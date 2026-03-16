@@ -51,8 +51,9 @@ class _LoginScreenState extends State<LoginScreen> {
         context.go('/admin');
       } else if (role == 'CLIENT') {
         context.go('/marketplace');
+      } else if (role == 'CAREGIVER') {
+        context.go('/caregiver/home');
       } else {
-        // Cuidadores y otros roles por ahora van a /test
         context.go('/test');
       }
     } catch (e) {

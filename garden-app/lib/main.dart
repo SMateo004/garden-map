@@ -7,6 +7,11 @@ import 'screens/caregiver/onboarding_wizard_screen.dart';
 import 'screens/test_agentes_screen.dart';
 import 'screens/client/marketplace_screen.dart';
 import 'screens/admin/admin_panel_screen.dart';
+import 'screens/client/my_pets_screen.dart';
+import 'screens/client/caregiver_profile_screen.dart';
+import 'screens/client/booking_screen.dart';
+import 'screens/client/payment_screen.dart';
+import 'screens/caregiver/caregiver_home_screen.dart';
 
 // ── Paleta oficial GARDEN ──────────────────────────────────
 const kBackgroundColor = Color(0xFF0A0E1A);
@@ -56,6 +61,38 @@ final GoRouter _router = GoRouter(
       name: 'admin',
       builder: (context, state) => const AdminPanelScreen(),
     ),
+    GoRoute(
+      path: '/my-pets',
+      name: 'myPets',
+      builder: (context, state) => const MyPetsScreen(),
+    ),
+    GoRoute(
+      path: '/caregiver/home',
+      name: 'caregiverHome',
+      builder: (context, state) => const CaregiverHomeScreen(),
+    ),
+    GoRoute(
+      path: '/caregiver/:id',
+      name: 'caregiverProfile',
+      builder: (context, state) => CaregiverProfileScreen(
+        caregiverId: state.pathParameters['id']!,
+      ),
+    ),
+    GoRoute(
+      path: '/booking/:caregiverId',
+      name: 'booking',
+      builder: (context, state) => BookingScreen(
+        caregiverId: state.pathParameters['caregiverId']!,
+      ),
+    ),
+    GoRoute(
+      path: '/payment/:bookingId',
+      name: 'payment',
+      builder: (context, state) => PaymentScreen(
+        bookingId: state.pathParameters['bookingId']!,
+      ),
+    ),
+
   ],
 );
 

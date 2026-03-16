@@ -304,6 +304,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         title: const Text('Encuentra un cuidador'),
         backgroundColor: kSurfaceColor,
         automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.pets, color: Colors.white),
+            tooltip: 'Mis mascotas',
+            onPressed: () => context.push('/my-pets'),
+          ),
+        ],
       ),
       body: Column(
         children: [
