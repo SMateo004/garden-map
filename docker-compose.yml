@@ -1,0 +1,16 @@
+# PostgreSQL para GARDEN API (desarrollo local).
+# Uso: docker compose up -d
+# Detener: docker compose down
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: garden_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - garden_pgdata:/var/lib/postgresql/data
+volumes:
+  garden_pgdata:

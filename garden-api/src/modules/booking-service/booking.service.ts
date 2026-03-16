@@ -1,0 +1,1363 @@
+import {
+  BookingStatus,
+  CaregiverStatus,
+  RefundStatus,
+  ServiceType,
+  type TimeSlot,
+} from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import type { Booking } from '@prisma/client';
+import prisma from '../../config/database.js';
+import {
+  AvailabilityConflictError,
+  BadRequestError,
+  BookingNotFoundError,
+  BookingValidationError,
+  ForbiddenError,
+} from '../../shared/errors.js';
+import logger from '../../shared/logger.js';
+import * as notificationService from '../../services/notification.service.js';
+import { blockchainService } from '../../services/blockchain.service.js';
+import type {
+  CreateBookingBody,
+  InitPaymentBody,
+} from './booking.validation.js';
+import type { BookingCreateResult } from './booking.types.js';
+import { bookingToResponse } from './booking.types.js';
+import { parseTimeBlocks } from '../../shared/availability-utils.js';
+
+/** Helper: HH:mm strings to minutes since midnight. */
+function timeToMins(t: string | null | undefined): number {
+  if (!t) return 0;
+  const parts = t.split(':');
+  const h = Number(parts[0] || 0);
+  const m = Number(parts[1] || 0);
+  return h * 60 + m;
+}
+
+/** Check if two time ranges [s1, e1] and [s2, e2] overlap. */
+function rangesOverlap(s1: number, e1: number, s2: number, e2: number): boolean {
+  return s1 < e2 && s2 < e1;
+}
+
+/** Tipos de notificación admin (booking flow). */
+const ADMIN_NOTIFICATION_PAYMENT_APPROVAL = 'PAYMENT_APPROVAL_REQUEST';
+const ADMIN_NOTIFICATION_CANCELLATION_REQUEST = 'CANCELLATION_REQUEST';
+
+/** Comisión plataforma (MVP). */
+const COMMISSION_RATE = 0.1;
+
+/** Admin fee (Bs) descontado del reembolso 100% en hospedaje (MVP). */
+const HOSPEDAJE_REFUND_ADMIN_FEE_BS = 10;
+
+/** Límites de horas para reembolso hospedaje (MVP). */
+const HOSPEDAJE_REFUND_100_HOURS = 48;
+const HOSPEDAJE_REFUND_50_HOURS = 24;
+
+/** Límites de horas para reembolso paseo (MVP). */
+const PASEO_REFUND_100_HOURS = 12;
+const PASEO_REFUND_50_HOURS = 6;
+
+/** QR válido 24h por defecto (legacy/otros flujos). */
+const QR_VALIDITY_HOURS = 24;
+/** QR en página de pago: 15 minutos (Subfase 2.3). */
+const QR_VALIDITY_MINUTES_PAYMENT = 15;
+
+/**
+ * Crea una reserva (hospedaje o paseo) en transacción:
+ * - Valida cuidador APPROVED y precios.
+ * - Comprueba disponibilidad (Availability) y solapamiento con otras reservas.
+ * - Calcula total, comisión, genera QR placeholder.
+ * - Status inicial PENDING_PAYMENT.
+ */
+export async function createBooking(
+  clientId: string,
+  body: CreateBookingBody
+): Promise<BookingCreateResult> {
+  return prisma.$transaction(async (tx) => {
+    const clientProfile = await tx.clientProfile.findUnique({
+      where: { userId: clientId },
+      include: { pets: { select: { id: true } } },
+    });
+
+    if (!clientProfile) {
+      throw new ForbiddenError(
+        'Debes completar el perfil de tu mascota primero',
+        'CLIENT_PROFILE_INCOMPLETE'
+      );
+    }
+
+    if (!clientProfile.pets.length) {
+      throw new ForbiddenError(
+        'Debes completar el perfil de tu mascota primero',
+        'CLIENT_PROFILE_INCOMPLETE'
+      );
+    }
+
+    if (!clientProfile.isComplete) {
+      throw new ForbiddenError(
+        'Debes completar el perfil de tu mascota primero',
+        'CLIENT_PROFILE_INCOMPLETE'
+      );
+    }
+
+    const pet = await tx.pet.findFirst({
+      where: {
+        id: body.petId,
+        clientProfile: { userId: clientId },
+      },
+      select: { id: true, name: true, breed: true, age: true, size: true, specialNeeds: true },
+    });
+
+    if (!pet) {
+      throw new BadRequestError(
+        'Mascota no encontrada o no te pertenece. Elige una mascota de tu perfil.',
+        'PET_NOT_OWNED',
+        'petId'
+      );
+    }
+
+    const caregiver = await tx.caregiverProfile.findFirst({
+      where: {
+        id: body.caregiverId,
+        status: CaregiverStatus.APPROVED,
+        suspended: false,
+      },
+      select: {
+        id: true,
+        pricePerDay: true,
+        pricePerWalk30: true,
+        pricePerWalk60: true,
+        servicesOffered: true,
+      },
+    });
+
+    if (!caregiver) {
+      throw new BadRequestError(
+        'Cuidador no encontrado o no disponible para reservas',
+        'CAREGIVER_NOT_FOUND',
+        'caregiverId'
+      );
+    }
+
+    // VALIDACIÓN: Mínimo 1 día de anticipación (no se puede reservar hoy ni fechas pasadas)
+    const now = new Date();
+    // Normalizamos a la fecha local (Bolivia -04:00 suele ser la referencia del user)
+    // Usamos toLocaleDateString con el locale apropiado para obtener YYYY-MM-DD
+    const todayStr = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0] || '';
+    const requestedDate = body.serviceType === ServiceType.HOSPEDAJE ? body.startDate : body.walkDate;
+
+    if (requestedDate && requestedDate <= todayStr) {
+      throw new BookingValidationError(
+        'Las reservas deben realizarse con al menos un día de anticipación. Por favor, selecciona una fecha a partir de mañana.',
+        'BOOKING_VALIDATION',
+        body.serviceType === ServiceType.HOSPEDAJE ? 'startDate' : 'walkDate'
+      );
+    }
+
+    const hasService =
+      body.serviceType === ServiceType.HOSPEDAJE
+        ? caregiver.servicesOffered.includes(ServiceType.HOSPEDAJE)
+        : caregiver.servicesOffered.includes(ServiceType.PASEO);
+    if (!hasService) {
+      throw new BookingValidationError(
+        `El cuidador no ofrece el servicio ${body.serviceType}`,
+        'BOOKING_VALIDATION',
+        'serviceType'
+      );
+    }
+
+    if (body.serviceType === ServiceType.HOSPEDAJE) {
+      await assertHospedajeAvailability(tx, body.caregiverId, body.startDate, body.endDate);
+    } else {
+      await assertPaseoAvailability(
+        tx,
+        body.caregiverId,
+        body.walkDate,
+        body.timeSlot,
+        body.startTime,
+        body.duration
+      );
+    }
+
+    let pricePerUnit: number;
+    let totalDays: number | null = null;
+    let totalAmount: number;
+
+    if (body.serviceType === ServiceType.HOSPEDAJE) {
+      const perDay = caregiver.pricePerDay ?? 0;
+      if (perDay <= 0) {
+        throw new BookingValidationError(
+          'El cuidador no tiene precio de hospedaje configurado',
+          'BOOKING_VALIDATION',
+          'caregiverId'
+        );
+      }
+      pricePerUnit = perDay;
+      totalDays = body.totalDays;
+      totalAmount = (totalDays ?? 0) * pricePerUnit;
+    } else {
+      const duration = (body as any).duration;
+      const p30 = caregiver.pricePerWalk30 ?? 0;
+      const p60 = caregiver.pricePerWalk60 ?? 0;
+
+      if (duration === 30) {
+        if (p30 <= 0) {
+          throw new BookingValidationError('El cuidador no tiene precio de paseo 30min', 'BOOKING_VALIDATION');
+        }
+        pricePerUnit = p30;
+        totalAmount = p30;
+      } else {
+        if (p60 <= 0) {
+          throw new BookingValidationError('El cuidador no tiene precio de paseo 60min para calcular el total', 'BOOKING_VALIDATION');
+        }
+        pricePerUnit = p60;
+        totalAmount = (p60 * duration) / 60;
+      }
+    }
+
+    const subtotal = totalAmount;
+    totalAmount = Math.round(subtotal * (1 + COMMISSION_RATE));
+    const commissionAmount = totalAmount - subtotal;
+    // Client sees the unit price with markup
+    pricePerUnit = Math.round(pricePerUnit * (1 + COMMISSION_RATE));
+
+    const bookingData: Prisma.BookingCreateInput = {
+      client: { connect: { id: clientId } },
+      caregiver: { connect: { id: body.caregiverId } },
+      pet: { connect: { id: pet.id } },
+      serviceType: body.serviceType as ServiceType,
+      status: BookingStatus.PENDING_PAYMENT,
+      totalAmount: new Prisma.Decimal(totalAmount),
+      pricePerUnit: new Prisma.Decimal(pricePerUnit),
+      commissionAmount: new Prisma.Decimal(commissionAmount),
+      petName: pet.name,
+      petBreed: pet.breed ?? null,
+      petAge: pet.age ?? null,
+      petSize: pet.size ?? undefined,
+      specialNeeds: pet.specialNeeds ?? null,
+      ...(body.serviceType === ServiceType.HOSPEDAJE
+        ? {
+          startDate: new Date(body.startDate),
+          endDate: new Date(body.endDate),
+          totalDays,
+        }
+        : {
+          walkDate: new Date((body as any).walkDate),
+          timeSlot: (body as any).timeSlot,
+          startTime: (body as any).startTime,
+          duration: (body as any).duration,
+        }),
+    };
+
+    const booking = await tx.booking.create({
+      data: bookingData,
+    });
+
+    logger.info('Cliente seleccionó mascota para reserva', {
+      userId: clientId,
+      petId: body.petId,
+      bookingId: booking.id,
+    });
+    logger.info('Booking created', {
+      bookingId: booking.id,
+      clientId,
+      caregiverId: body.caregiverId,
+      serviceType: body.serviceType,
+      totalAmount: String(booking.totalAmount),
+    });
+
+    return bookingToResponse(booking);
+  });
+}
+
+/** Hospedaje: todos los días en [start, end) deben estar disponibles (fila con isAvailable=true o defaultSchedule.hospedajeDefault). */
+async function assertHospedajeAvailability(
+  tx: Prisma.TransactionClient,
+  caregiverId: string,
+  startDate: string,
+  endDate: string
+): Promise<void> {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const dates: Date[] = [];
+  for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
+    dates.push(new Date(d));
+  }
+
+  const profile = await tx.caregiverProfile.findUnique({
+    where: { id: caregiverId },
+    select: { defaultAvailabilitySchedule: true },
+  });
+  const defaultSchedule = profile?.defaultAvailabilitySchedule as { hospedajeDefault?: boolean } | null;
+  const hospedajeDefault = defaultSchedule?.hospedajeDefault !== false;
+
+  const availabilityRows = await tx.availability.findMany({
+    where: { caregiverId, date: { in: dates } },
+  });
+  const availableSet = new Set<string>();
+  for (const d of dates) {
+    const dStr = d.toISOString().slice(0, 10);
+    const row = availabilityRows.find((r) => r.date.toISOString().slice(0, 10) === dStr);
+    if (row) {
+      if (row.isAvailable) availableSet.add(dStr);
+    } else if (hospedajeDefault) {
+      availableSet.add(dStr);
+    }
+  }
+  const missing = dates.filter(
+    (d) => !availableSet.has(d.toISOString().slice(0, 10))
+  );
+  if (missing.length > 0) {
+    logger.warn('Hospedaje availability conflict', {
+      caregiverId,
+      startDate,
+      endDate,
+      missingDates: missing.map((d) => d.toISOString().slice(0, 10)),
+    });
+    throw new AvailabilityConflictError(
+      `Fecha(s) no disponible(s) para hospedaje: ${missing.map((d) => d.toISOString().slice(0, 10)).join(', ')}. Elige otras fechas.`,
+      'startDate'
+    );
+  }
+
+  // Reservas que bloquean: CONFIRMED, IN_PROGRESS, PAYMENT_PENDING_APPROVAL 
+  // O PENDING_PAYMENT si tiene menos de 15 minutos de antigüedad.
+  const expirationDate = new Date(Date.now() - 15 * 60 * 1000);
+
+  const overlapping = await tx.booking.count({
+    where: {
+      caregiverId,
+      OR: [
+        {
+          status: { in: [BookingStatus.PAYMENT_PENDING_APPROVAL, BookingStatus.WAITING_CAREGIVER_APPROVAL, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS] },
+        },
+        {
+          status: BookingStatus.PENDING_PAYMENT,
+          createdAt: { gte: expirationDate },
+        }
+      ],
+      startDate: { lte: end },
+      endDate: { gt: start },
+    },
+  });
+  if (overlapping > 0) {
+    throw new AvailabilityConflictError(
+      'El cuidador ya tiene una reserva que se solapa con las fechas solicitadas. Elige otras fechas.',
+      'startDate'
+    );
+  }
+}
+
+/** Paseo: la fecha debe estar disponible (fila con timeBlocks[slot]=true o defaultSchedule.paseoTimeBlocks[slot]). */
+async function assertPaseoAvailability(
+  tx: Prisma.TransactionClient,
+  caregiverId: string,
+  walkDate: string,
+  timeSlot: TimeSlot,
+  startTime?: string | null,
+  duration?: number | null
+): Promise<void> {
+  const date = new Date(walkDate);
+
+  const profile = await tx.caregiverProfile.findUnique({
+    where: { id: caregiverId },
+    select: { defaultAvailabilitySchedule: true },
+  });
+  const defaultSchedule = profile?.defaultAvailabilitySchedule as { paseoTimeBlocks?: Record<string, boolean> } | null;
+  const defaultBlocks = defaultSchedule?.paseoTimeBlocks;
+
+  const avail = await tx.availability.findUnique({
+    where: {
+      caregiverId_date: { caregiverId, date },
+    },
+  });
+  let slotAvailable = false;
+  if (avail) {
+    if (!avail.isAvailable) {
+      throw new AvailabilityConflictError(
+        `El cuidador no está disponible el ${walkDate}. Elige otra fecha.`,
+        'walkDate'
+      );
+    }
+    const slots = parseTimeBlocks(avail.timeBlocks);
+    slotAvailable = slots.some(s => s.slot === timeSlot && s.enabled);
+  } else if (defaultBlocks) {
+    const slots = parseTimeBlocks(defaultBlocks);
+    slotAvailable = slots.some(s => s.slot === timeSlot && s.enabled);
+  }
+  if (!slotAvailable) {
+    throw new AvailabilityConflictError(
+      `Horario no disponible: el cuidador no tiene el bloque ${timeSlot} el ${walkDate}. Elige otra fecha u horario.`,
+      'timeSlot'
+    );
+  }
+
+  const expirationDate = new Date(Date.now() - 15 * 60 * 1000);
+
+  // Fetch ALL active bookings for this date and caregiver
+  const existingBookings = await tx.booking.findMany({
+    where: {
+      caregiverId,
+      walkDate: date,
+      OR: [
+        {
+          status: { in: [BookingStatus.PAYMENT_PENDING_APPROVAL, BookingStatus.WAITING_CAREGIVER_APPROVAL, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS] },
+        },
+        {
+          status: BookingStatus.PENDING_PAYMENT,
+          createdAt: { gte: expirationDate }
+        }
+      ]
+    },
+    select: { startTime: true, duration: true, timeSlot: true },
+  });
+
+  // Un bloque 'legacy' es aquel que no tiene hora de inicio (bloquea todo el slot)
+  const legacyBookings = existingBookings.filter(b => (!b.startTime || b.startTime === '') && b.timeSlot === timeSlot);
+  const timedBookings = existingBookings.filter(b => !!b.startTime && b.startTime !== '');
+
+  const isSpecific = !!startTime && startTime !== '';
+  logger.info('Check-Paseo-Avail', { walkDate, timeSlot, startTime, isSpecific, foundCount: existingBookings.length });
+
+  // 1. Si hay una reserva legacy en este mismo bloque, bloqueamos CUALQUIER reserva nueva en el bloque
+  if (legacyBookings.length > 0) {
+    throw new AvailabilityConflictError(
+      `El bloque ${timeSlot} ya tiene una reserva que ocupa todo el horario habilitado para este día.`,
+      'timeSlot'
+    );
+  }
+
+  // 2. Si la NUEVA reserva no tiene hora y hay ALGO en el bloque, bloqueamos (legacy mode)
+  if (!isSpecific && existingBookings.some(b => b.timeSlot === timeSlot)) {
+    throw new AvailabilityConflictError(
+      `El bloque ${timeSlot} ya tiene reservas previas. Por favor, selecciona una hora específica para buscar disponibilidad.`,
+      'timeSlot'
+    );
+  }
+
+  // 3. Validación por rangos con buffer de descanso (30 min) si tenemos hora de inicio
+  if (isSpecific) {
+    const requestedStart = timeToMins(startTime as string);
+    const requestedDuration = duration || 60;
+    const requestedEnd = requestedStart + requestedDuration;
+    const requestedEndWithBuffer = requestedEnd + 30;
+
+    // Verificar límites del bloque del cuidador
+    const availRow = avail || (defaultBlocks ? { timeBlocks: defaultBlocks } : null);
+    if (availRow) {
+      const slots = parseTimeBlocks((availRow as any).timeBlocks || availRow);
+      const currentBlock = slots.find(s => s.slot === timeSlot);
+      if (currentBlock?.start && currentBlock?.end) {
+        const blockStart = timeToMins(currentBlock.start);
+        const blockEnd = timeToMins(currentBlock.end);
+        if (requestedStart < blockStart || requestedEnd > blockEnd) {
+          throw new AvailabilityConflictError(
+            `El horario seleccionado (${startTime}) está fuera del rango atendido por el cuidador (${currentBlock.start} - ${currentBlock.end})`,
+            'startTime'
+          );
+        }
+      }
+    }
+
+    // Verificar solapamiento con otras reservas que tengan tiempo específico
+    for (const b of timedBookings) {
+      const bStart = timeToMins(b.startTime as string);
+      const bDuration = b.duration || 60; // 60 min fallback por seguridad
+      const bEndWithBuffer = bStart + bDuration + 30;
+
+      if (rangesOverlap(requestedStart, requestedEndWithBuffer, bStart, bEndWithBuffer)) {
+        logger.warn('Overlap detected in PASEO booking', { requestedStart, requestedEndWithBuffer, bStart, bEndWithBuffer });
+        throw new AvailabilityConflictError(
+          `Conflicto: El horario solicitado (${startTime}) se solapa con una reserva de ${b.startTime} a ${Math.floor((bStart + bDuration) / 60)}:${String((bStart + bDuration) % 60).padStart(2, '0')} (incluyendo descanso).`,
+          'startTime'
+        );
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pago: QR placeholder (API bancaria futura) e iniciar pago / aprobación manual
+// ---------------------------------------------------------------------------
+
+export interface GenerateQRResult {
+  qrId: string;
+  qrImageUrl: string;
+  qrExpiresAt: Date;
+}
+
+/**
+ * Genera datos de QR de pago. Placeholder para integración con API bancaria real.
+ *
+ * Integración futura (API bancaria):
+ * - Sustituir el bloque siguiente por: llamada HTTP a proveedor (ej. banco/aggregator),
+ *   enviando bookingId, totalAmount, currency; recibir qrId, qrImageUrl (o base64), expiresAt.
+ * - En webhook/callback del banco: llamar a paymentService.verifyPaymentByQr(qrId) al confirmar pago.
+ *
+ * @param _bookingId Reserva asociada (enviar a API bancaria para referencia)
+ * @param validityMinutes Minutos hasta expiración (default 24h). Página de pago usa 15.
+ */
+export function generateQR(
+  _bookingId: string,
+  validityMinutes: number = QR_VALIDITY_HOURS * 60
+): GenerateQRResult {
+  const qrId = crypto.randomUUID();
+  const qrExpiresAt = new Date(Date.now() + validityMinutes * 60 * 1000);
+  // Placeholder: en producción reemplazar por URL/imagen devuelta por API bancaria
+  const qrImageUrl = `https://api.garden.bo/qr/placeholder/${qrId}`;
+  logger.info('QR generado (placeholder; integrar API bancaria)', {
+    bookingId: _bookingId,
+    qrId,
+    validityMinutes,
+  });
+  return { qrId, qrImageUrl, qrExpiresAt };
+}
+
+/**
+ * Inicia el flujo de pago: genera QR (placeholder) o marca reserva para aprobación manual por admin.
+ * Solo cliente titular; reserva debe estar PENDING_PAYMENT.
+ */
+export async function initPayment(
+  bookingId: string,
+  clientId: string,
+  method: InitPaymentBody['method']
+): Promise<{ qrId?: string; qrImageUrl?: string; qrExpiresAt?: string; status: string }> {
+  return prisma.$transaction(async (tx) => {
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, clientId },
+      select: {
+        id: true,
+        status: true,
+        caregiverId: true,
+      },
+    });
+    if (!booking) throw new BookingNotFoundError(bookingId);
+    if (booking.status !== BookingStatus.PENDING_PAYMENT) {
+      throw new BookingValidationError(
+        'Solo se puede iniciar pago en reservas pendientes de pago'
+      );
+    }
+
+    if (method === 'qr') {
+      const { qrId, qrImageUrl, qrExpiresAt } = generateQR(
+        bookingId,
+        QR_VALIDITY_MINUTES_PAYMENT
+      );
+      await tx.booking.update({
+        where: { id: bookingId },
+        data: { qrId, qrImageUrl, qrExpiresAt },
+      });
+      logger.info('Pago QR iniciado', { bookingId, clientId, qrId });
+      return {
+        qrId,
+        qrImageUrl,
+        qrExpiresAt: qrExpiresAt.toISOString(),
+        status: BookingStatus.PENDING_PAYMENT,
+      };
+    }
+
+    await tx.booking.update({
+      where: { id: bookingId },
+      data: { status: BookingStatus.PAYMENT_PENDING_APPROVAL },
+    });
+    await tx.adminNotification.create({
+      data: {
+        type: ADMIN_NOTIFICATION_PAYMENT_APPROVAL,
+        caregiverId: booking.caregiverId,
+        bookingId: booking.id,
+      },
+    });
+    logger.info('Pago manual solicitado; notificación admin creada', {
+      bookingId,
+      clientId,
+      caregiverId: booking.caregiverId,
+    });
+    // Notificación admin (MVP: console; futuro: WhatsApp/Email con link a /admin/payments-pending)
+    logger.info('[ADMIN] Pago manual pendiente', {
+      bookingId: booking.id,
+      caregiverId: booking.caregiverId,
+      actionUrl: `/admin/payments-pending`,
+      message: 'Revisar y aprobar o rechazar en el panel admin.',
+    });
+    return { status: BookingStatus.PAYMENT_PENDING_APPROVAL };
+  });
+}
+
+/**
+ * Cuidador cancela la reserva de forma automática. 
+ * Estado → CANCELLED. Se notifica al dueño (cliente) con el motivo y política de devolución.
+ */
+export async function requestCancellationByCaregiver(
+  bookingId: string,
+  caregiverUserId: string,
+  reason: string
+): Promise<BookingCreateResult> {
+  const result = await prisma.$transaction(async (tx) => {
+    const profile = await tx.caregiverProfile.findFirst({
+      where: { userId: caregiverUserId },
+      select: { id: true },
+    });
+    if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
+
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, caregiverId: profile.id },
+      include: { client: { select: { id: true } } }
+    });
+    if (!booking) throw new BookingNotFoundError(bookingId);
+    if (booking.status !== BookingStatus.CONFIRMED && booking.status !== BookingStatus.IN_PROGRESS) {
+      throw new BookingValidationError(
+        'Solo se puede cancelar reservas confirmadas o en curso'
+      );
+    }
+
+    const now = new Date();
+    const updated = await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: BookingStatus.CANCELLED,
+        cancelledAt: now,
+        cancellationReason: reason,
+      },
+    });
+
+    // 1. Notificación para el dueño (cliente)
+    await tx.notification.create({
+      data: {
+        userId: (booking as any).client.id,
+        title: 'Tu reserva ha sido cancelada por el cuidador',
+        message: `El cuidador ha cancelado la reserva de ${booking.petName} (ID: ${bookingId.slice(0, 8)}). Motivo: ${reason}. La empresa se contactará contigo en un plazo de 1 día hábil para gestionar la devolución correspondiente según la política de reembolso.`,
+        type: 'BOOKING_CANCELLED',
+      }
+    });
+
+    // 2. Notificación para el cuidador (confirmación propia)
+    await tx.notification.create({
+      data: {
+        userId: caregiverUserId,
+        title: 'Has cancelado la reserva exitosamente',
+        message: `Has cancelado la reserva ${bookingId}. El cliente ha sido notificado y se gestionará el reembolso administrativo correspondiente.`,
+        type: 'BOOKING_CANCELLED',
+      }
+    });
+
+    logger.info('Reserva cancelada automáticamente por el cuidador', {
+      bookingId,
+      caregiverId: profile.id,
+      reason: reason.slice(0, 100),
+    });
+    return bookingToResponse(updated);
+  });
+
+  notificationService
+    .onCaregiverCancelled(bookingId, reason)
+    .catch((err) => logger.error('Notification onCaregiverCancelled failed', { bookingId, err }));
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Reembolsos y modificaciones (MVP Subfase 2.2)
+// ---------------------------------------------------------------------------
+
+export interface CalculateRefundResult {
+  refundAmount: number;
+  refundStatus: RefundStatus;
+  /** Porcentaje aplicado (100, 50, 0) para trazabilidad. */
+  refundPercent: number;
+}
+
+/**
+ * Calcula el reembolso según reglas MVP diferenciales.
+ * Hospedaje: >48h → 100% - Bs10 admin; 24-48h → 50%; <24h → 0%.
+ * Paseo: >12h → 100%; 6-12h → 50%; <6h → 0%.
+ * @param booking Reserva con serviceType, fechas y totalAmount
+ * @param cancellationDate Fecha/hora en que se solicita la cancelación (normalmente now)
+ */
+export function calculateRefund(
+  booking: Pick<
+    Booking,
+    'serviceType' | 'startDate' | 'endDate' | 'walkDate' | 'timeSlot' | 'totalAmount'
+  >,
+  cancellationDate: Date
+): CalculateRefundResult {
+  const total = Number(booking.totalAmount);
+
+  if (booking.serviceType === ServiceType.HOSPEDAJE) {
+    const start = booking.startDate
+      ? new Date(booking.startDate.getFullYear(), booking.startDate.getMonth(), booking.startDate.getDate(), 0, 0, 0)
+      : null;
+    if (!start) {
+      return { refundAmount: 0, refundStatus: RefundStatus.REJECTED, refundPercent: 0 };
+    }
+    const hoursUntil = (start.getTime() - cancellationDate.getTime()) / (60 * 60 * 1000);
+    if (hoursUntil > HOSPEDAJE_REFUND_100_HOURS) {
+      const amount = Math.max(0, total - HOSPEDAJE_REFUND_ADMIN_FEE_BS);
+      return {
+        refundAmount: Math.round(amount * 100) / 100,
+        refundStatus: RefundStatus.APPROVED,
+        refundPercent: 100,
+      };
+    }
+    if (hoursUntil > HOSPEDAJE_REFUND_50_HOURS) {
+      const amount = total * 0.5;
+      return {
+        refundAmount: Math.round(amount * 100) / 100,
+        refundStatus: RefundStatus.APPROVED,
+        refundPercent: 50,
+      };
+    }
+    return { refundAmount: 0, refundStatus: RefundStatus.REJECTED, refundPercent: 0 };
+  }
+
+  // PASEO: referencia = mediodía del walkDate para calcular horas hasta el servicio
+  const walkDate = booking.walkDate
+    ? new Date(
+      booking.walkDate.getFullYear(),
+      booking.walkDate.getMonth(),
+      booking.walkDate.getDate(),
+      12,
+      0,
+      0
+    )
+    : null;
+  if (!walkDate) {
+    return { refundAmount: 0, refundStatus: RefundStatus.REJECTED, refundPercent: 0 };
+  }
+  const hoursUntil = (walkDate.getTime() - cancellationDate.getTime()) / (60 * 60 * 1000);
+  if (hoursUntil > PASEO_REFUND_100_HOURS) {
+    return {
+      refundAmount: Math.round(total * 100) / 100,
+      refundStatus: RefundStatus.APPROVED,
+      refundPercent: 100,
+    };
+  }
+  if (hoursUntil > PASEO_REFUND_50_HOURS) {
+    const amount = total * 0.5;
+    return {
+      refundAmount: Math.round(amount * 100) / 100,
+      refundStatus: RefundStatus.APPROVED,
+      refundPercent: 50,
+    };
+  }
+  return { refundAmount: 0, refundStatus: RefundStatus.REJECTED, refundPercent: 0 };
+}
+
+/**
+ * Cancela una reserva y aplica política de reembolso.
+ * Solo PENDING_PAYMENT o CONFIRMED; solo el cliente titular.
+ * Actualiza status=CANCELLED, cancelledAt, cancellationReason, refundAmount, refundStatus.
+ */
+export async function cancelBooking(
+  bookingId: string,
+  clientId: string,
+  cancellationReason?: string
+): Promise<BookingCreateResult> {
+  const result = await prisma.$transaction(async (tx) => {
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, clientId },
+    });
+    if (!booking) throw new BookingNotFoundError(bookingId);
+    if (booking.status === BookingStatus.CANCELLED) {
+      throw new BookingValidationError('La reserva ya está cancelada');
+    }
+    if (booking.status === BookingStatus.COMPLETED || booking.status === BookingStatus.IN_PROGRESS) {
+      throw new BookingValidationError('No se puede cancelar una reserva ya iniciada o completada');
+    }
+
+    const now = new Date();
+    let refundAmount: number;
+    let refundStatus: RefundStatus;
+
+    if (
+      (booking.status === BookingStatus.PENDING_PAYMENT ||
+        booking.status === BookingStatus.PAYMENT_PENDING_APPROVAL) &&
+      !booking.paidAt
+    ) {
+      refundAmount = 0;
+      refundStatus = RefundStatus.REJECTED;
+    } else {
+      const calc = calculateRefund(booking, now);
+      refundAmount = calc.refundAmount;
+      refundStatus = calc.refundStatus;
+    }
+
+    const updated = await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: BookingStatus.CANCELLED,
+        cancelledAt: now,
+        cancellationReason: cancellationReason ?? null,
+        refundAmount: new Prisma.Decimal(refundAmount),
+        refundStatus,
+      },
+    });
+
+    // 1. Notificación para el cliente (dueño)
+    await tx.notification.create({
+      data: {
+        userId: clientId,
+        title: 'Has cancelado tu reserva',
+        message: `Tu reserva ${bookingId} ha sido cancelada. El reembolso calculado es de Bs ${refundAmount.toFixed(2)} (${refundStatus}). El equipo de soporte procesará la devolución si corresponde.`,
+        type: 'BOOKING_CANCELLED',
+      }
+    });
+
+    // 2. Notificación para el cuidador
+    const caregiver = await tx.caregiverProfile.findUnique({
+      where: { id: booking.caregiverId },
+      select: { userId: true },
+    });
+    if (caregiver) {
+      await tx.notification.create({
+        data: {
+          userId: caregiver.userId,
+          title: 'Una reserva ha sido cancelada por el cliente',
+          message: `El cliente ha cancelado la reserva ${bookingId}. Tu calendario se ha liberado automáticamente para estas fechas.`,
+          type: 'BOOKING_CANCELLED',
+        }
+      });
+    }
+
+    logger.info('Booking cancelled', {
+      bookingId,
+      clientId,
+      refundAmount,
+      refundStatus,
+    });
+    return { booking: updated, refundAmount, refundStatus };
+  });
+
+  notificationService
+    .onClientCancelled(bookingId)
+    .catch((err) => logger.error('Notification onClientCancelled failed', { bookingId, err }));
+
+  if (result.refundAmount > 0 && result.refundStatus === RefundStatus.APPROVED) {
+    notificationService
+      .onRefundProcessed(
+        bookingId,
+        `Tu reserva fue cancelada. Reembolso aprobado: Bs ${result.refundAmount.toFixed(2)}. El soporte se pondrá en contacto.`
+      )
+      .catch((err) => logger.error('Notification onRefundProcessed failed', { bookingId, err }));
+  }
+
+  // Registro en Blockchain (asíncrono)
+  blockchainService.cancelBookingOnChain(bookingId, cancellationReason || 'Cancelado por usuario').catch(err => {
+    logger.error('Blockchain cancellation failed', { bookingId, err });
+  });
+
+  return bookingToResponse(result.booking);
+}
+
+/**
+ * Extiende una reserva de hospedaje (nueva endDate).
+ * Solo CONFIRMED; el cliente titular; newEndDate > endDate actual.
+ * Comprueba disponibilidad y solapamientos; recalcula totalDays y totalAmount.
+ */
+export async function extendBooking(
+  bookingId: string,
+  clientId: string,
+  newEndDate: Date
+): Promise<BookingCreateResult> {
+  return prisma.$transaction(async (tx) => {
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, clientId },
+      select: {
+        id: true,
+        serviceType: true,
+        status: true,
+        startDate: true,
+        endDate: true,
+        totalDays: true,
+        pricePerUnit: true,
+        totalAmount: true,
+        caregiverId: true,
+      },
+    });
+    if (!booking) throw new BookingNotFoundError(bookingId);
+    if (booking.serviceType !== ServiceType.HOSPEDAJE) {
+      throw new BookingValidationError('Solo se puede extender una reserva de hospedaje');
+    }
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new BookingValidationError('Solo se puede extender una reserva confirmada');
+    }
+    const currentEnd = booking.endDate!;
+    if (newEndDate <= currentEnd) {
+      throw new BookingValidationError('La nueva fecha de salida debe ser posterior a la actual');
+    }
+    const start = booking.startDate!;
+    const newEndNorm = new Date(newEndDate.getFullYear(), newEndDate.getMonth(), newEndDate.getDate(), 0, 0, 0);
+    const minEnd = new Date(start);
+    minEnd.setDate(minEnd.getDate() + 2);
+    if (newEndNorm < minEnd) {
+      throw new BookingValidationError('Hospedaje: mínimo 48 horas entre check-in y check-out');
+    }
+
+    const dates: Date[] = [];
+    for (let d = new Date(currentEnd); d < newEndNorm; d.setDate(d.getDate() + 1)) {
+      dates.push(new Date(d));
+    }
+    const availabilityRows = await tx.availability.findMany({
+      where: {
+        caregiverId: booking.caregiverId,
+        date: { in: dates },
+        isAvailable: true,
+      },
+    });
+    const availableSet = new Set(
+      availabilityRows.map((r) => r.date.toISOString().slice(0, 10))
+    );
+    const missing = dates.filter((d) => !availableSet.has(d.toISOString().slice(0, 10)));
+    if (missing.length > 0) {
+      throw new AvailabilityConflictError(
+        `Fechas no disponibles para extensión: ${missing.map((d) => d.toISOString().slice(0, 10)).join(', ')}`
+      );
+    }
+
+    const overlapping = await tx.booking.count({
+      where: {
+        caregiverId: booking.caregiverId,
+        id: { not: bookingId },
+        status: { in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS] },
+        startDate: { lte: newEndNorm },
+        endDate: { gt: start },
+      },
+    });
+    if (overlapping > 0) {
+      throw new AvailabilityConflictError(
+        'El cuidador tiene otra reserva que se solapa con la extensión'
+      );
+    }
+
+    const totalDaysNew = Math.ceil((newEndNorm.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+    // Derive original caregiver price from the marked-up pricePerUnit
+    const pricePerUnitClient = Number(booking.pricePerUnit);
+    const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + COMMISSION_RATE));
+
+    const subtotalCaregiver = totalDaysNew * pricePerUnitCaregiver;
+    const totalAmountNew = Math.round(subtotalCaregiver * (1 + COMMISSION_RATE));
+    const commissionAmount = totalAmountNew - subtotalCaregiver;
+
+    const updated = await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        endDate: newEndNorm,
+        totalDays: totalDaysNew,
+        totalAmount: new Prisma.Decimal(totalAmountNew),
+        commissionAmount: new Prisma.Decimal(commissionAmount),
+      },
+    });
+
+    logger.info('Booking extended', {
+      bookingId,
+      newEndDate: newEndNorm.toISOString().slice(0, 10),
+      totalDaysNew,
+      totalAmountNew,
+    });
+    return bookingToResponse(updated);
+  });
+}
+
+/**
+ * Cambia las fechas de una reserva de hospedaje (nuevo startDate y endDate).
+ * Solo CONFIRMED; cliente titular; mínimo 48h entre inicio y fin.
+ * Comprueba disponibilidad y solapamientos (excluyendo esta reserva); recalcula montos.
+ */
+export async function changeDatesBooking(
+  bookingId: string,
+  clientId: string,
+  newStartDate: Date,
+  newEndDate: Date
+): Promise<BookingCreateResult> {
+  return prisma.$transaction(async (tx) => {
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, clientId },
+      select: {
+        id: true,
+        serviceType: true,
+        status: true,
+        startDate: true,
+        endDate: true,
+        pricePerUnit: true,
+        caregiverId: true,
+      },
+    });
+    if (!booking) throw new BookingNotFoundError(bookingId);
+    if (booking.serviceType !== ServiceType.HOSPEDAJE) {
+      throw new BookingValidationError('Solo se pueden cambiar fechas en una reserva de hospedaje');
+    }
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new BookingValidationError('Solo se pueden cambiar fechas en una reserva confirmada');
+    }
+
+    const startNorm = new Date(newStartDate.getFullYear(), newStartDate.getMonth(), newStartDate.getDate(), 0, 0, 0);
+    const endNorm = new Date(newEndDate.getFullYear(), newEndDate.getMonth(), newEndDate.getDate(), 0, 0, 0);
+    if (endNorm <= startNorm) {
+      throw new BookingValidationError('La fecha de salida debe ser posterior a la de entrada');
+    }
+    const minEnd = new Date(startNorm);
+    minEnd.setDate(minEnd.getDate() + 2);
+    if (endNorm < minEnd) {
+      throw new BookingValidationError('Hospedaje: mínimo 48 horas entre check-in y check-out');
+    }
+
+    const dates: Date[] = [];
+    for (let d = new Date(startNorm); d < endNorm; d.setDate(d.getDate() + 1)) {
+      dates.push(new Date(d));
+    }
+    const availabilityRows = await tx.availability.findMany({
+      where: {
+        caregiverId: booking.caregiverId,
+        date: { in: dates },
+        isAvailable: true,
+      },
+    });
+    const availableSet = new Set(
+      availabilityRows.map((r) => r.date.toISOString().slice(0, 10))
+    );
+    const missing = dates.filter((d) => !availableSet.has(d.toISOString().slice(0, 10)));
+    if (missing.length > 0) {
+      throw new AvailabilityConflictError(
+        `Fechas no disponibles: ${missing.map((d) => d.toISOString().slice(0, 10)).join(', ')}`
+      );
+    }
+
+    const overlapping = await tx.booking.count({
+      where: {
+        caregiverId: booking.caregiverId,
+        id: { not: bookingId },
+        status: { in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS] },
+        startDate: { lte: endNorm },
+        endDate: { gt: startNorm },
+      },
+    });
+    if (overlapping > 0) {
+      throw new AvailabilityConflictError(
+        'El cuidador tiene otra reserva que se solapa con las nuevas fechas'
+      );
+    }
+
+    const totalDaysNew = Math.ceil((endNorm.getTime() - startNorm.getTime()) / (24 * 60 * 60 * 1000));
+    // Derive original caregiver price
+    const pricePerUnitClient = Number(booking.pricePerUnit);
+    const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + COMMISSION_RATE));
+
+    const subtotalCaregiver = totalDaysNew * pricePerUnitCaregiver;
+    const totalAmountNew = Math.round(subtotalCaregiver * (1 + COMMISSION_RATE));
+    const commissionAmount = totalAmountNew - subtotalCaregiver;
+
+    const updated = await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        startDate: startNorm,
+        endDate: endNorm,
+        totalDays: totalDaysNew,
+        totalAmount: new Prisma.Decimal(totalAmountNew),
+        commissionAmount: new Prisma.Decimal(commissionAmount),
+      },
+    });
+
+    logger.info('Booking dates changed', {
+      bookingId,
+      newStartDate: startNorm.toISOString().slice(0, 10),
+      newEndDate: endNorm.toISOString().slice(0, 10),
+      totalDaysNew,
+      totalAmountNew,
+    });
+    return bookingToResponse(updated);
+  });
+}
+
+/**
+ * Obtiene todas las reservas del cliente autenticado.
+ * Retorna lista ordenada por createdAt DESC.
+ */
+export async function getMyBookings(clientId: string): Promise<BookingCreateResult[]> {
+  const bookings = await prisma.booking.findMany({
+    where: { clientId },
+    include: {
+      caregiver: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return bookings.map(bookingToResponse);
+}
+
+/**
+ * Obtiene una reserva por ID. El cliente titular o el cuidador asignado pueden acceder.
+ */
+export async function getBookingById(bookingId: string, requesterId: string): Promise<BookingCreateResult> {
+  const booking = await prisma.booking.findFirst({
+    where: {
+      id: bookingId,
+      OR: [{ clientId: requesterId }, { caregiver: { userId: requesterId } }],
+    },
+    include: {
+      caregiver: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+      },
+      client: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+        },
+      },
+    },
+  });
+
+  if (!booking) {
+    throw new BookingNotFoundError(bookingId);
+  }
+
+  return bookingToResponse(booking);
+}
+
+/**
+ * Lista reservas asignadas al cuidador (por userId del cuidador).
+ */
+export async function getBookingsByCaregiverUserId(
+  caregiverUserId: string
+): Promise<BookingCreateResult[]> {
+  const profile = await prisma.caregiverProfile.findFirst({
+    where: { userId: caregiverUserId },
+    select: { id: true },
+  });
+  if (!profile) return [];
+
+  const bookings = await prisma.booking.findMany({
+    where: { caregiverId: profile.id },
+    orderBy: { createdAt: 'desc' },
+  });
+  return bookings.map(bookingToResponse);
+}
+
+/**
+ * Cuidador acepta una reserva pagada.
+ */
+export async function acceptBooking(bookingId: string, caregiverUserId: string): Promise<BookingCreateResult> {
+  const profile = await prisma.caregiverProfile.findFirst({
+    where: { userId: caregiverUserId },
+    select: { id: true }
+  });
+  if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
+
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, caregiverId: profile.id }
+  });
+
+  if (!booking) throw new BookingNotFoundError(bookingId);
+  if (booking.status !== BookingStatus.WAITING_CAREGIVER_APPROVAL) {
+    throw new BadRequestError('Esta reserva no está esperando aprobación del cuidador');
+  }
+
+  const updated = await prisma.booking.update({
+    where: { id: bookingId },
+    data: { status: BookingStatus.CONFIRMED }
+  });
+
+  notificationService.onBookingAccepted(bookingId).catch(err => {
+    logger.error('Error sending onBookingAccepted notification', { bookingId, err });
+  });
+
+  return bookingToResponse(updated);
+}
+
+/**
+ * Cuidador rechaza una reserva pagada.
+ */
+export async function rejectBooking(bookingId: string, caregiverUserId: string, reason: string): Promise<BookingCreateResult> {
+  const profile = await prisma.caregiverProfile.findFirst({
+    where: { userId: caregiverUserId },
+    select: { id: true }
+  });
+  if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
+
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, caregiverId: profile.id }
+  });
+
+  if (!booking) throw new BookingNotFoundError(bookingId);
+  if (booking.status !== BookingStatus.WAITING_CAREGIVER_APPROVAL) {
+    throw new BadRequestError('Esta reserva no está esperando aprobación del cuidador');
+  }
+
+  const updated = await prisma.booking.update({
+    where: { id: bookingId },
+    data: {
+      status: BookingStatus.REJECTED_BY_CAREGIVER,
+      cancellationReason: reason,
+      refundStatus: RefundStatus.PENDING_APPROVAL,
+      refundAmount: booking.totalAmount
+    }
+  });
+
+  notificationService.onBookingRejected(bookingId, reason).catch(err => {
+    logger.error('Error sending onBookingRejected notification', { bookingId, err });
+  });
+
+  // Notificación Admin para devolución en 1 día hábil
+  await prisma.adminNotification.create({
+    data: {
+      type: 'BOOKING_REJECTED_REFUND_NEEDED',
+      caregiverId: profile.id,
+      bookingId: booking.id
+    }
+  });
+
+  return bookingToResponse(updated);
+}
+export async function startService(bookingId: string, caregiverUserId: string, photoUrl: string): Promise<BookingCreateResult> {
+  return prisma.$transaction(async (tx) => {
+    const profile = await tx.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
+    if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
+
+    const booking = await tx.booking.findFirst({ where: { id: bookingId, caregiverId: profile.id } });
+    if (!booking) throw new BookingNotFoundError(bookingId);
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new BadRequestError('El servicio solo puede iniciarse si está confirmado');
+    }
+
+    const updated = await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: BookingStatus.IN_PROGRESS,
+        serviceStartedAt: new Date(),
+        serviceStartPhoto: photoUrl,
+      },
+    });
+
+    return bookingToResponse(updated);
+  });
+}
+
+export async function addServiceEvent(bookingId: string, caregiverUserId: string, type: string, description: string): Promise<BookingCreateResult> {
+  const profile = await prisma.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
+  if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
+
+  const booking = await prisma.booking.findFirst({ where: { id: bookingId, caregiverId: profile.id } });
+  if (!booking) throw new BookingNotFoundError(bookingId);
+
+  const events = (booking.serviceEvents as any[]) || [];
+  events.push({ type, description, timestamp: new Date() });
+
+  const updated = await prisma.booking.update({
+    where: { id: bookingId },
+    data: { serviceEvents: events },
+  });
+
+  return bookingToResponse(updated);
+}
+
+export async function trackServiceLocation(bookingId: string, caregiverUserId: string, lat: number, lng: number): Promise<void> {
+  const profile = await prisma.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
+  if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
+
+  const booking = await prisma.booking.findFirst({ where: { id: bookingId, caregiverId: profile.id } });
+  if (!booking) throw new BookingNotFoundError(bookingId);
+
+  const tracking = (booking.serviceTrackingData as any[]) || [];
+  tracking.push({ lat, lng, timestamp: new Date() });
+
+  await prisma.booking.update({
+    where: { id: bookingId },
+    data: { serviceTrackingData: tracking },
+  });
+}
+
+export async function concludeService(
+  bookingId: string,
+  caregiverUserId: string,
+  photoUrl: string,
+  ownerRating: number,
+  lat: number,
+  lng: number
+): Promise<BookingCreateResult> {
+  return prisma.$transaction(async (tx) => {
+    const profile = await tx.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
+    if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
+
+    const booking = await tx.booking.findFirst({ where: { id: bookingId, caregiverId: profile.id } });
+    if (!booking) throw new BookingNotFoundError(bookingId);
+    if (booking.status !== BookingStatus.IN_PROGRESS) {
+      throw new BadRequestError('El servicio debe estar en curso para concluirlo');
+    }
+
+    const tracking = (booking.serviceTrackingData as any[]) || [];
+    tracking.push({ lat, lng, timestamp: new Date(), type: 'END' });
+
+    const updated = await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: BookingStatus.COMPLETED,
+        serviceEndedAt: new Date(),
+        serviceEndPhoto: photoUrl,
+        ownerRated: true,
+        ownerRating,
+        serviceTrackingData: tracking,
+      },
+    });
+
+    return bookingToResponse(updated);
+  });
+}
+
+export async function confirmReceiptByClient(bookingId: string, clientId: string): Promise<BookingCreateResult> {
+  return prisma.$transaction(async (tx) => {
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, clientId },
+      include: { caregiver: true }
+    });
+    if (!booking) throw new BookingNotFoundError(bookingId);
+    if (booking.status !== BookingStatus.COMPLETED) {
+      throw new BadRequestError('El servicio debe estar marcado como completado por el cuidador');
+    }
+    if (booking.payoutStatus === 'PAID') {
+      throw new BadRequestError('El pago ya fue procesado');
+    }
+
+    // Calcular el monto a transferir (Total - Comisión)
+    const amount = Number(booking.totalAmount) - Number(booking.commissionAmount);
+
+    // Actualizar balance del cuidador
+    await tx.caregiverProfile.update({
+      where: { id: booking.caregiverId },
+      data: { balance: { increment: amount } }
+    });
+
+    const updated = await tx.booking.update({
+      where: { id: bookingId },
+      data: { payoutStatus: 'PAID' }
+    });
+
+    // Registro en Blockchain (asíncrono) - Liberar calificación
+    // Usamos el rating que guardó el cuidador/dueño en concludeService
+    blockchainService.finalizeBookingOnChain(bookingId, booking.ownerRating || 5).catch(err => {
+      logger.error('Blockchain completion failed', { bookingId, err });
+    });
+
+    return bookingToResponse(updated);
+  });
+}

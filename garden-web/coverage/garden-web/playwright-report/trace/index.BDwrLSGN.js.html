@@ -1,0 +1,91 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for garden-web/playwright-report/trace/index.BDwrLSGN.js</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../../prettify.css" />
+    <link rel="stylesheet" href="../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../../index.html">All files</a> / <a href="index.html">garden-web/playwright-report/trace</a> index.BDwrLSGN.js</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/2</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/2</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="branch-0 cbranch-no" title="branch not covered" >import{T as x,r,a as C,W as F,j as e,D as z,b as I,c as P,d as A,e as O,f as V}from"./assets/defaultSettingsView-CJSZINFr.js";const $=()=&gt;{const[o,c]=r.useState(!1),[n,l]=r.useState(),[h,u]=r.useState(),[p,b]=r.useState(N),[f,j]=r.useState({done:0,total:0}),[k,v]=r.useState(!1),[y,m]=r.useState(null),[T,R]=r.useState(null),[U,E]=r.useState(!1),g=r.useCallback(t=&gt;{const s=new URL(window.location.href);if(!t.length)return;const i=t.item(0),a=URL.createObjectURL(i);s.searchParams.append("trace",a);const d=s.toString();window.history.pushState({},"",d),l(a),u(i.name),v(!1),m(null)},[]);r.useEffect(()=&gt;{const t=async s=&gt;{var a;if(!((a=s.clipboardData)!=null&amp;&amp;a.files.length))return;const i=["application/zip","application/x-zip-compressed"];for(const d of s.clipboardData.files)if(!i.includes(d.type))return;s.preventDefault(),g(s.clipboardData.files)};return document.addEventListener("paste",t),()=&gt;document.removeEventListener("paste",t)}),r.useEffect(()=&gt;{const t=s=&gt;{const{method:i,params:a}=s.data;if(i!=="load"||!((a==null?void 0:a.trace)instanceof Blob))return;const d=new File([a.trace],"trace.zip",{type:"application/zip"}),w=new DataTransfer;w.items.add(d),g(w.files)};return window.addEventListener("message",t),()=&gt;window.removeEventListener("message",t)});const W=r.useCallback(t=&gt;{t.preventDefault(),g(t.dataTransfer.files)},[g]),M=r.useCallback(t=&gt;{t.preventDefault(),t.target.files&amp;&amp;g(t.target.files)},[g]);r.useEffect(()=&gt;{const t=new URL(window.location.href).searchParams,s=t.get("trace");if(c(t.has("isServer")),s!=null&amp;&amp;s.startsWith("file:")){R(s||null);return}if(t.has("isServer")){const i=new URLSearchParams(window.location.search).get("ws"),a=new URL(`../${i}`,window.location.toString());a.protocol=window.location.protocol==="https:"?"wss:":"ws:";const d=new C(new F(a));d.onLoadTraceRequested(async w=&gt;{l(w.traceUrl),v(!1),m(null)}),d.initialize({}).catch(()=&gt;{})}else s&amp;&amp;!s.startsWith("blob:")&amp;&amp;l(s)},[]);const S=r.useCallback(async t=&gt;{const s=new URLSearchParams;s.set("trace",t);const i=await fetch(`contexts?${s.toString()}`);if(!i.ok){const{error:w}=await i.json();return m(w),w}const a=await i.json(),d=new x(t,a);j({done:0,total:0}),m(null),b(d)},[]);r.useEffect(()=&gt;{(async()=&gt;{if(!n){b(N);return}const t=s=&gt;{s.data.method==="progress"&amp;&amp;j(s.data.params)};try{navigator.serviceWorker.addEventListener("message",t),j({done:0,total:1});let s=await S(n);s!=null&amp;&amp;s.includes("please grant permission for Local Network Access")&amp;&amp;(await fetch(n,{method:"HEAD",headers:{"x-pw-serviceworker":"skip"}}),s=await S(n)),s&amp;&amp;(o||l(void 0))}finally{navigator.serviceWorker.removeEventListener("message",t)}})()},[o,n,h,S]);const D=f.done!==f.total&amp;&amp;f.total!==0&amp;&amp;!y;r.useEffect(()=&gt;{if(D){const t=setTimeout(()=&gt;{E(!0)},200);return()=&gt;clearTimeout(t)}else E(!1)},[D]);const L=!!(!o&amp;&amp;!k&amp;&amp;!T&amp;&amp;(!n||y));return e.jsxs("div",{className:"vbox workbench-loader",onDragOver:t=&gt;{t.preventDefault(),t.dataTransfer.types.includes("Files")&amp;&amp;v(!0)},children:[e.jsxs("div",{className:"hbox header",...L?{inert:!0}:{},children:[e.jsx("div",{className:"logo",children:e.jsx("img",{src:"playwright-logo.svg",alt:"Playwright logo"})}),e.jsx("div",{className:"product",children:"Playwright"}),p.title&amp;&amp;e.jsx("div",{className:"title",children:p.title}),e.jsx("div",{className:"spacer"}),e.jsx(z,{icon:"settings-gear",title:"Settings",dialogDataTestId:"settings-toolbar-dialog",children:e.jsx(I,{location:"trace-viewer"})})]}),e.jsx(P,{model:p,inert:L}),T&amp;&amp;e.jsxs("div",{className:"drop-target",children:[e.jsx("div",{children:"Trace Viewer uses Service Workers to show traces. To view trace:"}),e.jsxs("div",{style:{paddingTop:20},children:[e.jsxs("div",{children:["1. Click ",e.jsx("a",{href:T,children:"here"})," to put your trace into the download shelf"]}),e.jsxs("div",{children:["2. Go to ",e.jsx("a",{href:"https://trace.playwright.dev",children:"trace.playwright.dev"})]}),e.jsx("div",{children:"3. Drop the trace from the download shelf into the page"})]})]}),e.jsx(A,{open:U,isModal:!0,className:"progress-dialog",children:e.jsxs("div",{className:"progress-content",children:[e.jsx("div",{className:"title",role:"heading","aria-level":1,children:"Loading Playwright Trace..."}),e.jsx("div",{className:"progress-wrapper",children:e.jsx("div",{className:"inner-progress",style:{width:f.total?100*f.done/f.total+"%":0}})})]})}),L&amp;&amp;e.jsxs("div",{className:"drop-target",children:[e.jsx("div",{className:"processing-error",role:"alert",children:y}),e.jsx("div",{className:"title",role:"heading","aria-level":1,children:"Drop Playwright Trace to load"}),e.jsx("div",{children:"or"}),e.jsx("button",{onClick:()=&gt;{const t=document.createElement("input");t.type="file",t.click(),t.addEventListener("change",s=&gt;M(s))},type:"button",children:"Select file"}),e.jsx("div",{className:"info",children:"Playwright Trace Viewer is a Progressive Web App, it does not send your trace anywhere, it opens it locally."}),e.jsxs("div",{className:"version",children:["Playwright v","1.58.2"]})]}),o&amp;&amp;!n&amp;&amp;e.jsx("div",{className:"drop-target",children:e.jsx("div",{className:"title",children:"Select test to see the trace"})}),k&amp;&amp;e.jsx("div",{className:"drop-target",onDragLeave:()=&gt;{v(!1)},onDrop:t=&gt;W(t),children:e.jsx("div",{className:"title",children:"Release to analyse the Playwright Trace"})})]})},N=new x("",[]),q=({traceJson:o})=&gt;{const[c,n]=r.useState(void 0),[l,h]=r.useState(0),u=r.useRef(null);return r.useEffect(()=&gt;(u.current&amp;&amp;clearTimeout(u.current),u.current=setTimeout(async()=&gt;{try{const p=await B(o);n(p)}catch{const p=new x("",[]);n(p)}finally{h(l+1)}},500),()=&gt;{u.current&amp;&amp;clearTimeout(u.current)}),[o,l]),e.jsx(P,{isLive:!0,model:c})};async function B(o){const c=new URLSearchParams;c.set("trace",o);const l=await(await fetch(`contexts?${c.toString()}`)).json();return new x(o,l)}(async()=&gt;{const o=new URLSearchParams(window.location.search);if(O(),window.location.protocol!=="file:"){if(o.get("isUnderTest")==="true"&amp;&amp;await new Promise(h=&gt;setTimeout(h,1e3)),!navigator.serviceWorker)throw new Error(`Service workers are not supported.</span></span></span>
+<span class="cstat-no" title="statement not covered" >Make sure to serve the Trace Viewer (${window.location}) via HTTPS or localhost.`);navigator.serviceWorker.register("sw.bundle.js"),navigator.serviceWorker.controller||await new Promise(h=&gt;{navigator.serviceWorker.oncontrollerchange=()=&gt;h()}),setInterval(function(){fetch("ping")},1e4)}const c=o.get("trace"),l=(c==null?void 0:c.endsWith(".json"))?e.jsx(q,{traceJson:c}):e.jsx($,{});V.createRoot(document.querySelector("#root")).render(l)})();</span>
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-02-08T04:01:54.259Z
+            </div>
+        <script src="../../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../../sorter.js"></script>
+        <script src="../../../block-navigation.js"></script>
+    </body>
+</html>
+    

@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-gray-50 text-gray-900 antialiased;
+}
+
+.slick-dots li button:before {
+  @apply text-gray-400;
+}
+.slick-dots li.slick-active button:before {
+  @apply text-green-600;
+}
+
+/* React Calendar styling (GARDEN theme) */
+.react-calendar {
+  @apply w-full border-0 bg-white font-sans;
+}
+.react-calendar__navigation {
+  @apply flex items-center justify-between mb-4;
+}
+.react-calendar__navigation button {
+  @apply text-gray-700 hover:bg-gray-100 rounded-lg px-3 py-2 text-sm font-medium;
+}
+.react-calendar__navigation button:disabled {
+  @apply opacity-50 cursor-not-allowed;
+}
+.react-calendar__month-view__weekdays {
+  @apply text-xs font-semibold text-gray-600 mb-2;
+}
+.react-calendar__month-view__weekdays__weekday {
+  @apply text-center py-2;
+}
+.react-calendar__tile {
+  @apply rounded-lg text-sm py-3 hover:bg-gray-100 transition;
+}
+.react-calendar__tile:disabled {
+  @apply opacity-40 bg-gray-100 cursor-not-allowed;
+}
+.react-calendar__tile--active {
+  @apply bg-green-600 text-white hover:bg-green-700;
+}
+.react-calendar__tile--now {
+  @apply bg-green-50 font-semibold;
+}
+.react-calendar__tile--now:enabled:hover {
+  @apply bg-green-100;
+}

@@ -1,0 +1,16 @@
+model AjustePrecio {
+  id                   String   @id @default(uuid())
+  zona                 String
+  servicio             String
+  multiplicador        Float
+  porcentajeAjuste     Int
+  aplicarDesde         DateTime
+  aplicarHasta         DateTime
+  motivo               String
+  explicacionParaDueno String
+  cuandoVuelveNormal   String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([zona, servicio])
+}

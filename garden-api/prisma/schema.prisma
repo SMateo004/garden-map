@@ -1,0 +1,558 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                           String                        @id @default(uuid())
+  email                        String                        @unique
+  passwordHash                 String
+  role                         UserRole
+  firstName                    String
+  lastName                     String
+  phone                        String                        @unique
+  profilePicture               String?
+  country                      String?
+  city                         String?
+  isOver18                     Boolean                       @default(true)
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime                      @updatedAt
+  dateOfBirth                  DateTime?                     @db.Date
+  emailVerified                Boolean                       @default(false)
+  emailVerificationCode        String?                       @db.VarChar(6)
+  emailVerificationExpires     DateTime?
+  identityVerified             Boolean                       @default(false)
+  clientBookings               Booking[]                     @relation("ClientBookings")
+  caregiverProfile             CaregiverProfile?
+  clientProfile                ClientProfile?
+  identityVerificationSessions IdentityVerificationSession[]
+  reviews                      Review[]
+  verificationAudits           VerificationAudit[]
+  emailVerifications           EmailVerification[]
+  notifications                Notification[]
+
+  @@index([email])
+  @@index([role])
+  @@index([phone])
+  @@map("users")
+}
+
+model CaregiverProfile {
+  id                              String             @id @default(uuid())
+  userId                          String             @unique
+  status                          CaregiverStatus    @default(DRAFT)
+  verified                        Boolean            @default(false)
+  verifiedAt                      DateTime?
+  verifiedBy                      String?
+  verificationNotes               String?
+  verificationStatus              VerificationStatus @default(PENDING_REVIEW)
+  rejectionReason                 String?
+  adminNotes                      String?
+  approvedAt                      DateTime?
+  approvedBy                      String?
+  reviewedAt                      DateTime?
+  suspended                       Boolean            @default(false)
+  suspendedAt                     DateTime?
+  suspensionReason                String?
+  rating                          Float              @default(0)
+  reviewCount                     Int                @default(0)
+  bio                             String?            @db.VarChar(500)
+  bioDetail                       String?            @db.VarChar(300)
+  zone                            Zone?
+  spaceType                       String[]
+  spaceDescription                String?            @db.VarChar(500)
+  photos                          String[]
+  profilePhoto                    String?
+  address                         String?            @db.VarChar(500)
+  servicesOffered                 ServiceType[]
+  serviceAvailability             Json?
+  pricePerDay                     Int?
+  pricePerWalk30                  Int?
+  pricePerWalk60                  Int?
+  rates                           Json?
+  termsAccepted                   Boolean?
+  privacyAccepted                 Boolean?
+  verificationAccepted            Boolean?
+  termsAcceptedAt                 DateTime?
+  experienceYears                 ExperienceYears?
+  ownPets                         Boolean?
+  currentPetsDetails              Json?
+  caredOthers                     Boolean?
+  animalTypes                     AnimalType[]
+  experienceDescription           String?
+  whyCaregiver                    String?
+  whatDiffers                     String?
+  handleAnxious                   String?
+  emergencyResponse               String?
+  acceptAggressive                Boolean?
+  acceptMedication                MedicationType[]
+  acceptPuppies                   Boolean?
+  acceptSeniors                   Boolean?
+  sizesAccepted                   PetSize[]
+  noAcceptBreeds                  Boolean?
+  breedsWhy                       String?            @db.VarChar(500)
+  homeType                        HomeType?
+  ownHome                         Boolean?
+  hasYard                         Boolean?
+  yardFenced                      Boolean?
+  hasChildren                     Boolean?
+  hasOtherPets                    Boolean?
+  petsSleep                       PetsSleep?
+  clientPetsSleep                 ClientPetsSleep?
+  hoursAlone                      Int?
+  workFromHome                    Boolean?
+  maxPets                         Int?
+  oftenOut                        Boolean?
+  typicalDay                      String?
+  idDocument                      String?
+  selfie                          String?
+  /// CI anverso (frontal): obligatorio para enviar solicitud y PENDING_REVIEW. Subida a Cloudinary (garden/ci).
+  ciAnversoUrl                    String?
+  /// CI reverso (trasero): obligatorio para enviar solicitud y PENDING_REVIEW. Subida a Cloudinary (garden/ci).
+  ciReversoUrl                    String?
+  /// Número de CI (obligatorio y único para prevención de fraude)
+  ciNumber                        String?            @unique @db.VarChar(50)
+  /// Horario predeterminado para disponibilidad: { hospedajeDefault?: boolean, paseoTimeBlocks?: { MANANA, TARDE, NOCHE } }
+  defaultAvailabilitySchedule     Json?
+  createdAt                       DateTime           @default(now())
+  updatedAt                       DateTime           @updatedAt
+  /// Onboarding: { step: number, completed: boolean[] } — paso actual y completados
+  onboardingStatus                Json?
+  /// Identity status: PENDING | REVIEW | VERIFIED | REJECTED
+  identityVerificationStatus      String?            @default("PENDING") @db.VarChar(20)
+  /// Token for verification URL
+  identityVerificationToken       String?            @unique @db.VarChar(64)
+  identityVerificationScore       Float?
+  identityVerificationSubmittedAt DateTime?
+  emailVerified                   Boolean            @default(false)
+  /// Onboarding Lifecycle: INCOMPLETE | SUBMITTED | UNDER_REVIEW | APPROVED
+  profileStatus                   String?            @default("INCOMPLETE") @db.VarChar(20)
+  availabilityComplete            Boolean            @default(false)
+  caregiverProfileComplete        Boolean            @default(false)
+  personalInfoComplete            Boolean            @default(false)
+  balance                         Decimal            @default(0) @db.Decimal(10, 2)
+  verificationAttempts            Int                @default(0)
+  verificationLockUntil           DateTime?
+  /// Checklist items when admin requests revision (e.g. "Foto borrosa", "Documento no legible")
+  reviewChecklist                 Json?              @db.JsonB
+  availability                    Availability[]
+  bookings                        Booking[]          @relation("CaregiverBookings")
+  user                            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviews                         Review[]
+
+  @@index([status])
+  @@index([userId])
+  @@index([zone, verified])
+  @@index([verified])
+  @@index([zone, verified, suspended])
+  @@index([verified, suspended])
+  @@index([verificationStatus])
+  @@index([rating(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@index([experienceYears])
+  @@index([animalTypes])
+  @@map("caregiver_profiles")
+}
+
+/// Disponibilidad por cuidador y fecha. MVP: hospedaje por día; paseos por bloques (MANANA/TARDE/NOCHE).
+model Availability {
+  id             String           @id @default(uuid())
+  caregiverId    String
+  /// Fecha del día (sin hora); para consultas de calendario.
+  date           DateTime         @db.Date
+  /// false = bloqueado (no acepta reservas ese día).
+  isAvailable    Boolean          @default(true)
+  /// Solo paseos: bloques de tiempo. Ej: { "MANANA": true, "TARDE": true, "NOCHE": false } (TimeSlot).
+  timeBlocks     Json?
+  /// Motivo opcional de no disponibilidad o cambio en esa fecha.
+  overrideReason String?
+  createdAt      DateTime         @default(now())
+  caregiver      CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+
+  @@unique([caregiverId, date])
+  @@index([caregiverId])
+  @@index([caregiverId, date])
+  @@index([date, isAvailable])
+  @@map("availability")
+}
+
+/// Reserva: hospedaje (48h mínima) o paseo (30/60 min, bloques MANANA/TARDE/NOCHE).
+/// Flujo: PENDING_PAYMENT → (pago) → CONFIRMED → IN_PROGRESS → COMPLETED.
+/// Cancelación: cliente (refund según política) o cuidador solicita → admin aprueba (CANCELLED).
+model Booking {
+  id                        String           @id @default(uuid())
+  clientId                  String
+  caregiverId               String
+  serviceType               ServiceType
+  status                    BookingStatus    @default(PENDING_PAYMENT)
+  startDate                 DateTime?        @db.Date
+  endDate                   DateTime?        @db.Date
+  totalDays                 Int?
+  walkDate                  DateTime?        @db.Date
+  timeSlot                  TimeSlot?
+  startTime                 String?          @db.VarChar(5)
+  duration                  Int?
+  petId                     String?
+  petName                   String           @db.VarChar(200)
+  petBreed                  String?          @db.VarChar(100)
+  petAge                    Int?
+  petSize                   PetSize?
+  specialNeeds              String?
+  totalAmount               Decimal          @db.Decimal(10, 2)
+  pricePerUnit              Decimal          @db.Decimal(10, 2)
+  commissionAmount          Decimal          @db.Decimal(10, 2)
+  stripeCheckoutSessionId   String?          @unique
+  stripePaymentIntentId     String?
+  qrId                      String?          @unique
+  qrImageUrl                String?
+  qrExpiresAt               DateTime?
+  paidAt              DateTime?
+  cancelledAt         DateTime?
+  cancellationReason  String?
+  refundAmount        Decimal?         @db.Decimal(10, 2)
+  refundStatus        RefundStatus?
+  createdAt           DateTime         @default(now())
+  serviceStartedAt          DateTime?
+  serviceEndedAt            DateTime?
+  serviceStartPhoto         String?
+  serviceEndPhoto           String?
+  serviceTrackingData       Json?            @db.JsonB
+  serviceEvents             Json?            @db.JsonB
+  ownerRated                Boolean          @default(false)
+  ownerRating               Int?
+  payoutStatus              String           @default("PENDING")
+  updatedAt                 DateTime         @updatedAt
+  caregiver                 CaregiverProfile @relation("CaregiverBookings", fields: [caregiverId], references: [id], onDelete: Cascade)
+  client                    User             @relation("ClientBookings", fields: [clientId], references: [id], onDelete: Cascade)
+  pet                       Pet?             @relation(fields: [petId], references: [id])
+  review                    Review?
+
+  @@index([clientId, status])
+  @@index([caregiverId, status])
+  @@index([status])
+  @@index([status, startDate])
+  @@index([paidAt])
+  @@index([petId])
+  @@map("bookings")
+}
+
+model Review {
+  id                String           @id @default(uuid())
+  bookingId         String           @unique
+  clientId          String
+  caregiverId       String
+  rating            Int              @db.SmallInt
+  comment           String?
+  photo             String?
+  serviceType       ServiceType
+  caregiverResponse String?
+  respondedAt       DateTime?
+  createdAt         DateTime         @default(now())
+  booking           Booking          @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  caregiver         CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+  client            User             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([caregiverId, rating])
+  @@map("reviews")
+}
+
+/// Perfil de cliente (dueño de mascota). Datos generales del dueño; mascotas en Pet[].
+/// isComplete = true cuando tiene al menos un Pet con name, size y photoUrl (permite crear reservas).
+/// Fotos: petPhoto = URL absoluta Cloudinary (sincronizada con primera mascota); cada Pet.photoUrl también.
+model ClientProfile {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  address    String?  @db.VarChar(500)
+  phone      String?  @db.VarChar(20)
+  /// URL absoluta Cloudinary de la foto principal de mascota (p. ej. primera mascota).
+  petPhoto   String?
+  /// true = tiene al menos una mascota completa (name, size, photoUrl); permite reservas.
+  isComplete Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pets       Pet[]
+
+  @@index([userId])
+  @@index([isComplete])
+  @@map("client_profiles")
+}
+
+/// Mascota del cliente. Un dueño puede tener varias (relación 1 a muchos con ClientProfile).
+/// Las reservas referencian Pet opcionalmente (petId) y guardan copia de datos para historial.
+model Pet {
+  id              String        @id @default(uuid())
+  clientProfileId String
+  name            String        @db.VarChar(200)
+  breed           String?       @db.VarChar(100)
+  age             Int?
+  size            PetSize?
+  photoUrl        String?
+  specialNeeds    String?
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  bookings        Booking[]
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+
+  @@index([clientProfileId])
+  @@map("pets")
+}
+
+model AdminAction {
+  id         String   @id @default(uuid())
+  adminId    String
+  actionType String
+  targetId   String
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  @@index([adminId, actionType])
+  @@index([targetId])
+  @@map("admin_actions")
+}
+
+/// Notificaciones para el panel admin (ej. nueva solicitud cuidador, pago manual, cancelación por cuidador).
+model AdminNotification {
+  id          String    @id @default(uuid())
+  type        String
+  caregiverId String
+  bookingId   String?
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([type, readAt])
+  @@index([caregiverId])
+  @@index([bookingId])
+  @@map("admin_notifications")
+}
+
+model IdentityVerificationSession {
+  id                     String    @id @default(uuid())
+  userId                 String
+  status                 String    @db.VarChar(20)
+  similarity             Float?
+  selfieUrl              String?
+  ciFrontUrl             String?
+  expiresAt              DateTime
+  createdAt              DateTime  @default(now())
+  completedAt            DateTime?
+  reviewedBy             String?
+  reviewedAt             DateTime?
+  faceCroppedDocumentUrl String?
+  faceCroppedSelfieUrl   String?
+  rejectionReason        String?
+  ciBackUrl              String?
+  documentConfidence     Float?
+  identityScore          Float?
+  livenessFrameUrls      Json?
+  livenessScore          Float?
+  ocrData                Json?
+  similarityScore        Float?
+  attemptNumber          Int       @default(1)
+  behaviorScore          Float?
+  deviceDetails          Json?
+  deviceFingerprint      String?   @db.VarChar(128)
+  docScore               Float?
+  faceScore              Float?
+  fraudFlags             Json?
+  ipAddress              String?   @db.VarChar(45)
+  livenessStatus         String?   @db.VarChar(20)
+  locationData           Json?
+  ocrScore               Float?
+  qualityScore           Float?
+  trustScore             Float?
+  userAgent              String?
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([deviceFingerprint])
+  @@index([ipAddress])
+  @@map("identity_verification_sessions")
+}
+
+model VerificationAudit {
+  id                String   @id @default(uuid())
+  userId            String
+  sessionId         String?
+  action            String   @db.VarChar(50)
+  status            String   @db.VarChar(20)
+  ipAddress         String?  @db.VarChar(45)
+  deviceFingerprint String?  @db.VarChar(128)
+  trustScore        Float?
+  behaviorScore     Float?
+  fraudFlags        Json?
+  notes             String?
+  createdAt         DateTime @default(now())
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([deviceFingerprint])
+  @@map("verification_audits")
+}
+
+/// Email verification codes (6-digit, 10 min expiry). Max 5 attempts per code.
+model EmailVerification {
+  id         String   @id @default(uuid())
+  userId     String
+  codeHash   String   @db.VarChar(64)
+  expiresAt  DateTime
+  attempts   Int      @default(0)
+  verified   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("email_verifications")
+}
+
+/// Inbox notifications for users (e.g. caregiver: APPROVED, REJECTED, REVIEW).
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String   @db.VarChar(200)
+  message   String   @db.Text
+  type      String   @db.VarChar(20)
+  read      Boolean  @default(false)
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, read])
+  @@map("notifications")
+}
+
+enum UserRole {
+  CLIENT
+  CAREGIVER
+  ADMIN
+}
+
+enum ServiceType {
+  HOSPEDAJE
+  PASEO
+}
+
+enum Zone {
+  EQUIPETROL
+  URBARI
+  NORTE
+  LAS_PALMAS
+  CENTRO_SAN_MARTIN
+  OTROS
+}
+
+/// Flujo: creación → pago (automático o aprobación admin) → confirmada → en curso → completada.
+/// Cancelación: cliente cancela (refund según política) o cuidador solicita → admin aprueba/rechaza.
+enum BookingStatus {
+  PENDING_PAYMENT
+  PAYMENT_PENDING_APPROVAL
+  WAITING_CAREGIVER_APPROVAL
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  REJECTED_BY_CAREGIVER
+}
+
+/// Estado del reembolso cuando la reserva se cancela (MVP: ventana 48h hospedaje / 12h paseos).
+enum RefundStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  PROCESSED
+}
+
+enum TimeSlot {
+  MANANA
+  TARDE
+  NOCHE
+}
+
+enum ExperienceYears {
+  NEVER
+  LESS1
+  ONE_TO_FIVE
+  MORE5
+}
+
+enum AnimalType {
+  DOGS
+  CATS
+  PUPPIES
+  SENIORS
+  LARGE
+  SMALL
+  SPECIAL
+}
+
+enum MedicationType {
+  ORAL
+  INJECT
+  TOPIC
+}
+
+enum PetSize {
+  SMALL
+  MEDIUM
+  LARGE
+  GIANT
+}
+
+enum HomeType {
+  HOUSE
+  APARTMENT
+}
+
+enum PetsSleep {
+  INSIDE
+  OUTSIDE
+}
+
+enum ClientPetsSleep {
+  BED
+  CRATE
+  SOFA
+  FLOOR
+}
+
+enum VerificationStatus {
+  PENDING_REVIEW
+  REVIEW
+  APPROVED
+  REJECTED
+}
+
+/// Flujo completo registro + revisión admin. Reemplaza uso de verified/verificationStatus a largo plazo.
+enum CaregiverStatus {
+  DRAFT
+  PENDING_REVIEW
+  NEEDS_REVISION
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+model AjustePrecio {
+  id                   String   @id @default(uuid())
+  zona                 String
+  servicio             String
+  multiplicador        Float
+  porcentajeAjuste     Int
+  aplicarDesde         DateTime
+  aplicarHasta         DateTime
+  motivo               String
+  explicacionParaDueno String
+  cuandoVuelveNormal   String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([zona, servicio])
+}

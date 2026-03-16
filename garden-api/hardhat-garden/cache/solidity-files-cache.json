@@ -1,0 +1,79 @@
+{
+  "_format": "hh-sol-cache-2",
+  "files": {
+    "/Users/saimateovargas/Library/CloudStorage/OneDrive-Personal/Mateo Vargas/Proyectos/GARDEN/garden-mvp/garden-api/hardhat-garden/contracts/GardenEscrow.sol": {
+      "lastModificationDate": 1772835341322,
+      "contentHash": "2b553b34a29591029356558234adc92c",
+      "sourceName": "contracts/GardenEscrow.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 1000
+          },
+          "viaIR": true,
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "GardenEscrow"
+      ]
+    },
+    "/Users/saimateovargas/Library/CloudStorage/OneDrive-Personal/Mateo Vargas/Proyectos/GARDEN/garden-mvp/garden-api/hardhat-garden/contracts/GardenProfiles.sol": {
+      "lastModificationDate": 1773428647567,
+      "contentHash": "77e7593b51c8d19f405f5f641c355a4d",
+      "sourceName": "contracts/GardenProfiles.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 1000
+          },
+          "viaIR": true,
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "GardenProfiles"
+      ]
+    }
+  }
+}

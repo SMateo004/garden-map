@@ -1,0 +1,20 @@
+{
+  "name": "garden-mvp",
+  "private": true,
+  "description": "GARDEN MVP - Perfiles verificados, reservas, pagos QR, reseñas",
+  "scripts": {
+    "ensure:env": "node scripts/ensure-env.js",
+    "setup:db": "npm run ensure:env && cd garden-api && npx prisma generate && npx prisma migrate deploy && npx prisma db seed",
+    "setup:db:dev": "cd garden-api && npx prisma generate && npx prisma migrate dev --name init && npx prisma db seed",
+    "start:api": "cd garden-api && npm run dev",
+    "start:web": "cd garden-web && npm run dev",
+    "start:full": "npm run start:api & npm run start:web",
+    "test:flow": "npm run test:api --prefix garden-api && npm run test:run --prefix garden-web 2>/dev/null; echo 'Tests ejecutados'",
+    "test:api": "cd garden-api && npm run test:unit",
+    "test:web": "cd garden-web && npm run test:run",
+    "verification": "node scripts/verification-flow.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,43 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e6]:
+      - link "GARDEN" [ref=e7] [cursor=pointer]:
+        - /url: /
+      - navigation [ref=e8]:
+        - link "Cuidadores" [ref=e9] [cursor=pointer]:
+          - /url: /
+        - button "Login / Sign In (Dueños)" [ref=e10] [cursor=pointer]
+        - button "Soy cuidador" [ref=e11] [cursor=pointer]
+  - main [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - generic [ref=e16]: Paso 8 de 10
+          - button "Guardar y salir" [ref=e17] [cursor=pointer]
+        - progressbar "Paso 8 de 10" [ref=e18]
+      - main [ref=e20]:
+        - generic [ref=e21]:
+          - heading "Fotos personales (con mascotas)" [level=2] [ref=e22]
+          - paragraph [ref=e23]: Mínimo 2, máximo 4 fotos personales. JPG/PNG, 5MB cada una.
+          - generic [ref=e24]:
+            - generic [ref=e26] [cursor=pointer]:
+              - text: 📸
+              - paragraph [ref=e27]: Haz clic para subir fotos
+              - paragraph [ref=e28]: O arrastra y suelta aquí
+            - generic [ref=e29]:
+              - generic [ref=e30]:
+                - img "Preview 1" [ref=e31]
+                - button "Quitar foto" [ref=e32] [cursor=pointer]:
+                  - img [ref=e33]
+              - generic [ref=e35]:
+                - img "Preview 2" [ref=e36]
+                - button "Quitar foto" [ref=e37] [cursor=pointer]:
+                  - img [ref=e38]
+            - paragraph [ref=e40]: 2/4 fotos seleccionadas
+          - generic [ref=e41]:
+            - button "← Atrás" [ref=e42] [cursor=pointer]
+            - button "Subir y seguir →" [ref=e43] [cursor=pointer]
+```

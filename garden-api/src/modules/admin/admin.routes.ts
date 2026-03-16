@@ -1,0 +1,68 @@
+import { Router } from 'express';
+import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
+import * as adminController from './admin.controller.js';
+
+const router = Router();
+
+router.use(authMiddleware);
+router.use(requireRole('ADMIN'));
+
+/** GET /api/admin/caregivers — todos los cuidadores, paginado, ?status=pendientes|APPROVED|... */
+router.get('/caregivers', adminController.getCaregiversList);
+
+/** GET /api/admin/caregivers/pending — status IN [PENDING_REVIEW, NEEDS_REVISION], paginado. */
+router.get('/caregivers/pending', adminController.getPendingCaregivers);
+
+/** GET /api/admin/caregivers/:id/detail — todos los datos de la solicitud para revisión (solo ADMIN). */
+router.get('/caregivers/:id/detail', adminController.getCaregiverDetail);
+
+/** PATCH /api/admin/caregivers/:id/review — approve | reject | request_revision. */
+router.patch('/caregivers/:id/review', adminController.reviewCaregiver);
+
+/** PATCH /api/admin/caregivers/:id/suspend — suspend profile. */
+router.patch('/caregivers/:id/suspend', adminController.suspendCaregiver);
+
+/** PATCH /api/admin/caregivers/:id/activate — restore profile. */
+router.patch('/caregivers/:id/activate', adminController.activateCaregiver);
+
+/** DELETE /api/admin/caregivers/:id — absolute delete (removes User + Profile + all). */
+router.delete('/caregivers/:id', adminController.deleteCaregiver);
+
+/** Manually verify caregiver email. */
+router.patch('/caregivers/:id/verify-email', adminController.verifyEmail);
+
+/** Legacy: toggle verify badge (mantener compatibilidad). */
+router.patch('/caregivers/:id/verify', adminController.toggleVerify);
+
+/** GET /api/admin/payments-pending — reservas pendientes de aprobación de pago manual. */
+router.get('/payments-pending', adminController.getPaymentsPending);
+
+/** POST /api/admin/bookings/:id/reject-payment — rechazar pago manual. */
+router.post('/bookings/:id/reject-payment', adminController.rejectPayment);
+
+/** GET /api/admin/reservations — listado de reservas, ?status= opcional. */
+router.get('/reservations', adminController.getReservations);
+
+
+/** GET /api/admin/identity-reviews — lista sesiones en REVIEW. */
+router.get('/identity-reviews', adminController.listIdentityReviews);
+
+/** GET /api/admin/identity-reviews/:id — detalles con imágenes para revisión. */
+router.get('/identity-reviews/:id', adminController.getIdentityVerificationDetail);
+
+/** GET /api/admin/verifications/:id — alias para compatibilidad. */
+router.get('/verifications/:id', adminController.getIdentityVerificationDetail);
+
+/** POST /api/admin/verifications/:id/approve — aprobar manualmente. */
+router.post('/verifications/:id/approve', adminController.approveIdentityVerification);
+
+/** POST /api/admin/identity-reviews/:id/approve — aprobar (alias). */
+router.post('/identity-reviews/:id/approve', adminController.approveIdentityVerification);
+
+/** POST /api/admin/verifications/:id/reject — rechazar manualmente. */
+router.post('/verifications/:id/reject', adminController.rejectIdentityVerification);
+
+/** POST /api/admin/identity-reviews/:id/reject — rechazar (alias). */
+router.post('/identity-reviews/:id/reject', adminController.rejectIdentityVerification);
+
+export default router;
