@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
 import '../../services/agentes_service.dart';
 import '../../widgets/disputa_panel_card.dart';
+import '../../theme/garden_theme.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({Key? key}) : super(key: key);
@@ -122,111 +123,190 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     }
   }
 
-  Widget _buildTab(String label, int index) {
-    final isSelected = _selectedTab == index;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedTab = index),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isSelected ? kPrimaryColor.withOpacity(0.15) : Colors.transparent,
-            border: Border(
-              bottom: BorderSide(
-                color: isSelected ? kPrimaryColor : Colors.transparent,
-                width: 2,
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: themeNotifier,
+      builder: (context, _) {
+        final isDark = themeNotifier.isDark;
+        final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+        final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+        final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+        final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+        final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+        return Scaffold(
+          backgroundColor: bg,
+          appBar: AppBar(
+            backgroundColor: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+            elevation: 0,
+            automaticallyImplyLeading: false,
+            title: Row(
+              children: [
+                Text('GARDEN', style: TextStyle(color: GardenColors.primary, fontSize: 20, fontWeight: FontWeight.w900)),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: GardenColors.error.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: GardenColors.error.withOpacity(0.3)),
+                  ),
+                  child: Text('Admin', style: TextStyle(color: GardenColors.error, fontSize: 11, fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
+            actions: [
+              IconButton(
+                icon: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, color: subtextColor),
+                onPressed: () => themeNotifier.toggle(),
+              ),
+            ],
+          ),
+          body: Column(
+            children: [
+              _buildTabBar(surface, textColor, subtextColor, borderColor, isDark),
+              Expanded(
+                child: IndexedStack(
+                  index: _selectedTab,
+                  children: [
+                    _buildCaregiversList(surface, textColor, subtextColor, borderColor),
+                    _buildIdentityList(surface, textColor, subtextColor, borderColor),
+                    _buildDisputasPlaceholder(surface, textColor, subtextColor, borderColor),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTabBar(Color surface, Color textColor, Color subtextColor, Color borderColor, bool isDark) {
+    final tabs = [
+      ('Cuidadores', Icons.people_outlined),
+      ('Identidad', Icons.verified_user_outlined),
+      ('Disputas', Icons.gavel_outlined),
+    ];
+    return Container(
+      color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Row(
+        children: tabs.asMap().entries.map((entry) {
+          final i = entry.key;
+          final tab = entry.value;
+          final selected = _selectedTab == i;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _selectedTab = i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: EdgeInsets.only(right: i < tabs.length - 1 ? 8 : 0),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: selected ? GardenColors.primary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: selected ? GardenColors.primary : borderColor,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(tab.$2, size: 14, color: selected ? Colors.white : subtextColor),
+                    const SizedBox(width: 6),
+                    Text(tab.$1, style: TextStyle(
+                      color: selected ? Colors.white : subtextColor,
+                      fontSize: 12,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    )),
+                  ],
+                ),
               ),
             ),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? Colors.white : kTextSecondary,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-        ),
+          );
+        }).toList(),
       ),
     );
   }
 
-  Color _getStatusColor(String status) {
+  Widget _statusBadge(String status) {
+    Color color;
+    String label;
     switch (status) {
-      case 'APPROVED': return Colors.green;
-      case 'PENDING_REVIEW': return Colors.amber;
-      case 'NEEDS_REVISION': return Colors.orange;
-      case 'REJECTED': return Colors.red;
-      case 'SUSPENDED': return Colors.grey;
-      default: return kTextSecondary;
+      case 'APPROVED': color = GardenColors.success; label = 'Aprobado'; break;
+      case 'PENDING_REVIEW': color = GardenColors.warning; label = 'Pendiente'; break;
+      case 'NEEDS_REVISION': color = GardenColors.accent; label = 'Revisión'; break;
+      case 'REJECTED': color = GardenColors.error; label = 'Rechazado'; break;
+      case 'SUSPENDED': color = GardenColors.darkTextSecondary; label = 'Suspendido'; break;
+      default: color = GardenColors.darkTextSecondary; label = status;
     }
+    return GardenBadge(text: label, color: color, fontSize: 11);
   }
 
-  Widget _buildCaregiversList() {
-    if (_isLoading) return const Center(child: CircularProgressIndicator(color: kPrimaryColor));
-    if (_caregivers.isEmpty) return const Center(child: Text('No hay cuidadores registrados', style: TextStyle(color: kTextSecondary)));
+  Widget _buildCaregiversList(Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    if (_isLoading) return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
+    if (_caregivers.isEmpty) return Center(child: Text('No hay cuidadores registrados', style: TextStyle(color: subtextColor)));
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: _caregivers.length,
       itemBuilder: (context, index) {
         final caregiver = _caregivers[index];
-        final status = caregiver['status'] ?? 'UNKNOWN';
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: kSurfaceColor,
-            borderRadius: BorderRadius.circular(12),
+            color: surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: borderColor),
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  GardenAvatar(
+                    imageUrl: null,
+                    size: 44,
+                    initials: (caregiver['fullName'] as String? ?? 'C').substring(0, 1),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      caregiver['fullName'] ?? 'Sin nombre',
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(caregiver['fullName'] ?? '—', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                        Text(caregiver['email'] ?? '—', style: TextStyle(color: subtextColor, fontSize: 12)),
+                      ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: _getStatusColor(status).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: _getStatusColor(status).withOpacity(0.5)),
-                    ),
-                    child: Text(
-                      status,
-                      style: TextStyle(color: _getStatusColor(status), fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                  ),
+                  _statusBadge(caregiver['status'] as String? ?? ''),
                 ],
               ),
-              const SizedBox(height: 4),
-              Text(caregiver['email'] ?? '', style: const TextStyle(color: kTextSecondary, fontSize: 12)),
-              const SizedBox(height: 4),
-              Text(
-                'Registrado el: ${caregiver['createdAt'] != null ? caregiver['createdAt'].toString().substring(0, 10) : '-'}',
-                style: const TextStyle(color: kTextSecondary, fontSize: 11),
-              ),
-              if (status == 'PENDING_REVIEW' || status == 'NEEDS_REVISION') ...[
+              if (caregiver['status'] == 'PENDING_REVIEW' || caregiver['status'] == 'NEEDS_REVISION') ...[
                 const SizedBox(height: 12),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    TextButton(
-                      style: TextButton.styleFrom(backgroundColor: Colors.red.shade900.withOpacity(0.3)),
-                      onPressed: () => _reviewCaregiver(caregiver['id'], 'reject'),
-                      child: const Text('Rechazar', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                    Expanded(
+                      child: GardenButton(
+                        label: 'Aprobar',
+                        icon: Icons.check_rounded,
+                        height: 38,
+                        color: GardenColors.success,
+                        onPressed: () => _reviewCaregiver(caregiver['id'] as String, 'approve'),
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700),
-                      onPressed: () => _reviewCaregiver(caregiver['id'], 'approve'),
-                      child: const Text('Aprobar', style: TextStyle(color: Colors.white, fontSize: 12)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: GardenButton(
+                        label: 'Rechazar',
+                        icon: Icons.close_rounded,
+                        height: 38,
+                        color: GardenColors.error,
+                        outline: true,
+                        onPressed: () => _reviewCaregiver(caregiver['id'] as String, 'reject'),
+                      ),
                     ),
                   ],
                 ),
@@ -238,9 +318,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     );
   }
 
-  Widget _buildIdentityList() {
-    if (_isLoading) return const Center(child: CircularProgressIndicator(color: kPrimaryColor));
-    if (_identityReviews.isEmpty) return const Center(child: Text('No hay verificaciones pendientes', style: TextStyle(color: kTextSecondary)));
+  Widget _buildIdentityList(Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    if (_isLoading) return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
+    if (_identityReviews.isEmpty) return Center(child: Text('No hay verificaciones pendientes', style: TextStyle(color: subtextColor)));
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -251,8 +331,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: kSurfaceColor,
-            borderRadius: BorderRadius.circular(12),
+            color: surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: borderColor),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -263,22 +344,24 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   children: [
                     Text(
                       review['fullName'] ?? 'Usuario',
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                      style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
                     ),
                     Text(
                       'Estado: ${review['status']}',
-                      style: const TextStyle(color: kTextSecondary, fontSize: 12),
+                      style: TextStyle(color: subtextColor, fontSize: 12),
                     ),
                   ],
                 ),
               ),
-              ElevatedButton(
+              GardenButton(
+                label: 'Revisar',
+                width: 100,
+                height: 38,
                 onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Módulo de verificación facial próximamente')),
                   );
                 },
-                child: const Text('Revisar'),
               ),
             ],
           ),
@@ -287,115 +370,92 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     );
   }
 
-  Widget _buildDisputasPlaceholder() {
+  Widget _buildDisputasPlaceholder(Color surface, Color textColor, Color subtextColor, Color borderColor) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          const SizedBox(height: 24),
-          const Icon(Icons.gavel, color: kPrimaryColor, size: 64),
-          const SizedBox(height: 16),
-          const Text(
-            'Panel de Disputas',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 32),
-            child: Text(
-              'Las disputas aparecerán aquí cuando los dueños reporten problemas con sus reservas.',
-              style: TextStyle(color: kTextSecondary),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          const SizedBox(height: 32),
-          // Solo mostrar DisputaPanelCard cuando el token esté cargado
-          if (_adminToken.isEmpty)
-            const Center(
-              child: CircularProgressIndicator(color: kPrimaryColor),
-            )
-          else
-            DisputaPanelCard(
-              reservaId: 'DISP-7721',
-              motivoDisputa: 'El cuidador no se presentó a tiempo para el paseo de la tarde y no respondió mensajes por 2 horas.',
-              reserva: const {
-                'id': 'DISP-7721',
-                'fechas': '14-15 Marzo 2026',
-                'monto': 220,
-                'estado': 'completado',
-              },
-              cuidador: const {
-                'id': 'caregiver_01',
-                'nombre': 'Sai Mateo Vargas',
-                'rating_promedio': 4.9,
-                'disputas_previas': 0,
-                'tiempo_en_plataforma': '6 meses',
-              },
-              dueno: const {
-                'id': 'owner_01',
-                'nombre': 'Leo Messi',
-                'rating_promedio': 4.5,
-                'disputas_previas': 1,
-                'tiempo_en_plataforma': '3 meses',
-              },
-              mascota: const {
-                'nombre': 'Pulga',
-                'raza': 'Dálmata',
-                'edad': '2 años',
-                'condiciones_medicas': 'Ninguna',
-              },
-              mensajesRelevantes: const [
-                '14 Mar 15:00 - Dueño: ¿Dónde estás? Ya son las 3pm.',
-                '14 Mar 15:45 - Dueño: No contestas, voy a cancelar.',
-                '14 Mar 17:00 - Cuidador: Perdón, tuve un imprevisto.',
-              ],
-              agentesService: AgentesService(authToken: _adminToken),
-              onVeredictAplicado: (veredicto) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Veredicto aplicado: $veredicto'),
-                    backgroundColor: kPrimaryColor,
-                  ),
-                );
-              },
-            ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: kBackgroundColor,
-      appBar: AppBar(
-        title: const Text('Panel GARDEN'),
-        backgroundColor: kSurfaceColor,
-        automaticallyImplyLeading: false,
-      ),
-      body: Column(
-        children: [
           Container(
-            color: kSurfaceColor,
-            child: Row(
-              children: [
-                _buildTab('Cuidadores', 0),
-                _buildTab('Identidad', 1),
-                _buildTab('Disputas', 2),
-              ],
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderColor),
             ),
-          ),
-          Expanded(
-            child: IndexedStack(
-              index: _selectedTab,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildCaregiversList(),
-                _buildIdentityList(),
-                _buildDisputasPlaceholder(),
+                Row(
+                  children: [
+                    Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(
+                        color: GardenColors.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.gavel_outlined, color: GardenColors.primary, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Panel de Disputas', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 16)),
+                          Text('Análisis con GARDEN IA', style: TextStyle(color: subtextColor, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    GardenBadge(text: 'IA Activa', color: GardenColors.primary, icon: Icons.auto_awesome_outlined, fontSize: 11),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (_adminToken.isEmpty)
+                  const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+                else
+                  DisputaPanelCard(
+                    reservaId: 'DISP-7721',
+                    motivoDisputa: 'El cuidador no se presentó a tiempo para el paseo de la tarde y no respondió mensajes por 2 horas.',
+                    reserva: const {
+                      'id': 'DISP-7721',
+                      'fechas': '14-15 Marzo 2026',
+                      'monto': 220,
+                      'estado': 'completado',
+                    },
+                    cuidador: const {
+                      'id': 'caregiver_01',
+                      'nombre': 'Sai Mateo Vargas',
+                      'rating_promedio': 4.9,
+                      'disputas_previas': 0,
+                      'tiempo_en_plataforma': '6 meses',
+                    },
+                    dueno: const {
+                      'id': 'owner_01',
+                      'nombre': 'Leo Messi',
+                      'rating_promedio': 4.5,
+                      'disputas_previas': 1,
+                      'tiempo_en_plataforma': '3 meses',
+                    },
+                    mascota: const {
+                      'nombre': 'Pulga',
+                      'raza': 'Dálmata',
+                      'edad': '2 años',
+                      'condiciones_medicas': 'Ninguna',
+                    },
+                    mensajesRelevantes: const [
+                      '14 Mar 15:00 - Dueño: ¿Dónde estás? Ya son las 3pm.',
+                      '14 Mar 15:45 - Dueño: No contestas, voy a cancelar.',
+                      '14 Mar 17:00 - Cuidador: Perdón, tuve un imprevisto.',
+                    ],
+                    agentesService: AgentesService(authToken: _adminToken),
+                    onVeredictAplicado: (veredicto) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Veredicto aplicado: $veredicto'),
+                          backgroundColor: GardenColors.primary,
+                        ),
+                      );
+                    },
+                  ),
               ],
             ),
           ),
