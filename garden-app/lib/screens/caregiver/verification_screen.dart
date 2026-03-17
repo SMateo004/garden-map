@@ -354,6 +354,26 @@ class _VerificationScreenState extends State<VerificationScreen> {
     }
   }
 
+  Future<bool> _checkBlockchainBadge() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token') ?? _caregiverToken;
+      final response = await http.get(
+        Uri.parse('$_baseUrl/caregiver/my-profile'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        return data['data']?['isVerified'] == true || 
+               data['data']?['verificationStatus'] == 'APPROVED' ||
+               data['data']?['verificationStatus'] == 'VERIFIED';
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
   Widget _buildIntro() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -529,6 +549,51 @@ class _VerificationScreenState extends State<VerificationScreen> {
             textAlign: TextAlign.center,
             style: const TextStyle(color: kTextSecondary, fontSize: 16, height: 1.5),
           ),
+
+          if (isApproved)
+            FutureBuilder<bool>(
+              future: _checkBlockchainBadge(),
+              builder: (context, snapshot) {
+                if (snapshot.data == true) {
+                  return Container(
+                    margin: const EdgeInsets.only(top: 16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A1F2E),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF8247E5).withOpacity(0.5)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32, height: 32,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF8247E5).withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: Text('⬡', style: TextStyle(color: Color(0xFF8247E5), fontSize: 16)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Badge registrado en Polygon',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                              Text('Tu verificación quedó registrada de forma inmutable en la blockchain',
+                                style: TextStyle(color: Color(0xFF8247E5), fontSize: 11)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return const SizedBox();
+              },
+            ),
           const SizedBox(height: 48),
           if (isRejected)
             ElevatedButton(

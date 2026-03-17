@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
 import '../../services/agentes_service.dart';
 import '../../widgets/temporada_alta_badge.dart';
+import '../../theme/garden_theme.dart';
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({Key? key}) : super(key: key);
@@ -124,6 +125,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   Widget _buildFilterChip(String label, String value) {
     final isSelected = _selectedService == value;
+    final theme = Theme.of(context);
+    
     return GestureDetector(
       onTap: () {
         if (!isSelected) {
@@ -131,17 +134,23 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           _loadCaregivers(reset: true);
         }
       },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? kPrimaryColor : kBackgroundColor,
-          borderRadius: BorderRadius.circular(20),
+          color: isSelected ? GardenColors.primary : theme.colorScheme.surfaceVariant,
+          borderRadius: GardenRadius.full_,
+          boxShadow: isSelected ? GardenShadows.primary : null,
+          border: Border.all(
+            color: isSelected ? GardenColors.primary : theme.colorScheme.outline.withOpacity(0.5),
+            width: 1,
+          ),
         ),
         child: Text(
           label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : kTextSecondary,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          style: GardenText.labelLarge.copyWith(
+            color: isSelected ? Colors.white : theme.colorScheme.onSurface,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
           ),
         ),
       ),
@@ -149,127 +158,95 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   Widget _buildCaregiverCard(Map<String, dynamic> caregiver) {
-    return GestureDetector(
+    final theme = Theme.of(context);
+    final isVerified = caregiver['verified'] == true;
+    
+    return GardenCard(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: EdgeInsets.zero,
       onTap: () => context.push('/caregiver/${caregiver['id']}'),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        decoration: BoxDecoration(
-          color: kSurfaceColor,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
-        ),
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Sección superior: Imagen y Resumen rápido
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Imagen del cuidador
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: SizedBox(
-                    width: 80,
-                    height: 80,
-                    child: caregiver['profilePicture'] != null
-                        ? Image.network(
-                            caregiver['profilePicture'],
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Container(
-                              color: kBackgroundColor,
-                              child: const Icon(Icons.person, color: kTextSecondary, size: 40),
-                            ),
-                          )
-                        : Container(
-                            color: kBackgroundColor,
-                            child: const Icon(Icons.person, color: kTextSecondary, size: 40),
-                          ),
+                // Avatar grande con sombra
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: GardenRadius.lg_,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Hero(
+                    tag: 'avatar-${caregiver['id']}',
+                    child: GardenAvatar(
+                      imageUrl: caregiver['profilePicture'],
+                      size: 90,
+                      initials: '${caregiver['firstName']} ${caregiver['lastName']}',
+                    ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                // Info del cuidador
+                const SizedBox(width: 16),
+                // Información principal
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          if (caregiver['verified'] == true) ...[
-                            const Icon(Icons.verified, color: kPrimaryColor, size: 16),
-                            const SizedBox(width: 4),
-                          ],
                           Expanded(
                             child: Text(
                               '${caregiver['firstName']} ${caregiver['lastName']}',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                              style: GardenText.headingLarge.copyWith(
+                                color: theme.colorScheme.onSurface,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                          if (isVerified)
+                            Icon(Icons.verified, color: GardenColors.secondary, size: 20),
                         ],
                       ),
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(Icons.location_on, size: 12, color: kTextSecondary),
+                          Icon(Icons.location_on, size: 14, color: theme.colorScheme.onSurface.withOpacity(0.5)),
                           const SizedBox(width: 4),
                           Text(
                             _zoneLabels[caregiver['zone']] ?? caregiver['zone'] ?? 'Santa Cruz',
-                            style: const TextStyle(fontSize: 12, color: kTextSecondary),
+                            style: GardenText.bodySmall.copyWith(
+                              color: theme.colorScheme.onSurface.withOpacity(0.6),
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 4,
-                        children: (caregiver['services'] as List? ?? []).map((s) {
-                          return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: kPrimaryColor.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              s.toString(),
-                              style: const TextStyle(fontSize: 11, color: kPrimaryColor),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 8),
+                      // Rating
                       Row(
                         children: [
-                          const Icon(Icons.star, color: Color(0xFFFFD700), size: 14),
+                          const Icon(Icons.star, color: GardenColors.star, size: 16),
                           const SizedBox(width: 4),
                           Text(
                             (caregiver['rating'] as num? ?? 0).toStringAsFixed(1),
-                            style: const TextStyle(fontSize: 12, color: Colors.white),
+                            style: GardenText.labelLarge.copyWith(
+                              color: theme.colorScheme.onSurface,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                           if ((caregiver['reviewCount'] as int? ?? 0) > 0)
                             Text(
-                              ' (${caregiver['reviewCount']})',
-                              style: const TextStyle(fontSize: 12, color: kTextSecondary),
-                            ),
-                          const Spacer(),
-                          if (caregiver['pricePerWalk30'] != null)
-                            Text(
-                              'Bs ${caregiver['pricePerWalk30']}/paseo',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: kPrimaryColor,
-                              ),
-                            )
-                          else if (caregiver['pricePerDay'] != null)
-                            Text(
-                              'Bs ${caregiver['pricePerDay']}/noche',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: kPrimaryColor,
+                              ' (${caregiver['reviewCount']} reseñas)',
+                              style: GardenText.caption.copyWith(
+                                color: theme.colorScheme.onSurface.withOpacity(0.5),
                               ),
                             ),
                         ],
@@ -279,18 +256,125 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 ),
               ],
             ),
-            // Badge de temporada alta
-            if (caregiver['zone'] == 'EQUIPETROL') ...[
-              const SizedBox(height: 12),
-              TemporadaAltaBadge(
+          ),
+          
+          // Línea divisoria sutil
+          Divider(height: 1, color: theme.colorScheme.outline.withOpacity(0.1)),
+          
+          // Sección inferior: Servicios y Precio
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Servicios como Badges
+                Expanded(
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: (caregiver['services'] as List? ?? []).take(2).map((s) {
+                      return GardenBadge(
+                        text: s.toString(),
+                        color: GardenColors.secondary,
+                        fontSize: 10,
+                      );
+                    }).toList(),
+                  ),
+                ),
+                // Precio destacado
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (caregiver['pricePerWalk30'] != null) ...[
+                      Text(
+                        'Bs ${caregiver['pricePerWalk30']}',
+                        style: GardenText.price.copyWith(color: GardenColors.primary),
+                      ),
+                      Text('por paseo', style: GardenText.caption),
+                    ] else if (caregiver['pricePerDay'] != null) ...[
+                      Text(
+                        'Bs ${caregiver['pricePerDay']}',
+                        style: GardenText.price.copyWith(color: GardenColors.primary),
+                      ),
+                      Text('por noche', style: GardenText.caption),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Blockchain Verification (si aplica)
+          if (isVerified)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+              decoration: BoxDecoration(
+                color: GardenColors.polygon.withOpacity(0.08),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(GardenRadius.lg),
+                  bottomRight: Radius.circular(GardenRadius.lg),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.link, size: 12, color: GardenColors.polygon),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Verificado en Polygon Blockchain',
+                    style: GardenText.caption.copyWith(
+                      color: GardenColors.polygon,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          
+          // Badge de temporada alta
+          if (caregiver['zone'] == 'EQUIPETROL')
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TemporadaAltaBadge(
                 zona: 'Equipetrol',
                 porcentajeAjuste: 15,
                 motivo: 'Semana Santa',
                 fechaVueltaNormal: '24 de marzo',
                 agentesService: AgentesService(authToken: _authToken),
               ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingSkeleton() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(20),
+      itemCount: 5,
+      itemBuilder: (context, _) => Padding(
+        padding: const EdgeInsets.only(bottom: 20),
+        child: GardenCard(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const GardenSkeleton(width: 80, height: 80, radius: GardenRadius.lg),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    GardenSkeleton(width: 150, height: 18),
+                    SizedBox(height: 8),
+                    GardenSkeleton(width: 100, height: 14),
+                    SizedBox(height: 12),
+                    GardenSkeleton(width: 200, height: 14),
+                  ],
+                ),
+              ),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -298,119 +382,191 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: kBackgroundColor,
-      appBar: AppBar(
-        title: const Text('Encuentra un cuidador'),
-        backgroundColor: kSurfaceColor,
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.list_alt, color: Colors.white),
-            tooltip: 'Mis reservas',
-            onPressed: () => context.push('/my-bookings'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.pets, color: Colors.white),
-            tooltip: 'Mis mascotas',
-            onPressed: () => context.push('/my-pets'),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Filtros
-          Container(
-            color: kSurfaceColor,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    _buildFilterChip('Todos', 'todos'),
-                    const SizedBox(width: 8),
-                    _buildFilterChip('Paseo 🦮', 'paseo'),
-                    const SizedBox(width: 8),
-                    _buildFilterChip('Hospedaje 🏠', 'hospedaje'),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: _selectedZone,
-                  hint: const Text('Todas las zonas', style: TextStyle(color: kTextSecondary)),
-                  dropdownColor: kSurfaceColor,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.location_on_outlined, color: kTextSecondary),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: CustomScrollView(
+        controller: _scrollController,
+        slivers: [
+          // Header Moderno estilo Airbnb/Rover
+          SliverAppBar(
+            expandedHeight: 140,
+            floating: true,
+            pinned: true,
+            elevation: 0,
+            backgroundColor: theme.colorScheme.surface,
+            automaticallyImplyLeading: false,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: isDark 
+                      ? [GardenColors.darkSurface, theme.scaffoldBackgroundColor]
+                      : [GardenColors.primary.withOpacity(0.05), theme.scaffoldBackgroundColor],
                   ),
-                  items: _zoneLabels.entries.map((e) {
-                    return DropdownMenuItem(
-                      value: e.key,
-                      child: Text(e.value),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() => _selectedZone = value);
-                    _loadCaregivers(reset: true);
-                  },
                 ),
-              ],
+              ),
+              titlePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Busca el cuidador ideal',
+                      style: GardenText.headingLarge.copyWith(
+                        color: theme.colorScheme.onSurface,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  // Botón de Toggle de Tema (para testear)
+                  IconButton(
+                    icon: Icon(
+                      isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                      color: GardenColors.primary,
+                      size: 20,
+                    ),
+                    onPressed: () => themeNotifier.toggle(),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: IconButton(
+                  icon: Icon(Icons.list_alt_rounded, color: theme.colorScheme.onSurface),
+                  onPressed: () => context.push('/my-bookings'),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: IconButton(
+                  icon: Icon(Icons.pets_rounded, color: theme.colorScheme.onSurface),
+                  onPressed: () => context.push('/my-pets'),
+                ),
+              ),
+            ],
+          ),
+
+          // Filtros
+          SliverToBoxAdapter(
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Chips de servicio
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildFilterChip('Todos', 'todos'),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Paseo 🦮', 'paseo'),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Hospedaje 🏠', 'hospedaje'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Selector de zona con nuevo estilo
+                  Container(
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                      borderRadius: GardenRadius.md_,
+                      border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
+                    ),
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedZone,
+                      dropdownColor: theme.colorScheme.surface,
+                      icon: Icon(Icons.keyboard_arrow_down_rounded, color: GardenColors.primary),
+                      decoration: InputDecoration(
+                        hintText: 'Todas las zonas',
+                        hintStyle: GardenText.bodyMedium.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.4)),
+                        prefixIcon: Icon(Icons.location_on_rounded, color: GardenColors.primary, size: 20),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      items: _zoneLabels.entries.map((e) {
+                        return DropdownMenuItem(
+                          value: e.key,
+                          child: Text(e.value, style: GardenText.bodyMedium),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() => _selectedZone = value);
+                        _loadCaregivers(reset: true);
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          // Lista
-          Expanded(
-            child: _caregivers.isEmpty && _isLoading
-                ? const Center(child: CircularProgressIndicator(color: kPrimaryColor))
-                : _hasError && _caregivers.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.wifi_off, color: kTextSecondary, size: 48),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'No pudimos cargar los cuidadores',
-                              style: TextStyle(color: kTextSecondary),
-                            ),
-                            TextButton(
-                              onPressed: () => _loadCaregivers(reset: true),
-                              child: const Text('Reintentar', style: TextStyle(color: kPrimaryColor)),
-                            ),
-                          ],
-                        ),
-                      )
-                    : _caregivers.isEmpty && !_isLoading
-                        ? const Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.search_off, color: kTextSecondary, size: 48),
-                                SizedBox(height: 16),
-                                Text(
-                                  'No encontramos cuidadores con estos filtros',
-                                  style: TextStyle(color: kTextSecondary),
-                                ),
-                              ],
-                            ),
-                          )
-                        : ListView.builder(
-                            controller: _scrollController,
-                            padding: const EdgeInsets.all(16),
-                            itemCount: _caregivers.length + (_hasMore ? 1 : 0),
-                            itemBuilder: (context, index) {
-                              if (index == _caregivers.length) {
-                                return const Center(
-                                  child: Padding(
-                                    padding: EdgeInsets.all(16),
-                                    child: CircularProgressIndicator(color: kPrimaryColor),
-                                  ),
-                                );
-                              }
-                              return _buildCaregiverCard(_caregivers[index]);
-                            },
-                          ),
-          ),
+
+          // Lista de resultados
+          if (_isLoading && _caregivers.isEmpty)
+            SliverFillRemaining(child: _buildLoadingSkeleton())
+          else if (_hasError && _caregivers.isEmpty)
+            SliverFillRemaining(
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.error_outline_rounded, color: GardenColors.error, size: 60),
+                    const SizedBox(height: 20),
+                    Text('Ops! Algo salió mal', style: GardenText.headingMedium),
+                    const SizedBox(height: 8),
+                    Text('No pudimos conectar con los cuidadores', style: GardenText.bodySmall),
+                    const SizedBox(height: 20),
+                    GardenButton(
+                      label: 'Reintentar',
+                      onPressed: () => _loadCaregivers(reset: true),
+                      width: 160,
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (_caregivers.isEmpty && !_isLoading)
+            SliverFillRemaining(
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.search_off_rounded, color: theme.colorScheme.onSurface.withOpacity(0.2), size: 80),
+                    const SizedBox(height: 20),
+                    Text('Sin resultados', style: GardenText.headingMedium),
+                    const SizedBox(height: 8),
+                    Text('Intenta cambiar los filtros de búsqueda', style: GardenText.bodySmall),
+                  ],
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    if (index == _caregivers.length) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 32),
+                        child: Center(child: CircularProgressIndicator(color: GardenColors.primary)),
+                      );
+                    }
+                    return _buildCaregiverCard(_caregivers[index]);
+                  },
+                  childCount: _caregivers.length + (_hasMore ? 1 : 0),
+                ),
+              ),
+            ),
         ],
       ),
     );

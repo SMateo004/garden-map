@@ -137,6 +137,25 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                                   ),
                                 ],
                               ),
+                              // Badge blockchain
+                              Container(
+                                margin: const EdgeInsets.only(top: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF8247E5).withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFF8247E5).withOpacity(0.4)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Text('⬡', style: TextStyle(fontSize: 10, color: Color(0xFF8247E5))),
+                                    SizedBox(width: 4),
+                                    Text('Polygon Amoy',
+                                      style: TextStyle(fontSize: 10, color: Color(0xFF8247E5))),
+                                  ],
+                                ),
+                              ),
                             ],
                           ],
                         ),

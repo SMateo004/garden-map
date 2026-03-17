@@ -14,14 +14,15 @@ import 'screens/client/payment_screen.dart';
 import 'screens/caregiver/caregiver_home_screen.dart';
 import 'screens/caregiver/verification_screen.dart';
 import 'screens/client/my_bookings_screen.dart';
+import 'theme/garden_theme.dart';
 
-// ── Paleta oficial GARDEN ──────────────────────────────────
-const kBackgroundColor = Color(0xFF0A0E1A);
-const kSurfaceColor    = Color(0xFF1A1F2E);
-const kPrimaryColor    = Color(0xFF4F8EF7);
-const kAccentColor     = Color(0xFFFF6B35);
-const kTextPrimary     = Colors.white;
-const kTextSecondary   = Color(0xFFB0B8C8);
+// ── Compatibilidad con sistema anterior (Legacy Constants) ──
+const kBackgroundColor = GardenColors.background;
+const kSurfaceColor    = GardenColors.surface;
+const kPrimaryColor    = GardenColors.primary;
+const kAccentColor     = GardenColors.accent;
+const kTextPrimary     = GardenColors.textPrimary;
+const kTextSecondary   = GardenColors.textSecondary;
 
 // ── Router ─────────────────────────────────────────────────
 final GoRouter _router = GoRouter(
@@ -120,61 +121,16 @@ class GardenApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'GARDEN',
-      debugShowCheckedModeBanner: false,
-      routerConfig: _router,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        primaryColor: kPrimaryColor,
-        scaffoldBackgroundColor: kBackgroundColor,
-        colorScheme: const ColorScheme.dark(
-          primary: kPrimaryColor,
-          secondary: kAccentColor,
-          surface: kSurfaceColor,
-          onPrimary: Colors.white,
-          onSecondary: Colors.white,
-          onSurface: kTextPrimary,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: kSurfaceColor,
-          foregroundColor: kTextPrimary,
-          elevation: 0,
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: kPrimaryColor,
-            foregroundColor: Colors.white,
-            minimumSize: const Size(double.infinity, 50),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white,
-            side: const BorderSide(color: Colors.white),
-            minimumSize: const Size(double.infinity, 50),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.08),
-          hintStyle: const TextStyle(color: kTextSecondary),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 14,
-          ),
-        ),
-      ),
+    return AnimatedBuilder(
+      animation: themeNotifier,
+      builder: (context, _) {
+        return MaterialApp.router(
+          title: 'GARDEN',
+          debugShowCheckedModeBanner: false,
+          routerConfig: _router,
+          theme: gardenTheme(dark: themeNotifier.isDark),
+        );
+      },
     );
   }
 }
