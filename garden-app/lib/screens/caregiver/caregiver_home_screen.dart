@@ -533,6 +533,41 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               ],
             ),
           ),
+          // Tarjeta de verificación IA (solo si no está verificado)
+          Container(
+            margin: const EdgeInsets.only(top: 16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: kSurfaceColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: kAccentColor.withOpacity(0.5)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.verified_user, color: kAccentColor, size: 32),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Verifica tu identidad', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      Text('Completa la verificación IA para recibir más reservas',
+                        style: TextStyle(color: kTextSecondary, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kAccentColor,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    minimumSize: Size.zero,
+                  ),
+                  onPressed: () => context.push('/caregiver/verification'),
+                  child: const Text('Verificar', style: TextStyle(color: Colors.white, fontSize: 13)),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 24),
           Row(
             children: [

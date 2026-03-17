@@ -12,6 +12,7 @@ import 'screens/client/caregiver_profile_screen.dart';
 import 'screens/client/booking_screen.dart';
 import 'screens/client/payment_screen.dart';
 import 'screens/caregiver/caregiver_home_screen.dart';
+import 'screens/caregiver/verification_screen.dart';
 import 'screens/client/my_bookings_screen.dart';
 
 // ── Paleta oficial GARDEN ──────────────────────────────────
@@ -73,6 +74,11 @@ final GoRouter _router = GoRouter(
       builder: (context, state) => const CaregiverHomeScreen(),
     ),
     GoRoute(
+      path: '/caregiver/verification',
+      name: 'caregiverVerification',
+      builder: (context, state) => const VerificationScreen(),
+    ),
+    GoRoute(
       path: '/caregiver/:id',
       name: 'caregiverProfile',
       builder: (context, state) => CaregiverProfileScreen(
@@ -98,6 +104,7 @@ final GoRouter _router = GoRouter(
       name: 'myBookings',
       builder: (context, state) => const MyBookingsScreen(),
     ),
+
 
   ],
 );
