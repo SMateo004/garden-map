@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
+import '../../theme/garden_theme.dart';
 
 class PaymentScreen extends StatefulWidget {
   final String bookingId;
@@ -92,57 +93,104 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
-  void _showSuccessDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: kSurfaceColor,
-        title: const Text('Pago enviado', style: TextStyle(color: Colors.white)),
-        content: const Text(
-          'Tu solicitud de pago manual ha sido enviada para validación. Te notificaremos cuando el administrador apruebe la transacción.',
-          style: TextStyle(color: kTextSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              context.go('/marketplace');
-            },
-            child: const Text('Volver al inicio', style: TextStyle(color: kPrimaryColor)),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        backgroundColor: kBackgroundColor,
-        body: const Center(child: CircularProgressIndicator(color: kPrimaryColor)),
-      );
-    }
-    if (_paymentInitiated) {
-      return _buildConfirmationScreen();
-    }
-    return Scaffold(
-      backgroundColor: kBackgroundColor,
-      appBar: AppBar(
-        title: const Text('Confirmar pago'),
-        backgroundColor: kSurfaceColor,
-      ),
-      body: _buildPaymentBody(),
+    return AnimatedBuilder(
+      animation: themeNotifier,
+      builder: (context, _) {
+        final isDark = themeNotifier.isDark;
+        final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+        final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+        final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+
+        if (_isLoading) {
+          return Scaffold(
+            backgroundColor: bg,
+            body: const Center(child: CircularProgressIndicator(color: GardenColors.primary)),
+          );
+        }
+        if (_paymentInitiated) {
+          return _buildConfirmationScreen();
+        }
+        return Scaffold(
+          backgroundColor: bg,
+          appBar: AppBar(
+            title: Text('Confirmar pago', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 18)),
+            backgroundColor: surface,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 20),
+              onPressed: () => context.pop(),
+            ),
+          ),
+          body: _buildPaymentBody(),
+        );
+      },
     );
   }
 
   Widget _buildPaymentBody() {
     if (_booking == null) {
-      return const Center(child: Text('Reserva no encontrada', style: TextStyle(color: Colors.white)));
+      return Center(
+        child: Text('Reserva no encontrada', 
+          style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary)),
+      );
     }
 
-    final total = _booking!['totalAmount'];
-    final service = _booking!['serviceType'];
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    if (_qrResponse != null) {
+      return Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            children: [
+              Text('Escanea para pagar', 
+                style: TextStyle(color: textColor, fontWeight: FontWeight.w900, fontSize: 24, letterSpacing: -0.5)),
+              const SizedBox(height: 32),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10)),
+                  ],
+                ),
+                child: Image.network(
+                  _qrResponse!['qrImageUrl'] ?? 'https://via.placeholder.com/250',
+                  width: 250,
+                  height: 250,
+                ),
+              ),
+              const SizedBox(height: 32),
+              Text('Este código expira en 15 minutos',
+                style: TextStyle(color: subtextColor, fontSize: 14)),
+              const SizedBox(height: 48),
+              GardenButton(
+                label: 'Ya realicé el pago',
+                onPressed: () {
+                  setState(() {
+                    _paymentInitiated = true;
+                    _bookingStatus = 'PAYMENT_PENDING_APPROVAL';
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => setState(() => _qrResponse = null),
+                child: Text('Cambiar método de pago', style: TextStyle(color: subtextColor)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -150,214 +198,261 @@ class _PaymentScreenState extends State<PaymentScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Resumen de la reserva
+          Text('Resumen', style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: kSurfaceColor,
-              borderRadius: BorderRadius.circular(12),
+              color: surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderColor),
             ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                 const Text('Resumen del servicio', style: TextStyle(color: kTextSecondary, fontSize: 13)),
-                 const SizedBox(height: 8),
-                 Row(
-                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                   children: [
-                      Text(
-                        service == 'PASEO' ? 'Paseo 🦮' : 'Hospedaje 🏠',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-                      ),
-                      Text(
-                        'Bs $total',
-                        style: const TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold, fontSize: 22),
-                      ),
-                   ],
-                 ),
-                 const SizedBox(height: 12),
-                 const Divider(color: Colors.white12),
-                 const SizedBox(height: 12),
-                 _SummaryItem(label: 'Mascota', value: _booking!['petName'] ?? ''),
-                 _SummaryItem(label: 'Cuidador', value: '${_booking!['caregiver']?['firstName']} ${_booking!['caregiver']?['lastName']}'),
+                _summaryRow(Icons.pets_outlined, 'Mascota', _booking!['petName'] ?? '—', textColor, subtextColor),
+                const SizedBox(height: 10),
+                _summaryRow(
+                  _booking!['serviceType'] == 'PASEO' ? Icons.directions_walk_outlined : Icons.home_outlined,
+                  'Servicio',
+                  _booking!['serviceType'] == 'PASEO' ? 'Paseo' : 'Hospedaje',
+                  textColor, subtextColor,
+                ),
+                const SizedBox(height: 10),
+                _summaryRow(Icons.calendar_today_outlined, 'Fecha',
+                  _booking!['walkDate'] ?? _booking!['startDate'] ?? '—', textColor, subtextColor),
+                Divider(height: 24, color: borderColor),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Total a pagar', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+                    Text('Bs ${_booking!['totalAmount'] ?? _booking!['totalPrice'] ?? '—'}',
+                      style: const TextStyle(color: GardenColors.primary, fontSize: 24, fontWeight: FontWeight.w900)),
+                  ],
+                ),
               ],
             ),
           ),
-          
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
 
-          if (_qrResponse == null) ...[
-            const Text('Método de pago', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-            const SizedBox(height: 16),
-            _PaymentMethodCard(
-              method: 'qr',
-              title: 'Pago por QR Simple',
-              subtitle: 'Genera un código QR para pagar desde tu app bancaria',
-              icon: Icons.qr_code_scanner,
-              isSelected: _selectedMethod == 'qr',
-              onTap: () => setState(() => _selectedMethod = 'qr'),
-            ),
-            const SizedBox(height: 12),
-            _PaymentMethodCard(
-              method: 'manual',
-              title: 'Transferencia Directa / Manual',
-              subtitle: 'Sube tu comprobante para validación administrativa',
-              icon: Icons.account_balance,
-              isSelected: _selectedMethod == 'manual',
-              onTap: () => setState(() => _selectedMethod = 'manual'),
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 56),
-                backgroundColor: kPrimaryColor,
-              ),
-              onPressed: (_selectedMethod == null || _isSubmitting) ? null : _initPayment,
-              child: _isSubmitting 
-                ? const CircularProgressIndicator(color: Colors.white)
-                : const Text('Continuar', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-            ),
-          ] else ...[
-            // Sección de QR generado
-            Center(
-              child: Column(
-                children: [
-                  const Text('Escanea para pagar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20)),
-                  const SizedBox(height: 24),
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Image.network(
-                      _qrResponse!['qrImageUrl'] ?? 'https://via.placeholder.com/250',
-                      width: 250,
-                      height: 250,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Este código expira en 15 minutos',
-                    style: TextStyle(color: kTextSecondary),
-                  ),
-                  const SizedBox(height: 32),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 56),
-                      backgroundColor: kPrimaryColor,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _paymentInitiated = true;
-                        _bookingStatus = 'PAYMENT_PENDING_APPROVAL';
-                      });
-                    },
-                    child: const Text('Ya realicé el pago', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          // Selector de método de pago
+          Text('Método de pago', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+
+          // QR Bancario
+          _paymentMethodCard(
+            'qr',
+            Icons.qr_code_2_outlined,
+            'QR Bancario',
+            'Paga con cualquier banco o Tigo Money',
+            surface, textColor, subtextColor, borderColor,
+          ),
+          const SizedBox(height: 10),
+
+          // Transferencia manual
+          _paymentMethodCard(
+            'manual',
+            Icons.receipt_long_outlined,
+            'Transferencia manual',
+            'Sube comprobante para verificación del equipo',
+            surface, textColor, subtextColor, borderColor,
+          ),
+          const SizedBox(height: 28),
+
+          // Botón confirmar
+          GardenButton(
+            label: _isSubmitting ? 'Procesando...' : 'Confirmar pago',
+            loading: _isSubmitting,
+            icon: Icons.lock_outlined,
+            onPressed: _selectedMethod != null ? _initPayment : null,
+          ),
+          const SizedBox(height: 16),
+
+          // Nota de seguridad
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.shield_outlined, size: 14, color: subtextColor),
+              const SizedBox(width: 6),
+              Text('Pago protegido con escrow blockchain',
+                style: TextStyle(color: subtextColor, fontSize: 12)),
+            ],
+          ),
         ],
       ),
     );
   }
 
+  Widget _paymentMethodCard(String method, IconData icon, String title, String subtitle,
+      Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    final selected = _selectedMethod == method;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedMethod = method),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: selected ? GardenColors.primary.withOpacity(0.08) : surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? GardenColors.primary : borderColor,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48, height: 48,
+              decoration: BoxDecoration(
+                color: selected ? GardenColors.primary.withOpacity(0.15) : (themeNotifier.isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: selected ? GardenColors.primary : subtextColor, size: 24),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                  Text(subtitle, style: TextStyle(color: subtextColor, fontSize: 13)),
+                ],
+              ),
+            ),
+            if (selected)
+              Container(
+                width: 22, height: 22,
+                decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
+                child: const Icon(Icons.check, color: Colors.white, size: 14),
+              )
+            else
+              Container(
+                width: 22, height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: borderColor, width: 2),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _summaryRow(IconData icon, String label, String value, Color textColor, Color subtextColor) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: subtextColor),
+        const SizedBox(width: 10),
+        Text(label, style: TextStyle(color: subtextColor, fontSize: 14)),
+        const Spacer(),
+        Text(value, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
+      ],
+    );
+  }
+
   Widget _buildConfirmationScreen() {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
     return Scaffold(
-      backgroundColor: kBackgroundColor,
+      backgroundColor: bg,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(32),
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0.0, end: 1.0),
-                duration: const Duration(milliseconds: 600),
+                duration: const Duration(milliseconds: 800),
                 curve: Curves.elasticOut,
                 builder: (context, value, child) {
                   return Transform.scale(
                     scale: value,
                     child: Container(
-                      width: 120,
-                      height: 120,
+                      width: 100,
+                      height: 100,
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.15),
+                        color: Colors.green.withOpacity(0.1),
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.green, width: 3),
+                        border: Border.all(color: Colors.green.withOpacity(0.5), width: 4),
                       ),
-                      child: const Icon(Icons.check_rounded, color: Colors.green, size: 64),
+                      child: const Icon(Icons.check_rounded, color: Colors.green, size: 50),
                     ),
                   );
                 },
               ),
               const SizedBox(height: 32),
-              const Text('¡Reserva creada!',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+              Text('¡Reserva creada!',
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: textColor, letterSpacing: -0.5),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.15),
+                  color: GardenColors.warning.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.orange.withOpacity(0.5)),
+                  border: Border.all(color: GardenColors.warning.withOpacity(0.3)),
                 ),
                 child: const Text('Pago en revisión',
-                  style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 14),
+                  style: TextStyle(color: GardenColors.warning, fontWeight: FontWeight.w700, fontSize: 13),
                 ),
               ),
               const SizedBox(height: 24),
               Text(
                 'Tu pago está siendo verificado por el equipo de GARDEN. Recibirás una confirmación cuando sea aprobado y el cuidador acepte la reserva.',
-                style: TextStyle(color: kTextSecondary, fontSize: 15, height: 1.5),
+                style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
               if (_booking != null)
                 Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: kSurfaceColor, borderRadius: BorderRadius.circular(16)),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: surface, 
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: borderColor),
+                  ),
                   child: Column(
                     children: [
-                      _detailRow('Servicio', _booking!['serviceType'] ?? ''),
-                      _detailRow('Total', 'Bs ${_booking!['totalPrice'] ?? _booking!['totalAmount'] ?? ''}'),
-                      _detailRow('Estado', 'En revisión'),
+                      _detailRow('Servicio', _booking!['serviceType'] == 'PASEO' ? 'Paseo' : 'Hospedaje', textColor, subtextColor),
+                      const SizedBox(height: 12),
+                      _detailRow('Total', 'Bs ${_booking!['totalPrice'] ?? _booking!['totalAmount'] ?? ''}', GardenColors.primary, subtextColor, isBoldValue: true),
+                      const SizedBox(height: 12),
+                      _detailRow('Estado', 'En revisión', GardenColors.warning, subtextColor),
                     ],
                   ),
                 ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: kPrimaryColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: kPrimaryColor.withOpacity(0.3)),
+                  color: GardenColors.primary.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: GardenColors.primary.withOpacity(0.2)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Próximos pasos:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    Text('Próximos pasos:', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
+                    const SizedBox(height: 16),
+                    _stepRow('1', 'GARDEN verifica tu pago', GardenColors.warning, textColor),
                     const SizedBox(height: 12),
-                    _stepRow('1', 'GARDEN verifica tu pago', Colors.orange),
-                    const SizedBox(height: 8),
-                    _stepRow('2', 'El cuidador acepta la reserva', kPrimaryColor),
-                    const SizedBox(height: 8),
-                    _stepRow('3', '¡Reserva confirmada!', Colors.green),
+                    _stepRow('2', 'El cuidador acepta la reserva', GardenColors.primary, textColor),
+                    const SizedBox(height: 12),
+                    _stepRow('3', '¡Reserva confirmada!', Colors.green, textColor),
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 52),
-                  backgroundColor: kPrimaryColor,
-                ),
+              const Spacer(),
+              GardenButton(
+                label: 'Volver al inicio',
                 onPressed: () => context.go('/marketplace'),
-                child: const Text('Volver al inicio',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
               ),
             ],
           ),
@@ -366,104 +461,27 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  Widget _detailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: kTextSecondary, fontSize: 14)),
-          Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-        ],
-      ),
-    );
-  }
-
-  Widget _stepRow(String number, String text, Color color) {
+  Widget _detailRow(String label, String value, Color valueColor, Color labelColor, {bool isBoldValue = false}) {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Container(
-          width: 24, height: 24,
-          decoration: BoxDecoration(color: color.withOpacity(0.2), shape: BoxShape.circle),
-          child: Center(child: Text(number, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold))),
-        ),
-        const SizedBox(width: 12),
-        Expanded(child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 14))),
+        Text(label, style: TextStyle(color: labelColor, fontSize: 14)),
+        Text(value, style: TextStyle(color: valueColor, fontWeight: isBoldValue ? FontWeight.w900 : FontWeight.w700, fontSize: 14)),
       ],
     );
   }
-}
 
-class _SummaryItem extends StatelessWidget {
-  final String label;
-  final String value;
-  const _SummaryItem({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: kTextSecondary, fontSize: 14)),
-          Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 14)),
-        ],
-      ),
-    );
-  }
-}
-
-class _PaymentMethodCard extends StatelessWidget {
-  final String method;
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _PaymentMethodCard({
-    required this.method,
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isSelected ? kPrimaryColor.withOpacity(0.1) : kSurfaceColor,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? kPrimaryColor : Colors.white.withOpacity(0.05),
-            width: 2,
-          ),
+  Widget _stepRow(String number, String text, Color color, Color textColor) {
+    return Row(
+      children: [
+        Container(
+          width: 28, height: 28,
+          decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle),
+          child: Center(child: Text(number, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w800))),
         ),
-        child: Row(
-          children: [
-            Icon(icon, color: isSelected ? kPrimaryColor : kTextSecondary, size: 32),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                  const SizedBox(height: 4),
-                  Text(subtitle, style: const TextStyle(color: kTextSecondary, fontSize: 12)),
-                ],
-              ),
-            ),
-            if (isSelected)
-              const Icon(Icons.check_circle, color: kPrimaryColor),
-          ],
-        ),
-      ),
+        const SizedBox(width: 16),
+        Expanded(child: Text(text, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w500))),
+      ],
     );
   }
 }

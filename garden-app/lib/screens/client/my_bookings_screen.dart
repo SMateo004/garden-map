@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
+import '../../theme/garden_theme.dart';
 
 class MyBookingsScreen extends StatefulWidget {
   const MyBookingsScreen({Key? key}) : super(key: key);
@@ -75,13 +76,13 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: kSurfaceColor,
-        title: const Text('Cancelar reserva', style: TextStyle(color: Colors.white)),
-        content: const Text('¿Estás seguro? Esta acción no se puede deshacer.',
-          style: TextStyle(color: kTextSecondary)),
+        backgroundColor: themeNotifier.isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+        title: Text('Cancelar reserva', style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary)),
+        content: Text('¿Estás seguro? Esta acción no se puede deshacer.',
+          style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('No', style: TextStyle(color: kTextSecondary))),
+            child: Text('No', style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
@@ -129,23 +130,30 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     );
   }
 
-  Widget _buildFilterChip(String label, String value) {
+  Widget _filterPill(String label, String value, bool isDark) {
     final isSelected = _selectedFilter == value;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
     return GestureDetector(
       onTap: () => setState(() => _selectedFilter = value),
-      child: Container(
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(right: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? kPrimaryColor : kBackgroundColor,
+          color: isSelected ? GardenColors.primary : (isDark ? GardenColors.darkSurface : GardenColors.lightSurface),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? kPrimaryColor : Colors.white10),
+          border: Border.all(
+            color: isSelected ? GardenColors.primary : (isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
+          ),
+          boxShadow: isSelected ? [BoxShadow(color: GardenColors.primary.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))] : null,
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : kTextSecondary,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: isSelected ? Colors.white : subtextColor,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
             fontSize: 13,
           ),
         ),
@@ -153,9 +161,13 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     );
   }
 
-  Widget _buildBookingCard(Map<String, dynamic> booking) {
+  Widget _buildBookingCard(Map<String, dynamic> booking, bool isDark) {
     final status = booking['status'] as String;
     final isPaseo = booking['serviceType'] == 'PASEO';
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
     
     Color statusColor;
     String statusText;
@@ -163,7 +175,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
 
     switch (status) {
       case 'PENDING_PAYMENT':
-        statusColor = kTextSecondary;
+        statusColor = Colors.orange;
         statusText = 'Pendiente de pago';
         break;
       case 'PAYMENT_PENDING_APPROVAL':
@@ -171,17 +183,17 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
         statusText = 'Pago en revisión';
         break;
       case 'WAITING_CAREGIVER_APPROVAL':
-        statusColor = kPrimaryColor;
-        statusText = 'Esperando al cuidador';
+        statusColor = GardenColors.primary;
+        statusText = 'Esperando cuidador';
         break;
       case 'CONFIRMED':
         statusColor = Colors.green;
         statusText = 'Confirmada';
         break;
       case 'IN_PROGRESS':
-        statusColor = Colors.greenAccent;
+        statusColor = GardenColors.primary;
         statusText = 'En curso';
-        statusIcon = Icons.play_arrow;
+        statusIcon = Icons.play_arrow_rounded;
         break;
       case 'COMPLETED':
         statusColor = Colors.grey;
@@ -193,147 +205,177 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
         statusText = status == 'CANCELLED' ? 'Cancelada' : 'Rechazada';
         break;
       default:
-        statusColor = kTextSecondary;
+        statusColor = subtextColor;
         statusText = status;
     }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: kSurfaceColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        color: surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(isDark ? 0.3 : 0.05), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: kBackgroundColor,
-                backgroundImage: booking['caregiverPhoto'] != null ? NetworkImage(booking['caregiverPhoto']) : null,
-                child: booking['caregiverPhoto'] == null ? const Icon(Icons.person, color: kTextSecondary) : null,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  booking['caregiverName'] ?? 'Cuidador',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                GardenAvatar(
+                  imageUrl: booking['caregiverPhoto'],
+                  size: 48,
+                  initials: (booking['caregiverName'] as String? ?? 'C')[0],
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (statusIcon != null) ...[
-                      Icon(statusIcon, color: statusColor, size: 12),
-                      const SizedBox(width: 4),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        booking['caregiverName'] ?? 'Cuidador',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textColor),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(statusIcon ?? Icons.circle, color: statusColor, size: 8),
+                          const SizedBox(width: 6),
+                          Text(
+                            statusText,
+                            style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
                     ],
-                    Text(
-                      statusText,
-                      style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                if (status == 'PENDING_PAYMENT')
+                  GardenButton(
+                    label: 'Pagar',
+                    height: 36,
+                    width: 80,
+                    onPressed: () => context.push('/payment/${booking['id']}'),
+                  ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: borderColor),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(color: GardenColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                          child: Icon(isPaseo ? Icons.pets : Icons.home_rounded, color: GardenColors.primary, size: 16),
+                        ),
+                        const SizedBox(width: 10),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(booking['petName'] ?? 'Mascota', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
+                            Text(isPaseo ? 'Paseo de ${booking['duration']} min' : 'Hospedaje', style: TextStyle(color: subtextColor, fontSize: 11)),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          isPaseo ? booking['walkDate'] ?? '' : '${booking['startDate']} - ${booking['endDate']}',
+                          style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13),
+                        ),
+                        Text(
+                          isPaseo ? (booking['timeSlot'] ?? '') : '${booking['totalDays']} noches',
+                          style: TextStyle(color: subtextColor, fontSize: 11),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          // Mascota y servicio
-          Row(
-            children: [
-              const Icon(Icons.pets, size: 14, color: kTextSecondary),
-              const SizedBox(width: 4),
-              Text(
-                booking['petName'] ?? 'Mascota',
-                style: const TextStyle(color: kTextSecondary, fontSize: 13),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isPaseo ? kPrimaryColor.withOpacity(0.15) : Colors.green.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(6),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Total pagado', style: TextStyle(color: subtextColor, fontSize: 12)),
+                    Text('Bs ${booking['totalAmount']}', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w900, fontSize: 18)),
+                  ],
                 ),
-                child: Text(
-                  isPaseo ? 'PASEO' : 'HOSPEDAJE',
-                  style: TextStyle(
-                    color: isPaseo ? kPrimaryColor : Colors.green,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+                if (status == 'CONFIRMED' || status == 'COMPLETED' || status == 'IN_PROGRESS') ...[
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      if (status == 'CONFIRMED' || status == 'IN_PROGRESS')
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => _cancelBooking(booking['id']),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Colors.red),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text('Cancelar reserva', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+                          ),
+                        ),
+                      if (status == 'COMPLETED' && booking['rating'] == null)
+                        Expanded(
+                          child: GardenButton(
+                            label: 'Calificar experiencia',
+                            onPressed: () => _showRatingDialog(booking['id']),
+                          ),
+                        ),
+                    ],
                   ),
-                ),
-              ),
-            ],
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(bool isDark) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              color: GardenColors.primary.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.calendar_today_outlined, size: 48, color: GardenColors.primary),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Todavía no tienes reservas',
+            style: TextStyle(color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary, fontSize: 18, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
-          // Fecha y hora
-          Row(
-            children: [
-              const Icon(Icons.calendar_today, size: 14, color: kTextSecondary),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  isPaseo 
-                    ? '${booking['walkDate']} • ${booking['timeSlot'] == 'MANANA' ? 'Mañana' : booking['timeSlot'] == 'TARDE' ? 'Tarde' : 'Noche'} (${booking['duration']} min)'
-                    : '${booking['startDate']} al ${booking['endDate']} • ${booking['totalDays']} noches',
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                ),
-              ),
-            ],
+          Text(
+            '¡Tus mascotas te agradecerán un descanso!',
+            style: TextStyle(color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary, fontSize: 14),
           ),
-          const SizedBox(height: 16),
-          // Footer: Precio y Acciones
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Bs ${booking['totalAmount']}',
-                style: const TextStyle(color: kPrimaryColor, fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              Row(
-                children: [
-                  if (status == 'PENDING_PAYMENT')
-                    OutlinedButton(
-                      onPressed: () => context.push('/payment/${booking['id']}'),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: kPrimaryColor),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                        minimumSize: const Size(0, 32),
-                      ),
-                      child: const Text('Pagar ahora', style: TextStyle(color: kPrimaryColor, fontSize: 12)),
-                    ),
-                  if (status == 'CONFIRMED' || status == 'IN_PROGRESS')
-                    OutlinedButton(
-                      onPressed: () => _cancelBooking(booking['id']),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.red),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                        minimumSize: const Size(0, 32),
-                      ),
-                      child: const Text('Cancelar', style: TextStyle(color: Colors.red, fontSize: 12)),
-                    ),
-                  if (status == 'COMPLETED' && booking['rating'] == null)
-                    OutlinedButton(
-                      onPressed: () => _showRatingDialog(booking['id']),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: kPrimaryColor),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                        minimumSize: const Size(0, 32),
-                      ),
-                      child: const Text('Calificar', style: TextStyle(color: kPrimaryColor, fontSize: 12)),
-                    ),
-                ],
-              ),
-            ],
+          const SizedBox(height: 32),
+          SizedBox(
+            width: 200,
+            child: GardenButton(
+              label: 'Buscar cuidadores',
+              onPressed: () => context.go('/marketplace'),
+            ),
           ),
         ],
       ),
@@ -342,62 +384,60 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: kBackgroundColor,
-      appBar: AppBar(
-        title: const Text('Mis reservas'),
-        backgroundColor: kSurfaceColor,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadBookings,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Filtros
-          Container(
-            color: kSurfaceColor,
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildFilterChip('Todas', 'todas'),
-                  _buildFilterChip('Activas', 'activas'),
-                  _buildFilterChip('Completadas', 'completadas'),
-                  _buildFilterChip('Canceladas', 'canceladas'),
-                ],
+    return AnimatedBuilder(
+      animation: themeNotifier,
+      builder: (context, _) {
+        final isDark = themeNotifier.isDark;
+        final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+        final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+        final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+
+        return Scaffold(
+          backgroundColor: bg,
+          appBar: AppBar(
+            backgroundColor: surface,
+            elevation: 0,
+            title: Text('Mis reservas', style: TextStyle(color: textColor, fontWeight: FontWeight.w900, fontSize: 18)),
+            centerTitle: true,
+            actions: [
+              IconButton(
+                icon: Icon(Icons.refresh_rounded, color: textColor),
+                onPressed: _loadBookings,
               ),
-            ),
+            ],
           ),
-          // Lista
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: kPrimaryColor))
-                : _filteredBookings.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.calendar_today, size: 64, color: kTextSecondary.withOpacity(0.5)),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No tienes reservas en esta categoría',
-                              style: TextStyle(color: kTextSecondary.withOpacity(0.8)),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _filteredBookings.length,
-                        itemBuilder: (context, index) => _buildBookingCard(_filteredBookings[index]),
-                      ),
+          body: Column(
+            children: [
+              Container(
+                color: surface,
+                padding: const EdgeInsets.only(bottom: 16, left: 16, right: 16, top: 4),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _filterPill('Todas', 'todas', isDark),
+                      _filterPill('Activas', 'activas', isDark),
+                      _filterPill('Completadas', 'completadas', isDark),
+                      _filterPill('Canceladas', 'canceladas', isDark),
+                    ],
+                  ),
+                ),
+              ),
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+                    : _filteredBookings.isEmpty
+                        ? _buildEmptyState(isDark)
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _filteredBookings.length,
+                            itemBuilder: (context, index) => _buildBookingCard(_filteredBookings[index], isDark),
+                          ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -448,26 +488,33 @@ class _RatingSheetState extends State<_RatingSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        color: kSurfaceColor,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
+          Container(width: 40, height: 4, decoration: BoxDecoration(color: subtextColor.withOpacity(0.3), borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 24),
+          Text(
             'Califica tu experiencia',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: textColor),
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Tu opinión ayuda a otros dueños de mascotas a encontrar a los mejores cuidadores.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: kTextSecondary, fontSize: 14),
+            style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(5, (index) {
@@ -475,30 +522,21 @@ class _RatingSheetState extends State<_RatingSheet> {
               return GestureDetector(
                 onTap: () => setState(() => _rating = starIndex),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
                   child: Icon(
-                    Icons.star,
-                    color: starIndex <= _rating ? const Color(0xFFFFD700) : kTextSecondary.withOpacity(0.3),
-                    size: 44,
+                    starIndex <= _rating ? Icons.star_rounded : Icons.star_outline_rounded,
+                    color: starIndex <= _rating ? const Color(0xFFFFB800) : subtextColor.withOpacity(0.2),
+                    size: 48,
                   ),
                 ),
               );
             }),
           ),
-          const SizedBox(height: 32),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _rating > 0 && !_isSubmitting ? _submitRating : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kPrimaryColor,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: _isSubmitting 
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Text('Enviar calificación', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
+          const SizedBox(height: 48),
+          GardenButton(
+            label: 'Enviar calificación',
+            loading: _isSubmitting,
+            onPressed: _rating > 0 ? _submitRating : null,
           ),
           const SizedBox(height: 12),
         ],
