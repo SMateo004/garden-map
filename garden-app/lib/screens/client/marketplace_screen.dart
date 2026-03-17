@@ -157,6 +157,28 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     );
   }
 
+  Widget _buildAuthButton() {
+    final theme = Theme.of(context);
+    if (_authToken.isNotEmpty) {
+      return IconButton(
+        icon: const Icon(Icons.account_circle_outlined),
+        onPressed: () => context.push('/profile'),
+        tooltip: 'Mi perfil',
+      );
+    }
+    return TextButton(
+      onPressed: () => context.push('/login'),
+      child: Text(
+        'Iniciar sesión', 
+        style: TextStyle(
+          color: GardenColors.primary, 
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
+        ),
+      ),
+    );
+  }
+
   Widget _buildCaregiverCard(Map<String, dynamic> caregiver) {
     final theme = Theme.of(context);
     final isVerified = caregiver['verified'] == true;
@@ -435,6 +457,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               ),
             ),
             actions: [
+              _buildAuthButton(),
               Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: IconButton(

@@ -14,6 +14,7 @@ import 'screens/client/payment_screen.dart';
 import 'screens/caregiver/caregiver_home_screen.dart';
 import 'screens/caregiver/verification_screen.dart';
 import 'screens/client/my_bookings_screen.dart';
+import 'screens/profile/profile_screen.dart';
 import 'theme/garden_theme.dart';
 
 // ── Compatibilidad con sistema anterior (Legacy Constants) ──
@@ -26,7 +27,7 @@ const kTextSecondary   = GardenColors.textSecondary;
 
 // ── Router ─────────────────────────────────────────────────
 final GoRouter _router = GoRouter(
-  initialLocation: '/login',
+  initialLocation: '/marketplace',
   routes: [
     GoRoute(
       path: '/test',
@@ -106,7 +107,11 @@ final GoRouter _router = GoRouter(
       builder: (context, state) => const MyBookingsScreen(),
     ),
 
-
+    GoRoute(
+      path: '/profile',
+      name: 'profile',
+      builder: (context, state) => const ProfileScreen(),
+    ),
   ],
 );
 
