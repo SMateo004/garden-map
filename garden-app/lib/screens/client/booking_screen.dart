@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../main.dart';
+import '../../theme/garden_theme.dart';
 
 class BookingScreen extends StatefulWidget {
   final String caregiverId;
@@ -112,7 +112,6 @@ class _BookingScreenState extends State<BookingScreen> {
     try {
       final dateStr = date.toIso8601String().split('T')[0];
       
-      // Llamar con date Y service para obtener slots específicos
       final uri = Uri.parse(
         '$_baseUrl/caregivers/${widget.caregiverId}/availability'
       ).replace(queryParameters: {
@@ -120,26 +119,18 @@ class _BookingScreenState extends State<BookingScreen> {
         'service': 'PASEO',
       });
       
-      debugPrint('SLOTS URL: $uri');
-      
       final response = await http.get(uri);
       final body = jsonDecode(response.body);
-      
-      debugPrint('SLOTS body type: ${body.runtimeType}');
-      debugPrint('SLOTS raw: ${response.body.substring(0, response.body.length > 300 ? 300 : response.body.length)}');
       
       List<Map<String, dynamic>> slots = [];
 
       if (body is Map && body['success'] == true) {
         final data = body['data'];
         if (data is Map) {
-          // El endpoint devuelve data.paseos como objeto {fecha: [slots]}
           final paseos = data['paseos'];
           if (paseos is Map && paseos[dateStr] != null) {
             slots = (paseos[dateStr] as List).cast<Map<String, dynamic>>();
           }
-          
-          // También verificar data.availableSlots como fallback
           if (slots.isEmpty && data['availableSlots'] != null) {
             slots = (data['availableSlots'] as List).cast<Map<String, dynamic>>();
           }
@@ -148,20 +139,17 @@ class _BookingScreenState extends State<BookingScreen> {
         slots = body.cast<Map<String, dynamic>>();
       }
 
-      debugPrint('SLOTS de paseos[$dateStr]: $slots');
       final enabledSlots = slots.where((s) => s['enabled'] == true).toList();
       setState(() => _availableSlots = enabledSlots);
       
-    } catch (e, stack) {
+    } catch (e) {
       debugPrint('ERROR slots: $e');
-      debugPrint('STACK: $stack');
     } finally {
       if (mounted) setState(() => _loadingSlots = false);
     }
   }
 
   Future<void> _createBooking() async {
-    // Validaciones
     if (_selectedPetId == null) {
       _showError('Selecciona una mascota');
       return;
@@ -208,7 +196,7 @@ class _BookingScreenState extends State<BookingScreen> {
           'petId': _selectedPetId,
           'startDate': _selectedDate!.toIso8601String().split('T')[0],
           'endDate': _endDate!.toIso8601String().split('T')[0],
-          'totalDays': totalDays > 0 ? totalDays : 1, // At least 1 day
+          'totalDays': totalDays > 0 ? totalDays : 1,
         };
       }
 
@@ -225,7 +213,6 @@ class _BookingScreenState extends State<BookingScreen> {
       if (response.statusCode == 201 && data['success'] == true) {
         final bookingId = data['data']['id'];
         if (!mounted) return;
-        // Navegar a la pantalla de pago
         context.push('/payment/$bookingId');
       } else {
         if (data['errors'] != null) {
@@ -246,7 +233,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red.shade700),
+      SnackBar(content: Text(msg), backgroundColor: GardenColors.error),
     );
   }
 
@@ -273,168 +260,236 @@ class _BookingScreenState extends State<BookingScreen> {
      return null;
   }
 
+  Widget _buildCaregiverHeader() {
+    if (_caregiver == null) return const SizedBox();
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
+      ),
+      child: Row(
+        children: [
+          GardenAvatar(
+            imageUrl: _caregiver!['profilePicture'] as String?,
+            size: 56,
+            initials: '${(_caregiver!['firstName'] as String? ?? 'C')[0]}${(_caregiver!['lastName'] as String? ?? '')[0]}',
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${_caregiver!['firstName']} ${_caregiver!['lastName']}',
+                  style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+                Row(children: [
+                  const Icon(Icons.star_rounded, color: GardenColors.star, size: 14),
+                  const SizedBox(width: 4),
+                  Text('${(_caregiver!['rating'] as num? ?? 0).toStringAsFixed(1)}',
+                    style: TextStyle(color: subtextColor, fontSize: 13)),
+                ]),
+              ],
+            ),
+          ),
+          // Precio
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _caregiver!['pricePerWalk30'] != null
+                  ? 'Bs ${_caregiver!['pricePerWalk30']}'
+                  : _caregiver!['pricePerDay'] != null
+                    ? 'Bs ${_caregiver!['pricePerDay']}'
+                    : 'Consultar',
+                style: const TextStyle(color: GardenColors.primary, fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+              Text(
+                _caregiver!['pricePerWalk30'] != null ? 'por paseo' : 'por noche',
+                style: TextStyle(color: subtextColor, fontSize: 11),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_isLoading || _caregiver == null) {
-      return const Scaffold(
-        backgroundColor: kBackgroundColor,
-        body: Center(child: CircularProgressIndicator(color: kPrimaryColor)),
-      );
-    }
+    try {
+      final isDark = themeNotifier.isDark;
+      final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+      final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+      final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+      final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+      final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+
+      if (_isLoading) {
+        return Scaffold(
+          backgroundColor: bg,
+          body: const Center(child: CircularProgressIndicator(color: GardenColors.primary)),
+        );
+      }
+
+      if (_caregiver == null) {
+        return Scaffold(
+          backgroundColor: bg,
+          appBar: AppBar(title: const Text('Reservar'), backgroundColor: surface),
+          body: const Center(child: Text('No se pudo cargar la información del cuidador')),
+        );
+      }
 
     final services = (_caregiver!['services'] as List?)?.cast<String>() ?? [];
     double? calculatedPrice = _calculatePrice();
 
     return Scaffold(
-      backgroundColor: kBackgroundColor,
+      backgroundColor: bg,
       appBar: AppBar(
-        title: const Text('Crear reserva'),
-        backgroundColor: kSurfaceColor,
+        title: const Text('Reservar'),
+        backgroundColor: surface,
+        elevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Sección 1 — Seleccionar mascota
-            const Text('¿Para quién es el servicio?', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18)),
-            const SizedBox(height: 12),
-            if (_pets.isEmpty)
-              Container(
-                 decoration: BoxDecoration(
-                   color: kSurfaceColor,
-                   borderRadius: BorderRadius.circular(12),
-                 ),
-                 padding: const EdgeInsets.all(16),
-                 child: Column(
-                   children: [
-                     const Text('No tienes mascotas registradas', style: TextStyle(color: kTextSecondary)),
-                     const SizedBox(height: 8),
-                     TextButton(
-                       onPressed: () => context.push('/my-pets'),
-                       child: const Text('Agregar mascota', style: TextStyle(color: kPrimaryColor)),
-                     ),
-                   ],
-                 ),
-              )
-            else
-              Column(
-                children: _pets.map((pet) {
-                  final isSelected = _selectedPetId == pet['id'];
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedPetId = pet['id']),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: isSelected ? kPrimaryColor.withOpacity(0.2) : kSurfaceColor,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: isSelected ? kPrimaryColor : Colors.transparent),
-                      ),
-                      child: Row(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
-                            child: pet['photoUrl'] != null && pet['photoUrl'].toString().isNotEmpty
-                                ? Image.network(pet['photoUrl'], width: 40, height: 40, fit: BoxFit.cover)
-                                : Container(width: 40, height: 40, color: kBackgroundColor, child: const Icon(Icons.pets, color: kTextSecondary, size: 20)),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(pet['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                              if (pet['breed'] != null) Text(pet['breed'], style: const TextStyle(color: kTextSecondary, fontSize: 12)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            
-            const SizedBox(height: 24),
-
-            // Sección 2 — Seleccionar servicio
-            const Text('Tipo de servicio', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18)),
-            const SizedBox(height: 12),
-            Row(
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (services.contains('PASEO')) ...[
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() {
-                        _selectedService = 'PASEO';
-                        _selectedDate = null;
-                        _endDate = null;
-                      }),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: _selectedService == 'PASEO' ? kPrimaryColor : kSurfaceColor,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'Paseo 🦮',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: _selectedService == 'PASEO' ? Colors.white : kTextSecondary,
-                            fontWeight: FontWeight.bold,
+                // Info Cuidador
+                _buildCaregiverHeader(),
+                const SizedBox(height: 24),
+                
+                // Selección de Mascota
+                Text('Tu mascota', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                if (_pets.isEmpty)
+                  GardenButton(
+                    label: 'Agregar mascota',
+                    outline: true,
+                    onPressed: () => context.push('/my-pets'),
+                  )
+                else
+                  SizedBox(
+                    height: 100,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _pets.length,
+                      itemBuilder: (context, index) {
+                        final pet = _pets[index];
+                        final isSelected = _selectedPetId == pet['id'];
+                        return GestureDetector(
+                          onTap: () => setState(() => _selectedPetId = pet['id']),
+                          child: Container(
+                            width: 100,
+                            margin: const EdgeInsets.only(right: 12),
+                            decoration: BoxDecoration(
+                              color: isSelected ? GardenColors.primary.withOpacity(0.12) : surface,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isSelected ? GardenColors.primary : borderColor,
+                                width: isSelected ? 2 : 1,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                GardenAvatar(
+                                  imageUrl: pet['photoUrl'],
+                                  size: 40,
+                                  initials: pet['name']?[0] ?? 'P',
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  pet['name'] ?? '',
+                                  style: TextStyle(
+                                    color: isSelected ? GardenColors.primary : textColor,
+                                    fontSize: 13,
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
                   ),
-                  if (services.contains('HOSPEDAJE')) const SizedBox(width: 12),
-                ],
-                if (services.contains('HOSPEDAJE')) ...[
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() {
-                        _selectedService = 'HOSPEDAJE';
-                        _selectedDate = null;
-                        _endDate = null;
-                      }),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: _selectedService == 'HOSPEDAJE' ? kPrimaryColor : kSurfaceColor,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'Hospedaje 🏠',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: _selectedService == 'HOSPEDAJE' ? Colors.white : kTextSecondary,
-                            fontWeight: FontWeight.bold,
-                          ),
+                
+                const SizedBox(height: 24),
+                Divider(color: borderColor),
+                const SizedBox(height: 24),
+
+                // Tipo de Servicio
+                Text('Tipo de servicio', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    if (services.contains('PASEO'))
+                      Expanded(
+                        child: _ServiceCard(
+                          title: 'Paseo',
+                          emoji: '🦮',
+                          price: 'Bs ${_caregiver!['pricePerWalk30'] ?? '—'}',
+                          isSelected: _selectedService == 'PASEO',
+                          onTap: () => setState(() {
+                            _selectedService = 'PASEO';
+                            _selectedDate = null;
+                            _endDate = null;
+                            _selectedTimeSlot = null;
+                            _selectedStartTime = null;
+                          }),
                         ),
                       ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
+                    if (services.contains('PASEO') && services.contains('HOSPEDAJE')) const SizedBox(width: 12),
+                    if (services.contains('HOSPEDAJE'))
+                      Expanded(
+                        child: _ServiceCard(
+                          title: 'Hospedaje',
+                          emoji: '🏠',
+                          price: 'Bs ${_caregiver!['pricePerDay'] ?? '—'}',
+                          isSelected: _selectedService == 'HOSPEDAJE',
+                          onTap: () => setState(() {
+                            _selectedService = 'HOSPEDAJE';
+                            _selectedDate = null;
+                            _endDate = null;
+                            _selectedTimeSlot = null;
+                            _selectedStartTime = null;
+                          }),
+                        ),
+                      ),
+                  ],
+                ),
 
-            const SizedBox(height: 24),
+                const SizedBox(height: 24),
+                Divider(color: borderColor),
+                const SizedBox(height: 24),
 
-            // Sección 3 — Fechas
-            if (_selectedService != null) ...[
-               if (_selectedService == 'PASEO') ...[
-                  const Text('Fecha del paseo', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18)),
-                  const SizedBox(height: 12),
+                // Selección de Fecha / Hora
+                if (_selectedService == 'PASEO') ...[
+                  Text('¿Cuándo?', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
                   ListTile(
-                    tileColor: kSurfaceColor,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    leading: const Icon(Icons.calendar_today, color: kTextSecondary),
-                    title: Text(_selectedDate == null ? 'Seleccionar fecha' : formatDate(_selectedDate!), style: const TextStyle(color: Colors.white)),
+                    tileColor: surface,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: borderColor)),
+                    leading: const Icon(Icons.calendar_today, color: GardenColors.primary),
+                    title: Text(
+                      _selectedDate == null ? 'Seleccionar fecha' : formatDate(_selectedDate!),
+                      style: TextStyle(color: textColor),
+                    ),
                     onTap: () async {
                       final date = await showDatePicker(
-                         context: context, 
-                         initialDate: DateTime.now().add(const Duration(hours: 2)),
-                         firstDate: DateTime.now(), 
-                         lastDate: DateTime.now().add(const Duration(days: 60)),
+                        context: context,
+                        initialDate: DateTime.now().add(const Duration(hours: 2)),
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 60)),
                       );
                       if (date != null) {
                         setState(() => _selectedDate = date);
@@ -442,251 +497,305 @@ class _BookingScreenState extends State<BookingScreen> {
                       }
                     },
                   ),
-                  const SizedBox(height: 16),
                   if (_loadingSlots)
-                    const Center(child: CircularProgressIndicator(color: kPrimaryColor))
-                  else if (_availableSlots.isEmpty && _selectedDate != null)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: kSurfaceColor,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Text(
-                        'No hay horarios disponibles para esta fecha',
-                        style: TextStyle(color: kTextSecondary),
-                      ),
-                    )
-                  else if (_availableSlots.isNotEmpty) ...[
-                    const Text('Horario', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _availableSlots.map((slot) {
-                        final slotName = slot['slot'] as String;
-                        final start = slot['start'] as String;
-                        final end = slot['end'] as String;
-                        final label = slotName == 'MANANA' ? 'Mañana' : slotName == 'TARDE' ? 'Tarde' : 'Noche';
-                        final isSelected = _selectedTimeSlot == slotName;
-                        return GestureDetector(
-                          onTap: () => setState(() {
-                            _selectedTimeSlot = slotName;
-                            _selectedStartTime = null;
-                          }),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: isSelected ? kPrimaryColor : kSurfaceColor,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isSelected ? kPrimaryColor : Colors.white.withOpacity(0.1),
+                    const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(child: CircularProgressIndicator(color: GardenColors.primary)),
+                    ),
+                  if (_availableSlots.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    Text('Horario', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    ..._availableSlots.map((slot) {
+                      final slotName = slot['slot'] as String;
+                      final label = slotName == 'MANANA' ? 'Mañana' : slotName == 'TARDE' ? 'Tarde' : 'Noche';
+                      final range = '${slot['start']} - ${slot['end']}';
+                      final isSelected = _selectedTimeSlot == slotName;
+                      
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            GestureDetector(
+                              onTap: () => setState(() {
+                                _selectedTimeSlot = slotName;
+                                _selectedStartTime = null;
+                              }),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                                    color: GardenColors.primary,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+                                  const SizedBox(width: 8),
+                                  Text(range, style: TextStyle(color: subtextColor, fontSize: 12)),
+                                ],
                               ),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  label,
-                                  style: TextStyle(
-                                    color: isSelected ? Colors.white : kTextSecondary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                Text(
-                                  '$start - $end',
-                                  style: TextStyle(
-                                    color: isSelected ? Colors.white.withOpacity(0.8) : kTextSecondary,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
+                            if (isSelected) ...[
+                              const SizedBox(height: 12),
+                              _buildTimeChips(slot),
+                            ],
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    const Text(
+                      '* 30 min de descanso incluidos después del servicio',
+                      style: TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w500),
                     ),
-                    if (_selectedTimeSlot != null) ...[
-                      const SizedBox(height: 16),
-                      const Text('Hora de inicio', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
-                      const SizedBox(height: 8),
-                      Builder(
-                        builder: (context) {
-                          final slot = _availableSlots.firstWhere((s) => s['slot'] == _selectedTimeSlot);
-                          final startParts = (slot['start'] as String).split(':');
-                          final endParts = (slot['end'] as String).split(':');
-                          final startHour = int.parse(startParts[0]);
-                          final endHour = int.parse(endParts[0]);
-                          
-                          final timeSlots = <String>[];
-                          for (int h = startHour; h < endHour; h++) {
-                            for (int m = 0; m < 60; m += 30) {
-                              final totalMinutes = h * 60 + m + _selectedDuration + 30;
-                              if (totalMinutes <= endHour * 60) {
-                                timeSlots.add('${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}');
-                              }
-                            }
-                          }
-                          
-                          return Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: timeSlots.map((time) {
-                              final isSelected = _selectedStartTime == time;
-                              return GestureDetector(
-                                onTap: () => setState(() => _selectedStartTime = time),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: isSelected ? kPrimaryColor : kSurfaceColor,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: isSelected ? kPrimaryColor : Colors.white.withOpacity(0.1),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    time,
-                                    style: TextStyle(
-                                      color: isSelected ? Colors.white : kTextSecondary,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '* Incluye 30 min de descanso para el paseador después del servicio',
-                        style: TextStyle(color: kTextSecondary.withOpacity(0.7), fontSize: 11),
-                      ),
-                    ],
                   ],
+                ] else if (_selectedService == 'HOSPEDAJE') ...[
+                  Text('Fechas', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
-                  const Text('Duración', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
-                  const SizedBox(height: 8),
                   Row(
                     children: [
-                       ChoiceChip(
-                         label: const Text('30 min'),
-                         selected: _selectedDuration == 30,
-                         onSelected: (val) => setState(() => _selectedDuration = 30),
-                         selectedColor: kPrimaryColor,
-                         backgroundColor: kSurfaceColor,
-                         labelStyle: TextStyle(color: _selectedDuration == 30 ? Colors.white : kTextSecondary),
-                       ),
-                       const SizedBox(width: 8),
-                       ChoiceChip(
-                         label: const Text('60 min'),
-                         selected: _selectedDuration == 60,
-                         onSelected: (val) => setState(() => _selectedDuration = 60),
-                         selectedColor: kPrimaryColor,
-                         backgroundColor: kSurfaceColor,
-                         labelStyle: TextStyle(color: _selectedDuration == 60 ? Colors.white : kTextSecondary),
-                       ),
+                      Expanded(
+                        child: ListTile(
+                          tileColor: surface,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: borderColor)),
+                          title: const Text('Llegada', style: TextStyle(fontSize: 12, color: GardenColors.primary)),
+                          subtitle: Text(_selectedDate == null ? '---' : formatDate(_selectedDate!), style: TextStyle(color: textColor)),
+                          onTap: () async {
+                            final date = await showDatePicker(
+                              context: context,
+                              initialDate: DateTime.now(),
+                              firstDate: DateTime.now(),
+                              lastDate: DateTime.now().add(const Duration(days: 90)),
+                            );
+                            if (date != null) {
+                              setState(() {
+                                _selectedDate = date;
+                                if (_endDate != null && _endDate!.isBefore(_selectedDate!)) _endDate = null;
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ListTile(
+                          tileColor: surface,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: borderColor)),
+                          title: const Text('Salida', style: TextStyle(fontSize: 12, color: GardenColors.primary)),
+                          subtitle: Text(_endDate == null ? '---' : formatDate(_endDate!), style: TextStyle(color: textColor)),
+                          onTap: () async {
+                            if (_selectedDate == null) return _showError('Selecciona primero la llegada');
+                            final date = await showDatePicker(
+                              context: context,
+                              initialDate: _selectedDate!.add(const Duration(days: 1)),
+                              firstDate: _selectedDate!.add(const Duration(days: 1)),
+                              lastDate: DateTime.now().add(const Duration(days: 90)),
+                            );
+                            if (date != null) setState(() => _endDate = date);
+                          },
+                        ),
+                      ),
                     ],
                   ),
-               ] else if (_selectedService == 'HOSPEDAJE') ...[
-                  const Text('Fechas de hospedaje', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18)),
-                  const SizedBox(height: 12),
-                  ListTile(
-                    tileColor: kSurfaceColor,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    leading: const Icon(Icons.calendar_today, color: kTextSecondary),
-                    title: Text(_selectedDate == null ? 'Fecha de entrada' : formatDate(_selectedDate!), style: const TextStyle(color: Colors.white)),
-                    onTap: () async {
-                      final date = await showDatePicker(
-                         context: context, 
-                         initialDate: DateTime.now().add(const Duration(hours: 2)),
-                         firstDate: DateTime.now(), 
-                         lastDate: DateTime.now().add(const Duration(days: 60)),
-                      );
-                      if (date != null) {
-                        setState(() {
-                         _selectedDate = date;
-                         if (_endDate != null && _endDate!.isBefore(_selectedDate!)) {
-                           _endDate = null;
-                         }
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  ListTile(
-                    tileColor: kSurfaceColor,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    leading: const Icon(Icons.event_available, color: kTextSecondary),
-                    title: Text(_endDate == null ? 'Fecha de salida' : formatDate(_endDate!), style: const TextStyle(color: Colors.white)),
-                    onTap: () async {
-                      if (_selectedDate == null) {
-                         _showError('Selecciona primero la fecha de entrada');
-                         return;
-                      }
-                      final date = await showDatePicker(
-                         context: context, 
-                         initialDate: _selectedDate!.add(const Duration(days: 1)),
-                         firstDate: _selectedDate!.add(const Duration(days: 1)), 
-                         lastDate: DateTime.now().add(const Duration(days: 90)),
-                      );
-                      if (date != null) setState(() => _endDate = date);
-                    },
-                  ),
                   if (_selectedDate != null && _endDate != null) ...[
-                     const SizedBox(height: 8),
-                     Text(
-                       'Total: ${_endDate!.difference(_selectedDate!).inDays > 0 ? _endDate!.difference(_selectedDate!).inDays : 1} noches · Bs ${calculatedPrice ?? 0}',
-                       style: const TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold, fontSize: 16),
-                     ),
-                  ]
-               ],
+                    const SizedBox(height: 16),
+                    Text(
+                      '${_endDate!.difference(_selectedDate!).inDays} noches',
+                      style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ],
 
-               const SizedBox(height: 32),
+                const SizedBox(height: 32),
+                
+                // Resumen Final
+                if (calculatedPrice != null && _selectedPetId != null)
+                  _buildSummary(calculatedPrice),
+              ],
+            ),
+          ),
 
-               // Sección 4 — Resumen y precio
-               if ((_selectedService == 'PASEO' && _selectedDate != null && _selectedStartTime != null) || 
-                   (_selectedService == 'HOSPEDAJE' && _selectedDate != null && _endDate != null)) 
-                 if (_selectedPetId != null)
-                   Container(
-                     padding: const EdgeInsets.all(16),
-                     decoration: BoxDecoration(
-                        color: kPrimaryColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: kPrimaryColor.withOpacity(0.3)),
-                     ),
-                     child: Column(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: [
-                          const Text('Resumen', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
-                          const SizedBox(height: 8),
-                          Text('Cuidador: ${_caregiver!['firstName']} ${_caregiver!['lastName']}', style: const TextStyle(color: Colors.white)),
-                          Text('Mascota: ${_pets.firstWhere((p) => p['id'] == _selectedPetId)['name']}', style: const TextStyle(color: Colors.white)),
-                          Text('Servicio: $_selectedService', style: const TextStyle(color: Colors.white)),
-                          if (calculatedPrice != null) ...[
-                            const SizedBox(height: 8),
-                            Text('Total: Bs $calculatedPrice', style: const TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold, fontSize: 18)),
-                          ]
-                       ],
-                     ),
-                   ),
-
-               const SizedBox(height: 24),
-
-               // Sección 5 — Botón confirmar
-               ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 56),
-                    backgroundColor: kPrimaryColor,
-                  ),
-                  onPressed: _isSubmitting ? null : _createBooking,
-                  child: _isSubmitting 
-                     ? const CircularProgressIndicator(color: Colors.white)
-                     : const Text('Confirmar reserva', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-               ),
+          // Botón Sticky
+          Positioned(
+            bottom: 0, left: 0, right: 0,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+              decoration: BoxDecoration(
+                color: bg,
+                border: Border(top: BorderSide(color: borderColor)),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, -4))],
+              ),
+              child: GardenButton(
+                label: _isSubmitting ? 'Creando reserva...' : 'Confirmar reserva',
+                loading: _isSubmitting,
+                onPressed: _createBooking,
+              ),
+            ),
+          )
+        ],
+      ),
+    );
+    } catch (e, stack) {
+      debugPrint('BUILD ERROR: $e');
+      debugPrint('STACK TRACE: $stack');
+      return Scaffold(
+        backgroundColor: GardenColors.darkBackground,
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 60),
+              const Text('Error:', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              Text('$e', style: const TextStyle(color: Colors.white, fontSize: 12)),
+              const SizedBox(height: 16),
+              const Text('Stack:', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+              Text('$stack', style: const TextStyle(color: Colors.white70, fontSize: 10)),
             ],
+          ),
+        ),
+      );
+    }
+  }
+
+  Widget _buildTimeChips(Map<String, dynamic> slot) {
+    final startParts = (slot['start'] as String).split(':');
+    final endParts = (slot['end'] as String).split(':');
+    final startHour = int.parse(startParts[0]);
+    final endHour = int.parse(endParts[0]);
+    
+    final timeSlots = <String>[];
+    for (int h = startHour; h < endHour; h++) {
+      for (int m = 0; m < 60; m += 30) {
+        final totalMinutes = h * 60 + m + _selectedDuration + 30;
+        if (totalMinutes <= endHour * 60) {
+          timeSlots.add('${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}');
+        }
+      }
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: timeSlots.map((time) {
+        final isSelected = _selectedStartTime == time;
+        return GestureDetector(
+          onTap: () => setState(() => _selectedStartTime = time),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: isSelected ? GardenColors.primary : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: isSelected ? GardenColors.primary : GardenColors.darkBorder),
+            ),
+            child: Text(
+              time,
+              style: TextStyle(
+                color: isSelected ? Colors.white : themeNotifier.isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildSummary(double price) {
+    if (_selectedPetId == null || _selectedService == null || _selectedDate == null) {
+      return const SizedBox();
+    }
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final petName = _pets.firstWhere((p) => p['id'] == _selectedPetId)['name'];
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: GardenColors.primary.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: GardenColors.primary.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Resumen de reserva', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          _summaryRow(Icons.pets, 'Mascota', petName),
+          _summaryRow(Icons.settings, 'Servicio', _selectedService == 'PASEO' ? 'Paseo' : 'Hospedaje'),
+          _summaryRow(Icons.calendar_today, 'Fecha', formatDate(_selectedDate!)),
+          if (_selectedService == 'PASEO') _summaryRow(Icons.access_time, 'Hora', _selectedStartTime ?? ''),
+          const Divider(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Total', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
+              Text('Bs $price', style: const TextStyle(color: GardenColors.primary, fontSize: 24, fontWeight: FontWeight.w900)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: GardenColors.primary),
+          const SizedBox(width: 8),
+          Text('$label: ', style: const TextStyle(color: GardenColors.darkTextSecondary, fontSize: 13)),
+          Text(value, style: TextStyle(color: themeNotifier.isDark ? Colors.white : Colors.black87, fontSize: 13, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ServiceCard extends StatelessWidget {
+  final String title;
+  final String emoji;
+  final String price;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _ServiceCard({
+    required this.title,
+    required this.emoji,
+    required this.price,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected ? GardenColors.primary.withOpacity(0.12) : surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? GardenColors.primary : borderColor,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 32)),
+            const SizedBox(height: 12),
+            Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(price, style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.bold, fontSize: 12)),
           ],
         ),
       ),
