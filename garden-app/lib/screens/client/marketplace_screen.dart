@@ -181,8 +181,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   Widget _buildCaregiverCard(Map<String, dynamic> caregiver) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final isVerified = caregiver['verified'] == true;
-    
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
     return GardenCard(
       margin: const EdgeInsets.only(bottom: 20),
       padding: EdgeInsets.zero,
@@ -190,91 +193,70 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Sección superior: Imagen y Resumen rápido
+          // Foto Grande (con Hero)
+          Hero(
+            tag: 'photo-${caregiver['id']}',
+            child: ClipRRect(
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(GardenRadius.lg),
+                topRight: Radius.circular(GardenRadius.lg),
+              ),
+              child: Image.network(
+                caregiver['profilePicture'] ?? '',
+                height: 180,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  height: 180,
+                  color: GardenColors.primary.withOpacity(0.1),
+                  child: const Icon(Icons.pets, size: 40, color: GardenColors.primary),
+                ),
+              ),
+            ),
+          ),
+          
+          // Sección de Info (Snippet del usuario)
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Avatar grande con sombra
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: GardenRadius.lg_,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Hero(
-                    tag: 'avatar-${caregiver['id']}',
-                    child: GardenAvatar(
-                      imageUrl: caregiver['profilePicture'],
-                      size: 90,
-                      initials: '${caregiver['firstName']} ${caregiver['lastName']}',
-                    ),
-                  ),
+                GardenAvatar(
+                  imageUrl: caregiver['profilePicture'] as String?,
+                  size: 44,
+                  initials: '${(caregiver['firstName'] as String? ?? 'C')[0]}${(caregiver['lastName'] as String? ?? '')[0]}',
                 ),
-                const SizedBox(width: 16),
-                // Información principal
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '${caregiver['firstName']} ${caregiver['lastName']}',
-                              style: GardenText.headingLarge.copyWith(
-                                color: theme.colorScheme.onSurface,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (isVerified)
-                            Icon(Icons.verified, color: GardenColors.secondary, size: 20),
-                        ],
+                      Text(
+                        '${caregiver['firstName']} ${caregiver['lastName']}',
+                        style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
                       Row(
                         children: [
-                          Icon(Icons.location_on, size: 14, color: theme.colorScheme.onSurface.withOpacity(0.5)),
-                          const SizedBox(width: 4),
+                          Icon(Icons.location_on_outlined, size: 12, color: subtextColor),
+                          const SizedBox(width: 3),
                           Text(
-                            _zoneLabels[caregiver['zone']] ?? caregiver['zone'] ?? 'Santa Cruz',
-                            style: GardenText.bodySmall.copyWith(
-                              color: theme.colorScheme.onSurface.withOpacity(0.6),
-                            ),
+                            _zoneLabels[caregiver['zone']] ?? caregiver['zone'] ?? '',
+                            style: TextStyle(color: subtextColor, fontSize: 12),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      // Rating
-                      Row(
-                        children: [
-                          const Icon(Icons.star, color: GardenColors.star, size: 16),
-                          const SizedBox(width: 4),
-                          Text(
-                            (caregiver['rating'] as num? ?? 0).toStringAsFixed(1),
-                            style: GardenText.labelLarge.copyWith(
-                              color: theme.colorScheme.onSurface,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          if ((caregiver['reviewCount'] as int? ?? 0) > 0)
-                            Text(
-                              ' (${caregiver['reviewCount']} reseñas)',
-                              style: GardenText.caption.copyWith(
-                                color: theme.colorScheme.onSurface.withOpacity(0.5),
-                              ),
-                            ),
                         ],
                       ),
                     ],
                   ),
+                ),
+                Row(
+                  children: [
+                    const Icon(Icons.star_rounded, color: GardenColors.star, size: 15),
+                    const SizedBox(width: 3),
+                    Text(
+                      (caregiver['rating'] as num? ?? 0).toStringAsFixed(1),
+                      style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                  ],
                 ),
               ],
             ),

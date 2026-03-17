@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
-import '../../main.dart';
+import '../../theme/garden_theme.dart';
+import '../../widgets/temporada_alta_badge.dart';
+import '../../services/agentes_service.dart';
 
 class CaregiverProfileScreen extends StatefulWidget {
   final String caregiverId;
@@ -15,7 +17,7 @@ class CaregiverProfileScreen extends StatefulWidget {
 class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   Map<String, dynamic>? _caregiver;
   bool _isLoading = true;
-
+  int _selectedPhotoIndex = 0;
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
 
   @override
@@ -25,247 +27,384 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   }
 
   Future<void> _loadCaregiver() async {
-    setState(() => _isLoading = true);
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}'),
-      );
+      final response = await http.get(Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}'));
       final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        setState(() => _caregiver = data['data']);
-      }
-    } catch (e) {
-      // silencioso
-    } finally {
+      if (data['success'] == true) setState(() => _caregiver = data['data']);
+    } catch (_) {} finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
     if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: kBackgroundColor,
-        body: Center(child: CircularProgressIndicator(color: kPrimaryColor)),
+      return Scaffold(
+        backgroundColor: bg,
+        body: const Center(child: CircularProgressIndicator(color: GardenColors.primary)),
       );
     }
 
     if (_caregiver == null) {
       return Scaffold(
-        backgroundColor: kBackgroundColor,
-        appBar: AppBar(backgroundColor: kSurfaceColor, title: const Text('Cuidador no encontrado')),
-        body: const Center(child: Text('Error al cargar cuidador', style: TextStyle(color: Colors.white))),
+        backgroundColor: bg,
+        appBar: AppBar(backgroundColor: surface),
+        body: Center(child: Text('Cuidador no encontrado', style: TextStyle(color: textColor))),
       );
     }
 
     final photos = (_caregiver!['photos'] as List?)?.cast<String>() ?? [];
-    final firstPhoto = photos.isNotEmpty ? photos.first : null;
     final services = (_caregiver!['services'] as List?)?.cast<String>() ?? [];
+    final name = '${_caregiver!['firstName']} ${_caregiver!['lastName']}';
+    final rating = (_caregiver!['rating'] as num? ?? 0).toStringAsFixed(1);
+    final reviewCount = _caregiver!['reviewCount'] as int? ?? 0;
+    final zone = _caregiver!['zone'] as String? ?? '';
+    final bio = _caregiver!['bio'] as String? ?? '';
+    final verified = _caregiver!['verified'] == true;
+    final pricePerWalk = _caregiver!['pricePerWalk30'];
+    final pricePerDay = _caregiver!['pricePerDay'];
+    final priceDisplay = pricePerWalk != null ? 'Bs $pricePerWalk/paseo' : pricePerDay != null ? 'Bs $pricePerDay/noche' : 'Consultar';
 
     return Scaffold(
-      backgroundColor: kBackgroundColor,
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 280,
-            pinned: true,
-            backgroundColor: kSurfaceColor,
-            flexibleSpace: FlexibleSpaceBar(
-              background: firstPhoto != null
-                  ? Image.network(firstPhoto, fit: BoxFit.cover)
-                  : Container(color: kSurfaceColor),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Sección 1 — Header del cuidador
-                  Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(30),
-                        child: SizedBox(
-                          width: 60,
-                          height: 60,
-                          child: _caregiver!['profilePicture'] != null
-                              ? Image.network(
-                                  _caregiver!['profilePicture'],
-                                  fit: BoxFit.cover,
-                                )
-                              : Container(
-                                  color: kBackgroundColor,
-                                  child: const Icon(Icons.person, color: kTextSecondary, size: 30),
-                                ),
+      backgroundColor: bg,
+      body: Stack(
+        children: [
+          // Contenido scrollable
+          CustomScrollView(
+            slivers: [
+              // ── GALERÍA DE FOTOS ────────────────────────────
+              SliverToBoxAdapter(
+                child: Stack(
+                  children: [
+                    // Foto principal
+                    SizedBox(
+                      width: double.infinity,
+                      height: 320,
+                      child: photos.isNotEmpty
+                          ? Image.network(
+                              photos[_selectedPhotoIndex],
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: GardenColors.primary.withOpacity(0.1),
+                                child: const Icon(Icons.pets, size: 80, color: GardenColors.primary),
+                              ),
+                            )
+                          : Container(
+                              color: GardenColors.primary.withOpacity(0.1),
+                              child: const Icon(Icons.pets, size: 80, color: GardenColors.primary),
+                            ),
+                    ),
+                    // Gradiente inferior sobre la foto
+                    Positioned(
+                      bottom: 0, left: 0, right: 0,
+                      child: Container(
+                        height: 120,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.transparent, bg.withOpacity(0.95)],
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${_caregiver!['firstName']} ${_caregiver!['lastName']}',
-                              style: const TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                    ),
+                    // Botón atrás
+                    Positioned(
+                      top: 48, left: 16,
+                      child: GestureDetector(
+                        onTap: () => context.pop(),
+                        child: Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(
+                            color: surface.withOpacity(0.9),
+                            shape: BoxShape.circle,
+                            boxShadow: GardenShadows.card,
+                          ),
+                          child: Icon(Icons.arrow_back, color: textColor, size: 20),
+                        ),
+                      ),
+                    ),
+                    // Miniaturas de fotos
+                    if (photos.length > 1)
+                      Positioned(
+                        bottom: 16, right: 16,
+                        child: Row(
+                          children: photos.asMap().entries.map((e) {
+                            final selected = e.key == _selectedPhotoIndex;
+                            return GestureDetector(
+                              onTap: () => setState(() => _selectedPhotoIndex = e.key),
+                              child: Container(
+                                margin: const EdgeInsets.only(left: 6),
+                                width: selected ? 32 : 24,
+                                height: selected ? 32 : 24,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: selected ? GardenColors.primary : Colors.white.withOpacity(0.5),
+                                    width: selected ? 2 : 1,
+                                  ),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Image.network(e.value, fit: BoxFit.cover),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
+              // ── INFO PRINCIPAL ──────────────────────────────
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Nombre y rating
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Avatar del cuidador
+                          GardenAvatar(
+                            imageUrl: _caregiver!['profilePicture'] as String?,
+                            size: 64,
+                            initials: '${_caregiver!['firstName']?[0] ?? ''}${_caregiver!['lastName']?[0] ?? ''}',
+                          ),
+                          const SizedBox(width: 16),
+                          // Nombre, zona y rating
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Icon(Icons.location_on, size: 14, color: kTextSecondary),
-                                const SizedBox(width: 4),
-                                Text(
-                                  _caregiver!['zone'] ?? 'Ubicación no especificada',
-                                  style: const TextStyle(fontSize: 13, color: kTextSecondary),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(name, style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              Icon(Icons.location_on_outlined, size: 13, color: subtextColor),
+                                              const SizedBox(width: 3),
+                                              Text(zone, style: TextStyle(color: subtextColor, fontSize: 13)),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.star_rounded, color: GardenColors.star, size: 18),
+                                            const SizedBox(width: 4),
+                                            Text(rating, style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w800)),
+                                          ],
+                                        ),
+                                        if (reviewCount > 0)
+                                          Text('$reviewCount reseñas', style: TextStyle(color: subtextColor, fontSize: 11)),
+                                      ],
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                            if (_caregiver!['verified'] == true) ...[
-                              const SizedBox(height: 4),
-                              Row(
-                                children: const [
-                                  Icon(Icons.verified, color: kPrimaryColor, size: 14),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'Verificado por GARDEN IA',
-                                    style: TextStyle(fontSize: 12, color: kPrimaryColor),
-                                  ),
-                                ],
-                              ),
-                              // Badge blockchain
-                              Container(
-                                margin: const EdgeInsets.only(top: 4),
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF8247E5).withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: const Color(0xFF8247E5).withOpacity(0.4)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: const [
-                                    Text('⬡', style: TextStyle(fontSize: 10, color: Color(0xFF8247E5))),
-                                    SizedBox(width: 4),
-                                    Text('Polygon Amoy',
-                                      style: TextStyle(fontSize: 10, color: Color(0xFF8247E5))),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Sección 2 — Rating y precio
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.star, color: Color(0xFFFFD700), size: 18),
-                          const SizedBox(width: 4),
-                          Text(
-                            (_caregiver!['rating'] as num? ?? 0).toStringAsFixed(1),
-                            style: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
                           ),
-                          if ((_caregiver!['reviewCount'] as int? ?? 0) > 0)
-                            Text(
-                              ' (${_caregiver!['reviewCount']})',
-                              style: const TextStyle(fontSize: 14, color: kTextSecondary),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Badges verificado + blockchain
+                      Wrap(
+                        spacing: 8, runSpacing: 8,
+                        children: [
+                          if (verified)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: GardenColors.success.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: GardenColors.success.withOpacity(0.4)),
+                              ),
+                              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                const Icon(Icons.verified, color: GardenColors.success, size: 14),
+                                const SizedBox(width: 6),
+                                Text('Verificado por IA', style: TextStyle(color: GardenColors.success, fontSize: 12, fontWeight: FontWeight.w600)),
+                              ]),
+                            ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: GardenColors.polygon.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: GardenColors.polygon.withOpacity(0.4)),
+                            ),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              const Text('⬡', style: TextStyle(color: GardenColors.polygon, fontSize: 12)),
+                              const SizedBox(width: 6),
+                              Text('Polygon Amoy', style: TextStyle(color: GardenColors.polygon, fontSize: 12, fontWeight: FontWeight.w600)),
+                            ]),
+                          ),
+                          if (_caregiver!['zone'] == 'EQUIPETROL')
+                            TemporadaAltaBadge(
+                              zona: 'Equipetrol', porcentajeAjuste: 15,
+                              motivo: 'Semana Santa', fechaVueltaNormal: '24 de marzo',
+                              agentesService: AgentesService(authToken: ''),
                             ),
                         ],
                       ),
-                      if (_caregiver!['pricePerWalk30'] != null)
-                        Text(
-                          'Bs ${_caregiver!['pricePerWalk30']}/paseo',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kPrimaryColor),
-                        )
-                      else if (_caregiver!['pricePerDay'] != null)
-                        Text(
-                          'Bs ${_caregiver!['pricePerDay']}/noche',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kPrimaryColor),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
+                      const SizedBox(height: 24),
 
-                  // Sección 3 — Servicios
-                  const Text('Servicios', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18)),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    children: services.map((s) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: kPrimaryColor.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          s.toString(),
-                          style: const TextStyle(fontSize: 14, color: kPrimaryColor),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 24),
+                      // Divisor
+                      Divider(color: borderColor),
+                      const SizedBox(height: 20),
 
-                  // Sección 4 — Bio
-                  const Text('Sobre mí', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18)),
-                  const SizedBox(height: 12),
-                  Text(
-                    _caregiver!['bio'] ?? 'Sin descripción.',
-                    style: const TextStyle(color: kTextSecondary, fontSize: 14, height: 1.5),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Sección 5 — Fotos
-                  if (photos.isNotEmpty) ...[
-                    const Text('Fotos del espacio', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18)),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 100,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: photos.length,
-                        itemBuilder: (context, index) {
-                          return Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.network(
-                                photos[index],
-                                width: 120,
-                                height: 100,
-                                fit: BoxFit.cover,
+                      // Servicios
+                      Text('Servicios', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: services.map((s) {
+                          final isWalk = s == 'PASEO';
+                          return Expanded(
+                            child: Container(
+                              margin: EdgeInsets.only(right: services.last != s ? 12 : 0),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: surface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: borderColor),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(isWalk ? '🦮' : '🏠', style: const TextStyle(fontSize: 28)),
+                                  const SizedBox(height: 8),
+                                  Text(isWalk ? 'Paseo' : 'Hospedaje',
+                                    style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    isWalk
+                                      ? 'Bs ${pricePerWalk ?? '—'} / 30 min'
+                                      : 'Bs ${pricePerDay ?? '—'} / noche',
+                                    style: TextStyle(color: GardenColors.primary, fontSize: 14, fontWeight: FontWeight.w600),
+                                  ),
+                                ],
                               ),
                             ),
                           );
-                        },
+                        }).toList(),
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
+                      const SizedBox(height: 24),
 
-                  // Sección 6 — Botón de reservar
-                  const SizedBox(height: 32),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 56),
-                      backgroundColor: kPrimaryColor,
+                      Divider(color: borderColor),
+                      const SizedBox(height: 20),
+
+                      // Bio
+                      Text('Sobre ${_caregiver!['firstName']}',
+                        style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 12),
+                      Text(bio, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6)),
+                      const SizedBox(height: 24),
+
+                      Divider(color: borderColor),
+                      const SizedBox(height: 20),
+
+                      // Fotos del espacio
+                      if (photos.isNotEmpty) ...[
+                        Text('Fotos del espacio',
+                          style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          height: 120,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: photos.length,
+                            itemBuilder: (context, index) => GestureDetector(
+                              onTap: () => setState(() => _selectedPhotoIndex = index),
+                              child: Container(
+                                margin: const EdgeInsets.only(right: 10),
+                                width: 140,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: _selectedPhotoIndex == index ? GardenColors.primary : borderColor,
+                                    width: _selectedPhotoIndex == index ? 2 : 1,
+                                  ),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.network(photos[index], fit: BoxFit.cover),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Divider(color: borderColor),
+                        const SizedBox(height: 20),
+                      ],
+
+                      // Espacio para el botón sticky
+                      const SizedBox(height: 100),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // ── BOTÓN RESERVAR STICKY ───────────────────────────
+          Positioned(
+            bottom: 0, left: 0, right: 0,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+              decoration: BoxDecoration(
+                color: bg,
+                border: Border(top: BorderSide(color: borderColor, width: 1)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+                    blurRadius: 20,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  // Precio
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(priceDisplay,
+                        style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+                      Text('precio por servicio',
+                        style: TextStyle(color: subtextColor, fontSize: 12)),
+                    ],
+                  ),
+                  const SizedBox(width: 20),
+                  // Botón reservar
+                  Expanded(
+                    child: GardenButton(
+                      label: 'Reservar ahora',
+                      icon: Icons.calendar_today_outlined,
+                      onPressed: () => context.push('/booking/${widget.caregiverId}'),
                     ),
-                    onPressed: () {
-                      context.push('/booking/${widget.caregiverId}');
-                    },
-                    child: const Text('Reservar ahora', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
                   ),
                 ],
               ),
