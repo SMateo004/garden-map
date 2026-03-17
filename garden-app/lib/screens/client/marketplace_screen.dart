@@ -306,6 +306,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
+            icon: const Icon(Icons.list_alt, color: Colors.white),
+            tooltip: 'Mis reservas',
+            onPressed: () => context.push('/my-bookings'),
+          ),
+          IconButton(
             icon: const Icon(Icons.pets, color: Colors.white),
             tooltip: 'Mis mascotas',
             onPressed: () => context.push('/my-pets'),

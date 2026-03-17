@@ -12,6 +12,7 @@ import 'screens/client/caregiver_profile_screen.dart';
 import 'screens/client/booking_screen.dart';
 import 'screens/client/payment_screen.dart';
 import 'screens/caregiver/caregiver_home_screen.dart';
+import 'screens/client/my_bookings_screen.dart';
 
 // ── Paleta oficial GARDEN ──────────────────────────────────
 const kBackgroundColor = Color(0xFF0A0E1A);
@@ -91,6 +92,11 @@ final GoRouter _router = GoRouter(
       builder: (context, state) => PaymentScreen(
         bookingId: state.pathParameters['bookingId']!,
       ),
+    ),
+    GoRoute(
+      path: '/my-bookings',
+      name: 'myBookings',
+      builder: (context, state) => const MyBookingsScreen(),
     ),
 
   ],
