@@ -11,12 +11,18 @@ const PORT =
     : (parseInt(env.PORT, 10) || 3000);
 
 async function start() {
+  // Primero abrir el puerto para que Railway no de 502 por timeout
+  app.listen(PORT, '0.0.0.0', () => {
+    logger.info(`GARDEN API listening on port ${PORT}`);
+  });
+
   try {
     await prisma.$connect();
     logger.info('Database connected');
   } catch (e) {
     logger.error('Database connection failed', e);
-    process.exit(1);
+    // En producción no salimos inmediatamente para permitir que el healthcheck responda
+    if (process.env.NODE_ENV !== 'production') process.exit(1);
   }
 
   // Fail fast if schema is out of sync (missing table or profilePhoto column)
@@ -37,17 +43,12 @@ async function start() {
         'Database schema out of sync. Table or column missing. Run: cd garden-api && npx prisma db push';
       logger.error(fixMsg);
       console.error('\n*** ' + fixMsg + ' ***\n');
-      process.exit(1);
+      // No salimos en prod para depurar
     }
-    throw e;
   }
 
   // Iniciar Jobs Background
   iniciarJobAjustePrecios();
-
-  app.listen(PORT, () => {
-    logger.info(`GARDEN API listening on port ${PORT}`);
-  });
 }
 
 process.on('SIGTERM', async () => {
