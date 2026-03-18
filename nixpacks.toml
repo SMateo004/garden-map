@@ -1,0 +1,8 @@
+[phases.install]
+cmds = ["cd garden-api && npm ci"]
+
+[phases.build]
+cmds = ["cd garden-api && npm run build && npx prisma generate"]
+
+[start]
+cmd = "cd garden-api && npx prisma migrate deploy && npm start"
