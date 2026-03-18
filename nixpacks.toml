@@ -1,3 +1,6 @@
+[phases.setup]
+nixPkgs = ["node", "npm"]
+
 [phases.install]
 cmds = ["cd garden-api && npm ci"]
 
@@ -5,4 +8,4 @@ cmds = ["cd garden-api && npm ci"]
 cmds = ["cd garden-api && npm run build && npx prisma generate"]
 
 [start]
-cmd = "cd garden-api && npx prisma migrate deploy && npm start"
+cmd = "cd garden-api && node dist/server.js"
