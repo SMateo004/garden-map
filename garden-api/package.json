@@ -1,6 +1,7 @@
 {
   "name": "garden-api",
   "version": "1.0.0",
+  "type": "module",
   "description": "GARDEN - Perfiles de Cuidadores Verificados API",
   "main": "dist/server.js",
   "scripts": {
