@@ -1149,6 +1149,17 @@ export async function getBookingsByCaregiverUserId(
 
   const bookings = await prisma.booking.findMany({
     where: { caregiverId: profile.id },
+    include: {
+      client: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+        },
+      },
+    },
     orderBy: { createdAt: 'desc' },
   });
   return bookings.map(bookingToResponse);

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -19,6 +20,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   List<Map<String, dynamic>> _bookings = [];
   bool _isLoading = true;
   String _caregiverToken = '';
+  List<Map<String, dynamic>> _notifications = [];
+  int _unreadCount = 0;
+  Timer? _notifTimer;
 
   static const String _devToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJmNmRmZmYzMS1lYTFhLTQ4MzktYmZkOC1kMWY4OTgwNDQxMjAiLCJyb2xlIjoiQ0FSRUdJVkVSIiwiaWQiOiJmNmRmZmYzMS1lYTFhLTQ4MzktYmZkOC1kMWY4OTgwNDQxMjAiLCJpYXQiOjE3NzM2ODU4NjQsImV4cCI6MTc3NjI3Nzg2NH0.I9cvXI16qEgG55S6FTHeieDLqPjhCQewLKvN0xXgddw';
 
@@ -39,6 +43,13 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   void initState() {
     super.initState();
     _initData();
+    _notifTimer = Timer.periodic(const Duration(seconds: 30), (_) => _loadNotifications());
+  }
+
+  @override
+  void dispose() {
+    _notifTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _initData() async {
@@ -53,6 +64,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       await Future.wait([
         _loadAvailability(),
         _loadBookings(),
+        _loadNotifications(),
       ]);
       _computeDayStatuses();
     } catch (e) {
@@ -493,6 +505,236 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
       );
+    }
+  }
+
+  Future<void> _loadNotifications() async {
+    if (_caregiverToken.isEmpty) return;
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/caregiver/notifications'),
+        headers: {'Authorization': 'Bearer $_caregiverToken'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        final notifs = (data['data'] as List).cast<Map<String, dynamic>>();
+        if (mounted) {
+          setState(() {
+            _notifications = notifs;
+            _unreadCount = notifs.where((n) => n['read'] == false).length;
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _showNotificationsSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final isDark = themeNotifier.isDark;
+          final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+          final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+          final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+          final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.75,
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              children: [
+                // Handle
+                Container(
+                  width: 40, height: 4,
+                  margin: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: borderColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                // Header
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Notificaciones',
+                        style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+                      if (_unreadCount > 0)
+                        TextButton(
+                          onPressed: () async {
+                            // Marcar todas como leídas
+                            for (final n in _notifications.where((n) => n['read'] == false)) {
+                              await http.patch(
+                                Uri.parse('$_baseUrl/caregiver/notifications/${n['id']}/read'),
+                                headers: {'Authorization': 'Bearer $_caregiverToken'},
+                              );
+                            }
+                            await _loadNotifications();
+                            setSheetState(() {});
+                          },
+                          child: const Text('Marcar todas leídas',
+                            style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                        ),
+                    ],
+                  ),
+                ),
+                Divider(height: 1, color: borderColor),
+                // Lista de notificaciones
+                Expanded(
+                  child: _notifications.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.notifications_none_outlined, size: 56, color: subtextColor),
+                            const SizedBox(height: 12),
+                            Text('Sin notificaciones', style: TextStyle(color: subtextColor, fontSize: 16)),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        itemCount: _notifications.length,
+                        itemBuilder: (context, index) {
+                          final notif = _notifications[index];
+                          final isUnread = notif['read'] == false;
+                          return GestureDetector(
+                            onTap: () async {
+                              if (isUnread) {
+                                await http.patch(
+                                  Uri.parse('$_baseUrl/caregiver/notifications/${notif['id']}/read'),
+                                  headers: {'Authorization': 'Bearer $_caregiverToken'},
+                                );
+                                await _loadNotifications();
+                                setSheetState(() {});
+                              }
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: isUnread 
+                                  ? GardenColors.primary.withOpacity(0.06)
+                                  : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isUnread ? GardenColors.primary.withOpacity(0.2) : borderColor,
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Ícono según tipo
+                                  Container(
+                                    width: 40, height: 40,
+                                    decoration: BoxDecoration(
+                                      color: _notifColor(notif['type'] as String? ?? '').withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(
+                                      _notifIcon(notif['type'] as String? ?? ''),
+                                      color: _notifColor(notif['type'] as String? ?? ''),
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(notif['title'] as String? ?? '',
+                                                style: TextStyle(
+                                                  color: textColor,
+                                                  fontWeight: isUnread ? FontWeight.w700 : FontWeight.w500,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ),
+                                            if (isUnread)
+                                              Container(
+                                                width: 8, height: 8,
+                                                decoration: const BoxDecoration(
+                                                  color: GardenColors.primary,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(notif['message'] as String? ?? '',
+                                          style: TextStyle(color: subtextColor, fontSize: 13, height: 1.4),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          _formatNotifDate(notif['createdAt'] as String? ?? ''),
+                                          style: TextStyle(color: subtextColor.withOpacity(0.7), fontSize: 11),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  IconData _notifIcon(String type) {
+    switch (type) {
+      case 'NEW_BOOKING': return Icons.calendar_today_outlined;
+      case 'BOOKING_CANCELLED': return Icons.cancel_outlined;
+      case 'PAYMENT_RECEIVED': return Icons.payments_outlined;
+      case 'REVIEW_RECEIVED': return Icons.star_outline_rounded;
+      case 'SYSTEM': return Icons.info_outline;
+      case 'PROFILE_APPROVED': return Icons.verified_outlined;
+      default: return Icons.notifications_outlined;
+    }
+  }
+
+  Color _notifColor(String type) {
+    switch (type) {
+      case 'NEW_BOOKING': return GardenColors.primary;
+      case 'BOOKING_CANCELLED': return GardenColors.error;
+      case 'PAYMENT_RECEIVED': return GardenColors.success;
+      case 'REVIEW_RECEIVED': return GardenColors.star;
+      case 'SYSTEM': return GardenColors.secondary;
+      case 'PROFILE_APPROVED': return GardenColors.success;
+      default: return GardenColors.secondary;
+    }
+  }
+
+  String _formatNotifDate(String isoDate) {
+    if (isoDate.isEmpty) return '';
+    try {
+      final date = DateTime.parse(isoDate).toLocal();
+      final now = DateTime.now();
+      final diff = now.difference(date);
+      if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes} min';
+      if (diff.inHours < 24) return 'Hace ${diff.inHours}h';
+      if (diff.inDays < 7) return 'Hace ${diff.inDays}d';
+      return '${date.day}/${date.month}/${date.year}';
+    } catch (_) {
+      return '';
     }
   }
 
@@ -1230,62 +1472,43 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     );
   }
 
+  Widget _buildFullBookingCard(Map<String, dynamic> booking) {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final status = booking['status'] as String? ?? '';
+
+    return _ExpandableBookingCard(
+      booking: booking,
+      surface: surface,
+      textColor: textColor,
+      subtextColor: subtextColor,
+      borderColor: borderColor,
+      isDark: isDark,
+      onRespond: _respondBooking,
+    );
+  }
+
   Widget _buildBookings() {
     if (_bookings.isEmpty) {
       return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.inbox, color: kTextSecondary, size: 64),
+            Icon(Icons.inbox, color: GardenColors.darkTextSecondary, size: 64),
             SizedBox(height: 16),
-            Text('No tienes reservas aún', style: TextStyle(color: kTextSecondary)),
+            Text('No tienes reservas aún', style: TextStyle(color: GardenColors.darkTextSecondary)),
           ],
         ),
       );
     }
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       itemCount: _bookings.length,
       itemBuilder: (context, index) {
-        final b = _bookings[index];
-        final id = b['id'] as String;
-        final status = b['status'] as String;
-        final isPending = status == 'WAITING_CAREGIVER_APPROVAL';
-        return Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: kSurfaceColor,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: isPending ? kPrimaryColor : Colors.transparent),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildStatusBadge(status),
-                  Text('Bs ${b['totalAmount']}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kPrimaryColor)),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text('${b['serviceType']} - ${b['petName'] ?? 'Mascota'}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-              const SizedBox(height: 4),
-              Text('Fecha: ${b['walkDate'] ?? b['startDate']}', style: const TextStyle(color: kTextSecondary, fontSize: 14)),
-              if (isPending) ...[
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green), onPressed: () => _respondBooking(id, 'accept'), child: const Text('Aceptar'))),
-                    const SizedBox(width: 8),
-                    Expanded(child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700), onPressed: () => _respondBooking(id, 'reject'), child: const Text('Rechazar'))),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        );
+        return _buildFullBookingCard(_bookings[index]);
       },
     );
   }
@@ -1334,6 +1557,32 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               ],
             ),
             actions: [
+              Stack(
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.notifications_outlined, 
+                      color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+                    onPressed: () => _showNotificationsSheet(),
+                  ),
+                  if (_unreadCount > 0)
+                    Positioned(
+                      right: 8, top: 8,
+                      child: Container(
+                        width: 16, height: 16,
+                        decoration: const BoxDecoration(
+                          color: GardenColors.error,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            _unreadCount > 9 ? '9+' : '$_unreadCount',
+                            style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
               IconButton(
                 icon: Icon(themeNotifier.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
                   color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
@@ -1370,6 +1619,267 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _ExpandableBookingCard extends StatefulWidget {
+  final Map<String, dynamic> booking;
+  final Color surface, textColor, subtextColor, borderColor;
+  final bool isDark;
+  final Function(String, String) onRespond;
+
+  const _ExpandableBookingCard({
+    required this.booking,
+    required this.surface,
+    required this.textColor,
+    required this.subtextColor,
+    required this.borderColor,
+    required this.isDark,
+    required this.onRespond,
+  });
+
+  @override
+  State<_ExpandableBookingCard> createState() => _ExpandableBookingCardState();
+}
+
+class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final booking = widget.booking;
+    final status = booking['status'] as String? ?? '';
+
+    return GestureDetector(
+      onTap: () => setState(() => _expanded = !_expanded),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: widget.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: _expanded ? GardenColors.primary.withOpacity(0.4) : widget.borderColor,
+            width: _expanded ? 1.5 : 1,
+          ),
+          boxShadow: [BoxShadow(
+            color: Colors.black.withOpacity(widget.isDark ? 0.2 : 0.05),
+            blurRadius: _expanded ? 12 : 6,
+            offset: const Offset(0, 2),
+          )],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── HEADER siempre visible ──
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 42, height: 42,
+                    decoration: BoxDecoration(
+                      color: GardenColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      booking['serviceType'] == 'PASEO' ? Icons.directions_walk_outlined : Icons.home_outlined,
+                      color: GardenColors.primary, size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          booking['serviceType'] == 'PASEO' ? 'Paseo' : 'Hospedaje',
+                          style: TextStyle(color: widget.textColor, fontSize: 15, fontWeight: FontWeight.w700),
+                        ),
+                        Text(
+                          '${booking['petName'] ?? '—'} · ${booking['walkDate'] ?? booking['startDate'] ?? '—'}',
+                          style: TextStyle(color: widget.subtextColor, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      bookingStatusBadge(status),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Bs ${booking['totalAmount'] ?? '—'}',
+                        style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w800, fontSize: 15),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    _expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                    color: widget.subtextColor, size: 20,
+                  ),
+                ],
+              ),
+            ),
+
+            // ── CONTENIDO EXPANDIDO ──
+            if (_expanded) ...[
+              Divider(height: 1, color: widget.borderColor),
+
+              // Datos de la mascota
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                child: Text('Mascota', style: TextStyle(color: widget.subtextColor, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36, height: 36,
+                      decoration: BoxDecoration(
+                        color: GardenColors.primary.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.pets, color: GardenColors.primary, size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(booking['petName'] as String? ?? '—',
+                          style: TextStyle(color: widget.textColor, fontWeight: FontWeight.w600, fontSize: 14)),
+                        Text(
+                          [
+                            if (booking['petBreed'] != null) booking['petBreed'] as String,
+                            if (booking['petAge'] != null) '${booking['petAge']} años',
+                          ].join(' · '),
+                          style: TextStyle(color: widget.subtextColor, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                    if (booking['specialNeeds'] != null && (booking['specialNeeds'] as String).isNotEmpty)
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: GardenColors.warning.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text('⚠️ Especial', style: TextStyle(color: GardenColors.warning, fontSize: 11)),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
+              if (booking['specialNeeds'] != null && (booking['specialNeeds'] as String).isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: GardenColors.warning.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: GardenColors.warning.withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 14, color: GardenColors.warning),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(booking['specialNeeds'] as String,
+                          style: TextStyle(color: widget.subtextColor, fontSize: 12))),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+
+              Divider(height: 1, color: widget.borderColor),
+
+              // Datos del dueño
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                child: Text('Dueño', style: TextStyle(color: widget.subtextColor, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: Row(
+                  children: [
+                    GardenAvatar(
+                      imageUrl: null,
+                      size: 40,
+                      initials: (booking['clientName'] as String? ?? 'D')[0],
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(booking['clientName'] as String? ?? 'Cliente',
+                            style: TextStyle(color: widget.textColor, fontWeight: FontWeight.w600, fontSize: 14)),
+                          if (booking['clientPhone'] != null)
+                            Row(children: [
+                              Icon(Icons.phone_outlined, size: 12, color: widget.subtextColor),
+                              const SizedBox(width: 4),
+                              Text(booking['clientPhone'] as String,
+                                style: TextStyle(color: widget.subtextColor, fontSize: 12)),
+                            ]),
+                          if (booking['clientEmail'] != null)
+                            Row(children: [
+                              Icon(Icons.email_outlined, size: 12, color: widget.subtextColor),
+                              const SizedBox(width: 4),
+                              Expanded(child: Text(booking['clientEmail'] as String,
+                                style: TextStyle(color: widget.subtextColor, fontSize: 12),
+                                overflow: TextOverflow.ellipsis)),
+                            ]),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Acciones si aplica
+              if (status == 'WAITING_CAREGIVER_APPROVAL') ...[
+                Divider(height: 1, color: widget.borderColor),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GardenButton(
+                          label: 'Aceptar',
+                          icon: Icons.check_rounded,
+                          height: 42,
+                          color: GardenColors.success,
+                          onPressed: () => widget.onRespond(booking['id'] as String, 'accept'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: GardenButton(
+                          label: 'Rechazar',
+                          icon: Icons.close_rounded,
+                          height: 42,
+                          color: GardenColors.error,
+                          outline: true,
+                          onPressed: () => widget.onRespond(booking['id'] as String, 'reject'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/temporada_alta_badge.dart';
 import '../../services/agentes_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class CaregiverProfileScreen extends StatefulWidget {
   final String caregiverId;
@@ -403,7 +404,26 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                     child: GardenButton(
                       label: 'Reservar ahora',
                       icon: Icons.calendar_today_outlined,
-                      onPressed: () => context.push('/booking/${widget.caregiverId}'),
+                      onPressed: () async {
+                        final prefs = await SharedPreferences.getInstance();
+                        final token = prefs.getString('access_token') ?? '';
+                        if (token.isEmpty) {
+                          // No hay sesión, ir al login
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Inicia sesión para hacer una reserva'),
+                              backgroundColor: GardenColors.primary,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                          await Future.delayed(const Duration(seconds: 1));
+                          if (!mounted) return;
+                          context.push('/login');
+                        } else {
+                          context.push('/booking/${widget.caregiverId}');
+                        }
+                      },
                     ),
                   ),
                 ],
