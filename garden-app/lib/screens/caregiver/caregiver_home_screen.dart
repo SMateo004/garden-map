@@ -1529,6 +1529,268 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     );
   }
 
+  Widget _buildEarnings() {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    // Calcular estadísticas desde _bookings
+    final completedBookings = _bookings.where((b) => b['status'] == 'COMPLETED').toList();
+    final confirmedBookings = _bookings.where((b) => b['status'] == 'CONFIRMED' || b['status'] == 'IN_PROGRESS').toList();
+
+    double totalEarned = 0;
+    double totalCommission = 0;
+    double pendingEarnings = 0;
+
+    for (final b in completedBookings) {
+      final amount = double.tryParse(b['totalAmount']?.toString() ?? '0') ?? 0;
+      final commission = double.tryParse(b['commissionAmount']?.toString() ?? '0') ?? 0;
+      totalEarned += amount - commission;
+      totalCommission += commission;
+    }
+
+    for (final b in confirmedBookings) {
+      final amount = double.tryParse(b['totalAmount']?.toString() ?? '0') ?? 0;
+      final commission = double.tryParse(b['commissionAmount']?.toString() ?? '0') ?? 0;
+      pendingEarnings += amount - commission;
+    }
+
+    // Agrupar por mes
+    final Map<String, double> byMonth = {};
+    for (final b in completedBookings) {
+      final date = b['walkDate'] ?? b['startDate'] ?? b['createdAt'];
+      if (date == null) continue;
+      final month = date.toString().substring(0, 7); // YYYY-MM
+      final amount = double.tryParse(b['totalAmount']?.toString() ?? '0') ?? 0;
+      final commission = double.tryParse(b['commissionAmount']?.toString() ?? '0') ?? 0;
+      byMonth[month] = (byMonth[month] ?? 0) + (amount - commission);
+    }
+
+    // Agrupar por tipo de servicio
+    double walkEarnings = 0;
+    double hospedajeEarnings = 0;
+    for (final b in completedBookings) {
+      final amount = double.tryParse(b['totalAmount']?.toString() ?? '0') ?? 0;
+      final commission = double.tryParse(b['commissionAmount']?.toString() ?? '0') ?? 0;
+      final net = amount - commission;
+      if (b['serviceType'] == 'PASEO') walkEarnings += net;
+      else hospedajeEarnings += net;
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Mis ganancias', style: TextStyle(color: textColor, fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+          const SizedBox(height: 4),
+          Text('Ingresos netos después de comisión GARDEN', style: TextStyle(color: subtextColor, fontSize: 13)),
+          const SizedBox(height: 24),
+
+          // Tarjeta principal de ganancias totales
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFFF6B35), Color(0xFFE55A25)],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [BoxShadow(color: GardenColors.primary.withOpacity(0.35), blurRadius: 20, offset: const Offset(0, 6))],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Total ganado', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 8),
+                Text('Bs ${totalEarned.toStringAsFixed(2)}',
+                  style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900, letterSpacing: -1)),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    _earningsChip('${completedBookings.length} completadas', Icons.check_circle_outline),
+                    const SizedBox(width: 10),
+                    _earningsChip('Bs ${totalCommission.toStringAsFixed(0)} comisión', Icons.info_outline),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Ganancias pendientes
+          if (pendingEarnings > 0)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: GardenColors.success.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: GardenColors.success.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44, height: 44,
+                    decoration: BoxDecoration(
+                      color: GardenColors.success.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.hourglass_top_outlined, color: GardenColors.success, size: 22),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Por cobrar', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                        Text('De reservas confirmadas en curso', style: TextStyle(color: subtextColor, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  Text('Bs ${pendingEarnings.toStringAsFixed(2)}',
+                    style: const TextStyle(color: GardenColors.success, fontWeight: FontWeight.w800, fontSize: 18)),
+                ],
+              ),
+            ),
+
+          // Desglose por servicio
+          Text('Por servicio', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _serviceEarningsCard('🦮 Paseo', walkEarnings, completedBookings.where((b) => b['serviceType'] == 'PASEO').length, surface, textColor, subtextColor, borderColor)),
+              const SizedBox(width: 12),
+              Expanded(child: _serviceEarningsCard('🏠 Hospedaje', hospedajeEarnings, completedBookings.where((b) => b['serviceType'] == 'HOSPEDAJE').length, surface, textColor, subtextColor, borderColor)),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Historial por mes
+          if (byMonth.isNotEmpty) ...[
+            Text('Historial mensual', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 12),
+            ...byMonth.entries.toList().reversed.map((entry) {
+              final monthStr = _formatMonth(entry.key);
+              final amount = entry.value;
+              final maxAmount = byMonth.values.reduce((a, b) => a > b ? a : b);
+              final percentage = maxAmount > 0 ? amount / maxAmount : 0.0;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 70,
+                      child: Text(monthStr, style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w500)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: percentage,
+                          backgroundColor: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
+                          valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
+                          minHeight: 8,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text('Bs ${amount.toStringAsFixed(0)}',
+                      style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+                  ],
+                ),
+              );
+            }),
+          ],
+
+          // Si no hay ganancias
+          if (completedBookings.isEmpty)
+            Center(
+              child: Column(
+                children: [
+                  const SizedBox(height: 32),
+                  Container(
+                    width: 80, height: 80,
+                    decoration: BoxDecoration(
+                      color: GardenColors.primary.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.account_balance_wallet_outlined, size: 36, color: GardenColors.primary),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Sin ganancias aún', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  Text('Completa tus primeras reservas para ver tus estadísticas',
+                    style: TextStyle(color: subtextColor, fontSize: 14), textAlign: TextAlign.center),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _earningsChip(String label, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: Colors.white),
+          const SizedBox(width: 5),
+          Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _serviceEarningsCard(String title, double amount, int count, Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Text('Bs ${amount.toStringAsFixed(0)}',
+            style: const TextStyle(color: GardenColors.primary, fontSize: 22, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 4),
+          Text('$count servicios', style: TextStyle(color: subtextColor, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  String _formatMonth(String yearMonth) {
+    final parts = yearMonth.split('-');
+    if (parts.length < 2) return yearMonth;
+    const months = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    final month = int.tryParse(parts[1]) ?? 0;
+    return '${months[month]} ${parts[0]}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -1557,6 +1819,12 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               ],
             ),
             actions: [
+              IconButton(
+                icon: Icon(Icons.account_circle_outlined,
+                  color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+                onPressed: () => context.push('/profile'),
+                tooltip: 'Mi perfil',
+              ),
               Stack(
                 children: [
                   IconButton(
@@ -1601,6 +1869,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 _buildHome(),
                 _buildAvailability(),
                 _buildBookings(),
+                _buildEarnings(),
               ][_selectedTab],
           bottomNavigationBar: BottomNavigationBar(
             currentIndex: _selectedTab,
@@ -1612,9 +1881,26 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             elevation: 0,
             type: BottomNavigationBarType.fixed,
             items: const [
-              BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home_rounded), label: 'Inicio'),
-              BottomNavigationBarItem(icon: Icon(Icons.calendar_month_outlined), activeIcon: Icon(Icons.calendar_month_rounded), label: 'Disponibilidad'),
-              BottomNavigationBarItem(icon: Icon(Icons.list_alt_outlined), activeIcon: Icon(Icons.list_alt_rounded), label: 'Reservas'),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.home_outlined),
+                activeIcon: Icon(Icons.home_rounded),
+                label: 'Inicio',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.calendar_month_outlined),
+                activeIcon: Icon(Icons.calendar_month_rounded),
+                label: 'Disponibilidad',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.list_alt_outlined),
+                activeIcon: Icon(Icons.list_alt_rounded),
+                label: 'Reservas',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.account_balance_wallet_outlined),
+                activeIcon: Icon(Icons.account_balance_wallet_rounded),
+                label: 'Ganancias',
+              ),
             ],
           ),
         );
