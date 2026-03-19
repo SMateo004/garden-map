@@ -34,6 +34,7 @@ model User {
   verificationAudits           VerificationAudit[]
   emailVerifications           EmailVerification[]
   notifications                Notification[]
+  sentMessages                 ChatMessage[]
 
   @@index([email])
   @@index([role])
@@ -230,6 +231,7 @@ model Booking {
   client                    User             @relation("ClientBookings", fields: [clientId], references: [id], onDelete: Cascade)
   pet                       Pet?             @relation(fields: [petId], references: [id])
   review                    Review?
+  messages                  ChatMessage[]
 
   @@index([clientId, status])
   @@index([caregiverId, status])
@@ -556,3 +558,20 @@ model AjustePrecio {
 
   @@unique([zona, servicio])
 }
+
+model ChatMessage {
+  id          String   @id @default(uuid())
+  bookingId   String
+  senderId    String
+  senderRole  String   // 'CLIENT' | 'CAREGIVER'
+  message     String
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  booking     Booking  @relation(fields: [bookingId], references: [id])
+  sender      User     @relation(fields: [senderId], references: [id])
+
+  @@index([bookingId])
+  @@index([senderId])
+}
+

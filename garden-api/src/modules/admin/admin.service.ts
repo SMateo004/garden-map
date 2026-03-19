@@ -359,7 +359,7 @@ export async function reviewCaregiver(
 
     const isComplete = hasPersonalInfo && hasQuestionnaire && hasAvailability && identityVerified && emailVerified;
 
-    if (!isComplete) {
+    if (!isComplete && !body.force) {
       const missing: string[] = [];
       if (!hasPersonalInfo) missing.push('información personal');
       if (!hasQuestionnaire) missing.push('cuestionario');
@@ -367,7 +367,7 @@ export async function reviewCaregiver(
       if (!identityVerified) missing.push('verificación de identidad (QR)');
       if (!emailVerified) missing.push('verificación de correo');
       throw new BadRequestError(
-        `No se puede aprobar: faltan ${missing.join(', ')}. isComplete debe ser true.`,
+        `No se puede aprobar: faltan ${missing.join(', ')}. isComplete debe ser true. (Usa force: true para saltar esta validación)`,
         'PROFILE_INCOMPLETE'
       );
     }

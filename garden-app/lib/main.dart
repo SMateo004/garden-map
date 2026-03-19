@@ -15,6 +15,7 @@ import 'screens/caregiver/caregiver_home_screen.dart';
 import 'screens/caregiver/verification_screen.dart';
 import 'screens/client/my_bookings_screen.dart';
 import 'screens/profile/profile_screen.dart';
+import 'screens/chat/chat_screen.dart';
 import 'theme/garden_theme.dart';
 
 // ── Compatibilidad con sistema anterior (Legacy Constants) ──
@@ -111,6 +112,19 @@ final GoRouter _router = GoRouter(
       path: '/profile',
       name: 'profile',
       builder: (context, state) => const ProfileScreen(),
+    ),
+    GoRoute(
+      path: '/chat/:bookingId',
+      name: 'chat',
+      builder: (context, state) {
+        final bookingId = state.pathParameters['bookingId']!;
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        return ChatScreen(
+          bookingId: bookingId,
+          otherPersonName: extra['otherPersonName'] as String? ?? 'Usuario',
+          otherPersonPhoto: extra['otherPersonPhoto'] as String?,
+        );
+      },
     ),
   ],
 );

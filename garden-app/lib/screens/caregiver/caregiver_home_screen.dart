@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../main.dart';
+import '../chat/chat_screen.dart';
 
 class CaregiverHomeScreen extends StatefulWidget {
   const CaregiverHomeScreen({Key? key}) : super(key: key);
@@ -2162,6 +2163,25 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                   ),
                 ),
               ],
+
+              if (status == 'CONFIRMED' || status == 'IN_PROGRESS' || status == 'WAITING_CAREGIVER_APPROVAL' || status == 'COMPLETED')
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                  child: GardenButton(
+                    label: 'Abrir chat',
+                    icon: Icons.chat_outlined,
+                    outline: true,
+                    height: 40,
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ChatScreen(
+                          bookingId: booking['id'] as String,
+                          otherPersonName: booking['clientName'] as String? ?? 'Cliente',
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ],
         ),

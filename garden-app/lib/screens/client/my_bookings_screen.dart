@@ -327,6 +327,25 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                             child: const Text('Cancelar reserva', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
                           ),
                         ),
+                      if (status == 'CONFIRMED' || status == 'IN_PROGRESS' || status == 'COMPLETED') ...[
+                        if (status == 'CONFIRMED' || status == 'IN_PROGRESS')
+                          const SizedBox(width: 12),
+                        Expanded(
+                          child: GardenButton(
+                            label: 'Chat',
+                            icon: Icons.chat_rounded,
+                            outline: true,
+                            height: 40,
+                            onPressed: () => context.push(
+                              '/chat/${booking['id']}',
+                              extra: {
+                                'otherPersonName': booking['caregiverName'] ?? 'Cuidador',
+                                'otherPersonPhoto': booking['caregiverPhoto'],
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
                       if (status == 'COMPLETED' && booking['rating'] == null)
                         Expanded(
                           child: GardenButton(

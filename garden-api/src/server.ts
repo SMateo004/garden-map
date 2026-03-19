@@ -1,19 +1,22 @@
+import { createServer } from 'http';
 import app from './app.js';
 import { env } from './config/env.js';
 import prisma from './config/database.js';
 import logger from './shared/logger.js';
 import { iniciarJobAjustePrecios } from './jobs/ajuste-precios.job.js';
+import { initSocketServer } from './services/socket.service.js';
 
-// En desarrollo forzar 3000 para que el frontend (VITE_API_URL) conecte sin errores
 const PORT =
   process.env.NODE_ENV !== 'production'
     ? 3000
     : (parseInt(env.PORT, 10) || 3000);
 
+const httpServer = createServer(app);
+initSocketServer(httpServer);
+
 async function start() {
-  // Primero abrir el puerto para que Railway no de 502 por timeout
-  app.listen(PORT, '0.0.0.0', () => {
-    logger.info(`GARDEN API listening on port ${PORT}`);
+  httpServer.listen(PORT, '0.0.0.0', () => {
+    logger.info(`GARDEN API with Socket.io listening on port ${PORT}`);
   });
 
   try {
@@ -21,11 +24,9 @@ async function start() {
     logger.info('Database connected');
   } catch (e) {
     logger.error('Database connection failed', e);
-    // En producción no salimos inmediatamente para permitir que el healthcheck responda
     if (process.env.NODE_ENV !== 'production') process.exit(1);
   }
 
-  // Fail fast if schema is out of sync (missing table or profilePhoto column)
   try {
     await prisma.caregiverProfile.findFirst({
       select: { id: true, profilePhoto: true },
@@ -43,11 +44,9 @@ async function start() {
         'Database schema out of sync. Table or column missing. Run: cd garden-api && npx prisma db push';
       logger.error(fixMsg);
       console.error('\n*** ' + fixMsg + ' ***\n');
-      // No salimos en prod para depurar
     }
   }
 
-  // Iniciar Jobs Background
   iniciarJobAjustePrecios();
 }
 

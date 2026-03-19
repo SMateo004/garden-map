@@ -6,6 +6,7 @@ export const reviewCaregiverBodySchema = z
     reason: z.string().max(2000).optional(),
     adminMessage: z.string().max(2000).optional(),
     checklist: z.array(z.string().max(200)).max(20).optional(),
+    force: z.boolean().optional(),
   })
   .strict()
   .refine(

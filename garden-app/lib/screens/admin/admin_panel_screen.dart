@@ -20,6 +20,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   List<Map<String, dynamic>> _identityReviews = [];
   bool _isLoading = true;
   String _adminToken = '';
+  String _caregiverStatusFilter = 'pendientes'; // 'pendientes', 'DRAFT', 'APPROVED', 'REJECTED', 'todos'
 
   static const String _adminJWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhZG1pbi1sb2NhbCIsInJvbGUiOiJBRE1JTiIsImlkIjoiYWRtaW4tbG9jYWwiLCJpYXQiOjE3NzM2NjYzMDcsImV4cCI6MTc3NjI1ODMwN30.KfQ_6FrVZAzCxTiY1sBrN6tfpmj4uotX__pkX_Jtz8o';
 
@@ -61,8 +62,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
   Future<void> _loadCaregivers() async {
     try {
+      String url = '$_baseUrl/admin/caregivers?limit=50';
+      if (_caregiverStatusFilter != 'todos') {
+        url += '&status=$_caregiverStatusFilter';
+      }
+      
       final response = await http.get(
-        Uri.parse('$_baseUrl/admin/caregivers?limit=20'),
+        Uri.parse(url),
         headers: {'Authorization': 'Bearer $_adminToken'},
       );
       final data = jsonDecode(response.body);
@@ -89,7 +95,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     }
   }
 
-  Future<void> _reviewCaregiver(String id, String action) async {
+  Future<void> _reviewCaregiver(String id, String action, {bool force = false}) async {
     try {
       final response = await http.patch(
         Uri.parse('$_baseUrl/admin/caregivers/$id/review'),
@@ -99,6 +105,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         },
         body: jsonEncode({
           'action': action,
+          if (force) 'force': true,
           if (action == 'reject') 'reason': 'Perfil incompleto o información incorrecta',
         }),
       );
@@ -112,6 +119,28 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           ),
         );
         await _loadCaregivers();
+      } else if (data['error']?['code'] == 'PROFILE_INCOMPLETE' && !force) {
+        // Preguntar si quiere forzar la aprobación
+        final shouldForce = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: themeNotifier.isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+            title: const Text('Perfil incompleto'),
+            content: Text(data['error']['message'] + '\n\n¿Deseas forzar la aprobación de todas formas?'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), 
+                child: Text('Cancelar', style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary))),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: GardenColors.primary),
+                onPressed: () => Navigator.pop(ctx, true), 
+                child: const Text('Sí, forzar', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        );
+        if (shouldForce == true) {
+          await _reviewCaregiver(id, action, force: true);
+        }
       } else {
         throw Exception(data['error']?['message'] ?? 'Error');
       }
@@ -240,81 +269,144 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       case 'NEEDS_REVISION': color = GardenColors.accent; label = 'Revisión'; break;
       case 'REJECTED': color = GardenColors.error; label = 'Rechazado'; break;
       case 'SUSPENDED': color = GardenColors.darkTextSecondary; label = 'Suspendido'; break;
+      case 'DRAFT': color = Colors.grey; label = 'Borrador'; break;
       default: color = GardenColors.darkTextSecondary; label = status;
     }
     return GardenBadge(text: label, color: color, fontSize: 11);
   }
 
   Widget _buildCaregiversList(Color surface, Color textColor, Color subtextColor, Color borderColor) {
-    if (_isLoading) return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
-    if (_caregivers.isEmpty) return Center(child: Text('No hay cuidadores registrados', style: TextStyle(color: subtextColor)));
+    return Column(
+      children: [
+        _buildCaregiverStatusFilter(subtextColor, borderColor),
+        Expanded(
+          child: _isLoading 
+            ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+            : _caregivers.isEmpty 
+              ? Center(child: Text('No hay cuidadores con este estado', style: TextStyle(color: subtextColor)))
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: _caregivers.length,
+                  itemBuilder: (context, index) {
+                    final caregiver = _caregivers[index];
+                    return _buildCaregiverCard(caregiver, surface, textColor, subtextColor, borderColor);
+                  },
+                ),
+        ),
+      ],
+    );
+  }
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: _caregivers.length,
-      itemBuilder: (context, index) {
-        final caregiver = _caregivers[index];
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: borderColor),
-          ),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  GardenAvatar(
-                    imageUrl: null,
-                    size: 44,
-                    initials: (caregiver['fullName'] as String? ?? 'C').substring(0, 1),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(caregiver['fullName'] ?? '—', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
-                        Text(caregiver['email'] ?? '—', style: TextStyle(color: subtextColor, fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                  _statusBadge(caregiver['status'] as String? ?? ''),
-                ],
+  Widget _buildCaregiverStatusFilter(Color subtextColor, Color borderColor) {
+    final filters = [
+      ('Pendientes', 'pendientes'),
+      ('Borradores', 'DRAFT'),
+      ('Aprobados', 'APPROVED'),
+      ('Rechazados', 'REJECTED'),
+      ('Todos', 'todos'),
+    ];
+
+    return Container(
+      height: 40,
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: filters.length,
+        itemBuilder: (context, i) {
+          final f = filters[i];
+          final selected = _caregiverStatusFilter == f.$2;
+          return GestureDetector(
+            onTap: () {
+              setState(() => _caregiverStatusFilter = f.$2);
+              _loadCaregivers();
+            },
+            child: Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: selected ? GardenColors.primary.withOpacity(0.1) : Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: selected ? GardenColors.primary : borderColor),
               ),
-              if (caregiver['status'] == 'PENDING_REVIEW' || caregiver['status'] == 'NEEDS_REVISION') ...[
-                const SizedBox(height: 12),
-                Row(
+              child: Text(
+                f.$1,
+                style: TextStyle(
+                  color: selected ? GardenColors.primary : subtextColor,
+                  fontSize: 12,
+                  fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildCaregiverCard(Map<String, dynamic> caregiver, Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    final status = caregiver['status'] as String? ?? '';
+    final canReview = status == 'PENDING_REVIEW' || status == 'NEEDS_REVISION' || status == 'DRAFT';
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              GardenAvatar(
+                imageUrl: null,
+                size: 44,
+                initials: (caregiver['fullName'] as String? ?? 'C').substring(0, 1),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: GardenButton(
-                        label: 'Aprobar',
-                        icon: Icons.check_rounded,
-                        height: 38,
-                        color: GardenColors.success,
-                        onPressed: () => _reviewCaregiver(caregiver['id'] as String, 'approve'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: GardenButton(
-                        label: 'Rechazar',
-                        icon: Icons.close_rounded,
-                        height: 38,
-                        color: GardenColors.error,
-                        outline: true,
-                        onPressed: () => _reviewCaregiver(caregiver['id'] as String, 'reject'),
-                      ),
-                    ),
+                    Text(caregiver['fullName'] ?? '—', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                    Text(caregiver['email'] ?? '—', style: TextStyle(color: subtextColor, fontSize: 12)),
                   ],
                 ),
-              ],
+              ),
+              _statusBadge(status),
             ],
           ),
-        );
-      },
+          if (canReview) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: GardenButton(
+                    label: 'Aprobar',
+                    icon: Icons.check_rounded,
+                    height: 38,
+                    color: GardenColors.success,
+                    onPressed: () => _reviewCaregiver(caregiver['id'] as String, 'approve'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: GardenButton(
+                    label: 'Rechazar',
+                    icon: Icons.close_rounded,
+                    height: 38,
+                    color: GardenColors.error,
+                    outline: true,
+                    onPressed: () => _reviewCaregiver(caregiver['id'] as String, 'reject'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 

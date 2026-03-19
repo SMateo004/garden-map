@@ -17,6 +17,7 @@ import uploadRoutes from './modules/upload/upload.routes.js';
 import testRoutes from './modules/auth/test.routes.js';
 import notificationRoutes from './modules/notification-service/notification.routes.js';
 import agentesRoutes from './modules/agentes/agentes.routes.js';
+import chatRoutes from './modules/chat/chat.routes.js';
 
 const app = express();
 
@@ -76,6 +77,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/test', testRoutes);
 app.use('/api/agentes', agentesRoutes);
+app.use('/api/chat', chatRoutes);
 
 app.use(errorHandler);
 
