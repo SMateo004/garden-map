@@ -136,7 +136,12 @@ model CaregiverProfile {
   availabilityComplete            Boolean            @default(false)
   caregiverProfileComplete        Boolean            @default(false)
   personalInfoComplete            Boolean            @default(false)
+  addressDetail                   String?            @db.VarChar(500)
   balance                         Decimal            @default(0) @db.Decimal(10, 2)
+  bankName                        String?            @db.VarChar(100)
+  bankAccount                     String?            @db.VarChar(50)
+  bankHolder                      String?            @db.VarChar(100)
+  bankType                        String?            @db.VarChar(20) // 'CUENTA_CORRIENTE' | 'CUENTA_AHORRO' | 'TIGO_MONEY' | 'BILLETERA'
   verificationAttempts            Int                @default(0)
   verificationLockUntil           DateTime?
   /// Detalles adicionales del servicio (JSON): allowsLargePets, acceptsMultiple, etc.

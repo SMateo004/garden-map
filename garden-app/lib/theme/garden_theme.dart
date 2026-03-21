@@ -605,7 +605,7 @@ ThemeData gardenTheme({bool dark = true}) {
     brightness: dark ? Brightness.dark : Brightness.light,
     primaryColor: GardenColors.primary,
     scaffoldBackgroundColor: bg,
-    fontFamily: GardenText.fontFamily,
+    // fontFamily: GardenText.fontFamily,
     colorScheme: ColorScheme(
       brightness: dark ? Brightness.dark : Brightness.light,
       primary: GardenColors.primary,
@@ -618,6 +618,9 @@ ThemeData gardenTheme({bool dark = true}) {
       onError: Colors.white,
       outline: border,
       surfaceVariant: surfaceEl, // Para compatibilidad con widgets
+    ),
+    iconTheme: IconThemeData(
+      color: textP,
     ),
     appBarTheme: AppBarTheme(
       backgroundColor: surface,

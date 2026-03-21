@@ -172,3 +172,120 @@ export const rejectIdentityVerification = asyncHandler(async (req: Request, res:
   const result = await adminService.rejectIdentityVerification(req.params.id!, adminId);
   res.json({ success: true, data: result });
 });
+
+export const getWithdrawals = asyncHandler(async (req: Request, res: Response) => {
+  const status = req.query.status as string | undefined;
+  
+  const withdrawals = await prisma.walletTransaction.findMany({
+    where: { 
+      type: 'WITHDRAWAL',
+      ...(status ? { status } : { status: { in: ['PENDING', 'PROCESSING'] } }),
+    },
+    include: {
+      user: {
+        select: { 
+          id: true, firstName: true, lastName: true, email: true,
+          caregiverProfile: {
+            select: { bankName: true, bankAccount: true, bankHolder: true, bankType: true, balance: true }
+          }
+        }
+      }
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  res.json({ success: true, data: { withdrawals, total: withdrawals.length } });
+});
+
+export const processWithdrawal = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  
+  const tx = await prisma.walletTransaction.findUnique({ where: { id } });
+  if (!tx || tx.type !== 'WITHDRAWAL' || tx.status !== 'PENDING') {
+    return res.status(400).json({ success: false, error: { message: 'Solicitud no encontrada o no está pendiente' } });
+  }
+
+  await prisma.walletTransaction.update({
+    where: { id },
+    data: { status: 'PROCESSING' },
+  });
+
+  // Notificar al cuidador
+  await prisma.notification.create({
+    data: {
+      userId: tx.userId,
+      title: '⏳ Retiro en proceso',
+      message: `Tu retiro de Bs ${tx.amount} está siendo procesado. Te notificaremos cuando se complete.`,
+      type: 'SYSTEM',
+    },
+  });
+
+  res.json({ success: true, data: { status: 'PROCESSING' } });
+});
+
+export const completeWithdrawal = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  
+  const tx = await prisma.walletTransaction.findUnique({ where: { id } });
+  if (!tx || tx.type !== 'WITHDRAWAL' || !['PENDING', 'PROCESSING'].includes(tx.status)) {
+    return res.status(400).json({ success: false, error: { message: 'Solicitud no válida' } });
+  }
+
+  // Descontar saldo Y marcar como completado en una transacción
+  await prisma.$transaction(async (prismaTx) => {
+    await prismaTx.caregiverProfile.update({
+      where: { userId: tx.userId },
+      data: { balance: { decrement: Number(tx.amount) } },
+    });
+
+    const updatedProfile = await prismaTx.caregiverProfile.findUnique({
+      where: { userId: tx.userId },
+      select: { balance: true },
+    });
+
+    await prismaTx.walletTransaction.update({
+      where: { id },
+      data: { 
+        status: 'COMPLETED',
+        balance: Number(updatedProfile?.balance ?? 0),
+      },
+    });
+
+    await prismaTx.notification.create({
+      data: {
+        userId: tx.userId,
+        title: '✅ Retiro completado',
+        message: `Tu retiro de Bs ${tx.amount} fue procesado exitosamente. El dinero ya está en tu cuenta.`,
+        type: 'SYSTEM',
+      },
+    });
+  });
+
+  res.json({ success: true, data: { status: 'COMPLETED' } });
+});
+
+export const rejectWithdrawal = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { reason } = req.body;
+  
+  const tx = await prisma.walletTransaction.findUnique({ where: { id } });
+  if (!tx || tx.type !== 'WITHDRAWAL') {
+    return res.status(400).json({ success: false, error: { message: 'Solicitud no encontrada' } });
+  }
+
+  await prisma.walletTransaction.update({
+    where: { id },
+    data: { status: 'REJECTED' },
+  });
+
+  await prisma.notification.create({
+    data: {
+      userId: tx.userId,
+      title: '❌ Retiro rechazado',
+      message: `Tu retiro de Bs ${tx.amount} fue rechazado. ${reason ?? 'Contacta al soporte para más información.'}`,
+      type: 'SYSTEM',
+    },
+  });
+
+  res.json({ success: true, data: { status: 'REJECTED' } });
+});

@@ -25,6 +25,20 @@ router.get('/bookings', caregiverProfileController.getMyBookingsAsCaregiver);
 router.get('/notifications', caregiverProfileController.getNotifications);
 router.patch('/notifications/:id/read', caregiverProfileController.markNotificationRead);
 
+router.patch('/bank-info', authMiddleware, requireRole('CAREGIVER'),
+  asyncHandler(async (req, res) => {
+    const userId = (req as any).user.userId;
+    const { bankName, bankAccount, bankHolder, bankType } = req.body;
+    
+    await prisma.caregiverProfile.update({
+      where: { userId },
+      data: { bankName, bankAccount, bankHolder, bankType },
+    });
+    
+    res.json({ success: true, data: { message: 'Datos bancarios actualizados' } });
+  })
+);
+
 router.post('/profile/service-photo', authMiddleware, requireRole('CAREGIVER'),
   upload.single('servicePhoto'),
   asyncHandler(async (req, res) => {

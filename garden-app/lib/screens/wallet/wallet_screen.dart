@@ -137,8 +137,61 @@ class _WalletScreenState extends State<WalletScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      // SECCIÓN 2 — Botón de retiro (solo CAREGIVER)
+                      // SECCIÓN 2 — Datos bancarios y botón de retiro (solo CAREGIVER)
                       if (_role == 'CAREGIVER') ...[
+                        Text('Datos de cobro', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: surface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 44, height: 44,
+                                decoration: BoxDecoration(
+                                  color: GardenColors.secondary.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text(
+                                  '\uE84F', // account_balance
+                                  style: TextStyle(
+                                    fontFamily: 'MaterialIcons',
+                                    fontSize: 22,
+                                    color: GardenColors.secondary,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _walletData?['caregiverBankInfo']?['bankName'] != null
+                                    ? Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(_walletData!['caregiverBankInfo']!['bankName'] as String,
+                                              style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
+                                          Text('${_walletData!['caregiverBankInfo']!['bankHolder']} · ${_walletData!['caregiverBankInfo']!['bankAccount']}',
+                                              style: TextStyle(color: subtextColor, fontSize: 13)),
+                                        ],
+                                      )
+                                    : Text('Configura tus datos para cobrar', 
+                                        style: TextStyle(color: subtextColor, fontSize: 13, fontStyle: FontStyle.italic)),
+                              ),
+                              const SizedBox(width: 8),
+                              TextButton(
+                                onPressed: _showBankInfoSheet,
+                                child: Text(
+                                  _walletData?['caregiverBankInfo']?['bankName'] != null ? 'Editar' : 'Configurar',
+                                  style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
                         GardenButton(
                           label: 'Solicitar retiro',
                           icon: Icons.arrow_upward_rounded,
@@ -172,10 +225,16 @@ class _WalletScreenState extends State<WalletScreen> {
 
   void _showWithdrawSheet() {
     final amountController = TextEditingController();
-    final bankController = TextEditingController();
-    final accountController = TextEditingController();
-    final holderController = TextEditingController();
     bool isSubmitting = false;
+
+    // Verificar si tiene datos bancarios antes de abrir
+    if (_walletData?['caregiverBankInfo']?['bankName'] == null) {
+      _showBankInfoSheet();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Configura tus datos bancarios antes de retirar')),
+      );
+      return;
+    }
 
     showModalBottomSheet(
       context: context,
@@ -202,17 +261,12 @@ class _WalletScreenState extends State<WalletScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Center(
-                    child: Container(
-                      width: 40, height: 4,
-                      decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2)),
-                    ),
-                  ),
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2)))),
                   const SizedBox(height: 20),
                   Text('Solicitar retiro', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 4),
-                  Text('Saldo disponible: Bs ${(_walletData?['balance'] ?? 0).toStringAsFixed(2)}',
-                    style: TextStyle(color: subtextColor, fontSize: 13)),
+                  const SizedBox(height: 12),
+                  Text('Se enviará a: ${_walletData!['caregiverBankInfo']!['bankName']} (${_walletData!['caregiverBankInfo']!['bankAccount']})',
+                      style: TextStyle(color: subtextColor, fontSize: 12, fontStyle: FontStyle.italic)),
                   const SizedBox(height: 20),
                   // Monto
                   TextField(
@@ -230,13 +284,6 @@ class _WalletScreenState extends State<WalletScreen> {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  // Banco
-                  _withdrawField('Banco o billetera', bankController, 'Ej: Banco BNB, Tigo Money', textColor, subtextColor, surfaceEl, borderColor),
-                  const SizedBox(height: 12),
-                  _withdrawField('Número de cuenta', accountController, 'Número de cuenta o teléfono', textColor, subtextColor, surfaceEl, borderColor),
-                  const SizedBox(height: 12),
-                  _withdrawField('Titular de la cuenta', holderController, 'Nombre completo del titular', textColor, subtextColor, surfaceEl, borderColor),
                   const SizedBox(height: 24),
                   GardenButton(
                     label: isSubmitting ? 'Enviando...' : 'Confirmar solicitud',
@@ -244,16 +291,12 @@ class _WalletScreenState extends State<WalletScreen> {
                     onPressed: () async {
                       if (isSubmitting) return;
                       final amount = double.tryParse(amountController.text) ?? 0;
-                      if (amount <= 0 || bankController.text.isEmpty || accountController.text.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Completa todos los campos')),
-                        );
+                      if (amount <= 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ingresa un monto válido')));
                         return;
                       }
                       if (amount > (_walletData?['balance'] ?? 0)) {
-                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Fondos insuficientes')),
-                        );
+                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fondos insuficientes')));
                         return;
                       }
 
@@ -261,16 +304,8 @@ class _WalletScreenState extends State<WalletScreen> {
                       try {
                         final response = await http.post(
                           Uri.parse('$_baseUrl/wallet/withdraw'),
-                          headers: {
-                            'Authorization': 'Bearer $_token',
-                            'Content-Type': 'application/json'
-                          },
-                          body: jsonEncode({
-                            'amount': amount,
-                            'bankName': bankController.text.trim(),
-                            'accountNumber': accountController.text.trim(),
-                            'accountHolder': holderController.text.trim(),
-                          }),
+                          headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+                          body: jsonEncode({'amount': amount}),
                         );
                         final data = jsonDecode(response.body);
                         if (data['success'] == true) {
@@ -285,12 +320,114 @@ class _WalletScreenState extends State<WalletScreen> {
                             SnackBar(content: Text(data['error']?['message'] ?? 'Error'), backgroundColor: GardenColors.error),
                           );
                         }
-                      } catch (e) {
-                        setSheet(() => isSubmitting = false);
-                      }
+                      } catch (e) { setSheet(() => isSubmitting = false); }
                     },
                   ),
                   const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showBankInfoSheet() {
+    final bankInfo = _walletData?['caregiverBankInfo'];
+    final bankNameController = TextEditingController(text: bankInfo?['bankName'] as String? ?? '');
+    final bankAccountController = TextEditingController(text: bankInfo?['bankAccount'] as String? ?? '');
+    final bankHolderController = TextEditingController(text: bankInfo?['bankHolder'] as String? ?? '');
+    String selectedBankType = bankInfo?['bankType'] as String? ?? 'CUENTA_AHORRO';
+    bool isSaving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setSheet) {
+          final isDark = themeNotifier.isDark;
+          final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+          final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+          final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+          final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+          final surfaceEl = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+            child: Container(
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2)))),
+                  const SizedBox(height: 20),
+                  Text('Datos bancarios', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 16),
+                  // Tipo de cuenta
+                  DropdownButtonFormField<String>(
+                    value: selectedBankType,
+                    dropdownColor: surface,
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
+                      labelText: 'Tipo de cuenta',
+                      labelStyle: TextStyle(color: subtextColor),
+                      filled: true, fillColor: surfaceEl,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'CUENTA_AHORRO', child: Text('Cuenta de ahorro')),
+                      DropdownMenuItem(value: 'CUENTA_CORRIENTE', child: Text('Cuenta corriente')),
+                      DropdownMenuItem(value: 'TIGO_MONEY', child: Text('Tigo Money')),
+                      DropdownMenuItem(value: 'BILLETERA', child: Text('Billetera digital')),
+                    ],
+                    onChanged: (val) => setSheet(() => selectedBankType = val ?? 'CUENTA_AHORRO'),
+                  ),
+                  const SizedBox(height: 12),
+                  _withdrawField('Banco o billetera', bankNameController, 'Ej: Banco BNB, Tigo Money', textColor, subtextColor, surfaceEl, borderColor),
+                  const SizedBox(height: 12),
+                  _withdrawField('Número de cuenta', bankAccountController, 'Número de cuenta o teléfono', textColor, subtextColor, surfaceEl, borderColor),
+                  const SizedBox(height: 12),
+                  _withdrawField('Titular', bankHolderController, 'Nombre completo del titular', textColor, subtextColor, surfaceEl, borderColor),
+                  const SizedBox(height: 20),
+                  GardenButton(
+                    label: isSaving ? 'Guardando...' : 'Guardar datos bancarios',
+                    loading: isSaving,
+                    onPressed: () async {
+                      setSheet(() => isSaving = true);
+                      try {
+                        final response = await http.patch(
+                          Uri.parse('$_baseUrl/caregiver/bank-info'),
+                          headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+                          body: jsonEncode({
+                            'bankName': bankNameController.text.trim(),
+                            'bankAccount': bankAccountController.text.trim(),
+                            'bankHolder': bankHolderController.text.trim(),
+                            'bankType': selectedBankType,
+                          }),
+                        );
+                        final data = jsonDecode(response.body);
+                        if (data['success'] == true) {
+                          Navigator.pop(ctx);
+                          await _loadWallet();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Datos bancarios guardados'), backgroundColor: GardenColors.success),
+                          );
+                        } else {
+                          setSheet(() => isSaving = false);
+                        }
+                      } catch (e) {
+                        setSheet(() => isSaving = false);
+                      }
+                    },
+                  ),
                 ],
               ),
             ),
@@ -327,11 +464,29 @@ class _WalletScreenState extends State<WalletScreen> {
     IconData icon;
     Color color;
     switch (type) {
-      case 'EARNING': icon = Icons.arrow_downward_rounded; color = GardenColors.success; break;
-      case 'PAYMENT': icon = Icons.arrow_upward_rounded; color = GardenColors.error; break;
-      case 'WITHDRAWAL': icon = Icons.account_balance_outlined; color = isPending ? GardenColors.warning : GardenColors.error; break;
-      case 'REFUND': icon = Icons.refresh_rounded; color = GardenColors.success; break;
-      default: icon = Icons.swap_horiz_rounded; color = subtextColor;
+      case 'EARNING': 
+        icon = Icons.monetization_on_rounded; 
+        color = GardenColors.success; 
+        break;
+      case 'PAYMENT': 
+        icon = Icons.shopping_bag_outlined; 
+        color = GardenColors.error; 
+        break;
+      case 'WITHDRAWAL': 
+        icon = Icons.account_balance_rounded; 
+        color = isPending ? GardenColors.warning : Colors.blueAccent; 
+        break;
+      case 'REFUND': 
+        icon = Icons.keyboard_return_rounded; 
+        color = Colors.teal; 
+        break;
+      case 'COMMISSION':
+        icon = Icons.percent_rounded;
+        color = subtextColor;
+        break;
+      default: 
+        icon = Icons.swap_horiz_rounded; 
+        color = subtextColor;
     }
 
     final date = DateTime.tryParse(t['createdAt'] as String? ?? '');

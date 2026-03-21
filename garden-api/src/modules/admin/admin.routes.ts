@@ -68,4 +68,16 @@ router.post('/verifications/:id/reject', adminController.rejectIdentityVerificat
 /** POST /api/admin/identity-reviews/:id/reject — rechazar (alias). */
 router.post('/identity-reviews/:id/reject', adminController.rejectIdentityVerification);
 
+/** GET /api/admin/withdrawals — listar retiros pendientes */
+router.get('/withdrawals', adminController.getWithdrawals);
+
+/** PATCH /api/admin/withdrawals/:id/process — marcar en proceso */
+router.patch('/withdrawals/:id/process', adminController.processWithdrawal);
+
+/** PATCH /api/admin/withdrawals/:id/complete — marcar completado y descontar saldo */
+router.patch('/withdrawals/:id/complete', adminController.completeWithdrawal);
+
+/** PATCH /api/admin/withdrawals/:id/reject — rechazar retiro */
+router.patch('/withdrawals/:id/reject', adminController.rejectWithdrawal);
+
 export default router;

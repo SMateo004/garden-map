@@ -18,6 +18,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   int _selectedTab = 0; // 0: Cuidadores, 1: Identidad, 2: Disputas
   List<Map<String, dynamic>> _caregivers = [];
   List<Map<String, dynamic>> _identityReviews = [];
+  List<Map<String, dynamic>> _withdrawals = [];
   bool _isLoading = true;
   String _adminToken = '';
   String _caregiverStatusFilter = 'pendientes'; // 'pendientes', 'DRAFT', 'APPROVED', 'REJECTED', 'todos'
@@ -52,6 +53,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       await Future.wait([
         _loadCaregivers(),
         _loadIdentityReviews(),
+        _loadWithdrawals(),
       ]);
     } catch (e) {
       debugPrint('Error loading admin data: $e');
@@ -92,6 +94,88 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       }
     } catch (e) {
       debugPrint('Error loading identity reviews: $e');
+    }
+  }
+
+  Future<void> _loadWithdrawals() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/admin/withdrawals'),
+        headers: {'Authorization': 'Bearer $_adminToken'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        setState(() => _withdrawals = (data['data']['withdrawals'] as List).cast<Map<String, dynamic>>());
+      }
+    } catch (e) {
+      debugPrint('Error loading withdrawals: $e');
+    }
+  }
+
+  Future<void> _processWithdrawal(String id) async {
+    try {
+      final response = await http.patch(
+        Uri.parse('$_baseUrl/admin/withdrawals/$id/process'),
+        headers: {'Authorization': 'Bearer $_adminToken'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadWithdrawals();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Retiro marcado en proceso'), backgroundColor: GardenColors.success));
+      }
+    } catch (e) { debugPrint(e.toString()); }
+  }
+
+  Future<void> _completeWithdrawal(String id) async {
+    try {
+      final response = await http.patch(
+        Uri.parse('$_baseUrl/admin/withdrawals/$id/complete'),
+        headers: {'Authorization': 'Bearer $_adminToken'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadWithdrawals();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Retiro completado exitosamente'), backgroundColor: GardenColors.success));
+      }
+    } catch (e) { debugPrint(e.toString()); }
+  }
+
+  Future<void> _rejectWithdrawal(String id) async {
+    final reasonController = TextEditingController();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: themeNotifier.isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+        title: const Text('Rechazar retiro'),
+        content: TextField(
+          controller: reasonController,
+          decoration: const InputDecoration(hintText: 'Motivo del rechazo'),
+          style: TextStyle(color: themeNotifier.isDark ? Colors.white : Colors.black),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error),
+            onPressed: () => Navigator.pop(ctx, true), 
+            child: const Text('Confirmar rechazo', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        final response = await http.patch(
+          Uri.parse('$_baseUrl/admin/withdrawals/$id/reject'),
+          headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+          body: jsonEncode({'reason': reasonController.text.trim()}),
+        );
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          await _loadWithdrawals();
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Retiro rechazado'), backgroundColor: GardenColors.error));
+        }
+      } catch (e) { debugPrint(e.toString()); }
     }
   }
 
@@ -258,6 +342,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     _buildIdentityList(surface, textColor, subtextColor, borderColor),
                     _buildDisputasPlaceholder(surface, textColor, subtextColor, borderColor),
                     _buildPaymentsTab(),
+                    _buildWithdrawalsTab(surface, textColor, subtextColor, borderColor),
                   ],
                 ),
               ),
@@ -270,10 +355,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
   Widget _buildTabBar(Color surface, Color textColor, Color subtextColor, Color borderColor, bool isDark) {
     final tabs = [
-      ('Cuidadores', Icons.people_outlined),
+      ('Cuidadores', Icons.add),
       ('Identidad', Icons.verified_user_outlined),
-      ('Disputas', Icons.gavel_outlined),
-      ('Pagos', Icons.payments_outlined),
+      ('Disputas', Icons.gavel_rounded),
+      ('Pagos', Icons.price_check_rounded),
+      ('Retiros', Icons.account_balance_rounded),
     ];
     return Container(
       color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
@@ -784,5 +870,105 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
       );
     }
+  }
+
+  Widget _buildWithdrawalsTab(Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    if (_isLoading) return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
+    if (_withdrawals.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.account_balance_wallet_outlined, size: 64, color: subtextColor.withOpacity(0.5)),
+            const SizedBox(height: 16),
+            Text('Sin retiros pendientes', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _withdrawals.length,
+      itemBuilder: (context, index) {
+        final w = _withdrawals[index];
+        final user = w['user'] as Map<String, dynamic>;
+        final profile = user['caregiverProfile'] as Map<String, dynamic>? ?? {};
+        final status = w['status'] as String;
+        final isPending = status == 'PENDING';
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: borderColor),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${user['firstName']} ${user['lastName']}',
+                        style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                      Text(user['email'] as String, style: TextStyle(color: subtextColor, fontSize: 12)),
+                    ],
+                  ),
+                  Text('Bs ${w['amount']}',
+                    style: TextStyle(color: status == 'PROCESSING' ? GardenColors.warning : GardenColors.primary, fontWeight: FontWeight.w800, fontSize: 18)),
+                ],
+              ),
+              const Divider(height: 24),
+              Text('DATOS BANCARIOS', style: TextStyle(color: subtextColor, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
+              const SizedBox(height: 8),
+              Text(profile['bankName'] ?? '—', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
+              Text('Cuenta: ${profile['bankAccount'] ?? '—'} (${profile['bankType'] ?? '—'})', style: TextStyle(color: textColor, fontSize: 13)),
+              Text('Titular: ${profile['bankHolder'] ?? '—'}', style: TextStyle(color: textColor, fontSize: 13)),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  if (isPending) ...[
+                    Expanded(
+                      child: GardenButton(
+                        label: 'Procesar',
+                        height: 38,
+                        color: GardenColors.warning,
+                        onPressed: () => _processWithdrawal(w['id'] as String),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  if (status == 'PROCESSING') ...[
+                    Expanded(
+                      child: GardenButton(
+                        label: 'Completar Pago',
+                        height: 38,
+                        color: GardenColors.success,
+                        onPressed: () => _completeWithdrawal(w['id'] as String),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Expanded(
+                    child: GardenButton(
+                      label: 'Rechazar',
+                      height: 38,
+                      color: GardenColors.error,
+                      outline: true,
+                      onPressed: () => _rejectWithdrawal(w['id'] as String),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
