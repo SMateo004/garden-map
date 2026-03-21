@@ -23,7 +23,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   String? _selectedZone;
   int _currentPage = 1;
   bool _hasMore = true;
+  
+  // Filtros Avanzados
+  int? _minExperienceYears;
+  bool _filterAggressive = false;
+  bool _filterPuppies = false;
+  bool _filterSeniors = false;
+  List<String> _selectedSizes = [];
   String _authToken = '';
+  String? _userPhoto;
+  String? _userName;
   final ScrollController _scrollController = ScrollController();
 
   final Map<String, String> _zoneLabels = {
@@ -61,7 +70,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       token = const String.fromEnvironment('TEST_JWT', defaultValue: '');
     }
     if (mounted) {
-      setState(() => _authToken = token);
+      setState(() {
+        _authToken = token;
+        _userPhoto = prefs.getString('user_photo');
+        _userName = prefs.getString('user_name');
+      });
     }
   }
 
@@ -85,7 +98,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         'limit': '10',
         'page': _currentPage.toString(),
         if (_selectedService != 'todos') 'service': _selectedService,
-        if (_selectedZone != null) 'zone': _selectedZone!,
+        if (_selectedZone != null) 'zone': _selectedZone!.toLowerCase(),
+        if (_minExperienceYears != null) 'experienceYears': _minExperienceYears.toString(),
+        if (_filterAggressive) 'acceptAggressive': 'true',
+        if (_filterPuppies) 'acceptPuppies': 'true',
+        if (_filterSeniors) 'acceptSeniors': 'true',
+        if (_selectedSizes.isNotEmpty) 'sizesAccepted': _selectedSizes.join(','),
       };
       final uri = Uri.parse(
         '${const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api')}/caregivers',
@@ -237,11 +255,20 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       ),
                       Row(
                         children: [
+                          if (caregiver['experienceYears'] != null) ...[
+                            Icon(Icons.badge_outlined, size: 12, color: GardenColors.primary),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${caregiver['experienceYears']}+ años exp.',
+                              style: TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
                           Icon(Icons.location_on_outlined, size: 12, color: subtextColor),
                           const SizedBox(width: 3),
                           Text(
                             _zoneLabels[caregiver['zone']] ?? caregiver['zone'] ?? '',
-                            style: TextStyle(color: subtextColor, fontSize: 12),
+                            style: TextStyle(color: subtextColor, fontSize: 11),
                           ),
                         ],
                       ),
@@ -426,7 +453,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       ),
                     ),
                   ),
-                  // Botón de Toggle de Tema (para testear)
+                  GestureDetector(
+                    onTap: () => context.push('/profile'),
+                    child: GardenAvatar(
+                      imageUrl: _userPhoto,
+                      size: 32,
+                      initials: (_userName != null && _userName!.isNotEmpty) ? _userName![0] : 'U',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   IconButton(
                     icon: Icon(
                       isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
@@ -485,29 +520,43 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       borderRadius: GardenRadius.md_,
                       border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
                     ),
-                    child: DropdownButtonFormField<String>(
-                      value: _selectedZone,
-                      dropdownColor: theme.colorScheme.surface,
-                      icon: Icon(Icons.keyboard_arrow_down_rounded, color: GardenColors.primary),
-                      decoration: InputDecoration(
-                        hintText: 'Todas las zonas',
-                        hintStyle: GardenText.bodyMedium.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.4)),
-                        prefixIcon: Icon(Icons.location_on_rounded, color: GardenColors.primary, size: 20),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      ),
-                      items: _zoneLabels.entries.map((e) {
-                        return DropdownMenuItem(
-                          value: e.key,
-                          child: Text(e.value, style: GardenText.bodyMedium),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() => _selectedZone = value);
-                        _loadCaregivers(reset: true);
-                      },
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: _selectedZone,
+                            dropdownColor: theme.colorScheme.surface,
+                            icon: Icon(Icons.keyboard_arrow_down_rounded, color: GardenColors.primary),
+                            decoration: InputDecoration(
+                              hintText: 'Todas las zonas',
+                              hintStyle: GardenText.bodyMedium.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.4)),
+                              prefixIcon: Icon(Icons.location_on_rounded, color: GardenColors.primary, size: 20),
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
+                            items: _zoneLabels.entries.map((e) {
+                              return DropdownMenuItem(
+                                value: e.key,
+                                child: Text(e.value, style: GardenText.bodyMedium),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              setState(() => _selectedZone = value);
+                              _loadCaregivers(reset: true);
+                            },
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: IconButton(
+                            icon: Icon(Icons.tune_rounded, color: GardenColors.primary),
+                            onPressed: _showFiltersBottomSheet,
+                            tooltip: 'Filtros avanzados',
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -574,6 +623,136 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             ),
         ],
       ),
+    );
+  }
+
+  void _showFiltersBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final theme = Theme.of(context);
+          final isDark = theme.brightness == Brightness.dark;
+          final textColor = isDark ? Colors.white : Colors.black87;
+          
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.7,
+            decoration: BoxDecoration(
+              color: isDark ? GardenColors.darkSurface : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Filtros avanzados',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor)),
+                    TextButton(
+                      onPressed: () {
+                        setSheetState(() {
+                          _minExperienceYears = null;
+                          _filterAggressive = false;
+                          _filterPuppies = false;
+                          _filterSeniors = false;
+                          _selectedSizes = [];
+                        });
+                        setState(() {});
+                      },
+                      child: const Text('Limpiar', style: TextStyle(color: GardenColors.primary)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                
+                // Años de experiencia
+                Text('Años de experiencia mín.', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [0, 1, 2, 3, 5].map((years) {
+                    final selected = _minExperienceYears == years;
+                    return ChoiceChip(
+                      label: Text(years == 0 ? 'Sin min' : '$years+'),
+                      selected: selected,
+                      onSelected: (val) {
+                        setSheetState(() => _minExperienceYears = val ? years : null);
+                        setState(() {});
+                      },
+                      selectedColor: GardenColors.primary.withOpacity(0.2),
+                      checkmarkColor: GardenColors.primary,
+                      labelStyle: TextStyle(color: selected ? GardenColors.primary : textColor),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 24),
+
+                // Políticas
+                Text('Políticas de aceptación', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
+                _filterSwitch('Acepta agresivos', _filterAggressive, (v) {
+                  setSheetState(() => _filterAggressive = v);
+                  setState(() {});
+                }),
+                _filterSwitch('Acepta cachorros', _filterPuppies, (v) {
+                  setSheetState(() => _filterPuppies = v);
+                  setState(() {});
+                }),
+                _filterSwitch('Acepta seniors', _filterSeniors, (v) {
+                  setSheetState(() => _filterSeniors = v);
+                  setState(() {});
+                }),
+
+                const SizedBox(height: 24),
+                
+                // Tamaños
+                Text('Tamaños aceptados', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  children: ['PEQUEÑO', 'MEDIANO', 'GRANDE', 'GIGANTE'].map((size) {
+                    final selected = _selectedSizes.contains(size);
+                    return FilterChip(
+                      label: Text(size),
+                      selected: selected,
+                      onSelected: (val) {
+                        setSheetState(() {
+                          if (val) _selectedSizes.add(size);
+                          else _selectedSizes.remove(size);
+                        });
+                        setState(() {});
+                      },
+                      selectedColor: GardenColors.primary.withOpacity(0.2),
+                    );
+                  }).toList(),
+                ),
+
+                const Spacer(),
+                GardenButton(
+                  label: 'Aplicar filtros',
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _loadCaregivers(reset: true);
+                  },
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _filterSwitch(String label, bool value, Function(bool) onChanged) {
+    return Row(
+      children: [
+        Text(label, style: const TextStyle(fontSize: 14)),
+        const Spacer(),
+        Switch(value: value, onChanged: onChanged, activeColor: GardenColors.primary),
+      ],
     );
   }
 }

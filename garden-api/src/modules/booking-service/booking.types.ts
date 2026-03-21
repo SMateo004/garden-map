@@ -35,6 +35,7 @@ export interface BookingCreateResult {
   clientName?: string;
   clientEmail?: string;
   clientPhone?: string | null;
+  clientPhoto?: string | null;
 }
 
 export function bookingToResponse(b: any): BookingCreateResult {
@@ -72,13 +73,14 @@ export function bookingToResponse(b: any): BookingCreateResult {
 
   if (b.caregiver) {
     res.caregiverName = `${b.caregiver.user.firstName} ${b.caregiver.user.lastName}`;
-    res.caregiverPhoto = b.caregiver.profilePhoto;
+    res.caregiverPhoto = b.caregiver.profilePhoto || b.caregiver.user.profilePicture;
   }
 
   if (b.client) {
     res.clientName = `${b.client.firstName} ${b.client.lastName}`;
     res.clientEmail = b.client.email;
     res.clientPhone = b.client.phone;
+    res.clientPhoto = b.client.profilePicture;
   }
 
   return res;

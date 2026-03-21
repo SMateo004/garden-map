@@ -79,21 +79,21 @@ model CaregiverProfile {
   privacyAccepted                 Boolean?
   verificationAccepted            Boolean?
   termsAcceptedAt                 DateTime?
-  experienceYears                 ExperienceYears?
+  experienceYears                 Int?
   ownPets                         Boolean?
   currentPetsDetails              Json?
   caredOthers                     Boolean?
   animalTypes                     AnimalType[]
-  experienceDescription           String?
-  whyCaregiver                    String?
-  whatDiffers                     String?
-  handleAnxious                   String?
-  emergencyResponse               String?
+  experienceDescription           String?            @db.Text
+  whyCaregiver                    String?            @db.Text
+  whatDiffers                     String?            @db.Text
+  handleAnxious                   String?            @db.Text
+  emergencyResponse               String?            @db.Text
   acceptAggressive                Boolean?
   acceptMedication                MedicationType[]
   acceptPuppies                   Boolean?
   acceptSeniors                   Boolean?
-  sizesAccepted                   PetSize[]
+  sizesAccepted                   String[]
   noAcceptBreeds                  Boolean?
   breedsWhy                       String?            @db.VarChar(500)
   homeType                        HomeType?
@@ -138,6 +138,8 @@ model CaregiverProfile {
   balance                         Decimal            @default(0) @db.Decimal(10, 2)
   verificationAttempts            Int                @default(0)
   verificationLockUntil           DateTime?
+  /// Detalles adicionales del servicio (JSON): allowsLargePets, acceptsMultiple, etc.
+  serviceDetails                  Json?
   /// Checklist items when admin requests revision (e.g. "Foto borrosa", "Documento no legible")
   reviewChecklist                 Json?              @db.JsonB
   availability                    Availability[]

@@ -2,7 +2,6 @@ import { z } from 'zod';
 import {
   ServiceType,
   Zone,
-  ExperienceYears,
   AnimalType,
   MedicationType,
   PetSize,
@@ -124,7 +123,7 @@ export const registerCaregiverProfileSchema = z.object({
   pricePerWalk60: z.number().int().min(0).optional(),
   rates: ratesSchema,
 
-  experienceYears: z.nativeEnum(ExperienceYears).optional(),
+  experienceYears: z.number().optional(),
   ownPets: z.boolean().optional(),
   currentPetsDetails: currentPetsDetailsSchema,
   caredOthers: z.boolean().optional(),
@@ -199,7 +198,7 @@ export const patchCaregiverProfileSchema = z.object({
   pricePerWalk60: z.number().int().min(0).optional(),
   rates: ratesSchema,
 
-  experienceYears: z.nativeEnum(ExperienceYears).optional(),
+  experienceYears: z.number().optional(),
   ownPets: z.boolean().optional(),
   currentPetsDetails: currentPetsDetailsSchema,
   caredOthers: z.boolean().optional(),

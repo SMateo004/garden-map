@@ -11,8 +11,11 @@ const logger = winston.createLogger({
   ),
   defaultMeta: { service: 'garden-api' },
   transports: [
+    // Disable file logging in dev because OneDrive makes it very slow
+    /*
     new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
     new winston.transports.File({ filename: 'logs/combined.log' }),
+    */
   ],
 });
 

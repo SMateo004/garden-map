@@ -32,6 +32,11 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
       zone: zoneFilter?.length ? (zoneFilter as string[]) : undefined,
       priceRange: query.priceRange,
       spaceTypes: query.spaceTypes,
+      experienceYears: query.experienceYears,
+      acceptAggressive: query.acceptAggressive,
+      acceptPuppies: query.acceptPuppies,
+      acceptSeniors: query.acceptSeniors,
+      sizesAccepted: query.sizesAccepted,
       page: query.page,
       limit: query.limit,
     });

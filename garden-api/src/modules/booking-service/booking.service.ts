@@ -1083,6 +1083,7 @@ export async function getMyBookings(clientId: string): Promise<BookingCreateResu
               firstName: true,
               lastName: true,
               email: true,
+              profilePicture: true,
             },
           },
         },
@@ -1112,6 +1113,7 @@ export async function getBookingById(bookingId: string, requesterId: string): Pr
               firstName: true,
               lastName: true,
               email: true,
+              profilePicture: true,
             },
           },
         },
@@ -1123,6 +1125,7 @@ export async function getBookingById(bookingId: string, requesterId: string): Pr
           lastName: true,
           email: true,
           phone: true,
+          profilePicture: true,
         },
       },
     },
@@ -1157,6 +1160,7 @@ export async function getBookingsByCaregiverUserId(
           lastName: true,
           email: true,
           phone: true,
+          profilePicture: true,
         },
       },
     },
@@ -1186,7 +1190,11 @@ export async function acceptBooking(bookingId: string, caregiverUserId: string):
 
   const updated = await prisma.booking.update({
     where: { id: bookingId },
-    data: { status: BookingStatus.CONFIRMED }
+    data: { status: BookingStatus.CONFIRMED },
+    include: {
+      caregiver: { include: { user: { select: { id: true, firstName: true, lastName: true, email: true, profilePicture: true } } } },
+      client: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, profilePicture: true } }
+    }
   });
 
   notificationService.onBookingAccepted(bookingId).catch(err => {

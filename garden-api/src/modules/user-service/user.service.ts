@@ -12,6 +12,7 @@ export async function getById(id: string): Promise<UserPublic | null> {
       lastName: true,
       phone: true,
       profilePicture: true,
+      emailVerified: true,
       createdAt: true,
     },
   });

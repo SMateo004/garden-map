@@ -23,15 +23,13 @@ const app = express();
 
 app.use(helmet());
 app.use(cors({
-  // Se usa regex para permitir cualquier puerto dinámico en localhost/127.0.0.1 
-  // ya que a veces Flutter web usa puertos arbitrarios, pero mantenemos la sintaxis base que pediste.
   origin: [/http:\/\/localhost:\d+/, /http:\/\/127\.0\.0\.1:\d+/, 'http://localhost:5173'],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 }));
 
-// Stripe webhook: raw body required for signature verification (must be before express.json)
+// Stripe webhook
 app.use(
   '/api/payments/webhook',
   express.raw({ type: 'application/json' }),
@@ -44,8 +42,6 @@ app.use(
 
 app.use(express.json({ limit: '2mb' }));
 
-// Static file serving for local uploads — set CORP to allow cross-origin image loading
-// (Helmet defaults to same-origin, which blocks frontend at localhost:5173 from loading images at localhost:3000)
 const uploadsDir = path.join(process.cwd(), 'uploads');
 app.use('/uploads', (_req, res, next) => {
   res.set('Cross-Origin-Resource-Policy', 'cross-origin');

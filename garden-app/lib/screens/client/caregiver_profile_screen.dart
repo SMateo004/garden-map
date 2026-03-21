@@ -322,6 +322,121 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                       Text(bio, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6)),
                       const SizedBox(height: 24),
 
+                      // ── EXPERIENCIA Y PERFIL PROFESIONAL ──
+                      if (_caregiver!['experienceYears'] != null) ...[
+                        Divider(color: borderColor),
+                        const SizedBox(height: 20),
+                        Text('Experiencia', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: GardenColors.primary.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: GardenColors.primary.withOpacity(0.3)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.workspace_premium_outlined, color: GardenColors.primary, size: 16),
+                                  const SizedBox(width: 6),
+                                  Text('${_caregiver!['experienceYears']} años de experiencia',
+                                    style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 13)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (_caregiver!['experienceDescription'] != null && (_caregiver!['experienceDescription'] as String).isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Text(_caregiver!['experienceDescription'] as String,
+                            style: TextStyle(color: subtextColor, fontSize: 14, height: 1.6)),
+                        ],
+                      ],
+
+                      // ── POR QUÉ SER CUIDADOR ──
+                      if (_caregiver!['whyCaregiver'] != null && (_caregiver!['whyCaregiver'] as String).isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        _infoCard('¿Por qué soy cuidador?', _caregiver!['whyCaregiver'] as String, Icons.favorite_outline, GardenColors.error, surface, textColor, subtextColor, borderColor),
+                      ],
+
+                      // ── QUÉ LO DIFERENCIA ──
+                      if (_caregiver!['whatDiffers'] != null && (_caregiver!['whatDiffers'] as String).isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        _infoCard('¿Qué me diferencia?', _caregiver!['whatDiffers'] as String, Icons.star_outline_rounded, GardenColors.star, surface, textColor, subtextColor, borderColor),
+                      ],
+
+                      // ── POLÍTICAS DE MASCOTAS ──
+                      Divider(color: borderColor),
+                      const SizedBox(height: 20),
+                      Text('Políticas de cuidado', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 12),
+
+                      // Tamaños aceptados
+                      if ((_caregiver!['sizesAccepted'] as List? ?? []).isNotEmpty) ...[
+                        Text('Tamaños aceptados', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8, runSpacing: 6,
+                          children: {
+                            'PEQUEÑO': '🐾 Pequeño',
+                            'MEDIANO': '🐕 Mediano',
+                            'GRANDE': '🦮 Grande',
+                            'GIGANTE': '🐘 Gigante',
+                          }.entries
+                            .where((e) => (_caregiver!['sizesAccepted'] as List).contains(e.key))
+                            .map((e) => Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: GardenColors.success.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: GardenColors.success.withOpacity(0.3)),
+                              ),
+                              child: Text(e.value, style: const TextStyle(color: GardenColors.success, fontSize: 12, fontWeight: FontWeight.w500)),
+                            )).toList(),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Acepta/No acepta
+                      Wrap(
+                        spacing: 8, runSpacing: 8,
+                        children: [
+                          _policyChip('Cachorros', _caregiver!['acceptPuppies'] == true),
+                          _policyChip('Mascotas seniors', _caregiver!['acceptSeniors'] == true),
+                          _policyChip('Mascotas agresivas', _caregiver!['acceptAggressive'] == true),
+                        ],
+                      ),
+
+                      // ── SITUACIONES ESPECIALES ──
+                      if (_caregiver!['handleAnxious'] != null && (_caregiver!['handleAnxious'] as String).isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        _infoCard('Mascotas con ansiedad', _caregiver!['handleAnxious'] as String, Icons.psychology_outlined, GardenColors.warning, surface, textColor, subtextColor, borderColor),
+                      ],
+                      if (_caregiver!['emergencyResponse'] != null && (_caregiver!['emergencyResponse'] as String).isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        _infoCard('Protocolo de emergencias', _caregiver!['emergencyResponse'] as String, Icons.emergency_outlined, GardenColors.error, surface, textColor, subtextColor, borderColor),
+                      ],
+
+                      // ── MI ESPACIO ──
+                      if (_caregiver!['homeType'] != null || _caregiver!['hasYard'] == true) ...[
+                        Divider(color: borderColor),
+                        const SizedBox(height: 20),
+                        Text('Mi espacio', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8, runSpacing: 8,
+                          children: [
+                            if (_caregiver!['homeType'] != null)
+                              _spaceChip(_homeTypeLabel(_caregiver!['homeType'] as String), Icons.home_outlined),
+                            if (_caregiver!['hasYard'] == true)
+                              _spaceChip('Tiene jardín/patio', Icons.grass_outlined),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+
                       Divider(color: borderColor),
                       const SizedBox(height: 20),
 
@@ -433,5 +548,93 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
         ],
       ),
     );
+  }
+
+  Widget _infoCard(String title, String content, IconData icon, Color color, Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
+                const SizedBox(height: 4),
+                Text(content, style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _policyChip(String label, bool accepted) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: accepted ? GardenColors.success.withOpacity(0.1) : GardenColors.error.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: accepted ? GardenColors.success.withOpacity(0.3) : GardenColors.error.withOpacity(0.2),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(accepted ? Icons.check_circle_outline : Icons.cancel_outlined,
+            size: 13, color: accepted ? GardenColors.success : GardenColors.error),
+          const SizedBox(width: 5),
+          Text(label, style: TextStyle(
+            color: accepted ? GardenColors.success : GardenColors.error,
+            fontSize: 12, fontWeight: FontWeight.w500,
+          )),
+        ],
+      ),
+    );
+  }
+
+  Widget _spaceChip(String label, IconData icon) {
+    // Usamos el themeNotifier para obtener el tema actual
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: subtextColor),
+          const SizedBox(width: 5),
+          Text(label, style: TextStyle(color: subtextColor, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  String _homeTypeLabel(String type) {
+    const labels = {
+      'CASA': '🏠 Casa',
+      'APARTAMENTO': '🏢 Apartamento',
+      'APARTMENT': '🏢 Apartamento',
+      'FINCA': '🌾 Finca',
+      'LOCAL': '🏪 Local',
+    };
+    return labels[type] ?? type;
   }
 }

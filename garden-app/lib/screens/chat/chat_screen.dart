@@ -247,7 +247,7 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           if (!isMe) ...[
             GardenAvatar(
-              imageUrl: null,
+              imageUrl: widget.otherPersonPhoto,
               size: 28,
               initials: msg.senderName.isNotEmpty ? msg.senderName[0] : 'U',
             ),

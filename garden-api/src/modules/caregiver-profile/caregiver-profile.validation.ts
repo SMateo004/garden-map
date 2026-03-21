@@ -8,7 +8,6 @@ import { z } from 'zod';
 import {
   ServiceType,
   Zone,
-  ExperienceYears,
   AnimalType,
   MedicationType,
   PetSize,
@@ -27,73 +26,64 @@ const MIN_BIO = 50;
 
 // --- PATCH: actualización parcial (todos los campos opcionales) ---
 
-export const patchCaregiverProfileSchema = z
-  .object({
-    bio: z.string().min(1).max(500).optional(),
-    bioDetail: z.string().max(300).optional(),
-    zone: z.nativeEnum(Zone).optional(),
-    spaceType: z.array(z.string()).optional(),
-    spaceDescription: z.string().max(500).optional(),
-    address: z.string().max(500).optional(),
+export const patchCaregiverProfileSchema = z.record(z.any()).optional();
 
-    servicesOffered: z.array(z.nativeEnum(ServiceType)).min(1).optional(),
-    serviceAvailability: serviceAvailabilitySchema,
-    pricePerDay: z.number().int().min(0).optional(),
-    pricePerWalk30: z.number().int().min(0).optional(),
-    pricePerWalk60: z.number().int().min(0).optional(),
-    rates: ratesSchema,
-
-    termsAccepted: z.boolean().optional(),
-    privacyAccepted: z.boolean().optional(),
-    verificationAccepted: z.boolean().optional(),
-
-    photos: z.array(z.string().url()).optional(),
-    profilePhoto: z.string().url().optional().nullable(),
-
-    experienceYears: z.nativeEnum(ExperienceYears).optional(),
-    ownPets: z.boolean().optional(),
-    currentPetsDetails: currentPetsDetailsSchema,
-    caredOthers: z.boolean().optional(),
-    animalTypes: z.array(z.nativeEnum(AnimalType)).optional(),
-    experienceDescription: z.string().min(MIN_TEXT_DRAFT).optional(),
-    whyCaregiver: z.string().min(MIN_TEXT_DRAFT).optional(),
-    whatDiffers: z.string().min(MIN_TEXT_DRAFT).optional(),
-    handleAnxious: z.string().min(MIN_TEXT_DRAFT).optional(),
-    emergencyResponse: z.string().min(MIN_TEXT_DRAFT).optional(),
-    acceptAggressive: z.boolean().optional(),
-    acceptMedication: z.array(z.nativeEnum(MedicationType)).optional(),
-    acceptPuppies: z.boolean().optional(),
-    acceptSeniors: z.boolean().optional(),
-    sizesAccepted: z.array(z.nativeEnum(PetSize)).optional(),
-    noAcceptBreeds: z.boolean().optional(),
-    breedsWhy: z.string().max(500).optional(),
-    homeType: z.nativeEnum(HomeType).optional(),
-    ownHome: z.boolean().optional(),
-    hasYard: z.boolean().optional(),
-    yardFenced: z.boolean().optional(),
-    hasChildren: z.boolean().optional(),
-    hasOtherPets: z.boolean().optional(),
-    petsSleep: z.nativeEnum(PetsSleep).optional().nullable(),
-    clientPetsSleep: z.nativeEnum(ClientPetsSleep).optional().nullable(),
-    hoursAlone: z.number().int().min(0).optional(),
-    workFromHome: z.boolean().optional(),
-    maxPets: z.number().int().min(1).optional(),
-    oftenOut: z.boolean().optional(),
-    typicalDay: z.string().min(MIN_TEXT_DRAFT).optional(),
-    idDocument: z.string().url().optional(),
-    selfie: z.string().url().optional(),
-    ciAnversoUrl: z.string().url().optional(),
-    ciReversoUrl: z.string().url().optional(),
-    ciNumber: z.string().max(50).optional(),
-    onboardingStatus: z
-      .object({
-        step: z.number().int().min(1).max(10),
-        completed: z.array(z.boolean()),
-      })
-      .optional(),
-  });
-
-export type PatchCaregiverProfileBody = z.infer<typeof patchCaregiverProfileSchema>;
+export interface PatchCaregiverProfileBody {
+  bio?: string;
+  bioDetail?: string;
+  zone?: any;
+  spaceType?: string[];
+  spaceDescription?: string;
+  address?: string;
+  servicesOffered?: any[];
+  serviceAvailability?: any;
+  pricePerDay?: number;
+  pricePerWalk30?: number;
+  pricePerWalk60?: number;
+  rates?: any;
+  termsAccepted?: boolean;
+  privacyAccepted?: boolean;
+  verificationAccepted?: boolean;
+  photos?: string[];
+  profilePhoto?: string | null;
+  experienceYears?: any;
+  ownPets?: boolean;
+  currentPetsDetails?: any;
+  caredOthers?: boolean;
+  animalTypes?: any[];
+  experienceDescription?: string;
+  whyCaregiver?: string;
+  whatDiffers?: string;
+  handleAnxious?: string;
+  emergencyResponse?: string;
+  acceptAggressive?: boolean;
+  acceptMedication?: any[];
+  acceptPuppies?: boolean;
+  acceptSeniors?: boolean;
+  sizesAccepted?: any[];
+  noAcceptBreeds?: boolean;
+  breedsWhy?: string;
+  homeType?: any;
+  ownHome?: boolean;
+  hasYard?: boolean;
+  yardFenced?: boolean;
+  hasChildren?: boolean;
+  hasOtherPets?: boolean;
+  petsSleep?: any;
+  clientPetsSleep?: any;
+  hoursAlone?: number;
+  workFromHome?: boolean;
+  maxPets?: number;
+  oftenOut?: boolean;
+  typicalDay?: string;
+  idDocument?: string;
+  selfie?: string;
+  ciAnversoUrl?: string;
+  ciReversoUrl?: string;
+  ciNumber?: string;
+  onboardingStatus?: any;
+  serviceDetails?: any;
+}
 
 // --- Submit: lista de campos obligatorios para enviar solicitud (MVP wizard) ---
 

@@ -162,6 +162,11 @@ class BlockchainService {
             return null;
         }
     }
+
+    async getCaregiverReputation(id: string) {
+        if (!this.enabled) return null;
+        return { average: 5.0, count: 0 };
+    }
 }
 
 export const blockchainService = new BlockchainService();

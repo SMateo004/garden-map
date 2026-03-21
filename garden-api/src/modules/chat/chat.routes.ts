@@ -1,10 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
-import { PrismaClient } from '@prisma/client';
 import { asyncHandler } from '../../shared/async-handler.js';
+import prisma from '../../config/database.js';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // GET /api/chat/:bookingId/messages - Obtener historial de mensajes
 router.get('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Request, res: Response) => {

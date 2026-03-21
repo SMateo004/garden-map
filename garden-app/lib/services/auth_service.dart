@@ -42,7 +42,8 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('user_role', user['role'] ?? '');
     await prefs.setString('user_id', user['id'] ?? '');
-    await prefs.setString('user_name', user['fullName'] ?? user['firstName'] ?? '');
+    await prefs.setString('user_name', user['fullName'] ?? '${user['firstName']} ${user['lastName']}');
+    await prefs.setString('user_photo', user['profilePicture'] ?? '');
   }
 
   // LOGIN

@@ -2,10 +2,8 @@ import { Server as SocketServer } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../config/database.js';
 import logger from '../shared/logger.js';
-
-const prisma = new PrismaClient();
 
 let io: SocketServer | null = null;
 
@@ -17,7 +15,6 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
         },
     });
 
-    // Middleware de autenticación
     io.use((socket, next) => {
         const token = socket.handshake.auth.token as string;
         if (!token) return next(new Error('No token'));
@@ -34,19 +31,16 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
     io.on('connection', (socket) => {
         logger.info('Socket connected', { userId: socket.data.userId });
 
-        // Unirse a una sala de booking
         socket.on('join_booking', (bookingId: string) => {
             socket.join(`booking:${bookingId}`);
             logger.info('User joined booking room', { userId: socket.data.userId, bookingId });
         });
 
-        // Enviar mensaje
         socket.on('send_message', async (data: { bookingId: string; message: string }) => {
             try {
                 const { bookingId, message } = data;
                 if (!message?.trim()) return;
 
-                // Verificar que el usuario tiene acceso a este booking
                 const booking = await prisma.booking.findFirst({
                     where: {
                         id: bookingId,
@@ -62,7 +56,6 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
                     return;
                 }
 
-                // Guardar mensaje en DB
                 const savedMessage = await prisma.chatMessage.create({
                     data: {
                         bookingId,
@@ -75,7 +68,6 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
                     },
                 });
 
-                // Emitir a todos en la sala
                 io!.to(`booking:${bookingId}`).emit('new_message', {
                     id: savedMessage.id,
                     bookingId: savedMessage.bookingId,
@@ -93,7 +85,6 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
             }
         });
 
-        // Marcar mensajes como leídos
         socket.on('mark_read', async (bookingId: string) => {
             try {
                 await prisma.chatMessage.updateMany({
@@ -114,7 +105,7 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
         });
 
         socket.on('disconnect', () => {
-            logger.info('Socket disconnected', { userId: socket.data.userId });
+            logger.info('Socket disconnected');
         });
     });
 

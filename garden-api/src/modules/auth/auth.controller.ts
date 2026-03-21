@@ -46,6 +46,24 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
         data: { ...user, clientProfile: clientProfile ? { isComplete: clientProfile.isComplete } : null },
       });
     }
+
+    // Para CAREGIVER, el profilePicture principal puede estar en CaregiverProfile.profilePhoto
+    if (user.role === 'CAREGIVER') {
+      const caregiverProfile = await prisma.caregiverProfile.findUnique({
+        where: { userId: user.id },
+        select: { profilePhoto: true },
+      });
+      // Priorizar profilePhoto si existe y user.profilePicture es null
+      const effectivePhoto = user.profilePicture || caregiverProfile?.profilePhoto;
+      return res.json({
+        success: true,
+        data: { 
+          ...user, 
+          profilePicture: effectivePhoto,
+          caregiverProfile: caregiverProfile ? { profilePhoto: caregiverProfile.profilePhoto } : null 
+        },
+      });
+    }
     return res.json({ success: true, data: user });
   } catch (error) {
     // Log del error real para debugging

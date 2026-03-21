@@ -16,6 +16,16 @@ export interface CaregiverListItem {
   pricePerWalk60: number | null;
   verified: boolean;
   spaceType: string[]; // Array de tipos de espacio seleccionados
+  experienceYears: any;
+  experienceDescription: string | null;
+  whyCaregiver: string | null;
+  whatDiffers: string | null;
+  handleAnxious: string | null;
+  emergencyResponse: string | null;
+  acceptAggressive: boolean | null;
+  acceptPuppies: boolean | null;
+  acceptSeniors: boolean | null;
+  sizesAccepted: any[] | null;
 }
 
 export interface CaregiverDetail extends CaregiverListItem {
@@ -28,16 +38,6 @@ export interface CaregiverDetail extends CaregiverListItem {
   };
   reviews: ReviewPublic[];
   // Campos cuestionario
-  experienceYears?: string | null;
-  experienceDescription?: string | null;
-  whyCaregiver?: string | null;
-  whatDiffers?: string | null;
-  handleAnxious?: string | null;
-  emergencyResponse?: string | null;
-  acceptAggressive?: boolean | null;
-  acceptPuppies?: boolean | null;
-  acceptSeniors?: boolean | null;
-  sizesAccepted?: string[] | null;
   animalTypes?: string[] | null;
   acceptMedication?: string[] | null;
   homeType?: string | null;
@@ -78,6 +78,11 @@ export interface CaregiverFilters {
   spaceTypes?: string[]; // Array de tipos de espacio para filtrado multi-select
   page?: number;
   limit?: number;
+  experienceYears?: any;
+  acceptAggressive?: boolean;
+  acceptPuppies?: boolean;
+  acceptSeniors?: boolean;
+  sizesAccepted?: any[];
 }
 
 export interface PaginatedCaregivers {

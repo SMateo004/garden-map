@@ -24,6 +24,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   List<Map<String, dynamic>> _notifications = [];
   int _unreadCount = 0;
   Timer? _notifTimer;
+  Map<String, dynamic>? _caregiver;
 
   static const String _devToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJmNmRmZmYzMS1lYTFhLTQ4MzktYmZkOC1kMWY4OTgwNDQxMjAiLCJyb2xlIjoiQ0FSRUdJVkVSIiwiaWQiOiJmNmRmZmYzMS1lYTFhLTQ4MzktYmZkOC1kMWY4OTgwNDQxMjAiLCJpYXQiOjE3NzM2ODU4NjQsImV4cCI6MTc3NjI3Nzg2NH0.I9cvXI16qEgG55S6FTHeieDLqPjhCQewLKvN0xXgddw';
 
@@ -63,6 +64,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
 
     try {
       await Future.wait([
+        _loadCaregiverProfile(),
         _loadAvailability(),
         _loadBookings(),
         _loadNotifications(),
@@ -295,6 +297,21 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final data = jsonDecode(response.body);
     if (data['success'] == true) {
       setState(() => _availability = data['data']);
+    }
+  }
+
+  Future<void> _loadCaregiverProfile() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/caregiver/my-profile'),
+        headers: {'Authorization': 'Bearer $_caregiverToken'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        setState(() => _caregiver = data['data']);
+      }
+    } catch (e) {
+      // silencioso
     }
   }
 
@@ -757,9 +774,30 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Saludo
-          Text('Buenos días 👋', style: TextStyle(color: subtextColor, fontSize: 14)),
-          const SizedBox(height: 4),
-          Text('Panel de cuidador', style: TextStyle(color: textColor, fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Buenos días 👋', style: TextStyle(color: subtextColor, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text('Panel de ', style: TextStyle(color: textColor.withOpacity(0.6), fontSize: 22, fontWeight: FontWeight.w400)),
+                      Text('cuidador', style: TextStyle(color: textColor, fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                    ],
+                  ),
+                ],
+              ),
+              // Foto de perfil removida por solicitud del usuario
+            ],
+          ),
+          if (_caregiver != null && _caregiver!['user'] != null) ...[
+            const SizedBox(height: 8),
+            Text('${_caregiver!['user']['firstName']} ${_caregiver!['user']['lastName']}', 
+              style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+          ],
           const SizedBox(height: 24),
 
           // Alerta de reservas pendientes
@@ -2099,7 +2137,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                 child: Row(
                   children: [
                     GardenAvatar(
-                      imageUrl: null,
+                      imageUrl: booking['clientPhoto'],
                       size: 40,
                       initials: (booking['clientName'] as String? ?? 'D')[0],
                     ),

@@ -4,7 +4,6 @@ import { env } from './config/env.js';
 import prisma from './config/database.js';
 import logger from './shared/logger.js';
 import { iniciarJobAjustePrecios } from './jobs/ajuste-precios.job.js';
-import { initSocketServer } from './services/socket.service.js';
 
 const PORT =
   process.env.NODE_ENV !== 'production'
@@ -12,42 +11,35 @@ const PORT =
     : (parseInt(env.PORT, 10) || 3000);
 
 const httpServer = createServer(app);
-initSocketServer(httpServer);
 
 async function start() {
-  httpServer.listen(PORT, '0.0.0.0', () => {
-    logger.info(`GARDEN API with Socket.io listening on port ${PORT}`);
+  httpServer.listen(PORT, '0.0.0.0', async () => {
+    logger.info(`GARDEN API listening on port ${PORT}`);
+    console.log(`\n🚀 GARDEN API RUNNING ON http://localhost:${PORT}\n`);
+    
+    // Defer Socket.io to prevent main thread blocking during module load
+    try {
+        const { initSocketServer } = await import('./services/socket.service.js');
+        initSocketServer(httpServer);
+        logger.info('Socket.io initialized successfully');
+    } catch (err) {
+        logger.error('Failed to initialize Socket.io', err);
+    }
   });
 
   try {
     await prisma.$connect();
-    logger.info('Database connected');
+    logger.info('Database connected successfully');
   } catch (e) {
     logger.error('Database connection failed', e);
     if (process.env.NODE_ENV !== 'production') process.exit(1);
   }
 
-  try {
-    await prisma.caregiverProfile.findFirst({
-      select: { id: true, profilePhoto: true },
-      take: 1,
-    });
-  } catch (e: unknown) {
-    const err = e as { code?: string; message?: string };
-    const msg = typeof err?.message === 'string' ? err.message : '';
-    const tableMissing =
-      (msg.includes('caregiver_profiles') && (msg.includes('does not exist') || msg.includes('not exist'))) ||
-      (msg.includes('table') && msg.includes('does not exist'));
-    const columnMissing = err?.code === 'P2022' || msg.includes('profilePhoto');
-    if (tableMissing || columnMissing) {
-      const fixMsg =
-        'Database schema out of sync. Table or column missing. Run: cd garden-api && npx prisma db push';
-      logger.error(fixMsg);
-      console.error('\n*** ' + fixMsg + ' ***\n');
-    }
-  }
-
-  iniciarJobAjustePrecios();
+  // Defer heavy background jobs by 10s to let the API warm up
+  setTimeout(() => {
+    console.log('⏳ Starting background jobs (Pricing dynamic adjustment)...');
+    iniciarJobAjustePrecios();
+  }, 10000);
 }
 
 process.on('SIGTERM', async () => {
@@ -55,4 +47,7 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 
-start();
+start().catch(err => {
+  logger.error('Fatal startup error', err);
+  process.exit(1);
+});

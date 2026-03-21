@@ -12,6 +12,7 @@ import * as bookingService from '../booking-service/booking.service.js';
 import {
   patchCaregiverProfileSchema,
   patchAvailabilityBodySchema,
+  PatchCaregiverProfileBody,
 } from './caregiver-profile.validation.js';
 
 /** GET /api/caregiver/my-profile - Perfil del cuidador logueado (para cargar wizard). */
@@ -31,7 +32,7 @@ export const getMyProfile = asyncHandler(async (req: Request, res: Response) => 
 /** PATCH /api/caregiver/profile - Actualización parcial. 403 si status APPROVED. */
 export const patchProfile = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const body = patchCaregiverProfileSchema.parse(req.body);
+  const body = req.body as PatchCaregiverProfileBody;
   const result = await caregiverProfileService.patchProfile(userId, body);
   res.json({ success: true, data: result });
 });

@@ -16,11 +16,11 @@ const SALT_ROUNDS = 12;
 export interface AuthTokens {
   accessToken: string;
   expiresIn: string;
-  user: { id: string; email: string; role: string; firstName: string; lastName: string };
+  user: { id: string; email: string; role: string; firstName: string; lastName: string; profilePicture?: string | null };
 }
 
 export interface RegisterCaregiverResult {
-  user: { id: string; email: string; role: string; firstName: string; lastName: string };
+  user: { id: string; email: string; role: string; firstName: string; lastName: string; profilePicture?: string | null };
   profileId: string;
   verificationStatus: VerificationStatus;
   accessToken: string;
@@ -28,7 +28,7 @@ export interface RegisterCaregiverResult {
 }
 
 export interface RegisterClientResult {
-  user: { id: string; email: string; role: string; firstName: string; lastName: string };
+  user: { id: string; email: string; role: string; firstName: string; lastName: string; profilePicture?: string | null };
   profileId: string;
   accessToken: string;
   expiresIn: string;
@@ -213,6 +213,7 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
       role: result.user.role,
       firstName: result.user.firstName,
       lastName: result.user.lastName,
+      profilePicture: result.user.profilePicture,
     },
     profileId: result.profile.id,
     verificationStatus: result.profile.verificationStatus,
@@ -301,7 +302,7 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
   };
   logger.info('Creando User con role CLIENT', { email: userData.email, phone: userData.phone });
 
-  let user: { id: string; email: string; role: string; firstName: string; lastName: string };
+  let user: { id: string; email: string; role: string; firstName: string; lastName: string; profilePicture?: string | null };
   try {
     const created = await prisma.user.create({
       data: userData,
@@ -312,6 +313,7 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
       role: created.role,
       firstName: created.firstName,
       lastName: created.lastName,
+      profilePicture: created.profilePicture,
     };
     logger.info('User creado', { id: created.id, email: created.email });
   } catch (error: unknown) {
@@ -438,6 +440,7 @@ export async function login(
       role: user.role,
       firstName: user.firstName,
       lastName: user.lastName,
+      profilePicture: user.profilePicture,
     },
   };
 }

@@ -37,7 +37,11 @@ function applyMarkup(price: number | null | undefined): number | null {
  * Solo status=APPROVED y verified=true (aparecen tras approve del admin). Orden: rating DESC, createdAt DESC.
  */
 export async function listCaregivers(filters: CaregiverFilters): Promise<PaginatedCaregivers> {
-  const { service, zone, priceRange, spaceTypes, page = 1, limit = 10 } = filters;
+  const { 
+    service, zone, priceRange, spaceTypes, 
+    experienceYears, acceptAggressive, acceptPuppies, acceptSeniors, sizesAccepted,
+    page = 1, limit = 10 
+  } = filters;
 
   const cacheKey = `caregivers:list:${JSON.stringify({
     service: service ?? '',
@@ -102,6 +106,18 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
     }
   }
 
+  if (experienceYears !== undefined) {
+    (where as any).experienceYears = { gte: experienceYears };
+  }
+
+  if (acceptAggressive !== undefined) where.acceptAggressive = acceptAggressive;
+  if (acceptPuppies !== undefined) where.acceptPuppies = acceptPuppies;
+  if (acceptSeniors !== undefined) where.acceptSeniors = acceptSeniors;
+
+  if (sizesAccepted && Array.isArray(sizesAccepted) && sizesAccepted.length > 0) {
+    (where as any).sizesAccepted = { hasSome: sizesAccepted };
+  }
+
   const [caregivers, total] = await Promise.all([
     prisma.caregiverProfile.findMany({
       where,
@@ -130,6 +146,16 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       pricePerWalk60: applyMarkup(c.pricePerWalk60),
       verified: c.verified,
       spaceType: Array.isArray(c.spaceType) ? c.spaceType : (c.spaceType ? [c.spaceType] : []),
+      experienceYears: c.experienceYears,
+      experienceDescription: c.experienceDescription,
+      whyCaregiver: c.whyCaregiver,
+      whatDiffers: c.whatDiffers,
+      handleAnxious: c.handleAnxious,
+      emergencyResponse: c.emergencyResponse,
+      acceptAggressive: c.acceptAggressive,
+      acceptPuppies: c.acceptPuppies,
+      acceptSeniors: c.acceptSeniors,
+      sizesAccepted: c.sizesAccepted,
     })),
     pagination: {
       total,
@@ -872,24 +898,8 @@ export async function upsertCaregiverProfile(
   };
 }
 
-function mapProfileToListItem(
-  profile: {
-    id: string;
-    zone: Zone | null;
-    servicesOffered: ServiceType[];
-    rating: number;
-    reviewCount: number;
-    pricePerDay: number | null;
-    pricePerWalk30: number | null;
-    pricePerWalk60: number | null;
-    verified: boolean;
-    spaceType: string[]; // Array de tipos de espacio
-    profilePhoto?: string | null;
-    photos?: string[];
-    user: { firstName: string; lastName: string; profilePicture: string | null };
-  }
-): CaregiverListItem {
-  const p = profile as { profilePhoto?: string | null; photos?: string[] };
+function mapProfileToListItem(profile: any): CaregiverListItem {
+  const p = profile;
   return {
     id: profile.id,
     firstName: profile.user.firstName,
@@ -905,6 +915,16 @@ function mapProfileToListItem(
     pricePerWalk60: applyMarkup(profile.pricePerWalk60),
     verified: profile.verified,
     spaceType: Array.isArray(profile.spaceType) ? profile.spaceType : (profile.spaceType ? [profile.spaceType] : []),
+    experienceYears: profile.experienceYears,
+    experienceDescription: profile.experienceDescription,
+    whyCaregiver: profile.whyCaregiver,
+    whatDiffers: profile.whatDiffers,
+    handleAnxious: profile.handleAnxious,
+    emergencyResponse: profile.emergencyResponse,
+    acceptAggressive: profile.acceptAggressive,
+    acceptPuppies: profile.acceptPuppies,
+    acceptSeniors: profile.acceptSeniors,
+    sizesAccepted: profile.sizesAccepted,
   };
 }
 

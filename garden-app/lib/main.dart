@@ -13,9 +13,11 @@ import 'screens/client/booking_screen.dart';
 import 'screens/client/payment_screen.dart';
 import 'screens/caregiver/caregiver_home_screen.dart';
 import 'screens/caregiver/verification_screen.dart';
+import 'screens/caregiver/caregiver_edit_profile_screen.dart';
 import 'screens/client/my_bookings_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/chat/chat_screen.dart';
+import 'screens/caregiver/caregiver_profile_data_screen.dart';
 import 'theme/garden_theme.dart';
 
 // ── Compatibilidad con sistema anterior (Legacy Constants) ──
@@ -82,13 +84,6 @@ final GoRouter _router = GoRouter(
       builder: (context, state) => const VerificationScreen(),
     ),
     GoRoute(
-      path: '/caregiver/:id',
-      name: 'caregiverProfile',
-      builder: (context, state) => CaregiverProfileScreen(
-        caregiverId: state.pathParameters['id']!,
-      ),
-    ),
-    GoRoute(
       path: '/booking/:caregiverId',
       name: 'booking',
       builder: (context, state) => BookingScreen(
@@ -125,6 +120,23 @@ final GoRouter _router = GoRouter(
           otherPersonPhoto: extra['otherPersonPhoto'] as String?,
         );
       },
+    ),
+    GoRoute(
+      path: '/caregiver/edit-profile',
+      name: 'caregiverEditProfile',
+      builder: (context, state) => const CaregiverEditProfileScreen(),
+    ),
+    GoRoute(
+      path: '/caregiver/profile-data',
+      name: 'caregiverProfileData',
+      builder: (context, state) => const CaregiverProfileDataScreen(),
+    ),
+    GoRoute(
+      path: '/caregiver/:id',
+      name: 'caregiverProfile',
+      builder: (context, state) => CaregiverProfileScreen(
+        caregiverId: state.pathParameters['id']!,
+      ),
     ),
   ],
 );

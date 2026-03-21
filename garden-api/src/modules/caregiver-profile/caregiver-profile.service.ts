@@ -33,10 +33,11 @@ export async function patchUserInfo(
   });
   if (!profile) throw new BadRequestError('No tienes perfil de cuidador', 'CAREGIVER_PROFILE_NOT_FOUND');
 
-  if (profile.profileStatus === 'SUBMITTED' || profile.profileStatus === 'UNDER_REVIEW' || profile.profileStatus === 'APPROVED') {
+  // Se permite editar aunque esté APPROVED (ej: cambio de teléfono).
+  if (profile.profileStatus === 'SUBMITTED' || profile.profileStatus === 'UNDER_REVIEW') {
     throw new ForbiddenError(
-      'No puedes editar la información personal tras la aprobación o durante la revisión.',
-      'PERSONAL_INFO_READONLY'
+      'Tu perfil está en revisión y no puede ser editado en este momento.',
+      'PROFILE_IN_REVIEW_READONLY'
     );
   }
 
@@ -248,6 +249,7 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.ciReversoUrl !== undefined) updateData.ciReversoUrl = ensureAbsoluteUrl(body.ciReversoUrl) ?? null;
   if (body.ciNumber !== undefined) updateData.ciNumber = body.ciNumber;
   if (body.onboardingStatus !== undefined) updateData.onboardingStatus = body.onboardingStatus as object;
+  if (body.serviceDetails !== undefined) updateData.serviceDetails = body.serviceDetails as object;
 
   // Si estaba DRAFT o NEEDS_REVISION, mantener o establecer DRAFT (actualización de borrador).
   if (
@@ -257,13 +259,20 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
     updateData.status = CaregiverStatus.DRAFT;
   }
 
+  logger.debug('Updating caregiver profile', { userId, updateData });
   const updated = await prisma.caregiverProfile.update({
     where: { id: (profile as any).id },
     data: updateData as any,
   });
 
+  logger.debug('Caregiver profile updated, checking submission', { userId });
   // Trigger auto-submission check
-  await checkAndAutoSubmitProfile(userId);
+  try {
+    await checkAndAutoSubmitProfile(userId);
+  } catch (err: any) {
+    logger.error('Error in checkAndAutoSubmitProfile after patch', { userId, error: err.message, stack: err.stack });
+    // Don't throw if check fails, profile was already updated
+  }
 
   if (body.photos !== undefined && ensureAbsoluteUrls(body.photos).length > 0) {
     logger.info('Foto subida y guardada', {

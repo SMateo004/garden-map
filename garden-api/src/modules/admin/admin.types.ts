@@ -135,7 +135,7 @@ export interface AdminCaregiverDetailDto {
   termsAcceptedAt: string | null;
 
   // --- Experiencia ---
-  experienceYears: string | null;
+  experienceYears: number | null;
   ownPets: boolean | null;
   currentPetsDetails: unknown;
   caredOthers: boolean | null;

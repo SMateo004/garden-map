@@ -29,6 +29,15 @@ export const listCaregiversQuerySchema = z.object({
     if (!val) return undefined;
     return val.split(',').map((s) => s.trim()).filter(Boolean);
   }),
+  experienceYears: z.coerce.number().optional(),
+  acceptAggressive: z.preprocess((val) => val === 'true', z.boolean()).optional(),
+  acceptPuppies: z.preprocess((val) => val === 'true', z.boolean()).optional(),
+  acceptSeniors: z.preprocess((val) => val === 'true', z.boolean()).optional(),
+  // sizesAccepted: comma-separated string (ej: "PEQUEÑO,MEDIANO")
+  sizesAccepted: z.string().optional().transform((val) => {
+    if (!val) return undefined;
+    return val.split(',').map((s) => s.trim()).filter(Boolean);
+  }),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(10),
 });
