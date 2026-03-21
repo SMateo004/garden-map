@@ -402,6 +402,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _profileTile(icon: Icons.calendar_today, title: 'Mis reservas', onTap: () => context.push('/my-bookings')),
           _profileTile(icon: Icons.star_outline, title: 'Mis calificaciones', 
               onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Próximamente')))),
+          _profileTile(icon: Icons.account_balance_wallet_outlined, title: 'Mi billetera', onTap: () => context.push('/wallet')),
         ],
         
         if (_role == 'CAREGIVER') ...[
@@ -418,6 +419,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _caregiverProfile?['identityVerificationStatus'] != 'VERIFIED')
             _profileTile(icon: Icons.verified_user_outlined, title: 'Verificación IA', onTap: () => context.push('/caregiver/verification')),
           _profileTile(icon: Icons.calendar_month, title: 'Mi disponibilidad', onTap: () => context.push('/caregiver/home')),
+          _profileTile(icon: Icons.account_balance_wallet_outlined, title: 'Mi billetera', onTap: () => context.push('/wallet')),
         ],
         
         if (_role == 'ADMIN') ...[

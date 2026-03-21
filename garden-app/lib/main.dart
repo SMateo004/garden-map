@@ -18,6 +18,7 @@ import 'screens/client/my_bookings_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/chat/chat_screen.dart';
 import 'screens/caregiver/caregiver_profile_data_screen.dart';
+import 'screens/wallet/wallet_screen.dart';
 import 'theme/garden_theme.dart';
 
 // ── Compatibilidad con sistema anterior (Legacy Constants) ──
@@ -96,6 +97,11 @@ final GoRouter _router = GoRouter(
       builder: (context, state) => PaymentScreen(
         bookingId: state.pathParameters['bookingId']!,
       ),
+    ),
+    GoRoute(
+      path: '/wallet',
+      name: 'wallet',
+      builder: (context, state) => const WalletScreen(),
     ),
     GoRoute(
       path: '/my-bookings',

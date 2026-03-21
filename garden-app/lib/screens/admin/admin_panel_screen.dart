@@ -152,6 +152,61 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     }
   }
 
+  Widget _idBadge(String label, String value) {
+    final isDark = themeNotifier.isDark;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: '$label: ',
+              style: TextStyle(
+                color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary,
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            TextSpan(
+              text: value,
+              style: TextStyle(
+                color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _paymentStatusBadge(String status) {
+    Color color;
+    String label;
+    if (status == 'PAYMENT_PENDING_APPROVAL') {
+      color = GardenColors.warning;
+      label = 'Por Aprobar';
+    } else {
+      color = Colors.grey;
+      label = 'Pág. Pendiente';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withOpacity(0.5), width: 0.5),
+      ),
+      child: Text(label, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -202,6 +257,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     _buildCaregiversList(surface, textColor, subtextColor, borderColor),
                     _buildIdentityList(surface, textColor, subtextColor, borderColor),
                     _buildDisputasPlaceholder(surface, textColor, subtextColor, borderColor),
+                    _buildPaymentsTab(),
                   ],
                 ),
               ),
@@ -217,6 +273,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       ('Cuidadores', Icons.people_outlined),
       ('Identidad', Icons.verified_user_outlined),
       ('Disputas', Icons.gavel_outlined),
+      ('Pagos', Icons.payments_outlined),
     ];
     return Container(
       color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
@@ -554,5 +611,178 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildPaymentsTab() {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    return FutureBuilder(
+      future: _loadPendingPayments(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
+        }
+        final payments = snapshot.data as List<Map<String, dynamic>>? ?? [];
+        if (payments.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.check_circle_outline, size: 64, color: GardenColors.success),
+                const SizedBox(height: 16),
+                Text('Sin pagos pendientes', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                Text('Todos los pagos han sido procesados', style: TextStyle(color: subtextColor, fontSize: 14)),
+              ],
+            ),
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: payments.length,
+          itemBuilder: (context, index) {
+            final payment = payments[index];
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: borderColor),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(payment['petName'] as String? ?? '—',
+                            style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              _paymentStatusBadge(payment['status'] as String? ?? ''),
+                              const SizedBox(width: 8),
+                              Text('${payment['serviceType']} · ${payment['walkDate'] ?? payment['startDate'] ?? '—'}',
+                                style: TextStyle(color: subtextColor, fontSize: 13)),
+                            ],
+                          ),
+                        ],
+                        ),
+                      ),
+                      Text('Bs ${payment['totalAmount']}',
+                        style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w800, fontSize: 18)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _idBadge('RESERVA', payment['id'].toString().toUpperCase().substring(0, 8)),
+                      const SizedBox(width: 8),
+                      if (payment['qrId'] != null)
+                        _idBadge('PAGO', payment['qrId'].toString()),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text('Cliente: ${payment['clientEmail'] ?? '—'}',
+                      style: TextStyle(color: subtextColor, fontSize: 12)),
+                  Text('Cuidador: ${payment['caregiverName'] ?? '—'}',
+                      style: TextStyle(color: subtextColor, fontSize: 12)),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GardenButton(
+                          label: 'Aprobar pago',
+                          icon: Icons.check_rounded,
+                          height: 40,
+                          color: GardenColors.success,
+                          onPressed: () => _approvePayment(payment['id'] as String),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: GardenButton(
+                          label: 'Rechazar',
+                          icon: Icons.close_rounded,
+                          height: 40,
+                          color: GardenColors.error,
+                          outline: true,
+                          onPressed: () => _rejectPayment(payment['id'] as String),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _loadPendingPayments() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/admin/payments-pending'),
+        headers: {'Authorization': 'Bearer $_adminToken'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        return (data['data']['bookings'] as List).cast<Map<String, dynamic>>();
+      }
+    } catch (e) {
+      debugPrint('Error loading payments: $e');
+    }
+    return [];
+  }
+
+  Future<void> _approvePayment(String bookingId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/admin/bookings/$bookingId/approve-payment'),
+        headers: {'Authorization': 'Bearer $_adminToken'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        setState(() {}); // Recargar el FutureBuilder
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pago aprobado'), backgroundColor: GardenColors.success),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
+      );
+    }
+  }
+
+  Future<void> _rejectPayment(String bookingId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/admin/bookings/$bookingId/reject-payment'),
+        headers: {'Authorization': 'Bearer $_adminToken'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pago rechazado'), backgroundColor: GardenColors.error),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
+      );
+    }
   }
 }

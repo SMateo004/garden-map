@@ -568,7 +568,11 @@ export async function reviewCaregiver(
 /** GET /api/admin/payments-pending — reservas en PAYMENT_PENDING_APPROVAL. */
 export async function getPaymentsPending(): Promise<PendingPaymentsResult> {
   const bookings = await prisma.booking.findMany({
-    where: { status: BookingStatus.PAYMENT_PENDING_APPROVAL },
+    where: { 
+      status: { 
+        in: [BookingStatus.PAYMENT_PENDING_APPROVAL, BookingStatus.PENDING_PAYMENT] 
+      } 
+    },
     include: {
       client: { select: { email: true } },
       caregiver: {
@@ -610,7 +614,7 @@ export async function rejectPayment(bookingId: string, adminId: string): Promise
     where: { id: bookingId },
   });
   if (!booking) throw new NotFoundError('Reserva no encontrada');
-  if (booking.status !== BookingStatus.PAYMENT_PENDING_APPROVAL) {
+  if (booking.status !== BookingStatus.PAYMENT_PENDING_APPROVAL && booking.status !== BookingStatus.PENDING_PAYMENT) {
     throw new BadRequestError(
       'Solo se puede rechazar una reserva en espera de aprobación de pago manual.'
     );

@@ -557,9 +557,14 @@ export async function initPayment(
       };
     }
 
+    // Pago manual: generamos un ID de pago para seguimiento
+    const manualPaymentId = `PAY-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
     await tx.booking.update({
       where: { id: bookingId },
-      data: { status: BookingStatus.PAYMENT_PENDING_APPROVAL },
+      data: { 
+        status: BookingStatus.PAYMENT_PENDING_APPROVAL,
+        qrId: manualPaymentId // Usamos el campo qrId para guardar la referencia de pago manual
+      },
     });
     await tx.adminNotification.create({
       data: {
@@ -572,6 +577,7 @@ export async function initPayment(
       bookingId,
       clientId,
       caregiverId: booking.caregiverId,
+      paymentId: manualPaymentId
     });
     // Notificación admin (MVP: console; futuro: WhatsApp/Email con link a /admin/payments-pending)
     logger.info('[ADMIN] Pago manual pendiente', {
@@ -580,7 +586,7 @@ export async function initPayment(
       actionUrl: `/admin/payments-pending`,
       message: 'Revisar y aprobar o rechazar en el panel admin.',
     });
-    return { status: BookingStatus.PAYMENT_PENDING_APPROVAL };
+    return { status: BookingStatus.PAYMENT_PENDING_APPROVAL, qrId: manualPaymentId };
   });
 }
 
@@ -1361,9 +1367,22 @@ export async function confirmReceiptByClient(bookingId: string, clientId: string
     const amount = Number(booking.totalAmount) - Number(booking.commissionAmount);
 
     // Actualizar balance del cuidador
-    await tx.caregiverProfile.update({
+    const updatedProfile = await tx.caregiverProfile.update({
       where: { id: booking.caregiverId },
-      data: { balance: { increment: amount } }
+      data: { balance: { increment: amount } },
+      select: { balance: true, userId: true }
+    });
+
+    await tx.walletTransaction.create({
+      data: {
+        userId: updatedProfile.userId,
+        type: 'EARNING',
+        amount: amount,
+        balance: Number(updatedProfile.balance),
+        description: `Ganancia por ${booking.serviceType === 'PASEO' ? 'paseo' : 'hospedaje'} - ${booking.petName}`,
+        bookingId: booking.id,
+        status: 'COMPLETED',
+      },
     });
 
     const updated = await tx.booking.update({

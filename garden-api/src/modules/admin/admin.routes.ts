@@ -40,6 +40,9 @@ router.get('/payments-pending', adminController.getPaymentsPending);
 /** POST /api/admin/bookings/:id/reject-payment — rechazar pago manual. */
 router.post('/bookings/:id/reject-payment', adminController.rejectPayment);
 
+/** POST /api/admin/bookings/:id/approve-payment — aprobar pago manual. */
+router.post('/bookings/:id/approve-payment', adminController.approvePayment);
+
 /** GET /api/admin/reservations — listado de reservas, ?status= opcional. */
 router.get('/reservations', adminController.getReservations);
 

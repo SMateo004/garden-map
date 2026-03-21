@@ -6,6 +6,7 @@
 
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../shared/async-handler.js';
+import prisma from '../../config/database.js';
 import * as adminService from './admin.service.js';
 import {
   reviewCaregiverBodySchema,
@@ -97,6 +98,45 @@ export const rejectPayment = asyncHandler(async (req: Request, res: Response) =>
   const adminId = req.user!.userId;
   const result = await adminService.rejectPayment(bookingId, adminId);
   res.json({ success: true, data: result });
+});
+
+/** POST /api/admin/bookings/:id/approve-payment — aprobar pago manual */
+export const approvePayment = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  
+  const booking = await prisma.booking.findUnique({ where: { id } });
+  if (!booking) return res.status(404).json({ success: false, error: { message: 'Reserva no encontrada' } });
+  
+  if (booking.status !== 'PAYMENT_PENDING_APPROVAL' && booking.status !== 'PENDING_PAYMENT') {
+    return res.status(400).json({ success: false, error: { message: 'La reserva no está en un estado válido para aprobación de pago' } });
+  }
+  
+  await prisma.booking.update({
+    where: { id },
+    data: { 
+      status: 'WAITING_CAREGIVER_APPROVAL',
+      paidAt: new Date(),
+    },
+  });
+
+  // Notificar al cuidador
+  const caregiverProfile = await prisma.caregiverProfile.findUnique({
+    where: { id: booking.caregiverId },
+    select: { userId: true },
+  });
+  
+  if (caregiverProfile) {
+    await prisma.notification.create({
+      data: {
+        userId: caregiverProfile.userId,
+        title: 'Nueva reserva confirmada',
+        message: 'El pago fue verificado. Tienes una nueva reserva esperando tu aceptación.',
+        type: 'NEW_BOOKING',
+      },
+    });
+  }
+  
+  res.json({ success: true, data: { status: 'WAITING_CAREGIVER_APPROVAL' } });
 });
 
 /** GET /api/admin/reservations — listado de reservas, opcional ?status= */
