@@ -14,7 +14,19 @@ export const addEvent = asyncHandler(async (req: Request, res: Response) => {
     const bookingId = req.params.id!;
     const caregiverUserId = req.user!.userId;
     const { type, description } = req.body;
-    const booking = await bookingService.addServiceEvent(bookingId, caregiverUserId, type, description);
+    let photoUrl = req.body.photoUrl;
+
+    if (req.file) {
+        const fs = await import('fs/promises');
+        const path = await import('path');
+        const filename = `event-${bookingId}-${Date.now()}.jpg`;
+        const uploadDir = path.join(process.cwd(), 'uploads', 'service-events');
+        await fs.mkdir(uploadDir, { recursive: true });
+        await fs.writeFile(path.join(uploadDir, filename), req.file.buffer);
+        photoUrl = `${process.env.API_BASE_URL || 'http://localhost:3000'}/uploads/service-events/${filename}`;
+    }
+
+    const booking = await bookingService.addServiceEvent(bookingId, caregiverUserId, type, description, photoUrl);
     res.json({ success: true, data: booking });
 });
 

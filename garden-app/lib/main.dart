@@ -19,6 +19,7 @@ import 'screens/profile/profile_screen.dart';
 import 'screens/chat/chat_screen.dart';
 import 'screens/caregiver/caregiver_profile_data_screen.dart';
 import 'screens/wallet/wallet_screen.dart';
+import 'screens/service/service_execution_screen.dart';
 import 'theme/garden_theme.dart';
 
 // ── Compatibilidad con sistema anterior (Legacy Constants) ──
@@ -143,6 +144,18 @@ final GoRouter _router = GoRouter(
       builder: (context, state) => CaregiverProfileScreen(
         caregiverId: state.pathParameters['id']!,
       ),
+    ),
+    GoRoute(
+      path: '/service/:bookingId',
+      name: 'serviceExecution',
+      builder: (context, state) {
+        final bookingId = state.pathParameters['bookingId']!;
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        return ServiceExecutionScreen(
+          bookingId: bookingId,
+          role: extra['role'] as String? ?? 'CLIENT',
+        );
+      },
     ),
   ],
 );

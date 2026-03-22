@@ -317,35 +317,32 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                     children: [
                       if (status == 'CONFIRMED' || status == 'IN_PROGRESS')
                         Expanded(
+                          child: GardenButton(
+                            label: status == 'CONFIRMED' ? 'Ver reserva' : '🔴 En curso',
+                            icon: status == 'CONFIRMED' ? Icons.visibility_outlined : Icons.play_circle_outline,
+                            height: 40,
+                            color: status == 'IN_PROGRESS' ? GardenColors.success : GardenColors.primary,
+                            onPressed: () => context.push(
+                              '/service/${booking['id']}',
+                              extra: {'role': 'CLIENT'},
+                            ),
+                          ),
+                        ),
+                      if (status == 'CONFIRMED' || status == 'IN_PROGRESS')
+                        const SizedBox(width: 12),
+                      if (status == 'CONFIRMED' || status == 'IN_PROGRESS')
+                        Expanded(
                           child: OutlinedButton(
                             onPressed: () => _cancelBooking(booking['id']),
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(color: Colors.red),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              padding: const EdgeInsets.symmetric(vertical: 0),
+                              minimumSize: const Size(0, 40),
                             ),
-                            child: const Text('Cancelar reserva', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+                            child: const Text('Cancelar', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
                           ),
                         ),
-                      if (status == 'CONFIRMED' || status == 'IN_PROGRESS' || status == 'COMPLETED') ...[
-                        if (status == 'CONFIRMED' || status == 'IN_PROGRESS')
-                          const SizedBox(width: 12),
-                        Expanded(
-                          child: GardenButton(
-                            label: 'Chat',
-                            icon: Icons.chat_rounded,
-                            outline: true,
-                            height: 40,
-                            onPressed: () => context.push(
-                              '/chat/${booking['id']}',
-                              extra: {
-                                'otherPersonName': booking['caregiverName'] ?? 'Cuidador',
-                                'otherPersonPhoto': booking['caregiverPhoto'],
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
                       if (status == 'COMPLETED' && booking['rating'] == null)
                         Expanded(
                           child: GardenButton(

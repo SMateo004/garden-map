@@ -1104,12 +1104,13 @@ export async function getMyBookings(clientId: string): Promise<BookingCreateResu
 /**
  * Obtiene una reserva por ID. El cliente titular o el cuidador asignado pueden acceder.
  */
-export async function getBookingById(bookingId: string, requesterId: string): Promise<BookingCreateResult> {
-  const booking = await prisma.booking.findFirst({
-    where: {
-      id: bookingId,
-      OR: [{ clientId: requesterId }, { caregiver: { userId: requesterId } }],
-    },
+export async function getBookingById(
+  bookingId: string,
+  userId: string,
+  role?: string
+): Promise<BookingCreateResult> {
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
     include: {
       caregiver: {
         include: {
@@ -1139,6 +1140,15 @@ export async function getBookingById(bookingId: string, requesterId: string): Pr
 
   if (!booking) {
     throw new BookingNotFoundError(bookingId);
+  }
+
+  // Verificar acceso: cliente titular, cuidador asignado o ADMIN
+  const isClient = booking.clientId === userId;
+  const isCaregiver = booking.caregiver.userId === userId;
+  const isAdmin = role === 'ADMIN';
+
+  if (!isClient && !isCaregiver && !isAdmin) {
+    throw new ForbiddenError('No tienes acceso a esta reserva');
   }
 
   return bookingToResponse(booking);
@@ -1278,15 +1288,30 @@ export async function startService(bookingId: string, caregiverUserId: string, p
   });
 }
 
-export async function addServiceEvent(bookingId: string, caregiverUserId: string, type: string, description: string): Promise<BookingCreateResult> {
-  const profile = await prisma.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
+export async function addServiceEvent(
+  bookingId: string,
+  caregiverUserId: string,
+  type: string,
+  description: string,
+  photoUrl?: string
+): Promise<BookingCreateResult> {
+  const profile = await prisma.caregiverProfile.findFirst({
+    where: { userId: caregiverUserId },
+  });
   if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
 
-  const booking = await prisma.booking.findFirst({ where: { id: bookingId, caregiverId: profile.id } });
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, caregiverId: profile.id },
+  });
   if (!booking) throw new BookingNotFoundError(bookingId);
 
   const events = (booking.serviceEvents as any[]) || [];
-  events.push({ type, description, timestamp: new Date() });
+  events.push({
+    type,
+    description,
+    photoUrl,
+    timestamp: new Date(),
+  });
 
   const updated = await prisma.booking.update({
     where: { id: bookingId },

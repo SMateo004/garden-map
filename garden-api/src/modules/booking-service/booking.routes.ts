@@ -2,7 +2,9 @@ import { Router } from 'express';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
 import * as bookingController from './booking.controller.js';
 import * as serviceExecutionController from './service-execution.controller.js';
+import multer from 'multer';
 
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 const router = Router();
 
 /** GET /api/bookings/my — obtener todas las reservas del cliente autenticado. */
@@ -105,6 +107,7 @@ router.post(
   '/:id/event',
   authMiddleware,
   requireRole('CAREGIVER'),
+  upload.single('photo'),
   serviceExecutionController.addEvent
 );
 
@@ -119,6 +122,7 @@ router.post(
   '/:id/conclude',
   authMiddleware,
   requireRole('CAREGIVER'),
+  upload.single('photo'),
   serviceExecutionController.conclude
 );
 

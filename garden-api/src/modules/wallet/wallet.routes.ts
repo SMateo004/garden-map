@@ -164,6 +164,73 @@ router.post('/withdraw', authMiddleware, asyncHandler(async (req: Request, res: 
   });
 }));
 
+router.post('/redeem', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
+  const userId = (req as any).user.userId;
+  const role = (req as any).user.role;
+  const { code } = req.body;
+
+  const GIFT_CODES: Record<string, number> = {
+    'MATEO004': 20,
+    'GARDEN2026': 50,
+    'BIENVENIDO': 15,
+  };
+
+  const amount = GIFT_CODES[code?.toUpperCase()];
+  if (!amount) {
+    return res.status(400).json({ success: false, error: { message: 'Código inválido o expirado' } });
+  }
+
+  // Verificar si ya usó este código
+  const alreadyUsed = await prisma.walletTransaction.findFirst({
+    where: { 
+      userId, 
+      description: { contains: code.toUpperCase() } 
+    },
+  });
+
+  if (alreadyUsed) {
+    return res.status(400).json({ success: false, error: { message: 'Ya usaste este código' } });
+  }
+
+  // Agregar saldo según el rol
+  let newBalance = 0;
+  if (role === 'CAREGIVER') {
+    const updated = await prisma.caregiverProfile.update({
+      where: { userId },
+      data: { balance: { increment: amount } },
+      select: { balance: true },
+    });
+    newBalance = Number(updated.balance);
+  } else if (role === 'CLIENT') {
+    const updated = await prisma.clientProfile.update({
+      where: { userId },
+      data: { balance: { increment: amount } },
+      select: { balance: true },
+    });
+    newBalance = Number(updated.balance);
+  }
+
+  await prisma.walletTransaction.create({
+    data: {
+      userId,
+      type: 'REFUND',
+      amount,
+      balance: newBalance,
+      description: `Código de regalo: ${code.toUpperCase()}`,
+      status: 'COMPLETED',
+    },
+  });
+
+  res.json({ 
+    success: true, 
+    data: { 
+      amount, 
+      balance: newBalance, 
+      message: `¡Recibiste Bs ${amount} de regalo!` 
+    } 
+  });
+}));
+
 async function getWalletStatsAndTransactions(userId: string) {
   const transactions = await prisma.walletTransaction.findMany({
     where: { userId },

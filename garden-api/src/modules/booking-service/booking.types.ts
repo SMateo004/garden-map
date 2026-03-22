@@ -36,6 +36,9 @@ export interface BookingCreateResult {
   clientEmail?: string;
   clientPhone?: string | null;
   clientPhoto?: string | null;
+  serviceStartedAt?: string | null;
+  serviceEndedAt?: string | null;
+  serviceEvents?: any[] | null;
 }
 
 export function bookingToResponse(b: any): BookingCreateResult {
@@ -69,6 +72,9 @@ export function bookingToResponse(b: any): BookingCreateResult {
     refundAmount: b.refundAmount != null ? String(b.refundAmount) : null,
     refundStatus: b.refundStatus ?? null,
     paidAt: b.paidAt?.toISOString() ?? null,
+    serviceStartedAt: b.serviceStartedAt?.toISOString() ?? null,
+    serviceEndedAt: b.serviceEndedAt?.toISOString() ?? null,
+    serviceEvents: b.serviceEvents ?? [],
   };
 
   if (b.caregiver) {

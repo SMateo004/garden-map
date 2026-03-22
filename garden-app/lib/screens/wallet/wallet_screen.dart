@@ -136,6 +136,31 @@ class _WalletScreenState extends State<WalletScreen> {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 16),
+                      
+                      // Botón código de regalo
+                      GestureDetector(
+                        onTap: () => _showRedeemDialog(),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: GardenColors.star.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: GardenColors.star.withOpacity(0.2)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Text('🎁', style: TextStyle(fontSize: 18)),
+                              const SizedBox(width: 12),
+                              Text('¿Tienes un código de regalo?',
+                                style: TextStyle(color: GardenColors.star, fontSize: 13, fontWeight: FontWeight.w700)),
+                              const Spacer(),
+                              Icon(Icons.arrow_forward_ios_rounded, color: GardenColors.star, size: 14),
+                            ],
+                          ),
+                        ),
+                      ),
+                      
                       const SizedBox(height: 24),
                       // SECCIÓN 2 — Datos bancarios y botón de retiro (solo CAREGIVER)
                       if (_role == 'CAREGIVER') ...[
@@ -560,6 +585,125 @@ class _WalletScreenState extends State<WalletScreen> {
         Text(label, style: const TextStyle(color: Colors.white60, fontSize: 11)),
         Text(value, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w700)),
       ],
+    );
+  }
+
+  void _showRedeemDialog() {
+    final codeController = TextEditingController();
+    bool isRedeeming = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialog) {
+          final isDark = themeNotifier.isDark;
+          final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+          final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+          final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+          final surfaceEl = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
+
+          return Dialog(
+            backgroundColor: surface,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('🎁', style: TextStyle(fontSize: 48)),
+                  const SizedBox(height: 16),
+                  Text('Código de regalo',
+                    style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 8),
+                  Text('Ingresa tu código para recibir saldo gratis en tu billetera',
+                    style: TextStyle(color: subtextColor, fontSize: 13),
+                    textAlign: TextAlign.center),
+                  const SizedBox(height: 24),
+                  TextField(
+                    controller: codeController,
+                    textCapitalization: TextCapitalization.characters,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 6,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'CÓDIGO',
+                      hintStyle: TextStyle(color: subtextColor.withOpacity(0.3), letterSpacing: 4, fontSize: 16),
+                      filled: true,
+                      fillColor: surfaceEl,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16), 
+                        borderSide: const BorderSide(color: GardenColors.star, width: 2)
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 20),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  GardenButton(
+                    label: isRedeeming ? 'Validando...' : 'Canjear código',
+                    loading: isRedeeming,
+                    color: GardenColors.star,
+                    onPressed: () async {
+                      final code = codeController.text.trim();
+                      if (code.isEmpty) return;
+                      setDialog(() => isRedeeming = true);
+                      try {
+                        final response = await http.post(
+                          Uri.parse('$_baseUrl/wallet/redeem'),
+                          headers: {
+                            'Authorization': 'Bearer $_token',
+                            'Content-Type': 'application/json',
+                          },
+                          body: jsonEncode({'code': code}),
+                        );
+                        final data = jsonDecode(response.body);
+                        if (data['success'] == true) {
+                          Navigator.pop(ctx);
+                          await _loadWallet();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Row(
+                                children: [
+                                  const Text('🎉', style: TextStyle(fontSize: 20)),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: Text(data['data']['message'])),
+                                ],
+                              ),
+                              backgroundColor: GardenColors.success,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          );
+                        } else {
+                          setDialog(() => isRedeeming = false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(data['error']?['message'] ?? 'Código inválido'),
+                              backgroundColor: GardenColors.error,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setDialog(() => isRedeeming = false);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: Text('Cerrar', style: TextStyle(color: subtextColor, fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }

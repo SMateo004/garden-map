@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../main.dart';
 import '../chat/chat_screen.dart';
+import '../service/service_execution_screen.dart';
 
 class CaregiverHomeScreen extends StatefulWidget {
   const CaregiverHomeScreen({Key? key}) : super(key: key);
@@ -2201,6 +2202,26 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                   ),
                 ),
               ],
+
+              if (status == 'CONFIRMED' || status == 'IN_PROGRESS')
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                  child: GardenButton(
+                    label: status == 'CONFIRMED' ? 'Gestionar servicio' : '🔴 Servicio en curso',
+                    icon: status == 'CONFIRMED' ? Icons.pets_outlined : Icons.play_circle_outline,
+                    height: 42,
+                    color: status == 'IN_PROGRESS' ? GardenColors.success : GardenColors.primary,
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ServiceExecutionScreen(
+                          bookingId: booking['id'] as String,
+                          role: 'CAREGIVER',
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
 
               if (status == 'CONFIRMED' || status == 'IN_PROGRESS' || status == 'WAITING_CAREGIVER_APPROVAL' || status == 'COMPLETED')
                 Padding(
