@@ -21,4 +21,7 @@ router.post('/pet-photo', authMiddleware, requireRole('CLIENT'), uploadControlle
 // Ruta protegida para fotos de servicio (caregiver start/end)
 router.post('/service-photo', authMiddleware, requireRole('CAREGIVER'), ...uploadController.uploadServicePhotoHandler);
 
+// Ruta publica para 1 sola foto de perfil / temporal durante onboarding
+router.post('/public-single-photo', ...uploadController.uploadPublicSinglePhotoHandler);
+
 export default router;

@@ -20,6 +20,7 @@ import 'screens/chat/chat_screen.dart';
 import 'screens/caregiver/caregiver_profile_data_screen.dart';
 import 'screens/wallet/wallet_screen.dart';
 import 'screens/service/service_execution_screen.dart';
+import 'screens/dispute/dispute_screen.dart';
 import 'theme/garden_theme.dart';
 
 // ── Compatibilidad con sistema anterior (Legacy Constants) ──
@@ -154,6 +155,19 @@ final GoRouter _router = GoRouter(
         return ServiceExecutionScreen(
           bookingId: bookingId,
           role: extra['role'] as String? ?? 'CLIENT',
+        );
+      },
+    ),
+    GoRoute(
+      path: '/dispute/:bookingId',
+      name: 'dispute',
+      builder: (context, state) {
+        final bookingId = state.pathParameters['bookingId']!;
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        return DisputeScreen(
+          bookingId: bookingId,
+          role: extra['role'] as String? ?? 'CLIENT',
+          clientReasons: (extra['clientReasons'] as List?)?.cast<String>(),
         );
       },
     ),

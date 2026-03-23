@@ -72,22 +72,18 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     'LOCAL': '🏪 Local',
   };
 
-  static const _petTypes = ['PERRO', 'GATO', 'CONEJO', 'AVE', 'HAMSTER', 'OTROS'];
+  static const _petTypes = ['DOGS', 'CATS'];
   static const _petTypeLabels = {
-    'PERRO': '🐶 Perros',
-    'GATO': '🐱 Gatos',
-    'CONEJO': '🐰 Conejos',
-    'AVE': '🐦 Aves',
-    'HAMSTER': '🐹 Hámsters',
-    'OTROS': '🐾 Otros',
+    'DOGS': '🐶 Perros',
+    'CATS': '🐱 Gatos',
   };
 
-  static const _petSizes = ['PEQUEÑO', 'MEDIANO', 'GRANDE', 'GIGANTE'];
+  static const _petSizes = ['SMALL', 'MEDIUM', 'LARGE', 'GIANT'];
   static const _petSizeLabels = {
-    'PEQUEÑO': '🐾 Pequeño (<5kg)',
-    'MEDIANO': '🐕 Mediano (5-20kg)',
-    'GRANDE': '🦮 Grande (20-40kg)',
-    'GIGANTE': '🐘 Gigante (+40kg)',
+    'SMALL': '🐾 Pequeño (<5kg)',
+    'MEDIUM': '🐕 Mediano (5-20kg)',
+    'LARGE': '🦮 Grande (20-40kg)',
+    'GIANT': '🐘 Gigante (+40kg)',
   };
 
   static const _zones = ['EQUIPETROL', 'URBARI', 'NORTE', 'LAS_PALMAS', 'CENTRO_SAN_MARTIN', 'OTROS'];
@@ -534,44 +530,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
             // Sección EXTRA — Mascotas que aceptas
             _sectionTitle('Políticas de mascotas', textColor),
-            Text('Tamaños aceptados', style: TextStyle(color: subtextColor, fontSize: 13)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8, runSpacing: 8,
-              children: {
-                'PEQUEÑO': '🐾 Pequeño (<5kg)',
-                'MEDIANO': '🐕 Mediano (5-20kg)',
-                'GRANDE': '🦮 Grande (20-40kg)',
-                'GIGANTE': '🐘 Gigante (+40kg)',
-              }.entries.map((e) {
-                final selected = _sizesAccepted.contains(e.key);
-                return GestureDetector(
-                  onTap: () => setState(() {
-                    if (selected) _sizesAccepted.remove(e.key);
-                    else _sizesAccepted.add(e.key);
-                  }),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: selected ? GardenColors.primary.withOpacity(0.1) : surface,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: selected ? GardenColors.primary : borderColor,
-                        width: selected ? 1.5 : 1,
-                      ),
-                    ),
-                    child: Text(e.value,
-                      style: TextStyle(
-                        color: selected ? GardenColors.primary : subtextColor,
-                        fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                        fontSize: 13,
-                      )),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 20),
             _acceptSwitch('¿Aceptas mascotas agresivas?', _acceptAggressive, (val) => setState(() => _acceptAggressive = val), textColor, subtextColor, surface, borderColor),
             const SizedBox(height: 8),
             _acceptSwitch('¿Aceptas cachorros?', _acceptPuppies, (val) => setState(() => _acceptPuppies = val), textColor, subtextColor, surface, borderColor),

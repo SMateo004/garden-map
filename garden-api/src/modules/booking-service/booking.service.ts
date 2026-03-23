@@ -1094,6 +1094,7 @@ export async function getMyBookings(clientId: string): Promise<BookingCreateResu
           },
         },
       },
+      dispute: true,
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -1135,6 +1136,7 @@ export async function getBookingById(
           profilePicture: true,
         },
       },
+      dispute: true,
     },
   });
 
@@ -1179,6 +1181,7 @@ export async function getBookingsByCaregiverUserId(
           profilePicture: true,
         },
       },
+      dispute: true,
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -1341,7 +1344,6 @@ export async function concludeService(
   bookingId: string,
   caregiverUserId: string,
   photoUrl: string,
-  ownerRating: number,
   lat: number,
   lng: number
 ): Promise<BookingCreateResult> {
@@ -1364,8 +1366,6 @@ export async function concludeService(
         status: BookingStatus.COMPLETED,
         serviceEndedAt: new Date(),
         serviceEndPhoto: photoUrl,
-        ownerRated: true,
-        ownerRating,
         serviceTrackingData: tracking,
       },
     });
@@ -1374,7 +1374,12 @@ export async function concludeService(
   });
 }
 
-export async function confirmReceiptByClient(bookingId: string, clientId: string): Promise<BookingCreateResult> {
+export async function confirmReceiptByClient(
+  bookingId: string, 
+  clientId: string,
+  rating: number,
+  comment?: string
+): Promise<BookingCreateResult> {
   return prisma.$transaction(async (tx) => {
     const booking = await tx.booking.findFirst({
       where: { id: bookingId, clientId },
@@ -1386,6 +1391,20 @@ export async function confirmReceiptByClient(bookingId: string, clientId: string
     }
     if (booking.payoutStatus === 'PAID') {
       throw new BadRequestError('El pago ya fue procesado');
+    }
+
+    if (rating < 3) {
+      // Disputa (Rating bajo) -> No liberar fondos, poner en pausa.
+      const updated = await tx.booking.update({
+        where: { id: bookingId },
+        data: { 
+          payoutStatus: 'ON_HOLD',
+          ownerRated: true,
+          ownerRating: rating,
+          ownerComment: comment,
+        }
+      });
+      return bookingToResponse(updated);
     }
 
     // Calcular el monto a transferir (Total - Comisión)
@@ -1412,12 +1431,16 @@ export async function confirmReceiptByClient(bookingId: string, clientId: string
 
     const updated = await tx.booking.update({
       where: { id: bookingId },
-      data: { payoutStatus: 'PAID' }
+      data: { 
+        payoutStatus: 'PAID',
+        ownerRated: true,
+        ownerRating: rating,
+        ownerComment: comment,
+      }
     });
 
     // Registro en Blockchain (asíncrono) - Liberar calificación
-    // Usamos el rating que guardó el cuidador/dueño en concludeService
-    blockchainService.finalizeBookingOnChain(bookingId, booking.ownerRating || 5).catch(err => {
+    blockchainService.finalizeBookingOnChain(bookingId, rating).catch(err => {
       logger.error('Blockchain completion failed', { bookingId, err });
     });
 

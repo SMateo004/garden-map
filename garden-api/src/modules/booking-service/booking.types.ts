@@ -39,6 +39,13 @@ export interface BookingCreateResult {
   serviceStartedAt?: string | null;
   serviceEndedAt?: string | null;
   serviceEvents?: any[] | null;
+  ownerRated?: boolean;
+  ownerRating?: number | null;
+  ownerComment?: string | null;
+  caregiverRating?: number | null;
+  caregiverComment?: string | null;
+  hasDisputePending?: boolean;
+  disputeReasons?: string[];
 }
 
 export function bookingToResponse(b: any): BookingCreateResult {
@@ -75,6 +82,13 @@ export function bookingToResponse(b: any): BookingCreateResult {
     serviceStartedAt: b.serviceStartedAt?.toISOString() ?? null,
     serviceEndedAt: b.serviceEndedAt?.toISOString() ?? null,
     serviceEvents: b.serviceEvents ?? [],
+    ownerRated: b.ownerRated ?? false,
+    ownerRating: b.ownerRating,
+    ownerComment: b.ownerComment,
+    caregiverRating: b.caregiverRating,
+    caregiverComment: b.caregiverComment,
+    hasDisputePending: !!(b.dispute && b.dispute.status !== 'RESOLVED'),
+    disputeReasons: b.dispute?.clientReasons ?? [],
   };
 
   if (b.caregiver) {

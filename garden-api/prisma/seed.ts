@@ -246,6 +246,28 @@ async function main() {
     }
   });
 
+  // 8. BOOKING COMPLETED (para probar Disputas)
+  await prisma.booking.create({
+    data: {
+      clientId: userClient.id,
+      caregiverId: approvedProfile.id,
+      petId: pet.id,
+      petName: pet.name,
+      petBreed: pet.breed,
+      petAge: pet.age,
+      petSize: pet.size,
+      serviceType: ServiceType.HOSPEDAJE,
+      status: BookingStatus.COMPLETED,
+      totalAmount: 240.0,
+      pricePerUnit: 120.0,
+      totalDays: 2,
+      startDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // Hace 3 días
+      endDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),   // Hace 1 día
+      commissionAmount: 36.0,
+      ownerRated: false,
+    }
+  });
+
   console.log('Seed completado con datos de prueba (Mascota + Reserva).');
 }
 

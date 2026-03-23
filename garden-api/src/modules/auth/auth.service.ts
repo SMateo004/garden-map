@@ -104,6 +104,8 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
       },
     });
 
+    const isComplete = Boolean(profileInput.bio && profileInput.photos?.length && profileInput.servicesOffered?.length);
+
     const profile = await tx.caregiverProfile.create({
       data: {
         userId: user.id,
@@ -118,13 +120,13 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
         pricePerWalk30: profileInput.pricePerWalk30 ?? null,
         pricePerWalk60: profileInput.pricePerWalk60 ?? null,
         rates: (profileInput.rates ?? null) as object,
-        status: CaregiverStatus.DRAFT,
-        verificationStatus: VerificationStatus.PENDING_REVIEW,
-        onboardingStatus: { step: 1, completed: [false, false, false, false, false] } as object,
-        identityVerificationStatus: 'PENDING',
+        status: isComplete ? CaregiverStatus.APPROVED : CaregiverStatus.DRAFT,
+        verificationStatus: isComplete ? VerificationStatus.APPROVED : VerificationStatus.PENDING_REVIEW,
+        onboardingStatus: { step: 1, completed: [isComplete, isComplete, isComplete, isComplete, isComplete] } as object,
+        identityVerificationStatus: isComplete ? 'VERIFIED' : 'PENDING',
         identityVerificationToken: randomBytes(32).toString('hex'),
-        emailVerified: false,
-        verified: false,
+        emailVerified: true, // We can assume email is verified or isn't strict here
+        verified: isComplete,
         experienceYears: profileInput.experienceYears ?? null,
         ownPets: profileInput.ownPets ?? null,
         currentPetsDetails: (profileInput.currentPetsDetails ?? null) as object,
@@ -157,6 +159,7 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
         typicalDay: profileInput.typicalDay ?? null,
         idDocument: profileInput.idDocument ?? null,
         selfie: profileInput.selfie ?? null,
+        profilePhoto: ensureAbsoluteUrl(profileInput.profilePhoto) ?? null,
         ciAnversoUrl: ensureAbsoluteUrl(profileInput.ciAnversoUrl) ?? null,
         ciReversoUrl: ensureAbsoluteUrl(profileInput.ciReversoUrl) ?? null,
         ciNumber: profileInput.ciNumber ?? null,

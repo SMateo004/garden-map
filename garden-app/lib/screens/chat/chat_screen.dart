@@ -136,13 +136,13 @@ class _ChatScreenState extends State<ChatScreen> {
                           Container(
                             width: 7, height: 7,
                             decoration: BoxDecoration(
-                              color: _chatService.connected ? GardenColors.success : subtextColor,
+                              color: _initialized && _chatService.connected ? GardenColors.success : subtextColor,
                               shape: BoxShape.circle,
                             ),
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            _chatService.connected ? 'En línea' : 'Conectando...',
+                            _initialized && _chatService.connected ? 'En línea' : 'Conectando...',
                             style: TextStyle(color: subtextColor, fontSize: 11),
                           ),
                         ],

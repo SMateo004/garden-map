@@ -30,8 +30,10 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   Future<void> _initData() async {
     final prefs = await SharedPreferences.getInstance();
     String token = prefs.getString('access_token') ?? '';
+    debugPrint('MY_BOOKINGS: Loaded access_token: ${token.length > 20 ? token.substring(0, 20) : token}...');
     if (token.isEmpty) {
       token = const String.fromEnvironment('TEST_JWT', defaultValue: '');
+      debugPrint('MY_BOOKINGS: Using TEST_JWT: ${token.length > 20 ? token.substring(0, 20) : token}...');
     }
     setState(() => _clientToken = token);
     _loadBookings();
@@ -40,15 +42,18 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   Future<void> _loadBookings() async {
     setState(() => _isLoading = true);
     try {
+      debugPrint('MY_BOOKINGS: Fetching /bookings/my with token: ${_clientToken.length > 20 ? _clientToken.substring(0, 20) : _clientToken}...');
       final response = await http.get(
         Uri.parse('$_baseUrl/bookings/my'),
         headers: {'Authorization': 'Bearer $_clientToken'},
       );
+      debugPrint('MY_BOOKINGS: Response ${response.statusCode}: ${response.body}');
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         setState(() => _bookings = (data['data'] as List).cast<Map<String, dynamic>>());
       }
     } catch (e) {
+      debugPrint('MY_BOOKINGS ERROR: $e');
       // silencioso
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -343,7 +348,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                             child: const Text('Cancelar', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
                           ),
                         ),
-                      if (status == 'COMPLETED' && booking['rating'] == null)
+                      if (status == 'COMPLETED' && booking['ownerRating'] == null)
                         Expanded(
                           child: GardenButton(
                             label: 'Calificar experiencia',
@@ -493,12 +498,24 @@ class _RatingSheetState extends State<_RatingSheet> {
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
-        widget.onSubmitted();
+        if (!mounted) return;
+        widget.onSubmitted(); // Esto cierra el ModalBottom y recarga _loadBookings() en la pantalla principal
+        
+        if (_rating < 3) {
+          context.push(
+            '/dispute/${widget.bookingId}',
+            extra: {'role': 'CLIENT'},
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('¡Gracias por tu calificación!'), backgroundColor: GardenColors.success),
+          );
+        }
       }
     } catch (e) {
       // ignore
     } finally {
-      setState(() => _isSubmitting = false);
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 

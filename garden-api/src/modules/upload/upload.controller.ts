@@ -287,4 +287,31 @@ export const uploadServicePhotoHandler = [
   }),
 ];
 
+
+/** POST /api/upload/public-single-photo — multipart 'photo' (single file). Returns URL. No auth. */
+export const uploadPublicSinglePhotoHandler = [
+  upload.single('photo'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const file = req.file;
+    if (!file) throw new CaregiverProfileValidationError('Se requiere una foto');
+    
+    let url: string;
+    if (isCloudinaryConfigured()) {
+      try {
+        const tempId = randomUUID();
+        url = await uploadProfilePhotoToCloudinary(file.buffer, 'temp_' + tempId); // Reutilizo para subirla suelta
+      } catch (err) {
+        const tempId = randomUUID();
+        const urls = await saveRegistrationPhotosToLocal([file.buffer], 'temp_' + tempId);
+        url = urls[0]!;
+      }
+    } else {
+      const tempId = randomUUID();
+      const urls = await saveRegistrationPhotosToLocal([file.buffer], 'temp_' + tempId);
+      url = urls[0]!;
+    }
+    res.json({ success: true, data: { url } });
+  })
+];
+
 // Obsolete CI handlers removed per requirement

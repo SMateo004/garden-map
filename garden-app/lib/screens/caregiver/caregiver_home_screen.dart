@@ -8,6 +8,7 @@ import '../../theme/garden_theme.dart';
 import '../../main.dart';
 import '../chat/chat_screen.dart';
 import '../service/service_execution_screen.dart';
+import '../dispute/dispute_screen.dart';
 
 class CaregiverHomeScreen extends StatefulWidget {
   const CaregiverHomeScreen({Key? key}) : super(key: key);
@@ -2223,7 +2224,25 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                   ),
                 ),
 
-              if (status == 'CONFIRMED' || status == 'IN_PROGRESS' || status == 'WAITING_CAREGIVER_APPROVAL' || status == 'COMPLETED')
+              // Verificar si hay disputa pendiente para el cuidador
+              if (status == 'COMPLETED' && booking['hasDisputePending'] == true)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                  child: GardenButton(
+                    label: '⚠️ Responder disputa',
+                    height: 42,
+                    color: GardenColors.warning,
+                    onPressed: () => context.push(
+                      '/dispute/${booking['id']}',
+                      extra: {
+                        'role': 'CAREGIVER',
+                        'clientReasons': (booking['disputeReasons'] as List?)?.cast<String>(),
+                      },
+                    ),
+                  ),
+                ),
+
+              if (status == 'CONFIRMED' || status == 'IN_PROGRESS' || status == 'WAITING_CAREGIVER_APPROVAL')
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                   child: GardenButton(

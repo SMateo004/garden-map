@@ -5,7 +5,18 @@ import { authMiddleware } from '../../middleware/auth.middleware.js';
 
 const router = Router();
 
-// Usamos el middleware para asegurar que la app de Flutter envíe el token de sesión
+// --- Agente 2: Precios Inteligentes (Públicos o sin sesión completa) ---
+router.post('/precio/onboarding', async (req, res) => {
+    try {
+        const resultado = await sugerirPrecioOnboarding(req.body);
+        res.json(resultado);
+    } catch (error: any) {
+        console.error('Error en agente precio onboarding:', error);
+        res.status(500).json({ error: 'Error al sugerir precio', details: error.message });
+    }
+});
+
+// Usamos el middleware para el resto de rutas donde la app de Flutter envía el token
 router.use(authMiddleware);
 
 // --- Agente 1: Reputación y Disputas ---
@@ -29,17 +40,7 @@ router.post('/disputa/analizar', async (req, res) => {
     }
 });
 
-// --- Agente 2: Precios Inteligentes ---
-router.post('/precio/onboarding', async (req, res) => {
-    try {
-        const resultado = await sugerirPrecioOnboarding(req.body);
-        res.json(resultado);
-    } catch (error: any) {
-        console.error('Error en agente precio onboarding:', error);
-        res.status(500).json({ error: 'Error al sugerir precio', details: error.message });
-    }
-});
-
+// --- Agente 2: Precios Inteligentes (Con sesión) ---
 router.post('/precio/ajuste-dinamico', async (req, res) => {
     try {
         const resultado = await calcularAjusteDinamico(req.body);

@@ -233,12 +233,17 @@ model Booking {
   serviceEvents             Json?            @db.JsonB
   ownerRated                Boolean          @default(false)
   ownerRating               Int?
+  ownerComment              String?          @db.Text
+  caregiverRated            Boolean          @default(false)
+  caregiverRating           Int?
+  caregiverComment          String?          @db.Text
   payoutStatus              String           @default("PENDING")
   updatedAt                 DateTime         @updatedAt
   caregiver                 CaregiverProfile @relation("CaregiverBookings", fields: [caregiverId], references: [id], onDelete: Cascade)
   client                    User             @relation("ClientBookings", fields: [clientId], references: [id], onDelete: Cascade)
   pet                       Pet?             @relation(fields: [petId], references: [id])
   review                    Review?
+  dispute                   Dispute?
   messages                  ChatMessage[]
 
   @@index([clientId, status])
@@ -601,3 +606,18 @@ model ChatMessage {
   @@index([senderId])
 }
 
+
+model Dispute {
+  id                String   @id @default(uuid())
+  bookingId         String   @unique
+  booking           Booking  @relation(fields: [bookingId], references: [id])
+  clientReasons     String[] // razones seleccionadas por el cliente
+  caregiverResponse String[] // respuestas seleccionadas por el cuidador
+  aiVerdict         String?  // 'CLIENT_WINS' | 'CAREGIVER_WINS' | 'PARTIAL'
+  aiAnalysis        String?  @db.Text // análisis del agente
+  aiRecommendations String?  @db.Text // recomendaciones para el cuidador
+  status            String   @default("PENDING_CLIENT") // 'PENDING_CLIENT' | 'PENDING_CAREGIVER' | 'RESOLVED'
+  resolution        String?  // descripción de la resolución
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}

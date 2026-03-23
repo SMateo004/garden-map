@@ -41,14 +41,15 @@ export const track = asyncHandler(async (req: Request, res: Response) => {
 export const conclude = asyncHandler(async (req: Request, res: Response) => {
     const bookingId = req.params.id!;
     const caregiverUserId = req.user!.userId;
-    const { photo, rating, lat, lng } = req.body;
-    const booking = await bookingService.concludeService(bookingId, caregiverUserId, photo, Number(rating), lat, lng);
+    const { photo, lat, lng } = req.body;
+    const booking = await bookingService.concludeService(bookingId, caregiverUserId, photo, lat, lng);
     res.json({ success: true, data: booking });
 });
 
 export const confirmReceipt = asyncHandler(async (req: Request, res: Response) => {
     const bookingId = req.params.id!;
     const clientId = req.user!.userId;
-    const booking = await bookingService.confirmReceiptByClient(bookingId, clientId);
+    const { rating, comment } = req.body;
+    const booking = await bookingService.confirmReceiptByClient(bookingId, clientId, Number(rating), comment);
     res.json({ success: true, data: booking });
 });

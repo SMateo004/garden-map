@@ -33,6 +33,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   List<Map<String, dynamic>> _serviceEvents = [];
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
+  bool get _alreadyRated => _booking?['ownerRating'] != null;
 
   @override
   void initState() {
@@ -177,7 +178,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       return _buildInProgressView();
     }
     if (status == 'COMPLETED') {
-      if (widget.role == 'CLIENT' && (_booking?['ownerRating'] == null || _booking?['ownerRating'] == 0)) {
+      if (widget.role == 'CLIENT' && !_alreadyRated) {
         return _buildSatisfactionSurvey();
       }
       return _buildCompletedView();
@@ -1133,17 +1134,31 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   }
 
   Future<void> _submitRating(int rating, String comment) async {
+    debugPrint('SERVICE: _submitRating starting for ${widget.bookingId} with rating $rating. Comment: $comment');
     setState(() => _isProcessing = true);
     try {
+      debugPrint('SERVICE: Sending confirmation to ${widget.bookingId} with rating $rating...');
       final response = await http.post(
         Uri.parse('$_baseUrl/bookings/${widget.bookingId}/confirm-receipt'),
         headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
         body: jsonEncode({'rating': rating, 'comment': comment}),
       );
+      debugPrint('SERVICE: Confirmation response ${response.statusCode}: ${response.body}');
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         await _loadBooking();
         if (!mounted) return;
+
+        if (rating < 3) {
+          debugPrint('SERVICE: Rating $rating < 3. Opening dispute flow for ${widget.bookingId}');
+          // Abrir disputa
+          context.push(
+            '/dispute/${widget.bookingId}',
+            extra: {'role': 'CLIENT'},
+          );
+          return;
+        }
+
         _showSmartContractDialog(rating);
       } else {
         throw Exception(data['error']?['message'] ?? 'Error');

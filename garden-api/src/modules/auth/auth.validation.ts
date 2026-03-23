@@ -162,6 +162,7 @@ export const registerCaregiverProfileSchema = z.object({
   ciAnversoUrl: z.string().url().optional(),
   ciReversoUrl: z.string().url().optional(),
   ciNumber: z.string().max(50).optional(),
+  profilePhoto: z.string().url().optional(),
 });
 
 export const registerCaregiverSchema = z
