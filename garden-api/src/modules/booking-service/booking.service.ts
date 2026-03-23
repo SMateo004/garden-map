@@ -1439,6 +1439,33 @@ export async function confirmReceiptByClient(
       }
     });
 
+    // Create Review natively
+    await tx.review.create({
+      data: {
+        bookingId: booking.id,
+        clientId: clientId,
+        caregiverId: booking.caregiverId,
+        rating: rating,
+        comment: comment,
+        serviceType: booking.serviceType,
+      }
+    });
+
+    // Update Caregiver Average Rating
+    const result = await tx.review.aggregate({
+      where: { caregiverId: booking.caregiverId },
+      _avg: { rating: true },
+      _count: { id: true },
+    });
+    
+    await tx.caregiverProfile.update({
+      where: { id: booking.caregiverId },
+      data: {
+        rating: result._avg.rating || rating,
+        reviewCount: result._count.id || 1,
+      }
+    });
+
     // Registro en Blockchain (asíncrono) - Liberar calificación
     blockchainService.finalizeBookingOnChain(bookingId, rating).catch(err => {
       logger.error('Blockchain completion failed', { bookingId, err });

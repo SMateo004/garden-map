@@ -59,7 +59,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           fullName: name, email: email, password: password, phone: phone,
         );
         if (!mounted) return;
-        context.go('/marketplace');
+        context.go('/client-welcome');
       }
     } catch (e) {
       if (!mounted) return;
@@ -196,10 +196,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('GARDEN', style: TextStyle(color: GardenColors.primary, fontSize: 24, fontWeight: FontWeight.w900)),
-              IconButton(
-                icon: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, color: subtextColor),
-                onPressed: () => themeNotifier.toggle(),
-              ),
             ],
           ),
           const SizedBox(height: 40),

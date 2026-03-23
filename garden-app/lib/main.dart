@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
+import 'screens/client/client_welcome_screen.dart';
+import 'screens/client/landing_screen.dart';
 import 'screens/caregiver/onboarding_wizard_screen.dart';
 import 'screens/test_agentes_screen.dart';
 import 'screens/client/marketplace_screen.dart';
@@ -33,8 +35,13 @@ const kTextSecondary   = GardenColors.textSecondary;
 
 // ── Router ─────────────────────────────────────────────────
 final GoRouter _router = GoRouter(
-  initialLocation: '/marketplace',
+  initialLocation: '/',
   routes: [
+    GoRoute(
+      path: '/',
+      name: 'landing',
+      builder: (context, state) => const LandingScreen(),
+    ),
     GoRoute(
       path: '/test',
       name: 'test',
@@ -62,9 +69,21 @@ final GoRouter _router = GoRouter(
       },
     ),
     GoRoute(
+      path: '/client-welcome',
+      name: 'clientWelcome',
+      builder: (context, state) => const ClientWelcomeScreen(),
+    ),
+    GoRoute(
       path: '/marketplace',
       name: 'marketplace',
-      builder: (context, state) => const MarketplaceScreen(),
+      builder: (context, state) {
+        final queryParams = state.uri.queryParameters;
+        return MarketplaceScreen(
+          initialService: queryParams['service'],
+          initialZone: queryParams['zone'],
+          initialSize: queryParams['size'],
+        );
+      },
     ),
     GoRoute(
       path: '/admin',

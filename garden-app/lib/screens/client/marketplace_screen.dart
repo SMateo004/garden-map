@@ -9,7 +9,16 @@ import '../../widgets/temporada_alta_badge.dart';
 import '../../theme/garden_theme.dart';
 
 class MarketplaceScreen extends StatefulWidget {
-  const MarketplaceScreen({Key? key}) : super(key: key);
+  final String? initialService;
+  final String? initialZone;
+  final String? initialSize;
+
+  const MarketplaceScreen({
+    Key? key,
+    this.initialService,
+    this.initialZone,
+    this.initialSize,
+  }) : super(key: key);
 
   @override
   State<MarketplaceScreen> createState() => _MarketplaceScreenState();
@@ -47,6 +56,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialService != null) {
+      _selectedService = widget.initialService!;
+    }
+    if (widget.initialZone != null) {
+      _selectedZone = widget.initialZone;
+    }
+    if (widget.initialSize != null) {
+      _selectedSizes = [widget.initialSize!];
+    }
+    
     _loadInitialData();
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >=
@@ -452,23 +471,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                  ),
-                  GestureDetector(
-                    onTap: () => context.push('/profile'),
-                    child: GardenAvatar(
-                      imageUrl: _userPhoto,
-                      size: 32,
-                      initials: (_userName != null && _userName!.isNotEmpty) ? _userName![0] : 'U',
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: Icon(
-                      isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-                      color: GardenColors.primary,
-                      size: 20,
-                    ),
-                    onPressed: () => themeNotifier.toggle(),
                   ),
                 ],
               ),

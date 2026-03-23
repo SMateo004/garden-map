@@ -1890,12 +1890,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                         ),
                       ),
                     ),
+
                 ],
-              ),
-              IconButton(
-                icon: Icon(themeNotifier.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-                  color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
-                onPressed: () => themeNotifier.toggle(),
               ),
               IconButton(
                 icon: Icon(Icons.logout_outlined,

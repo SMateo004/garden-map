@@ -483,6 +483,7 @@ class _RatingSheet extends StatefulWidget {
 class _RatingSheetState extends State<_RatingSheet> {
   int _rating = 0;
   bool _isSubmitting = false;
+  final TextEditingController _commentController = TextEditingController();
 
   Future<void> _submitRating() async {
     if (_rating == 0) return;
@@ -494,7 +495,10 @@ class _RatingSheetState extends State<_RatingSheet> {
           'Authorization': 'Bearer ${widget.token}',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({'rating': _rating}),
+        body: jsonEncode({
+          'rating': _rating,
+          if (_commentController.text.trim().isNotEmpty) 'comment': _commentController.text.trim(),
+        }),
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
@@ -520,59 +524,86 @@ class _RatingSheetState extends State<_RatingSheet> {
   }
 
   @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = themeNotifier.isDark;
     final surface = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: subtextColor.withOpacity(0.3), borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 24),
-          Text(
-            'Califica tu experiencia',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: textColor),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Tu opinión ayuda a otros dueños de mascotas a encontrar a los mejores cuidadores.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
-          ),
-          const SizedBox(height: 32),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(5, (index) {
-              final starIndex = index + 1;
-              return GestureDetector(
-                onTap: () => setState(() => _rating = starIndex),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  child: Icon(
-                    starIndex <= _rating ? Icons.star_rounded : Icons.star_outline_rounded,
-                    color: starIndex <= _rating ? const Color(0xFFFFB800) : subtextColor.withOpacity(0.2),
-                    size: 48,
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: subtextColor.withOpacity(0.3), borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 24),
+              Text(
+                'Califica tu experiencia',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: textColor),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Tu opinión ayuda a otros dueños de mascotas a encontrar a los mejores cuidadores.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
+              ),
+              const SizedBox(height: 32),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (index) {
+                  final starIndex = index + 1;
+                  return GestureDetector(
+                    onTap: () => setState(() => _rating = starIndex),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Icon(
+                        starIndex <= _rating ? Icons.star_rounded : Icons.star_outline_rounded,
+                        color: starIndex <= _rating ? const Color(0xFFFFB800) : subtextColor.withOpacity(0.2),
+                        size: 48,
+                      ),
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 32),
+              TextField(
+                controller: _commentController,
+                maxLines: 3,
+                style: TextStyle(color: textColor, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Escribe una reseña (Opcional)',
+                  hintStyle: TextStyle(color: subtextColor),
+                  filled: true,
+                  fillColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
                   ),
                 ),
-              );
-            }),
+              ),
+              const SizedBox(height: 24),
+              GardenButton(
+                label: 'Enviar calificación',
+                loading: _isSubmitting,
+                onPressed: _rating > 0 ? _submitRating : null,
+              ),
+              const SizedBox(height: 12),
+            ],
           ),
-          const SizedBox(height: 48),
-          GardenButton(
-            label: 'Enviar calificación',
-            loading: _isSubmitting,
-            onPressed: _rating > 0 ? _submitRating : null,
-          ),
-          const SizedBox(height: 12),
-        ],
+        ),
       ),
     );
   }

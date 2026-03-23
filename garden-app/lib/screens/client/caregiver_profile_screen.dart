@@ -475,6 +475,73 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         const SizedBox(height: 20),
                       ],
 
+                      // Reseñas individuales
+                      if (_caregiver!['reviews'] != null && (_caregiver!['reviews'] as List).isNotEmpty) ...[
+                        Text('Reseñas',
+                          style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 16),
+                        ...(_caregiver!['reviews'] as List).map((r) {
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: surface,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 20,
+                                      backgroundImage: r['clientPhoto'] != null ? NetworkImage(r['clientPhoto']) : null,
+                                      backgroundColor: GardenColors.primary.withOpacity(0.2),
+                                      child: r['clientPhoto'] == null ? const Icon(Icons.person, color: GardenColors.primary, size: 20) : null,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(r['clientName'] ?? 'Anónimo', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+                                          Text(
+                                            r['createdAt'] != null ? r['createdAt'].toString().substring(0, 10) : '',
+                                            style: TextStyle(color: subtextColor, fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFFB800).withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.star_rounded, color: Color(0xFFFFB800), size: 14),
+                                          const SizedBox(width: 4),
+                                          Text('${r['rating']}', style: const TextStyle(color: Color(0xFFFFB800), fontWeight: FontWeight.w800, fontSize: 13)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (r['comment'] != null && r['comment'].toString().trim().isNotEmpty) ...[
+                                  const SizedBox(height: 12),
+                                  Text(r['comment'], style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5)),
+                                ],
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        const SizedBox(height: 24),
+                        Divider(color: borderColor),
+                        const SizedBox(height: 20),
+                      ],
+
                       // Espacio para el botón sticky
                       const SizedBox(height: 100),
                     ],

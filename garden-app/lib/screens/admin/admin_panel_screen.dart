@@ -324,12 +324,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 ),
               ],
             ),
-            actions: [
-              IconButton(
-                icon: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, color: subtextColor),
-                onPressed: () => themeNotifier.toggle(),
-              ),
-            ],
           ),
           body: Column(
             children: [

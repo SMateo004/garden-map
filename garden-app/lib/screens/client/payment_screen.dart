@@ -417,14 +417,53 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     color: surface, 
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: borderColor),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(isDark ? 0.3 : 0.05), blurRadius: 10, offset: const Offset(0, 4)),
+                    ],
                   ),
                   child: Column(
                     children: [
+                      // Cuidador
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 20,
+                            backgroundImage: _booking!['caregiverPhoto'] != null 
+                              ? NetworkImage(_booking!['caregiverPhoto']) 
+                              : null,
+                            backgroundColor: GardenColors.primary.withOpacity(0.2),
+                            child: _booking!['caregiverPhoto'] == null 
+                              ? const Icon(Icons.person, color: GardenColors.primary)
+                              : null,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Cuidador', style: TextStyle(color: subtextColor, fontSize: 12)),
+                                Text(_booking!['caregiverName'] ?? '—', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Divider(color: borderColor, height: 1),
+                      const SizedBox(height: 16),
+                      // Datos de Mascota y Fecha
+                      _detailRow('Mascota', _booking!['petName'] ?? '—', textColor, subtextColor),
+                      const SizedBox(height: 12),
+                      _detailRow('Fecha', _booking!['walkDate'] ?? _booking!['startDate'] ?? '—', textColor, subtextColor),
+                      const SizedBox(height: 12),
                       _detailRow('Servicio', _booking!['serviceType'] == 'PASEO' ? 'Paseo' : 'Hospedaje', textColor, subtextColor),
+                      const SizedBox(height: 16),
+                      Divider(color: borderColor, height: 1),
+                      const SizedBox(height: 16),
+                      // Precio y Estado
+                      _detailRow('Total Pagado', 'Bs ${_booking!['totalPrice'] ?? _booking!['totalAmount'] ?? ''}', GardenColors.primary, subtextColor, isBoldValue: true),
                       const SizedBox(height: 12),
-                      _detailRow('Total', 'Bs ${_booking!['totalPrice'] ?? _booking!['totalAmount'] ?? ''}', GardenColors.primary, subtextColor, isBoldValue: true),
-                      const SizedBox(height: 12),
-                      _detailRow('Estado', 'En revisión', GardenColors.warning, subtextColor),
+                      _detailRow('Estado', 'Validando Comprobante', GardenColors.warning, subtextColor),
                     ],
                   ),
                 ),

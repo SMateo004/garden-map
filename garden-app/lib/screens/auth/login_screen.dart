@@ -216,13 +216,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   );
                 },
               ),
-              IconButton(
-                icon: Icon(
-                  themeNotifier.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-                  color: subtextColor,
-                ),
-                onPressed: () => themeNotifier.toggle(),
-              ),
             ],
           ),
           const SizedBox(height: 48),
