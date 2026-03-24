@@ -32,8 +32,78 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
       final response = await http.get(Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}'));
       final data = jsonDecode(response.body);
       if (data['success'] == true) setState(() => _caregiver = data['data']);
+      await _loadFavoriteStatus();
     } catch (_) {} finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  bool _isFavorite = false;
+  bool _isTogglingFavorite = false;
+
+  Future<void> _loadFavoriteStatus() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token') ?? '';
+      if (token.isEmpty) return;
+
+      final response = await http.get(
+        Uri.parse('$_baseUrl/client/my-profile'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        final favorites = (data['data']['favoriteCaregiverIds'] as List?)?.cast<String>() ?? [];
+        if (mounted) {
+          setState(() {
+            _isFavorite = favorites.contains(widget.caregiverId);
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _toggleFavorite() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token') ?? '';
+    if (token.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Inicia sesión para guardar favoritos'),
+          backgroundColor: GardenColors.primary,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted) return;
+      context.push('/login');
+      return;
+    }
+
+    setState(() => _isTogglingFavorite = true);
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/client/favorites/${widget.caregiverId}'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        if (mounted) {
+          setState(() {
+            _isFavorite = data['data']['isFavorite'] == true;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_isFavorite ? 'Agregado a favoritos' : 'Eliminado de favoritos'),
+              backgroundColor: _isFavorite ? GardenColors.success : GardenColors.darkSurface,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (_) {} finally {
+      if (mounted) setState(() => _isTogglingFavorite = false);
     }
   }
 
@@ -129,6 +199,31 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                             boxShadow: GardenShadows.card,
                           ),
                           child: Icon(Icons.arrow_back, color: textColor, size: 20),
+                        ),
+                      ),
+                    ),
+                    // Botón favorito
+                    Positioned(
+                      top: 48, right: 16,
+                      child: GestureDetector(
+                        onTap: () => _toggleFavorite(),
+                        child: Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(
+                            color: surface.withOpacity(0.9),
+                            shape: BoxShape.circle,
+                            boxShadow: GardenShadows.card,
+                          ),
+                          child: _isTogglingFavorite 
+                              ? const Padding(
+                                  padding: EdgeInsets.all(12), 
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary)
+                                )
+                              : Icon(
+                                  _isFavorite ? Icons.favorite : Icons.favorite_border, 
+                                  color: _isFavorite ? GardenColors.error : textColor, 
+                                  size: 20
+                                ),
                         ),
                       ),
                     ),

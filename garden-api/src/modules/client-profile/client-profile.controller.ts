@@ -30,3 +30,22 @@ export const patchProfile = asyncHandler(async (req: Request, res: Response) => 
   const result = await clientProfileService.patchProfile(userId, body);
   res.json({ success: true, data: result });
 });
+
+export const getFavorites = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const result = await clientProfileService.getFavorites(userId);
+  res.json({ success: true, data: result });
+});
+
+export const toggleFavorite = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const caregiverId = req.params.caregiverId;
+  
+  if (!caregiverId) {
+    res.status(400).json({ success: false, error: 'caregiverId es requerido' });
+    return;
+  }
+  
+  const result = await clientProfileService.toggleFavorite(userId, caregiverId as string);
+  res.json({ success: true, data: result });
+});

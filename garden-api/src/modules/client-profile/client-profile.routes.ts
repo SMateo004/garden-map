@@ -15,4 +15,7 @@ router.get('/pets', clientPetsController.getPets);
 router.post('/pets', clientPetsController.createPet);
 router.patch('/pets/:petId', clientPetsController.patchPet);
 
+router.get('/favorites', clientProfileController.getFavorites);
+router.post('/favorites/:caregiverId', clientProfileController.toggleFavorite);
+
 export default router;

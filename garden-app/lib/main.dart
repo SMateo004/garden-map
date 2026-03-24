@@ -23,6 +23,7 @@ import 'screens/caregiver/caregiver_profile_data_screen.dart';
 import 'screens/wallet/wallet_screen.dart';
 import 'screens/service/service_execution_screen.dart';
 import 'screens/dispute/dispute_screen.dart';
+import 'screens/client/favorites_screen.dart';
 import 'theme/garden_theme.dart';
 
 // ── Compatibilidad con sistema anterior (Legacy Constants) ──
@@ -176,6 +177,11 @@ final GoRouter _router = GoRouter(
           role: extra['role'] as String? ?? 'CLIENT',
         );
       },
+    ),
+    GoRoute(
+      path: '/favorites',
+      name: 'favorites',
+      builder: (context, state) => const FavoritesScreen(),
     ),
     GoRoute(
       path: '/dispute/:bookingId',

@@ -400,6 +400,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (_role == 'CLIENT') ...[
           _profileTile(icon: Icons.pets, title: 'Mis mascotas', onTap: () => context.push('/my-pets')),
           _profileTile(icon: Icons.calendar_today, title: 'Mis reservas', onTap: () => context.push('/my-bookings')),
+          _profileTile(icon: Icons.favorite_border, title: 'Cuidadores favoritos', onTap: () => context.push('/favorites')),
           _profileTile(icon: Icons.star_outline, title: 'Mis calificaciones', 
               onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Próximamente')))),
           _profileTile(icon: Icons.account_balance_wallet_outlined, title: 'Mi billetera', onTap: () => context.push('/wallet')),
