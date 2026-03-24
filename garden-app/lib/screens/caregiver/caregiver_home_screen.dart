@@ -27,6 +27,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   int _unreadCount = 0;
   Timer? _notifTimer;
   Map<String, dynamic>? _caregiver;
+  Map<String, dynamic>? _dashboardStats;
+  String _userName = 'Cuidador';
 
   static const String _devToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJmNmRmZmYzMS1lYTFhLTQ4MzktYmZkOC1kMWY4OTgwNDQxMjAiLCJyb2xlIjoiQ0FSRUdJVkVSIiwiaWQiOiJmNmRmZmYzMS1lYTFhLTQ4MzktYmZkOC1kMWY4OTgwNDQxMjAiLCJpYXQiOjE3NzM2ODU4NjQsImV4cCI6MTc3NjI3Nzg2NH0.I9cvXI16qEgG55S6FTHeieDLqPjhCQewLKvN0xXgddw';
 
@@ -63,6 +65,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     if (_caregiverToken.isEmpty) {
       _caregiverToken = _devToken;
     }
+    // Cargar nombre desde prefs si existe
+    final storedName = prefs.getString('user_name') ?? '';
+    if (storedName.isNotEmpty) setState(() => _userName = storedName);
 
     try {
       await Future.wait([
@@ -70,12 +75,28 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         _loadAvailability(),
         _loadBookings(),
         _loadNotifications(),
+        _loadDashboardStats(),
       ]);
       _computeDayStatuses();
     } catch (e) {
       // silencioso
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadDashboardStats() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/caregiver/dashboard-stats'),
+        headers: {'Authorization': 'Bearer $_caregiverToken'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        setState(() => _dashboardStats = data['data']);
+      }
+    } catch (e) {
+      debugPrint('Dashboard error: $e');
     }
   }
 
@@ -310,7 +331,15 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
-        setState(() => _caregiver = data['data']);
+        setState(() {
+          _caregiver = data['data'];
+          // Actualizar nombre desde el perfil del cuidador
+          final user = data['data']?['user'];
+          if (user != null) {
+            _userName = '${user['firstName'] ?? ''}'.trim();
+            if (_userName.isEmpty) _userName = 'Cuidador';
+          }
+        });
       }
     } catch (e) {
       // silencioso
@@ -758,147 +787,291 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     }
   }
 
-  Widget _buildHome() {
+  Widget _buildDashboardTab() {
     final isDark = themeNotifier.isDark;
-    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final stats = _dashboardStats;
 
-    final pendingCount = _bookings.where((b) => b['status'] == 'WAITING_CAREGIVER_APPROVAL').length;
-    final confirmedCount = _bookings.where((b) => b['status'] == 'CONFIRMED' || b['status'] == 'IN_PROGRESS').length;
-    final completedCount = _bookings.where((b) => b['status'] == 'COMPLETED').length;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Saludo
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Buenos días 👋', style: TextStyle(color: subtextColor, fontSize: 14)),
-                  const SizedBox(height: 4),
-                  Row(
+    return RefreshIndicator(
+      onRefresh: _loadDashboardStats,
+      color: GardenColors.primary,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Saludo
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Panel de ', style: TextStyle(color: textColor.withOpacity(0.6), fontSize: 22, fontWeight: FontWeight.w400)),
-                      Text('cuidador', style: TextStyle(color: textColor, fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                      Text(_greeting(), style: TextStyle(color: subtextColor, fontSize: 13)),
+                      Text(_userName,
+                        style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800)),
                     ],
                   ),
-                ],
-              ),
-              // Foto de perfil removida por solicitud del usuario
-            ],
-          ),
-          if (_caregiver != null && _caregiver!['user'] != null) ...[
-            const SizedBox(height: 8),
-            Text('${_caregiver!['user']['firstName']} ${_caregiver!['user']['lastName']}', 
-              style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
-          ],
-          const SizedBox(height: 24),
-
-          // Alerta de reservas pendientes
-          if (pendingCount > 0)
-            Container(
-              margin: const EdgeInsets.only(bottom: 20),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: GardenColors.warning.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: GardenColors.warning.withOpacity(0.4)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.notifications_active_outlined, color: GardenColors.warning, size: 24),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('$pendingCount reserva${pendingCount > 1 ? 's' : ''} pendiente${pendingCount > 1 ? 's' : ''}',
-                          style: const TextStyle(color: GardenColors.warning, fontWeight: FontWeight.w700, fontSize: 15)),
-                        Text('Acepta o rechaza antes de que expiren',
-                          style: TextStyle(color: GardenColors.warning.withOpacity(0.8), fontSize: 13)),
-                      ],
-                    ),
-                  ),
+                ),
+                if ((stats?['pendingBookings'] ?? 0) > 0)
                   GestureDetector(
                     onTap: () => setState(() => _selectedTab = 2),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: GardenColors.warning,
-                        borderRadius: BorderRadius.circular(8),
+                        color: GardenColors.warning.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: GardenColors.warning.withOpacity(0.3)),
                       ),
-                      child: const Text('Ver', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.pending_outlined, color: GardenColors.warning, size: 14),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${stats!['pendingBookings']} pendiente${(stats['pendingBookings'] as int) > 1 ? 's' : ''}',
+                            style: const TextStyle(color: GardenColors.warning, fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Card de saldo y ganancias del mes
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF1A1F2E), Color(0xFF2D3250)],
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.account_balance_wallet_outlined, color: Colors.white60, size: 16),
+                      const SizedBox(width: 6),
+                      const Text('Saldo disponible', style: TextStyle(color: Colors.white60, fontSize: 13)),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () => context.push('/wallet'),
+                        child: const Text('Ver billetera',
+                          style: TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Bs ${((stats?['balance'] ?? 0) as num).toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      color: Colors.white, fontSize: 36,
+                      fontWeight: FontWeight.w900, letterSpacing: -1),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.trending_up_rounded, color: GardenColors.success, size: 16),
+                        const SizedBox(width: 8),
+                        const Text('Este mes:', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Bs ${((stats?['monthEarnings'] ?? 0) as num).toStringAsFixed(2)}',
+                          style: const TextStyle(color: GardenColors.success, fontSize: 14, fontWeight: FontWeight.w700),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${stats?['monthBookings'] ?? 0} servicio${((stats?['monthBookings'] ?? 0) as int) != 1 ? 's' : ''}',
+                          style: const TextStyle(color: Colors.white60, fontSize: 12),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 16),
 
-          // Métricas en grid 2x2
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.6,
-            children: [
-              _metricCard('Pendientes', pendingCount.toString(), Icons.hourglass_top_outlined, GardenColors.warning, surface, textColor, subtextColor, borderColor),
-              _metricCard('Confirmadas', confirmedCount.toString(), Icons.check_circle_outline, GardenColors.success, surface, textColor, subtextColor, borderColor),
-              _metricCard('Completadas', completedCount.toString(), Icons.done_all_outlined, GardenColors.secondary, surface, textColor, subtextColor, borderColor),
-              _metricCard('Total', _bookings.length.toString(), Icons.calendar_month_outlined, GardenColors.primary, surface, textColor, subtextColor, borderColor),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Acciones rápidas
-          Text('Acciones rápidas', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: GardenButton(
-                  label: 'Disponibilidad',
-                  icon: Icons.calendar_month_outlined,
-                  outline: true,
-                  onPressed: () => setState(() => _selectedTab = 1),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: GardenButton(
-                  label: 'Verificación IA',
-                  icon: Icons.verified_user_outlined,
-                  onPressed: () => context.push('/caregiver/verification'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Últimas reservas (preview de 3)
-          if (_bookings.isNotEmpty) ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // Grid de métricas
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.5,
               children: [
-                Text('Reservas recientes', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
-                GestureDetector(
-                  onTap: () => setState(() => _selectedTab = 2),
-                  child: Text('Ver todas', style: TextStyle(color: GardenColors.primary, fontSize: 14, fontWeight: FontWeight.w600)),
+                _statCard(
+                  icon: Icons.star_rounded,
+                  color: GardenColors.star,
+                  label: 'Calificación',
+                  value: (stats?['avgRating'] != null && (stats!['avgRating'] as num) > 0)
+                      ? '${(stats['avgRating'] as num).toStringAsFixed(1)} ⭐'
+                      : 'Sin reseñas',
+                  surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
+                ),
+                _statCard(
+                  icon: Icons.check_circle_outline_rounded,
+                  color: GardenColors.success,
+                  label: 'Completados',
+                  value: '${stats?['completedBookings'] ?? 0} servicios',
+                  surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
+                ),
+                _statCard(
+                  icon: Icons.calendar_month_outlined,
+                  color: GardenColors.secondary,
+                  label: 'Total reservas',
+                  value: '${stats?['totalBookings'] ?? 0} en total',
+                  surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
+                ),
+                _statCard(
+                  icon: Icons.pending_actions_outlined,
+                  color: GardenColors.warning,
+                  label: 'Pendientes',
+                  value: '${stats?['pendingBookings'] ?? 0} por atender',
+                  surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
                 ),
               ],
             ),
+            const SizedBox(height: 16),
+
+            // Acciones rápidas
+            Text('Acciones rápidas',
+              style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
             const SizedBox(height: 12),
-            ..._bookings.take(3).map((b) => _buildBookingPreviewCard(b, surface, textColor, subtextColor, borderColor)),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => context.push('/caregiver/profile-data'),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: GardenColors.primary.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: GardenColors.primary.withOpacity(0.2)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.edit_outlined, color: GardenColors.primary, size: 18),
+                          SizedBox(width: 8),
+                          Text('Mi perfil',
+                            style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => context.push('/wallet'),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: GardenColors.success.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: GardenColors.success.withOpacity(0.2)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.account_balance_wallet_outlined, color: GardenColors.success, size: 18),
+                          SizedBox(width: 8),
+                          Text('Billetera',
+                            style: TextStyle(color: GardenColors.success, fontWeight: FontWeight.w600, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            // Preview de reservas recientes
+            if (_bookings.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Reservas recientes',
+                    style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+                  GestureDetector(
+                    onTap: () => setState(() => _selectedTab = 2),
+                    child: const Text('Ver todas',
+                      style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ..._bookings.take(3).map((b) =>
+                _buildBookingPreviewCard(b, surface, textColor, subtextColor, borderColor)),
+            ],
+            const SizedBox(height: 32),
           ],
+        ),
+      ),
+    );
+  }
+
+  String _greeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Buenos días,';
+    if (hour < 18) return 'Buenas tardes,';
+    return 'Buenas noches,';
+  }
+
+  Widget _statCard({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required String value,
+    required Color surface,
+    required Color textColor,
+    required Color subtextColor,
+    required Color borderColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(value, style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+              Text(label, style: TextStyle(color: subtextColor, fontSize: 11)),
+            ],
+          ),
         ],
       ),
     );
@@ -1903,7 +2076,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           body: _isLoading 
             ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
             : [
-                _buildHome(),
+                _buildDashboardTab(),
                 _buildAvailability(),
                 _buildBookings(),
                 _buildEarnings(),

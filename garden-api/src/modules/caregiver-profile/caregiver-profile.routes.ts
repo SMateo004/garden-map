@@ -107,4 +107,47 @@ router.post('/profile/photo', authMiddleware, requireRole('CAREGIVER'),
   })
 );
 
+router.get('/dashboard-stats', authMiddleware, requireRole('CAREGIVER'),
+  asyncHandler(async (req, res) => {
+    const userId = (req as any).user.userId;
+    const profile = await prisma.caregiverProfile.findUnique({
+      where: { userId },
+      select: { id: true, balance: true },
+    });
+    if (!profile) return res.status(404).json({ success: false });
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [totalBookings, monthBookings, completedBookings, avgRating, pendingBookings] = await Promise.all([
+      prisma.booking.count({ where: { caregiverId: profile.id } }),
+      prisma.booking.count({ where: { caregiverId: profile.id, createdAt: { gte: startOfMonth } } }),
+      prisma.booking.count({ where: { caregiverId: profile.id, status: 'COMPLETED' } }),
+      prisma.booking.aggregate({
+        where: { caregiverId: profile.id, ownerRating: { not: null } },
+        _avg: { ownerRating: true },
+      }),
+      prisma.booking.count({ where: { caregiverId: profile.id, status: { in: ['CONFIRMED', 'WAITING_CAREGIVER_APPROVAL'] } } }),
+    ]);
+
+    const monthEarnings = await prisma.walletTransaction.aggregate({
+      where: { userId, type: 'EARNING', createdAt: { gte: startOfMonth } },
+      _sum: { amount: true },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        balance: Number(profile.balance),
+        totalBookings,
+        monthBookings,
+        completedBookings,
+        avgRating: avgRating._avg.ownerRating ?? 0,
+        pendingBookings,
+        monthEarnings: Number(monthEarnings._sum.amount ?? 0),
+      },
+    });
+  })
+);
+
 export default router;
