@@ -6,10 +6,11 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
+import '../../widgets/notification_bell.dart';
 import '../../main.dart';
 import '../chat/chat_screen.dart';
 import '../service/service_execution_screen.dart';
-import '../dispute/dispute_screen.dart';
+
 
 class CaregiverHomeScreen extends StatefulWidget {
   const CaregiverHomeScreen({super.key});
@@ -24,9 +25,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   List<Map<String, dynamic>> _bookings = [];
   bool _isLoading = true;
   String _caregiverToken = '';
-  List<Map<String, dynamic>> _notifications = [];
-  int _unreadCount = 0;
-  Timer? _notifTimer;
   Map<String, dynamic>? _caregiver;
   Map<String, dynamic>? _dashboardStats;
   Map<String, dynamic>? _nextBookingWithin24h;
@@ -50,12 +48,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   void initState() {
     super.initState();
     _initData();
-    _notifTimer = Timer.periodic(const Duration(seconds: 30), (_) => _loadNotifications());
   }
 
   @override
   void dispose() {
-    _notifTimer?.cancel();
     super.dispose();
   }
 
@@ -76,7 +72,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         _loadCaregiverProfile(),
         _loadAvailability(),
         _loadBookings(),
-        _loadNotifications(),
         _loadDashboardStats(),
       ]);
       _computeDayStatuses();
@@ -618,231 +613,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
         );
       }
-    }
-  }
-
-  Future<void> _loadNotifications() async {
-    if (_caregiverToken.isEmpty) return;
-    try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/caregiver/notifications'),
-        headers: {'Authorization': 'Bearer $_caregiverToken'},
-      );
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        final notifs = (data['data'] as List).cast<Map<String, dynamic>>();
-        if (mounted) {
-          setState(() {
-            _notifications = notifs;
-            _unreadCount = notifs.where((n) => n['read'] == false).length;
-          });
-        }
-      }
-    } catch (_) {}
-  }
-
-  void _showNotificationsSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setSheetState) {
-          final isDark = themeNotifier.isDark;
-          final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-          final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-          final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-          final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-
-          return Container(
-            height: MediaQuery.of(context).size.height * 0.75,
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: Column(
-              children: [
-                // Handle
-                Container(
-                  width: 40, height: 4,
-                  margin: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: borderColor,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                // Header
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Notificaciones',
-                        style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
-                      if (_unreadCount > 0)
-                        TextButton(
-                          onPressed: () async {
-                            // Marcar todas como leídas
-                            for (final n in _notifications.where((n) => n['read'] == false)) {
-                              await http.patch(
-                                Uri.parse('$_baseUrl/caregiver/notifications/${n['id']}/read'),
-                                headers: {'Authorization': 'Bearer $_caregiverToken'},
-                              );
-                            }
-                            await _loadNotifications();
-                            setSheetState(() {});
-                          },
-                          child: const Text('Marcar todas leídas',
-                            style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
-                        ),
-                    ],
-                  ),
-                ),
-                Divider(height: 1, color: borderColor),
-                // Lista de notificaciones
-                Expanded(
-                  child: _notifications.isEmpty
-                    ? const GardenEmptyState(
-                        type: GardenEmptyType.notifications,
-                        title: 'Todo tranquilo por aquí',
-                        subtitle: 'Cuando recibas solicitudes de reserva o mensajes, aparecerán aquí.',
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        itemCount: _notifications.length,
-                        itemBuilder: (context, index) {
-                          final notif = _notifications[index];
-                          final isUnread = notif['read'] == false;
-                          return GestureDetector(
-                            onTap: () async {
-                              if (isUnread) {
-                                await http.patch(
-                                  Uri.parse('$_baseUrl/caregiver/notifications/${notif['id']}/read'),
-                                  headers: {'Authorization': 'Bearer $_caregiverToken'},
-                                );
-                                await _loadNotifications();
-                                setSheetState(() {});
-                              }
-                            },
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: isUnread 
-                                  ? GardenColors.primary.withOpacity(0.06)
-                                  : Colors.transparent,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: isUnread ? GardenColors.primary.withOpacity(0.2) : borderColor,
-                                ),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Ícono según tipo
-                                  Container(
-                                    width: 40, height: 40,
-                                    decoration: BoxDecoration(
-                                      color: _notifColor(notif['type'] as String? ?? '').withOpacity(0.12),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Icon(
-                                      _notifIcon(notif['type'] as String? ?? ''),
-                                      color: _notifColor(notif['type'] as String? ?? ''),
-                                      size: 20,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(notif['title'] as String? ?? '',
-                                                style: TextStyle(
-                                                  color: textColor,
-                                                  fontWeight: isUnread ? FontWeight.w700 : FontWeight.w500,
-                                                  fontSize: 14,
-                                                ),
-                                              ),
-                                            ),
-                                            if (isUnread)
-                                              Container(
-                                                width: 8, height: 8,
-                                                decoration: const BoxDecoration(
-                                                  color: GardenColors.primary,
-                                                  shape: BoxShape.circle,
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(notif['message'] as String? ?? '',
-                                          style: TextStyle(color: subtextColor, fontSize: 13, height: 1.4),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          _formatNotifDate(notif['createdAt'] as String? ?? ''),
-                                          style: TextStyle(color: subtextColor.withOpacity(0.7), fontSize: 11),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  IconData _notifIcon(String type) {
-    switch (type) {
-      case 'NEW_BOOKING': return Icons.calendar_today_outlined;
-      case 'BOOKING_CANCELLED': return Icons.cancel_outlined;
-      case 'PAYMENT_RECEIVED': return Icons.payments_outlined;
-      case 'REVIEW_RECEIVED': return Icons.star_outline_rounded;
-      case 'SYSTEM': return Icons.info_outline;
-      case 'PROFILE_APPROVED': return Icons.verified_outlined;
-      default: return Icons.notifications_outlined;
-    }
-  }
-
-  Color _notifColor(String type) {
-    switch (type) {
-      case 'NEW_BOOKING': return GardenColors.primary;
-      case 'BOOKING_CANCELLED': return GardenColors.error;
-      case 'PAYMENT_RECEIVED': return GardenColors.success;
-      case 'REVIEW_RECEIVED': return GardenColors.star;
-      case 'SYSTEM': return GardenColors.secondary;
-      case 'PROFILE_APPROVED': return GardenColors.success;
-      default: return GardenColors.secondary;
-    }
-  }
-
-  String _formatNotifDate(String isoDate) {
-    if (isoDate.isEmpty) return '';
-    try {
-      final date = DateTime.parse(isoDate).toLocal();
-      final now = DateTime.now();
-      final diff = now.difference(date);
-      if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes} min';
-      if (diff.inHours < 24) return 'Hace ${diff.inHours}h';
-      if (diff.inDays < 7) return 'Hace ${diff.inDays}d';
-      return '${date.day}/${date.month}/${date.year}';
-    } catch (_) {
-      return '';
     }
   }
 
@@ -2490,32 +2260,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 onPressed: () => context.push('/profile'),
                 tooltip: 'Mi perfil',
               ),
-              Stack(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.notifications_outlined, 
-                      color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
-                    onPressed: () => _showNotificationsSheet(),
-                  ),
-                  if (_unreadCount > 0)
-                    Positioned(
-                      right: 8, top: 8,
-                      child: Container(
-                        width: 16, height: 16,
-                        decoration: const BoxDecoration(
-                          color: GardenColors.error,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            _unreadCount > 9 ? '9+' : '$_unreadCount',
-                            style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                ],
+              NotificationBell(
+                token: _caregiverToken,
+                baseUrl: _baseUrl,
               ),
               IconButton(
                 icon: Icon(Icons.logout_outlined,

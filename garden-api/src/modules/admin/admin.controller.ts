@@ -333,3 +333,39 @@ export const toggleGiftCode = asyncHandler(async (req: Request, res: Response) =
   const updated = await prisma.giftCode.update({ where: { id }, data: { active: !gc.active } });
   res.json({ success: true, data: { active: updated.active } });
 });
+
+/** GET /api/admin/disputes — listar todas las disputas */
+export const getDisputes = asyncHandler(async (req: Request, res: Response) => {
+  const status = req.query.status as string | undefined;
+
+  const disputes = await prisma.dispute.findMany({
+    where: status ? { status } : {},
+    include: {
+      booking: {
+        include: {
+          client: { select: { firstName: true, lastName: true, email: true } },
+          caregiver: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  res.json({
+    success: true,
+    data: disputes.map((d: any) => ({
+      id: d.id,
+      bookingId: d.bookingId,
+      status: d.status,
+      clientReasons: d.clientReasons,
+      caregiverResponse: d.caregiverResponse,
+      aiVerdict: d.aiVerdict,
+      aiAnalysis: d.aiAnalysis,
+      resolution: d.resolution,
+      createdAt: d.createdAt,
+      clientName: `${d.booking.client.firstName} ${d.booking.client.lastName}`,
+      caregiverName: `${d.booking.caregiver.user.firstName} ${d.booking.caregiver.user.lastName}`,
+      amount: d.booking.totalAmount,
+    })),
+  });
+});

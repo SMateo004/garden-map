@@ -54,6 +54,7 @@ function formatDate(iso: string) {
 
 export function AdminCaregiversListPage() {
   const [statusFilter, setStatusFilter] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
 
   const { data, isLoading, isError, error } = useAdminCaregivers({
@@ -61,6 +62,12 @@ export function AdminCaregiversListPage() {
     page,
     limit: PAGE_SIZE,
   });
+
+  // Simple local search filter for the current page, or we could add search to the hook/API
+  const filteredCaregivers = data?.caregivers.filter(c => 
+    c.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.email.toLowerCase().includes(searchTerm.toLowerCase())
+  ) ?? [];
 
   if (isLoading) {
     return (
@@ -84,24 +91,31 @@ export function AdminCaregiversListPage() {
   }
 
   if (!data) return null;
-  const { caregivers, total } = data;
+  const { total } = data;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div className="py-6 px-4 max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-            Cuidadores
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Listado de Cuidadores
           </h1>
-          <Link
-            to="/admin/caregivers/pending"
-            className="text-sm text-green-600 dark:text-green-400 hover:underline mt-0.5 inline-block"
-          >
-            Ver solo pendientes de revisión
-          </Link>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Gestiona todos los cuidadores registrados en la plataforma.
+          </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+            <input
+              type="text"
+              placeholder="Buscar por nombre o email..."
+              className="pl-9 pr-4 py-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm focus:ring-2 focus:ring-green-500 outline-none w-64"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
           <label htmlFor="status-filter" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
             Estado:
           </label>
@@ -150,14 +164,14 @@ export function AdminCaregiversListPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-            {caregivers.length === 0 ? (
+            {filteredCaregivers.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                   No hay cuidadores con los filtros seleccionados.
                 </td>
               </tr>
             ) : (
-              caregivers.map((c) => (
+              filteredCaregivers.map((c) => (
                 <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                   <td className="px-4 py-3">
                     <Link
@@ -194,12 +208,12 @@ export function AdminCaregiversListPage() {
 
       {/* Mobile: cards */}
       <div className="md:hidden space-y-4">
-        {caregivers.length === 0 ? (
+        {filteredCaregivers.length === 0 ? (
           <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-8 text-center text-gray-500 dark:text-gray-400">
             No hay cuidadores con los filtros seleccionados.
           </div>
         ) : (
-          caregivers.map((c) => (
+          filteredCaregivers.map((c) => (
             <CaregiverCard key={c.id} caregiver={c} />
           ))
         )}

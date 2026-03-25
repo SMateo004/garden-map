@@ -30,14 +30,11 @@ export function AdminIdentityReviewsPage() {
 
   return (
     <div className="py-6 px-4 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-black text-gray-900 dark:text-white">Revisiones de Identidad</h1>
-        <button
-          onClick={() => navigate('/admin')}
-          className="text-sm text-green-600 dark:text-green-400 hover:underline"
-        >
-          ← Panel Admin
-        </button>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Revisiones de Identidad</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          Verifica manualmente las identidades marcadas por la IA para revisión.
+        </p>
       </div>
 
       {items.length === 0 ? (

@@ -59,6 +59,85 @@ router.get('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Requ
     });
 }));
 
+// POST /api/chat/:bookingId/messages - Enviar un mensaje
+router.post('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
+    const { bookingId } = req.params;
+    const userId = (req as any).user.userId;
+    const { message } = req.body;
+
+    if (!message || typeof message !== 'string' || !message.trim()) {
+        return res.status(400).json({ success: false, error: { message: 'El mensaje no puede estar vacío' } });
+    }
+
+    // Verificar acceso al booking y obtener roles
+    const booking = await prisma.booking.findFirst({
+        where: {
+            id: bookingId,
+            OR: [
+                { clientId: userId },
+                { caregiver: { userId } },
+            ],
+        },
+        include: {
+            caregiver: { select: { userId: true } },
+        },
+    });
+
+    if (!booking) {
+        return res.status(403).json({ success: false, error: { message: 'Sin acceso' } });
+    }
+
+    const isClient = booking.clientId === userId;
+    const senderRole = isClient ? 'CLIENT' : 'CAREGIVER';
+    const recipientId = isClient ? booking.caregiver.userId : booking.clientId;
+
+    // Crear el mensaje
+    const newMessage = await prisma.chatMessage.create({
+        data: {
+            bookingId,
+            senderId: userId,
+            senderRole,
+            message: message.trim(),
+        },
+        include: {
+            sender: { select: { id: true, firstName: true, lastName: true } },
+        },
+    });
+
+    // Si es el PRIMER mensaje del cuidador al cliente → notificación in-app
+    if (!isClient) {
+        const previousMessages = await prisma.chatMessage.count({
+            where: { bookingId, senderRole: 'CAREGIVER' },
+        });
+        if (previousMessages === 1) {
+            // Es el primer mensaje (acabamos de crear el único)
+            const senderName = `${newMessage.sender.firstName} ${newMessage.sender.lastName}`;
+            await prisma.notification.create({
+                data: {
+                    userId: recipientId,
+                    title: `${senderName} te envió un mensaje 💬`,
+                    message: `Tu cuidador se ha puesto en contacto contigo sobre la reserva de ${booking.petName}. Entra al chat para responder.`,
+                    type: 'CHAT_MESSAGE',
+                },
+            });
+        }
+    }
+
+    res.status(201).json({
+        success: true,
+        data: {
+            id: newMessage.id,
+            bookingId: newMessage.bookingId,
+            senderId: newMessage.senderId,
+            senderName: `${newMessage.sender.firstName} ${newMessage.sender.lastName}`,
+            senderRole: newMessage.senderRole,
+            message: newMessage.message,
+            read: newMessage.read,
+            createdAt: newMessage.createdAt.toISOString(),
+        },
+    });
+}));
+
 // GET /api/chat/unread-count - Contar mensajes no leídos
 router.get('/unread-count', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
     const userId = (req as any).user.userId;

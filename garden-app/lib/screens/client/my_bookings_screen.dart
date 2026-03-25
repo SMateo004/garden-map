@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
 import '../../theme/garden_theme.dart';
+import '../../widgets/notification_bell.dart';
 
 class MyBookingsScreen extends StatefulWidget {
   const MyBookingsScreen({super.key});
@@ -530,6 +531,10 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
             title: Text('Mis reservas', style: TextStyle(color: textColor, fontWeight: FontWeight.w900, fontSize: 18)),
             centerTitle: true,
             actions: [
+              NotificationBell(
+                token: _clientToken,
+                baseUrl: _baseUrl,
+              ),
               IconButton(
                 icon: Icon(Icons.refresh_rounded, color: textColor),
                 onPressed: _loadBookings,

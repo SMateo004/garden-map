@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../main.dart';
 import '../../theme/garden_theme.dart';
+import '../../widgets/notification_bell.dart';
 
 class MarketplaceScreen extends StatefulWidget {
   final String? initialService;
@@ -42,6 +42,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   String? _userPhoto;
   String? _userName;
   String _searchQuery = '';
+
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
   final TextEditingController _searchController = TextEditingController();
   Timer? _searchDebounce;
   final ScrollController _scrollController = ScrollController();
@@ -544,6 +546,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             ),
             actions: _authToken.isNotEmpty
                 ? [
+                    NotificationBell(
+                      token: _authToken,
+                      baseUrl: _baseUrl,
+                    ),
                     IconButton(
                       icon: Icon(Icons.list_alt_rounded, color: theme.colorScheme.onSurface),
                       onPressed: () => context.push('/my-bookings'),

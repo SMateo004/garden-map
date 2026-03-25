@@ -22,11 +22,16 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   List<Map<String, dynamic>> _withdrawals = [];
   List<Map<String, dynamic>> _reservations = [];
   List<Map<String, dynamic>> _giftCodes = [];
+  List<Map<String, dynamic>> _disputes = [];
   String _reservationsFilter = 'todas';
+  String _withdrawalsFilter = 'PENDING';
+  String _disputesFilter = '';
   bool _isLoading = true;
+  bool _isLoadingDisputes = false;
   String _adminToken = '';
-  String _caregiverStatusFilter = 'pendientes'; // 'pendientes', 'DRAFT', 'APPROVED', 'REJECTED', 'todos'
-
+  String _caregiverStatusFilter = 'pendientes';
+  final TextEditingController _caregiverSearchCtrl = TextEditingController();
+  final TextEditingController _reservationsSearchCtrl = TextEditingController();
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
 
@@ -51,6 +56,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     setState(() => _adminToken = token);
   }
 
+  @override
+  void dispose() {
+    _caregiverSearchCtrl.dispose();
+    _reservationsSearchCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadAllData() async {
     setState(() => _isLoading = true);
     try {
@@ -60,11 +72,29 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         _loadWithdrawals(),
         _loadReservations(),
         _loadGiftCodes(),
+        _loadDisputes(),
       ]);
     } catch (e) {
       debugPrint('Error loading admin data: $e');
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadDisputes() async {
+    setState(() => _isLoadingDisputes = true);
+    try {
+      String url = '$_baseUrl/admin/disputes';
+      if (_disputesFilter.isNotEmpty) url += '?status=$_disputesFilter';
+      final response = await http.get(Uri.parse(url), headers: {'Authorization': 'Bearer $_adminToken'});
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        setState(() => _disputes = (data['data'] as List).cast<Map<String, dynamic>>());
+      }
+    } catch (e) {
+      debugPrint('Error loading disputes: $e');
+    } finally {
+      setState(() => _isLoadingDisputes = false);
     }
   }
 
@@ -191,10 +221,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
   Future<void> _loadWithdrawals() async {
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/admin/withdrawals'),
-        headers: {'Authorization': 'Bearer $_adminToken'},
-      );
+      String url = '$_baseUrl/admin/withdrawals?status=$_withdrawalsFilter';
+      final response = await http.get(Uri.parse(url), headers: {'Authorization': 'Bearer $_adminToken'});
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         setState(() => _withdrawals = (data['data']['withdrawals'] as List).cast<Map<String, dynamic>>());
@@ -328,6 +356,58 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     }
   }
 
+  Future<void> _approveIdentity(String sessionId) async {
+    try {
+      final response = await http.post(Uri.parse('$_baseUrl/admin/verifications/$sessionId/approve'), headers: {'Authorization': 'Bearer $_adminToken'});
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadIdentityReviews();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Identidad aprobada'), backgroundColor: GardenColors.success));
+      } else { throw Exception(data['error']?['message'] ?? 'Error'); }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error));
+    }
+  }
+
+  Future<void> _rejectIdentity(String sessionId) async {
+    try {
+      final response = await http.post(Uri.parse('$_baseUrl/admin/verifications/$sessionId/reject'), headers: {'Authorization': 'Bearer $_adminToken'});
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadIdentityReviews();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ Identidad rechazada'), backgroundColor: GardenColors.error));
+      } else { throw Exception(data['error']?['message'] ?? 'Error'); }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error));
+    }
+  }
+
+  Future<void> _suspendCaregiver(String id) async {
+    final reasonCtrl = TextEditingController();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: themeNotifier.isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+        title: const Text('Suspender cuidador'),
+        content: TextField(controller: reasonCtrl, decoration: const InputDecoration(hintText: 'Motivo de suspensión'), style: TextStyle(color: themeNotifier.isDark ? Colors.white : Colors.black)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: GardenColors.warning), onPressed: () => Navigator.pop(ctx, true), child: const Text('Suspender', style: TextStyle(color: Colors.white))),
+        ],
+      ),
+    );
+    if (confirm == true && reasonCtrl.text.trim().isNotEmpty) {
+      try {
+        final response = await http.patch(Uri.parse('$_baseUrl/admin/caregivers/$id/suspend'), headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'}, body: jsonEncode({'reason': reasonCtrl.text.trim()}));
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          await _loadCaregivers();
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cuidador suspendido'), backgroundColor: GardenColors.warning));
+        }
+      } catch (e) { debugPrint(e.toString()); }
+    }
+  }
+
   Widget _idBadge(String label, String value) {
     final isDark = themeNotifier.isDark;
     return Container(
@@ -425,11 +505,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   index: _selectedTab,
                   children: [
                     _buildCaregiversList(surface, textColor, subtextColor, borderColor),
-                    _buildIdentityList(surface, textColor, subtextColor, borderColor),
-                    _buildDisputasPlaceholder(surface, textColor, subtextColor, borderColor),
-                    _buildPaymentsTab(),
-                    _buildWithdrawalsTab(surface, textColor, subtextColor, borderColor),
+                    _buildRequestsTab(surface, textColor, subtextColor, borderColor),
                     _buildReservationsTab(surface, textColor, subtextColor, borderColor),
+                    _buildPaymentsTab(),
+                    _buildIdentityList(surface, textColor, subtextColor, borderColor),
+                    _buildDisputesTab(surface, textColor, subtextColor, borderColor),
+                    _buildWithdrawalsTab(surface, textColor, subtextColor, borderColor),
                     _buildGiftCodesTab(surface, textColor, subtextColor, borderColor),
                   ],
                 ),
@@ -443,29 +524,31 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
   Widget _buildTabBar(Color surface, Color textColor, Color subtextColor, Color borderColor, bool isDark) {
     final tabs = [
-      ('Cuidadores', Icons.add),
+      ('Cuidadores', Icons.person_search_rounded),
+      ('Solicitudes', Icons.pending_actions_rounded),
+      ('Reservas', Icons.calendar_month_outlined),
+      ('Pagos', Icons.price_check_rounded),
       ('Identidad', Icons.verified_user_outlined),
       ('Disputas', Icons.gavel_rounded),
-      ('Pagos', Icons.price_check_rounded),
       ('Retiros', Icons.account_balance_rounded),
-      ('Reservas', Icons.calendar_month_outlined),
       ('Códigos', Icons.card_giftcard_outlined),
     ];
     return Container(
       color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: Row(
-        children: tabs.asMap().entries.map((entry) {
-          final i = entry.key;
-          final tab = entry.value;
-          final selected = _selectedTab == i;
-          return Expanded(
-            child: GestureDetector(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: tabs.asMap().entries.map((entry) {
+            final i = entry.key;
+            final tab = entry.value;
+            final selected = _selectedTab == i;
+            return GestureDetector(
               onTap: () => setState(() => _selectedTab = i),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                margin: EdgeInsets.only(right: i < tabs.length - 1 ? 8 : 0),
-                padding: const EdgeInsets.symmetric(vertical: 10),
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
                 decoration: BoxDecoration(
                   color: selected ? GardenColors.primary : Colors.transparent,
                   borderRadius: BorderRadius.circular(10),
@@ -474,21 +557,22 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   ),
                 ),
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(tab.$2, size: 14, color: selected ? Colors.white : subtextColor),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 8),
                     Text(tab.$1, style: TextStyle(
                       color: selected ? Colors.white : subtextColor,
                       fontSize: 12,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                      fontWeight: selected ? FontWeight.bold : FontWeight.w400,
                     )),
                   ],
                 ),
               ),
-            ),
-          );
-        }).toList(),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
@@ -509,29 +593,130 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   }
 
   Widget _buildCaregiversList(Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    // Filtrar localmente por búsqueda
+    final filtered = _caregivers.where((c) {
+      final query = _caregiverSearchCtrl.text.toLowerCase();
+      if (query.isEmpty) return true;
+      return (c['fullName'] as String? ?? '').toLowerCase().contains(query) ||
+             (c['email'] as String? ?? '').toLowerCase().contains(query);
+    }).toList();
+
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: TextField(
+            controller: _caregiverSearchCtrl,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: 'Buscar por nombre o email...',
+              prefixIcon: const Icon(Icons.search, size: 20),
+              isDense: true,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
         _buildCaregiverStatusFilter(subtextColor, borderColor),
         Expanded(
           child: _isLoading 
             ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
-            : _caregivers.isEmpty
+            : filtered.isEmpty
               ? const GardenEmptyState(
                   type: GardenEmptyType.caregivers,
                   title: 'Sin cuidadores aquí',
-                  subtitle: 'No hay cuidadores con este estado por el momento.',
+                  subtitle: 'No hay cuidadores con este filtro por el momento.',
                   compact: true,
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: _caregivers.length,
+                  padding: const EdgeInsets.only(bottom: 16),
+                  itemCount: filtered.length,
                   itemBuilder: (context, index) {
-                    final caregiver = _caregivers[index];
+                    final caregiver = filtered[index];
                     return _buildCaregiverCard(caregiver, surface, textColor, subtextColor, borderColor);
                   },
                 ),
         ),
+        _buildHistoryLog('Cuidadores Aprobados Recientemente', 
+          _caregivers.where((c) => c['status'] == 'APPROVED').take(5).map((c) => 
+            '${c['fullName']} aprobado el ${c['updatedAt'] ?? 'recientemente'}'
+          ).toList(),
+          subtextColor, borderColor
+        ),
       ],
+    );
+  }
+
+  Widget _buildRequestsTab(Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    final pending = _caregivers.where((c) => 
+      c['status'] == 'PENDING_REVIEW' || c['status'] == 'DRAFT' || c['status'] == 'NEEDS_REVISION'
+    ).toList();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Text('Solicitudes pendientes: ', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                decoration: BoxDecoration(color: GardenColors.warning, borderRadius: BorderRadius.circular(10)),
+                child: Text('${pending.length}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: pending.isEmpty
+            ? const GardenEmptyState(
+                type: GardenEmptyType.caregivers,
+                title: 'No hay solicitudes',
+                subtitle: 'No hay cuidadores esperando aprobación en este momento.',
+                compact: true,
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.only(bottom: 16),
+                itemCount: pending.length,
+                itemBuilder: (context, index) {
+                  return _buildCaregiverCard(pending[index], surface, textColor, subtextColor, borderColor);
+                },
+              ),
+        ),
+        _buildHistoryLog('Cuidadores Aprobados Recientemente', 
+          _caregivers.where((c) => c['status'] == 'APPROVED').take(5).map((c) => 
+            '${c['fullName']} aprobado el ${c['updatedAt'] ?? 'recientemente'}'
+          ).toList(),
+          subtextColor, borderColor
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHistoryLog(String title, List<String> logs, Color subtextColor, Color borderColor) {
+    if (logs.isEmpty) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border(top: Border.all(color: borderColor).top),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.history, size: 14, color: GardenColors.primary),
+              const SizedBox(width: 6),
+              Text(title, style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...logs.map((log) => Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text('• $log', style: TextStyle(color: subtextColor.withOpacity(0.8), fontSize: 10)),
+          )),
+        ],
+      ),
     );
   }
 
@@ -585,6 +770,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   Widget _buildCaregiverCard(Map<String, dynamic> caregiver, Color surface, Color textColor, Color subtextColor, Color borderColor) {
     final status = caregiver['status'] as String? ?? '';
     final canReview = status == 'PENDING_REVIEW' || status == 'NEEDS_REVISION' || status == 'DRAFT';
+    final isApproved = status == 'APPROVED';
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -616,10 +802,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               _statusBadge(status),
             ],
           ),
-          if (canReview) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              if (canReview) ...[
                 Expanded(
                   child: GardenButton(
                     label: 'Aprobar',
@@ -640,13 +826,118 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     onPressed: () => _reviewCaregiver(caregiver['id'] as String, 'reject'),
                   ),
                 ),
+              ] else if (isApproved) ...[
+                Expanded(
+                  child: GardenButton(
+                    label: 'Suspender',
+                    icon: Icons.block,
+                    height: 38,
+                    color: GardenColors.warning,
+                    outline: true,
+                    onPressed: () => _suspendCaregiver(caregiver['id'] as String),
+                  ),
+                ),
               ],
-            ),
-          ],
+              const SizedBox(width: 10),
+               GardenButton(
+                label: '',
+                icon: Icons.visibility_outlined,
+                width: 50,
+                height: 38,
+                outline: true,
+                onPressed: () => _showCaregiverProfile(caregiver),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
+
+  void _showCaregiverProfile(Map<String, dynamic> caregiver) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.85,
+        decoration: BoxDecoration(
+          color: themeNotifier.isDark ? GardenColors.darkSurface : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            Container(margin: const EdgeInsets.symmetric(vertical: 12), width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        GardenAvatar(imageUrl: null, size: 80, initials: (caregiver['fullName'] as String? ?? 'C').substring(0,1)),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(caregiver['fullName'] ?? '—', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                              Text(caregiver['email'] ?? '—', style: const TextStyle(color: Colors.grey)),
+                              const SizedBox(height: 8),
+                              _statusBadge(caregiver['status'] ?? ''),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                    _profileDetailItem('Biografía', caregiver['bio'] ?? 'Sin biografía proporcionada.'),
+                    _profileDetailItem('Ubicación', caregiver['address'] ?? 'No especificada'),
+                    _profileDetailItem('Experiencia', caregiver['experience'] ?? 'Sin datos'),
+                    _profileDetailItem('ID de Usuario', caregiver['id']),
+                    const SizedBox(height: 32),
+                    const Text('REQUISITOS', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1, fontSize: 13, color: GardenColors.primary)),
+                    const SizedBox(height: 12),
+                    _profileCheckItem('Identidad Verificada', caregiver['isIdentityVerified'] == true),
+                    _profileCheckItem('Perfil Completo', caregiver['isProfileComplete'] == true),
+                    _profileCheckItem('Términos Aceptados', true),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: GardenButton(label: 'Cerrar', height: 48, onPressed: () => Navigator.pop(context)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _profileDetailItem(String label, String value) => Padding(
+    padding: const EdgeInsets.only(bottom: 20),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+        const SizedBox(height: 4),
+        Text(value, style: const TextStyle(fontSize: 15)),
+      ],
+    ),
+  );
+
+  Widget _profileCheckItem(String label, bool checked) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Row(
+      children: [
+        Icon(checked ? Icons.check_circle : Icons.error_outline, size: 18, color: checked ? GardenColors.success : GardenColors.error),
+        const SizedBox(width: 10),
+        Text(label, style: const TextStyle(fontSize: 14)),
+      ],
+    ),
+  );
 
   Widget _buildIdentityList(Color surface, Color textColor, Color subtextColor, Color borderColor) {
     if (_isLoading) return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
@@ -664,6 +955,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       itemCount: _identityReviews.length,
       itemBuilder: (context, index) {
         final review = _identityReviews[index];
+        final user = review['user'] as Map<String, dynamic>? ?? {};
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           padding: const EdgeInsets.all(16),
@@ -672,33 +964,68 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: borderColor),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Column(
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      review['fullName'] ?? 'Usuario',
-                      style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim(),
+                          style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 15),
+                        ),
+                        Text(
+                          user['email'] ?? '—',
+                          style: TextStyle(color: subtextColor, fontSize: 12),
+                        ),
+                        Text(
+                          'Similitud: ${review['similarity'] != null ? '${(review['similarity'] as num).round()}%' : 'N/A'}',
+                          style: TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
-                    Text(
-                      'Estado: ${review['status']}',
-                      style: TextStyle(color: subtextColor, fontSize: 12),
-                    ),
-                  ],
-                ),
+                  ),
+                  _statusBadge(review['status'] ?? ''),
+                ],
               ),
-              GardenButton(
-                label: 'Revisar',
-                width: 100,
-                height: 38,
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Módulo de verificación facial próximamente')),
-                  );
-                },
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: GardenButton(
+                      label: 'Aprobar',
+                      icon: Icons.check,
+                      height: 36,
+                      color: GardenColors.success,
+                      onPressed: () => _approveIdentity(review['id'] as String),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: GardenButton(
+                      label: 'Rechazar',
+                      icon: Icons.close,
+                      height: 36,
+                      color: GardenColors.error,
+                      outline: true,
+                      onPressed: () => _rejectIdentity(review['id'] as String),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GardenButton(
+                    label: '',
+                    icon: Icons.image_outlined,
+                    width: 50,
+                    height: 36,
+                    outline: true,
+                    onPressed: () {
+                       context.push('/admin/identity-reviews/${review['id']}');
+                    },
+                  ),
+                ],
               ),
             ],
           ),
@@ -707,97 +1034,107 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     );
   }
 
-  Widget _buildDisputasPlaceholder(Color surface, Color textColor, Color subtextColor, Color borderColor) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: borderColor),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 40, height: 40,
-                      decoration: BoxDecoration(
-                        color: GardenColors.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.gavel_outlined, color: GardenColors.primary, size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Panel de Disputas', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 16)),
-                          Text('Análisis con GARDEN IA', style: TextStyle(color: subtextColor, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                    const GardenBadge(text: 'IA Activa', color: GardenColors.primary, icon: Icons.auto_awesome_outlined, fontSize: 11),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                if (_adminToken.isEmpty)
-                  const Center(child: CircularProgressIndicator(color: GardenColors.primary))
-                else
-                  DisputaPanelCard(
-                    reservaId: 'DISP-7721',
-                    motivoDisputa: 'El cuidador no se presentó a tiempo para el paseo de la tarde y no respondió mensajes por 2 horas.',
-                    reserva: const {
-                      'id': 'DISP-7721',
-                      'fechas': '14-15 Marzo 2026',
-                      'monto': 220,
-                      'estado': 'completado',
-                    },
-                    cuidador: const {
-                      'id': 'caregiver_01',
-                      'nombre': 'Sai Mateo Vargas',
-                      'rating_promedio': 4.9,
-                      'disputas_previas': 0,
-                      'tiempo_en_plataforma': '6 meses',
-                    },
-                    dueno: const {
-                      'id': 'owner_01',
-                      'nombre': 'Leo Messi',
-                      'rating_promedio': 4.5,
-                      'disputas_previas': 1,
-                      'tiempo_en_plataforma': '3 meses',
-                    },
-                    mascota: const {
-                      'nombre': 'Pulga',
-                      'raza': 'Dálmata',
-                      'edad': '2 años',
-                      'condiciones_medicas': 'Ninguna',
-                    },
-                    mensajesRelevantes: const [
-                      '14 Mar 15:00 - Dueño: ¿Dónde estás? Ya son las 3pm.',
-                      '14 Mar 15:45 - Dueño: No contestas, voy a cancelar.',
-                      '14 Mar 17:00 - Cuidador: Perdón, tuve un imprevisto.',
-                    ],
-                    agentesService: AgentesService(authToken: _adminToken),
-                    onVeredictAplicado: (veredicto) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Veredicto aplicado: $veredicto'),
-                          backgroundColor: GardenColors.primary,
-                        ),
-                      );
-                    },
+  Widget _buildDisputesTab(Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    final filters = [
+      ('Todas', ''),
+      ('Pentientes', 'PENDING_CAREGIVER'),
+      ('Análisis IA', 'PENDING_AI'),
+      ('Resueltas', 'RESOLVED'),
+    ];
+
+    return Column(
+      children: [
+        Container(
+          height: 40,
+          margin: const EdgeInsets.symmetric(vertical: 12),
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: filters.length,
+            itemBuilder: (context, i) {
+              final f = filters[i];
+              final selected = _disputesFilter == f.$2;
+              return GestureDetector(
+                onTap: () {
+                  setState(() => _disputesFilter = f.$2);
+                  _loadDisputes();
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: selected ? GardenColors.primary.withOpacity(0.1) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: selected ? GardenColors.primary : borderColor),
                   ),
-              ],
-            ),
+                  child: Text(
+                    f.$1,
+                    style: TextStyle(
+                      color: selected ? GardenColors.primary : subtextColor,
+                      fontSize: 12,
+                      fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
-        ],
-      ),
+        ),
+        Expanded(
+          child: _isLoadingDisputes
+              ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+              : _disputes.isEmpty
+                  ? const GardenEmptyState(
+                      type: GardenEmptyType.bookings,
+                      title: 'Sin disputas',
+                      subtitle: 'No hay disputas registradas en este estado.',
+                      compact: true,
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      itemCount: _disputes.length,
+                      itemBuilder: (context, index) {
+                        final d = _disputes[index];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          child: DisputaPanelCard(
+                            reservaId: (d['bookingId'] as String? ?? '').substring(0, 8),
+                            motivoDisputa: (d['clientReasons'] as List? ?? []).join(', '),
+                            reserva: {
+                              'id': d['bookingId'],
+                              'monto': d['amount'],
+                              'estado': d['status'],
+                            },
+                            cuidador: {
+                              'nombre': d['caregiverName'],
+                              'respuesta': d['caregiverResponse'],
+                            },
+                            dueno: {
+                              'nombre': d['clientName'],
+                            },
+                            mascota: const {
+                              'nombre': 'Mascota',
+                            },
+                            mensajesRelevantes: const [],
+                            agentesService: AgentesService(authToken: _adminToken),
+                            onVeredictAplicado: (veredicto) {
+                              _loadDisputes();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Veredicto aplicado: $veredicto')),
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    ),
+        ),
+        _buildHistoryLog('Historial de Decisiones (IA)', 
+          _disputes.where((d) => d['status'] == 'RESOLVED').take(3).map((d) => 
+            'Disputa ${d['bookingId'].toString().substring(0,5)} resuelta a favor de ${d['verdict'] ?? 'revisión'}'
+          ).toList(),
+          subtextColor, borderColor
+        ),
+      ],
     );
   }
 
@@ -969,98 +1306,146 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   }
 
   Widget _buildWithdrawalsTab(Color surface, Color textColor, Color subtextColor, Color borderColor) {
-    if (_isLoading) return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
-    if (_withdrawals.isEmpty) {
-      return const GardenEmptyState(
-        type: GardenEmptyType.withdrawals,
-        title: 'Sin retiros pendientes',
-        subtitle: 'Cuando los cuidadores soliciten retiros, aparecerán aquí para aprobación.',
-        compact: true,
-      );
-    }
+    final filters = [
+      ('Pendientes', 'PENDING'),
+      ('Procesando', 'PROCESSING'),
+      ('Completados', 'COMPLETED'),
+      ('Rechazados', 'REJECTED'),
+    ];
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _withdrawals.length,
-      itemBuilder: (context, index) {
-        final w = _withdrawals[index];
-        final user = w['user'] as Map<String, dynamic>;
-        final profile = user['caregiverProfile'] as Map<String, dynamic>? ?? {};
-        final status = w['status'] as String;
-        final isPending = status == 'PENDING';
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: borderColor),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('${user['firstName']} ${user['lastName']}',
-                        style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
-                      Text(user['email'] as String, style: TextStyle(color: subtextColor, fontSize: 12)),
-                    ],
+    return Column(
+      children: [
+        Container(
+          height: 40,
+          margin: const EdgeInsets.symmetric(vertical: 12),
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: filters.length,
+            itemBuilder: (context, i) {
+              final f = filters[i];
+              final selected = _withdrawalsFilter == f.$2;
+              return GestureDetector(
+                onTap: () {
+                  setState(() => _withdrawalsFilter = f.$2);
+                  _loadWithdrawals();
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: selected ? GardenColors.primary.withOpacity(0.1) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: selected ? GardenColors.primary : borderColor),
                   ),
-                  Text('Bs ${w['amount']}',
-                    style: TextStyle(color: status == 'PROCESSING' ? GardenColors.warning : GardenColors.primary, fontWeight: FontWeight.w800, fontSize: 18)),
-                ],
-              ),
-              const Divider(height: 24),
-              Text('DATOS BANCARIOS', style: TextStyle(color: subtextColor, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
-              const SizedBox(height: 8),
-              Text(profile['bankName'] ?? '—', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
-              Text('Cuenta: ${profile['bankAccount'] ?? '—'} (${profile['bankType'] ?? '—'})', style: TextStyle(color: textColor, fontSize: 13)),
-              Text('Titular: ${profile['bankHolder'] ?? '—'}', style: TextStyle(color: textColor, fontSize: 13)),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  if (isPending) ...[
-                    Expanded(
-                      child: GardenButton(
-                        label: 'Procesar',
-                        height: 38,
-                        color: GardenColors.warning,
-                        onPressed: () => _processWithdrawal(w['id'] as String),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  if (status == 'PROCESSING') ...[
-                    Expanded(
-                      child: GardenButton(
-                        label: 'Completar Pago',
-                        height: 38,
-                        color: GardenColors.success,
-                        onPressed: () => _completeWithdrawal(w['id'] as String),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  Expanded(
-                    child: GardenButton(
-                      label: 'Rechazar',
-                      height: 38,
-                      color: GardenColors.error,
-                      outline: true,
-                      onPressed: () => _rejectWithdrawal(w['id'] as String),
+                  child: Text(
+                    f.$1,
+                    style: TextStyle(
+                      color: selected ? GardenColors.primary : subtextColor,
+                      fontSize: 12,
+                      fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                     ),
                   ),
-                ],
-              ),
-            ],
+                ),
+              );
+            },
           ),
-        );
-      },
+        ),
+        Expanded(
+          child: _isLoading 
+            ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+            : _withdrawals.isEmpty
+              ? const GardenEmptyState(
+                  type: GardenEmptyType.withdrawals,
+                  title: 'Sin retiros aquí',
+                  subtitle: 'No hay retiros con este estado por el momento.',
+                  compact: true,
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _withdrawals.length,
+                  itemBuilder: (context, index) {
+                    final w = _withdrawals[index];
+                    final user = w['user'] as Map<String, dynamic>;
+                    final profile = user['caregiverProfile'] as Map<String, dynamic>? ?? {};
+                    final status = w['status'] as String;
+                    final isPending = status == 'PENDING';
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: surface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('${user['firstName']} ${user['lastName']}',
+                                    style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                                  Text(user['email'] as String, style: TextStyle(color: subtextColor, fontSize: 12)),
+                                ],
+                              ),
+                              Text('Bs ${w['amount']}',
+                                style: TextStyle(color: status == 'PROCESSING' ? GardenColors.warning : GardenColors.primary, fontWeight: FontWeight.w800, fontSize: 18)),
+                            ],
+                          ),
+                          const Divider(height: 24),
+                          Text('DATOS BANCARIOS', style: TextStyle(color: subtextColor, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
+                          const SizedBox(height: 8),
+                          Text(profile['bankName'] ?? '—', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
+                          Text('Cuenta: ${profile['bankAccount'] ?? '—'} (${profile['bankType'] ?? '—'})', style: TextStyle(color: textColor, fontSize: 13)),
+                          Text('Titular: ${profile['bankHolder'] ?? '—'}', style: TextStyle(color: textColor, fontSize: 13)),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              if (isPending) ...[
+                                Expanded(
+                                  child: GardenButton(
+                                    label: 'Procesar',
+                                    height: 38,
+                                    color: GardenColors.warning,
+                                    onPressed: () => _processWithdrawal(w['id'] as String),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                              ],
+                              if (status == 'PROCESSING') ...[
+                                Expanded(
+                                  child: GardenButton(
+                                    label: 'Completar Pago',
+                                    height: 38,
+                                    color: GardenColors.success,
+                                    onPressed: () => _completeWithdrawal(w['id'] as String),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                              ],
+                              Expanded(
+                                child: GardenButton(
+                                  label: 'Rechazar',
+                                  height: 38,
+                                  color: GardenColors.error,
+                                  outline: true,
+                                  onPressed: () => _rejectWithdrawal(w['id'] as String),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 
@@ -1091,15 +1476,34 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       _              => GardenColors.warning,
     };
 
-    final filtered = _reservationsFilter == 'todas'
-        ? _reservations
-        : _reservations.where((r) => r['status'] == _reservationsFilter).toList();
+    final filtered = _reservations.where((r) {
+      final query = _reservationsSearchCtrl.text.toLowerCase();
+      final statusMatch = _reservationsFilter == 'todas' || r['status'] == _reservationsFilter;
+      if (!statusMatch) return false;
+      if (query.isEmpty) return true;
+      return (r['clientEmail'] as String? ?? '').toLowerCase().contains(query) ||
+             (r['caregiverName'] as String? ?? '').toLowerCase().contains(query) ||
+             (r['petName'] as String? ?? '').toLowerCase().contains(query);
+    }).toList();
 
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: TextField(
+            controller: _reservationsSearchCtrl,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: 'Buscar por cliente, cuidador o mascota...',
+              prefixIcon: const Icon(Icons.search, size: 20),
+              isDense: true,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
         Container(
           color: surface,
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(

@@ -35,6 +35,10 @@ import { AdminCaregiverReviewPage } from '@/pages/admin/AdminCaregiverReviewPage
 import { AdminVerificationPage } from '@/pages/admin/AdminVerificationPage';
 import { AdminIdentityReviewsPage } from '@/pages/admin/AdminIdentityReviewsPage';
 import { AdminAuthPage } from '@/pages/admin/AdminAuthPage';
+import { AdminLayout } from '@/components/admin/AdminLayout';
+import { AdminDisputesPage } from '@/pages/admin/AdminDisputesPage';
+import { AdminWithdrawalsPage } from '@/pages/admin/AdminWithdrawalsPage';
+import { AdminGiftCodesPage } from '@/pages/admin/AdminGiftCodesPage';
 import { ClientProfileCompletePage } from '@/pages/ClientProfileCompletePage';
 import { ClientProfilePage } from '@/pages/ClientProfilePage';
 import { ClientReservationsPage } from '@/pages/ClientReservationsPage';
@@ -314,69 +318,26 @@ export default function App() {
               }
             />
             <Route
-              path="/admin/caregivers/pending"
+              path="/admin"
               element={
                 <AdminRoute>
-                  <AdminPendingPage />
+                  <AdminLayout />
                 </AdminRoute>
               }
-            />
-            <Route
-              path="/admin/payments-pending"
-              element={
-                <AdminRoute>
-                  <AdminPaymentsPendingPage />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/admin/reservations"
-              element={
-                <AdminRoute>
-                  <AdminReservationsPage />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/admin/caregivers/:id/review"
-              element={
-                <AdminRoute>
-                  <AdminCaregiverReviewPage />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/admin/verification/:id"
-              element={
-                <AdminRoute>
-                  <AdminVerificationPage />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/admin/identity-reviews"
-              element={
-                <AdminRoute>
-                  <AdminIdentityReviewsPage />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/admin/identity-reviews/:id"
-              element={
-                <AdminRoute>
-                  <AdminVerificationPage />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/admin/caregivers"
-              element={
-                <AdminRoute>
-                  <AdminCaregiversListPage />
-                </AdminRoute>
-              }
-            />
+            >
+              <Route index element={<Navigate to="/admin/caregivers" replace />} />
+              <Route path="caregivers" element={<AdminCaregiversListPage />} />
+              <Route path="caregivers/pending" element={<AdminPendingPage />} />
+              <Route path="payments-pending" element={<AdminPaymentsPendingPage />} />
+              <Route path="reservations" element={<AdminReservationsPage />} />
+              <Route path="caregivers/:id/review" element={<AdminCaregiverReviewPage />} />
+              <Route path="verification/:id" element={<AdminVerificationPage />} />
+              <Route path="identity-reviews" element={<AdminIdentityReviewsPage />} />
+              <Route path="identity-reviews/:id" element={<AdminVerificationPage />} />
+              <Route path="disputes" element={<AdminDisputesPage />} />
+              <Route path="withdrawals" element={<AdminWithdrawalsPage />} />
+              <Route path="gift-codes" element={<AdminGiftCodesPage />} />
+            </Route>
           </Routes>
         </main>
       </div>

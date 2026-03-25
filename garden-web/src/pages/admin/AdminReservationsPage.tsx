@@ -23,6 +23,7 @@ function formatDate(d: string | null | undefined): string {
 
 export function AdminReservationsPage() {
   const [statusFilter, setStatusFilter] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin', 'reservations', statusFilter || undefined],
     queryFn: () => getAdminReservations(statusFilter || undefined),
@@ -49,20 +50,31 @@ export function AdminReservationsPage() {
     );
   }
 
-  const reservations = data?.reservations ?? [];
+  const reservations = (data?.reservations ?? []).filter(r => 
+    r.petName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.clientEmail?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.caregiverName?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <Link to="/admin/caregivers" className="text-sm font-medium text-slate-600 hover:text-slate-900">
-            ← Panel admin
-          </Link>
-          <h1 className="mt-2 text-2xl font-semibold text-slate-900">Reservas</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Todas las reservas. Las cancelaciones son automáticas y definitivas.
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Reservas</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Listado global de todas las reservas y su estado actual.
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+            <input
+              type="text"
+              placeholder="Mascota, cliente o cuidador..."
+              className="pl-9 pr-4 py-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm focus:ring-2 focus:ring-green-500 outline-none w-64"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
         <label className="flex items-center gap-2">
           <span className="text-sm font-medium text-slate-700">Estado:</span>
           <select

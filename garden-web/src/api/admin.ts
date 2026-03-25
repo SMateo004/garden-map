@@ -404,3 +404,113 @@ export async function rejectIdentityVerification(sessionId: string): Promise<{ s
   const res = await api.post<{ success: boolean }>(`/api/admin/verifications/${sessionId}/reject`);
   return res.data;
 }
+
+// ---------------------------------------------------------------------------
+// Disputas (Agente de IA)
+// ---------------------------------------------------------------------------
+
+export interface AdminDisputeItem {
+  id: string;
+  bookingId: string;
+  status: string;
+  clientReasons: string[];
+  caregiverResponse: string[];
+  aiVerdict?: string;
+  aiAnalysis?: string;
+  resolution?: string;
+  createdAt: string;
+  clientName: string;
+  caregiverName: string;
+  amount: number | string;
+}
+
+export async function getAdminDisputes(status?: string): Promise<AdminDisputeItem[]> {
+  const res = await api.get<{ success: boolean; data: AdminDisputeItem[] }>(
+    '/api/admin/disputes',
+    { params: { status } }
+  );
+  if (!res.data.success) throw new Error('Error al cargar disputas');
+  return res.data.data ?? [];
+}
+
+// ---------------------------------------------------------------------------
+// Retiros (Withdrawals)
+// ---------------------------------------------------------------------------
+
+export interface WithdrawalItem {
+  id: string;
+  userId: string;
+  amount: number | string;
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'REJECTED';
+  description: string;
+  createdAt: string;
+  user: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    caregiverProfile?: {
+      bankName: string;
+      bankAccount: string;
+      bankHolder: string;
+      bankType: string;
+      balance: number;
+    }
+  }
+}
+
+export async function getWithdrawals(status?: string): Promise<WithdrawalItem[]> {
+  const res = await api.get<{ success: boolean; data: { withdrawals: WithdrawalItem[] } }>(
+    '/api/admin/withdrawals',
+    { params: { status } }
+  );
+  if (!res.data.success) throw new Error('Error al cargar retiros');
+  return res.data.data.withdrawals ?? [];
+}
+
+export async function processWithdrawal(id: string): Promise<void> {
+  await api.patch(`/api/admin/withdrawals/${id}/process`);
+}
+
+export async function completeWithdrawal(id: string): Promise<void> {
+  await api.patch(`/api/admin/withdrawals/${id}/complete`);
+}
+
+export async function rejectWithdrawal(id: string, reason: string): Promise<void> {
+  await api.patch(`/api/admin/withdrawals/${id}/reject`, { reason });
+}
+
+// ---------------------------------------------------------------------------
+// Códigos de regalo (Gift Codes)
+// ---------------------------------------------------------------------------
+
+export interface GiftCodeItem {
+  id: string;
+  code: string;
+  amount: number;
+  usedCount: number;
+  maxUses: number;
+  expiresAt: string | null;
+  active: boolean;
+  createdAt: string;
+}
+
+export async function getGiftCodes(): Promise<GiftCodeItem[]> {
+  const res = await api.get<{ success: boolean; data: GiftCodeItem[] }>(
+    '/api/admin/gift-codes'
+  );
+  if (!res.data.success) throw new Error('Error al cargar códigos');
+  return res.data.data ?? [];
+}
+
+export async function createGiftCode(data: {
+  code: string;
+  amount: number;
+  maxUses?: number;
+  expiresAt?: string;
+}): Promise<void> {
+  await api.post('/api/admin/gift-codes', data);
+}
+
+export async function toggleGiftCode(id: string): Promise<void> {
+  await api.patch(`/api/admin/gift-codes/${id}/toggle`);
+}

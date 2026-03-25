@@ -73,16 +73,13 @@ export function AdminPendingPage() {
 
   return (
     <div className="py-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-          Solicitudes de cuidadores
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          Solicitudes de Cuidadores
         </h1>
-        <Link
-          to="/"
-          className="text-sm text-green-600 hover:text-green-700 dark:text-green-400"
-        >
-          ← Volver al listado
-        </Link>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          Revisa y aprueba el registro de nuevos cuidadores en la plataforma.
+        </p>
       </div>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
         {total} solicitud(es) pendiente(s) de revisión (PENDING_REVIEW o NEEDS_REVISION).

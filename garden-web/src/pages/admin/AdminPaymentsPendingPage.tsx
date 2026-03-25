@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   getPaymentsPending,
@@ -81,16 +80,13 @@ export function AdminPaymentsPendingPage() {
 
   return (
     <div className="py-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-          Pagos pendientes de aprobación
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          Pagos Pendientes de Aprobación
         </h1>
-        <Link
-          to="/admin/caregivers"
-          className="text-sm text-green-600 hover:text-green-700 dark:text-green-400"
-        >
-          ← Cuidadores
-        </Link>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          Verifica y aprueba los pagos manuales realizados por los clientes.
+        </p>
       </div>
       <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
         {total} reserva(s) en espera de aprobación de pago manual (PAYMENT_PENDING_APPROVAL).

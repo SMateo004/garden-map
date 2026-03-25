@@ -89,4 +89,7 @@ router.post('/gift-codes', adminController.createGiftCode);
 /** PATCH /api/admin/gift-codes/:id/toggle — activar/desactivar */
 router.patch('/gift-codes/:id/toggle', adminController.toggleGiftCode);
 
+/** GET /api/admin/disputes — listar todas las disputas */
+router.get('/disputes', adminController.getDisputes);
+
 export default router;

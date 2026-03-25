@@ -254,6 +254,22 @@ export async function createBooking(
       data: bookingData,
     });
 
+    // Notificación al cuidador: nueva solicitud
+    const caregiverUser = await tx.caregiverProfile.findUnique({
+      where: { id: body.caregiverId },
+      select: { userId: true },
+    });
+    if (caregiverUser) {
+      await tx.notification.create({
+        data: {
+          userId: caregiverUser.userId,
+          title: '¡Nueva solicitud de reserva!',
+          message: `Tienes una nueva solicitud de ${body.serviceType === 'HOSPEDAJE' ? 'hospedaje' : 'paseo'} para ${pet.name}. Revisa tu buzón para aceptar o rechazar.`,
+          type: 'NEW_BOOKING',
+        },
+      });
+    }
+
     logger.info('Cliente seleccionó mascota para reserva', {
       userId: clientId,
       petId: body.petId,
@@ -1216,6 +1232,16 @@ export async function acceptBooking(bookingId: string, caregiverUserId: string):
     }
   });
 
+  // Notificación in-app al cliente
+  await prisma.notification.create({
+    data: {
+      userId: updated.clientId,
+      title: '¡Tu reserva fue aceptada! 🐾',
+      message: `El cuidador aceptó tu reserva para ${updated.petName}. Ya está confirmada. Puedes ver los detalles en "Mis reservas".`,
+      type: 'BOOKING_ACCEPTED',
+    },
+  });
+
   notificationService.onBookingAccepted(bookingId).catch(err => {
     logger.error('Error sending onBookingAccepted notification', { bookingId, err });
   });
@@ -1252,6 +1278,16 @@ export async function rejectBooking(bookingId: string, caregiverUserId: string, 
     }
   });
 
+  // Notificación in-app al cliente
+  await prisma.notification.create({
+    data: {
+      userId: booking.clientId,
+      title: 'Reserva rechazada por el cuidador',
+      message: `El cuidador no pudo aceptar tu reserva para ${booking.petName}. Motivo: ${reason}. El equipo de GARDEN gestionará tu reembolso en 1 día hábil.`,
+      type: 'BOOKING_REJECTED',
+    },
+  });
+
   notificationService.onBookingRejected(bookingId, reason).catch(err => {
     logger.error('Error sending onBookingRejected notification', { bookingId, err });
   });
@@ -1284,6 +1320,16 @@ export async function startService(bookingId: string, caregiverUserId: string, p
         status: BookingStatus.IN_PROGRESS,
         serviceStartedAt: new Date(),
         serviceStartPhoto: photoUrl,
+      },
+    });
+
+    // Notificación in-app al cliente
+    await tx.notification.create({
+      data: {
+        userId: booking.clientId,
+        title: '¡El servicio ha comenzado! 🐕',
+        message: `El cuidador inició el servicio para ${booking.petName}. Puedes seguir el progreso en "Mis reservas".`,
+        type: 'SERVICE_STARTED',
       },
     });
 
@@ -1367,6 +1413,16 @@ export async function concludeService(
         serviceEndedAt: new Date(),
         serviceEndPhoto: photoUrl,
         serviceTrackingData: tracking,
+      },
+    });
+
+    // Notificación in-app al cliente
+    await tx.notification.create({
+      data: {
+        userId: booking.clientId,
+        title: 'Servicio finalizado ✅',
+        message: `El cuidador finalizó el servicio para ${booking.petName}. Entra a "Mis reservas" para confirmar la recepción y dejar tu reseña.`,
+        type: 'SERVICE_COMPLETED',
       },
     });
 
