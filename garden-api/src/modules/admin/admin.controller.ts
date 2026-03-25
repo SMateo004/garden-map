@@ -92,6 +92,12 @@ export const getPaymentsPending = asyncHandler(async (_req: Request, res: Respon
   res.json({ success: true, data: result });
 });
 
+/** GET /api/admin/payments-history — pagos procesados (paidAt != null). */
+export const getPaymentsHistory = asyncHandler(async (_req: Request, res: Response) => {
+  const result = await adminService.getPaymentsHistory();
+  res.json({ success: true, data: result });
+});
+
 /** POST /api/admin/bookings/:id/reject-payment — rechazar pago manual (vuelve a PENDING_PAYMENT). */
 export const rejectPayment = asyncHandler(async (req: Request, res: Response) => {
   const bookingId = req.params.id!;
@@ -147,9 +153,10 @@ export const getReservations = asyncHandler(async (req: Request, res: Response) 
 });
 
 
-/** GET /api/admin/identity-reviews — lista sesiones en REVIEW. */
-export const listIdentityReviews = asyncHandler(async (_req: Request, res: Response) => {
-  const result = await adminService.listIdentityReviews();
+/** GET /api/admin/identity-reviews — lista sesiones de identidad. ?status=REVIEW|APPROVED|REJECTED|ALL */
+export const listIdentityReviews = asyncHandler(async (req: Request, res: Response) => {
+  const status = typeof req.query.status === 'string' ? req.query.status : 'REVIEW';
+  const result = await adminService.listIdentityReviews(status);
   res.json({ success: true, data: result });
 });
 
@@ -290,9 +297,20 @@ export const rejectWithdrawal = asyncHandler(async (req: Request, res: Response)
   res.json({ success: true, data: { status: 'REJECTED' } });
 });
 
-/** GET /api/admin/gift-codes — listar todos los códigos de regalo */
+/** GET /api/admin/gift-codes — listar todos los códigos de regalo con nombres de usuarios que los usaron */
 export const listGiftCodes = asyncHandler(async (_req: Request, res: Response) => {
   const codes = await prisma.giftCode.findMany({ orderBy: { createdAt: 'desc' } });
+
+  // Collect all unique user IDs across all codes
+  const allUserIds = [...new Set(codes.flatMap((c) => c.usedBy))];
+  const users = allUserIds.length > 0
+    ? await prisma.user.findMany({
+        where: { id: { in: allUserIds } },
+        select: { id: true, firstName: true, lastName: true, email: true },
+      })
+    : [];
+  const userMap = new Map(users.map((u) => [u.id, u]));
+
   res.json({
     success: true,
     data: codes.map((c) => ({
@@ -304,6 +322,12 @@ export const listGiftCodes = asyncHandler(async (_req: Request, res: Response) =
       expiresAt: c.expiresAt?.toISOString() ?? null,
       active: c.active,
       createdAt: c.createdAt.toISOString(),
+      usedByUsers: c.usedBy.map((uid) => {
+        const u = userMap.get(uid);
+        return u
+          ? { id: u.id, name: `${u.firstName} ${u.lastName}`, email: u.email }
+          : { id: uid, name: 'Usuario desconocido', email: '' };
+      }),
     })),
   });
 });

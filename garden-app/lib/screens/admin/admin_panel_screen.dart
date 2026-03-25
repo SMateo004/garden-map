@@ -16,18 +16,22 @@ class AdminPanelScreen extends StatefulWidget {
 }
 
 class _AdminPanelScreenState extends State<AdminPanelScreen> {
-  int _selectedTab = 0; // 0: Cuidadores, 1: Identidad, 2: Disputas, 3: Pagos, 4: Retiros, 5: Reservas, 6: Códigos
+  int _selectedTab = 0;
   List<Map<String, dynamic>> _caregivers = [];
   List<Map<String, dynamic>> _identityReviews = [];
   List<Map<String, dynamic>> _withdrawals = [];
   List<Map<String, dynamic>> _reservations = [];
   List<Map<String, dynamic>> _giftCodes = [];
   List<Map<String, dynamic>> _disputes = [];
+  List<Map<String, dynamic>> _pendingPayments = [];
+  List<Map<String, dynamic>> _paymentsHistory = [];
   String _reservationsFilter = 'todas';
   String _withdrawalsFilter = 'PENDING';
   String _disputesFilter = '';
+  String _identityFilter = 'REVIEW';
   bool _isLoading = true;
   bool _isLoadingDisputes = false;
+  bool _isLoadingPayments = false;
   String _adminToken = '';
   String _caregiverStatusFilter = 'pendientes';
   final TextEditingController _caregiverSearchCtrl = TextEditingController();
@@ -73,11 +77,34 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         _loadReservations(),
         _loadGiftCodes(),
         _loadDisputes(),
+        _loadPayments(),
       ]);
     } catch (e) {
       debugPrint('Error loading admin data: $e');
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadPayments() async {
+    setState(() => _isLoadingPayments = true);
+    try {
+      final results = await Future.wait([
+        http.get(Uri.parse('$_baseUrl/admin/payments-pending'), headers: {'Authorization': 'Bearer $_adminToken'}),
+        http.get(Uri.parse('$_baseUrl/admin/payments-history'), headers: {'Authorization': 'Bearer $_adminToken'}),
+      ]);
+      final pending = jsonDecode(results[0].body);
+      final history = jsonDecode(results[1].body);
+      if (pending['success'] == true) {
+        setState(() => _pendingPayments = (pending['data']['bookings'] as List).cast<Map<String, dynamic>>());
+      }
+      if (history['success'] == true) {
+        setState(() => _paymentsHistory = (history['data'] as List).cast<Map<String, dynamic>>());
+      }
+    } catch (e) {
+      debugPrint('Error loading payments: $e');
+    } finally {
+      setState(() => _isLoadingPayments = false);
     }
   }
 
@@ -206,10 +233,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
   Future<void> _loadIdentityReviews() async {
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/admin/identity-reviews?limit=20'),
-        headers: {'Authorization': 'Bearer $_adminToken'},
-      );
+      final url = '$_baseUrl/admin/identity-reviews?status=$_identityFilter';
+      final response = await http.get(Uri.parse(url), headers: {'Authorization': 'Bearer $_adminToken'});
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         setState(() => _identityReviews = (data['data'] as List).cast<Map<String, dynamic>>());
@@ -855,60 +880,149 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   }
 
   void _showCaregiverProfile(Map<String, dynamic> caregiver) {
+    final isDark = themeNotifier.isDark;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.85,
+      builder: (ctx) => _CaregiverDetailSheet(
+        caregiverId: caregiver['id'] as String,
+        caregiverSummary: caregiver,
+        token: _adminToken,
+        baseUrl: _baseUrl,
+        isDark: isDark,
+        onReview: _reviewCaregiver,
+        onSuspend: _suspendCaregiver,
+        statusBadge: _statusBadge,
+      ),
+    );
+  }
+
+  void _showReservationDetail(Map<String, dynamic> r) {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : Colors.white;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final isPaseo = r['serviceType'] == 'PASEO';
+    final status = r['status'] as String? ?? '';
+
+    String bookingStatusLabel(String s) => switch (s) {
+      'CONFIRMED'              => 'Confirmada',
+      'IN_PROGRESS'            => 'En curso',
+      'COMPLETED'              => 'Completada',
+      'CANCELLED'              => 'Cancelada',
+      'WAITING_CAREGIVER_APPROVAL' => 'Esperando cuidador',
+      'PENDING_PAYMENT'        => 'Pendiente pago',
+      'PAYMENT_PENDING_APPROVAL' => 'Pago por aprobar',
+      _                        => s,
+    };
+
+    Color bookingStatusColor(String s) => switch (s) {
+      'CONFIRMED'    => GardenColors.success,
+      'IN_PROGRESS'  => GardenColors.primary,
+      'COMPLETED'    => Colors.grey,
+      'CANCELLED'    => GardenColors.error,
+      _              => GardenColors.warning,
+    };
+
+    Widget detailRow(String label, String value) => Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label.toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+          const SizedBox(height: 3),
+          Text(value, style: TextStyle(fontSize: 15, color: textColor)),
+        ],
+      ),
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.88,
         decoration: BoxDecoration(
-          color: themeNotifier.isDark ? GardenColors.darkSurface : Colors.white,
+          color: surface,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
           children: [
-            Container(margin: const EdgeInsets.symmetric(vertical: 12), width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+            Container(margin: const EdgeInsets.symmetric(vertical: 12), width: 40, height: 4,
+              decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: [
+                  Icon(isPaseo ? Icons.directions_walk_rounded : Icons.home_rounded, color: GardenColors.primary),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(isPaseo ? 'Detalle del Paseo' : 'Detalle del Hospedaje',
+                    style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 18))),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: bookingStatusColor(status).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(bookingStatusLabel(status),
+                      style: TextStyle(color: bookingStatusColor(status), fontWeight: FontWeight.bold, fontSize: 12)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Divider(color: borderColor),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        GardenAvatar(imageUrl: null, size: 80, initials: (caregiver['fullName'] as String? ?? 'C').substring(0,1)),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(caregiver['fullName'] ?? '—', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                              Text(caregiver['email'] ?? '—', style: const TextStyle(color: Colors.grey)),
-                              const SizedBox(height: 8),
-                              _statusBadge(caregiver['status'] ?? ''),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 32),
-                    _profileDetailItem('Biografía', caregiver['bio'] ?? 'Sin biografía proporcionada.'),
-                    _profileDetailItem('Ubicación', caregiver['address'] ?? 'No especificada'),
-                    _profileDetailItem('Experiencia', caregiver['experience'] ?? 'Sin datos'),
-                    _profileDetailItem('ID de Usuario', caregiver['id']),
-                    const SizedBox(height: 32),
-                    const Text('REQUISITOS', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1, fontSize: 13, color: GardenColors.primary)),
-                    const SizedBox(height: 12),
-                    _profileCheckItem('Identidad Verificada', caregiver['isIdentityVerified'] == true),
-                    _profileCheckItem('Perfil Completo', caregiver['isProfileComplete'] == true),
-                    _profileCheckItem('Términos Aceptados', true),
+                    Text('MASCOTA', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: GardenColors.primary, letterSpacing: 1)),
+                    const SizedBox(height: 8),
+                    detailRow('Nombre', r['petName'] ?? '—'),
+                    const Divider(height: 24),
+                    Text('CLIENTE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: GardenColors.primary, letterSpacing: 1)),
+                    const SizedBox(height: 8),
+                    detailRow('Email', r['clientEmail'] ?? '—'),
+                    if (r['clientName'] != null) detailRow('Nombre', r['clientName']),
+                    const Divider(height: 24),
+                    Text('CUIDADOR', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: GardenColors.primary, letterSpacing: 1)),
+                    const SizedBox(height: 8),
+                    detailRow('Nombre', r['caregiverName'] ?? '—'),
+                    if (r['caregiverEmail'] != null) detailRow('Email', r['caregiverEmail']),
+                    const Divider(height: 24),
+                    Text('FECHAS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: GardenColors.primary, letterSpacing: 1)),
+                    const SizedBox(height: 8),
+                    if (isPaseo)
+                      detailRow('Fecha del paseo', r['walkDate'] ?? '—')
+                    else ...[
+                      detailRow('Inicio', r['startDate'] ?? '—'),
+                      detailRow('Fin', r['endDate'] ?? '—'),
+                    ],
+                    const Divider(height: 24),
+                    Text('PAGO', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: GardenColors.primary, letterSpacing: 1)),
+                    const SizedBox(height: 8),
+                    detailRow('Total', 'Bs ${r['totalAmount'] ?? '0'}'),
+                    if (r['paymentMethod'] != null) detailRow('Método', r['paymentMethod']),
+                    if (r['paidAt'] != null) detailRow('Pagado el', r['paidAt']),
+                    if (r['cancellationReason'] != null) ...[
+                      const Divider(height: 24),
+                      Text('CANCELACIÓN', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: GardenColors.error, letterSpacing: 1)),
+                      const SizedBox(height: 8),
+                      detailRow('Motivo', r['cancellationReason']),
+                    ],
+                    const SizedBox(height: 8),
+                    _idBadge('ID', (r['id'] as String? ?? '').toUpperCase()),
                   ],
                 ),
               ),
             ),
             Padding(
               padding: const EdgeInsets.all(24),
-              child: GardenButton(label: 'Cerrar', height: 48, onPressed: () => Navigator.pop(context)),
+              child: GardenButton(label: 'Cerrar', height: 48, onPressed: () => Navigator.pop(ctx)),
             ),
           ],
         ),
@@ -940,99 +1054,178 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   );
 
   Widget _buildIdentityList(Color surface, Color textColor, Color subtextColor, Color borderColor) {
-    if (_isLoading) return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
-    if (_identityReviews.isEmpty) {
-      return const GardenEmptyState(
-        type: GardenEmptyType.identity,
-        title: 'Sin verificaciones pendientes',
-        subtitle: 'Cuando los cuidadores suban su identidad, aparecerán aquí para revisión.',
-        compact: true,
-      );
+    final filterOptions = [
+      ('Pendientes', 'REVIEW'),
+      ('Aprobadas', 'APPROVED'),
+      ('Rechazadas', 'REJECTED'),
+      ('Todas', 'ALL'),
+    ];
+
+    Color scoreColor(num? score) {
+      if (score == null) return subtextColor;
+      if (score >= 80) return GardenColors.success;
+      if (score >= 60) return GardenColors.warning;
+      return GardenColors.error;
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: _identityReviews.length,
-      itemBuilder: (context, index) {
-        final review = _identityReviews[index];
-        final user = review['user'] as Map<String, dynamic>? ?? {};
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: borderColor),
+    return Column(
+      children: [
+        Container(
+          height: 44,
+          margin: const EdgeInsets.symmetric(vertical: 10),
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: filterOptions.length,
+            itemBuilder: (context, i) {
+              final f = filterOptions[i];
+              final selected = _identityFilter == f.$2;
+              return GestureDetector(
+                onTap: () {
+                  setState(() => _identityFilter = f.$2);
+                  _loadIdentityReviews();
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: selected ? GardenColors.primary.withOpacity(0.1) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: selected ? GardenColors.primary : borderColor),
+                  ),
+                  child: Text(f.$1,
+                    style: TextStyle(
+                      color: selected ? GardenColors.primary : subtextColor,
+                      fontSize: 12,
+                      fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                    )),
+                ),
+              );
+            },
           ),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim(),
-                          style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 15),
-                        ),
-                        Text(
-                          user['email'] ?? '—',
-                          style: TextStyle(color: subtextColor, fontSize: 12),
-                        ),
-                        Text(
-                          'Similitud: ${review['similarity'] != null ? '${(review['similarity'] as num).round()}%' : 'N/A'}',
-                          style: TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _statusBadge(review['status'] ?? ''),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: GardenButton(
-                      label: 'Aprobar',
-                      icon: Icons.check,
-                      height: 36,
-                      color: GardenColors.success,
-                      onPressed: () => _approveIdentity(review['id'] as String),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: GardenButton(
-                      label: 'Rechazar',
-                      icon: Icons.close,
-                      height: 36,
-                      color: GardenColors.error,
-                      outline: true,
-                      onPressed: () => _rejectIdentity(review['id'] as String),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  GardenButton(
-                    label: '',
-                    icon: Icons.image_outlined,
-                    width: 50,
-                    height: 36,
-                    outline: true,
-                    onPressed: () {
-                       context.push('/admin/identity-reviews/${review['id']}');
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
+        ),
+        Expanded(
+          child: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+            : _identityReviews.isEmpty
+              ? const GardenEmptyState(
+                  type: GardenEmptyType.identity,
+                  title: 'Sin verificaciones',
+                  subtitle: 'No hay verificaciones con este estado.',
+                  compact: true,
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  itemCount: _identityReviews.length,
+                  itemBuilder: (context, index) {
+                    final review = _identityReviews[index];
+                    final user = review['user'] as Map<String, dynamic>? ?? {};
+                    final similarity = review['similarityScore'] ?? review['similarity'];
+                    final trust = review['trustScore'];
+                    final liveness = review['livenessScore'];
+                    final status = review['status'] as String? ?? 'REVIEW';
+                    final canAct = status == 'REVIEW';
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: surface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim(),
+                                      style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 15)),
+                                    Text(user['email'] ?? '—', style: TextStyle(color: subtextColor, fontSize: 12)),
+                                  ],
+                                ),
+                              ),
+                              _statusBadge(status),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          // Score chips row
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              if (similarity != null)
+                                _scoreBadge('Similitud', similarity as num, scoreColor(similarity as num?)),
+                              if (trust != null)
+                                _scoreBadge('Confianza', trust as num, scoreColor(trust as num?)),
+                              if (liveness != null)
+                                _scoreBadge('Liveness', liveness as num, scoreColor(liveness as num?)),
+                            ],
+                          ),
+                          if (review['reviewedBy'] != null) ...[
+                            const SizedBox(height: 6),
+                            Text('Revisado por: ${review['reviewedBy']}',
+                              style: TextStyle(color: subtextColor, fontSize: 10)),
+                          ],
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              if (canAct) ...[
+                                Expanded(
+                                  child: GardenButton(
+                                    label: 'Aprobar',
+                                    icon: Icons.check,
+                                    height: 36,
+                                    color: GardenColors.success,
+                                    onPressed: () => _approveIdentity(review['id'] as String),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: GardenButton(
+                                    label: 'Rechazar',
+                                    icon: Icons.close,
+                                    height: 36,
+                                    color: GardenColors.error,
+                                    outline: true,
+                                    onPressed: () => _rejectIdentity(review['id'] as String),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                              ],
+                              GardenButton(
+                                label: '',
+                                icon: Icons.image_outlined,
+                                width: 50,
+                                height: 36,
+                                outline: true,
+                                onPressed: () => context.push('/admin/identity-reviews/${review['id']}'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
+
+  Widget _scoreBadge(String label, num score, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.12),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: color.withOpacity(0.4)),
+    ),
+    child: Text('$label: ${score.toStringAsFixed(0)}%',
+      style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+  );
 
   Widget _buildDisputesTab(Color surface, Color textColor, Color subtextColor, Color borderColor) {
     final filters = [
@@ -1140,129 +1333,148 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
   Widget _buildPaymentsTab() {
     final isDark = themeNotifier.isDark;
-    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
-    return FutureBuilder(
-      future: _loadPendingPayments(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
-        }
-        final payments = snapshot.data ?? [];
-        if (payments.isEmpty) {
-          return const GardenEmptyState(
-            type: GardenEmptyType.payments,
-            title: 'Sin pagos pendientes',
-            subtitle: 'Todos los pagos han sido procesados. ¡Todo en orden!',
-            compact: true,
-          );
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: payments.length,
-          itemBuilder: (context, index) {
-            final payment = payments[index];
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: borderColor),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(payment['petName'] as String? ?? '—',
-                            style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
-                          const SizedBox(height: 2),
-                          Row(
-                            children: [
-                              _paymentStatusBadge(payment['status'] as String? ?? ''),
-                              const SizedBox(width: 8),
-                              Text('${payment['serviceType']} · ${payment['walkDate'] ?? payment['startDate'] ?? '—'}',
-                                style: TextStyle(color: subtextColor, fontSize: 13)),
-                            ],
-                          ),
-                        ],
-                        ),
-                      ),
-                      Text('Bs ${payment['totalAmount']}',
-                        style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w800, fontSize: 18)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      _idBadge('RESERVA', payment['id'].toString().toUpperCase().substring(0, 8)),
-                      const SizedBox(width: 8),
-                      if (payment['qrId'] != null)
-                        _idBadge('PAGO', payment['qrId'].toString()),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text('Cliente: ${payment['clientEmail'] ?? '—'}',
-                      style: TextStyle(color: subtextColor, fontSize: 12)),
-                  Text('Cuidador: ${payment['caregiverName'] ?? '—'}',
-                      style: TextStyle(color: subtextColor, fontSize: 12)),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: GardenButton(
-                          label: 'Aprobar pago',
-                          icon: Icons.check_rounded,
-                          height: 40,
-                          color: GardenColors.success,
-                          onPressed: () => _approvePayment(payment['id'] as String),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: GardenButton(
-                          label: 'Rechazar',
-                          icon: Icons.close_rounded,
-                          height: 40,
-                          color: GardenColors.error,
-                          outline: true,
-                          onPressed: () => _rejectPayment(payment['id'] as String),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Future<List<Map<String, dynamic>>> _loadPendingPayments() async {
-    try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/admin/payments-pending'),
-        headers: {'Authorization': 'Bearer $_adminToken'},
-      );
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        return (data['data']['bookings'] as List).cast<Map<String, dynamic>>();
-      }
-    } catch (e) {
-      debugPrint('Error loading payments: $e');
+    if (_isLoadingPayments) {
+      return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
     }
-    return [];
+
+    Widget paymentCard(Map<String, dynamic> payment, {required bool isPending}) {
+      final status = payment['status'] as String? ?? '';
+      final date = payment['walkDate'] ?? payment['startDate'] ?? payment['paidAt'] ?? '—';
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(payment['petName'] as String? ?? '—',
+                        style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                      const SizedBox(height: 2),
+                      Row(children: [
+                        if (isPending) _paymentStatusBadge(status),
+                        if (isPending) const SizedBox(width: 8),
+                        Text('${payment['serviceType'] ?? ''} · $date',
+                          style: TextStyle(color: subtextColor, fontSize: 12)),
+                      ]),
+                    ],
+                  ),
+                ),
+                Text('Bs ${payment['totalAmount']}',
+                  style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w800, fontSize: 18)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _idBadge('RESERVA', payment['id'].toString().toUpperCase().substring(0, 8)),
+            const SizedBox(height: 8),
+            Text('Cliente: ${payment['clientEmail'] ?? payment['clientName'] ?? '—'}', style: TextStyle(color: subtextColor, fontSize: 12)),
+            Text('Cuidador: ${payment['caregiverName'] ?? '—'}', style: TextStyle(color: subtextColor, fontSize: 12)),
+            if (isPending) ...[
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(
+                  child: GardenButton(
+                    label: 'Aprobar pago',
+                    icon: Icons.check_rounded,
+                    height: 40,
+                    color: GardenColors.success,
+                    onPressed: () async {
+                      await _approvePayment(payment['id'] as String);
+                      await _loadPayments();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: GardenButton(
+                    label: 'Rechazar',
+                    icon: Icons.close_rounded,
+                    height: 40,
+                    color: GardenColors.error,
+                    outline: true,
+                    onPressed: () async {
+                      await _rejectPayment(payment['id'] as String);
+                      await _loadPayments();
+                    },
+                  ),
+                ),
+              ]),
+            ] else ...[
+              const SizedBox(height: 6),
+              Row(children: [
+                Icon(Icons.check_circle_outline, size: 13, color: GardenColors.success),
+                const SizedBox(width: 4),
+                Text(
+                  payment['paymentMethod'] != null ? 'Método: ${payment['paymentMethod']}' : 'Pago confirmado',
+                  style: TextStyle(color: subtextColor, fontSize: 11),
+                ),
+              ]),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadPayments,
+      color: GardenColors.primary,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // --- Pending section ---
+          Row(children: [
+            const Icon(Icons.pending_actions_rounded, size: 16, color: GardenColors.warning),
+            const SizedBox(width: 6),
+            Text('Por aprobar (${_pendingPayments.length})',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: GardenColors.warning)),
+          ]),
+          const SizedBox(height: 10),
+          if (_pendingPayments.isEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              alignment: Alignment.center,
+              child: Text('Sin pagos pendientes', style: TextStyle(color: subtextColor, fontSize: 13)),
+            )
+          else
+            ..._pendingPayments.map((p) => paymentCard(p, isPending: true)),
+
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+          const SizedBox(height: 16),
+
+          // --- History section ---
+          Row(children: [
+            const Icon(Icons.history_rounded, size: 16, color: GardenColors.primary),
+            const SizedBox(width: 6),
+            Text('Historial reciente (${_paymentsHistory.length})',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: GardenColors.primary)),
+          ]),
+          const SizedBox(height: 10),
+          if (_paymentsHistory.isEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              alignment: Alignment.center,
+              child: Text('Sin historial aún', style: TextStyle(color: subtextColor, fontSize: 13)),
+            )
+          else
+            ..._paymentsHistory.map((p) => paymentCard(p, isPending: false)),
+        ],
+      ),
+    );
   }
 
   Future<void> _approvePayment(String bookingId) async {
@@ -1545,44 +1757,51 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                         final date = isPaseo
                             ? (r['walkDate'] ?? '—')
                             : '${r['startDate'] ?? '?'} – ${r['endDate'] ?? '?'}';
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: surface,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: borderColor),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      isPaseo ? 'Paseo' : 'Hospedaje',
-                                      style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14),
+                        return GestureDetector(
+                          onTap: () => _showReservationDetail(r),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: surface,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '${isPaseo ? 'Paseo' : 'Hospedaje'} · ${r['petName'] ?? ''}',
+                                        style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14),
+                                      ),
                                     ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: bookingStatusColor(status).withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: bookingStatusColor(status).withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(bookingStatusLabel(status),
+                                        style: TextStyle(color: bookingStatusColor(status), fontSize: 11, fontWeight: FontWeight.w600)),
                                     ),
-                                    child: Text(bookingStatusLabel(status),
-                                      style: TextStyle(color: bookingStatusColor(status), fontSize: 11, fontWeight: FontWeight.w600)),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              _infoRow(Icons.person_outline, r['clientEmail'] ?? '—', subtextColor),
-                              _infoRow(Icons.pets_outlined, r['petName'] ?? '—', subtextColor),
-                              _infoRow(Icons.supervisor_account_outlined, r['caregiverName'] ?? '—', subtextColor),
-                              _infoRow(Icons.calendar_today_outlined, date, subtextColor),
-                              _infoRow(Icons.attach_money_outlined, 'Bs ${r['totalAmount'] ?? '0'}', GardenColors.primary),
-                            ],
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                _infoRow(Icons.person_outline, r['clientEmail'] ?? '—', subtextColor),
+                                _infoRow(Icons.supervisor_account_outlined, r['caregiverName'] ?? '—', subtextColor),
+                                _infoRow(Icons.calendar_today_outlined, date, subtextColor),
+                                _infoRow(Icons.attach_money_outlined, 'Bs ${r['totalAmount'] ?? '0'}', GardenColors.primary),
+                                const SizedBox(height: 4),
+                                Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                                  Icon(Icons.chevron_right, size: 14, color: subtextColor),
+                                  Text('Ver detalle', style: TextStyle(color: subtextColor, fontSize: 11)),
+                                ]),
+                              ],
+                            ),
                           ),
                         );
                       },
@@ -1631,32 +1850,89 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                       itemBuilder: (context, i) {
                         final gc = _giftCodes[i];
                         final active = gc['active'] == true;
+                        final usedByUsers = (gc['usedByUsers'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+                        final isExpanded = (gc['_expanded'] as bool?) == true;
                         return Container(
                           margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                           decoration: BoxDecoration(
                             color: surface,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: active ? GardenColors.primary.withValues(alpha: 0.3) : borderColor),
                           ),
-                          child: Row(
+                          child: Column(
                             children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(gc['code'] as String, style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15, fontFamily: 'monospace')),
-                                    const SizedBox(height: 2),
-                                    Text('Bs ${gc['amount']}  ·  ${gc['usedCount']}/${gc['maxUses']} usos',
-                                      style: TextStyle(color: subtextColor, fontSize: 12)),
-                                  ],
+                              InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: usedByUsers.isEmpty ? null : () {
+                                  setState(() => _giftCodes[i] = {...gc, '_expanded': !isExpanded});
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(gc['code'] as String,
+                                              style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15, fontFamily: 'monospace')),
+                                            const SizedBox(height: 2),
+                                            Row(children: [
+                                              Text('Bs ${gc['amount']}  ·  ${gc['usedCount']}/${gc['maxUses']} usos',
+                                                style: TextStyle(color: subtextColor, fontSize: 12)),
+                                              if (gc['expiresAt'] != null) ...[
+                                                const SizedBox(width: 6),
+                                                Text('· Vence: ${(gc['expiresAt'] as String).substring(0, 10)}',
+                                                  style: TextStyle(color: subtextColor, fontSize: 11)),
+                                              ],
+                                            ]),
+                                          ],
+                                        ),
+                                      ),
+                                      if (usedByUsers.isNotEmpty)
+                                        Icon(isExpanded ? Icons.expand_less : Icons.expand_more,
+                                          size: 20, color: subtextColor),
+                                      Switch(
+                                        value: active,
+                                        activeColor: GardenColors.primary,
+                                        onChanged: (_) => _toggleGiftCode(gc['id'] as String),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                              Switch(
-                                value: active,
-                                activeColor: GardenColors.primary,
-                                onChanged: (_) => _toggleGiftCode(gc['id'] as String),
-                              ),
+                              if (isExpanded && usedByUsers.isNotEmpty) ...[
+                                Divider(height: 1, color: borderColor),
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('USADO POR', style: TextStyle(
+                                        fontSize: 10, fontWeight: FontWeight.bold,
+                                        color: GardenColors.primary, letterSpacing: 1)),
+                                      const SizedBox(height: 8),
+                                      ...usedByUsers.map((u) => Padding(
+                                        padding: const EdgeInsets.only(bottom: 6),
+                                        child: Row(children: [
+                                          const Icon(Icons.person_outline, size: 14, color: GardenColors.primary),
+                                          const SizedBox(width: 6),
+                                          Expanded(child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(u['name'] as String? ?? '—',
+                                                style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                                              if ((u['email'] as String? ?? '').isNotEmpty)
+                                                Text(u['email'] as String,
+                                                  style: TextStyle(color: subtextColor, fontSize: 11)),
+                                            ],
+                                          )),
+                                        ]),
+                                      )),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         );
@@ -1664,6 +1940,269 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     ),
         ),
       ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _CaregiverDetailSheet — loads full profile from API and shows it
+// ---------------------------------------------------------------------------
+class _CaregiverDetailSheet extends StatefulWidget {
+  final String caregiverId;
+  final Map<String, dynamic> caregiverSummary;
+  final String token;
+  final String baseUrl;
+  final bool isDark;
+  final Future<void> Function(String id, String action, {bool force}) onReview;
+  final Future<void> Function(String id) onSuspend;
+  final Widget Function(String status) statusBadge;
+
+  const _CaregiverDetailSheet({
+    required this.caregiverId,
+    required this.caregiverSummary,
+    required this.token,
+    required this.baseUrl,
+    required this.isDark,
+    required this.onReview,
+    required this.onSuspend,
+    required this.statusBadge,
+  });
+
+  @override
+  State<_CaregiverDetailSheet> createState() => _CaregiverDetailSheetState();
+}
+
+class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
+  Map<String, dynamic>? _detail;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final response = await http.get(
+        Uri.parse('${widget.baseUrl}/admin/caregivers/${widget.caregiverId}/detail'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        setState(() { _detail = data['data'] as Map<String, dynamic>; _loading = false; });
+      } else {
+        setState(() { _error = data['error']?['message'] ?? 'Error'; _loading = false; });
+      }
+    } catch (e) {
+      setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final surface = isDark ? GardenColors.darkSurface : Colors.white;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    final summary = widget.caregiverSummary;
+    final detail = _detail;
+    final status = (detail?['status'] ?? summary['status'] ?? '') as String;
+    final canReview = status == 'PENDING_REVIEW' || status == 'NEEDS_REVISION' || status == 'DRAFT';
+    final isApproved = status == 'APPROVED';
+
+    Widget row(String label, String? value) => value == null || value.isEmpty ? const SizedBox.shrink() : Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label.toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+          const SizedBox(height: 3),
+          Text(value, style: TextStyle(fontSize: 14, color: textColor)),
+        ],
+      ),
+    );
+
+    Widget section(String title) => Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 10),
+      child: Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: GardenColors.primary, letterSpacing: 1)),
+    );
+
+    Widget checkRow(String label, bool ok) => Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(children: [
+        Icon(ok ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+          size: 18, color: ok ? GardenColors.success : GardenColors.error),
+        const SizedBox(width: 10),
+        Text(label, style: TextStyle(fontSize: 14, color: textColor)),
+      ]),
+    );
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.9,
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          Container(margin: const EdgeInsets.symmetric(vertical: 12), width: 40, height: 4,
+            decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+          if (_loading)
+            const Expanded(child: Center(child: CircularProgressIndicator(color: GardenColors.primary)))
+          else if (_error != null)
+            Expanded(child: Center(child: Text(_error!, style: const TextStyle(color: GardenColors.error))))
+          else ...[
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    Row(
+                      children: [
+                        GardenAvatar(
+                          imageUrl: detail?['user']?['profilePicture'] as String?,
+                          size: 72,
+                          initials: ((detail?['user']?['firstName'] as String? ?? summary['fullName'] as String? ?? 'C')[0]),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${detail?['user']?['firstName'] ?? ''} ${detail?['user']?['lastName'] ?? ''}'.trim().isNotEmpty
+                                  ? '${detail?['user']?['firstName'] ?? ''} ${detail?['user']?['lastName'] ?? ''}'
+                                  : summary['fullName'] ?? '—',
+                                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor),
+                              ),
+                              Text(detail?['user']?['email'] ?? summary['email'] ?? '—',
+                                style: TextStyle(color: subtextColor, fontSize: 13)),
+                              const SizedBox(height: 6),
+                              widget.statusBadge(status),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Divider(color: borderColor),
+
+                    // Bio & Location
+                    section('PERFIL'),
+                    row('Biografía', detail?['bio'] as String?),
+                    row('Detalle del espacio', detail?['bioDetail'] as String?),
+                    row('Dirección', detail?['address'] as String?),
+                    row('Zona', detail?['zone'] as String?),
+                    row('Ciudad', detail?['user']?['city'] as String?),
+                    Divider(color: borderColor),
+
+                    // Services & Prices
+                    section('SERVICIOS Y PRECIOS'),
+                    if ((detail?['servicesOffered'] as List?)?.isNotEmpty == true)
+                      row('Servicios', (detail!['servicesOffered'] as List).join(', ')),
+                    if (detail?['pricePerDay'] != null)
+                      row('Precio por día (hospedaje)', 'Bs ${detail!['pricePerDay']}'),
+                    if (detail?['pricePerWalk30'] != null)
+                      row('Paseo 30 min', 'Bs ${detail!['pricePerWalk30']}'),
+                    if (detail?['pricePerWalk60'] != null)
+                      row('Paseo 60 min', 'Bs ${detail!['pricePerWalk60']}'),
+                    Divider(color: borderColor),
+
+                    // Experience
+                    section('EXPERIENCIA'),
+                    row('Años de experiencia', detail?['experienceYears']?.toString()),
+                    row('Descripción', detail?['experienceDescription'] as String?),
+                    row('Cuida a otros', detail?['caredOthers'] == true ? 'Sí' : (detail?['caredOthers'] == false ? 'No' : null)),
+                    row('Tiene mascotas propias', detail?['ownPets'] == true ? 'Sí' : (detail?['ownPets'] == false ? 'No' : null)),
+                    row('Detalle mascotas', detail?['currentPetsDetails'] as String?),
+                    row('¿Por qué cuidador?', detail?['whyCaregiver'] as String?),
+                    if ((detail?['animalTypes'] as List?)?.isNotEmpty == true)
+                      row('Tipos de animales', (detail!['animalTypes'] as List).join(', ')),
+                    Divider(color: borderColor),
+
+                    // Requirements
+                    section('REQUISITOS'),
+                    checkRow('Identidad verificada', detail?['verificationStatus'] == 'APPROVED'),
+                    checkRow('Términos aceptados', detail?['termsAccepted'] == true),
+                    checkRow('Privacidad aceptada', detail?['privacyAccepted'] == true),
+                    checkRow('Verificación aceptada', detail?['verificationAccepted'] == true),
+                    checkRow('Mayor de 18', detail?['user']?['isOver18'] == true),
+                    Divider(color: borderColor),
+
+                    // IDs
+                    section('IDENTIFICADORES'),
+                    row('Profile ID', detail?['id'] as String?),
+                    row('User ID', detail?['userId'] as String?),
+                    row('Registrado', detail?['createdAt'] != null
+                      ? (detail!['createdAt'] as String).substring(0, 10) : null),
+                    if (detail?['approvedAt'] != null)
+                      row('Aprobado el', (detail!['approvedAt'] as String).substring(0, 10)),
+                    if (detail?['rejectionReason'] != null)
+                      row('Motivo de rechazo', detail!['rejectionReason'] as String),
+                    if (detail?['verificationNotes'] != null)
+                      row('Notas de verificación', detail!['verificationNotes'] as String),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              child: Column(
+                children: [
+                  if (canReview) ...[
+                    Row(children: [
+                      Expanded(child: GardenButton(
+                        label: 'Aprobar',
+                        icon: Icons.check_rounded,
+                        height: 44,
+                        color: GardenColors.success,
+                        onPressed: () async {
+                          Navigator.pop(context);
+                          await widget.onReview(widget.caregiverId, 'approve');
+                        },
+                      )),
+                      const SizedBox(width: 12),
+                      Expanded(child: GardenButton(
+                        label: 'Rechazar',
+                        icon: Icons.close_rounded,
+                        height: 44,
+                        color: GardenColors.error,
+                        outline: true,
+                        onPressed: () async {
+                          Navigator.pop(context);
+                          await widget.onReview(widget.caregiverId, 'reject');
+                        },
+                      )),
+                    ]),
+                    const SizedBox(height: 10),
+                  ],
+                  if (isApproved) ...[
+                    GardenButton(
+                      label: 'Suspender cuidador',
+                      icon: Icons.block,
+                      height: 44,
+                      color: GardenColors.warning,
+                      outline: true,
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await widget.onSuspend(widget.caregiverId);
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  GardenButton(label: 'Cerrar', height: 44, outline: true, onPressed: () => Navigator.pop(context)),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

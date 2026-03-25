@@ -687,10 +687,11 @@ export async function getReservations(status?: string): Promise<AdminReservation
 }
 
 
-/** GET lista de sesiones en REVIEW para revisión manual */
-export async function listIdentityReviews() {
+/** GET lista de sesiones de identidad — por defecto solo REVIEW, pasa status='ALL' para todas */
+export async function listIdentityReviews(status?: string) {
+  const whereStatus = (!status || status === 'ALL') ? undefined : status;
   const sessions = await prisma.identityVerificationSession.findMany({
-    where: { status: 'REVIEW' },
+    where: whereStatus ? { status: whereStatus as any } : {},
     orderBy: { completedAt: 'asc' },
     include: {
       user: {
@@ -707,10 +708,53 @@ export async function listIdentityReviews() {
     id: s.id,
     userId: s.userId,
     user: s.user,
+    status: s.status,
     similarity: s.similarity,
+    similarityScore: s.similarityScore,
     // @ts-ignore
     trustScore: s.trustScore,
+    livenessScore: s.livenessScore,
     completedAt: s.completedAt,
+    createdAt: s.createdAt,
+    reviewedAt: (s as any).reviewedAt ?? null,
+    reviewedBy: (s as any).reviewedBy ?? null,
+  }));
+}
+
+/** GET /api/admin/payments-history — pagos procesados recientemente */
+export async function getPaymentsHistory(limit = 50) {
+  const bookings = await prisma.booking.findMany({
+    where: {
+      paidAt: { not: null },
+      status: { notIn: ['PENDING_PAYMENT', 'PAYMENT_PENDING_APPROVAL', 'CANCELLED'] as any[] },
+    },
+    select: {
+      id: true,
+      status: true,
+      petName: true,
+      totalAmount: true,
+      paidAt: true,
+      paymentMethod: true,
+      serviceType: true,
+      clientId: true,
+      client: { select: { firstName: true, lastName: true, email: true } },
+      caregiver: { include: { user: { select: { firstName: true, lastName: true } } } },
+    },
+    orderBy: { paidAt: 'desc' },
+    take: limit,
+  });
+
+  return bookings.map((b) => ({
+    id: b.id,
+    status: b.status,
+    petName: b.petName,
+    totalAmount: Number(b.totalAmount),
+    paidAt: b.paidAt?.toISOString() ?? null,
+    paymentMethod: b.paymentMethod,
+    serviceType: b.serviceType,
+    clientName: `${b.client.firstName} ${b.client.lastName}`,
+    clientEmail: b.client.email,
+    caregiverName: `${b.caregiver.user.firstName} ${b.caregiver.user.lastName}`,
   }));
 }
 

@@ -37,6 +37,9 @@ router.patch('/caregivers/:id/verify', adminController.toggleVerify);
 /** GET /api/admin/payments-pending — reservas pendientes de aprobación de pago manual. */
 router.get('/payments-pending', adminController.getPaymentsPending);
 
+/** GET /api/admin/payments-history — pagos ya procesados (historial). */
+router.get('/payments-history', adminController.getPaymentsHistory);
+
 /** POST /api/admin/bookings/:id/reject-payment — rechazar pago manual. */
 router.post('/bookings/:id/reject-payment', adminController.rejectPayment);
 
