@@ -5,8 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
-import '../../services/agentes_service.dart';
-import '../../widgets/temporada_alta_badge.dart';
 import '../../theme/garden_theme.dart';
 
 class MarketplaceScreen extends StatefulWidget {
@@ -238,179 +236,253 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final isVerified = caregiver['verified'] == true;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final cardBg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
-    return GardenCard(
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: EdgeInsets.zero,
+    final rating = (caregiver['rating'] as num? ?? 0).toStringAsFixed(1);
+    final reviewCount = caregiver['reviewCount'] as int? ?? 0;
+    final firstName = caregiver['firstName'] as String? ?? '';
+    final lastName = caregiver['lastName'] as String? ?? '';
+    final zone = _zoneLabels[caregiver['zone']] ?? caregiver['zone'] ?? '';
+    final expYears = caregiver['experienceYears'] as int?;
+    final services = (caregiver['services'] as List? ?? []).take(2).toList();
+
+    // Precio principal
+    String? priceLabel;
+    String? priceUnit;
+    if (caregiver['pricePerWalk30'] != null) {
+      priceLabel = 'Bs ${caregiver['pricePerWalk30']}';
+      priceUnit = '/paseo';
+    } else if (caregiver['pricePerDay'] != null) {
+      priceLabel = 'Bs ${caregiver['pricePerDay']}';
+      priceUnit = '/noche';
+    }
+
+    return GestureDetector(
       onTap: () => context.push('/caregiver/${caregiver['id']}'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Foto Grande (con Hero)
-          Hero(
-            tag: 'photo-${caregiver['id']}',
-            child: ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(GardenRadius.lg),
-                topRight: Radius.circular(GardenRadius.lg),
-              ),
-              child: Image.network(
-                caregiver['profilePicture'] ?? '',
-                height: 180,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  height: 180,
-                  color: GardenColors.primary.withOpacity(0.1),
-                  child: const Icon(Icons.pets, size: 40, color: GardenColors.primary),
-                ),
-              ),
-            ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isVerified
+                ? GardenColors.primary.withValues(alpha: 0.25)
+                : borderColor,
           ),
-          
-          // Sección de Info (Snippet del usuario)
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                GardenAvatar(
-                  imageUrl: caregiver['profilePicture'] as String?,
-                  size: 44,
-                  initials: '${(caregiver['firstName'] as String? ?? 'C')[0]}${(caregiver['lastName'] as String? ?? '')[0]}',
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            // ── Fila principal ──────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Avatar con ring de verificación
+                  Stack(
                     children: [
-                      Text(
-                        '${caregiver['firstName']} ${caregiver['lastName']}',
-                        style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700),
-                        overflow: TextOverflow.ellipsis,
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isVerified
+                                ? GardenColors.primary.withValues(alpha: 0.6)
+                                : borderColor,
+                            width: isVerified ? 2 : 1.5,
+                          ),
+                        ),
+                        child: GardenAvatar(
+                          imageUrl: caregiver['profilePicture'] as String?,
+                          size: 54,
+                          initials: '${firstName.isNotEmpty ? firstName[0] : "C"}${lastName.isNotEmpty ? lastName[0] : ""}',
+                        ),
                       ),
-                      Row(
-                        children: [
-                          if (caregiver['experienceYears'] != null) ...[
-                            const Icon(Icons.badge_outlined, size: 12, color: GardenColors.primary),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${caregiver['experienceYears']}+ años exp.',
-                              style: const TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.bold),
+                      if (isVerified)
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            width: 18,
+                            height: 18,
+                            decoration: const BoxDecoration(
+                              color: GardenColors.primary,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.verified_rounded, size: 12, color: Colors.white),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Info central
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Nombre + rating en misma fila
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '$firstName $lastName',
+                                style: TextStyle(
+                                  color: textColor,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.2,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                             const SizedBox(width: 8),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.star_rounded, color: GardenColors.star, size: 14),
+                                const SizedBox(width: 2),
+                                Text(
+                                  rating,
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                if (reviewCount > 0) ...[
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    '($reviewCount)',
+                                    style: TextStyle(color: subtextColor, fontSize: 11),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ],
-                          Icon(Icons.location_on_outlined, size: 12, color: subtextColor),
-                          const SizedBox(width: 3),
-                          Text(
-                            _zoneLabels[caregiver['zone']] ?? caregiver['zone'] ?? '',
-                            style: TextStyle(color: subtextColor, fontSize: 11),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Row(
-                  children: [
-                    const Icon(Icons.star_rounded, color: GardenColors.star, size: 15),
-                    const SizedBox(width: 3),
-                    Text(
-                      (caregiver['rating'] as num? ?? 0).toStringAsFixed(1),
-                      style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          
-          // Línea divisoria sutil
-          Divider(height: 1, color: theme.colorScheme.outline.withOpacity(0.1)),
-          
-          // Sección inferior: Servicios y Precio
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Servicios como Badges
-                Expanded(
-                  child: Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: (caregiver['services'] as List? ?? []).take(2).map((s) {
-                      return GardenBadge(
-                        text: s.toString(),
-                        color: GardenColors.secondary,
-                        fontSize: 10,
-                      );
-                    }).toList(),
-                  ),
-                ),
-                // Precio destacado
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    if (caregiver['pricePerWalk30'] != null) ...[
-                      Text(
-                        'Bs ${caregiver['pricePerWalk30']}',
-                        style: GardenText.price.copyWith(color: GardenColors.primary),
-                      ),
-                      const Text('por paseo', style: GardenText.caption),
-                    ] else if (caregiver['pricePerDay'] != null) ...[
-                      Text(
-                        'Bs ${caregiver['pricePerDay']}',
-                        style: GardenText.price.copyWith(color: GardenColors.primary),
-                      ),
-                      const Text('por noche', style: GardenText.caption),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
+                        ),
+                        const SizedBox(height: 4),
 
-          // Blockchain Verification (si aplica)
-          if (isVerified)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
-              decoration: BoxDecoration(
-                color: GardenColors.polygon.withOpacity(0.08),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(GardenRadius.lg),
-                  bottomRight: Radius.circular(GardenRadius.lg),
-                ),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.link, size: 12, color: GardenColors.polygon),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Verificado en Polygon Blockchain',
-                    style: GardenText.caption.copyWith(
-                      color: GardenColors.polygon,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 10,
+                        // Zona + experiencia
+                        Row(
+                          children: [
+                            Icon(Icons.location_on_outlined, size: 11, color: subtextColor),
+                            const SizedBox(width: 3),
+                            Text(zone, style: TextStyle(color: subtextColor, fontSize: 12)),
+                            if (expYears != null) ...[
+                              Text('  ·  ', style: TextStyle(color: subtextColor, fontSize: 12)),
+                              Icon(Icons.workspace_premium_outlined, size: 11, color: GardenColors.primary),
+                              const SizedBox(width: 3),
+                              Text(
+                                '$expYears+ años',
+                                style: const TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Badges de servicios
+                        if (services.isNotEmpty)
+                          Wrap(
+                            spacing: 5,
+                            children: services.map((s) => Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: GardenColors.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                s.toString(),
+                                style: const TextStyle(
+                                  color: GardenColors.primary,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            )).toList(),
+                          ),
+                      ],
                     ),
                   ),
+
+                  // Precio (columna derecha)
+                  if (priceLabel != null) ...[
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          priceLabel,
+                          style: const TextStyle(
+                            color: GardenColors.primary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          priceUnit!,
+                          style: TextStyle(color: subtextColor, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
-          
-          // Badge de temporada alta
-          if (caregiver['zone'] == 'EQUIPETROL')
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: TemporadaAltaBadge(
-                zona: 'Equipetrol',
-                porcentajeAjuste: 15,
-                motivo: 'Semana Santa',
-                fechaVueltaNormal: '24 de marzo',
-                agentesService: AgentesService(authToken: _authToken),
+
+            // ── Footer verificación / temporada alta ──────────────
+            if (isVerified || caregiver['zone'] == 'EQUIPETROL')
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                decoration: BoxDecoration(
+                  color: isVerified
+                      ? GardenColors.polygon.withValues(alpha: 0.07)
+                      : GardenColors.warning.withValues(alpha: 0.07),
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(16),
+                    bottomRight: Radius.circular(16),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    if (isVerified) ...[
+                      const Icon(Icons.link_rounded, size: 12, color: GardenColors.polygon),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Verificado en Polygon Blockchain',
+                        style: TextStyle(
+                          color: GardenColors.polygon,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ] else ...[
+                      Icon(Icons.trending_up_rounded, size: 12, color: GardenColors.warning),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Zona con alta demanda · Semana Santa',
+                        style: TextStyle(
+                          color: GardenColors.warning,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
