@@ -42,16 +42,14 @@ class _BookingScreenState extends State<BookingScreen> {
   Future<void> _initData() async {
     final prefs = await SharedPreferences.getInstance();
     _clientToken = prefs.getString('access_token') ?? '';
-    // Fallback if empty for dev
     if (_clientToken.isEmpty) {
-      _clientToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJiMWEyMWYzMS01MzRmLTQxMjktODdiNi02MWY1MDA4NDc0ZDIiLCJyb2xlIjoiQ0xJRU5UIiwiaWQiOiJiMWEyMWYzMS01MzRmLTQxMjktODdiNi02MWY1MDA4NDc0ZDIiLCJpYXQiOjE3NzM2NzM5MTgsImV4cCI6MTc3NjI2NTkxOH0.z3UlAvEptacachixvfUTMpgR19RZ536dm-44rLInGmM';
+      if (mounted) context.go('/login');
+      return;
     }
 
     await Future.wait([_loadCaregiver(), _loadPets()]);
-    
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
+
+    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _loadCaregiver() async {

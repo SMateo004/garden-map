@@ -8,7 +8,7 @@
 import { randomBytes } from 'crypto';
 import prisma from '../../config/database.js';
 import { CaregiverStatus } from '@prisma/client';
-import { BadRequestError, ForbiddenError, ConflictError } from '../../shared/errors.js';
+import { BadRequestError, ForbiddenError, ConflictError, AvailabilityConflictError } from '../../shared/errors.js';
 import { getCache, delByPrefix } from '../../shared/cache.js';
 import { ensureAbsoluteUrl, ensureAbsoluteUrls } from '../../shared/upload-utils.js';
 import type { PatchCaregiverProfileBody, PatchAvailabilityBody } from './caregiver-profile.validation.js';
@@ -467,6 +467,52 @@ export async function patchAvailability(userId: string, body: PatchAvailabilityB
   }
 
   // Se permite editar disponibilidad incluso si está APPROVED.
+
+  // Verificar conflictos: fechas que se quieren bloquear con reservas CONFIRMED/IN_PROGRESS
+  if (body.overrides && Object.keys(body.overrides).length > 0) {
+    const datesToBlock = Object.entries(body.overrides)
+      .filter(([, dayOverride]) => (dayOverride.isAvailable ?? true) === false)
+      .map(([dateStr]) => new Date(dateStr + 'T00:00:00.000Z'));
+
+    if (datesToBlock.length > 0) {
+      const conflicting = await prisma.booking.findMany({
+        where: {
+          caregiverId: profile.id,
+          status: { in: ['CONFIRMED', 'IN_PROGRESS'] },
+          OR: [
+            { walkDate: { in: datesToBlock } },
+            {
+              startDate: { lte: datesToBlock[datesToBlock.length - 1] },
+              endDate:   { gte: datesToBlock[0] },
+            },
+          ],
+        },
+        select: { walkDate: true, startDate: true, endDate: true },
+      });
+
+      if (conflicting.length > 0) {
+        const conflictDates = conflicting.flatMap((b) => {
+          if (b.walkDate) return [b.walkDate.toISOString().slice(0, 10)];
+          const result: string[] = [];
+          if (b.startDate && b.endDate) {
+            const cur = new Date(b.startDate);
+            while (cur <= b.endDate) {
+              result.push(cur.toISOString().slice(0, 10));
+              cur.setUTCDate(cur.getUTCDate() + 1);
+            }
+          }
+          return result;
+        });
+        const relevant = [...new Set(conflictDates)].filter((d) =>
+          datesToBlock.some((bd) => bd.toISOString().slice(0, 10) === d),
+        );
+        throw new AvailabilityConflictError(
+          `No puedes bloquear fechas con reservas activas: ${relevant.join(', ')}`,
+        );
+      }
+    }
+  }
+
   try {
     if (body.defaultSchedule !== undefined) {
       await prisma.caregiverProfile.update({

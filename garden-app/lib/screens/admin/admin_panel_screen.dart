@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../main.dart';
 import '../../services/agentes_service.dart';
 import '../../widgets/disputa_panel_card.dart';
 import '../../widgets/garden_empty_state.dart';
@@ -24,7 +24,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   String _adminToken = '';
   String _caregiverStatusFilter = 'pendientes'; // 'pendientes', 'DRAFT', 'APPROVED', 'REJECTED', 'todos'
 
-  static const String _adminJWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhZG1pbi1sb2NhbCIsInJvbGUiOiJBRE1JTiIsImlkIjoiYWRtaW4tbG9jYWwiLCJpYXQiOjE3NzM2NjYzMDcsImV4cCI6MTc3NjI1ODMwN30.KfQ_6FrVZAzCxTiY1sBrN6tfpmj4uotX__pkX_Jtz8o';
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
 
@@ -41,9 +40,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
   Future<void> _loadAdminToken() async {
     final prefs = await SharedPreferences.getInstance();
-    String token = prefs.getString('access_token') ?? '';
+    final token = prefs.getString('access_token') ?? '';
     if (token.isEmpty) {
-      token = _adminJWT;
+      if (mounted) context.go('/login');
+      return;
     }
     setState(() => _adminToken = token);
   }

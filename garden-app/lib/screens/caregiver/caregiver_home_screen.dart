@@ -32,7 +32,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   Map<String, dynamic>? _nextBookingWithin24h;
   String _userName = 'Cuidador';
 
-  static const String _devToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJmNmRmZmYzMS1lYTFhLTQ4MzktYmZkOC1kMWY4OTgwNDQxMjAiLCJyb2xlIjoiQ0FSRUdJVkVSIiwiaWQiOiJmNmRmZmYzMS1lYTFhLTQ4MzktYmZkOC1kMWY4OTgwNDQxMjAiLCJpYXQiOjE3NzM2ODU4NjQsImV4cCI6MTc3NjI3Nzg2NH0.I9cvXI16qEgG55S6FTHeieDLqPjhCQewLKvN0xXgddw';
 
   int _selectedTab = 0; // 0: Inicio, 1: Disponibilidad, 2: Reservas
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
@@ -65,7 +64,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     _caregiverToken = prefs.getString('access_token') ?? '';
     if (_caregiverToken.isEmpty) {
-      _caregiverToken = _devToken;
+      if (mounted) context.go('/login');
+      return;
     }
     // Cargar nombre desde prefs si existe
     final storedName = prefs.getString('user_name') ?? '';
@@ -584,6 +584,40 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
       );
+    }
+  }
+
+  Future<void> _requestCancellation(String bookingId, String reason) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/bookings/$bookingId/cancellation-request'),
+        headers: {
+          'Authorization': 'Bearer $_caregiverToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'reason': reason}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadBookings();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Solicitud enviada. El admin revisará tu cancelación.'),
+              backgroundColor: GardenColors.warning,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+      } else {
+        throw Exception(data['error']?['message'] ?? 'Error al solicitar cancelación');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+        );
+      }
     }
   }
 
@@ -2136,6 +2170,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       borderColor: borderColor,
       isDark: isDark,
       onRespond: _respondBooking,
+      onRequestCancellation: _requestCancellation,
     );
   }
 
@@ -2540,6 +2575,7 @@ class _ExpandableBookingCard extends StatefulWidget {
   final Color surface, textColor, subtextColor, borderColor;
   final bool isDark;
   final Function(String, String) onRespond;
+  final Function(String, String) onRequestCancellation;
 
   const _ExpandableBookingCard({
     required this.booking,
@@ -2549,6 +2585,7 @@ class _ExpandableBookingCard extends StatefulWidget {
     required this.borderColor,
     required this.isDark,
     required this.onRespond,
+    required this.onRequestCancellation,
   });
 
   @override
@@ -2557,6 +2594,55 @@ class _ExpandableBookingCard extends StatefulWidget {
 
 class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
   bool _expanded = false;
+
+  Future<void> _showCancellationDialog(String bookingId) async {
+    final reasonController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Solicitar cancelación'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Esta solicitud será revisada por el administrador. La cancelación no es inmediata.',
+              style: TextStyle(fontSize: 13, color: GardenColors.textSecondary),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: reasonController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'Escribe el motivo de cancelación...',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error),
+            onPressed: () {
+              if (reasonController.text.trim().isNotEmpty) {
+                Navigator.pop(ctx, true);
+              }
+            },
+            child: const Text('Enviar solicitud'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      widget.onRequestCancellation(bookingId, reasonController.text.trim());
+    }
+    reasonController.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2806,6 +2892,19 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                         ),
                       ),
                     ),
+                  ),
+                ),
+
+              if (status == 'CONFIRMED')
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                  child: GardenButton(
+                    label: 'Solicitar cancelación',
+                    icon: Icons.cancel_outlined,
+                    height: 40,
+                    color: GardenColors.error,
+                    outline: true,
+                    onPressed: () => _showCancellationDialog(booking['id'] as String),
                   ),
                 ),
 
