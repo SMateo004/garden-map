@@ -131,7 +131,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         'page': _currentPage.toString(),
         if (_selectedService != 'todos') 'service': _selectedService,
         if (_selectedZone != null) 'zone': _selectedZone!.toLowerCase(),
-        if (_minExperienceYears != null) 'experienceYears': _minExperienceYears.toString(),
+        if (_minExperienceYears != null && _minExperienceYears! > 0) 'experienceYears': _minExperienceYears.toString(),
         if (_filterAggressive) 'acceptAggressive': 'true',
         if (_filterPuppies) 'acceptPuppies': 'true',
         if (_filterSeniors) 'acceptSeniors': 'true',
@@ -671,12 +671,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                               focusedBorder: InputBorder.none,
                               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                             ),
-                            items: _zoneLabels.entries.map((e) {
-                              return DropdownMenuItem(
+                            items: [
+                              DropdownMenuItem<String>(
+                                value: null,
+                                child: Text('Todas las zonas', style: GardenText.bodyMedium),
+                              ),
+                              ..._zoneLabels.entries.map((e) => DropdownMenuItem(
                                 value: e.key,
                                 child: Text(e.value, style: GardenText.bodyMedium),
-                              );
-                            }).toList(),
+                              )),
+                            ],
                             onChanged: (value) {
                               setState(() => _selectedZone = value);
                               _loadCaregivers(reset: true);
@@ -797,6 +801,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                           _selectedSizes = [];
                         });
                         setState(() {});
+                        Navigator.pop(context);
+                        _loadCaregivers(reset: true);
                       },
                       child: const Text('Limpiar', style: TextStyle(color: GardenColors.primary)),
                     ),
