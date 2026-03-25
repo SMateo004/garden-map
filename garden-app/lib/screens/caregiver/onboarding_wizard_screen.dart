@@ -18,10 +18,10 @@ class OnboardingWizardScreen extends StatefulWidget {
   final String initialPassword;
 
   const OnboardingWizardScreen({
-    Key? key,
+    super.key,
     this.initialEmail = '',
     this.initialPassword = '',
-  }) : super(key: key);
+  });
 
   @override
   State<OnboardingWizardScreen> createState() => _OnboardingWizardScreenState();
@@ -41,8 +41,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   final _addressController = TextEditingController();
 
   // Paso 6: Perfil Profesional
-  List<String> _sizesAccepted = [];
-  List<String> _animalTypes = ['DOGS'];
+  final List<String> _sizesAccepted = [];
+  final List<String> _animalTypes = ['DOGS'];
   int _experienceYears = 1;
   bool _ownPets = false;
   bool _acceptPuppies = false;
@@ -51,7 +51,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   // Paso 7: Foto de Perfil
   String? _profilePhotoUrl;
   XFile? _localProfilePhoto;
-  bool _uploadingProfilePhoto = false;
+  final bool _uploadingProfilePhoto = false;
   DateTime? _dateOfBirth;
 
   // Paso 2: Fotos del hogar
@@ -60,7 +60,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   bool _uploadingPhotos = false;
 
   // Paso 3: Tipo de servicio y zona
-  List<String> _servicesOffered = [];
+  final List<String> _servicesOffered = [];
   String? _selectedZone;
   String? _homeType;
   bool _hasYard = false;
@@ -69,7 +69,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   bool _weekdays = false;
   bool _weekends = false;
   bool _holidays = false;
-  List<String> _times = [];
+  final List<String> _times = [];
 
   // Paso 5: Precio
   double _precioFinal = 0;
@@ -821,7 +821,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: kPrimaryColor.withOpacity(0.3)),
                   ),
-                  child: Column(
+                  child: const Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
@@ -829,8 +829,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                         color: kPrimaryColor,
                         size: 40,
                       ),
-                      const SizedBox(height: 8),
-                      const Text('Añadir foto', style: TextStyle(color: kTextSecondary, fontSize: 12)),
+                      SizedBox(height: 8),
+                      Text('Añadir foto', style: TextStyle(color: kTextSecondary, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -1157,14 +1157,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 BoxShadow(color: kPrimaryColor.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4)),
               ]
             ),
-            child: Row(
+            child: const Row(
               children: [
-                const Icon(Icons.auto_awesome, color: Colors.white, size: 40),
-                const SizedBox(width: 16),
+                Icon(Icons.auto_awesome, color: Colors.white, size: 40),
+                SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
+                    children: [
                       Text(
                         'Precio Dinámico Recomendado',
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
@@ -1229,11 +1229,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   final _handleAnxiousController = TextEditingController();
   final _emergencyResponseController = TextEditingController();
   bool _acceptAggressive = false;
-  List<String> _acceptMedication = [];
-  bool _noAcceptBreeds = false;
+  final List<String> _acceptMedication = [];
+  final bool _noAcceptBreeds = false;
   final _breedsWhyController = TextEditingController();
   bool _hasChildren = false;
-  String _petsSleep = 'INSIDE'; 
+  final String _petsSleep = 'INSIDE'; 
   int _hoursAlone = 0;
   bool _workFromHome = true;
   int _maxPets = 1;
@@ -1252,7 +1252,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           const Text('Completa todos los detalles para que tu perfil sea 100% visible a los dueños.', style: TextStyle(fontSize: 14, color: kTextSecondary)),
           const SizedBox(height: 24),
           
-          Text('Experiencia y mascotas', style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold)),
+          const Text('Experiencia y mascotas', style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           
           const Text('Mascotas que aceptas', style: TextStyle(color: kTextSecondary, fontWeight: FontWeight.bold)),
@@ -1268,7 +1268,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 backgroundColor: kSurfaceColor,
                 labelStyle: TextStyle(color: isSelected ? Colors.white : kTextSecondary),
                 onSelected: (selected) {
-                  setState(() { if (selected) _animalTypes.add(type); else _animalTypes.remove(type); });
+                  setState(() { if (selected) {
+                    _animalTypes.add(type);
+                  } else {
+                    _animalTypes.remove(type);
+                  } });
                 },
               );
             }).toList(),
@@ -1281,7 +1285,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             label: '\${_experienceYears} años', activeColor: kPrimaryColor,
             onChanged: (val) => setState(() => _experienceYears = val.toInt()),
           ),
-          Center(child: Text('\${_experienceYears} años de experiencia', style: const TextStyle(color: Colors.white, fontSize: 16))),
+          const Center(child: Text('\${_experienceYears} años de experiencia', style: TextStyle(color: Colors.white, fontSize: 16))),
           const SizedBox(height: 16),
           
           const Text('Tamaños aceptados', style: TextStyle(color: kTextSecondary)),
@@ -1294,7 +1298,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 label: Text(label), selected: isSelected, selectedColor: kPrimaryColor, backgroundColor: kSurfaceColor,
                 labelStyle: TextStyle(color: isSelected ? Colors.white : kTextSecondary),
                 onSelected: (selected) {
-                  setState(() { if (selected) _sizesAccepted.add(size); else _sizesAccepted.remove(size); });
+                  setState(() { if (selected) {
+                    _sizesAccepted.add(size);
+                  } else {
+                    _sizesAccepted.remove(size);
+                  } });
                 },
               );
             }).toList(),
@@ -1312,7 +1320,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           SwitchListTile(tileColor: kSurfaceColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), title: const Text('¿Aceptas mascotas agresivas?', style: TextStyle(color: Colors.white, fontSize: 14)), value: _acceptAggressive, activeColor: kPrimaryColor, onChanged: (v) => setState(() => _acceptAggressive = v)),
           const SizedBox(height: 24),
           if (_servicesOffered.contains('HOSPEDAJE') || _servicesOffered.contains('GUARDERIA')) ...[
-            Text('Condiciones y Entorno (Alojamiento)', style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold)),
+            const Text('Condiciones y Entorno (Alojamiento)', style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             SwitchListTile(tileColor: kSurfaceColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), title: const Text('¿Tienes niños en casa?', style: TextStyle(color: Colors.white, fontSize: 14)), value: _hasChildren, activeColor: kPrimaryColor, onChanged: (v) => setState(() => _hasChildren = v)),
             const SizedBox(height: 8),
@@ -1322,15 +1330,15 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             const SizedBox(height: 16),
             
             const Text('Horas que las mascotas estarán solas', style: TextStyle(color: kTextSecondary)),
-            Slider(value: _hoursAlone.toDouble(), min: 0, max: 24, divisions: 24, label: '${_hoursAlone} hrs', activeColor: kPrimaryColor, onChanged: (val) => setState(() => _hoursAlone = val.toInt())),
+            Slider(value: _hoursAlone.toDouble(), min: 0, max: 24, divisions: 24, label: '$_hoursAlone hrs', activeColor: kPrimaryColor, onChanged: (val) => setState(() => _hoursAlone = val.toInt())),
             const SizedBox(height: 16),
 
             const Text('Máximo de mascotas permitidas a la vez', style: TextStyle(color: kTextSecondary)),
-            Slider(value: _maxPets.toDouble(), min: 1, max: 10, divisions: 9, label: '${_maxPets} mascotas', activeColor: kPrimaryColor, onChanged: (val) => setState(() => _maxPets = val.toInt())),
+            Slider(value: _maxPets.toDouble(), min: 1, max: 10, divisions: 9, label: '$_maxPets mascotas', activeColor: kPrimaryColor, onChanged: (val) => setState(() => _maxPets = val.toInt())),
             const SizedBox(height: 24),
           ],
 
-          Text('Sobre ti y tu método', style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold)),
+          const Text('Sobre ti y tu método', style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           TextFormField(controller: _bioDetailController, maxLines: 4, decoration: const InputDecoration(hintText: 'Biografía detallada: tu experiencia, método de cuidado, formaciones...', prefixIcon: Padding(padding: EdgeInsets.only(bottom: 64), child: Icon(Icons.person_pin, color: kTextSecondary)), alignLabelWithHint: true)),
           const SizedBox(height: 8),
@@ -1399,9 +1407,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                       future: _localProfilePhoto!.readAsBytes(),
                       builder: (c, s) => s.hasData ? Image.memory(s.data!, fit: BoxFit.cover) : const CircularProgressIndicator()
                     )
-                  : Column(
+                  : const Column(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
+                      children: [
                         Icon(Icons.camera_alt_outlined, size: 60, color: kTextSecondary),
                         SizedBox(height: 8),
                         Text('Subir foto', style: TextStyle(color: kTextSecondary, fontWeight: FontWeight.bold))

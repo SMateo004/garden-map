@@ -8,7 +8,7 @@ import 'dart:typed_data';
 import 'package:http_parser/http_parser.dart';
 
 class MyPetsScreen extends StatefulWidget {
-  const MyPetsScreen({Key? key}) : super(key: key);
+  const MyPetsScreen({super.key});
 
   @override
   State<MyPetsScreen> createState() => _MyPetsScreenState();
@@ -113,7 +113,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
     return Scaffold(
       backgroundColor: kBackgroundColor,
       appBar: AppBar(
-        title: Text('Mis mascotas'),
+        title: const Text('Mis mascotas'),
         backgroundColor: kSurfaceColor,
       ),
       floatingActionButton: FloatingActionButton(
@@ -130,7 +130,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                     children: [
                       const Icon(Icons.pets, color: kTextSecondary, size: 64),
                       const SizedBox(height: 16),
-                      Text(
+                      const Text(
                         'Aún no tienes mascotas registradas',
                         style: TextStyle(color: kTextSecondary),
                       ),
@@ -138,7 +138,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(backgroundColor: kPrimaryColor),
                         onPressed: _showAddPetDialog,
-                        child: Text('Agregar mi primera mascota', style: TextStyle(color: Colors.white)),
+                        child: const Text('Agregar mi primera mascota', style: TextStyle(color: Colors.white)),
                       ),
                     ],
                   ),
@@ -221,7 +221,7 @@ class _AddPetForm extends StatefulWidget {
   final Function(Map<String, dynamic>) onCreate;
   final String clientToken;
 
-  const _AddPetForm({Key? key, required this.onCreate, required this.clientToken}) : super(key: key);
+  const _AddPetForm({super.key, required this.onCreate, required this.clientToken});
 
   @override
   State<_AddPetForm> createState() => _AddPetFormState();
@@ -312,7 +312,7 @@ class _AddPetFormState extends State<_AddPetForm> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
+              const Text(
                 'Nueva Mascota',
                 style: TextStyle(
                   fontSize: 20,
@@ -348,7 +348,7 @@ class _AddPetFormState extends State<_AddPetForm> {
               ),
               const SizedBox(height: 16),
               TextFormField(
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Nombre *',
                   filled: true,
                   fillColor: kBackgroundColor,
@@ -361,11 +361,11 @@ class _AddPetFormState extends State<_AddPetForm> {
               ),
               const SizedBox(height: 16),
               TextFormField(
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Raza (opcional)',
                   filled: true,
                   fillColor: kBackgroundColor,
-                  border: const OutlineInputBorder(),
+                  border: OutlineInputBorder(),
                   labelStyle: TextStyle(color: kTextSecondary),
                 ),
                 style: const TextStyle(color: Colors.white),
@@ -373,11 +373,11 @@ class _AddPetFormState extends State<_AddPetForm> {
               ),
               const SizedBox(height: 16),
               TextFormField(
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Edad en años (opcional)',
                   filled: true,
                   fillColor: kBackgroundColor,
-                  border: const OutlineInputBorder(),
+                  border: OutlineInputBorder(),
                   labelStyle: TextStyle(color: kTextSecondary),
                 ),
                 style: const TextStyle(color: Colors.white),
@@ -390,11 +390,11 @@ class _AddPetFormState extends State<_AddPetForm> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Tamaño',
                   filled: true,
                   fillColor: kBackgroundColor,
-                  border: const OutlineInputBorder(),
+                  border: OutlineInputBorder(),
                   labelStyle: TextStyle(color: kTextSecondary),
                 ),
                 dropdownColor: kSurfaceColor,
@@ -409,11 +409,11 @@ class _AddPetFormState extends State<_AddPetForm> {
               ),
               const SizedBox(height: 16),
               TextFormField(
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Necesidades especiales (opcional)',
                   filled: true,
                   fillColor: kBackgroundColor,
-                  border: const OutlineInputBorder(),
+                  border: OutlineInputBorder(),
                   labelStyle: TextStyle(color: kTextSecondary),
                 ),
                 style: const TextStyle(color: Colors.white),
@@ -438,7 +438,7 @@ class _AddPetFormState extends State<_AddPetForm> {
                     widget.onCreate(data);
                   }
                 },
-                child: Text('Guardar mascota', style: TextStyle(color: Colors.white, fontSize: 16)),
+                child: const Text('Guardar mascota', style: TextStyle(color: Colors.white, fontSize: 16)),
               ),
             ],
           ),

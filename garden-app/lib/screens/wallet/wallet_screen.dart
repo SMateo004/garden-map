@@ -102,11 +102,11 @@ class _WalletScreenState extends State<WalletScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
+                            const Row(
                               children: [
-                                const Icon(Icons.account_balance_wallet_outlined, color: Colors.white70, size: 18),
-                                const SizedBox(width: 8),
-                                const Text('Saldo disponible', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                                Icon(Icons.account_balance_wallet_outlined, color: Colors.white70, size: 18),
+                                SizedBox(width: 8),
+                                Text('Saldo disponible', style: TextStyle(color: Colors.white70, fontSize: 13)),
                               ],
                             ),
                             const SizedBox(height: 12),
@@ -148,13 +148,13 @@ class _WalletScreenState extends State<WalletScreen> {
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: GardenColors.star.withOpacity(0.2)),
                           ),
-                          child: Row(
+                          child: const Row(
                             children: [
-                              const Text('🎁', style: TextStyle(fontSize: 18)),
-                              const SizedBox(width: 12),
+                              Text('🎁', style: TextStyle(fontSize: 18)),
+                              SizedBox(width: 12),
                               Text('¿Tienes un código de regalo?',
                                 style: TextStyle(color: GardenColors.star, fontSize: 13, fontWeight: FontWeight.w700)),
-                              const Spacer(),
+                              Spacer(),
                               Icon(Icons.arrow_forward_ios_rounded, color: GardenColors.star, size: 14),
                             ],
                           ),

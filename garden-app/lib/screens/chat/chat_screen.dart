@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/chat_service.dart';
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_empty_state.dart';
 
 class ChatScreen extends StatefulWidget {
   final String bookingId;
@@ -9,11 +10,11 @@ class ChatScreen extends StatefulWidget {
   final String? otherPersonPhoto;
 
   const ChatScreen({
-    Key? key,
+    super.key,
     required this.bookingId,
     required this.otherPersonName,
     this.otherPersonPhoto,
-  }) : super(key: key);
+  });
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -160,17 +161,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   // Lista de mensajes
                   Expanded(
                     child: _chatService.messages.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.chat_bubble_outline, size: 56, color: subtextColor),
-                              const SizedBox(height: 12),
-                              Text('Sin mensajes aún', style: TextStyle(color: subtextColor, fontSize: 16)),
-                              const SizedBox(height: 8),
-                              Text('Inicia la conversación', style: TextStyle(color: subtextColor.withOpacity(0.6), fontSize: 13)),
-                            ],
-                          ),
+                      ? GardenEmptyState(
+                          type: GardenEmptyType.chat,
+                          title: 'Empieza la conversación',
+                          subtitle: 'Envía un mensaje a ${widget.otherPersonName} para coordinar el servicio.',
+                          compact: true,
                         )
                       : ListView.builder(
                           controller: _scrollController,

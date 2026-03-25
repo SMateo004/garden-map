@@ -38,6 +38,7 @@ export const listCaregiversQuerySchema = z.object({
     if (!val) return undefined;
     return val.split(',').map((s) => s.trim()).filter(Boolean);
   }),
+  search: z.string().max(80).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(10),
 });

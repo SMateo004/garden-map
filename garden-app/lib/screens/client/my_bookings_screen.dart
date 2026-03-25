@@ -7,7 +7,7 @@ import '../../main.dart';
 import '../../theme/garden_theme.dart';
 
 class MyBookingsScreen extends StatefulWidget {
-  const MyBookingsScreen({Key? key}) : super(key: key);
+  const MyBookingsScreen({super.key});
 
   @override
   State<MyBookingsScreen> createState() => _MyBookingsScreenState();
@@ -313,7 +313,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text('Total pagado', style: TextStyle(color: subtextColor, fontSize: 12)),
-                    Text('Bs ${booking['totalAmount']}', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w900, fontSize: 18)),
+                    Text('Bs ${booking['totalAmount']}', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w900, fontSize: 18)),
                   ],
                 ),
                 if (status == 'CONFIRMED' || status == 'COMPLETED' || status == 'IN_PROGRESS') ...[

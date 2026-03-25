@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../theme/garden_theme.dart';
 
 class LandingScreen extends StatefulWidget {
-  const LandingScreen({Key? key}) : super(key: key);
+  const LandingScreen({super.key});
 
   @override
   State<LandingScreen> createState() => _LandingScreenState();
@@ -53,7 +53,7 @@ class _LandingScreenState extends State<LandingScreen> {
                 backgroundColor: bg,
                 elevation: 0,
                 pinned: true,
-                title: Text(
+                title: const Text(
                   'GARDEN',
                   style: TextStyle(
                     color: GardenColors.primary,
@@ -171,7 +171,7 @@ class _LandingScreenState extends State<LandingScreen> {
                                         value: _selectedZone,
                                         hint: Text('Zona', style: TextStyle(color: subtextColor, fontWeight: FontWeight.w600)),
                                         isExpanded: true,
-                                        icon: Icon(Icons.location_on_rounded, color: GardenColors.primary),
+                                        icon: const Icon(Icons.location_on_rounded, color: GardenColors.primary),
                                         dropdownColor: surface,
                                         style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14),
                                         items: _zoneLabels.entries.map((e) {
@@ -196,7 +196,7 @@ class _LandingScreenState extends State<LandingScreen> {
                                         value: _selectedPetType,
                                         hint: Text('Mascota', style: TextStyle(color: subtextColor, fontWeight: FontWeight.w600)),
                                         isExpanded: true,
-                                        icon: Icon(Icons.pets, color: GardenColors.primary, size: 20),
+                                        icon: const Icon(Icons.pets, color: GardenColors.primary, size: 20),
                                         dropdownColor: surface,
                                         style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14),
                                         items: ['Perro', 'Gato'].map((e) {
@@ -221,7 +221,7 @@ class _LandingScreenState extends State<LandingScreen> {
                                         value: _selectedSize,
                                         hint: Text('Tamaño', style: TextStyle(color: subtextColor, fontWeight: FontWeight.w600)),
                                         isExpanded: true,
-                                        icon: Icon(Icons.straighten, color: GardenColors.primary, size: 20),
+                                        icon: const Icon(Icons.straighten, color: GardenColors.primary, size: 20),
                                         dropdownColor: surface,
                                         style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14),
                                         items: ['PEQUEÑO', 'MEDIANO', 'GRANDE', 'GIGANTE'].map((e) {

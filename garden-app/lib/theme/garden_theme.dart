@@ -193,7 +193,7 @@ class GardenCard extends StatelessWidget {
   final bool gradient;
 
   const GardenCard({
-    Key? key,
+    super.key,
     required this.child,
     this.padding,
     this.margin,
@@ -201,7 +201,7 @@ class GardenCard extends StatelessWidget {
     this.shadows,
     this.onTap,
     this.gradient = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -233,13 +233,13 @@ class GardenBadge extends StatelessWidget {
   final double fontSize;
 
   const GardenBadge({
-    Key? key,
+    super.key,
     required this.text,
     required this.color,
     this.textColor,
     this.icon,
     this.fontSize = 12,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -282,11 +282,11 @@ class GardenSkeleton extends StatefulWidget {
   final double radius;
 
   const GardenSkeleton({
-    Key? key,
+    super.key,
     required this.width,
     required this.height,
     this.radius = GardenRadius.sm,
-  }) : super(key: key);
+  });
 
   @override
   State<GardenSkeleton> createState() => _GardenSkeletonState();
@@ -339,12 +339,12 @@ class GardenAvatar extends StatelessWidget {
   final Color? backgroundColor;
 
   const GardenAvatar({
-    Key? key,
+    super.key,
     this.imageUrl,
     required this.size,
     this.initials,
     this.backgroundColor,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -399,7 +399,7 @@ class GardenButton extends StatelessWidget {
   final double? width;
 
   const GardenButton({
-    Key? key,
+    super.key,
     required this.label,
     this.onPressed,
     this.loading = false,
@@ -408,7 +408,7 @@ class GardenButton extends StatelessWidget {
     this.icon,
     this.height = 52,
     this.width,
-  }) : super(key: key);
+  });
 
 
 
@@ -498,7 +498,7 @@ class GardenInput extends StatelessWidget {
   final void Function(String)? onChanged;
 
   const GardenInput({
-    Key? key,
+    super.key,
     required this.hint,
     this.controller,
     this.prefixIcon,
@@ -508,7 +508,7 @@ class GardenInput extends StatelessWidget {
     this.maxLength,
     this.validator,
     this.onChanged,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -617,7 +617,7 @@ ThemeData gardenTheme({bool dark = true}) {
       onSecondary: Colors.white,
       onError: Colors.white,
       outline: border,
-      surfaceVariant: surfaceEl, // Para compatibilidad con widgets
+      surfaceContainerHighest: surfaceEl, // Para compatibilidad con widgets
     ),
     iconTheme: IconThemeData(
       color: textP,

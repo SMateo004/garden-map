@@ -12,7 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
 
 class VerificationScreen extends StatefulWidget {
-  const VerificationScreen({Key? key}) : super(key: key);
+  const VerificationScreen({super.key});
 
   @override
   State<VerificationScreen> createState() => _VerificationScreenState();
@@ -270,8 +270,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
       _stopCamera();
 
       setState(() {
-        if (type == 'selfie') _selfiePreview = bytes;
-        else if (type == 'ciFront') _ciFrontPreview = bytes;
+        if (type == 'selfie') {
+          _selfiePreview = bytes;
+        } else if (type == 'ciFront') _ciFrontPreview = bytes;
         else if (type == 'ciBack') _ciBackPreview = bytes;
       });
 
@@ -449,13 +450,13 @@ class _VerificationScreenState extends State<VerificationScreen> {
                         if (preview != null)
                           Positioned.fill(child: Image.memory(preview, fit: BoxFit.cover))
                         else
-                          Center(
+                          const Center(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.camera_alt, size: 64, color: kPrimaryColor),
-                                const SizedBox(height: 12),
-                                const Text('Toca para capturar', style: TextStyle(color: kTextSecondary)),
+                                Icon(Icons.camera_alt, size: 64, color: kPrimaryColor),
+                                SizedBox(height: 12),
+                                Text('Toca para capturar', style: TextStyle(color: kTextSecondary)),
                               ],
                             ),
                           ),
@@ -496,15 +497,15 @@ class _VerificationScreenState extends State<VerificationScreen> {
   }
 
   Widget _buildSubmitting() {
-    return Center(
+    return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircularProgressIndicator(color: kPrimaryColor),
-          const SizedBox(height: 24),
-          const Text('Analizando tus documentos con IA...', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          const Text('Esto puede tomar unos segundos', style: TextStyle(color: kTextSecondary, fontSize: 13)),
+          CircularProgressIndicator(color: kPrimaryColor),
+          SizedBox(height: 24),
+          Text('Analizando tus documentos con IA...', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          SizedBox(height: 8),
+          Text('Esto puede tomar unos segundos', style: TextStyle(color: kTextSecondary, fontSize: 13)),
         ],
       ),
     );

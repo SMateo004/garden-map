@@ -37,10 +37,11 @@ function applyMarkup(price: number | null | undefined): number | null {
  * Solo status=APPROVED y verified=true (aparecen tras approve del admin). Orden: rating DESC, createdAt DESC.
  */
 export async function listCaregivers(filters: CaregiverFilters): Promise<PaginatedCaregivers> {
-  const { 
-    service, zone, priceRange, spaceTypes, 
+  const {
+    service, zone, priceRange, spaceTypes,
     experienceYears, acceptAggressive, acceptPuppies, acceptSeniors, sizesAccepted,
-    page = 1, limit = 10 
+    search,
+    page = 1, limit = 10
   } = filters;
 
   const cacheKey = `caregivers:list:${JSON.stringify({
@@ -48,6 +49,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
     zone: Array.isArray(zone) ? zone.join(',') : zone ?? '',
     priceRange: priceRange ?? '',
     spaceTypes: Array.isArray(spaceTypes) ? spaceTypes.join(',') : spaceTypes ?? '',
+    search: search ?? '',
     page,
     limit,
   })}`;
@@ -116,6 +118,16 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
 
   if (sizesAccepted && Array.isArray(sizesAccepted) && sizesAccepted.length > 0) {
     (where as any).sizesAccepted = { hasSome: sizesAccepted };
+  }
+
+  if (search && search.trim()) {
+    const term = search.trim();
+    where.user = {
+      OR: [
+        { firstName: { contains: term, mode: 'insensitive' } },
+        { lastName: { contains: term, mode: 'insensitive' } },
+      ],
+    };
   }
 
   const [caregivers, total] = await Promise.all([
@@ -204,6 +216,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
           orderBy: { createdAt: 'desc' },
           include: {
             client: { select: { firstName: true, lastName: true, profilePicture: true } },
+            booking: { select: { petName: true } },
           },
         },
         availability: {
@@ -339,6 +352,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
       rating: r.rating,
       comment: r.comment,
       serviceType: r.serviceType,
+      petName: r.booking?.petName ?? null,
       createdAt: r.createdAt,
     })),
     // Campos detallados (Questionnaire)

@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 
 class CaregiverProfileDataScreen extends StatefulWidget {
-  const CaregiverProfileDataScreen({Key? key}) : super(key: key);
+  const CaregiverProfileDataScreen({super.key});
 
   @override
   State<CaregiverProfileDataScreen> createState() => _CaregiverProfileDataScreenState();
@@ -206,8 +206,9 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     try {
       // Mapping CASA/APARTAMENTO to Enum if only one selected
       String? hType;
-      if (_selectedHomeTypes.contains('HOUSE')) hType = 'HOUSE';
-      else if (_selectedHomeTypes.contains('APARTMENT')) hType = 'APARTMENT';
+      if (_selectedHomeTypes.contains('HOUSE')) {
+        hType = 'HOUSE';
+      } else if (_selectedHomeTypes.contains('APARTMENT')) hType = 'APARTMENT';
 
       final body = {
         'bio': _bioController.text.trim(),
@@ -290,7 +291,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   }
 
   Future<void> _addPhoto() async {
-    final maxPhotos = 6;
+    const maxPhotos = 6;
     if (_photos.length >= maxPhotos) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Máximo $maxPhotos fotos permitidas')));
       return;
@@ -463,7 +464,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             _sectionTitle('Tamaños aceptados', textColor),
             Column(
               children: _petSizes.map((s) => _buildCheckTile(_petSizeLabels[s]!, _acceptedSizes.contains(s), (v) {
-                setState(() { if (v!) _acceptedSizes.add(s); else _acceptedSizes.remove(s); });
+                setState(() { if (v!) {
+                  _acceptedSizes.add(s);
+                } else {
+                  _acceptedSizes.remove(s);
+                } });
               })).toList(),
             ),
             const Divider(height: 48),
@@ -473,9 +478,9 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             _buildPhotoGrid(borderColor),
             const SizedBox(height: 8),
             if (_selectedServices.contains('HOSPEDAJE')) 
-              Text('Requerido: 4 a 6 fotos de tu espacio y mascotas', style: TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.bold))
+              const Text('Requerido: 4 a 6 fotos de tu espacio y mascotas', style: TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.bold))
             else
-              Text('Requerido: Al menos 2 fotos para el servicio de paseo', style: TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
+              const Text('Requerido: Al menos 2 fotos para el servicio de paseo', style: TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
             const Divider(height: 48),
 
             // Sección 9 — FAQ
@@ -788,7 +793,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       label: Text(label),
       selected: isSelected,
       onSelected: (val) {
-        setState(() { if (val) list.add(value); else list.remove(value); });
+        setState(() { if (val) {
+          list.add(value);
+        } else {
+          list.remove(value);
+        } });
       },
       selectedColor: GardenColors.primary.withOpacity(0.2),
       checkmarkColor: GardenColors.primary,

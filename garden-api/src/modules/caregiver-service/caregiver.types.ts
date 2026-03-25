@@ -83,6 +83,7 @@ export interface CaregiverFilters {
   acceptPuppies?: boolean;
   acceptSeniors?: boolean;
   sizesAccepted?: any[];
+  search?: string;
 }
 
 export interface PaginatedCaregivers {

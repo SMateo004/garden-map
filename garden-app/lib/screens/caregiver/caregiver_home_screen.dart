@@ -5,13 +5,14 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_empty_state.dart';
 import '../../main.dart';
 import '../chat/chat_screen.dart';
 import '../service/service_execution_screen.dart';
 import '../dispute/dispute_screen.dart';
 
 class CaregiverHomeScreen extends StatefulWidget {
-  const CaregiverHomeScreen({Key? key}) : super(key: key);
+  const CaregiverHomeScreen({super.key});
 
   @override
   State<CaregiverHomeScreen> createState() => _CaregiverHomeScreenState();
@@ -28,6 +29,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   Timer? _notifTimer;
   Map<String, dynamic>? _caregiver;
   Map<String, dynamic>? _dashboardStats;
+  Map<String, dynamic>? _nextBookingWithin24h;
   String _userName = 'Cuidador';
 
   static const String _devToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJmNmRmZmYzMS1lYTFhLTQ4MzktYmZkOC1kMWY4OTgwNDQxMjAiLCJyb2xlIjoiQ0FSRUdJVkVSIiwiaWQiOiJmNmRmZmYzMS1lYTFhLTQ4MzktYmZkOC1kMWY4OTgwNDQxMjAiLCJpYXQiOjE3NzM2ODU4NjQsImV4cCI6MTc3NjI3Nzg2NH0.I9cvXI16qEgG55S6FTHeieDLqPjhCQewLKvN0xXgddw';
@@ -78,11 +80,39 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         _loadDashboardStats(),
       ]);
       _computeDayStatuses();
+      _computeNextBookingWithin24h();
     } catch (e) {
       // silencioso
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _computeNextBookingWithin24h() {
+    final now = DateTime.now();
+    Map<String, dynamic>? nearest;
+    Duration? nearestDiff;
+    for (final b in _bookings) {
+      if (b['status'] != 'CONFIRMED') continue;
+      final dateStr = b['walkDate'] as String? ?? b['startDate'] as String?;
+      if (dateStr == null) continue;
+      final timeStr = b['startTime'] as String?;
+      try {
+        final parts = dateStr.split('-');
+        final timeParts = timeStr?.split(':');
+        final hour = timeParts != null && timeParts.isNotEmpty ? int.tryParse(timeParts.first) ?? 9 : 9;
+        final minute = timeParts != null && timeParts.length > 1 ? int.tryParse(timeParts.last) ?? 0 : 0;
+        final serviceTime = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]), hour, minute);
+        final diff = serviceTime.difference(now);
+        if (diff.isNegative || diff.inHours >= 24) continue;
+        final nd = nearestDiff;
+        if (nd == null || diff < nd) {
+          nearest = b;
+          nearestDiff = diff;
+        }
+      } catch (_) {}
+    }
+    if (mounted) setState(() => _nextBookingWithin24h = nearest);
   }
 
   Future<void> _loadDashboardStats() async {
@@ -195,9 +225,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
 
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: kSurfaceColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -219,7 +249,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Row(
                     children: [
-                      Icon(Icons.edit, size: 14, color: kPrimaryColor),
+                      const Icon(Icons.edit, size: 14, color: kPrimaryColor),
                       const SizedBox(width: 8),
                       Text('$label: ${e.value['start']} - ${e.value['end']} ($enabled)',
                         style: const TextStyle(color: Colors.white, fontSize: 14)),
@@ -638,15 +668,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 // Lista de notificaciones
                 Expanded(
                   child: _notifications.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.notifications_none_outlined, size: 56, color: subtextColor),
-                            const SizedBox(height: 12),
-                            Text('Sin notificaciones', style: TextStyle(color: subtextColor, fontSize: 16)),
-                          ],
-                        ),
+                    ? const GardenEmptyState(
+                        type: GardenEmptyType.notifications,
+                        title: 'Todo tranquilo por aquí',
+                        subtitle: 'Cuando recibas solicitudes de reserva o mensajes, aparecerán aquí.',
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -790,222 +815,224 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   Widget _buildDashboardTab() {
     final isDark = themeNotifier.isDark;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final surfaceEl = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
     final stats = _dashboardStats;
+    final thisMonth = stats?['thisMonth'] as Map<String, dynamic>?;
+    final allTime = stats?['allTime'] as Map<String, dynamic>?;
+    final nextBooking = stats?['nextBooking'] as Map<String, dynamic>?;
+    final completeness = (stats?['profileCompleteness'] as num? ?? 0).toInt();
+    final acceptanceRate = (stats?['acceptanceRate'] as num? ?? 100).toInt();
+    final pendingCount = (stats?['pendingBookings'] as int? ?? 0);
 
-    return RefreshIndicator(
-      onRefresh: _loadDashboardStats,
-      color: GardenColors.primary,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Saludo
-            Row(
+    final nb = _nextBookingWithin24h;
+    return Column(
+      children: [
+        // ── BANNER RECORDATORIO 24H (sticky) ─────────────────
+        if (nb != null)
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: GardenColors.warning.withValues(alpha: 0.12),
+              borderRadius: GardenRadius.lg_,
+              border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4)),
+            ),
+            child: Row(
               children: [
+                const Text('⏰', style: TextStyle(fontSize: 20)),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_greeting(), style: TextStyle(color: subtextColor, fontSize: 13)),
-                      Text(_userName,
-                        style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800)),
+                      const Text('Servicio próximo',
+                        style: TextStyle(color: GardenColors.warning, fontWeight: FontWeight.w700, fontSize: 13)),
+                      Text(
+                        '${nb['petName'] ?? '—'} · hoy a las ${nb['startTime'] ?? nb['walkDate'] ?? ''}',
+                        style: TextStyle(color: subtextColor, fontSize: 12),
+                      ),
                     ],
                   ),
                 ),
-                if ((stats?['pendingBookings'] ?? 0) > 0)
-                  GestureDetector(
-                    onTap: () => setState(() => _selectedTab = 2),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: GardenColors.warning.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: GardenColors.warning.withOpacity(0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.pending_outlined, color: GardenColors.warning, size: 14),
-                          const SizedBox(width: 6),
-                          Text(
-                            '${stats!['pendingBookings']} pendiente${(stats['pendingBookings'] as int) > 1 ? 's' : ''}',
-                            style: const TextStyle(color: GardenColors.warning, fontSize: 12, fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                GardenButton(
+                  label: 'Ver',
+                  height: 34,
+                  width: 60,
+                  onPressed: () => setState(() => _selectedTab = 2),
+                ),
               ],
             ),
-            const SizedBox(height: 20),
+          ),
 
-            // Card de saldo y ganancias del mes
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF1A1F2E), Color(0xFF2D3250)],
-                ),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.account_balance_wallet_outlined, color: Colors.white60, size: 16),
-                      const SizedBox(width: 6),
-                      const Text('Saldo disponible', style: TextStyle(color: Colors.white60, fontSize: 13)),
-                      const Spacer(),
-                      GestureDetector(
-                        onTap: () => context.push('/wallet'),
-                        child: const Text('Ver billetera',
-                          style: TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Bs ${((stats?['balance'] ?? 0) as num).toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      color: Colors.white, fontSize: 36,
-                      fontWeight: FontWeight.w900, letterSpacing: -1),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.trending_up_rounded, color: GardenColors.success, size: 16),
-                        const SizedBox(width: 8),
-                        const Text('Este mes:', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Bs ${((stats?['monthEarnings'] ?? 0) as num).toStringAsFixed(2)}',
-                          style: const TextStyle(color: GardenColors.success, fontSize: 14, fontWeight: FontWeight.w700),
-                        ),
-                        const Spacer(),
-                        Text(
-                          '${stats?['monthBookings'] ?? 0} servicio${((stats?['monthBookings'] ?? 0) as int) != 1 ? 's' : ''}',
-                          style: const TextStyle(color: Colors.white60, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+        // ── CONTENIDO SCROLLABLE ─────────────────────────────
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async {
+              await Future.wait([_loadDashboardStats(), _loadBookings()]);
+              _computeNextBookingWithin24h();
+            },
+            color: GardenColors.primary,
+            child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+
+            // ── 1. CARD DE BIENVENIDA ──────────────────────────
+            _buildWelcomeCard(
+              isDark: isDark,
+              surface: surface,
+              textColor: textColor,
+              subtextColor: subtextColor,
+              borderColor: borderColor,
+              rating: (allTime?['rating'] as num? ?? 0).toDouble(),
+              reviewCount: allTime?['reviewCount'] as int? ?? 0,
+              pendingCount: pendingCount,
             ),
             const SizedBox(height: 16),
 
-            // Grid de métricas
+            // ── 2. GRID 2×2 MÉTRICAS ESTE MES ─────────────────
+            Text('Este mes',
+              style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 10),
             GridView.count(
               crossAxisCount: 2,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.5,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 1.55,
               children: [
-                _statCard(
+                _dashMetricCard(
+                  icon: Icons.calendar_today_outlined,
+                  color: GardenColors.secondary,
+                  label: 'Reservas',
+                  value: '${thisMonth?['bookings'] ?? 0}',
+                  suffix: 'este mes',
+                  surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
+                ),
+                _dashMetricCard(
+                  icon: Icons.payments_outlined,
+                  color: GardenColors.success,
+                  label: 'Ingresos',
+                  value: 'Bs ${((thisMonth?['earnings'] ?? 0) as num).toStringAsFixed(0)}',
+                  suffix: 'ganados',
+                  surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
+                ),
+                _dashMetricCard(
+                  icon: Icons.schedule_outlined,
+                  color: GardenColors.primary,
+                  label: 'Horas',
+                  value: '${((thisMonth?['hoursWorked'] ?? 0) as num).toStringAsFixed(1)}h',
+                  suffix: 'de servicio',
+                  surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
+                ),
+                _dashMetricCard(
                   icon: Icons.star_rounded,
                   color: GardenColors.star,
                   label: 'Calificación',
-                  value: (stats?['avgRating'] != null && (stats!['avgRating'] as num) > 0)
-                      ? '${(stats['avgRating'] as num).toStringAsFixed(1)} ⭐'
-                      : 'Sin reseñas',
-                  surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
-                ),
-                _statCard(
-                  icon: Icons.check_circle_outline_rounded,
-                  color: GardenColors.success,
-                  label: 'Completados',
-                  value: '${stats?['completedBookings'] ?? 0} servicios',
-                  surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
-                ),
-                _statCard(
-                  icon: Icons.calendar_month_outlined,
-                  color: GardenColors.secondary,
-                  label: 'Total reservas',
-                  value: '${stats?['totalBookings'] ?? 0} en total',
-                  surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
-                ),
-                _statCard(
-                  icon: Icons.pending_actions_outlined,
-                  color: GardenColors.warning,
-                  label: 'Pendientes',
-                  value: '${stats?['pendingBookings'] ?? 0} por atender',
+                  value: (allTime?['rating'] as num? ?? 0) > 0
+                      ? '${(allTime!['rating'] as num).toStringAsFixed(1)} ⭐'
+                      : '—',
+                  suffix: '${allTime?['reviewCount'] ?? 0} reseñas',
                   surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
                 ),
               ],
             ),
             const SizedBox(height: 16),
 
-            // Acciones rápidas
-            Text('Acciones rápidas',
+            // ── 3. PRÓXIMA RESERVA ─────────────────────────────
+            Text('Próxima reserva',
               style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
+            _buildNextBookingCard(
+              nextBooking: nextBooking,
+              surface: surface,
+              surfaceEl: surfaceEl,
+              textColor: textColor,
+              subtextColor: subtextColor,
+              borderColor: borderColor,
+            ),
+            const SizedBox(height: 16),
+
+            // ── 4. ACCESOS RÁPIDOS ─────────────────────────────
+            Text('Accesos rápidos',
+              style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: _quickAction(
+                  icon: Icons.calendar_month_outlined,
+                  label: 'Disponibilidad',
+                  color: GardenColors.secondary,
+                  onTap: () => setState(() => _selectedTab = 1),
+                  surface: surface, borderColor: borderColor,
+                )),
+                const SizedBox(width: 8),
+                Expanded(child: _quickAction(
+                  icon: Icons.person_outline_rounded,
+                  label: 'Ver mi perfil',
+                  color: GardenColors.primary,
+                  onTap: () {
+                    final caregiverId = _caregiver?['id'] as String?;
+                    if (caregiverId != null) context.push('/caregiver/$caregiverId');
+                  },
+                  surface: surface, borderColor: borderColor,
+                )),
+                const SizedBox(width: 8),
+                Expanded(child: _quickAction(
+                  icon: Icons.account_balance_wallet_outlined,
+                  label: 'Billetera',
+                  color: GardenColors.success,
+                  onTap: () => context.push('/wallet'),
+                  surface: surface, borderColor: borderColor,
+                )),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // ── 5. BARRA DE COMPLETITUD DEL PERFIL ────────────
+            if (completeness < 100) ...[
+              _buildCompletenessBar(
+                completeness: completeness,
+                textColor: textColor,
+                subtextColor: subtextColor,
+                surface: surface,
+                borderColor: borderColor,
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // ── 6. MÉTRICAS TOTALES ────────────────────────────
             Row(
               children: [
                 Expanded(
-                  child: GestureDetector(
-                    onTap: () => context.push('/caregiver/profile-data'),
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: GardenColors.primary.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: GardenColors.primary.withOpacity(0.2)),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.edit_outlined, color: GardenColors.primary, size: 18),
-                          SizedBox(width: 8),
-                          Text('Mi perfil',
-                            style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 13)),
-                        ],
-                      ),
-                    ),
+                  child: _totalStatChip(
+                    '${allTime?['bookings'] ?? 0} servicios totales',
+                    Icons.check_circle_outline_rounded,
+                    GardenColors.success,
+                    surface, borderColor, subtextColor,
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: GestureDetector(
-                    onTap: () => context.push('/wallet'),
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: GardenColors.success.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: GardenColors.success.withOpacity(0.2)),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.account_balance_wallet_outlined, color: GardenColors.success, size: 18),
-                          SizedBox(width: 8),
-                          Text('Billetera',
-                            style: TextStyle(color: GardenColors.success, fontWeight: FontWeight.w600, fontSize: 13)),
-                        ],
-                      ),
-                    ),
+                  child: _totalStatChip(
+                    '$acceptanceRate% aceptación',
+                    Icons.thumb_up_outlined,
+                    GardenColors.secondary,
+                    surface, borderColor, subtextColor,
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 16),
 
-            // Preview de reservas recientes
+            // ── 7. PREVIEW RESERVAS RECIENTES ─────────────────
             if (_bookings.isNotEmpty) ...[
-              const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1018,29 +1045,197 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               ..._bookings.take(3).map((b) =>
                 _buildBookingPreviewCard(b, surface, textColor, subtextColor, borderColor)),
             ],
-            const SizedBox(height: 32),
           ],
+        ),
+      ),
+          ),  // RefreshIndicator
+        ),    // Expanded
+      ],
+    );
+  }
+
+  // ── CARD DE BIENVENIDA ──────────────────────────────────────────────────
+  Widget _buildWelcomeCard({
+    required bool isDark,
+    required Color surface,
+    required Color textColor,
+    required Color subtextColor,
+    required Color borderColor,
+    required double rating,
+    required int reviewCount,
+    required int pendingCount,
+  }) {
+    final status = _caregiver?['status'] as String? ?? 'APPROVED';
+    final photoUrl = _caregiver?['profilePhoto'] as String?;
+    final initial = _userName.isNotEmpty ? _userName[0].toUpperCase() : 'C';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1E2433), Color(0xFF2D3250)],
+        ),
+        borderRadius: GardenRadius.xl_,
+        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        children: [
+          // Avatar
+          Container(
+            width: 56, height: 56,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: GardenColors.primary.withValues(alpha: 0.5), width: 2),
+            ),
+            child: ClipOval(
+              child: photoUrl != null && photoUrl.isNotEmpty
+                  ? Image.network(photoUrl, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _avatarPlaceholder(initial))
+                  : _avatarPlaceholder(initial),
+            ),
+          ),
+          const SizedBox(width: 14),
+          // Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _greeting(),
+                  style: const TextStyle(color: Colors.white60, fontSize: 12),
+                ),
+                Text(
+                  _userName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    // Badge estado
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: GardenColors.success.withValues(alpha: 0.15),
+                        borderRadius: GardenRadius.full_,
+                        border: Border.all(color: GardenColors.success.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6, height: 6,
+                            decoration: const BoxDecoration(
+                              color: GardenColors.success, shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            status == 'APPROVED' ? 'Activo' : status,
+                            style: const TextStyle(
+                              color: GardenColors.success, fontSize: 10, fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (rating > 0) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: GardenColors.star.withValues(alpha: 0.15),
+                          borderRadius: GardenRadius.full_,
+                          border: Border.all(color: GardenColors.star.withValues(alpha: 0.4)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.star_rounded, color: GardenColors.star, size: 11),
+                            const SizedBox(width: 4),
+                            Text(
+                              rating.toStringAsFixed(1),
+                              style: const TextStyle(
+                                color: GardenColors.star, fontSize: 10, fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // Badge pendientes
+          if (pendingCount > 0)
+            GestureDetector(
+              onTap: () => setState(() => _selectedTab = 2),
+              child: Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: GardenColors.warning.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4)),
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    const Icon(Icons.notifications_outlined, color: GardenColors.warning, size: 20),
+                    Positioned(
+                      top: 6, right: 6,
+                      child: Container(
+                        width: 12, height: 12,
+                        decoration: const BoxDecoration(
+                          color: GardenColors.warning, shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            '$pendingCount',
+                            style: const TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _avatarPlaceholder(String initial) {
+    return Container(
+      color: GardenColors.primary.withValues(alpha: 0.2),
+      child: Center(
+        child: Text(
+          initial,
+          style: const TextStyle(color: GardenColors.primary, fontSize: 22, fontWeight: FontWeight.w700),
         ),
       ),
     );
   }
 
-  String _greeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Buenos días,';
-    if (hour < 18) return 'Buenas tardes,';
-    return 'Buenas noches,';
-  }
-
-  Widget _statCard({
+  // ── METRIC CARD ────────────────────────────────────────────────────────
+  Widget _dashMetricCard({
     required IconData icon,
     required Color color,
     required String label,
     required String value,
+    required String suffix,
     required Color surface,
     required Color textColor,
     required Color subtextColor,
@@ -1050,7 +1245,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: GardenRadius.lg_,
         border: Border.all(color: borderColor),
       ),
       child: Column(
@@ -1058,18 +1253,21 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Container(
-            width: 36, height: 36,
+            width: 34, height: 34,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(10),
+              color: color.withValues(alpha: 0.12),
+              borderRadius: GardenRadius.sm_,
             ),
             child: Icon(icon, color: color, size: 18),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(value, style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
-              Text(label, style: TextStyle(color: subtextColor, fontSize: 11)),
+              Text(value,
+                style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 16),
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(suffix, style: TextStyle(color: subtextColor, fontSize: 10)),
             ],
           ),
         ],
@@ -1077,36 +1275,273 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     );
   }
 
-  Widget _metricCard(String label, String value, IconData icon, Color color, Color surface, Color textColor, Color subtextColor, Color borderColor) {
+  // ── PRÓXIMA RESERVA ─────────────────────────────────────────────────────
+  Widget _buildNextBookingCard({
+    required Map<String, dynamic>? nextBooking,
+    required Color surface,
+    required Color surfaceEl,
+    required Color textColor,
+    required Color subtextColor,
+    required Color borderColor,
+  }) {
+    if (nextBooking == null) {
+      return const GardenEmptyState(
+        type: GardenEmptyType.bookings,
+        title: 'Sin reservas próximas',
+        subtitle: 'Cuando tengas servicios confirmados aparecerán aquí.',
+        compact: true,
+      );
+    }
+
+    final dateStr = nextBooking['date'] as String?;
+    final petName = nextBooking['petName'] as String? ?? '—';
+    final serviceType = nextBooking['serviceType'] as String? ?? '';
+    final startTime = nextBooking['startTime'] as String?;
+    final countdown = _getCountdown(dateStr, startTime);
+    final isUrgent = countdown != null;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor),
+        color: isUrgent
+            ? GardenColors.warning.withValues(alpha: 0.06)
+            : surface,
+        borderRadius: GardenRadius.lg_,
+        border: Border.all(
+          color: isUrgent
+              ? GardenColors.warning.withValues(alpha: 0.4)
+              : borderColor,
+          width: isUrgent ? 1.5 : 1,
+        ),
       ),
       child: Row(
         children: [
+          // Ícono servicio
           Container(
-            width: 40, height: 40,
+            width: 48, height: 48,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+              color: isUrgent
+                  ? GardenColors.warning.withValues(alpha: 0.12)
+                  : GardenColors.secondary.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: color, size: 20),
+            child: Center(
+              child: Text(
+                serviceType == 'PASEO' ? '🦮' : '🏠',
+                style: const TextStyle(fontSize: 22),
+              ),
+            ),
           ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(value, style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800)),
-              Text(label, style: TextStyle(color: subtextColor, fontSize: 12)),
-            ],
+          const SizedBox(width: 14),
+          // Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  petName,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${serviceType == 'PASEO' ? 'Paseo' : 'Hospedaje'} · ${_formatNextDate(dateStr)}${startTime != null ? ' · $startTime' : ''}',
+                  style: TextStyle(color: subtextColor, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          // Countdown o flecha
+          if (countdown != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: GardenColors.warning,
+                borderRadius: GardenRadius.md_,
+              ),
+              child: Text(
+                countdown,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            )
+          else
+            Icon(Icons.chevron_right, color: subtextColor),
+        ],
+      ),
+    );
+  }
+
+  String? _getCountdown(String? dateStr, String? timeStr) {
+    if (dateStr == null) return null;
+    try {
+      final parts = dateStr.split('-');
+      final timeParts = timeStr?.split(':');
+      final hour = timeParts != null && timeParts.isNotEmpty ? int.tryParse(timeParts.first) ?? 9 : 9;
+      final minute = timeParts != null && timeParts.length > 1 ? int.tryParse(timeParts.last) ?? 0 : 0;
+      final serviceTime = DateTime(
+        int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]), hour, minute,
+      );
+      final diff = serviceTime.difference(DateTime.now());
+      if (diff.isNegative || diff.inHours >= 24) return null;
+      if (diff.inHours < 1) return 'En ${diff.inMinutes}min';
+      return 'En ${diff.inHours}h ${diff.inMinutes % 60}min';
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _formatNextDate(String? dateStr) {
+    if (dateStr == null) return '—';
+    try {
+      final dt = DateTime.parse(dateStr);
+      const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+      final now = DateTime.now();
+      if (dt.day == now.day && dt.month == now.month) return 'Hoy';
+      if (dt.day == now.day + 1 && dt.month == now.month) return 'Mañana';
+      return '${dt.day} ${months[dt.month - 1]}';
+    } catch (_) {
+      return dateStr ?? '—';
+    }
+  }
+
+  // ── ACCESO RÁPIDO ───────────────────────────────────────────────────────
+  Widget _quickAction({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+    required Color surface,
+    required Color borderColor,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: GardenRadius.md_,
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 5),
+            Text(
+              label,
+              style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── BARRA DE COMPLETITUD ────────────────────────────────────────────────
+  Widget _buildCompletenessBar({
+    required int completeness,
+    required Color textColor,
+    required Color subtextColor,
+    required Color surface,
+    required Color borderColor,
+  }) {
+    final color = completeness < 50
+        ? GardenColors.error
+        : completeness < 80
+            ? GardenColors.warning
+            : GardenColors.success;
+
+    return GestureDetector(
+      onTap: () => context.push('/caregiver/profile-data'),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: GardenRadius.lg_,
+          border: Border.all(color: borderColor),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Completitud del perfil',
+                  style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  '$completeness%',
+                  style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: GardenRadius.full_,
+              child: LinearProgressIndicator(
+                value: completeness / 100,
+                backgroundColor: borderColor,
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+                minHeight: 6,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Completa tu perfil para recibir más reservas →',
+              style: TextStyle(color: subtextColor, fontSize: 11),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── STAT CHIP TOTAL ─────────────────────────────────────────────────────
+  Widget _totalStatChip(
+    String label,
+    IconData icon,
+    Color color,
+    Color surface,
+    Color borderColor,
+    Color subtextColor,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: GardenRadius.md_,
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 14),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.w500),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
     );
+  }
+
+  String _greeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Buenos días,';
+    if (hour < 18) return 'Buenas tardes,';
+    return 'Buenas noches,';
   }
 
   Widget _buildBookingPreviewCard(Map<String, dynamic> booking, Color surface, Color textColor, Color subtextColor, Color borderColor) {
@@ -1201,7 +1636,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               child: const Row(
                 children: [
                   Icon(Icons.info_outline, color: kPrimaryColor, size: 16),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Modo edición activo. Realiza todos los cambios y presiona Guardar.',
@@ -1692,7 +2127,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-    final status = booking['status'] as String? ?? '';
 
     return _ExpandableBookingCard(
       booking: booking,
@@ -1707,15 +2141,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
 
   Widget _buildBookings() {
     if (_bookings.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.inbox, color: GardenColors.darkTextSecondary, size: 64),
-            SizedBox(height: 16),
-            Text('No tienes reservas aún', style: TextStyle(color: GardenColors.darkTextSecondary)),
-          ],
-        ),
+      return const GardenEmptyState(
+        type: GardenEmptyType.bookings,
+        title: 'Sin reservas por ahora',
+        subtitle: 'Cuando los dueños reserven tus servicios, tus reservas aparecerán aquí.',
       );
     }
     return ListView.builder(
@@ -1724,22 +2153,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       itemBuilder: (context, index) {
         return _buildFullBookingCard(_bookings[index]);
       },
-    );
-  }
-
-  Widget _buildStatusBadge(String status) {
-    Color color = kTextSecondary;
-    String label = status;
-    switch (status) {
-      case 'WAITING_CAREGIVER_APPROVAL': color = Colors.orange; label = 'Por Aceptar'; break;
-      case 'CONFIRMED': color = Colors.green; label = 'Confirmada'; break;
-      case 'PENDING_PAYMENT': color = kPrimaryColor; label = 'Pendiente Pago'; break;
-      case 'CANCELLED': color = Colors.red; label = 'Cancelada'; break;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6), border: Border.all(color: color.withOpacity(0.3))),
-      child: Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
     );
   }
 
@@ -1790,8 +2203,11 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       final amount = double.tryParse(b['totalAmount']?.toString() ?? '0') ?? 0;
       final commission = double.tryParse(b['commissionAmount']?.toString() ?? '0') ?? 0;
       final net = amount - commission;
-      if (b['serviceType'] == 'PASEO') walkEarnings += net;
-      else hospedajeEarnings += net;
+      if (b['serviceType'] == 'PASEO') {
+        walkEarnings += net;
+      } else {
+        hospedajeEarnings += net;
+      }
     }
 
     return SingleChildScrollView(
@@ -2019,7 +2435,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             automaticallyImplyLeading: false,
             title: Row(
               children: [
-                Text('GARDEN', style: TextStyle(color: GardenColors.primary, fontSize: 20, fontWeight: FontWeight.w900)),
+                const Text('GARDEN', style: TextStyle(color: GardenColors.primary, fontSize: 20, fontWeight: FontWeight.w900)),
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -2028,7 +2444,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: GardenColors.primary.withOpacity(0.3)),
                   ),
-                  child: Text('Cuidador', style: TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w600)),
+                  child: const Text('Cuidador', style: TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w600)),
                 ),
               ],
             ),
@@ -2266,7 +2682,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                               color: GardenColors.warning.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child: Text('⚠️ Especial', style: TextStyle(color: GardenColors.warning, fontSize: 11)),
+                            child: const Text('⚠️ Especial', style: TextStyle(color: GardenColors.warning, fontSize: 11)),
                           ),
                         ),
                       ),
@@ -2286,7 +2702,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.info_outline, size: 14, color: GardenColors.warning),
+                        const Icon(Icons.info_outline, size: 14, color: GardenColors.warning),
                         const SizedBox(width: 8),
                         Expanded(child: Text(booking['specialNeeds'] as String,
                           style: TextStyle(color: widget.subtextColor, fontSize: 12))),

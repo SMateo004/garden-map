@@ -3,12 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../main.dart';
 import '../../theme/garden_theme.dart';
 
 class PaymentScreen extends StatefulWidget {
   final String bookingId;
-  const PaymentScreen({Key? key, required this.bookingId}) : super(key: key);
+  const PaymentScreen({super.key, required this.bookingId});
 
   @override
   State<PaymentScreen> createState() => _PaymentScreenState();
@@ -75,11 +74,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
         if (_selectedMethod == 'qr') {
           setState(() => _qrResponse = data['data']);
         } else {
-          // Pago manual iniciado
-          setState(() {
-            _paymentInitiated = true;
-            _bookingStatus = data['data']['status'] ?? 'PAYMENT_PENDING_APPROVAL';
-          });
+          // Pago manual iniciado — navegar a pantalla de confirmación dedicada
+          if (mounted) {
+            context.go(
+              '/booking-confirmed/${widget.bookingId}',
+              extra: _booking,
+            );
+          }
         }
       } else {
         throw Exception(data['message'] ?? 'Error al iniciar pago');

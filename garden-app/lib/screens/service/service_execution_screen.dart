@@ -14,7 +14,7 @@ import '../chat/chat_screen.dart';
 class ServiceExecutionScreen extends StatefulWidget {
   final String bookingId;
   final String role; // 'CAREGIVER' o 'CLIENT'
-  const ServiceExecutionScreen({Key? key, required this.bookingId, required this.role}) : super(key: key);
+  const ServiceExecutionScreen({super.key, required this.bookingId, required this.role});
 
   @override
   State<ServiceExecutionScreen> createState() => _ServiceExecutionScreenState();
@@ -239,9 +239,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   decoration: const BoxDecoration(color: GardenColors.success, shape: BoxShape.circle),
                 ),
                 const SizedBox(width: 10),
-                Text('Lista para iniciar', style: TextStyle(color: GardenColors.success, fontWeight: FontWeight.w700, fontSize: 15)),
+                const Text('Lista para iniciar', style: TextStyle(color: GardenColors.success, fontWeight: FontWeight.w700, fontSize: 15)),
                 const Spacer(),
-                GardenBadge(text: '⬡ Escrow listo', color: GardenColors.polygon, fontSize: 11),
+                const GardenBadge(text: '⬡ Escrow listo', color: GardenColors.polygon, fontSize: 11),
               ],
             ),
           ),
@@ -732,7 +732,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 onTap: () => Navigator.pop(ctx),
                 child: Container(
                   width: 36, height: 36,
-                  decoration: BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                  decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
                   child: const Icon(Icons.close, color: Colors.white, size: 20),
                 ),
               ),
@@ -1055,7 +1055,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   const SizedBox(height: 16),
                   Text(
                     ['', 'Terrible', 'Malo', 'Normal', 'Bueno', '¡Excelente!'][selectedRating],
-                    style: TextStyle(color: GardenColors.star, fontWeight: FontWeight.w800, fontSize: 18),
+                    style: const TextStyle(color: GardenColors.star, fontWeight: FontWeight.w800, fontSize: 18),
                   ),
                 ],
 
@@ -1212,7 +1212,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
               ),
               const SizedBox(height: 32),
-              GardenBadge(text: '⬡ Polygon Amoy Network', color: GardenColors.polygon),
+              const GardenBadge(text: '⬡ Polygon Amoy Network', color: GardenColors.polygon),
               const SizedBox(height: 32),
               GardenButton(
                 label: 'Finalizar',

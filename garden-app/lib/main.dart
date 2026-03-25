@@ -13,6 +13,7 @@ import 'screens/client/my_pets_screen.dart';
 import 'screens/client/caregiver_profile_screen.dart';
 import 'screens/client/booking_screen.dart';
 import 'screens/client/payment_screen.dart';
+import 'screens/client/booking_confirmed_screen.dart';
 import 'screens/caregiver/caregiver_home_screen.dart';
 import 'screens/caregiver/verification_screen.dart';
 import 'screens/caregiver/caregiver_edit_profile_screen.dart';
@@ -121,6 +122,18 @@ final GoRouter _router = GoRouter(
       ),
     ),
     GoRoute(
+      path: '/booking-confirmed/:bookingId',
+      name: 'bookingConfirmed',
+      builder: (context, state) {
+        final bookingId = state.pathParameters['bookingId']!;
+        final extra = state.extra as Map<String, dynamic>?;
+        return BookingConfirmedScreen(
+          bookingId: bookingId,
+          bookingData: extra,
+        );
+      },
+    ),
+    GoRoute(
       path: '/wallet',
       name: 'wallet',
       builder: (context, state) => const WalletScreen(),
@@ -206,7 +219,7 @@ void main() async {
 }
 
 class GardenApp extends StatelessWidget {
-  const GardenApp({Key? key}) : super(key: key);
+  const GardenApp({super.key});
 
   @override
   Widget build(BuildContext context) {

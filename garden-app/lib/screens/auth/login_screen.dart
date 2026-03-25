@@ -5,7 +5,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+  const LoginScreen({super.key});
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -40,8 +40,9 @@ class _LoginScreenState extends State<LoginScreen> {
       final prefs = await SharedPreferences.getInstance();
       final role = prefs.getString('user_role') ?? '';
       if (!mounted) return;
-      if (role == 'ADMIN') context.go('/admin');
-      else if (role == 'CLIENT') context.go('/marketplace');
+      if (role == 'ADMIN') {
+        context.go('/admin');
+      } else if (role == 'CLIENT') context.go('/marketplace');
       else if (role == 'CAREGIVER') context.go('/caregiver/home');
       else context.go('/test');
     } catch (e) {
@@ -206,7 +207,7 @@ class _LoginScreenState extends State<LoginScreen> {
               // En móvil muestra logo, en desktop está en el panel izquierdo
               LayoutBuilder(
                 builder: (context, constraints) {
-                  return Text(
+                  return const Text(
                     'GARDEN',
                     style: TextStyle(
                       color: GardenColors.primary,
@@ -309,7 +310,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Text('¿No tienes cuenta? ', style: TextStyle(color: subtextColor, fontSize: 14)),
                 GestureDetector(
                   onTap: () => context.go('/register'),
-                  child: Text('Regístrate', style: TextStyle(color: GardenColors.primary, fontSize: 14, fontWeight: FontWeight.w600)),
+                  child: const Text('Regístrate', style: TextStyle(color: GardenColors.primary, fontSize: 14, fontWeight: FontWeight.w600)),
                 ),
               ],
             ),

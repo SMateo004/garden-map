@@ -5,10 +5,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
 import '../../services/agentes_service.dart';
 import '../../widgets/disputa_panel_card.dart';
+import '../../widgets/garden_empty_state.dart';
 import '../../theme/garden_theme.dart';
 
 class AdminPanelScreen extends StatefulWidget {
-  const AdminPanelScreen({Key? key}) : super(key: key);
+  const AdminPanelScreen({super.key});
 
   @override
   State<AdminPanelScreen> createState() => _AdminPanelScreenState();
@@ -311,7 +312,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             automaticallyImplyLeading: false,
             title: Row(
               children: [
-                Text('GARDEN', style: TextStyle(color: GardenColors.primary, fontSize: 20, fontWeight: FontWeight.w900)),
+                const Text('GARDEN', style: TextStyle(color: GardenColors.primary, fontSize: 20, fontWeight: FontWeight.w900)),
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -320,7 +321,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: GardenColors.error.withOpacity(0.3)),
                   ),
-                  child: Text('Admin', style: TextStyle(color: GardenColors.error, fontSize: 11, fontWeight: FontWeight.w600)),
+                  child: const Text('Admin', style: TextStyle(color: GardenColors.error, fontSize: 11, fontWeight: FontWeight.w600)),
                 ),
               ],
             ),
@@ -419,8 +420,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         Expanded(
           child: _isLoading 
             ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
-            : _caregivers.isEmpty 
-              ? Center(child: Text('No hay cuidadores con este estado', style: TextStyle(color: subtextColor)))
+            : _caregivers.isEmpty
+              ? const GardenEmptyState(
+                  type: GardenEmptyType.caregivers,
+                  title: 'Sin cuidadores aquí',
+                  subtitle: 'No hay cuidadores con este estado por el momento.',
+                  compact: true,
+                )
               : ListView.builder(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   itemCount: _caregivers.length,
@@ -549,7 +555,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
   Widget _buildIdentityList(Color surface, Color textColor, Color subtextColor, Color borderColor) {
     if (_isLoading) return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
-    if (_identityReviews.isEmpty) return Center(child: Text('No hay verificaciones pendientes', style: TextStyle(color: subtextColor)));
+    if (_identityReviews.isEmpty) {
+      return const GardenEmptyState(
+        type: GardenEmptyType.identity,
+        title: 'Sin verificaciones pendientes',
+        subtitle: 'Cuando los cuidadores suban su identidad, aparecerán aquí para revisión.',
+        compact: true,
+      );
+    }
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -634,7 +647,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                         ],
                       ),
                     ),
-                    GardenBadge(text: 'IA Activa', color: GardenColors.primary, icon: Icons.auto_awesome_outlined, fontSize: 11),
+                    const GardenBadge(text: 'IA Activa', color: GardenColors.primary, icon: Icons.auto_awesome_outlined, fontSize: 11),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -707,19 +720,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
         }
-        final payments = snapshot.data as List<Map<String, dynamic>>? ?? [];
+        final payments = snapshot.data ?? [];
         if (payments.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.check_circle_outline, size: 64, color: GardenColors.success),
-                const SizedBox(height: 16),
-                Text('Sin pagos pendientes', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 8),
-                Text('Todos los pagos han sido procesados', style: TextStyle(color: subtextColor, fontSize: 14)),
-              ],
-            ),
+          return const GardenEmptyState(
+            type: GardenEmptyType.payments,
+            title: 'Sin pagos pendientes',
+            subtitle: 'Todos los pagos han sido procesados. ¡Todo en orden!',
+            compact: true,
           );
         }
         return ListView.builder(
@@ -869,15 +876,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   Widget _buildWithdrawalsTab(Color surface, Color textColor, Color subtextColor, Color borderColor) {
     if (_isLoading) return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
     if (_withdrawals.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.account_balance_wallet_outlined, size: 64, color: subtextColor.withOpacity(0.5)),
-            const SizedBox(height: 16),
-            Text('Sin retiros pendientes', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
-          ],
-        ),
+      return const GardenEmptyState(
+        type: GardenEmptyType.withdrawals,
+        title: 'Sin retiros pendientes',
+        subtitle: 'Cuando los cuidadores soliciten retiros, aparecerán aquí para aprobación.',
+        compact: true,
       );
     }
 

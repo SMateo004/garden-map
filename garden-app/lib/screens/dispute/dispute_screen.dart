@@ -11,11 +11,11 @@ class DisputeScreen extends StatefulWidget {
   final List<String>? clientReasons; // para el cuidador, las razones del cliente
 
   const DisputeScreen({
-    Key? key,
+    super.key,
     required this.bookingId,
     required this.role,
     this.clientReasons,
-  }) : super(key: key);
+  });
 
   @override
   State<DisputeScreen> createState() => _DisputeScreenState();
@@ -25,7 +25,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
   String _token = '';
   bool _isLoading = false;
   int _step = 0; // 0: encuesta, 1: procesando IA, 2: resultado
-  List<String> _selectedReasons = [];
+  final List<String> _selectedReasons = [];
   Map<String, dynamic>? _resolution;
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
@@ -168,7 +168,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Calificación baja detectada', style: TextStyle(color: GardenColors.warning, fontWeight: FontWeight.w700, fontSize: 14)),
+                    const Text('Calificación baja detectada', style: TextStyle(color: GardenColors.warning, fontWeight: FontWeight.w700, fontSize: 14)),
                     Text('El pago al cuidador está retenido. Cuéntanos qué pasó.', style: TextStyle(color: subtextColor, fontSize: 12)),
                   ],
                 ),
@@ -193,8 +193,11 @@ class _DisputeScreenState extends State<DisputeScreen> {
                   final selected = _selectedReasons.contains(option['id'] as String);
                   return GestureDetector(
                     onTap: () => setState(() {
-                      if (selected) _selectedReasons.remove(option['id'] as String);
-                      else _selectedReasons.add(option['id'] as String);
+                      if (selected) {
+                        _selectedReasons.remove(option['id'] as String);
+                      } else {
+                        _selectedReasons.add(option['id'] as String);
+                      }
                     }),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
@@ -238,10 +241,10 @@ class _DisputeScreenState extends State<DisputeScreen> {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: GardenColors.polygon.withOpacity(0.2)),
                   ),
-                  child: Row(
+                  child: const Row(
                     children: [
-                      const Text('⬡', style: TextStyle(color: GardenColors.polygon, fontSize: 16)),
-                      const SizedBox(width: 10),
+                      Text('⬡', style: TextStyle(color: GardenColors.polygon, fontSize: 16)),
+                      SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           'La IA de GARDEN analizará ambas versiones y decidirá automáticamente. El smart contract ejecutará el veredicto.',
@@ -306,7 +309,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('El dueño reportó:', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.w700, fontSize: 14)),
+                      const Text('El dueño reportó:', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.w700, fontSize: 14)),
                       const SizedBox(height: 8),
                       ...clientReasonsLabels.map((r) => Padding(
                         padding: const EdgeInsets.only(bottom: 4),
@@ -326,8 +329,11 @@ class _DisputeScreenState extends State<DisputeScreen> {
                   final selected = _selectedReasons.contains(option['id'] as String);
                   return GestureDetector(
                     onTap: () => setState(() {
-                      if (selected) _selectedReasons.remove(option['id'] as String);
-                      else _selectedReasons.add(option['id'] as String);
+                      if (selected) {
+                        _selectedReasons.remove(option['id'] as String);
+                      } else {
+                        _selectedReasons.add(option['id'] as String);
+                      }
                     }),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
@@ -539,10 +545,10 @@ class _DisputeScreenState extends State<DisputeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  const Row(
                     children: [
-                      const Icon(Icons.lightbulb_outline, color: GardenColors.secondary, size: 18),
-                      const SizedBox(width: 8),
+                      Icon(Icons.lightbulb_outline, color: GardenColors.secondary, size: 18),
+                      SizedBox(width: 8),
                       Text('Recomendaciones para mejorar', style: TextStyle(color: GardenColors.secondary, fontWeight: FontWeight.w700, fontSize: 14)),
                     ],
                   ),
@@ -558,7 +564,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                             color: GardenColors.secondary.withOpacity(0.15),
                             shape: BoxShape.circle,
                           ),
-                          child: Center(child: Text('${e.key + 1}', style: TextStyle(color: GardenColors.secondary, fontSize: 11, fontWeight: FontWeight.w700))),
+                          child: Center(child: Text('${e.key + 1}', style: const TextStyle(color: GardenColors.secondary, fontSize: 11, fontWeight: FontWeight.w700))),
                         ),
                         const SizedBox(width: 10),
                         Expanded(child: Text(e.value, style: TextStyle(color: subtextColor, fontSize: 13, height: 1.4))),
@@ -579,11 +585,11 @@ class _DisputeScreenState extends State<DisputeScreen> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: GardenColors.polygon.withOpacity(0.3)),
             ),
-            child: Row(
+            child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('⬡', style: TextStyle(color: GardenColors.polygon, fontSize: 14)),
-                const SizedBox(width: 8),
+                Text('⬡', style: TextStyle(color: GardenColors.polygon, fontSize: 14)),
+                SizedBox(width: 8),
                 Text('Veredicto registrado en Polygon Amoy', style: TextStyle(color: GardenColors.polygon, fontSize: 12, fontWeight: FontWeight.w600)),
               ],
             ),

@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 
 class FavoritesScreen extends StatefulWidget {
-  const FavoritesScreen({Key? key}) : super(key: key);
+  const FavoritesScreen({super.key});
 
   @override
   State<FavoritesScreen> createState() => _FavoritesScreenState();
@@ -246,7 +246,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                             : pricePerDay != null
                                 ? 'Bs $pricePerDay / noche'
                                 : 'Consultar precio',
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: GardenColors.primary,
                           fontSize: 14,
                           fontWeight: FontWeight.w700,

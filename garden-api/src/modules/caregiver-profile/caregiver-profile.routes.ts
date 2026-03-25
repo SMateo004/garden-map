@@ -110,16 +110,25 @@ router.post('/profile/photo', authMiddleware, requireRole('CAREGIVER'),
 router.get('/dashboard-stats', authMiddleware, requireRole('CAREGIVER'),
   asyncHandler(async (req, res) => {
     const userId = (req as any).user.userId;
+
     const profile = await prisma.caregiverProfile.findUnique({
       where: { userId },
-      select: { id: true, balance: true },
+      select: {
+        id: true, balance: true, rating: true, reviewCount: true,
+        onboardingStatus: true, profilePhoto: true, status: true,
+      },
     });
     if (!profile) return res.status(404).json({ success: false });
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
 
-    const [totalBookings, monthBookings, completedBookings, avgRating, pendingBookings] = await Promise.all([
+    const [
+      totalBookings, monthBookings, completedBookings, avgRatingAgg,
+      pendingBookings, completedThisMonth, acceptedBookings, respondedBookings,
+      nextBookingRaw, monthEarningsAgg, allTimeEarningsAgg,
+    ] = await Promise.all([
       prisma.booking.count({ where: { caregiverId: profile.id } }),
       prisma.booking.count({ where: { caregiverId: profile.id, createdAt: { gte: startOfMonth } } }),
       prisma.booking.count({ where: { caregiverId: profile.id, status: 'COMPLETED' } }),
@@ -127,24 +136,89 @@ router.get('/dashboard-stats', authMiddleware, requireRole('CAREGIVER'),
         where: { caregiverId: profile.id, ownerRating: { not: null } },
         _avg: { ownerRating: true },
       }),
-      prisma.booking.count({ where: { caregiverId: profile.id, status: { in: ['CONFIRMED', 'WAITING_CAREGIVER_APPROVAL'] } } }),
+      prisma.booking.count({
+        where: { caregiverId: profile.id, status: { in: ['CONFIRMED', 'WAITING_CAREGIVER_APPROVAL'] } },
+      }),
+      prisma.booking.findMany({
+        where: { caregiverId: profile.id, status: 'COMPLETED', createdAt: { gte: startOfMonth } },
+        select: { serviceType: true, duration: true, totalDays: true },
+      }),
+      prisma.booking.count({
+        where: { caregiverId: profile.id, status: { in: ['CONFIRMED', 'COMPLETED', 'IN_PROGRESS'] } },
+      }),
+      prisma.booking.count({
+        where: {
+          caregiverId: profile.id,
+          status: { notIn: ['PENDING_PAYMENT', 'PAYMENT_PENDING_APPROVAL', 'CANCELLED'] },
+        },
+      }),
+      prisma.booking.findFirst({
+        where: {
+          caregiverId: profile.id,
+          status: 'CONFIRMED',
+          OR: [{ walkDate: { gte: today } }, { startDate: { gte: today } }],
+        },
+        orderBy: [{ walkDate: 'asc' }, { startDate: 'asc' }],
+        select: { walkDate: true, startDate: true, petName: true, serviceType: true, startTime: true },
+      }),
+      prisma.walletTransaction.aggregate({
+        where: { userId, type: 'EARNING', createdAt: { gte: startOfMonth } },
+        _sum: { amount: true },
+      }),
+      prisma.walletTransaction.aggregate({
+        where: { userId, type: 'EARNING' },
+        _sum: { amount: true },
+      }),
     ]);
 
-    const monthEarnings = await prisma.walletTransaction.aggregate({
-      where: { userId, type: 'EARNING', createdAt: { gte: startOfMonth } },
-      _sum: { amount: true },
-    });
+    // Horas trabajadas este mes (estimación)
+    const hoursWorked = completedThisMonth.reduce((acc, b) => {
+      if (b.serviceType === 'PASEO') return acc + (b.duration ?? 30) / 60;
+      return acc + (b.totalDays ?? 1) * 8;
+    }, 0);
+
+    // Tasa de aceptación
+    const acceptanceRate = respondedBookings > 0
+      ? Math.round((acceptedBookings / respondedBookings) * 100)
+      : 100;
+
+    // Próxima reserva
+    const nextBooking = nextBookingRaw ? {
+      date: (nextBookingRaw.walkDate ?? nextBookingRaw.startDate)?.toISOString().substring(0, 10) ?? null,
+      petName: nextBookingRaw.petName,
+      serviceType: String(nextBookingRaw.serviceType),
+      startTime: nextBookingRaw.startTime ?? null,
+    } : null;
+
+    // Completitud del perfil
+    const profileCompleteness = (profile.onboardingStatus as any)?.percentage ?? 0;
 
     res.json({
       success: true,
       data: {
+        // Campos existentes (retrocompat)
         balance: Number(profile.balance),
         totalBookings,
         monthBookings,
         completedBookings,
-        avgRating: avgRating._avg.ownerRating ?? 0,
+        avgRating: Number((avgRatingAgg._avg.ownerRating ?? profile.rating ?? 0).toFixed(1)),
         pendingBookings,
-        monthEarnings: Number(monthEarnings._sum.amount ?? 0),
+        monthEarnings: Number(monthEarningsAgg._sum.amount ?? 0),
+        // Nuevos campos
+        thisMonth: {
+          bookings: monthBookings,
+          earnings: Number(monthEarningsAgg._sum.amount ?? 0),
+          hoursWorked: Math.round(hoursWorked * 10) / 10,
+        },
+        allTime: {
+          bookings: totalBookings,
+          earnings: Number(allTimeEarningsAgg._sum.amount ?? 0),
+          rating: Number((avgRatingAgg._avg.ownerRating ?? profile.rating ?? 0).toFixed(1)),
+          reviewCount: profile.reviewCount ?? 0,
+        },
+        acceptanceRate,
+        nextBooking,
+        profileCompleteness,
       },
     });
   })

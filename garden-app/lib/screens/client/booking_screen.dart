@@ -7,7 +7,7 @@ import '../../theme/garden_theme.dart';
 
 class BookingScreen extends StatefulWidget {
   final String caregiverId;
-  const BookingScreen({Key? key, required this.caregiverId}) : super(key: key);
+  const BookingScreen({super.key, required this.caregiverId});
 
   @override
   State<BookingScreen> createState() => _BookingScreenState();
@@ -26,7 +26,7 @@ class _BookingScreenState extends State<BookingScreen> {
   DateTime? _selectedDate; // para paseo: fecha del paseo; para hospedaje: fecha inicio
   DateTime? _endDate; // solo hospedaje
   String? _selectedTimeSlot; // 'MANANA', 'TARDE', 'NOCHE'
-  int _selectedDuration = 30; // solo paseo: 30 o 60 minutos
+  final int _selectedDuration = 30; // solo paseo: 30 o 60 minutos
   bool _isSubmitting = false;
 
   List<Map<String, dynamic>> _availableSlots = [];
@@ -291,7 +291,7 @@ class _BookingScreenState extends State<BookingScreen> {
                 Row(children: [
                   const Icon(Icons.star_rounded, color: GardenColors.star, size: 14),
                   const SizedBox(width: 4),
-                  Text('${(_caregiver!['rating'] as num? ?? 0).toStringAsFixed(1)}',
+                  Text((_caregiver!['rating'] as num? ?? 0).toStringAsFixed(1),
                     style: TextStyle(color: subtextColor, fontSize: 13)),
                 ]),
               ],
@@ -543,7 +543,7 @@ class _BookingScreenState extends State<BookingScreen> {
                           ],
                         ),
                       );
-                    }).toList(),
+                    }),
                     const Text(
                       '* 30 min de descanso incluidos después del servicio',
                       style: TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w500),

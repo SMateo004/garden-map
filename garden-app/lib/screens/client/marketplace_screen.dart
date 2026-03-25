@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -14,11 +15,11 @@ class MarketplaceScreen extends StatefulWidget {
   final String? initialSize;
 
   const MarketplaceScreen({
-    Key? key,
+    super.key,
     this.initialService,
     this.initialZone,
     this.initialSize,
-  }) : super(key: key);
+  });
 
   @override
   State<MarketplaceScreen> createState() => _MarketplaceScreenState();
@@ -42,6 +43,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   String _authToken = '';
   String? _userPhoto;
   String? _userName;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounce;
   final ScrollController _scrollController = ScrollController();
 
   final Map<String, String> _zoneLabels = {
@@ -67,6 +71,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     }
     
     _loadInitialData();
+    _checkOnboarding();
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >=
               _scrollController.position.maxScrollExtent - 200 &&
@@ -80,6 +85,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   Future<void> _loadInitialData() async {
     await _loadToken();
     await _loadCaregivers(reset: true);
+  }
+
+  Future<void> _checkOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    final completed = prefs.getBool('onboarding_completed') ?? false;
+    if (!completed && mounted) {
+      context.go('/client-welcome');
+    }
   }
 
   Future<void> _loadToken() async {
@@ -99,6 +112,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   @override
   void dispose() {
+    _searchController.dispose();
+    _searchDebounce?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -123,6 +138,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         if (_filterPuppies) 'acceptPuppies': 'true',
         if (_filterSeniors) 'acceptSeniors': 'true',
         if (_selectedSizes.isNotEmpty) 'sizesAccepted': _selectedSizes.join(','),
+        if (_searchQuery.isNotEmpty) 'search': _searchQuery,
       };
       final uri = Uri.parse(
         '${const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api')}/caregivers',
@@ -175,7 +191,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? GardenColors.primary : theme.colorScheme.surfaceVariant,
+          color: isSelected ? GardenColors.primary : theme.colorScheme.surfaceContainerHighest,
           borderRadius: GardenRadius.full_,
           boxShadow: isSelected ? GardenShadows.primary : null,
           border: Border.all(
@@ -205,7 +221,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     }
     return TextButton(
       onPressed: () => context.push('/login'),
-      child: Text(
+      child: const Text(
         'Iniciar sesión', 
         style: TextStyle(
           color: GardenColors.primary, 
@@ -275,11 +291,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       Row(
                         children: [
                           if (caregiver['experienceYears'] != null) ...[
-                            Icon(Icons.badge_outlined, size: 12, color: GardenColors.primary),
+                            const Icon(Icons.badge_outlined, size: 12, color: GardenColors.primary),
                             const SizedBox(width: 4),
                             Text(
                               '${caregiver['experienceYears']}+ años exp.',
-                              style: TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.bold),
+                              style: const TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(width: 8),
                           ],
@@ -340,13 +356,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                         'Bs ${caregiver['pricePerWalk30']}',
                         style: GardenText.price.copyWith(color: GardenColors.primary),
                       ),
-                      Text('por paseo', style: GardenText.caption),
+                      const Text('por paseo', style: GardenText.caption),
                     ] else if (caregiver['pricePerDay'] != null) ...[
                       Text(
                         'Bs ${caregiver['pricePerDay']}',
                         style: GardenText.price.copyWith(color: GardenColors.primary),
                       ),
-                      Text('por noche', style: GardenText.caption),
+                      const Text('por noche', style: GardenText.caption),
                     ],
                   ],
                 ),
@@ -368,7 +384,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.link, size: 12, color: GardenColors.polygon),
+                  const Icon(Icons.link, size: 12, color: GardenColors.polygon),
                   const SizedBox(width: 6),
                   Text(
                     'Verificado en Polygon Blockchain',
@@ -403,18 +419,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     return ListView.builder(
       padding: const EdgeInsets.all(20),
       itemCount: 5,
-      itemBuilder: (context, _) => Padding(
-        padding: const EdgeInsets.only(bottom: 20),
+      itemBuilder: (context, _) => const Padding(
+        padding: EdgeInsets.only(bottom: 20),
         child: GardenCard(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           child: Row(
             children: [
-              const GardenSkeleton(width: 80, height: 80, radius: GardenRadius.lg),
-              const SizedBox(width: 16),
+              GardenSkeleton(width: 80, height: 80, radius: GardenRadius.lg),
+              SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     GardenSkeleton(width: 150, height: 18),
                     SizedBox(height: 8),
                     GardenSkeleton(width: 100, height: 14),
@@ -514,11 +530,56 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
+                  // Buscador por nombre
+                  TextField(
+                    controller: _searchController,
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: 'Buscar cuidador por nombre...',
+                      hintStyle: GardenText.bodyMedium.copyWith(
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                      ),
+                      prefixIcon: const Icon(Icons.search_rounded, color: GardenColors.primary, size: 20),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.close_rounded, color: theme.colorScheme.onSurface.withValues(alpha: 0.5), size: 18),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                                _loadCaregivers(reset: true);
+                              },
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                      border: OutlineInputBorder(
+                        borderRadius: GardenRadius.md_,
+                        borderSide: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: GardenRadius.md_,
+                        borderSide: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: GardenRadius.md_,
+                        borderSide: const BorderSide(color: GardenColors.primary, width: 1.5),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                    onChanged: (value) {
+                      _searchDebounce?.cancel();
+                      _searchDebounce = Timer(const Duration(milliseconds: 500), () {
+                        setState(() => _searchQuery = value.trim());
+                        _loadCaregivers(reset: true);
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
                   // Selector de zona con nuevo estilo
                   Container(
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
                       borderRadius: GardenRadius.md_,
                       border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
                     ),
@@ -528,11 +589,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                           child: DropdownButtonFormField<String>(
                             value: _selectedZone,
                             dropdownColor: theme.colorScheme.surface,
-                            icon: Icon(Icons.keyboard_arrow_down_rounded, color: GardenColors.primary),
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: GardenColors.primary),
                             decoration: InputDecoration(
                               hintText: 'Todas las zonas',
                               hintStyle: GardenText.bodyMedium.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.4)),
-                              prefixIcon: Icon(Icons.location_on_rounded, color: GardenColors.primary, size: 20),
+                              prefixIcon: const Icon(Icons.location_on_rounded, color: GardenColors.primary, size: 20),
                               border: InputBorder.none,
                               enabledBorder: InputBorder.none,
                               focusedBorder: InputBorder.none,
@@ -553,7 +614,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                         Padding(
                           padding: const EdgeInsets.only(right: 8),
                           child: IconButton(
-                            icon: Icon(Icons.tune_rounded, color: GardenColors.primary),
+                            icon: const Icon(Icons.tune_rounded, color: GardenColors.primary),
                             onPressed: _showFiltersBottomSheet,
                             tooltip: 'Filtros avanzados',
                           ),
@@ -575,11 +636,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.error_outline_rounded, color: GardenColors.error, size: 60),
+                    const Icon(Icons.error_outline_rounded, color: GardenColors.error, size: 60),
                     const SizedBox(height: 20),
-                    Text('Ops! Algo salió mal', style: GardenText.headingMedium),
+                    const Text('Ops! Algo salió mal', style: GardenText.headingMedium),
                     const SizedBox(height: 8),
-                    Text('No pudimos conectar con los cuidadores', style: GardenText.bodySmall),
+                    const Text('No pudimos conectar con los cuidadores', style: GardenText.bodySmall),
                     const SizedBox(height: 20),
                     GardenButton(
                       label: 'Reintentar',
@@ -598,9 +659,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   children: [
                     Icon(Icons.search_off_rounded, color: theme.colorScheme.onSurface.withOpacity(0.2), size: 80),
                     const SizedBox(height: 20),
-                    Text('Sin resultados', style: GardenText.headingMedium),
+                    const Text('Sin resultados', style: GardenText.headingMedium),
                     const SizedBox(height: 8),
-                    Text('Intenta cambiar los filtros de búsqueda', style: GardenText.bodySmall),
+                    const Text('Intenta cambiar los filtros de búsqueda', style: GardenText.bodySmall),
                   ],
                 ),
               ),
@@ -612,8 +673,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
                     if (index == _caregivers.length) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 32),
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 32),
                         child: Center(child: CircularProgressIndicator(color: GardenColors.primary)),
                       );
                     }
@@ -722,8 +783,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       selected: selected,
                       onSelected: (val) {
                         setSheetState(() {
-                          if (val) _selectedSizes.add(size);
-                          else _selectedSizes.remove(size);
+                          if (val) {
+                            _selectedSizes.add(size);
+                          } else {
+                            _selectedSizes.remove(size);
+                          }
                         });
                         setState(() {});
                       },

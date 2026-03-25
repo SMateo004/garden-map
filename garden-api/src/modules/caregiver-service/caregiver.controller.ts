@@ -37,6 +37,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
       acceptPuppies: query.acceptPuppies,
       acceptSeniors: query.acceptSeniors,
       sizesAccepted: query.sizesAccepted,
+      search: query.search,
       page: query.page,
       limit: query.limit,
     });
