@@ -208,27 +208,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     );
   }
 
-  Widget _buildAuthButton() {
-    final theme = Theme.of(context);
-    if (_authToken.isNotEmpty) {
-      return IconButton(
-        icon: const Icon(Icons.account_circle_outlined),
-        onPressed: () => context.push('/profile'),
-        tooltip: 'Mi perfil',
-      );
-    }
-    return TextButton(
-      onPressed: () => context.push('/login'),
-      child: const Text(
-        'Iniciar sesión', 
-        style: TextStyle(
-          color: GardenColors.primary, 
-          fontWeight: FontWeight.w700,
-          fontSize: 14,
-        ),
-      ),
-    );
-  }
 
   Widget _buildCaregiverCard(Map<String, dynamic> caregiver) {
     final theme = Theme.of(context);
@@ -563,23 +542,49 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 ],
               ),
             ),
-            actions: [
-              _buildAuthButton(),
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: IconButton(
-                  icon: Icon(Icons.list_alt_rounded, color: theme.colorScheme.onSurface),
-                  onPressed: () => context.push('/my-bookings'),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: IconButton(
-                  icon: Icon(Icons.pets_rounded, color: theme.colorScheme.onSurface),
-                  onPressed: () => context.push('/my-pets'),
-                ),
-              ),
-            ],
+            actions: _authToken.isNotEmpty
+                ? [
+                    IconButton(
+                      icon: Icon(Icons.list_alt_rounded, color: theme.colorScheme.onSurface),
+                      onPressed: () => context.push('/my-bookings'),
+                      tooltip: 'Mis reservas',
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.pets_rounded, color: theme.colorScheme.onSurface),
+                      onPressed: () => context.push('/my-pets'),
+                      tooltip: 'Mis mascotas',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.account_circle_outlined),
+                      onPressed: () => context.push('/profile'),
+                      tooltip: 'Mi perfil',
+                    ),
+                    const SizedBox(width: 4),
+                  ]
+                : [
+                    TextButton(
+                      onPressed: () => context.go('/register'),
+                      child: const Text(
+                        'Ser cuidador',
+                        style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => context.go('/login'),
+                      child: Text(
+                        'Iniciar sesión',
+                        style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12, top: 10, bottom: 10),
+                      child: GardenButton(
+                        label: 'Registrarse',
+                        width: 110,
+                        onPressed: () => context.go('/register'),
+                      ),
+                    ),
+                  ],
           ),
 
           // Filtros
