@@ -80,4 +80,13 @@ router.patch('/withdrawals/:id/complete', adminController.completeWithdrawal);
 /** PATCH /api/admin/withdrawals/:id/reject — rechazar retiro */
 router.patch('/withdrawals/:id/reject', adminController.rejectWithdrawal);
 
+/** GET /api/admin/gift-codes — listar todos los códigos de regalo */
+router.get('/gift-codes', adminController.listGiftCodes);
+
+/** POST /api/admin/gift-codes — crear nuevo código de regalo */
+router.post('/gift-codes', adminController.createGiftCode);
+
+/** PATCH /api/admin/gift-codes/:id/toggle — activar/desactivar */
+router.patch('/gift-codes/:id/toggle', adminController.toggleGiftCode);
+
 export default router;

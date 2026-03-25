@@ -16,10 +16,13 @@ class AdminPanelScreen extends StatefulWidget {
 }
 
 class _AdminPanelScreenState extends State<AdminPanelScreen> {
-  int _selectedTab = 0; // 0: Cuidadores, 1: Identidad, 2: Disputas
+  int _selectedTab = 0; // 0: Cuidadores, 1: Identidad, 2: Disputas, 3: Pagos, 4: Retiros, 5: Reservas, 6: Códigos
   List<Map<String, dynamic>> _caregivers = [];
   List<Map<String, dynamic>> _identityReviews = [];
   List<Map<String, dynamic>> _withdrawals = [];
+  List<Map<String, dynamic>> _reservations = [];
+  List<Map<String, dynamic>> _giftCodes = [];
+  String _reservationsFilter = 'todas';
   bool _isLoading = true;
   String _adminToken = '';
   String _caregiverStatusFilter = 'pendientes'; // 'pendientes', 'DRAFT', 'APPROVED', 'REJECTED', 'todos'
@@ -55,12 +58,100 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         _loadCaregivers(),
         _loadIdentityReviews(),
         _loadWithdrawals(),
+        _loadReservations(),
+        _loadGiftCodes(),
       ]);
     } catch (e) {
       debugPrint('Error loading admin data: $e');
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _loadReservations() async {
+    try {
+      String url = '$_baseUrl/admin/reservations';
+      if (_reservationsFilter != 'todas') url += '?status=$_reservationsFilter';
+      final response = await http.get(Uri.parse(url), headers: {'Authorization': 'Bearer $_adminToken'});
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        setState(() => _reservations = (data['data']['reservations'] as List).cast<Map<String, dynamic>>());
+      }
+    } catch (e) { debugPrint('Error loading reservations: $e'); }
+  }
+
+  Future<void> _loadGiftCodes() async {
+    try {
+      final response = await http.get(Uri.parse('$_baseUrl/admin/gift-codes'), headers: {'Authorization': 'Bearer $_adminToken'});
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        setState(() => _giftCodes = (data['data'] as List).cast<Map<String, dynamic>>());
+      }
+    } catch (e) { debugPrint('Error loading gift codes: $e'); }
+  }
+
+  Future<void> _createGiftCode(String code, double amount, int maxUses) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/admin/gift-codes'),
+        headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'code': code, 'amount': amount, 'maxUses': maxUses}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadGiftCodes();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Código creado'), backgroundColor: GardenColors.success));
+      } else {
+        throw Exception(data['error']?['message'] ?? 'Error');
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error));
+    }
+  }
+
+  Future<void> _toggleGiftCode(String id) async {
+    try {
+      final response = await http.patch(Uri.parse('$_baseUrl/admin/gift-codes/$id/toggle'), headers: {'Authorization': 'Bearer $_adminToken'});
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) await _loadGiftCodes();
+    } catch (e) { debugPrint(e.toString()); }
+  }
+
+  void _showCreateGiftCodeDialog() {
+    final codeCtrl = TextEditingController();
+    final amountCtrl = TextEditingController();
+    final maxUsesCtrl = TextEditingController(text: '1');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Nuevo código de regalo'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: codeCtrl, decoration: const InputDecoration(labelText: 'Código (ej: PROMO2026)'), textCapitalization: TextCapitalization.characters),
+            const SizedBox(height: 8),
+            TextField(controller: amountCtrl, decoration: const InputDecoration(labelText: 'Monto (Bs)'), keyboardType: TextInputType.number),
+            const SizedBox(height: 8),
+            TextField(controller: maxUsesCtrl, decoration: const InputDecoration(labelText: 'Usos máximos'), keyboardType: TextInputType.number),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () {
+              final code = codeCtrl.text.trim().toUpperCase();
+              final amount = double.tryParse(amountCtrl.text) ?? 0;
+              final maxUses = int.tryParse(maxUsesCtrl.text) ?? 1;
+              if (code.isNotEmpty && amount > 0) {
+                Navigator.pop(ctx);
+                _createGiftCode(code, amount, maxUses);
+              }
+            },
+            child: const Text('Crear'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadCaregivers() async {
@@ -338,6 +429,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     _buildDisputasPlaceholder(surface, textColor, subtextColor, borderColor),
                     _buildPaymentsTab(),
                     _buildWithdrawalsTab(surface, textColor, subtextColor, borderColor),
+                    _buildReservationsTab(surface, textColor, subtextColor, borderColor),
+                    _buildGiftCodesTab(surface, textColor, subtextColor, borderColor),
                   ],
                 ),
               ),
@@ -355,6 +448,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       ('Disputas', Icons.gavel_rounded),
       ('Pagos', Icons.price_check_rounded),
       ('Retiros', Icons.account_balance_rounded),
+      ('Reservas', Icons.calendar_month_outlined),
+      ('Códigos', Icons.card_giftcard_outlined),
     ];
     return Container(
       color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
@@ -966,6 +1061,205 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildReservationsTab(Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    final filters = [
+      ('Todas', 'todas'),
+      ('Confirmadas', 'CONFIRMED'),
+      ('En curso', 'IN_PROGRESS'),
+      ('Completadas', 'COMPLETED'),
+      ('Canceladas', 'CANCELLED'),
+    ];
+
+    String bookingStatusLabel(String s) => switch (s) {
+      'CONFIRMED'              => 'Confirmada',
+      'IN_PROGRESS'            => 'En curso',
+      'COMPLETED'              => 'Completada',
+      'CANCELLED'              => 'Cancelada',
+      'WAITING_CAREGIVER_APPROVAL' => 'Esperando cuidador',
+      'PENDING_PAYMENT'        => 'Pendiente pago',
+      _                        => s,
+    };
+
+    Color bookingStatusColor(String s) => switch (s) {
+      'CONFIRMED'    => GardenColors.success,
+      'IN_PROGRESS'  => GardenColors.primary,
+      'COMPLETED'    => GardenColors.textSecondary,
+      'CANCELLED'    => GardenColors.error,
+      _              => GardenColors.warning,
+    };
+
+    final filtered = _reservationsFilter == 'todas'
+        ? _reservations
+        : _reservations.where((r) => r['status'] == _reservationsFilter).toList();
+
+    return Column(
+      children: [
+        Container(
+          color: surface,
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: filters.map((f) {
+                final selected = _reservationsFilter == f.$2;
+                return GestureDetector(
+                  onTap: () { setState(() => _reservationsFilter = f.$2); _loadReservations(); },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: selected ? GardenColors.primary : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: selected ? GardenColors.primary : borderColor),
+                    ),
+                    child: Text(f.$1, style: TextStyle(
+                      color: selected ? Colors.white : subtextColor,
+                      fontSize: 12, fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    )),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+              : filtered.isEmpty
+                  ? const GardenEmptyState(type: GardenEmptyType.bookings, title: 'Sin reservas', subtitle: 'No hay reservas con este filtro.', compact: true)
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: filtered.length,
+                      itemBuilder: (context, i) {
+                        final r = filtered[i];
+                        final status = r['status'] as String? ?? '';
+                        final isPaseo = r['serviceType'] == 'PASEO';
+                        final date = isPaseo
+                            ? (r['walkDate'] ?? '—')
+                            : '${r['startDate'] ?? '?'} – ${r['endDate'] ?? '?'}';
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: surface,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      isPaseo ? 'Paseo' : 'Hospedaje',
+                                      style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: bookingStatusColor(status).withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(bookingStatusLabel(status),
+                                      style: TextStyle(color: bookingStatusColor(status), fontSize: 11, fontWeight: FontWeight.w600)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              _infoRow(Icons.person_outline, r['clientEmail'] ?? '—', subtextColor),
+                              _infoRow(Icons.pets_outlined, r['petName'] ?? '—', subtextColor),
+                              _infoRow(Icons.supervisor_account_outlined, r['caregiverName'] ?? '—', subtextColor),
+                              _infoRow(Icons.calendar_today_outlined, date, subtextColor),
+                              _infoRow(Icons.attach_money_outlined, 'Bs ${r['totalAmount'] ?? '0'}', GardenColors.primary),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+        ),
+      ],
+    );
+  }
+
+  Widget _infoRow(IconData icon, String text, Color color) => Padding(
+    padding: const EdgeInsets.only(top: 3),
+    child: Row(children: [
+      Icon(icon, size: 13, color: color),
+      const SizedBox(width: 6),
+      Expanded(child: Text(text, style: TextStyle(color: color, fontSize: 12), overflow: TextOverflow.ellipsis)),
+    ]),
+  );
+
+  Widget _buildGiftCodesTab(Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text('${_giftCodes.length} códigos', style: TextStyle(color: subtextColor, fontSize: 13)),
+              ),
+              GardenButton(
+                label: 'Nuevo código',
+                icon: Icons.add_rounded,
+                height: 36,
+                onPressed: _showCreateGiftCodeDialog,
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+              : _giftCodes.isEmpty
+                  ? const GardenEmptyState(type: GardenEmptyType.bookings, title: 'Sin códigos', subtitle: 'Crea el primer código de regalo.', compact: true)
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      itemCount: _giftCodes.length,
+                      itemBuilder: (context, i) {
+                        final gc = _giftCodes[i];
+                        final active = gc['active'] == true;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: surface,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: active ? GardenColors.primary.withValues(alpha: 0.3) : borderColor),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(gc['code'] as String, style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15, fontFamily: 'monospace')),
+                                    const SizedBox(height: 2),
+                                    Text('Bs ${gc['amount']}  ·  ${gc['usedCount']}/${gc['maxUses']} usos',
+                                      style: TextStyle(color: subtextColor, fontSize: 12)),
+                                  ],
+                                ),
+                              ),
+                              Switch(
+                                value: active,
+                                activeColor: GardenColors.primary,
+                                onChanged: (_) => _toggleGiftCode(gc['id'] as String),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+        ),
+      ],
     );
   }
 }

@@ -289,3 +289,47 @@ export const rejectWithdrawal = asyncHandler(async (req: Request, res: Response)
 
   res.json({ success: true, data: { status: 'REJECTED' } });
 });
+
+/** GET /api/admin/gift-codes — listar todos los códigos de regalo */
+export const listGiftCodes = asyncHandler(async (_req: Request, res: Response) => {
+  const codes = await prisma.giftCode.findMany({ orderBy: { createdAt: 'desc' } });
+  res.json({
+    success: true,
+    data: codes.map((c) => ({
+      id: c.id,
+      code: c.code,
+      amount: Number(c.amount),
+      usedCount: c.usedBy.length,
+      maxUses: c.maxUses,
+      expiresAt: c.expiresAt?.toISOString() ?? null,
+      active: c.active,
+      createdAt: c.createdAt.toISOString(),
+    })),
+  });
+});
+
+/** POST /api/admin/gift-codes — crear nuevo código de regalo */
+export const createGiftCode = asyncHandler(async (req: Request, res: Response) => {
+  const { code, amount, maxUses, expiresAt } = req.body;
+  if (!code || !amount) {
+    return res.status(400).json({ success: false, error: { message: 'code y amount son requeridos' } });
+  }
+  const created = await prisma.giftCode.create({
+    data: {
+      code: String(code).toUpperCase().trim(),
+      amount: Number(amount),
+      maxUses: maxUses ? Number(maxUses) : 1,
+      expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+    },
+  });
+  res.status(201).json({ success: true, data: { id: created.id, code: created.code } });
+});
+
+/** PATCH /api/admin/gift-codes/:id/toggle — activar/desactivar código */
+export const toggleGiftCode = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const gc = await prisma.giftCode.findUnique({ where: { id } });
+  if (!gc) return res.status(404).json({ success: false, error: { message: 'Código no encontrado' } });
+  const updated = await prisma.giftCode.update({ where: { id }, data: { active: !gc.active } });
+  res.json({ success: true, data: { active: updated.active } });
+});

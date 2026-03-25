@@ -268,6 +268,21 @@ async function main() {
     }
   });
 
+  // Gift codes
+  const giftCodes = [
+    { code: 'MATEO004',   amount: 20 },
+    { code: 'GARDEN2026', amount: 50 },
+    { code: 'BIENVENIDO', amount: 15 },
+  ];
+  for (const gc of giftCodes) {
+    await prisma.giftCode.upsert({
+      where:  { code: gc.code },
+      update: {},
+      create: { code: gc.code, amount: gc.amount, maxUses: 100, active: true },
+    });
+  }
+  console.log('Gift codes seeded.');
+
   console.log('Seed completado con datos de prueba (Mascota + Reserva).');
 }
 

@@ -169,28 +169,26 @@ router.post('/redeem', authMiddleware, asyncHandler(async (req: Request, res: Re
   const role = (req as any).user.role;
   const { code } = req.body;
 
-  const GIFT_CODES: Record<string, number> = {
-    'MATEO004': 20,
-    'GARDEN2026': 50,
-    'BIENVENIDO': 15,
-  };
+  if (!code) {
+    return res.status(400).json({ success: false, error: { message: 'Código requerido' } });
+  }
 
-  const amount = GIFT_CODES[code?.toUpperCase()];
-  if (!amount) {
+  const giftCode = await prisma.giftCode.findUnique({ where: { code: code.toUpperCase() } });
+
+  if (!giftCode || !giftCode.active) {
     return res.status(400).json({ success: false, error: { message: 'Código inválido o expirado' } });
   }
-
-  // Verificar si ya usó este código
-  const alreadyUsed = await prisma.walletTransaction.findFirst({
-    where: { 
-      userId, 
-      description: { contains: code.toUpperCase() } 
-    },
-  });
-
-  if (alreadyUsed) {
+  if (giftCode.expiresAt && giftCode.expiresAt < new Date()) {
+    return res.status(400).json({ success: false, error: { message: 'Código expirado' } });
+  }
+  if (giftCode.usedBy.includes(userId)) {
     return res.status(400).json({ success: false, error: { message: 'Ya usaste este código' } });
   }
+  if (giftCode.usedBy.length >= giftCode.maxUses) {
+    return res.status(400).json({ success: false, error: { message: 'Código agotado' } });
+  }
+
+  const amount = Number(giftCode.amount);
 
   // Agregar saldo según el rol
   let newBalance = 0;
@@ -210,24 +208,30 @@ router.post('/redeem', authMiddleware, asyncHandler(async (req: Request, res: Re
     newBalance = Number(updated.balance);
   }
 
-  await prisma.walletTransaction.create({
+  await Promise.all([
+    prisma.giftCode.update({
+      where: { id: giftCode.id },
+      data: { usedBy: { push: userId } },
+    }),
+    prisma.walletTransaction.create({
+      data: {
+        userId,
+        type: 'REFUND',
+        amount,
+        balance: newBalance,
+        description: `Código de regalo: ${giftCode.code}`,
+        status: 'COMPLETED',
+      },
+    }),
+  ]);
+
+  res.json({
+    success: true,
     data: {
-      userId,
-      type: 'REFUND',
       amount,
       balance: newBalance,
-      description: `Código de regalo: ${code.toUpperCase()}`,
-      status: 'COMPLETED',
-    },
-  });
-
-  res.json({ 
-    success: true, 
-    data: { 
-      amount, 
-      balance: newBalance, 
-      message: `¡Recibiste Bs ${amount} de regalo!` 
-    } 
+      message: `¡Recibiste Bs ${amount} de regalo!`
+    }
   });
 }));
 

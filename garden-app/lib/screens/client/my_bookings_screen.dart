@@ -77,6 +77,86 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     return _bookings;
   }
 
+  Future<void> _extendBooking(String bookingId, String currentEndDate) async {
+    final initial = DateTime.tryParse(currentEndDate) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial.add(const Duration(days: 1)),
+      firstDate: initial.add(const Duration(days: 1)),
+      lastDate: DateTime.now().add(const Duration(days: 60)),
+      helpText: 'Selecciona nueva fecha de fin',
+    );
+    if (picked == null) return;
+    final newEndDate = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/bookings/$bookingId/extend'),
+        headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'newEndDate': newEndDate}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadBookings();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Hospedaje extendido hasta $newEndDate'), backgroundColor: GardenColors.success),
+        );
+      } else {
+        throw Exception(data['error']?['message'] ?? 'Error al extender');
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+      );
+    }
+  }
+
+  Future<void> _changeDates(String bookingId) async {
+    DateTime? newStart;
+    DateTime? newEnd;
+
+    newStart = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().add(const Duration(days: 2)),
+      firstDate: DateTime.now().add(const Duration(days: 2)),
+      lastDate: DateTime.now().add(const Duration(days: 90)),
+      helpText: 'Nueva fecha de inicio',
+    );
+    if (newStart == null || !mounted) return;
+
+    final capturedStart = newStart;
+    newEnd = await showDatePicker(
+      context: context,
+      initialDate: capturedStart.add(const Duration(days: 1)),
+      firstDate: capturedStart.add(const Duration(days: 1)),
+      lastDate: capturedStart.add(const Duration(days: 30)),
+      helpText: 'Nueva fecha de fin',
+    );
+    if (newEnd == null || !mounted) return;
+
+    final startStr = '${newStart.year}-${newStart.month.toString().padLeft(2, '0')}-${newStart.day.toString().padLeft(2, '0')}';
+    final endStr   = '${newEnd.year}-${newEnd.month.toString().padLeft(2, '0')}-${newEnd.day.toString().padLeft(2, '0')}';
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/bookings/$bookingId/change-dates'),
+        headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'newStartDate': startStr, 'newEndDate': endStr}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadBookings();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fechas actualizadas: $startStr – $endStr'), backgroundColor: GardenColors.success),
+        );
+      } else {
+        throw Exception(data['error']?['message'] ?? 'Error al cambiar fechas');
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+      );
+    }
+  }
+
   Future<void> _cancelBooking(String bookingId) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -357,6 +437,35 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         ),
                     ],
                   ),
+                  // Extender / Cambiar fechas solo para HOSPEDAJE CONFIRMED
+                  if (status == 'CONFIRMED' && !isPaseo) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GardenButton(
+                            label: 'Extender',
+                            icon: Icons.more_time_outlined,
+                            height: 38,
+                            color: GardenColors.accent,
+                            outline: true,
+                            onPressed: () => _extendBooking(booking['id'], booking['endDate'] ?? ''),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: GardenButton(
+                            label: 'Cambiar fechas',
+                            icon: Icons.edit_calendar_outlined,
+                            height: 38,
+                            color: GardenColors.accent,
+                            outline: true,
+                            onPressed: () => _changeDates(booking['id']),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ],
             ),

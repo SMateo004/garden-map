@@ -608,6 +608,19 @@ model ChatMessage {
 }
 
 
+model GiftCode {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  amount    Decimal   @db.Decimal(10, 2)
+  usedBy    String[]  @default([])
+  maxUses   Int       @default(1)
+  expiresAt DateTime?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  @@map("gift_codes")
+}
+
 model Dispute {
   id                String   @id @default(uuid())
   bookingId         String   @unique
