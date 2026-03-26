@@ -49,6 +49,9 @@ router.post('/bookings/:id/approve-payment', adminController.approvePayment);
 /** GET /api/admin/reservations — listado de reservas, ?status= opcional. */
 router.get('/reservations', adminController.getReservations);
 
+/** GET /api/admin/reservations/:id — detalle completo de una reserva. */
+router.get('/reservations/:id', adminController.getReservationDetail);
+
 
 /** GET /api/admin/identity-reviews — lista sesiones en REVIEW. */
 router.get('/identity-reviews', adminController.listIdentityReviews);

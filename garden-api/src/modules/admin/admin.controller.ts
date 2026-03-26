@@ -152,6 +152,12 @@ export const getReservations = asyncHandler(async (req: Request, res: Response) 
   res.json({ success: true, data: result });
 });
 
+/** GET /api/admin/reservations/:id — detalle completo de una reserva */
+export const getReservationDetail = asyncHandler(async (req: Request, res: Response) => {
+  const result = await adminService.getReservationDetail(req.params.id!);
+  res.json({ success: true, data: result });
+});
+
 
 /** GET /api/admin/identity-reviews — lista sesiones de identidad. ?status=REVIEW|APPROVED|REJECTED|ALL */
 export const listIdentityReviews = asyncHandler(async (req: Request, res: Response) => {

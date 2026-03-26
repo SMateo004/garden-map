@@ -686,6 +686,168 @@ export async function getReservations(status?: string): Promise<AdminReservation
   return { reservations, total: reservations.length };
 }
 
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** GET /api/admin/reservations/:id — detalle completo de una reserva para admin */
+export async function getReservationDetail(bookingId: string) {
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: {
+      client: {
+        include: {
+          clientProfile: { include: { pets: true } },
+        },
+      },
+      caregiver: {
+        include: { user: true },
+      },
+      review: true,
+      dispute: true,
+      pet: true,
+      messages: {
+        include: {
+          sender: { select: { id: true, firstName: true, lastName: true, role: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      },
+    },
+  });
+  if (!booking) throw new NotFoundError('Reserva no encontrada');
+
+  // Wallet transactions linked to this booking
+  const walletTxs = await prisma.walletTransaction.findMany({
+    where: { bookingId: booking.id },
+    include: { user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } } },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  // Chat availability: 7 days after service ended (or completion)
+  const chatBaseDate = booking.serviceEndedAt ?? (booking.status === 'COMPLETED' ? booking.updatedAt : null);
+  const chatAvailable = chatBaseDate
+    ? Date.now() - new Date(chatBaseDate).getTime() < SEVEN_DAYS_MS
+    : ['IN_PROGRESS', 'CONFIRMED', 'WAITING_CAREGIVER_APPROVAL'].includes(booking.status);
+  const chatExpiresAt = chatBaseDate
+    ? new Date(new Date(chatBaseDate).getTime() + SEVEN_DAYS_MS).toISOString()
+    : null;
+
+  const totalAmount = Number(booking.totalAmount);
+  const commissionAmount = Number(booking.commissionAmount);
+  const caregiverPayout = totalAmount - commissionAmount;
+
+  const u = booking.caregiver.user;
+  const c = booking.client;
+
+  return {
+    id: booking.id,
+    status: booking.status,
+    serviceType: booking.serviceType,
+    // Dates & time
+    startDate: booking.startDate?.toISOString().slice(0, 10) ?? null,
+    endDate: booking.endDate?.toISOString().slice(0, 10) ?? null,
+    walkDate: booking.walkDate?.toISOString().slice(0, 10) ?? null,
+    timeSlot: booking.timeSlot,
+    startTime: booking.startTime,
+    duration: booking.duration,
+    totalDays: booking.totalDays,
+    createdAt: booking.createdAt.toISOString(),
+    updatedAt: booking.updatedAt.toISOString(),
+    // Service execution
+    serviceStartedAt: booking.serviceStartedAt?.toISOString() ?? null,
+    serviceEndedAt: booking.serviceEndedAt?.toISOString() ?? null,
+    serviceStartPhoto: booking.serviceStartPhoto,
+    serviceEndPhoto: booking.serviceEndPhoto,
+    serviceTrackingData: booking.serviceTrackingData,
+    serviceEvents: booking.serviceEvents,
+    // Pet
+    petId: booking.petId,
+    petName: booking.petName,
+    petBreed: booking.petBreed,
+    petAge: booking.petAge,
+    petSize: booking.petSize,
+    specialNeeds: booking.specialNeeds,
+    petPhotoUrl: (booking.pet as any)?.photoUrl ?? null,
+    // Payment
+    totalAmount,
+    pricePerUnit: Number(booking.pricePerUnit),
+    commissionAmount,
+    commissionPercent: 10,
+    caregiverPayoutAmount: caregiverPayout,
+    paidAt: booking.paidAt?.toISOString() ?? null,
+    paymentMethod: (booking as any).paymentMethod ?? null,
+    payoutStatus: booking.payoutStatus,
+    qrId: booking.qrId,
+    refundAmount: booking.refundAmount ? Number(booking.refundAmount) : null,
+    refundStatus: booking.refundStatus,
+    cancelledAt: booking.cancelledAt?.toISOString() ?? null,
+    cancellationReason: booking.cancellationReason,
+    // Client
+    clientId: booking.clientId,
+    clientEmail: c.email,
+    clientName: `${c.firstName} ${c.lastName}`.trim(),
+    clientPhone: c.phone ?? null,
+    clientProfileId: (booking.client.clientProfile as any)?.id ?? null,
+    // Caregiver
+    caregiverId: booking.caregiverId,
+    caregiverName: `${u.firstName} ${u.lastName}`.trim(),
+    caregiverEmail: u.email,
+    caregiverPhone: u.phone ?? null,
+    caregiverUserId: u.id,
+    // Ratings
+    ownerRated: booking.ownerRated,
+    ownerRating: booking.ownerRating,
+    ownerComment: booking.ownerComment,
+    caregiverRated: booking.caregiverRated,
+    caregiverRating: booking.caregiverRating,
+    caregiverComment: booking.caregiverComment,
+    review: booking.review ? {
+      id: booking.review.id,
+      rating: booking.review.rating,
+      comment: booking.review.comment,
+      photo: booking.review.photo,
+      caregiverResponse: booking.review.caregiverResponse,
+      respondedAt: booking.review.respondedAt?.toISOString() ?? null,
+      createdAt: booking.review.createdAt.toISOString(),
+    } : null,
+    // Dispute
+    dispute: booking.dispute ? {
+      id: booking.dispute.id,
+      status: booking.dispute.status,
+      clientReasons: booking.dispute.clientReasons,
+      caregiverResponse: booking.dispute.caregiverResponse,
+      aiVerdict: booking.dispute.aiVerdict,
+      aiAnalysis: booking.dispute.aiAnalysis,
+      aiRecommendations: booking.dispute.aiRecommendations,
+      resolution: booking.dispute.resolution,
+      createdAt: booking.dispute.createdAt.toISOString(),
+      updatedAt: booking.dispute.updatedAt.toISOString(),
+    } : null,
+    // Chat
+    chatAvailable,
+    chatExpiresAt,
+    messages: chatAvailable ? booking.messages.map((m) => ({
+      id: m.id,
+      senderId: m.senderId,
+      senderName: `${m.sender.firstName} ${m.sender.lastName}`.trim(),
+      senderRole: m.senderRole,
+      message: m.message,
+      read: m.read,
+      createdAt: m.createdAt.toISOString(),
+    })) : [],
+    // Wallet transactions
+    walletTransactions: walletTxs.map((tx) => ({
+      id: tx.id,
+      type: tx.type,
+      amount: Number(tx.amount),
+      balance: Number(tx.balance),
+      description: tx.description,
+      status: tx.status,
+      userEmail: tx.user.email,
+      userName: `${tx.user.firstName} ${tx.user.lastName}`.trim(),
+      userRole: tx.user.role,
+      createdAt: tx.createdAt.toISOString(),
+    })),
+  };
+}
 
 /** GET lista de sesiones de identidad — por defecto solo REVIEW, pasa status='ALL' para todas */
 export async function listIdentityReviews(status?: string) {
