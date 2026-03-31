@@ -679,15 +679,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               prefixIcon: Icon(Icons.home_work_outlined, color: kTextSecondary),
             ),
           ),
-          const SizedBox(height: 16),          ListTile(
-            tileColor: kSurfaceColor,
+          const SizedBox(height: 16),
+          ListTile(
+            tileColor: const Color(0xFF1A2E10),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             leading: const Icon(Icons.cake_outlined, color: kTextSecondary),
             title: Text(
               _dateOfBirth == null ? 'Fecha de nacimiento' : _formatDate(_dateOfBirth!),
-              style: TextStyle(
-                color: _dateOfBirth == null ? kTextSecondary : Colors.white,
-              ),
+              style: const TextStyle(color: Colors.white70),
             ),
             onTap: () async {
               final picked = await showDatePicker(
@@ -697,11 +696,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
                 builder: (context, child) {
                   return Theme(
-                    data: Theme.of(context).copyWith(
+                    data: ThemeData.dark().copyWith(
                       colorScheme: const ColorScheme.dark(
                         primary: kPrimaryColor,
-                        surface: kSurfaceColor,
+                        onPrimary: Colors.white,
+                        surface: Color(0xFF1A2E10),
+                        onSurface: Colors.white,
                       ),
+                      dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF162610)),
                     ),
                     child: child!,
                   );
@@ -1743,8 +1745,47 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     final bool showNavButtons = _currentStep <= 5;
     final bool isRegistrationStep = _currentStep == 5;
 
-    return Scaffold(
-      backgroundColor: kBackgroundColor,
+    return Theme(
+      data: ThemeData.dark().copyWith(
+        colorScheme: const ColorScheme.dark(
+          primary: kPrimaryColor,
+          secondary: kPrimaryColor,
+          surface: Color(0xFF1A2E10),
+        ),
+        scaffoldBackgroundColor: const Color(0xFF0D1A07),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF162610),
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFF1A2E10),
+          hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: kPrimaryColor,
+            foregroundColor: Colors.white,
+            minimumSize: const Size(double.infinity, 50),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white70,
+            side: const BorderSide(color: Colors.white30),
+            minimumSize: const Size(double.infinity, 50),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+      ),
+      child: Scaffold(
+      backgroundColor: const Color(0xFF0D1A07),
       appBar: AppBar(
         title: const Text('Crear perfil de cuidador'),
         // Show back arrow only for pre-registration steps (0-4)
@@ -1829,6 +1870,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             ),
         ],
       ),
-    );
+    )); // closes Scaffold + Theme
   }
 }
