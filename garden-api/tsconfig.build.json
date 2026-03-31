@@ -4,6 +4,7 @@
     "strict": false,
     "noImplicitAny": false,
     "strictNullChecks": false,
-    "noUncheckedIndexedAccess": false
+    "noUncheckedIndexedAccess": false,
+    "noEmitOnError": false
   }
 }
