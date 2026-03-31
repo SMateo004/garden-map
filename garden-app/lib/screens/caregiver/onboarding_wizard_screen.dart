@@ -600,11 +600,23 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString().replaceFirst('Exception: ', '');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: Colors.red.shade700,
-          duration: const Duration(seconds: 5),
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Row(children: [
+            Icon(Icons.error_outline, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Error al registrarse'),
+          ]),
+          content: SingleChildScrollView(
+            child: Text(msg, style: const TextStyle(fontSize: 14)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Entendido'),
+            ),
+          ],
         ),
       );
     } finally {
@@ -621,7 +633,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         children: [
           const Text(
             'Cuéntanos sobre ti',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: GardenColors.lightTextPrimary),
           ),
           const SizedBox(height: 4),
           const Text(
@@ -681,12 +693,17 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           ),
           const SizedBox(height: 16),
           ListTile(
-            tileColor: const Color(0xFF1A2E10),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            tileColor: GardenColors.lightSurface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: const BorderSide(color: GardenColors.lightBorder),
+            ),
             leading: const Icon(Icons.cake_outlined, color: kTextSecondary),
             title: Text(
               _dateOfBirth == null ? 'Fecha de nacimiento' : _formatDate(_dateOfBirth!),
-              style: const TextStyle(color: Colors.white70),
+              style: TextStyle(
+                color: _dateOfBirth == null ? GardenColors.lightTextHint : GardenColors.lightTextPrimary,
+              ),
             ),
             onTap: () async {
               final picked = await showDatePicker(
@@ -749,7 +766,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         children: [
           Text(
             titulo,
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: GardenColors.lightTextPrimary),
           ),
           const SizedBox(height: 4),
           Text(
@@ -931,7 +948,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         children: [
           const Text(
             '¿Qué ofreces?',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: GardenColors.lightTextPrimary),
           ),
           const SizedBox(height: 24),
 
@@ -971,7 +988,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                         Text(
                           'Hospedaje',
                           style: TextStyle(
-                            color: _servicesOffered.contains('HOSPEDAJE') ? kPrimaryColor : Colors.white,
+                            color: _servicesOffered.contains('HOSPEDAJE') ? kPrimaryColor : GardenColors.lightTextPrimary,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -1012,7 +1029,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                         Text(
                           'Paseo',
                           style: TextStyle(
-                            color: _servicesOffered.contains('PASEO') ? kPrimaryColor : Colors.white,
+                            color: _servicesOffered.contains('PASEO') ? kPrimaryColor : GardenColors.lightTextPrimary,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -1037,7 +1054,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             hint: const Text('Selecciona tu zona', style: TextStyle(color: kTextSecondary)),
             items: zoneLabels.entries.map((e) => DropdownMenuItem(
               value: e.key,
-              child: Text(e.value, style: const TextStyle(color: Colors.white)),
+              child: Text(e.value, style: const TextStyle(color: GardenColors.lightTextPrimary)),
             )).toList(),
             onChanged: (v) {
               setState(() => _selectedZone = v);
@@ -1053,7 +1070,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: GardenColors.lightTextPrimary,
               ),
             ),
             const SizedBox(height: 12),
@@ -1118,9 +1135,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             ),
             const SizedBox(height: 12),
             SwitchListTile(
-              tileColor: kSurfaceColor,
+              tileColor: GardenColors.lightSurface,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              title: const Text('¿Tienes patio?', style: TextStyle(color: Colors.white)),
+              title: const Text('¿Tienes patio?', style: TextStyle(color: GardenColors.lightTextPrimary)),
               value: _hasYard,
               onChanged: (val) => setState(() => _hasYard = val),
               activeColor: kPrimaryColor,
@@ -1140,13 +1157,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         children: [
           const Text(
             '¿Cuándo estás disponible?',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: GardenColors.lightTextPrimary),
           ),
           const SizedBox(height: 24),
           SwitchListTile(
-            tileColor: kSurfaceColor,
+            tileColor: GardenColors.lightSurface,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            title: const Text('Días de semana', style: TextStyle(color: Colors.white)),
+            title: const Text('Días de semana', style: TextStyle(color: GardenColors.lightTextPrimary)),
             subtitle: const Text('Lunes a Viernes', style: TextStyle(color: kTextSecondary, fontSize: 12)),
             value: _weekdays,
             activeColor: kPrimaryColor,
@@ -1154,9 +1171,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           ),
           const SizedBox(height: 12),
           SwitchListTile(
-            tileColor: kSurfaceColor,
+            tileColor: GardenColors.lightSurface,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            title: const Text('Fines de semana', style: TextStyle(color: Colors.white)),
+            title: const Text('Fines de semana', style: TextStyle(color: GardenColors.lightTextPrimary)),
             subtitle: const Text('Sábado y Domingo', style: TextStyle(color: kTextSecondary, fontSize: 12)),
             value: _weekends,
             activeColor: kPrimaryColor,
@@ -1164,9 +1181,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           ),
           const SizedBox(height: 12),
           SwitchListTile(
-            tileColor: kSurfaceColor,
+            tileColor: GardenColors.lightSurface,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            title: const Text('Feriados', style: TextStyle(color: Colors.white)),
+            title: const Text('Feriados', style: TextStyle(color: GardenColors.lightTextPrimary)),
             subtitle: const Text('Días festivos nacionales', style: TextStyle(color: kTextSecondary, fontSize: 12)),
             value: _holidays,
             activeColor: kPrimaryColor,
@@ -1384,24 +1401,24 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           ),
           const SizedBox(height: 16),
 
-          SwitchListTile(tileColor: kSurfaceColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), title: const Text('¿He cuidado mascotas de otras personas?', style: TextStyle(color: Colors.white, fontSize: 14)), value: _caredOthers, activeColor: kPrimaryColor, onChanged: (v) => setState(() => _caredOthers = v)),
+          SwitchListTile(tileColor: GardenColors.lightSurface, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), title: const Text('¿He cuidado mascotas de otras personas?', style: TextStyle(color: GardenColors.lightTextPrimary, fontSize: 14)), value: _caredOthers, activeColor: kPrimaryColor, onChanged: (v) => setState(() => _caredOthers = v)),
           const SizedBox(height: 8),
-          SwitchListTile(tileColor: kSurfaceColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), title: const Text('¿Tienes mascotas propias?', style: TextStyle(color: Colors.white, fontSize: 14)), value: _ownPets, activeColor: kPrimaryColor, onChanged: (v) => setState(() => _ownPets = v)),
+          SwitchListTile(tileColor: GardenColors.lightSurface, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), title: const Text('¿Tienes mascotas propias?', style: TextStyle(color: GardenColors.lightTextPrimary, fontSize: 14)), value: _ownPets, activeColor: kPrimaryColor, onChanged: (v) => setState(() => _ownPets = v)),
           const SizedBox(height: 8),
-          SwitchListTile(tileColor: kSurfaceColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), title: const Text('¿Aceptas cachorros?', style: TextStyle(color: Colors.white, fontSize: 14)), value: _acceptPuppies, activeColor: kPrimaryColor, onChanged: (v) => setState(() => _acceptPuppies = v)),
+          SwitchListTile(tileColor: GardenColors.lightSurface, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), title: const Text('¿Aceptas cachorros?', style: TextStyle(color: GardenColors.lightTextPrimary, fontSize: 14)), value: _acceptPuppies, activeColor: kPrimaryColor, onChanged: (v) => setState(() => _acceptPuppies = v)),
           const SizedBox(height: 8),
-          SwitchListTile(tileColor: kSurfaceColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), title: const Text('¿Aceptas mascotas senior?', style: TextStyle(color: Colors.white, fontSize: 14)), value: _acceptSeniors, activeColor: kPrimaryColor, onChanged: (v) => setState(() => _acceptSeniors = v)),
+          SwitchListTile(tileColor: GardenColors.lightSurface, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), title: const Text('¿Aceptas mascotas senior?', style: TextStyle(color: GardenColors.lightTextPrimary, fontSize: 14)), value: _acceptSeniors, activeColor: kPrimaryColor, onChanged: (v) => setState(() => _acceptSeniors = v)),
           const SizedBox(height: 8),
-          SwitchListTile(tileColor: kSurfaceColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), title: const Text('¿Aceptas mascotas agresivas?', style: TextStyle(color: Colors.white, fontSize: 14)), value: _acceptAggressive, activeColor: kPrimaryColor, onChanged: (v) => setState(() => _acceptAggressive = v)),
+          SwitchListTile(tileColor: GardenColors.lightSurface, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), title: const Text('¿Aceptas mascotas agresivas?', style: TextStyle(color: GardenColors.lightTextPrimary, fontSize: 14)), value: _acceptAggressive, activeColor: kPrimaryColor, onChanged: (v) => setState(() => _acceptAggressive = v)),
           const SizedBox(height: 24),
           if (_servicesOffered.contains('HOSPEDAJE') || _servicesOffered.contains('GUARDERIA')) ...[
             const Text('Condiciones y Entorno (Alojamiento)', style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            SwitchListTile(tileColor: kSurfaceColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), title: const Text('¿Tienes niños en casa?', style: TextStyle(color: Colors.white, fontSize: 14)), value: _hasChildren, activeColor: kPrimaryColor, onChanged: (v) => setState(() => _hasChildren = v)),
+            SwitchListTile(tileColor: GardenColors.lightSurface, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), title: const Text('¿Tienes niños en casa?', style: TextStyle(color: GardenColors.lightTextPrimary, fontSize: 14)), value: _hasChildren, activeColor: kPrimaryColor, onChanged: (v) => setState(() => _hasChildren = v)),
             const SizedBox(height: 8),
-            SwitchListTile(tileColor: kSurfaceColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), title: const Text('¿Trabajas desde casa?', style: TextStyle(color: Colors.white, fontSize: 14)), value: _workFromHome, activeColor: kPrimaryColor, onChanged: (v) => setState(() => _workFromHome = v)),
+            SwitchListTile(tileColor: GardenColors.lightSurface, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), title: const Text('¿Trabajas desde casa?', style: TextStyle(color: GardenColors.lightTextPrimary, fontSize: 14)), value: _workFromHome, activeColor: kPrimaryColor, onChanged: (v) => setState(() => _workFromHome = v)),
             const SizedBox(height: 8),
-            SwitchListTile(tileColor: kSurfaceColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), title: const Text('¿Sales a menudo?', style: TextStyle(color: Colors.white, fontSize: 14)), value: _oftenOut, activeColor: kPrimaryColor, onChanged: (v) => setState(() => _oftenOut = v)),
+            SwitchListTile(tileColor: GardenColors.lightSurface, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), title: const Text('¿Sales a menudo?', style: TextStyle(color: GardenColors.lightTextPrimary, fontSize: 14)), value: _oftenOut, activeColor: kPrimaryColor, onChanged: (v) => setState(() => _oftenOut = v)),
             const SizedBox(height: 16),
             
             const Text('Horas que las mascotas estarán solas', style: TextStyle(color: kTextSecondary)),
@@ -1457,7 +1474,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Text('Tu retrato final', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+          const Text('Tu retrato final', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: GardenColors.lightTextPrimary)),
           const SizedBox(height: 12),
           const Text(
             'Sube una foto tuya clara, sonriendo e idealmente con una mascota. Esta será la cara visible de tu negocio en GARDEN.',
@@ -1746,25 +1763,37 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     final bool isRegistrationStep = _currentStep == 5;
 
     return Theme(
-      data: ThemeData.dark().copyWith(
-        colorScheme: const ColorScheme.dark(
+      data: ThemeData(
+        colorScheme: const ColorScheme.light(
           primary: kPrimaryColor,
           secondary: kPrimaryColor,
-          surface: Color(0xFF1A2E10),
+          surface: GardenColors.lightSurface,
+          onSurface: GardenColors.lightTextPrimary,
+          onPrimary: Colors.white,
         ),
-        scaffoldBackgroundColor: const Color(0xFF0D1A07),
+        scaffoldBackgroundColor: GardenColors.lightBackground,
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF162610),
-          foregroundColor: Colors.white,
+          backgroundColor: GardenColors.lightSurface,
+          foregroundColor: GardenColors.lightTextPrimary,
           elevation: 0,
+          iconTheme: IconThemeData(color: GardenColors.lightTextPrimary),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: const Color(0xFF1A2E10),
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+          fillColor: GardenColors.lightSurfaceElevated,
+          hintStyle: const TextStyle(color: GardenColors.lightTextHint),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
+            borderSide: const BorderSide(color: GardenColors.lightBorder),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: GardenColors.lightBorder),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: kPrimaryColor, width: 2),
           ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
@@ -1773,19 +1802,27 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             foregroundColor: Colors.white,
             minimumSize: const Size(double.infinity, 50),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white70,
-            side: const BorderSide(color: Colors.white30),
+            foregroundColor: kPrimaryColor,
+            side: const BorderSide(color: kPrimaryColor),
             minimumSize: const Size(double.infinity, 50),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
+        dropdownMenuTheme: const DropdownMenuThemeData(
+          textStyle: TextStyle(color: GardenColors.lightTextPrimary),
+        ),
+        listTileTheme: const ListTileThemeData(
+          textColor: GardenColors.lightTextPrimary,
+          iconColor: GardenColors.lightTextSecondary,
+        ),
       ),
       child: Scaffold(
-      backgroundColor: const Color(0xFF0D1A07),
+      backgroundColor: GardenColors.lightBackground,
       appBar: AppBar(
         title: const Text('Crear perfil de cuidador'),
         // Show back arrow only for pre-registration steps (0-4)
