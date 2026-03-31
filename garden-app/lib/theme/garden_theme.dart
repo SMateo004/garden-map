@@ -602,7 +602,7 @@ String fixImageUrl(String url) {
   if (!url.startsWith('http://localhost') && !url.startsWith('http://127.0.0.1')) {
     return url;
   }
-  const apiUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
+  const apiUrl = String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
   final apiUri = Uri.tryParse(apiUrl);
   if (apiUri == null) return url;
   final apiHost = apiUri.host;

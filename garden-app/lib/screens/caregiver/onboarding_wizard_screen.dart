@@ -91,7 +91,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     try {
       final service = _servicesOffered.isNotEmpty ? _servicesOffered.first : 'PASEO';
       final zone = _selectedZone ?? 'EQUIPETROL';
-      final url = '${const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api')}/caregivers/price-stats?zone=$zone&service=$service';
+      final url = '${const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api')}/caregivers/price-stats?zone=$zone&service=$service';
       final res = await http.get(Uri.parse(url));
       final data = jsonDecode(res.body);
       if (data['success'] == true && mounted) {
@@ -121,7 +121,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
   static const _baseUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'http://localhost:3000/api',
+    defaultValue: 'https://garden-api-1ldd.onrender.com/api',
   );
 
   /// For returning users: load profile and jump to the first incomplete step (6-9).
@@ -394,7 +394,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     setState(() => _uploadingPhotos = true);
     try {
       final uri = Uri.parse(
-        '${const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api')}/upload/registration-photos',
+        '${const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api')}/upload/registration-photos',
       );
       final request = http.MultipartRequest('POST', uri);
       for (final photo in _localPhotos) {
@@ -462,7 +462,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     // Si hay foto de perfil local, subirla primero
     if (_localProfilePhoto != null && _profilePhotoUrl == null) {
       try {
-        final uri = Uri.parse('${const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api')}/upload/public-single-photo');
+        final uri = Uri.parse('${const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api')}/upload/public-single-photo');
         final request = http.MultipartRequest('POST', uri);
         final bytes = await _localProfilePhoto!.readAsBytes();
         
@@ -563,7 +563,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
       final response = await http.post(
         Uri.parse(
-          '${const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api')}/auth/caregiver/register',
+          '${const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api')}/auth/caregiver/register',
         ),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(body),

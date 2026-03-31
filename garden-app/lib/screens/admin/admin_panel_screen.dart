@@ -40,7 +40,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   final TextEditingController _reservationsSearchCtrl = TextEditingController();
   final TextEditingController _paymentsSearchCtrl = TextEditingController();
 
-  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
   @override
   void initState() {

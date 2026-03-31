@@ -23,7 +23,7 @@ class _AdminOwnersScreenState extends State<AdminOwnersScreen> {
 
   String get _baseUrl => const String.fromEnvironment(
         'API_URL',
-        defaultValue: 'http://localhost:3000/api',
+        defaultValue: 'https://garden-api-1ldd.onrender.com/api',
       );
 
   @override

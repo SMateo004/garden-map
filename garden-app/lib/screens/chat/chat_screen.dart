@@ -33,7 +33,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _initialized = false;
 
   String get _baseUrl => const String.fromEnvironment(
-    'API_URL', defaultValue: 'http://localhost:3000/api');
+    'API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
   @override
   void initState() {

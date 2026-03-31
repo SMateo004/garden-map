@@ -24,7 +24,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
   bool _loading = true;
   String _token = '';
   String _userId = '';
-  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
   // Proposal form state
   String _modalidad = 'IN_PERSON';

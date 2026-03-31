@@ -36,7 +36,7 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
   String _selectedBankName = '';
   String _selectedBankType = 'CUENTA_AHORRO';
 
-  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
   @override
   void initState() {

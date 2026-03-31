@@ -28,7 +28,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
   final List<String> _selectedReasons = [];
   Map<String, dynamic>? _resolution;
 
-  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
   // Opciones para el cliente
   static const List<Map<String, dynamic>> _clientOptions = [

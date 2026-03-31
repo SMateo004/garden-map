@@ -17,7 +17,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
   bool _isLoading = true;
   String _token = '';
 
-  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
   static const _sizeLabels = {'SMALL': 'Pequeño', 'MEDIUM': 'Mediano', 'LARGE': 'Grande', 'GIANT': 'Gigante'};
 

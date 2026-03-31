@@ -17,7 +17,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Map<String, dynamic>? _booking;
   bool _isLoading = true;
   String _clientToken = '';
-  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
   String? _selectedMethod; // 'qr' o 'manual'
   Map<String, dynamic>? _qrResponse;

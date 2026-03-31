@@ -14,7 +14,7 @@ class AccountDataScreen extends StatefulWidget {
 }
 
 class _AccountDataScreenState extends State<AccountDataScreen> {
-  static const _baseUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
+  static const _baseUrl = String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
   static const _blockchainContract = '0xc8223f91B21FC7C72744f98e09b113AfF882756E';
 
   Map<String, dynamic>? _userData;

@@ -33,7 +33,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   Duration _elapsed = Duration.zero;
   List<Map<String, dynamic>> _serviceEvents = [];
 
-  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
   bool get _alreadyRated => _booking?['ownerRating'] != null;
 
   @override

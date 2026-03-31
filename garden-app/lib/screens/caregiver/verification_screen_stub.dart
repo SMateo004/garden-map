@@ -42,7 +42,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
   String _resultMessage = '';
 
   String get _baseUrl =>
-      const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
+      const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
 

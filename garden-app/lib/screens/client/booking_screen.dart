@@ -18,7 +18,7 @@ class _BookingScreenState extends State<BookingScreen> {
   List<Map<String, dynamic>> _pets = [];
   bool _isLoading = true;
   String _clientToken = '';
-  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
   // Selecciones del usuario
   String? _selectedPetId;

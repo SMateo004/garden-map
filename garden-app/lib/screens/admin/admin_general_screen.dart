@@ -88,7 +88,7 @@ class _LiveStatsTabState extends State<_LiveStatsTab> {
 
   String get _baseUrl => const String.fromEnvironment(
         'API_URL',
-        defaultValue: 'http://localhost:3000/api',
+        defaultValue: 'https://garden-api-1ldd.onrender.com/api',
       );
 
   @override
@@ -452,7 +452,7 @@ class _FinancialTabState extends State<_FinancialTab>
 
   String get _baseUrl => const String.fromEnvironment(
         'API_URL',
-        defaultValue: 'http://localhost:3000/api',
+        defaultValue: 'https://garden-api-1ldd.onrender.com/api',
       );
 
   @override
@@ -1274,7 +1274,7 @@ class _ZonesTabState extends State<_ZonesTab> {
 
   String get _baseUrl => const String.fromEnvironment(
         'API_URL',
-        defaultValue: 'http://localhost:3000/api',
+        defaultValue: 'https://garden-api-1ldd.onrender.com/api',
       );
 
   final _zoneLabels = const {
