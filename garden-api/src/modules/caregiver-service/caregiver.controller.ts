@@ -270,7 +270,7 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
   const rawBody = parseCaregiverBody(req.body as Record<string, unknown>);
   const input = createCaregiverProfileSchema.parse(rawBody);
 
-  const { profile, created } = await caregiverService.upsertCaregiverProfile(userId, input, photoUrls);
+  const { profile, created } = await caregiverService.upsertCaregiverProfile(userId, input as any, photoUrls);
 
   if (created) {
     res.status(201).json({ success: true, data: profile });

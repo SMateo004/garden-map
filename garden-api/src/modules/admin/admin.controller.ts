@@ -70,7 +70,7 @@ export const deleteCaregiver = asyncHandler(async (req: Request, res: Response) 
   const profileId = req.params.id!;
   const body = deleteCaregiverSchema.parse(req.body);
   const adminId = req.user!.userId;
-  const result = await adminService.deleteCaregiver(profileId, adminId, body);
+  const result = await adminService.deleteCaregiver(profileId, adminId, body as any);
   res.json({ success: true, data: result });
 });
 
