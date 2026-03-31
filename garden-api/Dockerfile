@@ -19,4 +19,4 @@ RUN npx prisma generate
 RUN npx tsc -p tsconfig.build.json || true
 
 # Start: run migrations then start server
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/server.js"]
