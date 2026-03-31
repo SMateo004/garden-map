@@ -537,7 +537,6 @@ class _NotificationDetailDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = themeNotifier.isDark;
-    final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final iconColor = _NotificationRow._typeColor(notif.type);
@@ -545,18 +544,9 @@ class _NotificationDetailDialog extends StatelessWidget {
 
     return Dialog(
       backgroundColor: Colors.transparent,
-      child: Container(
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: GardenColors.primary.withOpacity(0.12),
-              blurRadius: 32,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
+      elevation: 0,
+      child: GlassBox(
+        borderRadius: BorderRadius.circular(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

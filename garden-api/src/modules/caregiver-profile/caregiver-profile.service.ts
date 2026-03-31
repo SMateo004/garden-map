@@ -202,6 +202,14 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   }
   if (body.spaceDescription !== undefined) updateData.spaceDescription = body.spaceDescription;
   if (body.address !== undefined) updateData.address = body.address;
+  if ((body as any).addressLat !== undefined) updateData.addressLat = (body as any).addressLat;
+  if ((body as any).addressLng !== undefined) updateData.addressLng = (body as any).addressLng;
+  if ((body as any).addressStreet !== undefined) updateData.addressStreet = (body as any).addressStreet;
+  if ((body as any).addressNumber !== undefined) updateData.addressNumber = (body as any).addressNumber;
+  if ((body as any).addressApartment !== undefined) updateData.addressApartment = (body as any).addressApartment;
+  if ((body as any).addressCondominio !== undefined) updateData.addressCondominio = (body as any).addressCondominio;
+  if ((body as any).addressReference !== undefined) updateData.addressReference = (body as any).addressReference;
+  if ((body as any).addressZone !== undefined) updateData.addressZone = (body as any).addressZone;
   if (body.servicesOffered !== undefined) updateData.servicesOffered = body.servicesOffered;
   if (body.serviceAvailability !== undefined) updateData.serviceAvailability = body.serviceAvailability;
   if (body.pricePerDay !== undefined) updateData.pricePerDay = body.pricePerDay;
@@ -249,7 +257,34 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.ciReversoUrl !== undefined) updateData.ciReversoUrl = ensureAbsoluteUrl(body.ciReversoUrl) ?? null;
   if (body.ciNumber !== undefined) updateData.ciNumber = body.ciNumber;
   if (body.onboardingStatus !== undefined) updateData.onboardingStatus = body.onboardingStatus as object;
-  if (body.serviceDetails !== undefined) updateData.serviceDetails = body.serviceDetails as object;
+  if (body.serviceDetails !== undefined) {
+    updateData.serviceDetails = body.serviceDetails as object;
+    // Sync serviceDetails.availability → defaultAvailabilitySchedule
+    const avFromDetails = (body.serviceDetails as any)?.availability;
+    if (avFromDetails !== undefined) {
+      const s = avFromDetails?.slots ?? {};
+      // Preserve existing time ranges (start/end) from the current schedule
+      const existingSchedule = (profile.defaultAvailabilitySchedule as Record<string, unknown>) ?? {};
+      const existingBlocks = (existingSchedule.paseoTimeBlocks as Record<string, unknown>) ?? {};
+      const mergeBlock = (key: string, enabled: boolean, defaultStart: string, defaultEnd: string) => {
+        const ex = existingBlocks[key] as Record<string, unknown> | undefined;
+        if (ex && typeof ex === 'object' && ex.start) return { ...ex, enabled };
+        return { enabled, start: defaultStart, end: defaultEnd };
+      };
+      updateData.defaultAvailabilitySchedule = {
+        ...existingSchedule,
+        hospedajeDefault: avFromDetails?.weekdays ?? true,
+        weekdays: avFromDetails?.weekdays ?? true,
+        weekends: avFromDetails?.weekends ?? false,
+        holidays: avFromDetails?.holidays ?? false,
+        paseoTimeBlocks: {
+          morning:   mergeBlock('morning',   s.morning   ?? true,  '08:00', '11:00'),
+          afternoon: mergeBlock('afternoon', s.afternoon ?? true,  '13:00', '17:00'),
+          night:     mergeBlock('night',     s.night     ?? false, '19:00', '22:00'),
+        },
+      };
+    }
+  }
 
   // Si estaba DRAFT o NEEDS_REVISION, mantener o establecer DRAFT (actualización de borrador).
   if (
@@ -460,7 +495,7 @@ export async function getMyAvailabilityForEdit(
 export async function patchAvailability(userId: string, body: PatchAvailabilityBody): Promise<{ success: true }> {
   const profile = await prisma.caregiverProfile.findUnique({
     where: { userId },
-    select: { id: true, profileStatus: true },
+    select: { id: true, profileStatus: true, defaultAvailabilitySchedule: true, serviceDetails: true },
   }) as any;
   if (!profile) {
     throw new BadRequestError('No tienes perfil de cuidador', 'CAREGIVER_PROFILE_NOT_FOUND');
@@ -515,9 +550,37 @@ export async function patchAvailability(userId: string, body: PatchAvailabilityB
 
   try {
     if (body.defaultSchedule !== undefined) {
+      const existingSchedule = (profile.defaultAvailabilitySchedule as Record<string, unknown>) ?? {};
+      const merged = { ...existingSchedule, ...body.defaultSchedule };
+
+      // Reverse sync: keep serviceDetails.availability in sync so Profile Data screen stays current
+      const existingSD  = (profile.serviceDetails as Record<string, unknown>) ?? {};
+      const existingAv  = (existingSD.availability as Record<string, unknown>) ?? {};
+      const existingSl  = (existingAv.slots as Record<string, unknown>) ?? {};
+      const newAv: Record<string, unknown> = { ...existingAv };
+      const newSlots: Record<string, unknown> = { ...existingSl };
+
+      const ds = body.defaultSchedule as Record<string, unknown>;
+      if (ds.weekdays !== undefined) newAv.weekdays = ds.weekdays;
+      if (ds.weekends !== undefined) newAv.weekends = ds.weekends;
+      if (ds.holidays !== undefined) newAv.holidays = ds.holidays;
+
+      const rawBlocks = ds.paseoTimeBlocks as Record<string, unknown> | undefined;
+      if (rawBlocks) {
+        for (const [key, val] of Object.entries(rawBlocks)) {
+          newSlots[key] = (typeof val === 'object' && val !== null)
+            ? (val as Record<string, unknown>).enabled
+            : val;
+        }
+      }
+      newAv.slots = newSlots;
+
       await prisma.caregiverProfile.update({
         where: { id: profile.id },
-        data: { defaultAvailabilitySchedule: body.defaultSchedule },
+        data: {
+          defaultAvailabilitySchedule: merged,
+          serviceDetails: { ...existingSD, availability: newAv } as any,
+        },
       });
     }
     if (body.overrides && Object.keys(body.overrides).length > 0) {

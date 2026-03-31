@@ -33,9 +33,16 @@ export const addEvent = asyncHandler(async (req: Request, res: Response) => {
 export const track = asyncHandler(async (req: Request, res: Response) => {
     const bookingId = req.params.id!;
     const caregiverUserId = req.user!.userId;
-    const { lat, lng } = req.body;
-    await bookingService.trackServiceLocation(bookingId, caregiverUserId, lat, lng);
+    const { lat, lng, accuracy } = req.body;
+    await bookingService.trackServiceLocation(bookingId, caregiverUserId, lat, lng, accuracy);
     res.json({ success: true });
+});
+
+export const getTrack = asyncHandler(async (req: Request, res: Response) => {
+    const bookingId = req.params.id!;
+    const userId = req.user!.userId;
+    const track = await bookingService.getGpsTrack(bookingId, userId);
+    res.json({ success: true, data: track });
 });
 
 export const conclude = asyncHandler(async (req: Request, res: Response) => {

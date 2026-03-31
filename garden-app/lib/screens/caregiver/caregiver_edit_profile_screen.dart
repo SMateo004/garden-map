@@ -1,16 +1,15 @@
 import 'dart:convert';
-import 'dart:html' as html;
 import 'dart:typed_data';
 import 'package:http_parser/http_parser.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:go_router/go_router.dart';
-import '../../main.dart';
 import '../../theme/garden_theme.dart';
+import '../../utils/garden_banks.dart';
 
 class CaregiverEditProfileScreen extends StatefulWidget {
-  const CaregiverEditProfileScreen({Key? key}) : super(key: key);
+  const CaregiverEditProfileScreen({super.key});
 
   @override
   State<CaregiverEditProfileScreen> createState() => _CaregiverEditProfileScreenState();
@@ -31,26 +30,11 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
   final _lastNameController = TextEditingController();
   final _phoneController = TextEditingController();
 
-  // Selecciones
-  String _selectedZone = 'EQUIPETROL';
-  List<String> _selectedServices = [];
-
-  static const _zones = [
-    'EQUIPETROL', 'URBARI', 'NORTE', 'SUR', 'CENTRO',
-    'ESTE', 'OESTE', 'LAS_PALMAS', 'REMANSO',
-  ];
-
-  static const _zoneLabels = {
-    'EQUIPETROL': 'Equipetrol',
-    'URBARI': 'Urbari',
-    'NORTE': 'Norte',
-    'SUR': 'Sur',
-    'CENTRO': 'Centro',
-    'ESTE': 'Este',
-    'OESTE': 'Oeste',
-    'LAS_PALMAS': 'Las Palmas',
-    'REMANSO': 'Remanso',
-  };
+  // Datos de cobro
+  final _bankAccountController = TextEditingController();
+  final _bankHolderController = TextEditingController();
+  String _selectedBankName = '';
+  String _selectedBankType = 'CUENTA_AHORRO';
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
 
@@ -91,6 +75,10 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
             _lastNameController.text = user['lastName'] as String? ?? '';
             _phoneController.text = user['phone'] as String? ?? '';
           }
+          _selectedBankName = profile['bankName'] as String? ?? '';
+          _selectedBankType = profile['bankType'] as String? ?? 'CUENTA_AHORRO';
+          _bankAccountController.text = profile['bankAccount'] as String? ?? '';
+          _bankHolderController.text = profile['bankHolder'] as String? ?? '';
         });
       }
     } catch (e) {
@@ -101,19 +89,12 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
   }
 
   Future<void> _pickProfilePhoto() async {
-    final input = html.FileUploadInputElement();
-    input.accept = 'image/*';
-    input.click();
-    await input.onChange.first;
-    final file = input.files?.first;
-    if (file == null) return;
-    final reader = html.FileReader();
-    reader.readAsArrayBuffer(file);
-    await reader.onLoad.first;
-    final bytes = Uint8List.fromList(reader.result as List<int>);
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
     setState(() {
       _newPhotoBytes = bytes;
-      _newPhotoName = file.name;
+      _newPhotoName = picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
     });
   }
 
@@ -145,6 +126,23 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
   }
 
   Future<void> _saveProfile() async {
+    // ── Validación de campos obligatorios ──
+    final isVerifiedCheck = _profile?['identityVerificationStatus'] == 'VERIFIED';
+    if (!isVerifiedCheck) {
+      if (_firstNameController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('El nombre es obligatorio'), backgroundColor: GardenColors.error));
+        return;
+      }
+      if (_lastNameController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('El apellido es obligatorio'), backgroundColor: GardenColors.error));
+        return;
+      }
+    }
+    if (_phoneController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('El teléfono es obligatorio'), backgroundColor: GardenColors.error));
+      return;
+    }
+
     setState(() => _isSaving = true);
     try {
       // Subir foto primero si hay una nueva
@@ -164,19 +162,23 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
         }),
       );
 
-      // Guardar también la info personal
+      // Guardar también la info personal y datos de cobro
       await _saveUserInfo();
+      await _saveBankInfo();
 
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Perfil actualizado correctamente'),
+            content: Text('✅ Perfil actualizado correctamente'),
             backgroundColor: GardenColors.success,
+            duration: Duration(seconds: 2),
           ),
         );
-        Navigator.pop(context, true); // retorna true para indicar que hubo cambios
+        await Future.delayed(const Duration(seconds: 2));
+        if (!mounted) return;
+        Navigator.pop(context, true);
       } else {
         throw Exception(data['error']?['message'] ?? 'Error al guardar');
       }
@@ -187,6 +189,24 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _saveBankInfo() async {
+    if (_selectedBankName.isEmpty) return;
+    try {
+      await http.patch(
+        Uri.parse('$_baseUrl/caregiver/bank-info'),
+        headers: {'Authorization': 'Bearer $_caregiverToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'bankName': _selectedBankName,
+          'bankAccount': _bankAccountController.text.trim(),
+          'bankHolder': _bankHolderController.text.trim(),
+          'bankType': _selectedBankType,
+        }),
+      );
+    } catch (e) {
+      debugPrint('Error saving bank info: $e');
     }
   }
 
@@ -280,7 +300,7 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
                       ),
                       const SizedBox(height: 8),
                       if (_newPhotoBytes != null)
-                        Center(
+                        const Center(
                           child: Text('Nueva foto seleccionada',
                             style: TextStyle(color: GardenColors.success, fontSize: 12, fontWeight: FontWeight.w600)),
                         ),
@@ -308,7 +328,11 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
                       _buildPersonalInfoSection(textColor, subtextColor, isDark),
                       const Divider(height: 32),
 
-                      // Sección 6 - Estado
+                      // Sección — Datos de cobro
+                      _buildBankSection(textColor, subtextColor, surface, borderColor, isDark),
+                      const Divider(height: 32),
+
+                      // Sección — Estado
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -347,49 +371,219 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
     );
   }
 
-  Widget _serviceChip(String label, String value) {
-    final isSelected = _selectedServices.contains(value);
-    return FilterChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (selected) {
-        setState(() {
-          if (selected) {
-            _selectedServices.add(value);
-          } else {
-            _selectedServices.remove(value);
-          }
-        });
-      },
-      selectedColor: GardenColors.primary.withOpacity(0.2),
-      checkmarkColor: GardenColors.primary,
-      labelStyle: TextStyle(
-        color: isSelected ? GardenColors.primary : Colors.grey,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: isSelected ? GardenColors.primary : Colors.grey.shade300),
+  Widget _buildBankSection(Color textColor, Color subtextColor, Color surface, Color borderColor, bool isDark) {
+    final surfaceEl = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
+    final isWallet = GardenBanks.isDigitalWallet(_selectedBankName);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('Datos de cobro', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: GardenColors.secondary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.lock_outline_rounded, color: GardenColors.secondary, size: 12),
+                  SizedBox(width: 4),
+                  Text('Solo visible para ti', style: TextStyle(color: GardenColors.secondary, fontSize: 10, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text('Cuenta donde recibirás tus pagos. No es visible para los dueños.', style: TextStyle(color: subtextColor, fontSize: 12)),
+        const SizedBox(height: 16),
+
+        // Selector banco/billetera
+        GestureDetector(
+          onTap: () => _showBankPickerSheet(context, isDark),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: surfaceEl,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _selectedBankName.isEmpty ? borderColor : GardenColors.primary.withValues(alpha: 0.5)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _selectedBankName.isEmpty ? Icons.account_balance_rounded : (isWallet ? Icons.account_balance_wallet_rounded : Icons.account_balance_rounded),
+                  color: _selectedBankName.isEmpty ? subtextColor : GardenColors.primary, size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _selectedBankName.isEmpty
+                      ? Text('Selecciona banco o billetera', style: TextStyle(color: subtextColor, fontSize: 14))
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(_selectedBankName, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
+                            Text(GardenBanks.typeLabels[_selectedBankType] ?? _selectedBankType, style: TextStyle(color: subtextColor, fontSize: 11)),
+                          ],
+                        ),
+                ),
+                Icon(Icons.keyboard_arrow_down_rounded, color: subtextColor, size: 20),
+              ],
+            ),
+          ),
+        ),
+
+        if (_selectedBankName.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          // Tipo de cuenta (solo bancos tradicionales)
+          if (!isWallet)
+            Row(
+              children: [
+                _accountTypeChip('Cuenta de ahorro', 'CUENTA_AHORRO', textColor, subtextColor),
+                const SizedBox(width: 10),
+                _accountTypeChip('Cuenta corriente', 'CUENTA_CORRIENTE', textColor, subtextColor),
+              ],
+            ),
+          if (!isWallet) const SizedBox(height: 10),
+          TextField(
+            controller: _bankAccountController,
+            keyboardType: TextInputType.number,
+            style: TextStyle(color: textColor),
+            decoration: _inputDecoration(isWallet ? 'Número de teléfono (ej: 70012345)' : 'Número de cuenta bancaria', isDark),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _bankHolderController,
+            style: TextStyle(color: textColor),
+            decoration: _inputDecoration('Nombre completo del titular', isDark),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _accountTypeChip(String label, String value, Color textColor, Color subtextColor) {
+    final isSelected = _selectedBankType == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedBankType = value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? GardenColors.primary.withValues(alpha: 0.12) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: isSelected ? GardenColors.primary : subtextColor.withValues(alpha: 0.3)),
+          ),
+          child: Center(
+            child: Text(label, style: TextStyle(
+              color: isSelected ? GardenColors.primary : subtextColor,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              fontSize: 12,
+            )),
+          ),
+        ),
       ),
     );
   }
 
-  Widget _priceField(String label, TextEditingController controller, bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: TextStyle(color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary, fontSize: 13)),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          style: TextStyle(color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary),
-          decoration: _inputDecoration('0.00', isDark).copyWith(
-            prefixText: 'Bs ',
-            prefixStyle: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.bold),
-          ),
-        ),
-      ],
+  void _showBankPickerSheet(BuildContext parentCtx, bool isDark) {
+    final searchController = TextEditingController();
+
+    showModalBottomSheet(
+      context: parentCtx,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setPickerSheet) {
+          final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+          final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+          final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+          final surfaceEl = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
+
+          final query = searchController.text.toLowerCase();
+          final filtered = query.isEmpty
+              ? GardenBanks.all
+              : GardenBanks.all.where((b) => b['name']!.toLowerCase().contains(query)).toList();
+
+          final items = <Widget>[];
+          for (final category in ['Bancos', 'Billeteras digitales']) {
+            final catBanks = filtered.where((b) => b['category'] == category).toList();
+            if (catBanks.isEmpty) continue;
+            items.add(Padding(
+              padding: const EdgeInsets.only(left: 4, top: 12, bottom: 6),
+              child: Text(category.toUpperCase(), style: TextStyle(color: subtextColor, fontWeight: FontWeight.w700, fontSize: 10, letterSpacing: 1)),
+            ));
+            for (final bank in catBanks) {
+              final isSelected = bank['name'] == _selectedBankName;
+              items.add(Material(
+                color: Colors.transparent,
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  leading: Container(
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(
+                      color: isSelected ? GardenColors.primary.withValues(alpha: 0.15) : GardenColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      category == 'Bancos' ? Icons.account_balance_rounded : Icons.account_balance_wallet_rounded,
+                      color: isSelected ? GardenColors.primary : subtextColor, size: 18,
+                    ),
+                  ),
+                  title: Text(bank['name']!, style: TextStyle(
+                    color: isSelected ? GardenColors.primary : textColor,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: 14,
+                  )),
+                  subtitle: Text(GardenBanks.typeLabels[bank['type']] ?? '', style: TextStyle(color: subtextColor, fontSize: 11)),
+                  trailing: isSelected ? const Icon(Icons.check_circle_rounded, color: GardenColors.primary, size: 20) : null,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setState(() {
+                      _selectedBankName = bank['name']!;
+                      _selectedBankType = bank['type']!;
+                    });
+                  },
+                ),
+              ));
+            }
+          }
+
+          return SizedBox(
+            height: MediaQuery.of(context).size.height * 0.78,
+            child: GlassBox(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              children: [
+                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2)))),
+                const SizedBox(height: 16),
+                Text('Banco o billetera', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 18)),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: searchController,
+                  style: TextStyle(color: textColor),
+                  onChanged: (_) => setPickerSheet(() {}),
+                  decoration: InputDecoration(
+                    hintText: 'Buscar...',
+                    hintStyle: TextStyle(color: subtextColor),
+                    prefixIcon: Icon(Icons.search_rounded, color: subtextColor, size: 20),
+                    filled: true, fillColor: surfaceEl,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Expanded(child: ListView(padding: EdgeInsets.zero, children: items)),
+              ],
+            ),
+          ));
+        },
+      ),
     );
   }
 

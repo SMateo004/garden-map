@@ -13,6 +13,8 @@ export async function getById(id: string): Promise<UserPublic | null> {
       phone: true,
       profilePicture: true,
       emailVerified: true,
+      city: true,
+      country: true,
       createdAt: true,
     },
   });

@@ -128,7 +128,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session):
     logger.error('Notification onBookingWaitingApproval failed (Stripe)', { bookingId, err });
   });
 
-  // Registro en Blockchain (asíncrono)
+  // Registro en Blockchain — guardar txHash para verificación
   blockchainService.createBookingOnChain(
     bookingId,
     booking.clientId,
@@ -138,7 +138,12 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session):
     booking.endDate || booking.walkDate || new Date(),
     booking.petName,
     booking.serviceType
-  ).catch(err => {
+  ).then(async (txHash) => {
+    if (txHash) {
+      await prisma.booking.update({ where: { id: bookingId }, data: { blockchainTxHash: txHash } });
+      logger.info('[Blockchain] txHash saved to booking', { bookingId, txHash });
+    }
+  }).catch(err => {
     logger.error('Blockchain registration failed (Stripe)', { bookingId, err });
   });
 }
@@ -179,7 +184,7 @@ export async function verifyPaymentByQr(qrId: string): Promise<{ bookingId: stri
     logger.error('Notification onBookingWaitingApproval failed', { bookingId: booking.id, err });
   });
 
-  // Registro en Blockchain (asíncrono)
+  // Registro en Blockchain — guardar txHash
   blockchainService.createBookingOnChain(
     booking.id,
     booking.clientId,
@@ -189,7 +194,12 @@ export async function verifyPaymentByQr(qrId: string): Promise<{ bookingId: stri
     booking.endDate || booking.walkDate || new Date(),
     booking.petName,
     booking.serviceType
-  ).catch(err => {
+  ).then(async (txHash) => {
+    if (txHash) {
+      await prisma.booking.update({ where: { id: booking.id }, data: { blockchainTxHash: txHash } });
+      logger.info('[Blockchain] txHash saved to booking', { bookingId: booking.id, txHash });
+    }
+  }).catch(err => {
     logger.error('Blockchain registration failed (QR)', { bookingId: booking.id, err });
   });
 
@@ -235,7 +245,7 @@ export async function verifyPaymentManual(
     logger.error('Notification onBookingWaitingApproval failed', { bookingId, err });
   });
 
-  // Registro en Blockchain (asíncrono)
+  // Registro en Blockchain — guardar txHash
   blockchainService.createBookingOnChain(
     bookingId,
     booking.clientId,
@@ -245,7 +255,12 @@ export async function verifyPaymentManual(
     booking.endDate || booking.walkDate || new Date(),
     booking.petName,
     booking.serviceType
-  ).catch(err => {
+  ).then(async (txHash) => {
+    if (txHash) {
+      await prisma.booking.update({ where: { id: bookingId }, data: { blockchainTxHash: txHash } });
+      logger.info('[Blockchain] txHash saved to booking', { bookingId, txHash });
+    }
+  }).catch(err => {
     logger.error('Blockchain registration failed (Manual)', { bookingId, err });
   });
 

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -42,8 +43,13 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       if (role == 'ADMIN') {
         context.go('/admin');
-      } else if (role == 'CLIENT') context.go('/marketplace');
-      else if (role == 'CAREGIVER') context.go('/caregiver/home');
+      } else if (role == 'CLIENT') {
+        if (kIsWeb) {
+          context.go('/marketplace');
+        } else {
+          context.go('/service-selector');
+        }
+      } else if (role == 'CAREGIVER') context.go('/caregiver/home');
       else context.go('/test');
     } catch (e) {
       if (!mounted) return;
@@ -293,8 +299,8 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           const SizedBox(height: 20),
 
-          // Botón explorar sin login
-          GardenButton(
+          // Botón explorar sin login (solo web)
+          if (kIsWeb) GardenButton(
             label: 'Explorar cuidadores',
             outline: true,
             icon: Icons.search,

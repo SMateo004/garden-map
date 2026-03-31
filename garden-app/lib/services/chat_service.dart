@@ -11,6 +11,7 @@ class ChatMessage {
   final String senderRole;
   final String message;
   final bool read;
+  final bool isSystem;
   final DateTime createdAt;
 
   ChatMessage({
@@ -21,6 +22,7 @@ class ChatMessage {
     required this.senderRole,
     required this.message,
     required this.read,
+    this.isSystem = false,
     required this.createdAt,
   });
 
@@ -28,11 +30,12 @@ class ChatMessage {
     return ChatMessage(
       id: json['id'] as String,
       bookingId: json['bookingId'] as String,
-      senderId: json['senderId'] as String,
-      senderName: json['senderName'] as String? ?? 'Usuario',
+      senderId: json['senderId'] as String? ?? '',
+      senderName: json['senderName'] as String? ?? 'Sistema',
       senderRole: json['senderRole'] as String? ?? '',
       message: json['message'] as String,
       read: json['read'] as bool? ?? false,
+      isSystem: json['isSystem'] as bool? ?? false,
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
   }
@@ -47,6 +50,8 @@ class ChatService extends ChangeNotifier {
   List<ChatMessage> _messages = [];
   bool _connected = false;
   int _unreadCount = 0;
+  bool _isDisposed = false;
+  String? _pendingBookingId;
 
   List<ChatMessage> get messages => _messages;
   bool get connected => _connected;
@@ -61,46 +66,75 @@ class ChatService extends ChangeNotifier {
         _currentUserId = currentUserId;
 
   void connect() {
-    final wsUrl = _baseUrl.replaceAll('/api', '');
-    _socket = IO.io(wsUrl, <String, dynamic>{
-      'transports': ['websocket'],
-      'autoConnect': false,
-      'auth': {'token': _token},
-    });
+    try {
+      final wsUrl = _baseUrl.replaceAll('/api', '');
+      _socket = IO.io(wsUrl, <String, dynamic>{
+        'transports': ['polling', 'websocket'],
+        'autoConnect': false,
+        'auth': {'token': _token},
+        'timeout': 10000,
+      });
 
-    _socket!.onConnect((_) {
-      _connected = true;
-      debugPrint('Chat: Socket connected');
-      notifyListeners();
-    });
+      _socket!.onConnect((_) {
+        _connected = true;
+        debugPrint('Chat: Socket connected');
+        // Auto-join the room if joinBooking was called before connection was ready
+        if (_pendingBookingId != null) {
+          _socket!.emit('join_booking', _pendingBookingId!);
+          debugPrint('Chat: Auto-joined room $_pendingBookingId on connect');
+        }
+        if (!_isDisposed) notifyListeners();
+      });
 
-    _socket!.onDisconnect((_) {
-      _connected = false;
-      debugPrint('Chat: Socket disconnected');
-      notifyListeners();
-    });
+      _socket!.onDisconnect((_) {
+        _connected = false;
+        debugPrint('Chat: Socket disconnected');
+        if (!_isDisposed) notifyListeners();
+      });
 
-    _socket!.on('new_message', (data) {
-      final msg = ChatMessage.fromJson(data as Map<String, dynamic>);
-      _messages.add(msg);
-      if (msg.senderId != _currentUserId) _unreadCount++;
-      notifyListeners();
-    });
+      _socket!.onConnectError((data) {
+        debugPrint('Chat: Connect error: $data');
+        _connected = false;
+      });
 
-    _socket!.on('messages_read', (data) {
-      _unreadCount = 0;
-      notifyListeners();
-    });
+      _socket!.onError((data) {
+        debugPrint('Chat: Socket error: $data');
+      });
 
-    _socket!.on('error', (data) {
-      debugPrint('Chat error: $data');
-    });
+      _socket!.on('new_message', (data) {
+        if (_isDisposed) return;
+        try {
+          final msg = ChatMessage.fromJson(data as Map<String, dynamic>);
+          _messages.add(msg);
+          if (msg.senderId != _currentUserId) _unreadCount++;
+          notifyListeners();
+        } catch (e) {
+          debugPrint('Chat: Error parsing message: $e');
+        }
+      });
 
-    _socket!.connect();
+      _socket!.on('messages_read', (data) {
+        if (_isDisposed) return;
+        _unreadCount = 0;
+        notifyListeners();
+      });
+
+      _socket!.on('error', (data) {
+        debugPrint('Chat error: $data');
+      });
+
+      _socket!.connect();
+    } catch (e) {
+      debugPrint('Chat: Failed to initialize socket: $e');
+    }
   }
 
   void joinBooking(String bookingId) {
-    _socket?.emit('join_booking', bookingId);
+    _pendingBookingId = bookingId;
+    if (_connected) {
+      _socket?.emit('join_booking', bookingId);
+    }
+    // If not yet connected, onConnect will auto-join using _pendingBookingId
   }
 
   void sendMessage(String bookingId, String message) {
@@ -160,6 +194,7 @@ class ChatService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _isDisposed = true;
     _socket?.disconnect();
     _socket?.dispose();
     super.dispose();

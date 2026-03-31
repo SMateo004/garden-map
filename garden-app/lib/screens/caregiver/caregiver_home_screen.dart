@@ -24,6 +24,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   Map<String, dynamic>? _availability;
   List<Map<String, dynamic>> _bookings = [];
   bool _isLoading = true;
+  bool _setupPending = false; // true = show resume-registration screen
   String _caregiverToken = '';
   Map<String, dynamic>? _caregiver;
   Map<String, dynamic>? _dashboardStats;
@@ -39,10 +40,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   DateTime? _selectedDay;
   Map<String, String> _dayStatus = {}; // 'available', 'blocked', 'partial', 'booked'
   
-  // Modo edición
-  bool _editMode = false;
-  Map<String, dynamic> _pendingChanges = {}; // cambios sin guardar
-  Map<String, dynamic> _editableSchedule = {}; // copia editable del schedule
 
   @override
   void initState() {
@@ -74,6 +71,16 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         _loadBookings(),
         _loadDashboardStats(),
       ]);
+
+      // Check if setup is complete; show resume button instead of redirecting
+      final setupComplete = prefs.getBool('caregiver_setup_complete') ?? false;
+      if (!setupComplete && _caregiver != null) {
+        final status = (_caregiver!['status'] as String? ?? '').toUpperCase();
+        if (status == 'DRAFT' || status == 'PENDING_REVIEW' || status == 'PENDING') {
+          if (mounted) setState(() => _setupPending = true);
+        }
+      }
+
       _computeDayStatuses();
       _computeNextBookingWithin24h();
     } catch (e) {
@@ -125,202 +132,42 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     }
   }
 
-  void _enterEditMode() {
-    final raw = _availability?['defaultSchedule']?['paseoTimeBlocks'];
-    final currentBlocks = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
-    
-    Map<String, dynamic> safeBlock(String key, String defaultStart, String defaultEnd) {
-      final b = currentBlocks[key];
-      if (b is Map) return Map<String, dynamic>.from(b);
-      return {'enabled': true, 'start': defaultStart, 'end': defaultEnd};
-    }
-    
-    _editableSchedule = {
-      'morning': safeBlock('morning', '08:00', '11:00'),
-      'afternoon': safeBlock('afternoon', '13:00', '17:00'),
-      'night': safeBlock('night', '19:00', '22:00'),
-    };
-    _pendingChanges = {};
-    setState(() => _editMode = true);
-  }
-
-  Future<void> _saveChanges() async {
-    // Mostrar resumen antes de guardar
-    final confirmed = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _buildSaveConfirmSheet(),
-    );
-    if (confirmed != true) return;
-
-    setState(() => _isLoading = true);
-    try {
-      final body = <String, dynamic>{};
-      
-      // Incluir cambios de schedule si los hay
-      if (_editableSchedule.isNotEmpty) {
-        body['defaultSchedule'] = {
-          'paseoTimeBlocks': _editableSchedule,
-          'hospedajeDefault': true,
-        };
-      }
-      
-      // Incluir overrides de días bloqueados si los hay
-      if (_pendingChanges.isNotEmpty) {
-        body['overrides'] = _pendingChanges;
-      }
-      
-      if (body.isEmpty) {
-        setState(() => _editMode = false);
-        return;
-      }
-      
-      final response = await http.patch(
-        Uri.parse('$_baseUrl/caregiver/availability'),
-        headers: {
-          'Authorization': 'Bearer $_caregiverToken',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(body),
-      );
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        await _loadAvailability();
-        _computeDayStatuses();
-        setState(() {
-          _editMode = false;
-          _pendingChanges = {};
-          _editableSchedule = {};
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cambios guardados'), backgroundColor: Colors.green),
-        );
-      } else {
-        throw Exception(data['error']?['message'] ?? 'Error al guardar');
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Widget _buildSaveConfirmSheet() {
-    final blockedDays = _pendingChanges.keys.toList();
-    final changedBlocks = _editableSchedule.entries.where((e) {
-      final rawCurrent = (_availability?['defaultSchedule']?['paseoTimeBlocks'] as Map?)?[e.key];
-      final current = rawCurrent is Map ? Map<String, dynamic>.from(rawCurrent) : null;
-      return current == null || 
-        current['enabled'] != e.value['enabled'] ||
-        current['start'] != e.value['start'] ||
-        current['end'] != e.value['end'];
-    }).toList();
-
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        color: kSurfaceColor,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Resumen de cambios',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
-          const SizedBox(height: 16),
-          if (changedBlocks.isEmpty && blockedDays.isEmpty)
-            const Text('No hay cambios pendientes', style: TextStyle(color: kTextSecondary))
-          else ...[
-            if (changedBlocks.isNotEmpty) ...[
-              const Text('Horarios modificados:', style: TextStyle(color: kTextSecondary, fontSize: 13)),
-              const SizedBox(height: 8),
-              ...changedBlocks.map((e) {
-                final label = e.key == 'morning' ? 'Mañana' : e.key == 'afternoon' ? 'Tarde' : 'Noche';
-                final enabled = e.value['enabled'] == true ? 'Activado' : 'Desactivado';
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.edit, size: 14, color: kPrimaryColor),
-                      const SizedBox(width: 8),
-                      Text('$label: ${e.value['start']} - ${e.value['end']} ($enabled)',
-                        style: const TextStyle(color: Colors.white, fontSize: 14)),
-                    ],
-                  ),
-                );
-              }),
-              const SizedBox(height: 12),
-            ],
-            if (blockedDays.isNotEmpty) ...[
-              const Text('Días bloqueados:', style: TextStyle(color: kTextSecondary, fontSize: 13)),
-              const SizedBox(height: 8),
-              ...blockedDays.map((day) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  children: [
-                    const Icon(Icons.block, size: 14, color: Colors.red),
-                    const SizedBox(width: 8),
-                    Text(day, style: const TextStyle(color: Colors.white, fontSize: 14)),
-                  ],
-                ),
-              )),
-            ],
-          ],
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.white38),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: const Text('Cancelar', style: TextStyle(color: Colors.white)),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kPrimaryColor,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: const Text('Guardar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   void _computeDayStatuses() {
     final statuses = <String, String>{};
     final now = DateTime.now();
     
+    // Leer flags de días habilitados del schedule predeterminado
+    final defaultSchedule = (_availability?['defaultSchedule'] as Map?) ?? {};
+    final weekdaysEnabled = defaultSchedule['weekdays'] as bool? ?? true;
+    final weekendsEnabled = defaultSchedule['weekends'] as bool? ?? true;
+    final holidaysEnabled = defaultSchedule['holidays'] as bool? ?? true;
+
+    // Feriados nacionales de Bolivia 2025-2026 (ISO)
+    const bolivianHolidays = {
+      '2025-01-01','2025-01-22','2025-02-24','2025-02-25','2025-04-18','2025-04-19',
+      '2025-05-01','2025-06-19','2025-06-21','2025-08-06','2025-10-12','2025-11-02',
+      '2025-12-25','2026-01-01','2026-01-22','2026-02-16','2026-02-17','2026-04-03',
+      '2026-04-04','2026-05-01','2026-06-11','2026-06-21','2026-08-06','2026-10-12',
+      '2026-11-02','2026-12-25',
+    };
+
     // Generar los próximos 90 días
     for (int i = 0; i < 90; i++) {
       final date = now.add(Duration(days: i));
       final dateStr = date.toIso8601String().split('T')[0];
-      
+
       // Verificar si tiene reserva confirmada
       final hasBooking = _bookings.any((b) =>
         (b['startDate'] == dateStr || b['walkDate'] == dateStr) &&
         (b['status'] == 'CONFIRMED' || b['status'] == 'IN_PROGRESS' || b['status'] == 'PENDING_PAYMENT')
       );
-      
+
       if (hasBooking) {
         statuses[dateStr] = 'booked';
         continue;
       }
-      
-      // Verificar overrides (el API puede devolverlos en 'overrides' o 'dates')
+
+      // Verificar overrides explícitos (el API los devuelve en 'dates')
       final serverOverrides = (_availability?['overrides'] ?? _availability?['dates']) as Map?;
       if (serverOverrides != null && serverOverrides.containsKey(dateStr)) {
         final override = serverOverrides[dateStr];
@@ -329,8 +176,25 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           continue;
         }
       }
-      
-      // Por defecto: disponible
+
+      // Verificar si el tipo de día está desactivado en el schedule predeterminado
+      final weekday = date.weekday; // 1=lunes … 7=domingo
+      final isWeekend = weekday == 6 || weekday == 7;
+      final isHoliday = bolivianHolidays.contains(dateStr);
+
+      if (isHoliday && !holidaysEnabled) {
+        statuses[dateStr] = 'blocked';
+        continue;
+      }
+      if (isWeekend && !weekendsEnabled) {
+        statuses[dateStr] = 'blocked';
+        continue;
+      }
+      if (!isWeekend && !isHoliday && !weekdaysEnabled) {
+        statuses[dateStr] = 'blocked';
+        continue;
+      }
+
       statuses[dateStr] = 'available';
     }
     
@@ -379,6 +243,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final data = jsonDecode(response.body);
     if (data['success'] == true) {
       setState(() => _bookings = (data['data'] as List).cast<Map<String, dynamic>>());
+      _computeDayStatuses();
     }
   }
 
@@ -390,10 +255,15 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
 
   Future<void> _toggleTimeBlock(String blockName, bool enabled) async {
     try {
-      final currentBlocks = _availability!['defaultSchedule']['paseoTimeBlocks'];
+      final rawCurrent = _availability?['defaultSchedule']?['paseoTimeBlocks'];
+      final currentBlocks = rawCurrent is Map ? Map<String, dynamic>.from(rawCurrent) : <String, dynamic>{};
       final updatedBlocks = Map<String, dynamic>.from(currentBlocks);
+      final existing = updatedBlocks[blockName];
+      final existingMap = existing is Map ? Map<String, dynamic>.from(existing) : <String, dynamic>{};
       updatedBlocks[blockName] = {
-        ...Map<String, dynamic>.from(updatedBlocks[blockName]),
+        'start': blockName == 'morning' ? '08:00' : blockName == 'afternoon' ? '13:00' : '19:00',
+        'end':   blockName == 'morning' ? '11:00' : blockName == 'afternoon' ? '17:00' : '22:00',
+        ...existingMap,
         'enabled': enabled,
       };
 
@@ -624,7 +494,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
     final stats = _dashboardStats;
-    final thisMonth = stats?['thisMonth'] as Map<String, dynamic>?;
     final allTime = stats?['allTime'] as Map<String, dynamic>?;
     final nextBooking = stats?['nextBooking'] as Map<String, dynamic>?;
     final completeness = (stats?['profileCompleteness'] as num? ?? 0).toInt();
@@ -699,57 +568,32 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             ),
             const SizedBox(height: 16),
 
-            // ── 2. GRID 2×2 MÉTRICAS ESTE MES ─────────────────
-            Text('Este mes',
-              style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 10),
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 1.55,
-              children: [
-                _dashMetricCard(
-                  icon: Icons.calendar_today_outlined,
-                  color: GardenColors.secondary,
-                  label: 'Reservas',
-                  value: '${thisMonth?['bookings'] ?? 0}',
-                  suffix: 'este mes',
-                  surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
-                ),
-                _dashMetricCard(
-                  icon: Icons.payments_outlined,
-                  color: GardenColors.success,
-                  label: 'Ingresos',
-                  value: 'Bs ${((thisMonth?['earnings'] ?? 0) as num).toStringAsFixed(0)}',
-                  suffix: 'ganados',
-                  surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
-                ),
-                _dashMetricCard(
-                  icon: Icons.schedule_outlined,
-                  color: GardenColors.primary,
-                  label: 'Horas',
-                  value: '${((thisMonth?['hoursWorked'] ?? 0) as num).toStringAsFixed(1)}h',
-                  suffix: 'de servicio',
-                  surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
-                ),
-                _dashMetricCard(
-                  icon: Icons.star_rounded,
-                  color: GardenColors.star,
-                  label: 'Calificación',
-                  value: (allTime?['rating'] as num? ?? 0) > 0
-                      ? '${(allTime!['rating'] as num).toStringAsFixed(1)} ⭐'
-                      : '—',
-                  suffix: '${allTime?['reviewCount'] ?? 0} reseñas',
-                  surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
-                ),
-              ],
+            // ── 2. SOLICITUDES PENDIENTES (máxima prioridad) ──
+            ..._buildPendingRequestsSection(
+              surface: surface,
+              textColor: textColor,
+              subtextColor: subtextColor,
+              borderColor: borderColor,
             ),
-            const SizedBox(height: 16),
 
-            // ── 3. PRÓXIMA RESERVA ─────────────────────────────
+            // ── 3. RESERVA EN CURSO ────────────────────────────
+            if (_bookings.any((b) => b['status'] == 'IN_PROGRESS')) ...[
+              _buildActiveBookingCard(
+                _bookings.firstWhere((b) => b['status'] == 'IN_PROGRESS'),
+                surface, textColor, subtextColor, borderColor,
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // ── 4. RESERVAS CONFIRMADAS ────────────────────────
+            ..._buildConfirmedBookingsSection(
+              surface: surface,
+              textColor: textColor,
+              subtextColor: subtextColor,
+              borderColor: borderColor,
+            ),
+
+            // ── 5. PRÓXIMA RESERVA ─────────────────────────────
             Text('Próxima reserva',
               style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
             const SizedBox(height: 10),
@@ -800,7 +644,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             const SizedBox(height: 16),
 
             // ── 5. BARRA DE COMPLETITUD DEL PERFIL ────────────
-            if (completeness < 100) ...[
+            if (completeness < 100 && _caregiver?['status'] != 'APPROVED') ...[
               _buildCompletenessBar(
                 completeness: completeness,
                 textColor: textColor,
@@ -899,7 +743,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             ),
             child: ClipOval(
               child: photoUrl != null && photoUrl.isNotEmpty
-                  ? Image.network(photoUrl, fit: BoxFit.cover,
+                  ? Image.network(fixImageUrl(photoUrl), fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => _avatarPlaceholder(initial))
                   : _avatarPlaceholder(initial),
             ),
@@ -1021,6 +865,413 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     );
   }
 
+  // ── SOLICITUDES PENDIENTES DE APROBACIÓN ──────────────────────────────────
+  List<Widget> _buildPendingRequestsSection({
+    required Color surface,
+    required Color textColor,
+    required Color subtextColor,
+    required Color borderColor,
+  }) {
+    final pending = _bookings
+        .where((b) => b['status'] == 'WAITING_CAREGIVER_APPROVAL')
+        .toList();
+    if (pending.isEmpty) return [];
+
+    return [
+      Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: GardenColors.error,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              '${pending.length} NUEVA${pending.length > 1 ? 'S' : ''}',
+              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text('Solicitudes de reserva',
+            style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+        ],
+      ),
+      const SizedBox(height: 10),
+      ...pending.map((b) => _buildPendingRequestCard(
+        booking: b,
+        surface: surface,
+        textColor: textColor,
+        subtextColor: subtextColor,
+        borderColor: borderColor,
+      )),
+      const SizedBox(height: 16),
+    ];
+  }
+
+  Widget _buildPendingRequestCard({
+    required Map<String, dynamic> booking,
+    required Color surface,
+    required Color textColor,
+    required Color subtextColor,
+    required Color borderColor,
+  }) {
+    final petName     = booking['petName']     as String? ?? '—';
+    final serviceType = booking['serviceType'] as String? ?? '';
+    final clientName  = booking['clientName']  as String?
+        ?? '${booking['client']?['firstName'] ?? ''} ${booking['client']?['lastName'] ?? ''}'.trim();
+    final dateStr     = booking['walkDate']    as String? ?? booking['startDate'] as String?;
+    final startTime   = booking['startTime']   as String?;
+    final net = _caregiverNetAmount(booking);
+    final isPaseo     = serviceType == 'PASEO';
+    final bookingId   = booking['id'] as String? ?? '';
+
+    String dateLabel = '';
+    if (dateStr != null) {
+      try {
+        final d = DateTime.parse(dateStr);
+        final now = DateTime.now();
+        final diff = d.difference(DateTime(now.year, now.month, now.day)).inDays;
+        if (diff == 0) {
+          dateLabel = 'Hoy';
+        } else if (diff == 1) {
+          dateLabel = 'Mañana';
+        } else {
+          dateLabel = '${d.day}/${d.month}';
+        }
+      } catch (_) { dateLabel = dateStr; }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: GardenColors.error.withValues(alpha: 0.45), width: 1.5),
+        boxShadow: [BoxShadow(color: GardenColors.error.withValues(alpha: 0.07), blurRadius: 12, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        children: [
+          // Header pulsante
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: GardenColors.error.withValues(alpha: 0.08),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.notifications_active_rounded, color: GardenColors.error, size: 16),
+                const SizedBox(width: 6),
+                const Text('Esperando tu respuesta',
+                  style: TextStyle(color: GardenColors.error, fontSize: 12, fontWeight: FontWeight.w700)),
+                const Spacer(),
+                Text(isPaseo ? '🦮' : '🏠', style: const TextStyle(fontSize: 20)),
+              ],
+            ),
+          ),
+          // Info
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(petName, style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 2),
+                          Text(clientName.isNotEmpty ? clientName : 'Cliente',
+                            style: TextStyle(color: subtextColor, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text('Bs $net',
+                          style: const TextStyle(color: GardenColors.success, fontSize: 20, fontWeight: FontWeight.w800)),
+                        Text('tu ganancia', style: TextStyle(color: subtextColor, fontSize: 10)),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    _infoChip(isPaseo ? 'Paseo' : 'Hospedaje', Icons.pets_rounded, subtextColor, borderColor),
+                    if (dateLabel.isNotEmpty)
+                      _infoChip(dateLabel, Icons.calendar_today_rounded, subtextColor, borderColor),
+                    if (startTime != null)
+                      _infoChip(startTime, Icons.access_time_rounded, subtextColor, borderColor),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // Botones
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GardenButton(
+                    label: 'Aceptar',
+                    icon: Icons.check_rounded,
+                    height: 46,
+                    color: GardenColors.success,
+                    onPressed: () => _respondBooking(bookingId, 'accept'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: GardenButton(
+                    label: 'Rechazar',
+                    icon: Icons.close_rounded,
+                    height: 46,
+                    color: GardenColors.error,
+                    outline: true,
+                    onPressed: () => _respondBooking(bookingId, 'reject'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── RESERVAS CONFIRMADAS ───────────────────────────────────────────────────
+  List<Widget> _buildConfirmedBookingsSection({
+    required Color surface,
+    required Color textColor,
+    required Color subtextColor,
+    required Color borderColor,
+  }) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final endOfTomorrow = today.add(const Duration(days: 2));
+
+    final confirmed = _bookings.where((b) {
+      if (b['status'] != 'CONFIRMED') return false;
+      final dateStr = b['walkDate'] as String? ?? b['startDate'] as String?;
+      if (dateStr == null) return false;
+      try {
+        final d = DateTime.parse(dateStr);
+        final serviceDay = DateTime(d.year, d.month, d.day);
+        return !serviceDay.isBefore(today) && serviceDay.isBefore(endOfTomorrow);
+      } catch (_) {
+        return false;
+      }
+    }).toList();
+    if (confirmed.isEmpty) return [];
+
+    return [
+      Text('Reservas confirmadas',
+        style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+      const SizedBox(height: 10),
+      ...confirmed.map((b) => _buildConfirmedBookingCard(
+        booking: b,
+        surface: surface,
+        textColor: textColor,
+        subtextColor: subtextColor,
+        borderColor: borderColor,
+      )),
+      const SizedBox(height: 16),
+    ];
+  }
+
+  Widget _buildConfirmedBookingCard({
+    required Map<String, dynamic> booking,
+    required Color surface,
+    required Color textColor,
+    required Color subtextColor,
+    required Color borderColor,
+  }) {
+    final petName     = booking['petName']     as String? ?? '—';
+    final serviceType = booking['serviceType'] as String? ?? '';
+    final clientName  = (booking['clientName'] as String?
+        ?? '${booking['client']?['firstName'] ?? ''} ${booking['client']?['lastName'] ?? ''}'.trim())
+        .trim();
+    final dateStr     = booking['walkDate'] as String? ?? booking['startDate'] as String?;
+    final startTime   = booking['startTime'] as String?;
+    final bookingId   = booking['id'] as String? ?? '';
+    final isPaseo     = serviceType == 'PASEO';
+    final net         = _caregiverNetAmount(booking);
+
+    String dateLabel = '';
+    if (dateStr != null) {
+      try {
+        final d = DateTime.parse(dateStr);
+        final now = DateTime.now();
+        final diff = d.difference(DateTime(now.year, now.month, now.day)).inDays;
+        if (diff == 0) {
+          dateLabel = 'Hoy';
+        } else if (diff == 1) {
+          dateLabel = 'Mañana';
+        } else {
+          dateLabel = '${d.day}/${d.month}';
+        }
+      } catch (_) {
+        dateLabel = dateStr;
+      }
+    }
+
+    void openService() => Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ServiceExecutionScreen(bookingId: bookingId, role: 'CAREGIVER'),
+      ),
+    );
+
+    void openChat() => Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          bookingId: bookingId,
+          otherPersonName: clientName.isNotEmpty ? clientName : 'Cliente',
+          token: _caregiverToken,
+        ),
+      ),
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4), width: 1.5),
+        boxShadow: [BoxShadow(color: GardenColors.primary.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: GardenColors.primary.withValues(alpha: 0.08),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: GardenColors.primary,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text('CONFIRMADA',
+                    style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                ),
+                const Spacer(),
+                Text(isPaseo ? '🦮' : '🏠', style: const TextStyle(fontSize: 20)),
+              ],
+            ),
+          ),
+          // Info
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(petName,
+                            style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 2),
+                          Text(clientName.isNotEmpty ? clientName : 'Cliente',
+                            style: TextStyle(color: subtextColor, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text('Bs $net',
+                          style: const TextStyle(color: GardenColors.success, fontSize: 20, fontWeight: FontWeight.w800)),
+                        Text('tu ganancia', style: TextStyle(color: subtextColor, fontSize: 10)),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    _infoChip(isPaseo ? 'Paseo' : 'Hospedaje', Icons.pets_rounded, subtextColor, borderColor),
+                    if (dateLabel.isNotEmpty)
+                      _infoChip(dateLabel, Icons.calendar_today_rounded, subtextColor, borderColor),
+                    if (startTime != null)
+                      _infoChip(startTime, Icons.access_time_rounded, subtextColor, borderColor),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // Botones
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GardenButton(
+                    label: 'Gestionar servicio',
+                    icon: Icons.pets_outlined,
+                    height: 46,
+                    color: GardenColors.primary,
+                    onPressed: openService,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: 46,
+                  height: 46,
+                  child: OutlinedButton(
+                    onPressed: openChat,
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      side: BorderSide(color: GardenColors.primary.withValues(alpha: 0.5)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Icon(Icons.chat_bubble_outline_rounded, color: GardenColors.primary, size: 20),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoChip(String label, IconData icon, Color subtextColor, Color borderColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        border: Border.all(color: borderColor),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: subtextColor),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(color: subtextColor, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
   Widget _avatarPlaceholder(String initial) {
     return Container(
       color: GardenColors.primary.withValues(alpha: 0.2),
@@ -1033,48 +1284,92 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     );
   }
 
-  // ── METRIC CARD ────────────────────────────────────────────────────────
-  Widget _dashMetricCard({
-    required IconData icon,
-    required Color color,
-    required String label,
-    required String value,
-    required String suffix,
-    required Color surface,
-    required Color textColor,
-    required Color subtextColor,
-    required Color borderColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: GardenRadius.lg_,
-        border: Border.all(color: borderColor),
+  // ── RESERVA EN CURSO ────────────────────────────────────────────────────
+  Widget _buildActiveBookingCard(
+    Map<String, dynamic> booking,
+    Color surface,
+    Color textColor,
+    Color subtextColor,
+    Color borderColor,
+  ) {
+    final petName    = booking['petName']    as String? ?? '—';
+    final serviceType = booking['serviceType'] as String? ?? '';
+    final dateStr    = booking['walkDate']   as String? ?? booking['startDate'] as String?;
+    final startTime  = booking['startTime']  as String?;
+    final bookingId  = booking['id']         as String? ?? '';
+    final isPaseo    = serviceType == 'PASEO';
+
+    void openService() => Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ServiceExecutionScreen(bookingId: bookingId, role: 'CAREGIVER'),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Container(
-            width: 34, height: 34,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: GardenRadius.sm_,
-            ),
-            child: Icon(icon, color: color, size: 18),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(value,
-                style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 16),
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(suffix, style: TextStyle(color: subtextColor, fontSize: 10)),
+    );
+
+    return GestureDetector(
+      onTap: openService,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              GardenColors.primary.withValues(alpha: 0.18),
+              GardenColors.primary.withValues(alpha: 0.05),
             ],
           ),
-        ],
+          borderRadius: GardenRadius.xl_,
+          border: Border.all(color: GardenColors.primary.withValues(alpha: 0.45), width: 1.5),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: GardenColors.primary,
+                    borderRadius: GardenRadius.full_,
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.radio_button_checked, color: Colors.white, size: 10),
+                      SizedBox(width: 5),
+                      Text('EN CURSO', style: TextStyle(
+                        color: Colors.white, fontSize: 11,
+                        fontWeight: FontWeight.w800, letterSpacing: 0.5,
+                      )),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                Text(isPaseo ? '🦮' : '🏠', style: const TextStyle(fontSize: 26)),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(petName,
+              style: TextStyle(color: textColor, fontSize: 22,
+                fontWeight: FontWeight.w800, letterSpacing: -0.3)),
+            const SizedBox(height: 4),
+            Text(
+              '${isPaseo ? 'Paseo' : 'Hospedaje'}'
+              '${dateStr != null ? ' · ${_formatNextDate(dateStr)}' : ''}'
+              '${startTime != null ? ' · $startTime' : ''}',
+              style: TextStyle(color: subtextColor, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            GardenButton(
+              label: '🔴  Ver servicio en curso',
+              height: 44,
+              color: GardenColors.primary,
+              onPressed: openService,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1211,7 +1506,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       if (dt.day == now.day + 1 && dt.month == now.month) return 'Mañana';
       return '${dt.day} ${months[dt.month - 1]}';
     } catch (_) {
-      return dateStr ?? '—';
+      return dateStr;
     }
   }
 
@@ -1350,186 +1645,552 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
 
   Widget _buildBookingPreviewCard(Map<String, dynamic> booking, Color surface, Color textColor, Color subtextColor, Color borderColor) {
     final status = booking['status'] as String? ?? '';
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor),
-      ),
-      child: Row(
-        children: [
-          bookingStatusBadge(status),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(booking['petName'] as String? ?? 'Mascota', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
-                Text(booking['serviceType'] as String? ?? '', style: TextStyle(color: subtextColor, fontSize: 12)),
-              ],
-            ),
-          ),
-          Text('Bs ${booking['totalAmount'] ?? '—'}', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 15)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAvailability() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header con botón Editar / Guardar / Cancelar
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Disponibilidad',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
-              if (!_editMode)
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.edit, size: 16),
-                  label: const Text('Editar'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kPrimaryColor,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    minimumSize: Size.zero,
-                  ),
-                  onPressed: _enterEditMode,
-                )
-              else
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: () => setState(() {
-                        _editMode = false;
-                        _pendingChanges = {};
-                        _editableSchedule = {};
-                      }),
-                      child: const Text('Cancelar', style: TextStyle(color: kTextSecondary)),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.save, size: 16),
-                      label: const Text('Guardar'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        minimumSize: Size.zero,
-                      ),
-                      onPressed: _saveChanges,
-                    ),
-                  ],
-                ),
-            ],
-          ),
-          
-          // Banner de modo edición
-          if (_editMode) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: kPrimaryColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: kPrimaryColor.withOpacity(0.3)),
+    final bookingId = booking['id'] as String? ?? '';
+    final canOpen = status == 'CONFIRMED' || status == 'IN_PROGRESS';
+    return GestureDetector(
+      onTap: canOpen && bookingId.isNotEmpty
+          ? () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ServiceExecutionScreen(bookingId: bookingId, role: 'CAREGIVER'),
               ),
-              child: const Row(
+            )
+          : null,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          children: [
+            bookingStatusBadge(status),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline, color: kPrimaryColor, size: 16),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Modo edición activo. Realiza todos los cambios y presiona Guardar.',
-                      style: TextStyle(color: kPrimaryColor, fontSize: 13),
-                    ),
-                  ),
+                  Text(booking['petName'] as String? ?? 'Mascota', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
+                  Text(booking['serviceType'] as String? ?? '', style: TextStyle(color: subtextColor, fontSize: 12)),
                 ],
               ),
             ),
-          ],
-          
-          const SizedBox(height: 20),
-          
-          // Sección horarios por defecto
-          const Text('Horarios por defecto',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-          const Text('Aplican a todos los días salvo excepciones',
-            style: TextStyle(color: kTextSecondary, fontSize: 12)),
-          const SizedBox(height: 12),
-          _buildEditableScheduleBlocks(),
-          
-          const SizedBox(height: 24),
-          
-          // Leyenda
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
+            Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                _legendItem(Colors.green.shade700, 'Disponible'),
-                const SizedBox(width: 12),
-                _legendItem(Colors.red.shade700, 'Bloqueado'),
-                const SizedBox(width: 12),
-                _legendItem(Colors.orange, 'Parcial'),
-                const SizedBox(width: 12),
-                _legendItem(kPrimaryColor, 'Reservado'),
+                Text('Bs ${_caregiverNet(booking)}', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 15)),
+                if (canOpen) ...[
+                  const SizedBox(width: 6),
+                  const Icon(Icons.chevron_right_rounded, color: GardenColors.primary, size: 18),
+                ],
               ],
             ),
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // Navegación de mes
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.chevron_left, color: Colors.white),
-                onPressed: () => setState(() =>
-                  _calendarMonth = DateTime(_calendarMonth.year, _calendarMonth.month - 1)),
-              ),
-              Text(_monthName(_calendarMonth),
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-              IconButton(
-                icon: const Icon(Icons.chevron_right, color: Colors.white),
-                onPressed: () => setState(() =>
-                  _calendarMonth = DateTime(_calendarMonth.year, _calendarMonth.month + 1)),
-              ),
-            ],
-          ),
-          
-          // Días de la semana
-          Row(
-            children: ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do'].map((d) =>
-              Expanded(
-                child: Center(
-                  child: Text(d, style: const TextStyle(color: kTextSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
-                ),
-              )
-            ).toList(),
-          ),
-          const SizedBox(height: 8),
-          
-          _buildCalendarGrid(),
-          const SizedBox(height: 24),
-          
-          if (_selectedDay != null) _buildDayPanel(_selectedDay!),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _legendItem(Color color, String label) {
+  String _caregiverNet(Map<String, dynamic> booking) => _caregiverNetAmount(booking);
+
+  Widget _buildAvailability() {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    final now = DateTime.now();
+    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+    int availableCount = 0, blockedCount = 0, bookedCount = 0;
+    for (int i = 1; i <= daysInMonth; i++) {
+      final ds = '${now.year}-${now.month.toString().padLeft(2,'0')}-${i.toString().padLeft(2,'0')}';
+      final s = _dayStatus[ds] ?? 'available';
+      if (s == 'blocked') blockedCount++;
+      else if (s == 'booked') bookedCount++;
+      else availableCount++;
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _loadAvailability();
+        _computeDayStatuses();
+      },
+      color: GardenColors.primary,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── TÍTULO ─────────────────────────────────────────
+            Text('Disponibilidad',
+              style: TextStyle(color: textColor, fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+            const SizedBox(height: 4),
+            Text('Gestiona cuándo estás disponible para servicios',
+              style: TextStyle(color: subtextColor, fontSize: 13)),
+            const SizedBox(height: 16),
+
+            // ── RESUMEN DEL MES ─────────────────────────────────
+            Row(children: [
+              _availStatChip('$availableCount disponibles', GardenColors.success),
+              const SizedBox(width: 8),
+              _availStatChip('$blockedCount bloqueados', GardenColors.error),
+              const SizedBox(width: 8),
+              _availStatChip('$bookedCount reservados', GardenColors.primary),
+            ]),
+            const SizedBox(height: 24),
+
+            // ── DÍAS DISPONIBLES ────────────────────────────────
+            Text('Días disponibles',
+              style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text('Activa los días en que puedes recibir servicios',
+              style: TextStyle(color: subtextColor, fontSize: 12)),
+            const SizedBox(height: 12),
+            _buildDayTypeToggles(textColor, subtextColor, borderColor, surface),
+            const SizedBox(height: 24),
+
+            // ── HORARIOS HABITUALES ─────────────────────────────
+            Text('Horarios habituales',
+              style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text('Toca para activar/desactivar · Toca "Editar hora" para cambiar rango',
+              style: TextStyle(color: subtextColor, fontSize: 12)),
+            const SizedBox(height: 12),
+            _buildScheduleBlockCards(textColor, subtextColor, borderColor, surface),
+            const SizedBox(height: 28),
+
+            // ── CALENDARIO ─────────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(_monthName(_calendarMonth),
+                  style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+                Row(children: [
+                  _calNavBtn(Icons.chevron_left, () => setState(() =>
+                    _calendarMonth = DateTime(_calendarMonth.year, _calendarMonth.month - 1))),
+                  const SizedBox(width: 6),
+                  _calNavBtn(Icons.chevron_right, () => setState(() =>
+                    _calendarMonth = DateTime(_calendarMonth.year, _calendarMonth.month + 1))),
+                ]),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // Leyenda
+            Row(children: [
+              _legendDot(GardenColors.success, 'Disponible'),
+              const SizedBox(width: 12),
+              _legendDot(GardenColors.error, 'Bloqueado'),
+              const SizedBox(width: 12),
+              _legendDot(GardenColors.primary, 'Reservado'),
+            ]),
+            const SizedBox(height: 10),
+
+            // Días semana
+            Row(
+              children: ['Lu','Ma','Mi','Ju','Vi','Sa','Do'].map((d) =>
+                Expanded(child: Center(
+                  child: Text(d, style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.w600)),
+                ))
+              ).toList(),
+            ),
+            const SizedBox(height: 6),
+
+            _buildCalendarGrid(),
+            const SizedBox(height: 12),
+            Center(
+              child: Text('Toca un día para ver detalles o bloquearlo',
+                style: TextStyle(color: subtextColor, fontSize: 12)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDayTypeToggles(Color textColor, Color subtextColor, Color borderColor, Color surface) {
+    final defaultSchedule = (_availability?['defaultSchedule'] as Map?) ?? {};
+    final weekdays = defaultSchedule['weekdays'] as bool? ?? true;
+    final weekends = defaultSchedule['weekends'] as bool? ?? true;
+    final holidays = defaultSchedule['holidays'] as bool? ?? true;
+
+    final items = [
+      {'key': 'weekdays',  'label': 'Lun – Vie', 'icon': Icons.work_outline_rounded,    'value': weekdays},
+      {'key': 'weekends',  'label': 'Sáb – Dom', 'icon': Icons.weekend_outlined,         'value': weekends},
+      {'key': 'holidays',  'label': 'Feriados',  'icon': Icons.celebration_outlined,     'value': holidays},
+    ];
+
     return Row(
+      children: items.asMap().entries.map((entry) {
+        final i = entry.key;
+        final item = entry.value;
+        final isEnabled = item['value'] as bool;
+
+        return Expanded(
+          child: GestureDetector(
+            onTap: () => _toggleDayType(item['key'] as String, !isEnabled),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              margin: EdgeInsets.only(right: i < 2 ? 8 : 0),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+              decoration: BoxDecoration(
+                color: isEnabled
+                  ? GardenColors.success.withValues(alpha: 0.1)
+                  : surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isEnabled
+                    ? GardenColors.success.withValues(alpha: 0.55)
+                    : borderColor,
+                  width: isEnabled ? 1.5 : 1,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Icon(item['icon'] as IconData,
+                    color: isEnabled ? GardenColors.success : subtextColor, size: 22),
+                  const SizedBox(height: 8),
+                  Text(item['label'] as String,
+                    style: TextStyle(
+                      color: isEnabled ? textColor : subtextColor,
+                      fontSize: 12, fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 6),
+                  _miniToggle(isEnabled, GardenColors.success),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Future<void> _toggleDayType(String key, bool enabled) async {
+    try {
+      final response = await http.patch(
+        Uri.parse('$_baseUrl/caregiver/availability'),
+        headers: {
+          'Authorization': 'Bearer $_caregiverToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'defaultSchedule': {key: enabled},
+        }),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadAvailability();
+        _computeDayStatuses();
+      } else {
+        throw Exception(data['error']?['message'] ?? 'Error');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+        );
+      }
+    }
+  }
+
+  Widget _availStatChip(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+    );
+  }
+
+  Widget _calNavBtn(IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 32, height: 32,
+        decoration: BoxDecoration(
+          color: GardenColors.primary.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: GardenColors.primary, size: 20),
+      ),
+    );
+  }
+
+  Widget _legendDot(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Container(width: 12, height: 12, decoration: BoxDecoration(color: color.withOpacity(0.8), borderRadius: BorderRadius.circular(3))),
-        const SizedBox(width: 4),
-        Text(label, style: const TextStyle(color: kTextSecondary, fontSize: 11)),
+        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 5),
+        Text(label, style: TextStyle(color: kTextSecondary, fontSize: 11)),
       ],
     );
+  }
+
+  Widget _buildScheduleBlockCards(Color textColor, Color subtextColor, Color borderColor, Color surface) {
+    final rawBlocks = () {
+      final raw = _availability?['defaultSchedule']?['paseoTimeBlocks'];
+      return raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+    }();
+
+    final blockDefs = [
+      {'key': 'morning',   'label': 'Mañana', 'icon': Icons.wb_sunny_rounded,   'color': const Color(0xFFFFB347), 'ds': '08:00', 'de': '11:00'},
+      {'key': 'afternoon', 'label': 'Tarde',  'icon': Icons.wb_cloudy_rounded,  'color': const Color(0xFF5BB8FF), 'ds': '13:00', 'de': '17:00'},
+      {'key': 'night',     'label': 'Noche',  'icon': Icons.nights_stay_rounded,'color': const Color(0xFF9B8AFB), 'ds': '19:00', 'de': '22:00'},
+    ];
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: blockDefs.asMap().entries.map((entry) {
+        final i = entry.key;
+        final b = entry.value;
+        final key = b['key'] as String;
+        final rawBlock = rawBlocks[key];
+        final block = rawBlock is Map
+          ? Map<String, dynamic>.from(rawBlock)
+          : {'enabled': true, 'start': b['ds'], 'end': b['de']};
+        final isEnabled = block['enabled'] == true;
+        final color = b['color'] as Color;
+        final icon = b['icon'] as IconData;
+
+        return Expanded(
+          child: Container(
+            margin: EdgeInsets.only(right: i < 2 ? 8 : 0),
+            child: GestureDetector(
+              onTap: () => _toggleTimeBlock(key, !isEnabled),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: isEnabled ? color.withValues(alpha: 0.1) : surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isEnabled ? color.withValues(alpha: 0.55) : borderColor,
+                    width: isEnabled ? 1.5 : 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Icon(icon, color: isEnabled ? color : subtextColor, size: 20),
+                        _miniToggle(isEnabled, color),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(b['label'] as String,
+                      style: TextStyle(
+                        color: isEnabled ? textColor : subtextColor,
+                        fontWeight: FontWeight.w700, fontSize: 13,
+                      )),
+                    const SizedBox(height: 3),
+                    Text('${block['start']} - ${block['end']}',
+                      style: TextStyle(
+                        color: isEnabled ? color : subtextColor,
+                        fontSize: 11, fontWeight: FontWeight.w500,
+                      )),
+                    if (isEnabled) ...[
+                      const SizedBox(height: 10),
+                      GestureDetector(
+                        onTap: () => _showEditBlockSheet(key, block),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Icons.access_time, size: 10, color: color),
+                            const SizedBox(width: 4),
+                            Text('Editar hora', style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
+                          ]),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _miniToggle(bool isEnabled, Color color) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      width: 30, height: 17,
+      decoration: BoxDecoration(
+        color: isEnabled ? color : kTextSecondary.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: AnimatedAlign(
+        duration: const Duration(milliseconds: 220),
+        alignment: isEnabled ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.all(2),
+          width: 13, height: 13,
+          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showEditBlockSheet(String blockKey, Map<String, dynamic> block) async {
+    String start = block['start'] as String? ?? '08:00';
+    String end = block['end'] as String? ?? '11:00';
+    final label = blockKey == 'morning' ? 'Mañana' : blockKey == 'afternoon' ? 'Tarde' : 'Noche';
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => GlassBox(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          padding: EdgeInsets.only(
+            left: 24, right: 24, top: 24,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Horario de $label',
+                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              const Text('Ajusta el rango horario para este bloque',
+                style: TextStyle(color: kTextSecondary, fontSize: 13)),
+              const SizedBox(height: 24),
+              Row(children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Inicio', style: TextStyle(color: kTextSecondary, fontSize: 12)),
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: () async {
+                      final parts = start.split(':');
+                      final picked = await showTimePicker(
+                        context: ctx,
+                        initialTime: TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1])),
+                        builder: (c, child) => Theme(
+                          data: ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: kPrimaryColor)),
+                          child: child!,
+                        ),
+                      );
+                      if (picked != null) setSheetState(() => start = '${picked.hour.toString().padLeft(2,'0')}:${picked.minute.toString().padLeft(2,'0')}');
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: kBackgroundColor,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: kPrimaryColor.withOpacity(0.4)),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.access_time, color: kPrimaryColor, size: 16),
+                        const SizedBox(width: 8),
+                        Text(start, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+                      ]),
+                    ),
+                  ),
+                ])),
+                const SizedBox(width: 16),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Fin', style: TextStyle(color: kTextSecondary, fontSize: 12)),
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: () async {
+                      final parts = end.split(':');
+                      final picked = await showTimePicker(
+                        context: ctx,
+                        initialTime: TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1])),
+                        builder: (c, child) => Theme(
+                          data: ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: kPrimaryColor)),
+                          child: child!,
+                        ),
+                      );
+                      if (picked != null) setSheetState(() => end = '${picked.hour.toString().padLeft(2,'0')}:${picked.minute.toString().padLeft(2,'0')}');
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: kBackgroundColor,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: kPrimaryColor.withOpacity(0.4)),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.access_time, color: kPrimaryColor, size: 16),
+                        const SizedBox(width: 8),
+                        Text(end, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+                      ]),
+                    ),
+                  ),
+                ])),
+              ]),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kPrimaryColor,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await _saveBlockTime(blockKey, start, end);
+                  },
+                  child: const Text('Guardar horario', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveBlockTime(String blockKey, String start, String end) async {
+    try {
+      final raw = _availability?['defaultSchedule']?['paseoTimeBlocks'];
+      final currentBlocks = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+      final updatedBlocks = Map<String, dynamic>.from(currentBlocks);
+      final existing = updatedBlocks[blockKey] is Map ? Map<String, dynamic>.from(updatedBlocks[blockKey]) : {'enabled': true};
+      updatedBlocks[blockKey] = {...existing, 'start': start, 'end': end};
+
+      final response = await http.patch(
+        Uri.parse('$_baseUrl/caregiver/availability'),
+        headers: {'Authorization': 'Bearer $_caregiverToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'defaultSchedule': {'paseoTimeBlocks': updatedBlocks}}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadAvailability();
+        _computeDayStatuses();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Horario actualizado'), backgroundColor: Colors.green),
+        );
+      } else {
+        throw Exception(data['error']?['message'] ?? 'Error');
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+      );
+    }
   }
 
   String _monthName(DateTime date) {
@@ -1553,7 +2214,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       final date = DateTime(_calendarMonth.year, _calendarMonth.month, day);
       final dateStr = date.toIso8601String().split('T')[0];
       final status = _dayStatus[dateStr] ?? 'available';
-      final isSelected = _selectedDay?.toIso8601String().split('T')[0] == dateStr;
+
       final isPast = date.isBefore(DateTime.now().subtract(const Duration(days: 0)));
       
       Color bgColor;
@@ -1566,22 +2227,36 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       
       if (isPast) bgColor = kSurfaceColor;
       
+      final isToday = date.year == DateTime.now().year &&
+        date.month == DateTime.now().month &&
+        date.day == DateTime.now().day;
+
       cells.add(
         GestureDetector(
-          onTap: isPast ? null : () => setState(() => _selectedDay = date),
+          onTap: isPast ? null : () {
+            setState(() => _selectedDay = date);
+            showModalBottomSheet(
+              context: context,
+              backgroundColor: Colors.transparent,
+              isScrollControlled: true,
+              builder: (_) => _buildDayPanel(date),
+            );
+          },
           child: Container(
             margin: const EdgeInsets.all(2),
             decoration: BoxDecoration(
               color: bgColor.withOpacity(isPast ? 0.3 : 0.8),
               borderRadius: BorderRadius.circular(8),
-              border: isSelected ? Border.all(color: Colors.white, width: 2) : null,
+              border: isToday
+                ? Border.all(color: Colors.white, width: 2)
+                : null,
             ),
             child: Center(
               child: Text(
                 '$day',
                 style: TextStyle(
                   color: isPast ? kTextSecondary : Colors.white,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  fontWeight: isToday ? FontWeight.w800 : FontWeight.normal,
                   fontSize: 13,
                 ),
               ),
@@ -1605,13 +2280,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final status = _dayStatus[dateStr] ?? 'available';
     final isBooked = status == 'booked';
     
-    return Container(
+    return GlassBox(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: kSurfaceColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1637,56 +2308,22 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               children: [
                 const Text('Bloquear día completo', style: TextStyle(color: Colors.white)),
                 Switch(
-                  value: status == 'blocked' || (_pendingChanges[dateStr]?['isAvailable'] == false),
+                  value: status == 'blocked',
                   activeColor: Colors.red,
-                  onChanged: (val) {
-                    if (_editMode) {
-                      setState(() {
-                        if (val) {
-                          _pendingChanges[dateStr] = {'isAvailable': false, 'reason': 'No disponible'};
-                          _dayStatus[dateStr] = 'blocked';
-                        } else {
-                          _pendingChanges.remove(dateStr);
-                          _dayStatus[dateStr] = 'available';
-                        }
-                      });
-                    } else {
-                      // Sin modo edición: guardar inmediatamente
-                      _toggleDayBlock(dateStr, val);
-                    }
-                  },
+                  onChanged: (val) => _toggleDayBlock(dateStr, val),
                 ),
               ],
             ),
             if (status != 'blocked') ...[
               const Divider(color: Colors.white12),
-              const Text('Horarios disponibles este día:', 
+              const Text('Horarios disponibles este día:',
                 style: TextStyle(color: kTextSecondary, fontSize: 13)),
               const SizedBox(height: 8),
               _buildDayTimeBlocks(dateStr),
-              if (_editMode && _pendingChanges.containsKey(dateStr) && 
-                  _pendingChanges[dateStr]['timeBlocks'] != null) ...[
-                const SizedBox(height: 8),
-                TextButton.icon(
-                  icon: const Icon(Icons.restore, size: 14, color: kTextSecondary),
-                  label: const Text('Restablecer horarios a predeterminado',
-                    style: TextStyle(color: kTextSecondary, fontSize: 12)),
-                  onPressed: () {
-                    setState(() {
-                      if (_pendingChanges[dateStr] != null) {
-                        (_pendingChanges[dateStr] as Map).remove('timeBlocks');
-                        if ((_pendingChanges[dateStr] as Map).isEmpty) {
-                          _pendingChanges.remove(dateStr);
-                        }
-                      }
-                    });
-                  },
-                ),
-              ],
             ],
           ] else
             const Text(
-              'Este día tiene reservas activas. Mantente atento!',
+              'Este día tiene reservas activas. ¡Mantente atento!',
               style: TextStyle(color: kTextSecondary, fontSize: 14),
             ),
         ],
@@ -1695,55 +2332,32 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   }
 
   Widget _buildDayTimeBlocks(String dateStr) {
-    debugPrint('DAY PANEL dates data: ${(_availability?['dates'] as Map?)?[dateStr]}');
-    
-    final rawGlobal = _editMode 
-      ? _editableSchedule 
-      : (() {
-          final raw = _availability?['defaultSchedule']?['paseoTimeBlocks'];
-          return raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
-        })();
+    final raw = _availability?['defaultSchedule']?['paseoTimeBlocks'];
+    final rawGlobal = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
 
-    // El backend devuelve overrides en dates[dateStr].timeBlocks.slots
     final rawDateEntry = (_availability?['dates'] as Map?)?[dateStr];
     final rawTimeBlocks = rawDateEntry is Map ? rawDateEntry['timeBlocks'] : null;
     final rawSlots = rawTimeBlocks is Map ? rawTimeBlocks['slots'] : null;
-    final dayOverride = rawSlots is Map 
-      ? Map<String, dynamic>.from(rawSlots) 
-      : <String, dynamic>{};
-
-    // También verificar _pendingChanges para cambios no guardados en modo edición
-    final rawPending = _pendingChanges[dateStr]?['timeBlocks'];
-    final pendingOverride = rawPending is Map 
-      ? Map<String, dynamic>.from(rawPending) 
-      : <String, dynamic>{};
-    
-    // Combinar: pending tiene prioridad sobre lo guardado en backend
-    final effectiveOverride = {...dayOverride, ...pendingOverride};
+    final dayOverride = rawSlots is Map ? Map<String, dynamic>.from(rawSlots) : <String, dynamic>{};
 
     return Column(
       children: ['morning', 'afternoon', 'night'].map((blockKey) {
         final rawGlobalBlock = rawGlobal[blockKey];
         final globalBlock = rawGlobalBlock is Map
           ? Map<String, dynamic>.from(rawGlobalBlock)
-          : {'enabled': true, 'start': blockKey == 'morning' ? '08:00' : blockKey == 'afternoon' ? '13:00' : '19:00',
-             'end': blockKey == 'morning' ? '11:00' : blockKey == 'afternoon' ? '17:00' : '22:00'};
+          : {
+              'enabled': true,
+              'start': blockKey == 'morning' ? '08:00' : blockKey == 'afternoon' ? '13:00' : '19:00',
+              'end':   blockKey == 'morning' ? '11:00' : blockKey == 'afternoon' ? '17:00' : '22:00',
+            };
 
         final label = blockKey == 'morning' ? 'Mañana' : blockKey == 'afternoon' ? 'Tarde' : 'Noche';
-
-        // El estado del bloque para este día específico:
-        // Priorizar effectiveOverride (servidor + local)
-        final rawDayBlock = effectiveOverride[blockKey];
-        final dayBlockOverride = rawDayBlock is Map 
-          ? Map<String, dynamic>.from(rawDayBlock) 
-          : null;
-        
-        final isEnabled = dayBlockOverride != null 
+        final rawDayBlock = dayOverride[blockKey];
+        final dayBlockOverride = rawDayBlock is Map ? Map<String, dynamic>.from(rawDayBlock) : null;
+        final isEnabled = dayBlockOverride != null
           ? dayBlockOverride['enabled'] == true
           : globalBlock['enabled'] == true;
-        
-        final timeRange = '${globalBlock['start']} - ${globalBlock['end']}';
-        final isCustomized = effectiveOverride.containsKey(blockKey);
+        final isCustomized = dayOverride.containsKey(blockKey);
 
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
@@ -1751,9 +2365,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           decoration: BoxDecoration(
             color: kBackgroundColor,
             borderRadius: BorderRadius.circular(10),
-            border: isCustomized 
-              ? Border.all(color: kAccentColor.withOpacity(0.5)) 
-              : null,
+            border: isCustomized ? Border.all(color: kAccentColor.withValues(alpha: 0.5)) : null,
           ),
           child: Row(
             children: [
@@ -1761,167 +2373,34 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        if (isCustomized) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: kAccentColor.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Text('Personalizado',
-                              style: TextStyle(color: kAccentColor, fontSize: 10)),
+                    Row(children: [
+                      Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      if (isCustomized) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: kAccentColor.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(4),
                           ),
-                        ],
+                          child: const Text('Personalizado', style: TextStyle(color: kAccentColor, fontSize: 10)),
+                        ),
                       ],
-                    ),
-                    Text(timeRange, style: const TextStyle(color: kTextSecondary, fontSize: 12)),
+                    ]),
+                    Text('${globalBlock['start']} - ${globalBlock['end']}',
+                      style: const TextStyle(color: kTextSecondary, fontSize: 12)),
                   ],
                 ),
               ),
               Switch(
                 value: isEnabled,
                 activeColor: kPrimaryColor,
-                onChanged: (val) {
-                  if (_editMode) {
-                    // Modo edición: acumular en _pendingChanges
-                    setState(() {
-                      if (!_pendingChanges.containsKey(dateStr)) {
-                        _pendingChanges[dateStr] = {'isAvailable': true, 'timeBlocks': {}};
-                      }
-                      final timeBlocks = _pendingChanges[dateStr]['timeBlocks'];
-                      final blocksMap = timeBlocks is Map 
-                        ? Map<String, dynamic>.from(timeBlocks) 
-                        : <String, dynamic>{};
-                      blocksMap[blockKey] = {
-                        'enabled': val,
-                        'start': globalBlock['start'],
-                        'end': globalBlock['end'],
-                      };
-                      _pendingChanges[dateStr]['timeBlocks'] = blocksMap;
-                    });
-                  } else {
-                    // Sin modo edición: guardar inmediatamente
-                    _toggleDayBlockImmediate(dateStr, blockKey, val);
-                  }
-                },
+                onChanged: (val) => _toggleDayBlockImmediate(dateStr, blockKey, val),
               ),
             ],
           ),
         );
       }).toList(),
-    );
-  }
-
-  Widget _buildEditableScheduleBlocks() {
-    final rawBlocks = _editMode ? _editableSchedule : (() {
-      final raw = _availability?['defaultSchedule']?['paseoTimeBlocks'];
-      return raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
-    })();
-    
-    return Column(
-      children: ['morning', 'afternoon', 'night'].map((key) {
-        final rawBlock = rawBlocks[key];
-        final block = rawBlock is Map 
-          ? Map<String, dynamic>.from(rawBlock)
-          : {'enabled': true, 
-             'start': key == 'morning' ? '08:00' : key == 'afternoon' ? '13:00' : '19:00',
-             'end': key == 'morning' ? '11:00' : key == 'afternoon' ? '17:00' : '22:00'};
-        final label = key == 'morning' ? 'Mañana' : key == 'afternoon' ? 'Tarde' : 'Noche';
-        final isEnabled = block['enabled'] == true;
-        
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: kSurfaceColor,
-            borderRadius: BorderRadius.circular(12),
-            border: _editMode ? Border.all(color: kPrimaryColor.withOpacity(0.3)) : null,
-          ),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        if (_editMode && isEnabled)
-                          // Editores de hora en modo edición
-                          Row(
-                            children: [
-                              _timeEditor('Inicio', block['start'] as String, (newTime) {
-                                setState(() {
-                                  (_editableSchedule[key] as Map<String, dynamic>)['start'] = newTime;
-                                });
-                              }),
-                              const Text(' - ', style: TextStyle(color: kTextSecondary)),
-                              _timeEditor('Fin', block['end'] as String, (newTime) {
-                                setState(() {
-                                  (_editableSchedule[key] as Map<String, dynamic>)['end'] = newTime;
-                                });
-                              }),
-                            ],
-                          )
-                        else
-                          Text('${block['start']} - ${block['end']}',
-                            style: const TextStyle(color: kTextSecondary, fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                  Switch(
-                    value: isEnabled,
-                    activeColor: kPrimaryColor,
-                    onChanged: _editMode ? (val) {
-                      setState(() {
-                        (_editableSchedule[key] as Map<String, dynamic>)['enabled'] = val;
-                      });
-                    } : null,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _timeEditor(String label, String currentTime, Function(String) onChanged) {
-    return GestureDetector(
-      onTap: () async {
-        final parts = currentTime.split(':');
-        final picked = await showTimePicker(
-          context: context,
-          initialTime: TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1])),
-          builder: (context, child) {
-            return Theme(
-              data: ThemeData.dark().copyWith(
-                colorScheme: const ColorScheme.dark(primary: kPrimaryColor),
-              ),
-              child: child!,
-            );
-          },
-        );
-        if (picked != null) {
-          final formatted = '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-          onChanged(formatted);
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: kPrimaryColor.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: kPrimaryColor.withOpacity(0.5)),
-        ),
-        child: Text(currentTime,
-          style: const TextStyle(color: kPrimaryColor, fontSize: 13, fontWeight: FontWeight.bold)),
-      ),
     );
   }
 
@@ -1941,6 +2420,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       isDark: isDark,
       onRespond: _respondBooking,
       onRequestCancellation: _requestCancellation,
+      token: _caregiverToken,
     );
   }
 
@@ -1961,271 +2441,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     );
   }
 
-  Widget _buildEarnings() {
-    final isDark = themeNotifier.isDark;
-    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-
-    // Calcular estadísticas desde _bookings
-    final completedBookings = _bookings.where((b) => b['status'] == 'COMPLETED').toList();
-    final confirmedBookings = _bookings.where((b) => b['status'] == 'CONFIRMED' || b['status'] == 'IN_PROGRESS').toList();
-
-    double totalEarned = 0;
-    double totalCommission = 0;
-    double pendingEarnings = 0;
-
-    for (final b in completedBookings) {
-      final amount = double.tryParse(b['totalAmount']?.toString() ?? '0') ?? 0;
-      final commission = double.tryParse(b['commissionAmount']?.toString() ?? '0') ?? 0;
-      totalEarned += amount - commission;
-      totalCommission += commission;
-    }
-
-    for (final b in confirmedBookings) {
-      final amount = double.tryParse(b['totalAmount']?.toString() ?? '0') ?? 0;
-      final commission = double.tryParse(b['commissionAmount']?.toString() ?? '0') ?? 0;
-      pendingEarnings += amount - commission;
-    }
-
-    // Agrupar por mes
-    final Map<String, double> byMonth = {};
-    for (final b in completedBookings) {
-      final date = b['walkDate'] ?? b['startDate'] ?? b['createdAt'];
-      if (date == null) continue;
-      final month = date.toString().substring(0, 7); // YYYY-MM
-      final amount = double.tryParse(b['totalAmount']?.toString() ?? '0') ?? 0;
-      final commission = double.tryParse(b['commissionAmount']?.toString() ?? '0') ?? 0;
-      byMonth[month] = (byMonth[month] ?? 0) + (amount - commission);
-    }
-
-    // Agrupar por tipo de servicio
-    double walkEarnings = 0;
-    double hospedajeEarnings = 0;
-    for (final b in completedBookings) {
-      final amount = double.tryParse(b['totalAmount']?.toString() ?? '0') ?? 0;
-      final commission = double.tryParse(b['commissionAmount']?.toString() ?? '0') ?? 0;
-      final net = amount - commission;
-      if (b['serviceType'] == 'PASEO') {
-        walkEarnings += net;
-      } else {
-        hospedajeEarnings += net;
-      }
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Mis ganancias', style: TextStyle(color: textColor, fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
-          const SizedBox(height: 4),
-          Text('Ingresos netos después de comisión GARDEN', style: TextStyle(color: subtextColor, fontSize: 13)),
-          const SizedBox(height: 24),
-
-          // Tarjeta principal de ganancias totales
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFFFF6B35), Color(0xFFE55A25)],
-              ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [BoxShadow(color: GardenColors.primary.withOpacity(0.35), blurRadius: 20, offset: const Offset(0, 6))],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Total ganado', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
-                const SizedBox(height: 8),
-                Text('Bs ${totalEarned.toStringAsFixed(2)}',
-                  style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900, letterSpacing: -1)),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    _earningsChip('${completedBookings.length} completadas', Icons.check_circle_outline),
-                    const SizedBox(width: 10),
-                    _earningsChip('Bs ${totalCommission.toStringAsFixed(0)} comisión', Icons.info_outline),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Ganancias pendientes
-          if (pendingEarnings > 0)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: GardenColors.success.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: GardenColors.success.withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 44, height: 44,
-                    decoration: BoxDecoration(
-                      color: GardenColors.success.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.hourglass_top_outlined, color: GardenColors.success, size: 22),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Por cobrar', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
-                        Text('De reservas confirmadas en curso', style: TextStyle(color: subtextColor, fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                  Text('Bs ${pendingEarnings.toStringAsFixed(2)}',
-                    style: const TextStyle(color: GardenColors.success, fontWeight: FontWeight.w800, fontSize: 18)),
-                ],
-              ),
-            ),
-
-          // Desglose por servicio
-          Text('Por servicio', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _serviceEarningsCard('🦮 Paseo', walkEarnings, completedBookings.where((b) => b['serviceType'] == 'PASEO').length, surface, textColor, subtextColor, borderColor)),
-              const SizedBox(width: 12),
-              Expanded(child: _serviceEarningsCard('🏠 Hospedaje', hospedajeEarnings, completedBookings.where((b) => b['serviceType'] == 'HOSPEDAJE').length, surface, textColor, subtextColor, borderColor)),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Historial por mes
-          if (byMonth.isNotEmpty) ...[
-            Text('Historial mensual', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 12),
-            ...byMonth.entries.toList().reversed.map((entry) {
-              final monthStr = _formatMonth(entry.key);
-              final amount = entry.value;
-              final maxAmount = byMonth.values.reduce((a, b) => a > b ? a : b);
-              final percentage = maxAmount > 0 ? amount / maxAmount : 0.0;
-              return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: borderColor),
-                ),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 70,
-                      child: Text(monthStr, style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w500)),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: percentage,
-                          backgroundColor: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
-                          valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
-                          minHeight: 8,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text('Bs ${amount.toStringAsFixed(0)}',
-                      style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
-                  ],
-                ),
-              );
-            }),
-          ],
-
-          // Si no hay ganancias
-          if (completedBookings.isEmpty)
-            Center(
-              child: Column(
-                children: [
-                  const SizedBox(height: 32),
-                  Container(
-                    width: 80, height: 80,
-                    decoration: BoxDecoration(
-                      color: GardenColors.primary.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.account_balance_wallet_outlined, size: 36, color: GardenColors.primary),
-                  ),
-                  const SizedBox(height: 16),
-                  Text('Sin ganancias aún', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 8),
-                  Text('Completa tus primeras reservas para ver tus estadísticas',
-                    style: TextStyle(color: subtextColor, fontSize: 14), textAlign: TextAlign.center),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _earningsChip(String label, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: Colors.white),
-          const SizedBox(width: 5),
-          Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
-
-  Widget _serviceEarningsCard(String title, double amount, int count, Color surface, Color textColor, Color subtextColor, Color borderColor) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          Text('Bs ${amount.toStringAsFixed(0)}',
-            style: const TextStyle(color: GardenColors.primary, fontSize: 22, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 4),
-          Text('$count servicios', style: TextStyle(color: subtextColor, fontSize: 12)),
-        ],
-      ),
-    );
-  }
-
-  String _formatMonth(String yearMonth) {
-    final parts = yearMonth.split('-');
-    if (parts.length < 2) return yearMonth;
-    const months = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-    final month = int.tryParse(parts[1]) ?? 0;
-    return '${months[month]} ${parts[0]}';
-  }
-
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -2240,7 +2455,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             automaticallyImplyLeading: false,
             title: Row(
               children: [
-                const Text('GARDEN', style: TextStyle(color: GardenColors.primary, fontSize: 20, fontWeight: FontWeight.w900)),
+                GestureDetector(
+                  onTap: () => context.go('/caregiver/home'),
+                  child: const Text('GARDEN', style: TextStyle(color: GardenColors.primary, fontSize: 20, fontWeight: FontWeight.w900)),
+                ),
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -2254,12 +2472,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               ],
             ),
             actions: [
-              IconButton(
-                icon: Icon(Icons.account_circle_outlined,
-                  color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
-                onPressed: () => context.push('/profile'),
-                tooltip: 'Mi perfil',
-              ),
               NotificationBell(
                 token: _caregiverToken,
                 baseUrl: _baseUrl,
@@ -2271,48 +2483,135 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               ),
             ],
           ),
-          body: _isLoading 
+          body: _isLoading
             ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
-            : [
+            : _setupPending
+              ? _buildResumeRegistrationScreen(isDark)
+              : [
                 _buildDashboardTab(),
                 _buildAvailability(),
                 _buildBookings(),
-                _buildEarnings(),
               ][_selectedTab],
-          bottomNavigationBar: BottomNavigationBar(
-            currentIndex: _selectedTab,
-            onTap: (i) => setState(() => _selectedTab = i),
-            backgroundColor: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
-            selectedItemColor: GardenColors.primary,
-            unselectedItemColor: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary,
-            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-            elevation: 0,
-            type: BottomNavigationBarType.fixed,
+          bottomNavigationBar: _setupPending ? null : LiquidGlassNavBar(
+            selectedIndex: _selectedTab,
+            onTap: (i) {
+              if (i == 3) {
+                context.push('/profile');
+              } else {
+                setState(() => _selectedTab = i);
+              }
+            },
             items: const [
-              BottomNavigationBarItem(
-                icon: Icon(Icons.home_outlined),
-                activeIcon: Icon(Icons.home_rounded),
-                label: 'Inicio',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.calendar_month_outlined),
-                activeIcon: Icon(Icons.calendar_month_rounded),
-                label: 'Disponibilidad',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.list_alt_outlined),
-                activeIcon: Icon(Icons.list_alt_rounded),
-                label: 'Reservas',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.account_balance_wallet_outlined),
-                activeIcon: Icon(Icons.account_balance_wallet_rounded),
-                label: 'Ganancias',
-              ),
+              GardenNavItem(Icons.home_outlined,            Icons.home_rounded,            'Inicio'),
+              GardenNavItem(Icons.calendar_month_outlined,  Icons.calendar_month_rounded,  'Disponibilidad'),
+              GardenNavItem(Icons.list_alt_outlined,        Icons.list_alt_rounded,        'Reservas'),
+              GardenNavItem(Icons.person_outline_rounded,   Icons.person_rounded,          'Mi Perfil'),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildResumeRegistrationScreen(bool isDark) {
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+    return Container(
+      color: bg,
+      child: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Icon
+                Container(
+                  width: 96,
+                  height: 96,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [GardenColors.primary, Color(0xFF1B5E20)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: GardenColors.primary.withOpacity(0.35),
+                        blurRadius: 28,
+                        spreadRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.assignment_late_outlined, color: Colors.white, size: 48),
+                ),
+                const SizedBox(height: 28),
+                Text(
+                  'Completa tu registro',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Tu perfil aún no está listo para ser visible en el marketplace. Finaliza los pasos pendientes para que los dueños puedan encontrarte.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: subtextColor,
+                    fontSize: 15,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 40),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GardenColors.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 0,
+                    ),
+                    onPressed: () => context.go('/caregiver/onboarding'),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.arrow_forward_rounded, size: 22),
+                        SizedBox(width: 10),
+                        Text(
+                          'Continuar registro',
+                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () async {
+                    // Allow logout from resume screen
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.remove('access_token');
+                    await prefs.remove('user_name');
+                    if (mounted) context.go('/login');
+                  },
+                  child: Text(
+                    'Cerrar sesión',
+                    style: TextStyle(color: subtextColor, fontSize: 14),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -2323,6 +2622,7 @@ class _ExpandableBookingCard extends StatefulWidget {
   final bool isDark;
   final Function(String, String) onRespond;
   final Function(String, String) onRequestCancellation;
+  final String token;
 
   const _ExpandableBookingCard({
     required this.booking,
@@ -2333,6 +2633,7 @@ class _ExpandableBookingCard extends StatefulWidget {
     required this.isDark,
     required this.onRespond,
     required this.onRequestCancellation,
+    required this.token,
   });
 
   @override
@@ -2346,7 +2647,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
     final reasonController = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (_) => GardenGlassDialog(
         title: const Text('Solicitar cancelación'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -2370,14 +2671,14 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error),
             onPressed: () {
               if (reasonController.text.trim().isNotEmpty) {
-                Navigator.pop(ctx, true);
+                Navigator.pop(context, true);
               }
             },
             child: const Text('Enviar solicitud'),
@@ -2455,7 +2756,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                       bookingStatusBadge(status),
                       const SizedBox(height: 4),
                       Text(
-                        'Bs ${booking['totalAmount'] ?? '—'}',
+                        'Bs ${_caregiverNetAmount(booking)}',
                         style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w800, fontSize: 15),
                       ),
                     ],
@@ -2686,6 +2987,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                         builder: (_) => ChatScreen(
                           bookingId: booking['id'] as String,
                           otherPersonName: booking['clientName'] as String? ?? 'Cliente',
+                          token: widget.token,
                         ),
                       ),
                     ),
@@ -2697,4 +2999,12 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
       ),
     );
   }
+}
+
+
+String _caregiverNetAmount(Map<String, dynamic> booking) {
+  final total = double.tryParse(booking['totalAmount']?.toString() ?? '0') ?? 0;
+  final commission = double.tryParse(booking['commissionAmount']?.toString() ?? '0') ?? 0;
+  final net = total - commission;
+  return net > 0 ? net.toStringAsFixed(0) : (total > 0 ? total.toStringAsFixed(0) : '—');
 }

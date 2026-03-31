@@ -6,6 +6,8 @@ import * as caregiverController from './caregiver.controller.js';
 const router = Router();
 
 router.get('/', caregiverController.list);
+/** GET /api/caregivers/price-stats?zone=X&service=Y — price statistics for wizard */
+router.get('/price-stats', caregiverController.getPriceStats);
 router.get('/:id/availability', caregiverController.getAvailability);
 router.get('/:id', caregiverController.getById);
 

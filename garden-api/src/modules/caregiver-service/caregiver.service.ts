@@ -72,15 +72,17 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
     suspended: false,
     status: CaregiverStatus.APPROVED,
     verified: true,
-  };
+    // Doble seguridad: solo cuidadores con email verificado e identidad confirmada
+    emailVerified: true,
+    identityVerificationStatus: 'VERIFIED',
+  } as Prisma.CaregiverProfileWhereInput;
 
   if (zonesFilter?.length) {
     where.zone = { in: zonesFilter };
   }
 
-  if (service && service !== 'ambos') {
-    const st = service === ServiceType.PASEO ? ServiceType.PASEO : ServiceType.HOSPEDAJE;
-    where.servicesOffered = { has: st };
+  if (service === ServiceType.PASEO || service === ServiceType.HOSPEDAJE) {
+    where.servicesOffered = { has: service as ServiceType };
   }
 
   // Filtrar por tipos de espacio (multi-select): usar hasSome si hay múltiples valores
@@ -173,6 +175,8 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       acceptPuppies: c.acceptPuppies,
       acceptSeniors: c.acceptSeniors,
       sizesAccepted: c.sizesAccepted,
+      addressLatApprox: c.addressLat != null ? c.addressLat + (Math.random() - 0.5) * 0.008 : null,
+      addressLngApprox: c.addressLng != null ? c.addressLng + (Math.random() - 0.5) * 0.008 : null,
     })),
     pagination: {
       total,
@@ -357,7 +361,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
       rating: r.rating,
       comment: r.comment,
       serviceType: r.serviceType,
-      petName: r.booking?.petName ?? null,
+      petName: (r as any).booking?.petName ?? null,
       createdAt: r.createdAt,
     })),
     // Campos detallados (Questionnaire)

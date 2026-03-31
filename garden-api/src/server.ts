@@ -5,10 +5,7 @@ import prisma from './config/database.js';
 import logger from './shared/logger.js';
 import { iniciarJobAjustePrecios } from './jobs/ajuste-precios.job.js';
 
-const PORT =
-  process.env.NODE_ENV !== 'production'
-    ? 3000
-    : (parseInt(env.PORT, 10) || 3000);
+const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
 const httpServer = createServer(app);
 

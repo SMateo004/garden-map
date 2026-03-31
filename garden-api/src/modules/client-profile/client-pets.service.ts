@@ -32,6 +32,14 @@ export type PetListItem = {
   photoUrl: string | null;
   specialNeeds: string | null;
   notes: string | null;
+  gender: string | null;
+  weight: number | null;
+  color: string | null;
+  sterilized: boolean | null;
+  microchipNumber: string | null;
+  extraPhotos: string[];
+  vaccinePhotos: string[];
+  documents: string[];
 };
 
 /**
@@ -53,6 +61,14 @@ export async function getPetsByUserId(userId: string): Promise<PetListItem[]> {
           photoUrl: true,
           specialNeeds: true,
           notes: true,
+          gender: true,
+          weight: true,
+          color: true,
+          sterilized: true,
+          microchipNumber: true,
+          extraPhotos: true,
+          vaccinePhotos: true,
+          documents: true,
         },
       },
     },
@@ -85,6 +101,14 @@ export async function createPet(userId: string, body: CreatePetBody): Promise<Pe
       photoUrl,
       specialNeeds: body.specialNeeds ?? null,
       notes: body.notes ?? null,
+      gender: body.gender ?? null,
+      weight: body.weight ?? null,
+      color: body.color ?? null,
+      sterilized: body.sterilized ?? null,
+      microchipNumber: body.microchipNumber ?? null,
+      extraPhotos: body.extraPhotos ?? [],
+      vaccinePhotos: body.vaccinePhotos ?? [],
+      documents: body.documents ?? [],
     },
   });
 
@@ -119,6 +143,14 @@ export async function createPet(userId: string, body: CreatePetBody): Promise<Pe
     photoUrl: pet.photoUrl,
     specialNeeds: pet.specialNeeds,
     notes: pet.notes ?? null,
+    gender: pet.gender ?? null,
+    weight: pet.weight ?? null,
+    color: pet.color ?? null,
+    sterilized: pet.sterilized ?? null,
+    microchipNumber: pet.microchipNumber ?? null,
+    extraPhotos: pet.extraPhotos ?? [],
+    vaccinePhotos: pet.vaccinePhotos ?? [],
+    documents: pet.documents ?? [],
   };
 }
 
@@ -157,6 +189,14 @@ export async function updatePet(
       ...(photoUrlValue !== undefined && { photoUrl: photoUrlValue }),
       ...(body.specialNeeds !== undefined && { specialNeeds: body.specialNeeds }),
       ...(body.notes !== undefined && { notes: body.notes }),
+      ...(body.gender !== undefined && { gender: body.gender }),
+      ...(body.weight !== undefined && { weight: body.weight }),
+      ...(body.color !== undefined && { color: body.color }),
+      ...(body.sterilized !== undefined && { sterilized: body.sterilized }),
+      ...(body.microchipNumber !== undefined && { microchipNumber: body.microchipNumber }),
+      ...(body.extraPhotos !== undefined && { extraPhotos: body.extraPhotos }),
+      ...(body.vaccinePhotos !== undefined && { vaccinePhotos: body.vaccinePhotos }),
+      ...(body.documents !== undefined && { documents: body.documents }),
     },
   });
 
@@ -185,5 +225,38 @@ export async function updatePet(
     photoUrl: updated.photoUrl,
     specialNeeds: updated.specialNeeds,
     notes: updated.notes,
+    gender: updated.gender ?? null,
+    weight: updated.weight ?? null,
+    color: updated.color ?? null,
+    sterilized: updated.sterilized ?? null,
+    microchipNumber: updated.microchipNumber ?? null,
+    extraPhotos: updated.extraPhotos ?? [],
+    vaccinePhotos: updated.vaccinePhotos ?? [],
+    documents: updated.documents ?? [],
   };
+}
+
+/**
+ * Elimina una mascota. Valida que pertenezca al cliente. Recalcula isComplete del perfil.
+ */
+export async function deletePet(userId: string, petId: string): Promise<void> {
+  const profile = await prisma.clientProfile.findUnique({
+    where: { userId },
+    select: { id: true },
+  });
+  if (!profile) throw new NotFoundError('No tienes perfil de cliente');
+
+  const pet = await prisma.pet.findFirst({
+    where: { id: petId, clientProfileId: profile.id },
+  });
+  if (!pet) throw new BadRequestError('Mascota no pertenece al usuario', 'PET_NOT_OWNED');
+
+  await prisma.pet.delete({ where: { id: petId } });
+
+  const allPets = await prisma.pet.findMany({
+    where: { clientProfileId: profile.id },
+    orderBy: { createdAt: 'desc' },
+    select: { name: true, size: true, photoUrl: true },
+  });
+  await recalcProfileIsComplete(prisma, profile.id, allPets);
 }

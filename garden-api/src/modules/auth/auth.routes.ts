@@ -5,6 +5,7 @@ import * as authController from './auth.controller.js';
 const router = Router();
 
 router.get('/me', authMiddleware, authController.me);
+router.patch('/me', authMiddleware, authController.patchMe);
 router.get('/check-email', authController.checkEmail);
 router.post('/caregiver/register', authController.registerCaregiver);
 router.post('/client/register', authController.registerClient);
@@ -14,5 +15,8 @@ router.post('/login', authController.login);
 router.post('/send-verification-email', authMiddleware, authController.sendVerificationEmail);
 /** POST /api/auth/verify-email — body: { code }. Validates code, marks user verified. */
 router.post('/verify-email', authMiddleware, authController.verifyEmail);
+
+/** DELETE /api/auth/account — authenticated user deletes their own account */
+router.delete('/account', authMiddleware, authController.deleteAccount);
 
 export default router;

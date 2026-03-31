@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
-import 'dart:html' as html;
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -9,7 +9,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 
 class CaregiverProfileDataScreen extends StatefulWidget {
-  const CaregiverProfileDataScreen({super.key});
+  /// When true, the screen hides its own AppBar/Scaffold and calls
+  /// [onSaveComplete] instead of `Navigator.pop()` after a successful save.
+  final bool embeddedMode;
+  final VoidCallback? onSaveComplete;
+
+  const CaregiverProfileDataScreen({
+    super.key,
+    this.embeddedMode = false,
+    this.onSaveComplete,
+  });
 
   @override
   State<CaregiverProfileDataScreen> createState() => _CaregiverProfileDataScreenState();
@@ -96,6 +105,18 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     _loadData();
   }
 
+  /// Reads the enabled flag from multiple possible sources in priority order:
+  /// 1. slots value (bool from serviceDetails.availability.slots)
+  /// 2. block object (Map with 'enabled' key, from defaultAvailabilitySchedule.paseoTimeBlocks.morning)
+  /// 3. legacy bool (from old MANANA/TARDE/NOCHE format)
+  bool _extractBlockEnabled(dynamic slotVal, dynamic blockObj, dynamic legacyBool, {required bool defaultValue}) {
+    if (slotVal is bool) return slotVal;
+    if (blockObj is Map) return blockObj['enabled'] as bool? ?? defaultValue;
+    if (blockObj is bool) return blockObj;
+    if (legacyBool is bool) return legacyBool;
+    return defaultValue;
+  }
+
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final prefs = await SharedPreferences.getInstance();
@@ -114,6 +135,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         final faq = details['faq'] ?? {};
         final availability = details['availability'] ?? {};
         final slots = availability['slots'] ?? {};
+        final defaultSchedule = profile['defaultAvailabilitySchedule'] ?? {};
+        final paseoBlocks = defaultSchedule['paseoTimeBlocks'] ?? {};
 
         setState(() {
           _profile = profile;
@@ -136,12 +159,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
           _maxPets = details['maxPets'] ?? 1;
           _acceptedPetTypes = List<String>.from(details['acceptedPetTypes'] ?? []);
           _acceptedSizes = List<String>.from(details['acceptedSizes'] ?? []);
-          _weekdays = availability['weekdays'] ?? true;
-          _weekends = availability['weekends'] ?? false;
-          _holidays = availability['holidays'] ?? false;
-          _morningSlot = slots['morning'] ?? true;
-          _afternoonSlot = slots['afternoon'] ?? true;
-          _nightSlot = slots['night'] ?? false;
+          _weekdays = availability['weekdays'] ?? defaultSchedule['weekdays'] ?? true;
+          _weekends = availability['weekends'] ?? defaultSchedule['weekends'] ?? false;
+          _holidays = availability['holidays'] ?? defaultSchedule['holidays'] ?? false;
+          _morningSlot   = _extractBlockEnabled(slots['morning'],   paseoBlocks['morning'],   paseoBlocks['MANANA'],   defaultValue: true);
+          _afternoonSlot = _extractBlockEnabled(slots['afternoon'], paseoBlocks['afternoon'], paseoBlocks['TARDE'],    defaultValue: true);
+          _nightSlot     = _extractBlockEnabled(slots['night'],     paseoBlocks['night'],     paseoBlocks['NOCHE'],    defaultValue: false);
           _photos = List<String>.from(profile['photos'] ?? []);
 
           // Nuevos campos simplificados
@@ -191,7 +214,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     }
     
     if (_selectedServices.contains('PASEO')) {
-      if (_pricePerWalk30Controller.text != '0') score++;
+      if (_pricePerWalk60Controller.text != '0') score++;
     }
 
     if (_includesController.text.isNotEmpty) score++;
@@ -201,7 +224,30 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     setState(() => _completionPercentage = ((score / total) * 100).round());
   }
 
+  void _showValidationError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: GardenColors.error));
+    setState(() => _isSaving = false);
+  }
+
   Future<void> _saveAllData() async {
+    // ── Validación de campos obligatorios ──
+    if (_bioController.text.trim().isEmpty) {
+      return _showValidationError('La bio es obligatoria');
+    }
+    if (_selectedServices.isEmpty) {
+      return _showValidationError('Selecciona al menos un servicio');
+    }
+    if (_selectedServices.contains('PASEO')) {
+      if ((_pricePerWalk60Controller.text.trim().isEmpty) || (double.tryParse(_pricePerWalk60Controller.text) ?? 0) <= 0) {
+        return _showValidationError('Ingresa el precio del paseo (1 hora)');
+      }
+    }
+    if (_selectedServices.contains('HOSPEDAJE')) {
+      if ((_pricePerDayController.text.trim().isEmpty) || (double.tryParse(_pricePerDayController.text) ?? 0) <= 0) {
+        return _showValidationError('Ingresa el precio por noche del hospedaje');
+      }
+    }
+
     setState(() => _isSaving = true);
     try {
       // Mapping CASA/APARTAMENTO to Enum if only one selected
@@ -216,7 +262,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         'zone': _selectedZone,
         'servicesOffered': _selectedServices,
         'pricePerDay': (double.tryParse(_pricePerDayController.text) ?? 0).round(),
-        'pricePerWalk30': (double.tryParse(_pricePerWalk30Controller.text) ?? 0).round(),
         'pricePerWalk60': (double.tryParse(_pricePerWalk60Controller.text) ?? 0).round(),
         'homeType': hType,
         'spaceType': _selectedHomeTypes,
@@ -253,16 +298,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             'requirements': _requirementsController.text.trim(),
           },
         },
-        'experienceYears': int.tryParse(_experienceYearsController.text) ?? 0,
-        'experienceDescription': _experienceDescController.text.trim(),
-        'whyCaregiver': _whyCaregiverController.text.trim(),
-        'whatDiffers': _whatDiffersController.text.trim(),
-        'handleAnxious': _handleAnxiousController.text.trim(),
-        'emergencyResponse': _emergencyResponseController.text.trim(),
-        'acceptAggressive': _acceptAggressive ?? false,
-        'acceptPuppies': _acceptPuppies ?? false,
-        'acceptSeniors': _acceptSeniors ?? false,
-        'sizesAccepted': _sizesAccepted,
       };
 
       final response = await http.patch(
@@ -275,10 +310,18 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       );
 
       if (jsonDecode(response.body)['success'] == true) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cambios guardados correctamente'), backgroundColor: GardenColors.success),
+          const SnackBar(content: Text('Cambios guardados correctamente'), backgroundColor: GardenColors.success, duration: Duration(seconds: 2)),
         );
         _computeCompletion();
+        await Future.delayed(const Duration(seconds: 1));
+        if (!mounted) return;
+        if (widget.embeddedMode && widget.onSaveComplete != null) {
+          widget.onSaveComplete!();
+        } else {
+          Navigator.pop(context);
+        }
       } else {
         final err = jsonDecode(response.body)['error']?['message'] ?? 'Error desconocido';
         throw Exception(err);
@@ -293,20 +336,14 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   Future<void> _addPhoto() async {
     const maxPhotos = 6;
     if (_photos.length >= maxPhotos) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Máximo $maxPhotos fotos permitidas')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Máximo $maxPhotos fotos permitidas')));
       return;
     }
 
-    final input = html.FileUploadInputElement()..accept = 'image/*';
-    input.click();
-    await input.onChange.first;
-    if (input.files == null || input.files!.isEmpty) return;
-
-    final file = input.files!.first;
-    final reader = html.FileReader();
-    reader.readAsArrayBuffer(file);
-    await reader.onLoad.first;
-    final bytes = Uint8List.fromList(reader.result as List<int>);
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (picked == null) return;
+    final bytes = Uint8List.fromList(await picked.readAsBytes());
+    final fileName = picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
 
     setState(() => _isSaving = true);
     try {
@@ -315,7 +352,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       request.files.add(http.MultipartFile.fromBytes(
         'servicePhoto',
         bytes,
-        filename: file.name,
+        filename: fileName,
         contentType: MediaType('image', 'jpeg'),
       ));
 
@@ -344,6 +381,9 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
+      if (widget.embeddedMode) {
+        return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
+      }
       return Scaffold(
         appBar: AppBar(title: const Text('Perfil profesional')),
         body: const Center(child: CircularProgressIndicator(color: GardenColors.primary)),
@@ -356,14 +396,39 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     final surface = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
+    if (widget.embeddedMode) {
+      return _buildBody(textColor, subtextColor, surface, borderColor, isDark);
+    }
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Perfil profesional')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            // Sección 1 — Banner
-            _buildCompletionBanner(),
+      appBar: AppBar(
+        title: const Text('Perfil profesional'),
+        actions: [
+          if (_isSaving)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.only(right: 16),
+                child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary)),
+              ),
+            )
+          else
+            TextButton(
+              onPressed: _saveAllData,
+              child: const Text('Guardar', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.bold, fontSize: 15)),
+            ),
+        ],
+      ),
+      body: _buildBody(textColor, subtextColor, surface, borderColor, isDark),
+    );
+  }
+
+  Widget _buildBody(Color textColor, Color subtextColor, Color surface, Color borderColor, bool isDark) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          // Sección 1 — Banner
+          _buildCompletionBanner(),
             const SizedBox(height: 32),
 
             // Sección 2 — Sobre ti
@@ -409,27 +474,52 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             ],
 
             // Sección 4 — Servicios
-            _sectionTitle('Servicios y precios', textColor),
+            _sectionTitle('Servicios que ofreces', textColor),
             _buildServiceChips(surface, borderColor),
+
             if (_selectedServices.contains('PASEO')) ...[
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(child: GardenInput(hint: 'Precio 30 min (Bs)', controller: _pricePerWalk30Controller, keyboardType: TextInputType.number)),
-                  const SizedBox(width: 12),
-                  Expanded(child: GardenInput(hint: 'Precio 60 min (Bs)', controller: _pricePerWalk60Controller, keyboardType: TextInputType.number)),
-                ],
-              ),
+              const SizedBox(height: 24),
+              Row(children: [
+                const Icon(Icons.directions_walk_rounded, color: GardenColors.primary, size: 18),
+                const SizedBox(width: 8),
+                Text('Precios de paseo', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(6)),
+                  child: const Text('Obligatorio', style: TextStyle(color: GardenColors.error, fontSize: 10, fontWeight: FontWeight.w700)),
+                ),
+              ]),
+              const SizedBox(height: 10),
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Precio por paseo (1 hora)', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                GardenInput(hint: 'Ej: 60 (Bs)', controller: _pricePerWalk60Controller, keyboardType: TextInputType.number),
+              ]),
             ],
+
             if (_selectedServices.contains('HOSPEDAJE')) ...[
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(child: GardenInput(hint: 'Precio por noche (Bs)', controller: _pricePerDayController, keyboardType: TextInputType.number)),
-                  const SizedBox(width: 12),
-                  const Expanded(child: SizedBox()), // Placeholder
-                ],
-              ),
+              const SizedBox(height: 24),
+              Row(children: [
+                const Icon(Icons.house_rounded, color: GardenColors.primary, size: 18),
+                const SizedBox(width: 8),
+                Text('Precio de hospedaje', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(6)),
+                  child: const Text('Obligatorio', style: TextStyle(color: GardenColors.error, fontSize: 10, fontWeight: FontWeight.w700)),
+                ),
+              ]),
+              const SizedBox(height: 10),
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Precio por noche (la mascota duerme en tu casa)', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Row(children: [
+                  Expanded(child: GardenInput(hint: 'Ej: 120 (Bs)', controller: _pricePerDayController, keyboardType: TextInputType.number)),
+                  const Expanded(child: SizedBox()),
+                ]),
+              ]),
             ],
             const SizedBox(height: 16),
             _buildZoneDropdown(surface, borderColor, textColor),
@@ -553,17 +643,30 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
             const Divider(height: 48),
 
-            const SizedBox(height: 20),
-            GardenButton(
-              label: _isSaving ? 'Guardando...' : 'Guardar cambios',
-              loading: _isSaving,
-              icon: Icons.check_circle_outline,
-              onPressed: _saveAllData,
-            ),
+            if (widget.embeddedMode) ...[
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: GardenColors.primary,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: GardenColors.primary.withOpacity(0.3),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                  onPressed: _isSaving ? null : _saveAllData,
+                  child: _isSaving
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Guardar y continuar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
+
             const SizedBox(height: 60),
           ],
         ),
-      ),
     );
   }
 

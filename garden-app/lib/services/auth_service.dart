@@ -69,14 +69,16 @@ class AuthService {
 
   // REGISTRO CLIENTE (dueño)
   Future<Map<String, dynamic>> registerClient({
-    required String fullName,
+    required String firstName,
+    required String lastName,
     required String email,
     required String password,
     required String phone,
     String? address,
   }) async {
     final body = {
-      'fullName': fullName,
+      'firstName': firstName,
+      'lastName': lastName,
       'email': email,
       'password': password,
       'phone': phone,

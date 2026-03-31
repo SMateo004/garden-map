@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import '../services/agentes_service.dart';
 
@@ -16,7 +17,7 @@ class PrecioOnboardingCard extends StatefulWidget {
   final Function(double) onPrecioConfirmado;
 
   const PrecioOnboardingCard({
-    Key? key,
+    super.key,
     required this.zona,
     required this.servicio,
     required this.experienciaMeses,
@@ -26,7 +27,7 @@ class PrecioOnboardingCard extends StatefulWidget {
     required this.precioMaxZona,
     required this.agentesService,
     required this.onPrecioConfirmado,
-  }) : super(key: key);
+  });
 
   @override
   State<PrecioOnboardingCard> createState() => _PrecioOnboardingCardState();
@@ -370,6 +371,25 @@ class _PrecioOnboardingCardState extends State<PrecioOnboardingCard>
 
   @override
   Widget build(BuildContext context) {
+    final useBlur = kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+
+    final inner = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24.0),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: useBlur ? 0.1 : 0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+      ),
+      child: _state == _CardState.cargando
+          ? _buildSkeletonLoader()
+          : _state == _CardState.error
+              ? _buildErrorState()
+              : _buildExitoState(),
+    );
+
     // Fondo oscuro contexto
     return Container(
       color: const Color(0xFF0A0E1A),
@@ -377,23 +397,9 @@ class _PrecioOnboardingCardState extends State<PrecioOnboardingCard>
       child: Center(
         child: ClipRRect(
           borderRadius: BorderRadius.circular(20),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24.0),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white.withOpacity(0.2)),
-              ),
-              child: _state == _CardState.cargando
-                  ? _buildSkeletonLoader()
-                  : _state == _CardState.error
-                      ? _buildErrorState()
-                      : _buildExitoState(),
-            ),
-          ),
+          child: useBlur
+              ? BackdropFilter(filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10), child: inner)
+              : inner,
         ),
       ),
     );

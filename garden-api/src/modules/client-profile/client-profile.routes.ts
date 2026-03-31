@@ -14,8 +14,11 @@ router.patch('/profile', clientProfileController.patchProfile);
 router.get('/pets', clientPetsController.getPets);
 router.post('/pets', clientPetsController.createPet);
 router.patch('/pets/:petId', clientPetsController.patchPet);
+router.delete('/pets/:petId', clientPetsController.deletePet);
 
 router.get('/favorites', clientProfileController.getFavorites);
 router.post('/favorites/:caregiverId', clientProfileController.toggleFavorite);
+
+router.get('/my-reviews', clientProfileController.getMyReviews);
 
 export default router;

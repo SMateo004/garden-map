@@ -5,7 +5,7 @@ import '../widgets/temporada_alta_badge.dart';
 import '../widgets/disputa_panel_card.dart';
 
 class TestAgentesScreen extends StatefulWidget {
-  const TestAgentesScreen({Key? key}) : super(key: key);
+  const TestAgentesScreen({super.key});
 
   @override
   State<TestAgentesScreen> createState() => _TestAgentesScreenState();

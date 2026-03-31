@@ -116,7 +116,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     final firstName = c['firstName'] ?? '';
     final lastName = c['lastName'] ?? '';
     final zone = c['zone'] ?? '';
-    final pricePerWalk = c['pricePerWalk30'];
+    final pricePerWalk = c['pricePerWalk60'] ?? c['pricePerWalk30'];
     final pricePerDay = c['pricePerDay'];
     final verified = c['verified'] == true;
     final profilePicture = c['profilePicture'] as String?;
@@ -143,7 +143,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     aspectRatio: 16 / 8,
                     child: profilePicture != null && profilePicture.isNotEmpty
                         ? Image.network(
-                            profilePicture,
+                            fixImageUrl(profilePicture),
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => _photoPlaceholder(),
                           )
@@ -242,7 +242,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     children: [
                       Text(
                         pricePerWalk != null
-                            ? 'Bs $pricePerWalk / paseo'
+                            ? 'Bs $pricePerWalk / 1 hora'
                             : pricePerDay != null
                                 ? 'Bs $pricePerDay / noche'
                                 : 'Consultar precio',

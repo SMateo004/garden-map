@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { PetSize } from '@prisma/client';
 
+const petGender = z.enum(['MALE', 'FEMALE']).optional();
+
 export const createPetBodySchema = z
   .object({
     name: z.string().min(1, 'Nombre requerido').max(200),
@@ -10,6 +12,14 @@ export const createPetBodySchema = z
     photoUrl: z.string().url().optional(),
     specialNeeds: z.string().max(2000).optional(),
     notes: z.string().max(2000).optional(),
+    gender: petGender,
+    weight: z.number().min(0).max(200).optional(),
+    color: z.string().max(100).optional(),
+    sterilized: z.boolean().optional(),
+    microchipNumber: z.string().max(50).optional(),
+    extraPhotos: z.array(z.string().url()).max(6).optional(),
+    vaccinePhotos: z.array(z.string().url()).max(6).optional(),
+    documents: z.array(z.string().url()).max(6).optional(),
   })
   .strict();
 
@@ -24,6 +34,14 @@ export const patchPetBodySchema = z
     photoUrl: z.string().url().optional(),
     specialNeeds: z.string().max(2000).optional(),
     notes: z.string().max(2000).optional(),
+    gender: petGender,
+    weight: z.number().min(0).max(200).optional(),
+    color: z.string().max(100).optional(),
+    sterilized: z.boolean().optional(),
+    microchipNumber: z.string().max(50).optional(),
+    extraPhotos: z.array(z.string().url()).max(6).optional(),
+    vaccinePhotos: z.array(z.string().url()).max(6).optional(),
+    documents: z.array(z.string().url()).max(6).optional(),
   })
   .strict();
 

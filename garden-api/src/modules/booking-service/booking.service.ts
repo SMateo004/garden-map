@@ -18,6 +18,7 @@ import {
 import logger from '../../shared/logger.js';
 import * as notificationService from '../../services/notification.service.js';
 import { blockchainService } from '../../services/blockchain.service.js';
+import { getIO } from '../../services/socket.service.js';
 import type {
   CreateBookingBody,
   InitPaymentBody,
@@ -1111,6 +1112,7 @@ export async function getMyBookings(clientId: string): Promise<BookingCreateResu
         },
       },
       dispute: true,
+      meetAndGreet: true,
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -1153,6 +1155,7 @@ export async function getBookingById(
         },
       },
       dispute: true,
+      meetAndGreet: true,
     },
   });
 
@@ -1198,6 +1201,7 @@ export async function getBookingsByCaregiverUserId(
         },
       },
       dispute: true,
+      meetAndGreet: true,
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -1245,6 +1249,9 @@ export async function acceptBooking(bookingId: string, caregiverUserId: string):
   notificationService.onBookingAccepted(bookingId).catch(err => {
     logger.error('Error sending onBookingAccepted notification', { bookingId, err });
   });
+
+  // Escrow ya se crea on-chain cuando el pago se confirma (payment.service.ts).
+  // No duplicar la llamada aquí — el contrato rechaza bookings que ya existen.
 
   return bookingToResponse(updated);
 }
@@ -1367,23 +1374,91 @@ export async function addServiceEvent(
     data: { serviceEvents: events },
   });
 
+  // Si es un incidente, notificar al dueño en tiempo real
+  if (type === 'INCIDENT') {
+    await prisma.notification.create({
+      data: {
+        userId: booking.clientId,
+        title: '⚠️ Tu cuidador reportó un incidente',
+        message: description || 'Tu cuidador ha reportado un incidente durante el servicio. El equipo GARDEN está al tanto.',
+        type: 'SERVICE_INCIDENT',
+      },
+    });
+
+    // Emitir al booking room (si el dueño está en el chat o en la pantalla del servicio)
+    const io = getIO();
+    if (io) {
+      io.to(`booking:${bookingId}`).emit('incident_reported', {
+        bookingId,
+        description,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    logger.info('Incident reported and client notified', { bookingId, clientId: booking.clientId });
+  }
+
   return bookingToResponse(updated);
 }
 
-export async function trackServiceLocation(bookingId: string, caregiverUserId: string, lat: number, lng: number): Promise<void> {
+function calcGpsDistance(points: { lat: number; lng: number }[]): number {
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    const R = 6371000;
+    const cur = points[i]!;
+    const prev = points[i - 1]!;
+    const dLat = (cur.lat - prev.lat) * Math.PI / 180;
+    const dLng = (cur.lng - prev.lng) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(prev.lat * Math.PI / 180) * Math.cos(cur.lat * Math.PI / 180) *
+      Math.sin(dLng / 2) ** 2;
+    total += R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+  return total;
+}
+
+export async function trackServiceLocation(
+  bookingId: string,
+  caregiverUserId: string,
+  lat: number,
+  lng: number,
+  accuracy?: number
+): Promise<void> {
   const profile = await prisma.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
   if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
 
   const booking = await prisma.booking.findFirst({ where: { id: bookingId, caregiverId: profile.id } });
   if (!booking) throw new BookingNotFoundError(bookingId);
+  if (booking.serviceType !== ServiceType.PASEO) throw new BadRequestError('GPS solo disponible para paseos');
 
+  const punto = { lat, lng, timestamp: new Date(), accuracy: accuracy ?? 0 };
   const tracking = (booking.serviceTrackingData as any[]) || [];
-  tracking.push({ lat, lng, timestamp: new Date() });
+  tracking.push(punto);
 
   await prisma.booking.update({
     where: { id: bookingId },
     data: { serviceTrackingData: tracking },
   });
+
+  // Emit real-time GPS update via Socket.io
+  const io = getIO();
+  if (io) {
+    io.to(`booking:${bookingId}`).emit('gps_update', { ...punto, timestamp: punto.timestamp.toISOString() });
+  }
+}
+
+export async function getGpsTrack(bookingId: string, userId: string): Promise<any[]> {
+  const booking = await prisma.booking.findFirst({
+    where: {
+      id: bookingId,
+      OR: [
+        { clientId: userId },
+        { caregiver: { userId } },
+      ],
+    },
+  });
+  if (!booking) throw new BookingNotFoundError(bookingId);
+  return (booking.serviceTrackingData as any[]) || [];
 }
 
 export async function concludeService(
@@ -1404,7 +1479,8 @@ export async function concludeService(
     }
 
     const tracking = (booking.serviceTrackingData as any[]) || [];
-    tracking.push({ lat, lng, timestamp: new Date(), type: 'END' });
+    if (lat && lng) tracking.push({ lat, lng, timestamp: new Date(), type: 'END' });
+    const gpsDistance = booking.serviceType === ServiceType.PASEO ? calcGpsDistance(tracking) : null;
 
     const updated = await tx.booking.update({
       where: { id: bookingId },
@@ -1413,6 +1489,7 @@ export async function concludeService(
         serviceEndedAt: new Date(),
         serviceEndPhoto: photoUrl,
         serviceTrackingData: tracking,
+        gpsDistance,
       },
     });
 
@@ -1523,7 +1600,12 @@ export async function confirmReceiptByClient(
     });
 
     // Registro en Blockchain (asíncrono) - Liberar calificación
-    blockchainService.finalizeBookingOnChain(bookingId, rating).catch(err => {
+    blockchainService.finalizeBookingOnChain(bookingId, rating).then(async (txHash) => {
+      if (txHash) {
+        await prisma.booking.update({ where: { id: bookingId }, data: { blockchainFinalizedTxHash: txHash } });
+        logger.info('[Blockchain] finalize txHash saved', { bookingId, txHash });
+      }
+    }).catch(err => {
       logger.error('Blockchain completion failed', { bookingId, err });
     });
 

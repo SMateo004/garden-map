@@ -21,8 +21,8 @@ export const createCaregiverProfileSchema = z.object({
 
 /** Query params para GET /api/caregivers (MVP + spec técnica) */
 export const listCaregiversQuerySchema = z.object({
-  service: z.enum(['hospedaje', 'paseo', 'ambos']).optional(),
-  zone: z.enum(['equipetrol', 'urbari', 'norte', 'las_palmas', 'centro_san_martin', 'otros']).optional(),
+  service: z.string().optional().transform((v) => v?.toLowerCase()).pipe(z.enum(['hospedaje', 'paseo', 'ambos']).optional()),
+  zone: z.enum(['equipetrol', 'urbari', 'norte', 'las_palmas', 'centro', 'remanzo', 'sur', 'urubo_norte', 'urubo_sur', 'otros']).optional(),
   priceRange: z.enum(['economico', 'estandar', 'premium']).optional(),
   // spaceTypes: comma-separated string que se convierte a array (ej: "casa_con_patio,departamento_pequeno")
   spaceTypes: z.string().optional().transform((val) => {
@@ -49,7 +49,11 @@ export const ZONE_QUERY_TO_ENUM: Record<string, Zone> = {
   urbari: Zone.URBARI,
   norte: Zone.NORTE,
   las_palmas: Zone.LAS_PALMAS,
-  centro_san_martin: Zone.CENTRO_SAN_MARTIN,
+  centro: Zone.CENTRO,
+  remanzo: Zone.REMANZO,
+  sur: Zone.SUR,
+  urubo_norte: Zone.URUBO_NORTE,
+  urubo_sur: Zone.URUBO_SUR,
   otros: Zone.OTROS,
 };
 

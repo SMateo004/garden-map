@@ -1,6 +1,8 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import '../services/agentes_service.dart';
+import '../theme/garden_theme.dart';
 
 enum _PanelState { cargando, exito, error }
 
@@ -16,7 +18,7 @@ class DisputaPanelCard extends StatefulWidget {
   final Function(String) onVeredictAplicado;
 
   const DisputaPanelCard({
-    Key? key,
+    super.key,
     required this.reservaId,
     required this.reserva,
     required this.cuidador,
@@ -26,7 +28,7 @@ class DisputaPanelCard extends StatefulWidget {
     this.mensajesRelevantes,
     required this.agentesService,
     required this.onVeredictAplicado,
-  }) : super(key: key);
+  });
 
   @override
   State<DisputaPanelCard> createState() => _DisputaPanelCardState();
@@ -104,23 +106,15 @@ class _DisputaPanelCardState extends State<DisputaPanelCard>
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF1A1F2E),
-          title: const Text(
-            "Confirmar acción",
-            style: TextStyle(color: Colors.white),
-          ),
+        return GardenGlassDialog(
+          title: const Text("Confirmar acción"),
           content: const Text(
             "¿Confirmas aplicar la recomendación de GARDEN IA? Esta acción ajustará el escrow de forma definitiva.",
-            style: TextStyle(color: Colors.white),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text(
-                "Cancelar",
-                style: TextStyle(color: Colors.white70),
-              ),
+              child: const Text("Cancelar"),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -411,25 +405,30 @@ class _DisputaPanelCardState extends State<DisputaPanelCard>
 
   @override
   Widget build(BuildContext context) {
+    final useBlur = kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+
+    final inner = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24.0),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(useBlur ? 0.1 : 0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.2)),
+      ),
+      child: _state == _PanelState.cargando
+          ? _buildSkeletonLoader()
+          : _state == _PanelState.error
+              ? _buildErrorState()
+              : _buildExitoState(),
+    );
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(24.0),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.2)),
-          ),
-          child: _state == _PanelState.cargando
-              ? _buildSkeletonLoader()
-              : _state == _PanelState.error
-                  ? _buildErrorState()
-                  : _buildExitoState(),
-        ),
-      ),
+      child: useBlur
+          ? BackdropFilter(filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10), child: inner)
+          : inner,
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:go_router/go_router.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
@@ -10,18 +11,20 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final _nameController    = TextEditingController();
-  final _emailController   = TextEditingController();
-  final _passwordController= TextEditingController();
-  final _phoneController   = TextEditingController();
-  final _authService       = AuthService();
-  bool _isLoading          = false;
-  bool _obscurePassword    = true;
-  String _selectedRole     = 'owner'; // 'owner' o 'caregiver'
+  final _firstNameController = TextEditingController();
+  final _lastNameController  = TextEditingController();
+  final _emailController     = TextEditingController();
+  final _passwordController  = TextEditingController();
+  final _phoneController     = TextEditingController();
+  final _authService         = AuthService();
+  bool _isLoading            = false;
+  bool _obscurePassword      = true;
+  String _selectedRole       = 'owner'; // 'owner' o 'caregiver'
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _phoneController.dispose();
@@ -34,12 +37,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    final name     = _nameController.text.trim();
-    final email    = _emailController.text.trim();
-    final password = _passwordController.text;
-    final phone    = _phoneController.text.trim();
+    final firstName = _firstNameController.text.trim();
+    final lastName  = _lastNameController.text.trim();
+    final email     = _emailController.text.trim();
+    final password  = _passwordController.text;
+    final phone     = _phoneController.text.trim();
 
-    if (name.isEmpty || email.isEmpty || password.isEmpty || phone.isEmpty) {
+    if (firstName.isEmpty || lastName.isEmpty || email.isEmpty || password.isEmpty || phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Completa todos los campos')),
       );
@@ -56,10 +60,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       if (_selectedRole == 'owner') {
         await _authService.registerClient(
-          fullName: name, email: email, password: password, phone: phone,
+          firstName: firstName, lastName: lastName, email: email, password: password, phone: phone,
         );
         if (!mounted) return;
-        context.go('/client-welcome');
+        if (kIsWeb) {
+          context.go('/client-welcome');
+        } else {
+          context.go('/service-selector');
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -268,9 +276,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
           // Campos solo para dueños
           if (_selectedRole == 'owner') ...[
-            _fieldLabel('Nombre completo', textColor),
-            const SizedBox(height: 8),
-            _textField(controller: _nameController, hint: 'Tu nombre completo', icon: Icons.person_outlined, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _fieldLabel('Nombre', textColor),
+                      const SizedBox(height: 8),
+                      _textField(controller: _firstNameController, hint: 'Tu nombre', icon: Icons.person_outlined, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _fieldLabel('Apellido', textColor),
+                      const SizedBox(height: 8),
+                      _textField(controller: _lastNameController, hint: 'Tu apellido', icon: Icons.person_outline, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                    ],
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 20),
 
             _fieldLabel('Correo electrónico', textColor),

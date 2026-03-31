@@ -8,6 +8,7 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '../../shared/async-handler.js';
 import * as clientProfileService from './client-profile.service.js';
 import { patchClientProfileSchema } from './client-profile.validation.js';
+import prisma from '../../config/database.js';
 
 /** GET /api/client/my-profile - Perfil del cliente logueado. */
 export const getMyProfile = asyncHandler(async (req: Request, res: Response) => {
@@ -40,12 +41,38 @@ export const getFavorites = asyncHandler(async (req: Request, res: Response) => 
 export const toggleFavorite = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const caregiverId = req.params.caregiverId;
-  
+
   if (!caregiverId) {
     res.status(400).json({ success: false, error: 'caregiverId es requerido' });
     return;
   }
-  
+
   const result = await clientProfileService.toggleFavorite(userId, caregiverId as string);
   res.json({ success: true, data: result });
+});
+
+/** GET /api/client/my-reviews — calificaciones escritas por el cliente logueado. */
+export const getMyReviews = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const reviews = await prisma.review.findMany({
+    where: { clientId: userId },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      rating: true,
+      comment: true,
+      serviceType: true,
+      createdAt: true,
+      caregiverResponse: true,
+      caregiver: {
+        select: {
+          id: true,
+          bio: true,
+          profilePhoto: true,
+          user: { select: { firstName: true, lastName: true } },
+        },
+      },
+    },
+  });
+  res.json({ success: true, data: reviews });
 });

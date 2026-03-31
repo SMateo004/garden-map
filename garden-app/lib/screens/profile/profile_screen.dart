@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../services/language_service.dart';
+import '../client/my_data_screen.dart';
+import '../client/my_ratings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -15,6 +18,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
+  bool _isDeletingAccount = false;
   String _token = '';
   String _role = '';
   Map<String, dynamic>? _caregiverProfile;
@@ -227,10 +231,182 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+
+  void _showLanguageSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => AnimatedBuilder(
+        animation: languageNotifier,
+        builder: (context, _) {
+          final isDark = themeNotifier.isDark;
+          final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+          final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+          final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+          return GlassBox(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(width: 40, height: 4,
+                    decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2))),
+                ),
+                const SizedBox(height: 20),
+                Text('Idioma', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                Text('Solo cambia las etiquetas de la app', style: TextStyle(color: subtextColor, fontSize: 13)),
+                const SizedBox(height: 20),
+                for (final lang in AppLanguage.values)
+                  _langOption(lang, textColor, subtextColor, ctx),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _langOption(AppLanguage lang, Color textColor, Color subtextColor, BuildContext sheetCtx) {
+    final labels = {AppLanguage.es: ('🇧🇴', 'Español'), AppLanguage.en: ('🇺🇸', 'English'), AppLanguage.pt: ('🇧🇷', 'Português')};
+    final (flag, name) = labels[lang]!;
+    final selected = languageNotifier.language == lang;
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+      leading: Text(flag, style: const TextStyle(fontSize: 28)),
+      title: Text(name, style: TextStyle(color: textColor, fontWeight: selected ? FontWeight.w700 : FontWeight.w400)),
+      trailing: selected ? const Icon(Icons.check_circle_rounded, color: GardenColors.primary) : null,
+      onTap: () {
+        languageNotifier.setLanguage(lang);
+        Navigator.pop(sheetCtx);
+      },
+    );
+  }
+
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-    if (mounted) context.go('/marketplace');
+    await prefs.remove('access_token');
+    await prefs.remove('user_role');
+    await prefs.remove('user_id');
+    await prefs.remove('user_name');
+    await prefs.remove('user_photo');
+    if (mounted) context.go('/login');
+  }
+
+  Future<void> _deleteAccount() async {
+    final theme = Theme.of(context);
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final passwordController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => Dialog(
+          backgroundColor: surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 56, height: 56,
+                  decoration: BoxDecoration(color: GardenColors.error.withOpacity(0.1), shape: BoxShape.circle),
+                  child: const Icon(Icons.delete_forever_outlined, color: GardenColors.error, size: 28),
+                ),
+                const SizedBox(height: 16),
+                Text('Eliminar cuenta', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 8),
+                Text(
+                  'Esta acción es irreversible. Perderás tus calificaciones, historial y cualquier saldo en tu billetera (transferido a Garden).\n\nIngresa tu contraseña para confirmar.',
+                  style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  style: TextStyle(color: textColor),
+                  decoration: InputDecoration(
+                    hintText: 'Contraseña',
+                    hintStyle: TextStyle(color: subtextColor),
+                    filled: true,
+                    fillColor: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.error, width: 2)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: Text('Cancelar', style: TextStyle(color: subtextColor)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: GardenColors.error,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                        ),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Eliminar', style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    final password = passwordController.text.trim();
+    if (password.isEmpty) return;
+
+    setState(() => _isDeletingAccount = true);
+    try {
+      final res = await http.delete(
+        Uri.parse('$_baseUrl/auth/account'),
+        headers: {
+          'Authorization': 'Bearer $_token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'password': password}),
+      );
+      final data = jsonDecode(res.body);
+      if (!mounted) return;
+      if (data['success'] == true) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.clear();
+        if (mounted) context.go('/login');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['error']?['message'] ?? 'Error al eliminar la cuenta'), backgroundColor: GardenColors.error),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error de conexión: $e'), backgroundColor: GardenColors.error),
+      );
+    } finally {
+      if (mounted) setState(() => _isDeletingAccount = false);
+    }
   }
 
   Widget _profileTile({
@@ -249,6 +425,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
         leading: Icon(icon, color: GardenColors.primary),
         title: Text(title, style: TextStyle(color: theme.colorScheme.onSurface)),
         trailing: const Icon(Icons.chevron_right),
+      ),
+    );
+  }
+
+  Widget _buildAccountInfoTile() {
+    final theme = Theme.of(context);
+    final isDark = themeNotifier.isDark;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final user = _userData;
+    if (user == null) return const SizedBox.shrink();
+
+    String createdAt = '';
+    try {
+      final dt = DateTime.parse(user['createdAt'] as String? ?? '').toLocal();
+      createdAt = '${dt.day}/${dt.month}/${dt.year}';
+    } catch (_) {}
+
+    final walletAddress = user['walletAddress'] as String? ??
+        (_caregiverProfile?['walletAddress'] as String?) ?? '';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          _infoRow(Icons.calendar_today_outlined, 'Miembro desde', createdAt.isNotEmpty ? createdAt : 'N/A', subtextColor),
+          if (walletAddress.isNotEmpty) ...[
+            Divider(height: 1, color: theme.dividerColor),
+            _infoRow(Icons.account_balance_wallet_outlined, 'Wallet blockchain', '${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}', subtextColor),
+          ],
+          Divider(height: 1, color: theme.dividerColor),
+          _infoRow(Icons.fingerprint_outlined, 'ID de cuenta', (user['id'] as String? ?? '').isNotEmpty ? '${(user['id'] as String).substring(0, 8)}...' : 'N/A', subtextColor),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(IconData icon, String label, String value, Color subtextColor) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: GardenColors.primary),
+          const SizedBox(width: 12),
+          Text(label, style: TextStyle(color: theme.colorScheme.onSurface, fontSize: 14)),
+          const Spacer(),
+          Text(value, style: TextStyle(color: subtextColor, fontSize: 13)),
+        ],
       ),
     );
   }
@@ -398,11 +625,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 16),
         
         if (_role == 'CLIENT') ...[
+          _profileTile(icon: Icons.person_outlined, title: 'Mis Datos', onTap: () async {
+            final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const MyDataScreen()));
+            if (result == true && mounted) _loadProfile();
+          }),
           _profileTile(icon: Icons.pets, title: 'Mis mascotas', onTap: () => context.push('/my-pets')),
           _profileTile(icon: Icons.calendar_today, title: 'Mis reservas', onTap: () => context.push('/my-bookings')),
           _profileTile(icon: Icons.favorite_border, title: 'Cuidadores favoritos', onTap: () => context.push('/favorites')),
-          _profileTile(icon: Icons.star_outline, title: 'Mis calificaciones', 
-              onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Próximamente')))),
+          _profileTile(icon: Icons.star_outline, title: 'Mis calificaciones',
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyRatingsScreen()))),
           _profileTile(icon: Icons.account_balance_wallet_outlined, title: 'Mi billetera', onTap: () => context.push('/wallet')),
         ],
         
@@ -450,9 +681,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         
-        _profileTile(icon: Icons.notifications_outlined, title: 'Notificaciones', 
+        _profileTile(icon: Icons.notifications_outlined, title: 'Notificaciones',
             onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Próximamente')))),
+
+        if (_role == 'CLIENT')
+          AnimatedBuilder(
+            animation: languageNotifier,
+            builder: (context, _) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                onTap: _showLanguageSheet,
+                tileColor: theme.colorScheme.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                leading: const Icon(Icons.language_outlined, color: GardenColors.primary),
+                title: Text('Idioma', style: TextStyle(color: theme.colorScheme.onSurface)),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(languageNotifier.displayName,
+                      style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.5), fontSize: 14)),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.chevron_right),
+                  ],
+                ),
+              ),
+            ),
+          ),
         
+        const SizedBox(height: 24),
+        const Text('Accesibilidad', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+        _buildAccountInfoTile(),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: ListTile(
+            tileColor: GardenColors.error.withOpacity(0.05),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: GardenColors.error.withOpacity(0.3)),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            leading: _isDeletingAccount
+                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.error))
+                : const Icon(Icons.delete_forever_outlined, color: GardenColors.error),
+            title: const Text('Eliminar cuenta', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.w600)),
+            subtitle: const Text('Esta acción es permanente e irreversible', style: TextStyle(fontSize: 11)),
+            trailing: const Icon(Icons.chevron_right, color: GardenColors.error),
+            onTap: _isDeletingAccount ? null : _deleteAccount,
+          ),
+        ),
         const SizedBox(height: 40),
         GardenButton(
           label: 'Cerrar sesión',

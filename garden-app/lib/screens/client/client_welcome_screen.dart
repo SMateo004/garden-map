@@ -54,7 +54,10 @@ class _ClientWelcomeScreenState extends State<ClientWelcomeScreen>
 
   Future<void> _complete() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('onboarding_completed', true);
+    final userId = prefs.getString('user_id') ?? '';
+    if (userId.isNotEmpty) {
+      await prefs.setBool('welcome_seen_$userId', true);
+    }
     if (!mounted) return;
     context.go('/marketplace');
   }
@@ -375,14 +378,14 @@ class _Page1Illustration extends StatelessWidget {
           ),
 
           // ── Chips de filtro ───────────────────────────────────
-          Positioned(
+          const Positioned(
             bottom: 0, left: 0,
             child: Row(
               children: [
                 _FilterChip(label: 'Equipetrol', color: GardenColors.primary),
-                const SizedBox(width: 6),
+                SizedBox(width: 6),
                 _FilterChip(label: '★ 4.5+', color: GardenColors.star),
-                const SizedBox(width: 6),
+                SizedBox(width: 6),
                 _FilterChip(label: 'Pequeños', color: GardenColors.secondary),
               ],
             ),
@@ -634,13 +637,13 @@ class _Page2Illustration extends StatelessWidget {
           ),
 
           // ── Pago bloqueado (izquierda) ────────────────────────
-          Positioned(
+          const Positioned(
             left: 0, bottom: 32,
             child: Column(
               children: [
                 _MoneyBubble(amount: 'Bs.80', color: GardenColors.primary, label: 'Cliente paga'),
-                const SizedBox(height: 6),
-                const Icon(
+                SizedBox(height: 6),
+                Icon(
                   Icons.arrow_forward_rounded,
                   color: GardenColors.success,
                   size: 18,
@@ -650,16 +653,16 @@ class _Page2Illustration extends StatelessWidget {
           ),
 
           // ── Pago liberado (derecha) ───────────────────────────
-          Positioned(
+          const Positioned(
             right: 0, bottom: 32,
             child: Column(
               children: [
-                const Icon(
+                Icon(
                   Icons.arrow_forward_rounded,
                   color: GardenColors.success,
                   size: 18,
                 ),
-                const SizedBox(height: 6),
+                SizedBox(height: 6),
                 _MoneyBubble(amount: 'Bs.80', color: GardenColors.success, label: 'Cuidador cobra'),
               ],
             ),
@@ -892,9 +895,9 @@ class _Page3Illustration extends StatelessWidget {
                             alignment: Alignment.centerRight,
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                              decoration: BoxDecoration(
+                              decoration: const BoxDecoration(
                                 color: GardenColors.primary,
-                                borderRadius: const BorderRadius.only(
+                                borderRadius: BorderRadius.only(
                                   topLeft: Radius.circular(10),
                                   topRight: Radius.circular(10),
                                   bottomLeft: Radius.circular(10),

@@ -39,6 +39,18 @@ export interface BookingCreateResult {
   serviceStartedAt?: string | null;
   serviceEndedAt?: string | null;
   serviceEvents?: any[] | null;
+  gpsTrack?: any[] | null;
+  gpsDistance?: number | null;
+  caregiverAddress?: {
+    lat: number | null;
+    lng: number | null;
+    street: string | null;
+    number: string | null;
+    apartment: string | null;
+    condominio: string | null;
+    reference: string | null;
+    zone: string | null;
+  } | null;
   ownerRated?: boolean;
   ownerRating?: number | null;
   ownerComment?: string | null;
@@ -46,6 +58,7 @@ export interface BookingCreateResult {
   caregiverComment?: string | null;
   hasDisputePending?: boolean;
   disputeReasons?: string[];
+  meetAndGreet?: any;
 }
 
 export function bookingToResponse(b: any): BookingCreateResult {
@@ -82,6 +95,8 @@ export function bookingToResponse(b: any): BookingCreateResult {
     serviceStartedAt: b.serviceStartedAt?.toISOString() ?? null,
     serviceEndedAt: b.serviceEndedAt?.toISOString() ?? null,
     serviceEvents: b.serviceEvents ?? [],
+    gpsTrack: b.serviceTrackingData ?? [],
+    gpsDistance: b.gpsDistance ?? null,
     ownerRated: b.ownerRated ?? false,
     ownerRating: b.ownerRating,
     ownerComment: b.ownerComment,
@@ -89,6 +104,7 @@ export function bookingToResponse(b: any): BookingCreateResult {
     caregiverComment: b.caregiverComment,
     hasDisputePending: !!(b.dispute && b.dispute.status !== 'RESOLVED'),
     disputeReasons: b.dispute?.clientReasons ?? [],
+    meetAndGreet: b.meetAndGreet ?? null,
   };
 
   if (b.caregiver) {
@@ -101,6 +117,20 @@ export function bookingToResponse(b: any): BookingCreateResult {
     res.clientEmail = b.client.email;
     res.clientPhone = b.client.phone;
     res.clientPhoto = b.client.profilePicture;
+  }
+
+  if (b.caregiver && b.serviceType === 'HOSPEDAJE' &&
+      ['CONFIRMED','IN_PROGRESS','COMPLETED'].includes(b.status)) {
+    res.caregiverAddress = {
+      lat: b.caregiver.addressLat ?? null,
+      lng: b.caregiver.addressLng ?? null,
+      street: b.caregiver.addressStreet ?? null,
+      number: b.caregiver.addressNumber ?? null,
+      apartment: b.caregiver.addressApartment ?? null,
+      condominio: b.caregiver.addressCondominio ?? null,
+      reference: b.caregiver.addressReference ?? null,
+      zone: b.caregiver.addressZone ?? null,
+    };
   }
 
   return res;

@@ -242,7 +242,8 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
   }
   logger.info('Inicio registro cliente', {
     input: {
-      fullName: body.fullName,
+      firstName: body.firstName,
+      lastName: body.lastName,
       email: body.email,
       phone: body.phone,
       hasAddress: body.address != null && body.address !== '',
@@ -288,16 +289,13 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
   }
 
   const email = body.email.toLowerCase().trim();
-  const nameParts = body.fullName.trim().split(/\s+/);
-  const firstName = nameParts.slice(0, -1).join(' ') || nameParts[0] || '';
-  const lastName = nameParts[nameParts.length - 1] || '';
 
   const userData = {
     email,
     passwordHash,
     role: UserRole.CLIENT,
-    firstName: firstName.trim(),
-    lastName: lastName.trim(),
+    firstName: body.firstName,
+    lastName: body.lastName,
     phone: body.phone.trim(),
     country: 'Bolivia',
     city: 'Santa Cruz',
@@ -326,7 +324,7 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
       meta: err.meta,
       message: err.message,
       stack: err.stack,
-      input: { email: body.email, phone: body.phone, fullName: body.fullName },
+      input: { email: body.email, phone: body.phone, firstName: body.firstName, lastName: body.lastName },
     });
     if (err.code === 'P2002') {
       const target = Array.isArray(err.meta?.target) ? (err.meta.target as string[]) : [];

@@ -33,6 +33,7 @@ contract GardenEscrow {
     event PaymentConfirmed(string indexed bookingId, uint256 timestamp);
     event ServiceFinalized(string indexed bookingId, uint8 rating, uint256 timestamp);
     event ServiceCancelled(string indexed bookingId, string reason, uint256 timestamp);
+    event DisputeResolved(string indexed bookingId, string verdict, uint256 caregiverAmountBs, uint256 clientDiscountBs, uint256 timestamp);
     
     modifier onlyOwner() {
         require(msg.sender == owner, "Solo el administrador de GARDEN puede llamar esta funcion");
@@ -107,6 +108,66 @@ contract GardenEscrow {
         emit ServiceCancelled(_bookingId, _reason, block.timestamp);
     }
     
+    /**
+     * @dev Resuelve una disputa con veredicto para el cuidador (pago total neto).
+     * Finaliza la reserva on-chain y emite el evento de disputa resuelta.
+     */
+    function resolveDisputeCaregiverWins(
+        string calldata _bookingId,
+        uint256 _caregiverAmountBs
+    ) external onlyOwner {
+        Booking storage b = bookings[_bookingId];
+        require(b.isActive, "Reserva no activa");
+
+        b.isActive = false;
+        b.isCompleted = true;
+        b.rating = 3;
+
+        emit DisputeResolved(_bookingId, "CAREGIVER_WINS", _caregiverAmountBs, 0, block.timestamp);
+        emit ServiceFinalized(_bookingId, 3, block.timestamp);
+    }
+
+    /**
+     * @dev Resuelve una disputa con veredicto para el cliente (reembolso total).
+     * Cancela la reserva on-chain y emite el evento de disputa resuelta.
+     */
+    function resolveDisputeClientWins(
+        string calldata _bookingId,
+        uint256 _refundAmountBs
+    ) external onlyOwner {
+        Booking storage b = bookings[_bookingId];
+        require(b.isActive, "Reserva no activa");
+
+        b.isActive = false;
+
+        emit DisputeResolved(_bookingId, "CLIENT_WINS", 0, _refundAmountBs, block.timestamp);
+        emit ServiceCancelled(_bookingId, "Disputa resuelta a favor del cliente", block.timestamp);
+    }
+
+    /**
+     * @dev Resuelve una disputa con veredicto parcial:
+     *      80% del monto neto al cuidador + 20% convertido en codigo de descuento para el dueno.
+     *      La comision (10%) ya fue descontada off-chain antes de llamar esta funcion.
+     * @param _caregiverAmountBs 80% del monto neto (en Bs, sin decimales)
+     * @param _clientDiscountBs  20% del monto neto convertido en descuento para el dueno
+     */
+    function resolvePartial(
+        string calldata _bookingId,
+        uint256 _caregiverAmountBs,
+        uint256 _clientDiscountBs
+    ) external onlyOwner {
+        Booking storage b = bookings[_bookingId];
+        require(b.isActive, "Reserva no activa");
+        require(_caregiverAmountBs + _clientDiscountBs <= b.amountBs, "Montos exceden el total registrado");
+
+        b.isActive = false;
+        b.isCompleted = true;
+        b.rating = 3; // calificacion neutral para disputa parcial
+
+        emit DisputeResolved(_bookingId, "PARTIAL", _caregiverAmountBs, _clientDiscountBs, block.timestamp);
+        emit ServiceFinalized(_bookingId, 3, block.timestamp);
+    }
+
     /**
      * @dev Obtiene info de una reserva (para transparencia en el frontend)
      */

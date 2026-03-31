@@ -96,6 +96,13 @@ router.post(
 
 /** SERVICE EXECUTION ROUTES (CAREGIVER) */
 
+/** GET /api/bookings/:id/track — GPS track history. Cliente o cuidador de la reserva. */
+router.get(
+  '/:id/track',
+  authMiddleware,
+  serviceExecutionController.getTrack
+);
+
 router.post(
   '/:id/start',
   authMiddleware,

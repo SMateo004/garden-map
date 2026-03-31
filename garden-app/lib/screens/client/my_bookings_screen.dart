@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../main.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/notification_bell.dart';
+import '../service/meet_and_greet_screen.dart';
+import '../chat/chat_screen.dart';
 
 class MyBookingsScreen extends StatefulWidget {
   const MyBookingsScreen({super.key});
@@ -78,97 +79,17 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     return _bookings;
   }
 
-  Future<void> _extendBooking(String bookingId, String currentEndDate) async {
-    final initial = DateTime.tryParse(currentEndDate) ?? DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initial.add(const Duration(days: 1)),
-      firstDate: initial.add(const Duration(days: 1)),
-      lastDate: DateTime.now().add(const Duration(days: 60)),
-      helpText: 'Selecciona nueva fecha de fin',
-    );
-    if (picked == null) return;
-    final newEndDate = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-    try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/bookings/$bookingId/extend'),
-        headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
-        body: jsonEncode({'newEndDate': newEndDate}),
-      );
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        await _loadBookings();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Hospedaje extendido hasta $newEndDate'), backgroundColor: GardenColors.success),
-        );
-      } else {
-        throw Exception(data['error']?['message'] ?? 'Error al extender');
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
-      );
-    }
-  }
-
-  Future<void> _changeDates(String bookingId) async {
-    DateTime? newStart;
-    DateTime? newEnd;
-
-    newStart = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now().add(const Duration(days: 2)),
-      firstDate: DateTime.now().add(const Duration(days: 2)),
-      lastDate: DateTime.now().add(const Duration(days: 90)),
-      helpText: 'Nueva fecha de inicio',
-    );
-    if (newStart == null || !mounted) return;
-
-    final capturedStart = newStart;
-    newEnd = await showDatePicker(
-      context: context,
-      initialDate: capturedStart.add(const Duration(days: 1)),
-      firstDate: capturedStart.add(const Duration(days: 1)),
-      lastDate: capturedStart.add(const Duration(days: 30)),
-      helpText: 'Nueva fecha de fin',
-    );
-    if (newEnd == null || !mounted) return;
-
-    final startStr = '${newStart.year}-${newStart.month.toString().padLeft(2, '0')}-${newStart.day.toString().padLeft(2, '0')}';
-    final endStr   = '${newEnd.year}-${newEnd.month.toString().padLeft(2, '0')}-${newEnd.day.toString().padLeft(2, '0')}';
-    try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/bookings/$bookingId/change-dates'),
-        headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
-        body: jsonEncode({'newStartDate': startStr, 'newEndDate': endStr}),
-      );
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        await _loadBookings();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fechas actualizadas: $startStr – $endStr'), backgroundColor: GardenColors.success),
-        );
-      } else {
-        throw Exception(data['error']?['message'] ?? 'Error al cambiar fechas');
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
-      );
-    }
-  }
-
   Future<void> _cancelBooking(String bookingId) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: themeNotifier.isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
-        title: Text('Cancelar reserva', style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary)),
-        content: Text('¿Estás seguro? Esta acción no se puede deshacer.',
-          style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary)),
+      builder: (ctx) => GardenGlassDialog(
+        title: const Text('Cancelar reserva'),
+        content: const Text('¿Estás seguro? Esta acción no se puede deshacer.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-            child: Text('No', style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('No'),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
@@ -218,7 +139,6 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
 
   Widget _filterPill(String label, String value, bool isDark) {
     final isSelected = _selectedFilter == value;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
     return GestureDetector(
@@ -410,7 +330,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                             color: status == 'IN_PROGRESS' ? GardenColors.success : GardenColors.primary,
                             onPressed: () => context.push(
                               '/service/${booking['id']}',
-                              extra: {'role': 'CLIENT'},
+                              extra: {'role': 'CLIENT', 'token': _clientToken},
                             ),
                           ),
                         ),
@@ -438,34 +358,71 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         ),
                     ],
                   ),
-                  // Extender / Cambiar fechas solo para HOSPEDAJE CONFIRMED
+                  // Meet & Greet para HOSPEDAJE CONFIRMED
                   if (status == 'CONFIRMED' && !isPaseo) ...[
                     const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: GardenButton(
-                            label: 'Extender',
-                            icon: Icons.more_time_outlined,
-                            height: 38,
-                            color: GardenColors.accent,
-                            outline: true,
-                            onPressed: () => _extendBooking(booking['id'], booking['endDate'] ?? ''),
+                    Builder(builder: (_) {
+                      final mg = booking['meetAndGreet'] as Map<String, dynamic>?;
+                      final mgStatus = mg?['status'] as String?;
+                      final isAccepted = mgStatus == 'ACCEPTED';
+
+                      if (isAccepted) {
+                        // M&G confirmado → ir directo al chat con banner de fecha
+                        final confirmedDate = mg?['confirmedDate'] as String?;
+                        String note = 'Meet & Greet confirmado';
+                        if (confirmedDate != null) {
+                          try {
+                            final d = DateTime.parse(confirmedDate).toLocal();
+                            const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+                            const days = ['lun','mar','mié','jue','vie','sáb','dom'];
+                            final h = d.hour.toString().padLeft(2,'0');
+                            final m = d.minute.toString().padLeft(2,'0');
+                            note = 'Meet & Greet · ${days[d.weekday-1]} ${d.day} ${months[d.month-1]} · $h:$m';
+                          } catch (_) {}
+                        }
+                        return OutlinedButton.icon(
+                          onPressed: () => Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => ChatScreen(
+                              bookingId: booking['id'] as String,
+                              otherPersonName: 'Cuidador',
+                              token: _clientToken,
+                              meetAndGreetNote: note,
+                            ),
+                          )),
+                          icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+                          label: const Text('Chat · Meet & Greet', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: GardenColors.success,
+                            side: const BorderSide(color: GardenColors.success),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            minimumSize: const Size(double.infinity, 42),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: GardenButton(
-                            label: 'Cambiar fechas',
-                            icon: Icons.edit_calendar_outlined,
-                            height: 38,
-                            color: GardenColors.accent,
-                            outline: true,
-                            onPressed: () => _changeDates(booking['id']),
+                        );
+                      }
+
+                      // M&G no aceptado aún → ir a pantalla Meet & Greet
+                      return OutlinedButton.icon(
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => MeetAndGreetScreen(
+                            bookingId: booking['id'] as String,
+                            role: 'CLIENT',
                           ),
+                        )),
+                        icon: const Text('🤝', style: TextStyle(fontSize: 14)),
+                        label: Text(
+                          mgStatus == 'PROPOSED' ? '🤝 Meet & Greet · Propuesta pendiente'
+                            : mgStatus == 'COMPLETED' ? '🤝 Meet & Greet finalizado'
+                            : '🤝 Coordinar Meet & Greet',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                         ),
-                      ],
-                    ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: GardenColors.primary,
+                          side: const BorderSide(color: GardenColors.primary),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          minimumSize: const Size(double.infinity, 42),
+                        ),
+                      );
+                    }),
                   ],
                 ],
               ],
@@ -646,18 +603,14 @@ class _RatingSheetState extends State<_RatingSheet> {
   @override
   Widget build(BuildContext context) {
     final isDark = themeNotifier.isDark;
-    final surface = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Container(
+      child: GlassBox(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
         padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        ),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,

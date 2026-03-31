@@ -383,19 +383,135 @@ export const getDisputes = asyncHandler(async (req: Request, res: Response) => {
 
   res.json({
     success: true,
-    data: disputes.map((d: any) => ({
-      id: d.id,
-      bookingId: d.bookingId,
-      status: d.status,
-      clientReasons: d.clientReasons,
-      caregiverResponse: d.caregiverResponse,
-      aiVerdict: d.aiVerdict,
-      aiAnalysis: d.aiAnalysis,
-      resolution: d.resolution,
-      createdAt: d.createdAt,
-      clientName: `${d.booking.client.firstName} ${d.booking.client.lastName}`,
-      caregiverName: `${d.booking.caregiver.user.firstName} ${d.booking.caregiver.user.lastName}`,
-      amount: d.booking.totalAmount,
-    })),
+    data: disputes.map((d: any) => {
+      let aiRecommendations: string[] = [];
+      try { aiRecommendations = JSON.parse(d.aiRecommendations ?? '[]'); } catch { /* no-op */ }
+      return {
+        id: d.id,
+        bookingId: d.bookingId,
+        status: d.status,
+        clientReasons: d.clientReasons,
+        caregiverResponse: d.caregiverResponse,
+        aiVerdict: d.aiVerdict,
+        aiAnalysis: d.aiAnalysis,
+        aiRecommendations,
+        resolution: d.resolution,
+        discountCodeId: d.discountCodeId ?? null,
+        createdAt: d.createdAt,
+        updatedAt: d.updatedAt,
+        clientName: `${d.booking.client.firstName} ${d.booking.client.lastName}`,
+        clientEmail: d.booking.client.email,
+        caregiverName: `${d.booking.caregiver.user.firstName} ${d.booking.caregiver.user.lastName}`,
+        serviceType: d.booking.serviceType,
+        petName: d.booking.petName,
+        amount: d.booking.totalAmount,
+      };
+    }),
   });
+});
+
+// ─── Owners ──────────────────────────────────────────────────────────────────
+
+/** GET /api/admin/owners */
+export const getOwnersList = asyncHandler(async (req: Request, res: Response) => {
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 30;
+  const search = req.query.search as string | undefined;
+  const data = await adminService.listOwners(page, limit, search);
+  res.json({ success: true, data });
+});
+
+/** GET /api/admin/owners/:id */
+export const getOwnerDetail = asyncHandler(async (req: Request, res: Response) => {
+  const data = await adminService.getOwnerDetail(req.params.id!);
+  res.json({ success: true, data });
+});
+
+// ─── Stats ───────────────────────────────────────────────────────────────────
+
+/** GET /api/admin/stats/live */
+export const getLiveStats = asyncHandler(async (_req: Request, res: Response) => {
+  const data = await adminService.getLiveStats();
+  res.json({ success: true, data });
+});
+
+/** GET /api/admin/stats/financial */
+export const getFinancialStats = asyncHandler(async (_req: Request, res: Response) => {
+  const data = await adminService.getFinancialStats();
+  res.json({ success: true, data });
+});
+
+// ─── Zones ───────────────────────────────────────────────────────────────────
+
+/** GET /api/admin/zones */
+export const getZones = asyncHandler(async (_req: Request, res: Response) => {
+  const data = adminService.getZonesConfig();
+  res.json({ success: true, data });
+});
+
+/** PATCH /api/admin/zones/:zone/toggle */
+export const toggleZone = asyncHandler(async (req: Request, res: Response) => {
+  const zone = req.params.zone!.toUpperCase();
+  const data = adminService.toggleZone(zone);
+  res.json({ success: true, data });
+});
+
+// ── App Settings ─────────────────────────────────────────────────────────
+
+/** GET /api/admin/settings */
+export const getSettings = asyncHandler(async (req: Request, res: Response) => {
+  const settings = await prisma.appSettings.findMany();
+  // Build a key->value map
+  const map: Record<string, unknown> = {};
+  for (const s of settings) {
+    try { map[s.key] = JSON.parse(s.value); } catch { map[s.key] = s.value; }
+  }
+  // Defaults for keys not yet in DB
+  const defaults: Record<string, unknown> = {
+    walk30Enabled: false,
+    maintenanceMode: false,
+    newRegistrationsEnabled: true,
+    marketplaceEnabled: true,
+    paymentsEnabled: true,
+  };
+  res.json({ success: true, data: { ...defaults, ...map } });
+});
+
+/** PATCH /api/admin/settings/:key */
+export const updateSetting = asyncHandler(async (req: Request, res: Response) => {
+  const key = req.params.key as string;
+  const { value } = req.body;
+  const adminId = req.user?.userId ?? (req.user as { id?: string })?.id;
+  const stored = await prisma.appSettings.upsert({
+    where: { key },
+    update: { value: JSON.stringify(value), updatedBy: adminId },
+    create: { key, value: JSON.stringify(value), updatedBy: adminId },
+  });
+  res.json({ success: true, data: stored });
+});
+
+/** GET /api/admin/agent-logs */
+export const getAgentLogs = asyncHandler(async (req: Request, res: Response) => {
+  const limit = Math.min(parseInt((req.query.limit as string) ?? '50'), 200);
+  const logs = await prisma.agentLog.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+  });
+  res.json({ success: true, data: logs });
+});
+
+/** POST /api/admin/agent-logs — post a custom instruction/event */
+export const postAgentInstruction = asyncHandler(async (req: Request, res: Response) => {
+  const { agentType, action, input } = req.body;
+  const adminId = req.user?.userId ?? (req.user as { id?: string })?.id;
+  const log = await prisma.agentLog.create({
+    data: {
+      agentType: agentType ?? 'CUSTOM',
+      action: action ?? 'ADMIN_INSTRUCTION',
+      input: input ?? null,
+      status: 'PENDING',
+      userId: adminId,
+    },
+  });
+  res.json({ success: true, data: log });
 });

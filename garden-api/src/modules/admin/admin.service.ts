@@ -172,10 +172,42 @@ export async function verifyEmail(profileId: string): Promise<{ emailVerified: b
 }
 
 export async function toggleVerify(caregiverId: string, adminId: string): Promise<{ verified: boolean; verifiedAt: Date | null }> {
-  const profile = await prisma.caregiverProfile.findUnique({ where: { id: caregiverId } });
+  const profile = await prisma.caregiverProfile.findUnique({
+    where: { id: caregiverId },
+    include: { user: { select: { id: true } } },
+  });
   if (!profile) throw new CaregiverNotFoundError(caregiverId);
 
   const newVerified = !profile.verified;
+
+  // Si se va a activar, validar los mismos requisitos que el flujo de aprobación
+  if (newVerified) {
+    const identityVerified = (profile as any).identityVerificationStatus === 'VERIFIED';
+    const emailVerified = (profile as any).emailVerified === true;
+    const hasPhoto = !!(profile as any).profilePhoto;
+    const hasBio = !!(profile as any).bio && ((profile as any).bio as string).length >= 50;
+    const hasZone = !!(profile as any).zone;
+    const hasServices = Array.isArray((profile as any).servicesOffered) && (profile as any).servicesOffered.length > 0;
+    const availabilityCount = await prisma.availability.count({ where: { caregiverId } });
+    const hasAvailability = availabilityCount > 0 || (profile as any).defaultAvailabilitySchedule != null;
+
+    const missing: string[] = [];
+    if (!emailVerified) missing.push('verificación de correo');
+    if (!identityVerified) missing.push('verificación de identidad');
+    if (!hasPhoto) missing.push('foto de perfil');
+    if (!hasBio) missing.push('bio completa (mín. 50 caracteres)');
+    if (!hasZone) missing.push('zona');
+    if (!hasServices) missing.push('servicios ofrecidos');
+    if (!hasAvailability) missing.push('disponibilidad');
+
+    if (missing.length > 0) {
+      throw new BadRequestError(
+        `No se puede aprobar: faltan ${missing.join(', ')}.`,
+        'PROFILE_INCOMPLETE'
+      );
+    }
+  }
+
   const now = new Date();
   const updated = await prisma.caregiverProfile.update({
     where: { id: caregiverId },
@@ -202,6 +234,7 @@ export async function toggleVerify(caregiverId: string, adminId: string): Promis
   });
 
   await getCache().del(`caregivers:detail:${caregiverId}`);
+  await delByPrefix('caregivers:list:');
 
   return { verified: updated.verified, verifiedAt: updated.verifiedAt };
 }
@@ -883,21 +916,28 @@ export async function listIdentityReviews(status?: string) {
   }));
 }
 
-/** GET /api/admin/payments-history — pagos procesados recientemente */
-export async function getPaymentsHistory(limit = 50) {
+/** GET /api/admin/payments-history — todos los pagos confirmados (paidAt != null) */
+export async function getPaymentsHistory(limit = 100) {
   const bookings = await prisma.booking.findMany({
     where: {
       paidAt: { not: null },
-      status: { notIn: ['PENDING_PAYMENT', 'PAYMENT_PENDING_APPROVAL', 'CANCELLED'] as any[] },
+      // Incluimos todos los estados post-pago: confirmados, en progreso, completados, y en espera de cuidador
+      status: { notIn: ['PENDING_PAYMENT', 'PAYMENT_PENDING_APPROVAL'] as any[] },
     },
     select: {
       id: true,
       status: true,
       petName: true,
       totalAmount: true,
+      commissionAmount: true,
       paidAt: true,
-      paymentMethod: true,
       serviceType: true,
+      startDate: true,
+      endDate: true,
+      walkDate: true,
+      qrId: true,
+      stripePaymentIntentId: true,
+      payoutStatus: true,
       clientId: true,
       client: { select: { firstName: true, lastName: true, email: true } },
       caregiver: { include: { user: { select: { firstName: true, lastName: true } } } },
@@ -906,18 +946,27 @@ export async function getPaymentsHistory(limit = 50) {
     take: limit,
   });
 
-  return bookings.map((b) => ({
-    id: b.id,
-    status: b.status,
-    petName: b.petName,
-    totalAmount: Number(b.totalAmount),
-    paidAt: b.paidAt?.toISOString() ?? null,
-    paymentMethod: b.paymentMethod,
-    serviceType: b.serviceType,
-    clientName: `${b.client.firstName} ${b.client.lastName}`,
-    clientEmail: b.client.email,
-    caregiverName: `${b.caregiver.user.firstName} ${b.caregiver.user.lastName}`,
-  }));
+  return bookings.map((b) => {
+    // Inferir método de pago: QR manual vs Stripe
+    const paymentMethod = b.qrId ? 'QR/Transferencia' : b.stripePaymentIntentId ? 'Stripe' : 'Manual';
+    return {
+      id: b.id,
+      status: b.status,
+      petName: b.petName,
+      totalAmount: Number(b.totalAmount),
+      commissionAmount: Number(b.commissionAmount),
+      paidAt: b.paidAt?.toISOString() ?? null,
+      paymentMethod,
+      serviceType: b.serviceType,
+      startDate: b.startDate?.toISOString() ?? null,
+      endDate: b.endDate?.toISOString() ?? null,
+      walkDate: b.walkDate?.toISOString() ?? null,
+      payoutStatus: b.payoutStatus,
+      clientName: `${b.client.firstName} ${b.client.lastName}`,
+      clientEmail: b.client.email,
+      caregiverName: `${b.caregiver.user.firstName} ${b.caregiver.user.lastName}`,
+    };
+  });
 }
 
 /** GET detalles sesión identidad con URLs firmadas para imágenes */
@@ -1165,4 +1214,484 @@ export async function deleteCaregiver(
   await delByPrefix('caregivers:list:');
 
   return { success: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OWNERS (CLIENTES / DUEÑOS DE MASCOTAS)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function listOwners(page = 1, limit = 30, search?: string) {
+  const skip = (page - 1) * limit;
+
+  const where: any = { role: 'CLIENT' };
+  if (search) {
+    where.OR = [
+      { firstName: { contains: search, mode: 'insensitive' } },
+      { email: { contains: search, mode: 'insensitive' } },
+    ];
+  }
+
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        clientProfile: { include: { pets: true } },
+        clientBookings: {
+          select: { id: true, status: true, totalAmount: true },
+        },
+      },
+    }),
+    prisma.user.count({ where }),
+  ]);
+
+  const owners = users.map((u) => {
+    const bookings = u.clientBookings;
+    const completed = bookings.filter((b) => b.status === 'COMPLETED');
+    const totalSpent = completed.reduce((acc, b) => acc + Number(b.totalAmount ?? 0), 0);
+    return {
+      id: u.id,
+      name: `${u.firstName} ${u.lastName}`,
+      email: u.email,
+      phone: u.phone,
+      photoUrl: u.profilePicture,
+      createdAt: u.createdAt.toISOString(),
+      emailVerified: u.emailVerified,
+      petsCount: u.clientProfile?.pets.length ?? 0,
+      bookingsCount: bookings.length,
+      completedBookings: completed.length,
+      totalSpent,
+      isComplete: u.clientProfile?.isComplete ?? false,
+    };
+  });
+
+  return { owners, total, page, limit, pages: Math.ceil(total / limit) };
+}
+
+export async function getOwnerDetail(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      clientProfile: { include: { pets: true } },
+      clientBookings: {
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        include: {
+          caregiver: { select: { profilePhoto: true, user: { select: { firstName: true, lastName: true } } } },
+          pet: { select: { name: true, size: true } },
+        },
+      },
+    },
+  });
+  if (!user) throw new NotFoundError('Owner not found');
+
+  const bookings = user.clientBookings;
+  const completed = bookings.filter((b) => b.status === 'COMPLETED');
+  const totalSpent = completed.reduce((acc, b) => acc + Number((b as any).totalAmount ?? 0), 0);
+
+  return {
+    id: user.id,
+    name: `${user.firstName} ${user.lastName}`,
+    email: user.email,
+    phone: user.phone,
+    photoUrl: user.profilePicture,
+    createdAt: user.createdAt.toISOString(),
+    emailVerified: user.emailVerified,
+    clientProfile: user.clientProfile
+      ? {
+          id: user.clientProfile.id,
+          isComplete: user.clientProfile.isComplete,
+          address: user.clientProfile.address,
+          zone: null,
+          pets: user.clientProfile.pets.map((p) => ({
+            id: p.id,
+            name: p.name,
+            breed: p.breed,
+            size: p.size,
+            photoUrl: p.photoUrl,
+            birthDate: null,
+            notes: p.notes,
+          })),
+        }
+      : null,
+    bookings: bookings.map((b) => ({
+      id: b.id,
+      status: b.status,
+      serviceType: b.serviceType,
+      totalPrice: Number(b.totalAmount ?? 0),
+      walkDate: b.walkDate?.toISOString() ?? null,
+      createdAt: b.createdAt.toISOString(),
+      caregiverName: b.caregiver?.user ? `${(b.caregiver.user as any).firstName} ${(b.caregiver.user as any).lastName}` : null,
+      petName: b.pet?.name ?? null,
+    })),
+    stats: {
+      totalBookings: bookings.length,
+      completedBookings: completed.length,
+      totalSpent,
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LIVE STATS
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function getLiveStats() {
+  const now = new Date();
+  const last5min = new Date(now.getTime() - 5 * 60 * 1000);
+  const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  const [
+    activeBookings,
+    pendingPayments,
+    pendingWithdrawals,
+    pendingDisputes,
+    pendingCaregivers,
+    recentBookings24h,
+    recentBookings7d,
+    newUsers7d,
+    newUsers24h,
+    totalClients,
+    totalCaregivers,
+    totalBookings,
+  ] = await Promise.all([
+    prisma.booking.count({ where: { status: 'IN_PROGRESS' } }),
+    prisma.booking.count({ where: { status: 'PAYMENT_PENDING_APPROVAL' } }),
+    prisma.walletTransaction.count({ where: { type: 'WITHDRAWAL', status: 'PENDING' } }),
+    prisma.dispute.count({ where: { status: { not: 'RESOLVED' } } }),
+    prisma.caregiverProfile.count({ where: { status: { in: ['PENDING_REVIEW', 'NEEDS_REVISION'] } } }),
+    prisma.booking.count({ where: { createdAt: { gte: last24h } } }),
+    prisma.booking.count({ where: { createdAt: { gte: last7d } } }),
+    prisma.user.count({ where: { createdAt: { gte: last7d } } }),
+    prisma.user.count({ where: { createdAt: { gte: last24h } } }),
+    prisma.user.count({ where: { role: 'CLIENT' } }),
+    prisma.caregiverProfile.count(),
+    prisma.booking.count(),
+  ]);
+
+  // Recent activity feed (last 24h)
+  const recentActivity = await prisma.booking.findMany({
+    where: { createdAt: { gte: last24h } },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+    select: {
+      id: true,
+      status: true,
+      serviceType: true,
+      createdAt: true,
+      client: { select: { firstName: true, lastName: true } },
+      caregiver: { select: { user: { select: { firstName: true, lastName: true } } } },
+    },
+  });
+
+  return {
+    realtime: {
+      activeServices: activeBookings,
+      pendingPayments,
+      pendingWithdrawals,
+      pendingDisputes,
+      pendingCaregivers,
+    },
+    today: {
+      newBookings: recentBookings24h,
+      newUsers: newUsers24h,
+    },
+    week: {
+      newBookings: recentBookings7d,
+      newUsers: newUsers7d,
+    },
+    totals: {
+      clients: totalClients,
+      caregivers: totalCaregivers,
+      bookings: totalBookings,
+    },
+    recentActivity: recentActivity.map((b) => ({
+      id: b.id,
+      type: b.serviceType,
+      status: b.status,
+      clientName: b.client ? `${b.client.firstName} ${b.client.lastName}` : '—',
+      caregiverName: b.caregiver?.user ? `${(b.caregiver.user as any).firstName} ${(b.caregiver.user as any).lastName}` : '—',
+      createdAt: b.createdAt.toISOString(),
+    })),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FINANCIAL STATS
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function getFinancialStats() {
+  /**
+   * MODELO FINANCIERO GARDEN
+   * ─────────────────────────────────────────────────────────────
+   * El cuidador fija su precio P (pricePerUnit × días/duración).
+   * GARDEN añade 10% encima → el cliente paga totalAmount = P × 1.10
+   * commissionAmount = P × 0.10  ← ganancia real de GARDEN (ya guardada en DB)
+   * Cuidador recibe  = totalAmount − commissionAmount = P
+   *
+   * Devoluciones (refundAmount procesadas) → dinero del dueño que
+   * se regresa; NO es ganancia de GARDEN, se muestra separado.
+   *
+   * Códigos de regalo → gasto de marketing de GARDEN; se descuenta
+   * del neto como inversión en adquisición de usuarios.
+   * ─────────────────────────────────────────────────────────────
+   */
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+  const startOfYear = new Date(now.getFullYear(), 0, 1);
+
+  // ── Reservas completadas ─────────────────────────────────────
+  // commissionAmount = ganancia GARDEN por reserva (10% del precio del cuidador)
+  // totalAmount      = lo que pagó el cliente
+  // totalAmount - commissionAmount = lo que recibe el cuidador
+  const [allCompleted, monthCompleted, lastMonthCompleted, yearCompleted] = await Promise.all([
+    prisma.booking.aggregate({
+      where: { status: 'COMPLETED' },
+      _sum: { totalAmount: true, commissionAmount: true },
+      _count: true,
+    }),
+    prisma.booking.aggregate({
+      where: { status: 'COMPLETED', serviceEndedAt: { gte: startOfMonth } },
+      _sum: { totalAmount: true, commissionAmount: true },
+      _count: true,
+    }),
+    prisma.booking.aggregate({
+      where: { status: 'COMPLETED', serviceEndedAt: { gte: startOfLastMonth, lte: endOfLastMonth } },
+      _sum: { totalAmount: true, commissionAmount: true },
+      _count: true,
+    }),
+    prisma.booking.aggregate({
+      where: { status: 'COMPLETED', serviceEndedAt: { gte: startOfYear } },
+      _sum: { totalAmount: true, commissionAmount: true },
+      _count: true,
+    }),
+  ]);
+
+  // ── Devoluciones procesadas (dinero que volvió al dueño) ─────
+  const refundStats = await prisma.booking.aggregate({
+    where: { refundStatus: 'PROCESSED' },
+    _sum: { refundAmount: true, commissionAmount: true },
+    _count: true,
+  });
+
+  // ── Retiros de cuidadores ────────────────────────────────────
+  const [withdrawalStats, withdrawalMonthly] = await Promise.all([
+    prisma.walletTransaction.groupBy({
+      by: ['status'],
+      where: { type: 'WITHDRAWAL' },
+      _sum: { amount: true },
+      _count: true,
+    }),
+    prisma.walletTransaction.aggregate({
+      where: { type: 'WITHDRAWAL', status: 'COMPLETED', createdAt: { gte: startOfMonth } },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  // ── Códigos de regalo usados (gasto de marketing) ────────────
+  const giftCodes = await prisma.giftCode.findMany({
+    select: { amount: true, usedBy: true },
+  });
+  const totalGiftCodeMarketing = giftCodes.reduce(
+    (acc, gc) => acc + Number(gc.amount) * gc.usedBy.length,
+    0,
+  );
+  const monthGiftCodes = giftCodes.reduce((acc, gc) => acc + Number(gc.amount), 0); // aproximado
+
+  // ── Gráfica mensual (últimos 6 meses) ────────────────────────
+  // Mostramos: comisión GARDEN (ganancia real) y facturación total al cliente
+  const monthlyData: Array<{
+    month: string; commission: number; billedToClient: number; bookings: number;
+  }> = [];
+  for (let i = 5; i >= 0; i--) {
+    const mStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const mEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+    const agg = await prisma.booking.aggregate({
+      where: { status: 'COMPLETED', serviceEndedAt: { gte: mStart, lte: mEnd } },
+      _sum: { totalAmount: true, commissionAmount: true },
+      _count: true,
+    });
+    monthlyData.push({
+      month: mStart.toLocaleString('es', { month: 'short', year: '2-digit' }),
+      commission: Number(agg._sum.commissionAmount ?? 0),
+      billedToClient: Number(agg._sum.totalAmount ?? 0),
+      bookings: agg._count,
+    });
+  }
+
+  // ── Desglose por tipo de servicio ────────────────────────────
+  const [paseoStats, hospedajeStats] = await Promise.all([
+    prisma.booking.aggregate({
+      where: { status: 'COMPLETED', serviceType: 'PASEO' },
+      _sum: { totalAmount: true, commissionAmount: true },
+      _count: true,
+    }),
+    prisma.booking.aggregate({
+      where: { status: 'COMPLETED', serviceType: 'HOSPEDAJE' },
+      _sum: { totalAmount: true, commissionAmount: true },
+      _count: true,
+    }),
+  ]);
+
+  // ── Cálculos finales ─────────────────────────────────────────
+  const grossBilled        = Number(allCompleted._sum.totalAmount ?? 0);      // total facturado a clientes
+  const gardenCommissions  = Number(allCompleted._sum.commissionAmount ?? 0); // ganancia real GARDEN (10%)
+  const caregiverPayouts   = grossBilled - gardenCommissions;                  // lo que reciben cuidadores
+  const refundsToClients   = Number(refundStats._sum.refundAmount ?? 0);      // devoluciones (≠ ganancia)
+  const refundCommLost     = Number(refundStats._sum.commissionAmount ?? 0);  // comisiones perdidas por cancelaciones
+  const netGardenIncome    = gardenCommissions - refundCommLost - totalGiftCodeMarketing;
+
+  const thisMonthGardenInc = Number(monthCompleted._sum.commissionAmount ?? 0);
+  const lastMonthGardenInc = Number(lastMonthCompleted._sum.commissionAmount ?? 0);
+  const yearGardenInc      = Number(yearCompleted._sum.commissionAmount ?? 0);
+
+  const pendingWd    = withdrawalStats.find((w) => w.status === 'PENDING');
+  const completedWd  = withdrawalStats.find((w) => w.status === 'COMPLETED');
+  const processingWd = withdrawalStats.find((w) => w.status === 'PROCESSING');
+
+  return {
+    /**
+     * summary: KPIs principales del dashboard
+     * - grossBilled: total cobrado a clientes (incluye comisión GARDEN)
+     * - gardenCommissions: 10% sobre precio cuidador = ganancia bruta GARDEN
+     * - caregiverPayouts: lo que reciben los cuidadores (90% del total)
+     * - netGardenIncome: ganancia neta tras devoluciones y marketing
+     */
+    summary: {
+      grossBilled,
+      gardenCommissions,
+      caregiverPayouts,
+      netGardenIncome,
+      thisMonthGardenIncome: thisMonthGardenInc,
+      lastMonthGardenIncome: lastMonthGardenInc,
+      yearGardenIncome: yearGardenInc,
+      totalBookingsCompleted: allCompleted._count,
+      thisMonthBookings: monthCompleted._count,
+      // growth vs mes anterior (%)
+      monthGrowth: lastMonthGardenInc > 0
+        ? ((thisMonthGardenInc - lastMonthGardenInc) / lastMonthGardenInc) * 100
+        : 0,
+    },
+    refunds: {
+      count: refundStats._count,
+      totalReturnedToClients: refundsToClients,
+      commissionLost: refundCommLost,
+    },
+    marketing: {
+      giftCodeSpend: totalGiftCodeMarketing,
+      giftCodesIssued: giftCodes.length,
+      giftCodeRedemptions: giftCodes.reduce((acc, gc) => acc + gc.usedBy.length, 0),
+    },
+    withdrawals: {
+      pending:    { count: pendingWd?._count    ?? 0, amount: Number(pendingWd?._sum.amount    ?? 0) },
+      processing: { count: processingWd?._count ?? 0, amount: Number(processingWd?._sum.amount ?? 0) },
+      completed:  { count: completedWd?._count  ?? 0, amount: Number(completedWd?._sum.amount  ?? 0) },
+      thisMonth:  Number(withdrawalMonthly._sum.amount ?? 0),
+    },
+    serviceBreakdown: {
+      paseo: {
+        count: paseoStats._count,
+        billedToClient: Number(paseoStats._sum.totalAmount ?? 0),
+        gardenEarnings: Number(paseoStats._sum.commissionAmount ?? 0),
+        caregiverEarnings: Number(paseoStats._sum.totalAmount ?? 0) - Number(paseoStats._sum.commissionAmount ?? 0),
+      },
+      hospedaje: {
+        count: hospedajeStats._count,
+        billedToClient: Number(hospedajeStats._sum.totalAmount ?? 0),
+        gardenEarnings: Number(hospedajeStats._sum.commissionAmount ?? 0),
+        caregiverEarnings: Number(hospedajeStats._sum.totalAmount ?? 0) - Number(hospedajeStats._sum.commissionAmount ?? 0),
+      },
+    },
+    monthlyChart: monthlyData,
+    /**
+     * Estado de Resultados (Income Statement)
+     * Ingresos: comisiones cobradas (10% por servicio)
+     * Egresos: devoluciones de comisiones + inversión marketing
+     * Utilidad neta = comisiones − pérdidas por devoluciones − marketing
+     */
+    incomeStatement: {
+      revenues: {
+        commissionsEarned: gardenCommissions,
+        description: 'GARDEN cobra 10% sobre el precio del cuidador por cada servicio completado',
+      },
+      expenses: {
+        refundedCommissions: refundCommLost,
+        marketingGiftCodes: totalGiftCodeMarketing,
+        total: refundCommLost + totalGiftCodeMarketing,
+      },
+      netIncome: netGardenIncome,
+      companyFeeRate: 0.10,
+      note: 'Si cuidador cobra Bs 30 → cliente paga Bs 33 → GARDEN gana Bs 3',
+    },
+    /**
+     * Balance General
+     * Activos: comisiones acumuladas + fondos en tránsito
+     * Pasivos: retiros pendientes de cuidadores
+     */
+    balanceSheet: {
+      assets: {
+        accumulatedCommissions: gardenCommissions,
+        pendingCaregiverFunds: caregiverPayouts - Number(completedWd?._sum.amount ?? 0),
+        total: grossBilled - Number(completedWd?._sum.amount ?? 0),
+      },
+      liabilities: {
+        pendingWithdrawals: Number(pendingWd?._sum.amount ?? 0),
+        processingWithdrawals: Number(processingWd?._sum.amount ?? 0),
+        total: Number(pendingWd?._sum.amount ?? 0) + Number(processingWd?._sum.amount ?? 0),
+      },
+      equity: {
+        retainedEarnings: netGardenIncome,
+        note: 'Utilidad neta acumulada de GARDEN',
+      },
+    },
+    /**
+     * Estado de Flujo
+     * Entradas: comisiones cobradas este mes
+     * Salidas: retiros pagados este mes + marketing
+     */
+    cashFlow: {
+      inflows: {
+        commissionsThisMonth: thisMonthGardenInc,
+      },
+      outflows: {
+        withdrawalsPaidThisMonth: Number(withdrawalMonthly._sum.amount ?? 0),
+        marketingEstimate: monthGiftCodes,
+        total: Number(withdrawalMonthly._sum.amount ?? 0) + monthGiftCodes,
+      },
+      netCashFlow: thisMonthGardenInc - Number(withdrawalMonthly._sum.amount ?? 0) - monthGiftCodes,
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ZONES CONFIG (in-memory, resets on restart; MVP approach)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _blockedZones = new Set<string>();
+
+export function getZonesConfig() {
+  const allZones = [
+    'EQUIPETROL', 'URBARI', 'NORTE', 'LAS_PALMAS', 'CENTRO',
+    'REMANZO', 'SUR', 'URUBO_NORTE', 'URUBO_SUR', 'OTROS',
+  ];
+  return allZones.map((z) => ({ zone: z, blocked: _blockedZones.has(z) }));
+}
+
+export function toggleZone(zone: string) {
+  if (_blockedZones.has(zone)) {
+    _blockedZones.delete(zone);
+    return { zone, blocked: false };
+  } else {
+    _blockedZones.add(zone);
+    return { zone, blocked: true };
+  }
+}
+
+export function isZoneBlocked(zone: string): boolean {
+  return _blockedZones.has(zone);
 }

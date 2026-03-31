@@ -236,7 +236,8 @@ export const patchCaregiverProfileSchema = z.object({
 
 // --- Register client (simplificado) ---
 export const registerClientSchema = z.object({
-  fullName: z.string().min(2, 'Nombre completo requerido').max(200),
+  firstName: z.string().min(1, 'Nombre requerido').max(100).transform((v) => v.trim()),
+  lastName: z.string().min(1, 'Apellido requerido').max(100).transform((v) => v.trim()),
   email: z.string().email('Email inválido'),
   password: z.string().min(8, 'Mínimo 8 caracteres'),
   phone: phoneClientSchema,

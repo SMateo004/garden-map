@@ -1,7 +1,6 @@
 import 'dart:convert';
-import 'dart:html' as html;
+import 'package:image_picker/image_picker.dart' as image_picker_pkg;
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -9,9 +8,13 @@ import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart' show XFile;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
+import '../../theme/garden_theme.dart' show fixImageUrl, GardenColors;
 import '../../services/auth_service.dart';
 import '../../services/agentes_service.dart';
 import '../../widgets/precio_onboarding_card.dart';
+import 'caregiver_profile_data_screen.dart';
+import 'verification_screen.dart';
+import 'email_verification_screen.dart';
 
 class OnboardingWizardScreen extends StatefulWidget {
   final String initialEmail;
@@ -48,10 +51,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   bool _acceptPuppies = false;
   bool _acceptSeniors = false;
 
-  // Paso 7: Foto de Perfil
+  // Paso 5 (nueva pos): Foto de Perfil
   String? _profilePhotoUrl;
   XFile? _localProfilePhoto;
-  final bool _uploadingProfilePhoto = false;
   DateTime? _dateOfBirth;
 
   // Paso 2: Fotos del hogar
@@ -74,6 +76,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   // Paso 5: Precio
   double _precioFinal = 0;
   String _authToken = '';
+  Map<String, dynamic>? _priceStats;
 
   @override
   void initState() {
@@ -81,22 +84,138 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     _emailController.text = widget.initialEmail;
     _passwordController.text = widget.initialPassword;
     _loadToken();
+    _loadPriceStats();
+  }
+
+  Future<void> _loadPriceStats() async {
+    try {
+      final service = _servicesOffered.isNotEmpty ? _servicesOffered.first : 'PASEO';
+      final zone = _selectedZone ?? 'EQUIPETROL';
+      final url = '${const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api')}/caregivers/price-stats?zone=$zone&service=$service';
+      final res = await http.get(Uri.parse(url));
+      final data = jsonDecode(res.body);
+      if (data['success'] == true && mounted) {
+        setState(() => _priceStats = data['data'] as Map<String, dynamic>);
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadToken() async {
     final prefs = await SharedPreferences.getInstance();
     String token = prefs.getString('access_token') ?? '';
-    
-    // Fallback para desarrollo: si no hay token (cuidador aún no registrado)
-    // usar el token de dev hardcodeado
+
     if (token.isEmpty) {
-      token = const String.fromEnvironment(
-        'TEST_JWT',
-        defaultValue: '',
-      );
+      token = const String.fromEnvironment('TEST_JWT', defaultValue: '');
     }
-    
+
     setState(() => _authToken = token);
+
+    // If already registered, compute which post-registration step to resume at
+    if (token.isNotEmpty) {
+      final setupComplete = prefs.getBool('caregiver_setup_complete') ?? false;
+      if (!setupComplete) {
+        await _computeAndSetResumeStep(token);
+      }
+    }
+  }
+
+  static const _baseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'http://localhost:3000/api',
+  );
+
+  /// For returning users: load profile and jump to the first incomplete step (6-9).
+  Future<void> _computeAndSetResumeStep(String token) async {
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/caregiver/my-profile'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] != true) return;
+      final profile = data['data'] as Map<String, dynamic>;
+
+      // Step 6: Professional profile (CaregiverProfileDataScreen)
+      final bio = (profile['bio'] as String? ?? '').trim();
+      final bioDetail = (profile['bioDetail'] as String? ?? '').trim();
+      final experienceDesc = (profile['experienceDescription'] as String? ?? '').trim();
+      final whyCaregiver = (profile['whyCaregiver'] as String? ?? '').trim();
+      final whatDiffers = (profile['whatDiffers'] as String? ?? '').trim();
+      final handleAnxious = (profile['handleAnxious'] as String? ?? '').trim();
+      final emergencyResponse = (profile['emergencyResponse'] as String? ?? '').trim();
+      final sizesAccepted = (profile['sizesAccepted'] as List?) ?? [];
+      final animalTypes = (profile['animalTypes'] as List?) ?? [];
+
+      final profileComplete = bio.length >= 45 &&
+          bioDetail.length >= 3 &&
+          experienceDesc.length >= 15 &&
+          whyCaregiver.length >= 3 &&
+          whatDiffers.length >= 3 &&
+          handleAnxious.isNotEmpty &&
+          emergencyResponse.isNotEmpty &&
+          sizesAccepted.isNotEmpty &&
+          animalTypes.isNotEmpty;
+
+      if (!profileComplete) {
+        setState(() => _currentStep = 6);
+        return;
+      }
+
+      // Step 7: Identity verification
+      final identityStatus = (profile['identityVerificationStatus'] as String? ?? '').toUpperCase();
+      if (identityStatus != 'VERIFIED' && identityStatus != 'APPROVED') {
+        setState(() => _currentStep = 7);
+        return;
+      }
+
+      // Step 8: Email verification
+      final emailVerified = profile['emailVerified'] == true;
+      final userEmailVerified = (profile['user'] as Map<String, dynamic>?)?['emailVerified'] == true;
+      if (!emailVerified && !userEmailVerified) {
+        setState(() => _currentStep = 8);
+        return;
+      }
+
+      // Step 9: Availability — check if any availability has been configured
+      final availSet = profile['availabilityConfigured'] == true ||
+          profile['hasServiceAvailability'] == true;
+      if (!availSet) {
+        setState(() => _currentStep = 9);
+        return;
+      }
+
+      // All done
+      _completeWizard();
+    } catch (_) {
+      // If error, stay at step 0 (new registration)
+    }
+  }
+
+  void _advanceStep() {
+    if (_currentStep >= 9) {
+      _completeWizard();
+    } else {
+      setState(() => _currentStep++);
+    }
+  }
+
+  Future<void> _completeWizard() async {
+    setState(() => _isLoading = true);
+    try {
+      await http.post(
+        Uri.parse('$_baseUrl/caregiver/profile/submit'),
+        headers: {
+          'Authorization': 'Bearer $_authToken',
+          'Content-Type': 'application/json',
+        },
+      );
+    } catch (_) {}
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('caregiver_setup_complete', true);
+
+    if (!mounted) return;
+    context.go('/caregiver/home');
   }
 
   @override
@@ -189,15 +308,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           return false;
         }
         return true;
-      case 5:
-        if (_sizesAccepted.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Selecciona al menos un tamaño de mascota que aceptas')),
-          );
-          return false;
-        }
-        return true;
-      case 6:
+      case 5: // Foto de perfil (retrato) — triggers registration
         if (_profilePhotoUrl == null && _localProfilePhoto == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Por favor, sube una foto de perfil profesional')),
@@ -206,12 +317,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         }
         return true;
       default:
-        return true;
+        return true; // Steps 6-9 handled by embedded screens
     }
   }
 
   Future<void> _nextStep() async {
-    // El paso de fotos (index 3) tiene lógica async: subir antes de validar
+    // Paso de fotos (index 3): subir antes de validar
     if (_currentStep == 3) {
       final minFotos = _servicesOffered.contains('HOSPEDAJE') ? 4 : 2;
       final total = _localPhotos.length + _photoUrls.length;
@@ -225,7 +336,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         try {
           await _uploadAllPhotos();
         } catch (_) {
-          return; // el error ya se mostró en el SnackBar dentro de _uploadAllPhotos
+          return;
         }
       }
       if (_photoUrls.length < minFotos) {
@@ -237,8 +348,16 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       setState(() => _currentStep++);
       return;
     }
+
+    // Paso de foto de perfil (index 5): validar y crear cuenta
+    if (_currentStep == 5) {
+      if (!_validateCurrentStep()) return;
+      await _submitWizard(); // creates account, then advances to step 6
+      return;
+    }
+
     if (!_validateCurrentStep()) return;
-    if (_currentStep < 6) {
+    if (_currentStep < 9) {
       setState(() => _currentStep++);
     }
   }
@@ -250,30 +369,22 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   }
 
   Future<void> _pickAndUploadPhoto() async {
-    // Usar dart:html directamente para Flutter web
+    // Usar image_picker para seleccionar fotos (compatible con web y móvil)
     final isHospedaje = _servicesOffered.contains('HOSPEDAJE');
     final maxFotos = isHospedaje ? 6 : 4;
     if (_localPhotos.length + _photoUrls.length >= maxFotos) return;
 
-    final uploadInput = html.FileUploadInputElement();
-    uploadInput.accept = 'image/*';
-    uploadInput.multiple = false;
-    uploadInput.click();
-
-    await uploadInput.onChange.first;
-    final file = uploadInput.files?.first;
-    if (file == null) return;
-
-    final reader = html.FileReader();
-    reader.readAsArrayBuffer(file);
-    await reader.onLoad.first;
-
-    final bytes = reader.result as List<int>;
+    final picked = await image_picker_pkg.ImagePicker().pickImage(
+      source: image_picker_pkg.ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
     setState(() {
       _localPhotos.add(XFile.fromData(
         Uint8List.fromList(bytes),
-        name: file.name,
-        mimeType: file.type,
+        name: picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name,
+        mimeType: 'image/jpeg',
       ));
     });
   }
@@ -422,7 +533,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           if (_servicesOffered.contains('HOSPEDAJE'))
             'pricePerDay': _precioFinal.toInt(),
           if (_servicesOffered.contains('PASEO'))
-            'pricePerWalk30': _precioFinal.toInt(),
+            'pricePerWalk60': _precioFinal.toInt(),
           if (_homeType != null) 'homeType': _homeType,
           'hasYard': _hasYard,
           'address': _addressController.text.trim(),
@@ -440,15 +551,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           'emergencyResponse': _emergencyResponseController.text.trim(),
           'acceptAggressive': _acceptAggressive,
           'hasChildren': _hasChildren,
-          'petsSleep': _petsSleep,
+          'petsSleep': 'INSIDE',
           'hoursAlone': _hoursAlone,
           'workFromHome': _workFromHome,
           'maxPets': _maxPets,
           'oftenOut': _oftenOut,
           'typicalDay': _typicalDayController.text.trim(),
           'bioDetail': _bioDetailController.text.trim(),
-          'sizesAccepted': _sizesAccepted,
-          'animalTypes': _animalTypes,
         },
       };
 
@@ -463,66 +572,18 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 201 && data['success'] == true) {
-        // Guardar token del cuidador recién registrado
+        // Save token and user data
         final authService = AuthService();
         await authService.saveToken(data['data']['accessToken']);
         await authService.saveUserData(data['data']['user']);
 
+        // Update local token so post-registration steps can use the API
+        setState(() => _authToken = data['data']['accessToken'] as String? ?? _authToken);
 
         if (!mounted) return;
-        
-        // Modal de bienvenida
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) {
-            return Dialog(
-              backgroundColor: Colors.transparent,
-              child: Container(
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF388E3C), Color(0xFF1B5E20)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.verified_user_rounded, color: Colors.white, size: 80),
-                    const SizedBox(height: 24),
-                    Text(
-                      '¡Bienvenido a GARDEN,\n${_firstNameController.text.trim()}!',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Tu cuenta de cuidador ha sido creada exitosamente. Nos agrada tenerte en la comunidad.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 14, color: Colors.white70),
-                    ),
-                    const SizedBox(height: 32),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFF1B5E20),
-                        minimumSize: const Size(double.infinity, 50),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () {
-                        context.go('/caregiver/home'); // Directo al home
-                      },
-                      child: const Text('Comenzar', style: TextStyle(fontWeight: FontWeight.bold)),
-                    )
-                  ],
-                ),
-              ),
-            );
-          }
-        );
+
+        // Seamlessly advance to step 6 (Professional Profile)
+        setState(() => _currentStep = 6);
 
       } else {
         // Manejo de errores de validación
@@ -725,7 +786,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: Image.network(
-                        _photoUrls[index],
+                        fixImageUrl(_photoUrls[index]),
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -879,13 +940,16 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             children: [
               Expanded(
                 child: GestureDetector(
-                  onTap: () => setState(() {
-                    if (_servicesOffered.contains('HOSPEDAJE')) {
-                      _servicesOffered.remove('HOSPEDAJE');
-                    } else {
-                      _servicesOffered.add('HOSPEDAJE');
-                    }
-                  }),
+                  onTap: () {
+                    setState(() {
+                      if (_servicesOffered.contains('HOSPEDAJE')) {
+                        _servicesOffered.remove('HOSPEDAJE');
+                      } else {
+                        _servicesOffered.add('HOSPEDAJE');
+                      }
+                    });
+                    _loadPriceStats();
+                  },
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -917,13 +981,16 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: GestureDetector(
-                  onTap: () => setState(() {
-                    if (_servicesOffered.contains('PASEO')) {
-                      _servicesOffered.remove('PASEO');
-                    } else {
-                      _servicesOffered.add('PASEO');
-                    }
-                  }),
+                  onTap: () {
+                    setState(() {
+                      if (_servicesOffered.contains('PASEO')) {
+                        _servicesOffered.remove('PASEO');
+                      } else {
+                        _servicesOffered.add('PASEO');
+                      }
+                    });
+                    _loadPriceStats();
+                  },
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -970,7 +1037,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               value: e.key,
               child: Text(e.value, style: const TextStyle(color: Colors.white)),
             )).toList(),
-            onChanged: (v) => setState(() => _selectedZone = v),
+            onChanged: (v) {
+              setState(() => _selectedZone = v);
+              _loadPriceStats();
+            },
           ),
 
           // Solo mostrar opciones de hogar si ofrece HOSPEDAJE
@@ -1123,12 +1193,17 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                   }
                 }),
                 backgroundColor: kSurfaceColor,
-                selectedColor: kPrimaryColor,
+                selectedColor: GardenColors.primary.withValues(alpha: 0.18),
                 labelStyle: TextStyle(
-                  color: _times.contains(val) ? Colors.white : kTextSecondary,
+                  color: _times.contains(val) ? GardenColors.primary : kTextSecondary,
                   fontWeight: _times.contains(val) ? FontWeight.bold : FontWeight.normal,
                 ),
-                checkmarkColor: Colors.white,
+                checkmarkColor: GardenColors.primary,
+                side: BorderSide(
+                  color: _times.contains(val)
+                      ? GardenColors.primary.withValues(alpha: 0.4)
+                      : GardenColors.darkBorder,
+                ),
               );
             }).toList(),
           ),
@@ -1189,18 +1264,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           const SizedBox(height: 24),
           PrecioOnboardingCard(
             zona: _selectedZone ?? 'EQUIPETROL',
-            servicio: _servicesOffered.isNotEmpty
-                ? _servicesOffered.first.toLowerCase()
-                : 'hospedaje',
+            servicio: _servicesOffered.isNotEmpty ? _servicesOffered.first.toLowerCase() : 'paseo',
             experienciaMeses: 6,
             trustScore: 85,
-            precioPromedioZona: 95.0,
-            precioMinZona: 60.0,
-            precioMaxZona: 150.0,
+            precioPromedioZona: (_priceStats?['avgPrice'] as num?)?.toDouble() ?? 90.0,
+            precioMinZona: (_priceStats?['minPrice'] as num?)?.toDouble() ?? 50.0,
+            precioMaxZona: (_priceStats?['maxPrice'] as num?)?.toDouble() ?? 180.0,
             agentesService: AgentesService(authToken: _authToken),
-            onPrecioConfirmado: (precio) {
-              setState(() => _precioFinal = precio);
-            },
+            onPrecioConfirmado: (precio) => setState(() => _precioFinal = precio),
           ),
           if (_precioFinal > 0) ...[
             const SizedBox(height: 16),
@@ -1222,26 +1293,28 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
 
 
-  // ── PASO 6: Perfil Profesional (Extendido) ────────────────
+  // ── Paso 6 (Perfil profesional) is now handled by CaregiverProfileDataScreen ──
+  // These fields remain for the registration body (sent with defaults):
   bool _caredOthers = false;
-  final _whyCaregiverController = TextEditingController();
-  final _whatDiffersController = TextEditingController();
-  final _handleAnxiousController = TextEditingController();
-  final _emergencyResponseController = TextEditingController();
   bool _acceptAggressive = false;
-  final List<String> _acceptMedication = [];
-  final bool _noAcceptBreeds = false;
-  final _breedsWhyController = TextEditingController();
   bool _hasChildren = false;
-  final String _petsSleep = 'INSIDE'; 
   int _hoursAlone = 0;
   bool _workFromHome = true;
   int _maxPets = 1;
   bool _oftenOut = false;
+
+  // Keeping these controllers so dispose() doesn't crash (they may be referenced):
+  final _whyCaregiverController = TextEditingController();
+  final _whatDiffersController = TextEditingController();
+  final _handleAnxiousController = TextEditingController();
+  final _emergencyResponseController = TextEditingController();
   final _typicalDayController = TextEditingController();
   final _bioDetailController = TextEditingController();
+  final _breedsWhyController = TextEditingController();
 
-  Widget _buildStep6() {
+  // Dead code kept for reference — replaced by CaregiverProfileDataScreen
+  // ignore: unused_element
+  Widget _buildStep6Deprecated() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -1360,19 +1433,19 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
   // ── PASO 7: Foto de Perfil ────────────────────────────────
   Future<void> _pickProfilePhoto() async {
-    final uploadInput = html.FileUploadInputElement();
-    uploadInput.accept = 'image/*';
-    uploadInput.click();
-    await uploadInput.onChange.first;
-    final file = uploadInput.files?.first;
-    if (file == null) return;
-    final reader = html.FileReader();
-    reader.readAsArrayBuffer(file);
-    await reader.onLoad.first;
-    final bytes = reader.result as List<int>;
+    final picked = await image_picker_pkg.ImagePicker().pickImage(
+      source: image_picker_pkg.ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
     setState(() {
       _profilePhotoUrl = null;
-      _localProfilePhoto = XFile.fromData(Uint8List.fromList(bytes), name: file.name, mimeType: file.type);
+      _localProfilePhoto = XFile.fromData(
+        Uint8List.fromList(bytes),
+        name: picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name,
+        mimeType: 'image/jpeg',
+      );
     });
   }
 
@@ -1426,36 +1499,260 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     );
   }
 
+  // ── PASO 10: Disponibilidad detallada ─────────────────────────────────────
+  bool _availWeekdays = true;
+  bool _availWeekends = false;
+  bool _availHolidays = false;
+  bool _availMorning = true;
+  bool _availAfternoon = true;
+  bool _availNight = false;
+  bool _savingAvailability = false;
+
+  Future<void> _saveAvailabilityAndFinish() async {
+    setState(() => _savingAvailability = true);
+    try {
+      await http.patch(
+        Uri.parse('$_baseUrl/caregiver/availability'),
+        headers: {
+          'Authorization': 'Bearer $_authToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'defaultSchedule': {
+            'weekdays': _availWeekdays,
+            'weekends': _availWeekends,
+            'holidays': _availHolidays,
+            'times': [
+              if (_availMorning) 'MORNING',
+              if (_availAfternoon) 'AFTERNOON',
+              if (_availNight) 'NIGHT',
+            ],
+          },
+        }),
+      );
+    } catch (_) {}
+    if (mounted) setState(() => _savingAvailability = false);
+    _completeWizard();
+  }
+
+  Widget _buildStepAvailability() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Configura tu disponibilidad',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Dinos cuándo puedes atender mascotas. Los dueños solo podrán reservarte en los días y horarios que actives.',
+            style: TextStyle(fontSize: 14, color: kTextSecondary),
+          ),
+          const SizedBox(height: 28),
+
+          const Text('Días disponibles', style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold, fontSize: 15)),
+          const SizedBox(height: 12),
+          _availDayTile(
+            icon: Icons.work_outline_rounded,
+            title: 'Días de semana',
+            subtitle: 'Lunes a Viernes',
+            value: _availWeekdays,
+            onChanged: (v) => setState(() => _availWeekdays = v),
+          ),
+          const SizedBox(height: 10),
+          _availDayTile(
+            icon: Icons.weekend_outlined,
+            title: 'Fines de semana',
+            subtitle: 'Sábado y Domingo',
+            value: _availWeekends,
+            onChanged: (v) => setState(() => _availWeekends = v),
+          ),
+          const SizedBox(height: 10),
+          _availDayTile(
+            icon: Icons.event_outlined,
+            title: 'Feriados',
+            subtitle: 'Días festivos nacionales',
+            value: _availHolidays,
+            onChanged: (v) => setState(() => _availHolidays = v),
+          ),
+
+          const SizedBox(height: 28),
+          const Text('Horarios de atención', style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold, fontSize: 15)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _availTimeChip('Mañana', '6am–12pm', Icons.wb_sunny_outlined, _availMorning, (v) => setState(() => _availMorning = v))),
+              const SizedBox(width: 10),
+              Expanded(child: _availTimeChip('Tarde', '12pm–7pm', Icons.wb_cloudy_outlined, _availAfternoon, (v) => setState(() => _availAfternoon = v))),
+              const SizedBox(width: 10),
+              Expanded(child: _availTimeChip('Noche', '7pm–10pm', Icons.nights_stay_outlined, _availNight, (v) => setState(() => _availNight = v))),
+            ],
+          ),
+
+          const SizedBox(height: 36),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: kPrimaryColor.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: kPrimaryColor.withOpacity(0.25)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline_rounded, color: kPrimaryColor, size: 20),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Podrás ajustar días específicos en cualquier momento desde tu panel de disponibilidad.',
+                    style: TextStyle(color: kTextSecondary, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 32),
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kPrimaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              onPressed: _savingAvailability ? null : _saveAvailabilityAndFinish,
+              child: _savingAvailability
+                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Finalizar y entrar a GARDEN', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
+  }
+
+  Widget _availDayTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: kSurfaceColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: value ? kPrimaryColor.withOpacity(0.4) : Colors.transparent, width: 1.5),
+      ),
+      child: SwitchListTile(
+        secondary: Icon(icon, color: value ? kPrimaryColor : kTextSecondary, size: 22),
+        title: Text(title, style: TextStyle(color: Colors.white, fontWeight: value ? FontWeight.w600 : FontWeight.normal)),
+        subtitle: Text(subtitle, style: const TextStyle(color: kTextSecondary, fontSize: 12)),
+        value: value,
+        activeColor: kPrimaryColor,
+        onChanged: onChanged,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Widget _availTimeChip(String label, String hours, IconData icon, bool selected, ValueChanged<bool> onChanged) {
+    return GestureDetector(
+      onTap: () => onChanged(!selected),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        decoration: BoxDecoration(
+          color: selected ? kPrimaryColor.withOpacity(0.15) : kSurfaceColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: selected ? kPrimaryColor : GardenColors.darkBorder, width: 1.5),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: selected ? kPrimaryColor : kTextSecondary, size: 22),
+            const SizedBox(height: 6),
+            Text(label, style: TextStyle(color: selected ? Colors.white : kTextSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
+            const SizedBox(height: 2),
+            Text(hours, style: const TextStyle(color: kTextSecondary, fontSize: 10)),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // ─── Steps 6-9 are post-registration embedded screens ───────────────────
+    // They manage their own navigation via callbacks; wizard provides only
+    // the progress header above them.
+    final Widget postRegStep;
+    if (_currentStep == 6) {
+      postRegStep = CaregiverProfileDataScreen(
+        embeddedMode: true,
+        onSaveComplete: _advanceStep,
+      );
+    } else if (_currentStep == 7) {
+      postRegStep = VerificationScreen(
+        showAppBar: false,
+        onComplete: _advanceStep,
+      );
+    } else if (_currentStep == 8) {
+      postRegStep = EmailVerificationScreen(
+        showAppBar: false,
+        onComplete: _advanceStep,
+      );
+    } else if (_currentStep == 9) {
+      postRegStep = _buildStepAvailability();
+    } else {
+      postRegStep = const SizedBox.shrink();
+    }
+
     final steps = [
-      _buildStep1(), // 0: Datos personales
-      _buildStep3(), // 1: Servicios y zona
-      _buildStep4(), // 2: Disponibilidad
-      _buildStep2(), // 3: Fotos adaptadas al servicio
-      _buildStep5(), // 4: Precio
-      _buildStep6(), // 5: Perfil Profesional
-      _buildStep7(), // 6: Foto de perfil
+      _buildStep1(),   // 0: Datos personales
+      _buildStep3(),   // 1: Servicios y zona
+      _buildStep4(),   // 2: Disponibilidad básica
+      _buildStep2(),   // 3: Fotos del lugar
+      _buildStep5(),   // 4: Precio
+      _buildStep7(),   // 5: Foto de perfil → triggers registration
+      postRegStep,     // 6: Perfil profesional
+      postRegStep,     // 7: Verificación de identidad
+      postRegStep,     // 8: Verificación de email
+      postRegStep,     // 9: Disponibilidad
     ];
 
     final stepTitles = [
-      'Datos basicos',
+      'Datos básicos',
       'Servicios',
       'Disponibilidad',
       'Fotos del lugar',
       'Precio',
-      'Profesional',
-      'Retrato',
+      'Tu retrato',
+      'Perfil profesional',
+      'Verificación ID',
+      'Verificación Email',
+      'Tu agenda',
     ];
+
+    // Steps 6-9 are embedded screens that manage their own "Continue" buttons.
+    // The wizard hides the bottom nav bar for those steps.
+    final bool showNavButtons = _currentStep <= 5;
+    final bool isRegistrationStep = _currentStep == 5;
 
     return Scaffold(
       backgroundColor: kBackgroundColor,
       appBar: AppBar(
         title: const Text('Crear perfil de cuidador'),
+        // Show back arrow only for pre-registration steps (0-4)
+        automaticallyImplyLeading: _currentStep < 5,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(6),
           child: LinearProgressIndicator(
-            value: (_currentStep + 1) / 7,
+            value: (_currentStep + 1) / 10,
             backgroundColor: kSurfaceColor,
             valueColor: const AlwaysStoppedAnimation<Color>(kPrimaryColor),
             minHeight: 6,
@@ -1472,12 +1769,19 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Paso ${_currentStep + 1} de 7',
+                  'Paso ${_currentStep + 1} de 10',
                   style: const TextStyle(color: kTextSecondary, fontSize: 12),
                 ),
-                Text(
-                  stepTitles[_currentStep],
-                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: kPrimaryColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    stepTitles[_currentStep],
+                    style: const TextStyle(color: kPrimaryColor, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ),
@@ -1494,36 +1798,35 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             ),
           ),
 
-          // Navigation buttons
-          Container(
-            color: kSurfaceColor,
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _currentStep == 0 ? null : _prevStep,
-                    child: const Text('Anterior'),
+          // Navigation buttons — only for pre-registration steps (0-5)
+          if (showNavButtons)
+            Container(
+              color: kSurfaceColor,
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _currentStep == 0 ? null : _prevStep,
+                      child: const Text('Anterior'),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _isLoading
-                        ? null
-                        : (_currentStep == 6 ? _submitWizard : _nextStep),
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 24,
-                            width: 24,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                          )
-                        : Text(_currentStep == 6 ? 'Finalizar y Crear Perfil' : 'Siguiente'),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _nextStep,
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 24,
+                              width: 24,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            )
+                          : Text(isRegistrationStep ? 'Crear mi cuenta' : 'Siguiente'),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );

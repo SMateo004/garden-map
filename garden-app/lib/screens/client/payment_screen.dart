@@ -139,7 +139,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
 
     final isDark = themeNotifier.isDark;
-    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
@@ -362,10 +361,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0.0, end: 1.0),
@@ -489,11 +487,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   ],
                 ),
               ),
-              const Spacer(),
+              const SizedBox(height: 32),
               GardenButton(
                 label: 'Volver al inicio',
                 onPressed: () => context.go('/marketplace'),
               ),
+              const SizedBox(height: 16),
             ],
           ),
         ),

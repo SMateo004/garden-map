@@ -155,12 +155,25 @@ router.post('/withdraw', authMiddleware, asyncHandler(async (req: Request, res: 
     });
   }
 
-  res.json({ 
-    success: true, 
-    data: { 
+  // Notificar al cuidador con detalles del proceso
+  await prisma.notification.create({
+    data: {
+      userId,
+      title: '✅ Solicitud de retiro recibida',
+      message:
+        `Hemos recibido tu solicitud de retiro de Bs ${amount} a ${profile.bankName} (${profile.bankAccount} — ${profile.bankHolder}).\n\n` +
+        `El depósito se realizará en un plazo máximo de 5 días hábiles de forma completamente gratuita.\n\n` +
+        `Cuando el depósito sea confirmado, te lo notificaremos aquí. Si surge algún inconveniente, te contactaremos directamente por la app. ¡Gracias por confiar en Garden!`,
+      type: 'SYSTEM',
+    },
+  });
+
+  res.json({
+    success: true,
+    data: {
       id: transaction.id,
-      message: 'Solicitud enviada. El admin procesará tu retiro.' 
-    } 
+      message: 'Solicitud enviada. El admin procesará tu retiro.'
+    }
   });
 }));
 

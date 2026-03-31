@@ -15,6 +15,8 @@ model User {
   firstName                    String
   lastName                     String
   phone                        String                        @unique
+  isDeleted                    Boolean                       @default(false)
+  deletedAt                    DateTime?
   profilePicture               String?
   country                      String?
   city                         String?
@@ -70,6 +72,14 @@ model CaregiverProfile {
   photos                          String[]
   profilePhoto                    String?
   address                         String?            @db.VarChar(500)
+  addressLat                      Float?
+  addressLng                      Float?
+  addressStreet                   String?            @db.VarChar(200)
+  addressNumber                   String?            @db.VarChar(20)
+  addressApartment                String?            @db.VarChar(50)
+  addressCondominio               String?            @db.VarChar(100)
+  addressReference                String?            @db.VarChar(200)
+  addressZone                     String?            @db.VarChar(100)
   servicesOffered                 ServiceType[]
   serviceAvailability             Json?
   pricePerDay                     Int?
@@ -230,6 +240,7 @@ model Booking {
   serviceStartPhoto         String?
   serviceEndPhoto           String?
   serviceTrackingData       Json?            @db.JsonB
+  gpsDistance               Float?
   serviceEvents             Json?            @db.JsonB
   ownerRated                Boolean          @default(false)
   ownerRating               Int?
@@ -237,6 +248,8 @@ model Booking {
   caregiverRated            Boolean          @default(false)
   caregiverRating           Int?
   caregiverComment          String?          @db.Text
+  blockchainTxHash          String?
+  blockchainFinalizedTxHash String?
   payoutStatus              String           @default("PENDING")
   updatedAt                 DateTime         @updatedAt
   caregiver                 CaregiverProfile @relation("CaregiverBookings", fields: [caregiverId], references: [id], onDelete: Cascade)
@@ -245,6 +258,7 @@ model Booking {
   review                    Review?
   dispute                   Dispute?
   messages                  ChatMessage[]
+  meetAndGreet              MeetAndGreet?
 
   @@index([clientId, status])
   @@index([caregiverId, status])
@@ -328,6 +342,14 @@ model Pet {
   photoUrl        String?
   specialNeeds    String?
   notes           String?
+  gender          String?       @db.VarChar(10)
+  weight          Float?
+  color           String?       @db.VarChar(100)
+  sterilized      Boolean?
+  microchipNumber String?       @db.VarChar(50)
+  extraPhotos     String[]
+  vaccinePhotos   String[]
+  documents       String[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   bookings        Booking[]
@@ -463,6 +485,31 @@ model Notification {
   @@map("notifications")
 }
 
+/// Key-value store for runtime app configuration (no server restart needed).
+model AppSettings {
+  key       String   @id
+  value     String   // JSON-stringified value
+  updatedAt DateTime @updatedAt
+  updatedBy String?  // Admin user ID who last changed it
+  @@map("app_settings")
+}
+
+/// Log of AI agent calls for the admin monitor.
+model AgentLog {
+  id        String   @id @default(uuid())
+  agentType String   @db.VarChar(50) // 'PRECIO' | 'CALIFICACION' | 'DISPUTA' | 'CUSTOM'
+  action    String   @db.VarChar(200)
+  input     Json?
+  output    Json?
+  durationMs Int?
+  status    String   @default("SUCCESS") @db.VarChar(20)
+  userId    String?
+  createdAt DateTime @default(now())
+  @@index([agentType])
+  @@index([createdAt])
+  @@map("agent_logs")
+}
+
 enum UserRole {
   CLIENT
   CAREGIVER
@@ -479,7 +526,11 @@ enum Zone {
   URBARI
   NORTE
   LAS_PALMAS
-  CENTRO_SAN_MARTIN
+  CENTRO
+  REMANZO
+  SUR
+  URUBO_NORTE
+  URUBO_SUR
   OTROS
 }
 
@@ -597,6 +648,7 @@ model ChatMessage {
   senderId    String
   senderRole  String   // 'CLIENT' | 'CAREGIVER'
   message     String
+  isSystem    Boolean  @default(false)
   read        Boolean  @default(false)
   createdAt   DateTime @default(now())
 
@@ -621,6 +673,23 @@ model GiftCode {
   @@map("gift_codes")
 }
 
+model MeetAndGreet {
+  id             String    @id @default(uuid())
+  bookingId      String    @unique
+  booking        Booking   @relation(fields: [bookingId], references: [id])
+  status         String    @default("PENDING_PROPOSAL")
+  proposedBy     String
+  modalidad      String
+  proposedDate   DateTime?
+  confirmedDate  DateTime?
+  meetingPoint   String?   @db.Text
+  caregiverNotes String?   @db.Text
+  clientNotes    String?   @db.Text
+  approved       Boolean?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
 model Dispute {
   id                String   @id @default(uuid())
   bookingId         String   @unique
@@ -629,9 +698,11 @@ model Dispute {
   caregiverResponse String[] // respuestas seleccionadas por el cuidador
   aiVerdict         String?  // 'CLIENT_WINS' | 'CAREGIVER_WINS' | 'PARTIAL'
   aiAnalysis        String?  @db.Text // análisis del agente
-  aiRecommendations String?  @db.Text // recomendaciones para el cuidador
-  status            String   @default("PENDING_CLIENT") // 'PENDING_CLIENT' | 'PENDING_CAREGIVER' | 'RESOLVED'
+  aiRecommendations String?  @db.Text // recomendaciones para el cuidador (JSON array)
+  status            String   @default("PENDING_CLIENT") // 'PENDING_CLIENT' | 'PENDING_CAREGIVER' | 'PENDING_AI' | 'RESOLVED'
   resolution        String?  // descripción de la resolución
+  /// Solo en veredicto PARTIAL: ID del GiftCode emitido al dueño como compensación (20% del neto, uso único)
+  discountCodeId    String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }

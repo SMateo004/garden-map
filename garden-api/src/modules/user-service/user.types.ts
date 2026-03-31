@@ -8,5 +8,8 @@ export interface UserPublic {
   lastName: string;
   phone: string;
   profilePicture: string | null;
+  city: string | null;
+  country: string | null;
+  emailVerified: boolean;
   createdAt: Date;
 }

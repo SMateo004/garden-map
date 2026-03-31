@@ -98,4 +98,26 @@ router.patch('/gift-codes/:id/toggle', adminController.toggleGiftCode);
 /** GET /api/admin/disputes — listar todas las disputas */
 router.get('/disputes', adminController.getDisputes);
 
+// ── Owners ────────────────────────────────────────────────────────────────
+router.get('/owners', adminController.getOwnersList);
+router.get('/owners/:id', adminController.getOwnerDetail);
+
+// ── Stats ─────────────────────────────────────────────────────────────────
+router.get('/stats/live', adminController.getLiveStats);
+router.get('/stats/financial', adminController.getFinancialStats);
+
+// ── Zones ─────────────────────────────────────────────────────────────────
+router.get('/zones', adminController.getZones);
+router.patch('/zones/:zone/toggle', adminController.toggleZone);
+
+// ── App Settings ──────────────────────────────────────────────────────────
+/** GET /api/admin/settings — get all app settings */
+router.get('/settings', adminController.getSettings);
+/** PATCH /api/admin/settings/:key — update a setting value */
+router.patch('/settings/:key', adminController.updateSetting);
+/** GET /api/admin/agent-logs — get recent agent logs */
+router.get('/agent-logs', adminController.getAgentLogs);
+/** POST /api/admin/agent-logs — post a custom agent instruction */
+router.post('/agent-logs', adminController.postAgentInstruction);
+
 export default router;

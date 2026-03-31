@@ -26,3 +26,11 @@ export const patchPet = asyncHandler(async (req: Request, res: Response) => {
   const pet = await clientPetsService.updatePet(userId, petId, body);
   res.json({ success: true, data: pet });
 });
+
+/** DELETE /api/client/pets/:petId — eliminar mascota. Valida que pertenezca al usuario. */
+export const deletePet = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const petId = req.params.petId!;
+  await clientPetsService.deletePet(userId, petId);
+  res.json({ success: true, data: { deleted: true } });
+});

@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 
 // ── PALETA OFICIAL GARDEN ──────────────────────────────────────────────────
@@ -194,6 +196,250 @@ class GardenShadows {
   GardenShadows._();
 }
 
+// ── LIQUID GLASS ───────────────────────────────────────────────────────────
+
+/// Contenedor glass morphism — fondo difuminado + tinte + borde luminoso.
+/// Úsalo para bottom bars flotantes, modales, paneles de filtro.
+class GlassBox extends StatelessWidget {
+  final Widget child;
+  final BorderRadius? borderRadius;
+  final EdgeInsetsGeometry? padding;
+  final double blurSigma;
+
+  const GlassBox({
+    super.key,
+    required this.child,
+    this.borderRadius,
+    this.padding,
+    this.blurSigma = 22,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final radius = borderRadius ?? BorderRadius.circular(GardenRadius.xxl);
+
+    // BackdropFilter causa crashes nativos en Android — usar fallback opaco allí.
+    final useBlur = kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+
+    final tintLight = Colors.white.withValues(alpha: useBlur ? 0.72 : 0.92);
+    final tintDark  = const Color(0xFF162610).withValues(alpha: useBlur ? 0.82 : 0.95);
+
+    final decoration = BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          isDark ? tintDark : tintLight,
+          isDark
+              ? const Color(0xFF0D1A07).withValues(alpha: useBlur ? 0.75 : 0.93)
+              : Colors.white.withValues(alpha: useBlur ? 0.55 : 0.88),
+        ],
+      ),
+      borderRadius: radius,
+      border: Border.all(
+        color: Colors.white.withValues(alpha: isDark ? 0.09 : 0.50),
+        width: 1.0,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: isDark ? 0.30 : 0.08),
+          blurRadius: 24,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    );
+
+    final inner = Container(padding: padding, decoration: decoration, child: child);
+
+    if (!useBlur) {
+      return ClipRRect(borderRadius: radius, child: inner);
+    }
+
+    return ClipRRect(
+      borderRadius: radius,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+        child: inner,
+      ),
+    );
+  }
+}
+
+/// Barra de navegación inferior flotante con efecto Liquid Glass.
+/// Reemplaza el BottomNavigationBar estándar. Usa con extendBody: true en Scaffold.
+class LiquidGlassNavBar extends StatelessWidget {
+  final int selectedIndex;
+  final ValueChanged<int> onTap;
+  final List<GardenNavItem> items;
+
+  const LiquidGlassNavBar({
+    super.key,
+    required this.selectedIndex,
+    required this.onTap,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+
+    return Container(
+      color: Colors.transparent,
+      padding: EdgeInsets.fromLTRB(20, 6, 20, bottomPad + 14),
+      child: GlassBox(
+        borderRadius: BorderRadius.circular(30),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          child: Row(
+            children: List.generate(items.length, (i) {
+              final item = items[i];
+              final selected = i == selectedIndex;
+              final iconColor = selected
+                  ? GardenColors.primary
+                  : (isDark ? GardenColors.darkTextSecondary : const Color(0xFF8A9A7A));
+              final labelColor = selected
+                  ? GardenColors.primary
+                  : (isDark ? GardenColors.darkTextSecondary : const Color(0xFF8A9A7A));
+
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => onTap(i),
+                  behavior: HitTestBehavior.opaque,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 240),
+                        curve: Curves.easeInOut,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? GardenColors.primary.withValues(alpha: 0.13)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(16),
+                          border: selected
+                              ? Border.all(
+                                  color: GardenColors.primary.withValues(alpha: 0.22),
+                                  width: 1.0,
+                                )
+                              : null,
+                        ),
+                        child: Icon(
+                          selected ? item.activeIcon : item.icon,
+                          color: iconColor,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 240),
+                        style: TextStyle(
+                          color: labelColor,
+                          fontSize: 10,
+                          fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                          letterSpacing: selected ? 0.1 : 0,
+                        ),
+                        child: Text(item.label),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class GardenNavItem {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  const GardenNavItem(this.icon, this.activeIcon, this.label);
+}
+
+// ── LIQUID GLASS DIALOG ────────────────────────────────────────────────────
+
+/// Diálogo con efecto Liquid Glass.
+/// Reemplaza AlertDialog/Dialog con fondo glass morphism.
+/// Uso: showDialog(context: ctx, builder: (_) => GardenGlassDialog(...))
+class GardenGlassDialog extends StatelessWidget {
+  final Widget? title;
+  final Widget? content;
+  final List<Widget>? actions;
+  final EdgeInsetsGeometry? contentPadding;
+
+  const GardenGlassDialog({
+    super.key,
+    this.title,
+    this.content,
+    this.actions,
+    this.contentPadding,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor     = isDark ? GardenColors.darkTextPrimary    : GardenColors.lightTextPrimary;
+    final subtextColor  = isDark ? GardenColors.darkTextSecondary  : GardenColors.lightTextSecondary;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      child: GlassBox(
+        borderRadius: BorderRadius.circular(GardenRadius.xl),
+        padding: contentPadding ?? const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (title != null)
+              DefaultTextStyle(
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  decoration: TextDecoration.none,
+                ),
+                child: title!,
+              ),
+            if (title != null && content != null) const SizedBox(height: 12),
+            if (content != null)
+              DefaultTextStyle(
+                style: TextStyle(
+                  color: subtextColor,
+                  fontSize: 14,
+                  height: 1.5,
+                  decoration: TextDecoration.none,
+                ),
+                child: content!,
+              ),
+            if (actions != null && actions!.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: actions!
+                    .map((a) => Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: a,
+                        ))
+                    .toList(),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ── WIDGETS REUTILIZABLES ──────────────────────────────────────────────────
 
 /// Tarjeta GARDEN
@@ -348,6 +594,25 @@ class _GardenSkeletonState extends State<GardenSkeleton>
   }
 }
 
+/// Fixes image URLs so that localhost-based URLs work on Android emulator.
+/// When the app is run with --dart-define=API_URL=http://10.0.2.2:3000/api,
+/// any stored URL like http://localhost:3000/uploads/... gets rewritten to
+/// http://10.0.2.2:3000/uploads/... so the emulator can reach the host machine.
+String fixImageUrl(String url) {
+  if (!url.startsWith('http://localhost') && !url.startsWith('http://127.0.0.1')) {
+    return url;
+  }
+  const apiUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api');
+  final apiUri = Uri.tryParse(apiUrl);
+  if (apiUri == null) return url;
+  final apiHost = apiUri.host;
+  if (apiHost == 'localhost' || apiHost == '127.0.0.1') return url;
+  return url.replaceFirst(
+    RegExp(r'http://(localhost|127\.0\.0\.1)(:\d+)?'),
+    '${apiUri.scheme}://$apiHost${apiUri.hasPort ? ":${apiUri.port}" : ""}',
+  );
+}
+
 /// Avatar con placeholder inteligente
 class GardenAvatar extends StatelessWidget {
   final String? imageUrl;
@@ -373,7 +638,7 @@ class GardenAvatar extends StatelessWidget {
         height: size,
         child: imageUrl != null && imageUrl!.isNotEmpty
             ? Image.network(
-                imageUrl!,
+                fixImageUrl(imageUrl!),
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => _buildPlaceholder(isDark),
                 loadingBuilder: (_, child, loadingProgress) {
@@ -435,17 +700,40 @@ class GardenButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final btnColor = color ?? GardenColors.primary;
 
+    final radius = BorderRadius.circular(GardenRadius.lg);
+
     if (outline) {
+      final useBlur = kIsWeb ||
+          defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS;
+
+      final outlinedBtn = OutlinedButton(
+        onPressed: loading ? null : onPressed,
+        style: OutlinedButton.styleFrom(
+          backgroundColor: btnColor.withValues(alpha: useBlur ? 0.06 : 0.10),
+          side: BorderSide(color: btnColor, width: 1.5),
+          shape: RoundedRectangleBorder(borderRadius: radius),
+        ),
+        child: _buildChild(btnColor),
+      );
+
+      if (!useBlur) {
+        return SizedBox(
+          width: width ?? double.infinity,
+          height: height,
+          child: outlinedBtn,
+        );
+      }
+
       return SizedBox(
         width: width ?? double.infinity,
         height: height,
-        child: OutlinedButton(
-          onPressed: loading ? null : onPressed,
-          style: OutlinedButton.styleFrom(
-            side: BorderSide(color: btnColor, width: 1.5),
-            shape: RoundedRectangleBorder(borderRadius: GardenRadius.md_),
+        child: ClipRRect(
+          borderRadius: radius,
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: outlinedBtn,
           ),
-          child: _buildChild(btnColor),
         ),
       );
     }
@@ -453,28 +741,67 @@ class GardenButton extends StatelessWidget {
     return SizedBox(
       width: width ?? double.infinity,
       height: height,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [btnColor, Color.lerp(btnColor, Colors.black, 0.18)!],
-          ),
-          borderRadius: GardenRadius.md_,
-          boxShadow: [
-            BoxShadow(
-              color: btnColor.withValues(alpha: 0.28),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Base gradient
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [btnColor, Color.lerp(btnColor, Colors.black, 0.20)!],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: btnColor.withValues(alpha: 0.30),
+                    blurRadius: 14,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+            ),
+            // Glass shimmer — reflexión de luz en el tercio superior
+            Positioned(
+              top: 0, left: 0, right: 0,
+              height: height * 0.52,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.18),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Borde luminoso superior
+            Positioned(
+              top: 0, left: 0, right: 0,
+              height: 1,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.35),
+                ),
+              ),
+            ),
+            // Contenido del botón
+            ElevatedButton(
+              onPressed: loading ? null : onPressed,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                overlayColor: Colors.white.withValues(alpha: 0.08),
+                shape: RoundedRectangleBorder(borderRadius: radius),
+              ),
+              child: _buildChild(Colors.white),
             ),
           ],
-        ),
-        child: ElevatedButton(
-          onPressed: loading ? null : onPressed,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.transparent,
-            shadowColor: Colors.transparent,
-            shape: RoundedRectangleBorder(borderRadius: GardenRadius.md_),
-          ),
-          child: _buildChild(Colors.white),
         ),
       ),
     );
@@ -629,7 +956,7 @@ ThemeData gardenTheme({bool dark = false}) {
   final surfaceEl= dark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
   final border   = dark ? GardenColors.darkBorder          : GardenColors.lightBorder;
   final textP    = dark ? GardenColors.darkTextPrimary     : GardenColors.lightTextPrimary;
-  final textS    = dark ? GardenColors.darkTextSecondary   : GardenColors.lightTextSecondary;
+
   final textH    = dark ? GardenColors.darkTextHint        : GardenColors.lightTextHint;
 
   return ThemeData(
@@ -658,15 +985,18 @@ ThemeData gardenTheme({bool dark = false}) {
     ),
     iconTheme: IconThemeData(color: textP),
     appBarTheme: AppBarTheme(
-      backgroundColor: surface,
+      backgroundColor: surface.withValues(alpha: 0.92),
       foregroundColor: textP,
       elevation: 0,
+      scrolledUnderElevation: 0,
+      surfaceTintColor: Colors.transparent,
       centerTitle: false,
       titleTextStyle: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.w700,
         color: textP,
       ),
+      shadowColor: Colors.transparent,
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
@@ -710,12 +1040,16 @@ ThemeData gardenTheme({bool dark = false}) {
       ),
     ),
     chipTheme: ChipThemeData(
-      backgroundColor: dark ? GardenColors.darkSurfaceElevated : GardenColors.lime.withValues(alpha: 0.3),
-      selectedColor: GardenColors.primary.withValues(alpha: 0.15),
+      backgroundColor: dark
+          ? Colors.white.withValues(alpha: 0.06)
+          : Colors.white.withValues(alpha: 0.55),
+      selectedColor: GardenColors.primary.withValues(alpha: 0.18),
       checkmarkColor: GardenColors.primary,
       labelStyle: TextStyle(color: textP, fontSize: 13),
       side: BorderSide(color: border),
-      shape: RoundedRectangleBorder(borderRadius: GardenRadius.sm_),
+      shape: RoundedRectangleBorder(borderRadius: GardenRadius.md_),
+      elevation: 0,
+      pressElevation: 0,
     ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith((states) =>
@@ -729,10 +1063,8 @@ ThemeData gardenTheme({bool dark = false}) {
       fillColor: WidgetStateProperty.resolveWith((states) =>
           states.contains(WidgetState.selected) ? GardenColors.primary : null),
     ),
-    bottomNavigationBarTheme: BottomNavigationBarThemeData(
-      backgroundColor: surface,
-      selectedItemColor: GardenColors.primary,
-      unselectedItemColor: textS,
+    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      backgroundColor: Colors.transparent,
       elevation: 0,
     ),
     dividerTheme: DividerThemeData(color: border, thickness: 1),
@@ -754,7 +1086,10 @@ ThemeData gardenTheme({bool dark = false}) {
       behavior: SnackBarBehavior.floating,
     ),
     dialogTheme: DialogThemeData(
-      backgroundColor: surface,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      shadowColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: GardenRadius.xl_),
     ),
   );

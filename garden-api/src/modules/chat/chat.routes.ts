@@ -50,7 +50,7 @@ router.get('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Requ
             id: m.id,
             bookingId: m.bookingId,
             senderId: m.senderId,
-            senderName: `${m.sender.firstName} ${m.sender.lastName}`,
+            senderName: `${(m as any).sender.firstName} ${(m as any).sender.lastName}`,
             senderRole: m.senderRole,
             message: m.message,
             read: m.read,
@@ -94,7 +94,7 @@ router.post('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Req
     // Crear el mensaje
     const newMessage = await prisma.chatMessage.create({
         data: {
-            bookingId,
+            bookingId: bookingId!,
             senderId: userId,
             senderRole,
             message: message.trim(),
@@ -111,7 +111,7 @@ router.post('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Req
         });
         if (previousMessages === 1) {
             // Es el primer mensaje (acabamos de crear el único)
-            const senderName = `${newMessage.sender.firstName} ${newMessage.sender.lastName}`;
+            const senderName = `${(newMessage as any).sender.firstName} ${(newMessage as any).sender.lastName}`;
             await prisma.notification.create({
                 data: {
                     userId: recipientId,
@@ -129,7 +129,7 @@ router.post('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Req
             id: newMessage.id,
             bookingId: newMessage.bookingId,
             senderId: newMessage.senderId,
-            senderName: `${newMessage.sender.firstName} ${newMessage.sender.lastName}`,
+            senderName: `${(newMessage as any).sender.firstName} ${(newMessage as any).sender.lastName}`,
             senderRole: newMessage.senderRole,
             message: newMessage.message,
             read: newMessage.read,

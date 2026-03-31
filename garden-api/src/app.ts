@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import path from 'path';
 import { env } from './config/env.js';
 import { errorHandler } from './shared/error-handler.js';
+import prisma from './config/database.js';
 import caregiverRoutes from './modules/caregiver-service/caregiver.routes.js';
 import userRoutes from './modules/user-service/user.routes.js';
 import adminRoutes from './modules/admin/admin.routes.js';
@@ -20,12 +21,18 @@ import agentesRoutes from './modules/agentes/agentes.routes.js';
 import chatRoutes from './modules/chat/chat.routes.js';
 import walletRoutes from './modules/wallet/wallet.routes.js';
 import disputeRoutes from './modules/dispute/dispute.routes.js';
+import meetAndGreetRoutes from './modules/meet-and-greet/meet-and-greet.routes.js';
 
 const app = express();
 
 app.use(helmet());
 app.use(cors({
-  origin: [/http:\/\/localhost:\d+/, /http:\/\/127\.0\.0\.1:\d+/, 'http://localhost:5173'],
+  origin: [
+    /http:\/\/localhost:\d+/,
+    /http:\/\/127\.0\.0\.1:\d+/,
+    /http:\/\/192\.168\.\d+\.\d+:\d+/,  // red local (dispositivos móviles)
+    'http://localhost:5173',
+  ],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
@@ -78,6 +85,28 @@ app.use('/api/agentes', agentesRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/disputes', disputeRoutes);
+app.use('/api/meet-and-greet', meetAndGreetRoutes);
+
+/** GET /api/settings — public endpoint, no auth required */
+app.get('/api/settings', async (_req, res) => {
+  try {
+    const settings = await prisma.appSettings.findMany();
+    const map: Record<string, unknown> = {};
+    for (const s of settings) {
+      try { map[s.key] = JSON.parse(s.value); } catch { map[s.key] = s.value; }
+    }
+    const defaults: Record<string, unknown> = {
+      walk30Enabled: false,
+      maintenanceMode: false,
+      newRegistrationsEnabled: true,
+      marketplaceEnabled: true,
+      paymentsEnabled: true,
+    };
+    res.json({ success: true, data: { ...defaults, ...map } });
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Error loading settings' } });
+  }
+});
 
 app.use(errorHandler);
 

@@ -314,4 +314,33 @@ export const uploadPublicSinglePhotoHandler = [
   })
 ];
 
+/** POST /api/upload/user-photo — multipart 'photo' (single file). Updates User.profilePicture. Requires any auth. */
+export const uploadUserPhotoHandler = [
+  upload.single('photo'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const file = req.file;
+    const userId = req.user!.userId;
+
+    if (!file) throw new CaregiverProfileValidationError('Se requiere una foto (JPG/PNG, máx. 5MB)');
+    if (!file.mimetype.startsWith('image/')) throw new CaregiverProfileValidationError('El archivo debe ser una imagen');
+
+    let url: string;
+    if (isCloudinaryConfigured()) {
+      try {
+        url = await uploadProfilePhotoToCloudinary(file.buffer, userId);
+      } catch (err) {
+        logger.error('Fallo Cloudinary userPhoto, usando local', { error: err });
+        const urls = await saveRegistrationPhotosToLocal([file.buffer], `user-${userId}`);
+        url = urls[0]!;
+      }
+    } else {
+      const urls = await saveRegistrationPhotosToLocal([file.buffer], `user-${userId}`);
+      url = urls[0]!;
+    }
+
+    await prisma.user.update({ where: { id: userId }, data: { profilePicture: url } });
+    res.json({ success: true, data: { url } });
+  }),
+];
+
 // Obsolete CI handlers removed per requirement

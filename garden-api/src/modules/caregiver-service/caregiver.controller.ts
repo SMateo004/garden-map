@@ -11,6 +11,7 @@ import { processAndUploadToCloudinary } from './upload.middleware.js';
 import { CaregiverNotFoundError, CaregiverProfileValidationError, NotFoundError } from '../../shared/errors.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import logger from '../../shared/logger.js';
+import prisma from '../../config/database.js';
 
 /**
  * GET /api/caregivers
@@ -21,9 +22,10 @@ import logger from '../../shared/logger.js';
 export const list = asyncHandler(async (req: Request, res: Response) => {
   try {
     const query = listCaregiversQuerySchema.parse(req.query);
+    const normalizedService = query.service?.toLowerCase();
     const serviceFilter =
-      query.service === 'paseo' || query.service === 'hospedaje'
-        ? (query.service === 'paseo' ? 'PASEO' : 'HOSPEDAJE')
+      normalizedService === 'paseo' || normalizedService === 'hospedaje'
+        ? (normalizedService === 'paseo' ? 'PASEO' : 'HOSPEDAJE')
         : undefined;
     const zoneFilter = query.zone ? [ZONE_QUERY_TO_ENUM[query.zone]].filter(Boolean) : undefined;
 
@@ -274,5 +276,40 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
     res.status(201).json({ success: true, data: profile });
   } else {
     res.status(200).json({ success: true, data: profile });
+  }
+});
+
+/** GET /api/caregivers/price-stats?zone=X&service=Y — returns price stats for the onboarding wizard */
+export const getPriceStats = asyncHandler(async (req: Request, res: Response) => {
+  const zone = req.query.zone as string | undefined;
+  const service = (req.query.service as string | undefined) ?? 'PASEO';
+
+  const where: Record<string, unknown> = { status: 'APPROVED', suspended: false };
+  if (zone) where.zone = zone;
+
+  if (service === 'PASEO') {
+    where.servicesOffered = { has: 'PASEO' };
+    const profiles = await prisma.caregiverProfile.findMany({
+      where: { ...(where as any), pricePerWalk60: { not: null } },
+      select: { pricePerWalk60: true },
+    });
+    if (profiles.length === 0) {
+      return res.json({ success: true, data: { avgPrice: 80, minPrice: 50, maxPrice: 150, count: 0 } });
+    }
+    const prices = profiles.map(p => Number(p.pricePerWalk60));
+    const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+    return res.json({ success: true, data: { avgPrice: avg, minPrice: Math.min(...prices), maxPrice: Math.max(...prices), count: profiles.length } });
+  } else {
+    where.servicesOffered = { has: 'HOSPEDAJE' };
+    const profiles = await prisma.caregiverProfile.findMany({
+      where: { ...(where as any), pricePerDay: { not: null } },
+      select: { pricePerDay: true },
+    });
+    if (profiles.length === 0) {
+      return res.json({ success: true, data: { avgPrice: 120, minPrice: 80, maxPrice: 200, count: 0 } });
+    }
+    const prices = profiles.map(p => Number(p.pricePerDay));
+    const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+    return res.json({ success: true, data: { avgPrice: avg, minPrice: Math.min(...prices), maxPrice: Math.max(...prices), count: profiles.length } });
   }
 });

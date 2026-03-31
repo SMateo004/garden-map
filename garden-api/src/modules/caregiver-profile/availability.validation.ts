@@ -14,6 +14,9 @@ export const defaultScheduleSchema = z
   .object({
     hospedajeDefault: z.boolean().optional(),
     paseoTimeBlocks: timeBlocksSchema,
+    weekdays: z.boolean().optional(),
+    weekends: z.boolean().optional(),
+    holidays: z.boolean().optional(),
   })
   .optional();
 

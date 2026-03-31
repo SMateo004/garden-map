@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
-import '../../main.dart'; // Para themeNotifier
+import '../../utils/garden_banks.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -239,7 +239,14 @@ class _WalletScreenState extends State<WalletScreen> {
                           ),
                         )
                       else
-                        ...(_walletData!['transactions'] as List).map((t) => _buildTransactionTile(t as Map<String, dynamic>, surface, textColor, subtextColor, borderColor)),
+                        ...(_walletData!['transactions'] as List)
+                          .where((t) {
+                            final tx = t as Map;
+                            // Solo mostrar retiros COMPLETADOS en el historial; los PENDING/PROCESSING se ocultan
+                            if (tx['type'] == 'WITHDRAWAL' && tx['status'] != 'COMPLETED') return false;
+                            return true;
+                          })
+                          .map((t) => _buildTransactionTile(t as Map<String, dynamic>, surface, textColor, subtextColor, borderColor)),
                     ],
                   ),
                 ),
@@ -268,7 +275,6 @@ class _WalletScreenState extends State<WalletScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setSheet) {
           final isDark = themeNotifier.isDark;
-          final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
           final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
           final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
           final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
@@ -276,11 +282,8 @@ class _WalletScreenState extends State<WalletScreen> {
 
           return Padding(
             padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-            child: Container(
-              decoration: BoxDecoration(
-                color: surface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              ),
+            child: GlassBox(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               padding: const EdgeInsets.all(24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -334,16 +337,32 @@ class _WalletScreenState extends State<WalletScreen> {
                         );
                         final data = jsonDecode(response.body);
                         if (data['success'] == true) {
-                          Navigator.pop(ctx);
+                          if (ctx.mounted) Navigator.pop(ctx);
                           await _loadWallet();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Solicitud enviada. El admin procesará tu retiro.'), backgroundColor: GardenColors.success),
-                          );
+                          if (mounted) {
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              SnackBar(
+                                content: const Row(
+                                  children: [
+                                    Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                                    SizedBox(width: 10),
+                                    Expanded(child: Text('¡Solicitud enviada! Revisa tus notificaciones para más detalles.')),
+                                  ],
+                                ),
+                                backgroundColor: GardenColors.success,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                duration: const Duration(seconds: 4),
+                              ),
+                            );
+                          }
                         } else {
                           setSheet(() => isSubmitting = false);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(data['error']?['message'] ?? 'Error'), backgroundColor: GardenColors.error),
-                          );
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(data['error']?['message'] ?? 'Error'), backgroundColor: GardenColors.error),
+                            );
+                          }
                         }
                       } catch (e) { setSheet(() => isSubmitting = false); }
                     },
@@ -360,9 +379,9 @@ class _WalletScreenState extends State<WalletScreen> {
 
   void _showBankInfoSheet() {
     final bankInfo = _walletData?['caregiverBankInfo'];
-    final bankNameController = TextEditingController(text: bankInfo?['bankName'] as String? ?? '');
     final bankAccountController = TextEditingController(text: bankInfo?['bankAccount'] as String? ?? '');
     final bankHolderController = TextEditingController(text: bankInfo?['bankHolder'] as String? ?? '');
+    String selectedBankName = bankInfo?['bankName'] as String? ?? '';
     String selectedBankType = bankInfo?['bankType'] as String? ?? 'CUENTA_AHORRO';
     bool isSaving = false;
 
@@ -373,19 +392,16 @@ class _WalletScreenState extends State<WalletScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setSheet) {
           final isDark = themeNotifier.isDark;
-          final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
           final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
           final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
           final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
           final surfaceEl = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
+          final isWallet = GardenBanks.isDigitalWallet(selectedBankName);
 
           return Padding(
             padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-            child: Container(
-              decoration: BoxDecoration(
-                color: surface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              ),
+            child: GlassBox(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               padding: const EdgeInsets.all(24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -393,46 +409,93 @@ class _WalletScreenState extends State<WalletScreen> {
                 children: [
                   Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2)))),
                   const SizedBox(height: 20),
-                  Text('Datos bancarios', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 16),
-                  // Tipo de cuenta
-                  DropdownButtonFormField<String>(
-                    value: selectedBankType,
-                    dropdownColor: surface,
-                    style: TextStyle(color: textColor),
-                    decoration: InputDecoration(
-                      labelText: 'Tipo de cuenta',
-                      labelStyle: TextStyle(color: subtextColor),
-                      filled: true, fillColor: surfaceEl,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  Text('Datos de cobro', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 4),
+                  Text('Estos datos se usan para depositar tus ganancias.', style: TextStyle(color: subtextColor, fontSize: 12)),
+                  const SizedBox(height: 20),
+
+                  // ── Selector de banco/billetera ──
+                  GestureDetector(
+                    onTap: () => _showBankPickerSheet(context, isDark, selectedBankName, (bank) {
+                      setSheet(() {
+                        selectedBankName = bank['name']!;
+                        selectedBankType = bank['type']!;
+                      });
+                    }),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: surfaceEl,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: selectedBankName.isEmpty ? borderColor : GardenColors.primary.withValues(alpha: 0.6)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            selectedBankName.isEmpty
+                                ? Icons.account_balance_rounded
+                                : (isWallet ? Icons.account_balance_wallet_rounded : Icons.account_balance_rounded),
+                            color: selectedBankName.isEmpty ? subtextColor : GardenColors.primary,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: selectedBankName.isEmpty
+                                ? Text('Selecciona banco o billetera', style: TextStyle(color: subtextColor, fontSize: 14))
+                                : Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(selectedBankName, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
+                                      Text(GardenBanks.typeLabels[selectedBankType] ?? selectedBankType,
+                                          style: TextStyle(color: subtextColor, fontSize: 11)),
+                                    ],
+                                  ),
+                          ),
+                          Icon(Icons.keyboard_arrow_down_rounded, color: subtextColor, size: 20),
+                        ],
+                      ),
                     ),
-                    items: const [
-                      DropdownMenuItem(value: 'CUENTA_AHORRO', child: Text('Cuenta de ahorro')),
-                      DropdownMenuItem(value: 'CUENTA_CORRIENTE', child: Text('Cuenta corriente')),
-                      DropdownMenuItem(value: 'TIGO_MONEY', child: Text('Tigo Money')),
-                      DropdownMenuItem(value: 'BILLETERA', child: Text('Billetera digital')),
-                    ],
-                    onChanged: (val) => setSheet(() => selectedBankType = val ?? 'CUENTA_AHORRO'),
                   ),
                   const SizedBox(height: 12),
-                  _withdrawField('Banco o billetera', bankNameController, 'Ej: Banco BNB, Tigo Money', textColor, subtextColor, surfaceEl, borderColor),
-                  const SizedBox(height: 12),
-                  _withdrawField('Número de cuenta', bankAccountController, 'Número de cuenta o teléfono', textColor, subtextColor, surfaceEl, borderColor),
+
+                  // ── Tipo de cuenta (solo bancos tradicionales) ──
+                  if (selectedBankName.isNotEmpty && !isWallet) ...[
+                    Row(
+                      children: [
+                        _accountTypeChip('Cuenta de ahorro', 'CUENTA_AHORRO', selectedBankType, textColor, subtextColor, (v) => setSheet(() => selectedBankType = v)),
+                        const SizedBox(width: 10),
+                        _accountTypeChip('Cuenta corriente', 'CUENTA_CORRIENTE', selectedBankType, textColor, subtextColor, (v) => setSheet(() => selectedBankType = v)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  _withdrawField(
+                    isWallet ? 'Número de teléfono' : 'Número de cuenta',
+                    bankAccountController,
+                    isWallet ? 'Ej: 70012345' : 'Número de cuenta bancaria',
+                    textColor, subtextColor, surfaceEl, borderColor,
+                  ),
                   const SizedBox(height: 12),
                   _withdrawField('Titular', bankHolderController, 'Nombre completo del titular', textColor, subtextColor, surfaceEl, borderColor),
                   const SizedBox(height: 20),
                   GardenButton(
-                    label: isSaving ? 'Guardando...' : 'Guardar datos bancarios',
+                    label: isSaving ? 'Guardando...' : 'Guardar datos de cobro',
                     loading: isSaving,
                     onPressed: () async {
+                      if (selectedBankName.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Selecciona un banco o billetera')),
+                        );
+                        return;
+                      }
                       setSheet(() => isSaving = true);
                       try {
                         final response = await http.patch(
                           Uri.parse('$_baseUrl/caregiver/bank-info'),
                           headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
                           body: jsonEncode({
-                            'bankName': bankNameController.text.trim(),
+                            'bankName': selectedBankName,
                             'bankAccount': bankAccountController.text.trim(),
                             'bankHolder': bankHolderController.text.trim(),
                             'bankType': selectedBankType,
@@ -440,11 +503,13 @@ class _WalletScreenState extends State<WalletScreen> {
                         );
                         final data = jsonDecode(response.body);
                         if (data['success'] == true) {
-                          Navigator.pop(ctx);
+                          if (ctx.mounted) Navigator.pop(ctx);
                           await _loadWallet();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Datos bancarios guardados'), backgroundColor: GardenColors.success),
-                          );
+                          if (mounted) {
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              const SnackBar(content: Text('Datos de cobro guardados'), backgroundColor: GardenColors.success),
+                            );
+                          }
                         } else {
                           setSheet(() => isSaving = false);
                         }
@@ -453,11 +518,153 @@ class _WalletScreenState extends State<WalletScreen> {
                       }
                     },
                   ),
+                  const SizedBox(height: 8),
                 ],
               ),
             ),
           );
         },
+      ),
+    );
+  }
+
+  void _showBankPickerSheet(
+    BuildContext parentCtx,
+    bool isDark,
+    String currentBank,
+    void Function(Map<String, String> bank) onSelected,
+  ) {
+    final searchController = TextEditingController();
+
+    showModalBottomSheet(
+      context: parentCtx,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setPickerSheet) {
+          final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+          final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+          final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+          final surfaceEl = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
+
+          final query = searchController.text.toLowerCase();
+          final filtered = query.isEmpty
+              ? GardenBanks.all
+              : GardenBanks.all.where((b) => b['name']!.toLowerCase().contains(query)).toList();
+
+          // Build grouped list items
+          final items = <Widget>[];
+          for (final category in ['Bancos', 'Billeteras digitales']) {
+            final catBanks = filtered.where((b) => b['category'] == category).toList();
+            if (catBanks.isEmpty) continue;
+            items.add(Padding(
+              padding: const EdgeInsets.only(left: 4, top: 12, bottom: 6),
+              child: Text(category.toUpperCase(),
+                  style: TextStyle(color: subtextColor, fontWeight: FontWeight.w700, fontSize: 10, letterSpacing: 1)),
+            ));
+            for (final bank in catBanks) {
+              final isSelected = bank['name'] == currentBank;
+              items.add(Material(
+                color: Colors.transparent,
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  leading: Container(
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? GardenColors.primary.withValues(alpha: 0.15)
+                          : GardenColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      category == 'Bancos' ? Icons.account_balance_rounded : Icons.account_balance_wallet_rounded,
+                      color: isSelected ? GardenColors.primary : subtextColor,
+                      size: 18,
+                    ),
+                  ),
+                  title: Text(bank['name']!,
+                      style: TextStyle(
+                        color: isSelected ? GardenColors.primary : textColor,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        fontSize: 14,
+                      )),
+                  subtitle: Text(GardenBanks.typeLabels[bank['type']] ?? '',
+                      style: TextStyle(color: subtextColor, fontSize: 11)),
+                  trailing: isSelected ? const Icon(Icons.check_circle_rounded, color: GardenColors.primary, size: 20) : null,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    onSelected(Map<String, String>.from(bank));
+                  },
+                ),
+              ));
+            }
+          }
+
+          return SizedBox(
+            height: MediaQuery.of(context).size.height * 0.78,
+            child: GlassBox(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              children: [
+                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2)))),
+                const SizedBox(height: 16),
+                Text('Banco o billetera', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 18)),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: searchController,
+                  style: TextStyle(color: textColor),
+                  onChanged: (_) => setPickerSheet(() {}),
+                  decoration: InputDecoration(
+                    hintText: 'Buscar...',
+                    hintStyle: TextStyle(color: subtextColor),
+                    prefixIcon: Icon(Icons.search_rounded, color: subtextColor, size: 20),
+                    filled: true, fillColor: surfaceEl,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Expanded(child: ListView(padding: EdgeInsets.zero, children: items)),
+              ],
+            ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _accountTypeChip(
+    String label,
+    String value,
+    String selected,
+    Color textColor,
+    Color subtextColor,
+    void Function(String) onSelect,
+  ) {
+    final isSelected = selected == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => onSelect(value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? GardenColors.primary.withValues(alpha: 0.12) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: isSelected ? GardenColors.primary : subtextColor.withValues(alpha: 0.3)),
+          ),
+          child: Center(
+            child: Text(label,
+                style: TextStyle(
+                  color: isSelected ? GardenColors.primary : subtextColor,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  fontSize: 12,
+                )),
+          ),
+        ),
       ),
     );
   }
@@ -597,110 +804,101 @@ class _WalletScreenState extends State<WalletScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialog) {
           final isDark = themeNotifier.isDark;
-          final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
           final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
           final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
           final surfaceEl = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
 
-          return Dialog(
-            backgroundColor: surface,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('🎁', style: TextStyle(fontSize: 48)),
-                  const SizedBox(height: 16),
-                  Text('Código de regalo',
-                    style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 8),
-                  Text('Ingresa tu código para recibir saldo gratis en tu billetera',
-                    style: TextStyle(color: subtextColor, fontSize: 13),
-                    textAlign: TextAlign.center),
-                  const SizedBox(height: 24),
-                  TextField(
-                    controller: codeController,
-                    textCapitalization: TextCapitalization.characters,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 6,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: 'CÓDIGO',
-                      hintStyle: TextStyle(color: subtextColor.withOpacity(0.3), letterSpacing: 4, fontSize: 16),
-                      filled: true,
-                      fillColor: surfaceEl,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16), 
-                        borderSide: const BorderSide(color: GardenColors.star, width: 2)
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 20),
-                    ),
+          return GardenGlassDialog(
+            title: const Text('🎁  Código de regalo'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Ingresa tu código para recibir saldo gratis en tu billetera',
+                  style: TextStyle(color: subtextColor, fontSize: 13),
+                  textAlign: TextAlign.center),
+                const SizedBox(height: 24),
+                TextField(
+                  controller: codeController,
+                  textCapitalization: TextCapitalization.characters,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 6,
                   ),
-                  const SizedBox(height: 24),
-                  GardenButton(
-                    label: isRedeeming ? 'Validando...' : 'Canjear código',
-                    loading: isRedeeming,
-                    color: GardenColors.star,
-                    onPressed: () async {
-                      final code = codeController.text.trim();
-                      if (code.isEmpty) return;
-                      setDialog(() => isRedeeming = true);
-                      try {
-                        final response = await http.post(
-                          Uri.parse('$_baseUrl/wallet/redeem'),
-                          headers: {
-                            'Authorization': 'Bearer $_token',
-                            'Content-Type': 'application/json',
-                          },
-                          body: jsonEncode({'code': code}),
+                  decoration: InputDecoration(
+                    hintText: 'CÓDIGO',
+                    hintStyle: TextStyle(color: subtextColor.withOpacity(0.3), letterSpacing: 4, fontSize: 16),
+                    filled: true,
+                    fillColor: surfaceEl,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: GardenColors.star, width: 2),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 20),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                GardenButton(
+                  label: isRedeeming ? 'Validando...' : 'Canjear código',
+                  loading: isRedeeming,
+                  color: GardenColors.star,
+                  onPressed: () async {
+                    final code = codeController.text.trim();
+                    if (code.isEmpty) return;
+                    setDialog(() => isRedeeming = true);
+                    try {
+                      final response = await http.post(
+                        Uri.parse('$_baseUrl/wallet/redeem'),
+                        headers: {
+                          'Authorization': 'Bearer $_token',
+                          'Content-Type': 'application/json',
+                        },
+                        body: jsonEncode({'code': code}),
+                      );
+                      final data = jsonDecode(response.body);
+                      if (data['success'] == true) {
+                        Navigator.pop(ctx);
+                        await _loadWallet();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                const Text('🎉', style: TextStyle(fontSize: 20)),
+                                const SizedBox(width: 12),
+                                Expanded(child: Text(data['data']['message'])),
+                              ],
+                            ),
+                            backgroundColor: GardenColors.success,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
                         );
-                        final data = jsonDecode(response.body);
-                        if (data['success'] == true) {
-                          Navigator.pop(ctx);
-                          await _loadWallet();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Row(
-                                children: [
-                                  const Text('🎉', style: TextStyle(fontSize: 20)),
-                                  const SizedBox(width: 12),
-                                  Expanded(child: Text(data['data']['message'])),
-                                ],
-                              ),
-                              backgroundColor: GardenColors.success,
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                          );
-                        } else {
-                          setDialog(() => isRedeeming = false);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(data['error']?['message'] ?? 'Código inválido'),
-                              backgroundColor: GardenColors.error,
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        }
-                      } catch (e) {
+                      } else {
                         setDialog(() => isRedeeming = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(data['error']?['message'] ?? 'Código inválido'),
+                            backgroundColor: GardenColors.error,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
                       }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: Text('Cerrar', style: TextStyle(color: subtextColor, fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              ),
+                    } catch (e) {
+                      setDialog(() => isRedeeming = false);
+                    }
+                  },
+                ),
+              ],
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('Cerrar', style: TextStyle(color: subtextColor, fontWeight: FontWeight.w600)),
+              ),
+            ],
           );
         },
       ),

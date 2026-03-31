@@ -26,10 +26,11 @@ class _BookingScreenState extends State<BookingScreen> {
   DateTime? _selectedDate; // para paseo: fecha del paseo; para hospedaje: fecha inicio
   DateTime? _endDate; // solo hospedaje
   String? _selectedTimeSlot; // 'MANANA', 'TARDE', 'NOCHE'
-  final int _selectedDuration = 30; // solo paseo: 30 o 60 minutos
+  int _selectedDuration = 60; // solo paseo: 60 minutos (walk30 deshabilitado)
   bool _isSubmitting = false;
 
   List<Map<String, dynamic>> _availableSlots = [];
+  List<Map<String, dynamic>> _bookedPaseos = []; // reservas activas del cuidador
   bool _loadingSlots = false;
   String? _selectedStartTime; // hora específica dentro del slot, ej: "09:00"
 
@@ -138,7 +139,19 @@ class _BookingScreenState extends State<BookingScreen> {
       }
 
       final enabledSlots = slots.where((s) => s['enabled'] == true).toList();
-      setState(() => _availableSlots = enabledSlots);
+
+      List<Map<String, dynamic>> booked = [];
+      if (body is Map && body['success'] == true) {
+        final d = body['data'];
+        if (d is Map && d['bookedPaseos'] is List) {
+          booked = (d['bookedPaseos'] as List).cast<Map<String, dynamic>>();
+        }
+      }
+
+      setState(() {
+        _availableSlots = enabledSlots;
+        _bookedPaseos = booked;
+      });
       
     } catch (e) {
       debugPrint('ERROR slots: $e');
@@ -242,11 +255,7 @@ class _BookingScreenState extends State<BookingScreen> {
   double? _calculatePrice() {
      if (_caregiver == null || _selectedService == null) return null;
      if (_selectedService == 'PASEO') {
-         if (_selectedDuration == 30) {
-             return (_caregiver!['pricePerWalk30'] as num?)?.toDouble();
-         } else {
-             return (_caregiver!['pricePerWalk60'] as num?)?.toDouble();
-         }
+         return (_caregiver!['pricePerWalk60'] as num?)?.toDouble();
      } else if (_selectedService == 'HOSPEDAJE') {
          if (_selectedDate != null && _endDate != null) {
              int days = _endDate!.difference(_selectedDate!).inDays;
@@ -295,24 +304,31 @@ class _BookingScreenState extends State<BookingScreen> {
               ],
             ),
           ),
-          // Precio
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                _caregiver!['pricePerWalk30'] != null
-                  ? 'Bs ${_caregiver!['pricePerWalk30']}'
-                  : _caregiver!['pricePerDay'] != null
-                    ? 'Bs ${_caregiver!['pricePerDay']}'
-                    : 'Consultar',
-                style: const TextStyle(color: GardenColors.primary, fontSize: 18, fontWeight: FontWeight.w800),
-              ),
-              Text(
-                _caregiver!['pricePerWalk30'] != null ? 'por paseo' : 'por noche',
-                style: TextStyle(color: subtextColor, fontSize: 11),
-              ),
-            ],
-          ),
+          // Precio dinámico
+          Builder(builder: (_) {
+            String priceText;
+            String priceUnit;
+            if (_selectedService == 'PASEO') {
+              final p = _caregiver!['pricePerWalk60'];
+              priceText = p != null ? 'Bs $p' : '—';
+              priceUnit = '1 hora';
+            } else if (_selectedService == 'HOSPEDAJE') {
+              priceText = _caregiver!['pricePerDay'] != null ? 'Bs ${_caregiver!['pricePerDay']}' : '—';
+              priceUnit = 'por noche';
+            } else {
+              final p60 = _caregiver!['pricePerWalk60'];
+              priceText = p60 != null ? 'Bs $p60/hora' : '—';
+              priceUnit = 'paseo 1h';
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(priceText,
+                    style: const TextStyle(color: GardenColors.primary, fontSize: 17, fontWeight: FontWeight.w800)),
+                Text(priceUnit, style: TextStyle(color: subtextColor, fontSize: 11)),
+              ],
+            );
+          }),
         ],
       ),
     );
@@ -387,14 +403,24 @@ class _BookingScreenState extends State<BookingScreen> {
                           child: Container(
                             width: 100,
                             margin: const EdgeInsets.only(right: 12),
-                            decoration: BoxDecoration(
-                              color: isSelected ? GardenColors.primary.withOpacity(0.12) : surface,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isSelected ? GardenColors.primary : borderColor,
-                                width: isSelected ? 2 : 1,
-                              ),
-                            ),
+                            decoration: isSelected
+                                ? BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        GardenColors.primary.withValues(alpha: 0.18),
+                                        GardenColors.primary.withValues(alpha: 0.08),
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: GardenColors.primary.withValues(alpha: 0.35), width: 1.0),
+                                  )
+                                : BoxDecoration(
+                                    color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white.withValues(alpha: 0.40),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: borderColor, width: 1.0),
+                                  ),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -435,7 +461,9 @@ class _BookingScreenState extends State<BookingScreen> {
                         child: _ServiceCard(
                           title: 'Paseo',
                           emoji: '🦮',
-                          price: 'Bs ${_caregiver!['pricePerWalk30'] ?? '—'}',
+                          price: _caregiver!['pricePerWalk60'] != null
+                              ? 'Bs ${_caregiver!['pricePerWalk60']}/hora'
+                              : '—',
                           isSelected: _selectedService == 'PASEO',
                           onTap: () => setState(() {
                             _selectedService = 'PASEO';
@@ -472,6 +500,38 @@ class _BookingScreenState extends State<BookingScreen> {
 
                 // Selección de Fecha / Hora
                 if (_selectedService == 'PASEO') ...[
+                  // ── Duración ──
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: GardenColors.primary.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: GardenColors.primary.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.timer_outlined, color: GardenColors.primary, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Paseo de 1 hora', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                              Text('Todos los paseos tienen duración de 60 minutos', style: TextStyle(color: subtextColor, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          _caregiver!['pricePerWalk60'] != null ? 'Bs ${_caregiver!['pricePerWalk60']}' : '—',
+                          style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w800, fontSize: 16),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Divider(color: borderColor),
+                  const SizedBox(height: 24),
+
                   Text('¿Cuándo?', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
                   ListTile(
@@ -536,7 +596,7 @@ class _BookingScreenState extends State<BookingScreen> {
                             ),
                             if (isSelected) ...[
                               const SizedBox(height: 12),
-                              _buildTimeChips(slot),
+                              _buildTimeChips(slot, _selectedDate!),
                             ],
                           ],
                         ),
@@ -658,12 +718,73 @@ class _BookingScreenState extends State<BookingScreen> {
     }
   }
 
-  Widget _buildTimeChips(Map<String, dynamic> slot) {
+  Widget _buildDurationChip(int minutes, dynamic price, Color textColor) {
+    final isDark = themeNotifier.isDark;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final isSelected = _selectedDuration == minutes;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() {
+          _selectedDuration = minutes;
+          _selectedStartTime = null;
+        }),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+          decoration: isSelected
+              ? BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      GardenColors.primary.withValues(alpha: 0.18),
+                      GardenColors.primary.withValues(alpha: 0.08),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: GardenColors.primary.withValues(alpha: 0.35), width: 1.0),
+                )
+              : BoxDecoration(
+                  color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white.withValues(alpha: 0.40),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: borderColor, width: 1.0),
+                ),
+          child: Column(children: [
+            Icon(Icons.timer_outlined, color: isSelected ? GardenColors.primary : textColor, size: 22),
+            const SizedBox(height: 6),
+            Text('$minutes min',
+                style: TextStyle(color: isSelected ? GardenColors.primary : textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+            const SizedBox(height: 2),
+            Text(price != null ? 'Bs $price' : '—',
+                style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w800, fontSize: 16)),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  bool _isTimeConflicting(String time, String dateStr) {
+    if (_bookedPaseos.isEmpty) return false;
+    final parts = time.split(':');
+    final newStart = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+    final newEnd = newStart + _selectedDuration + 30; // +30 min descanso
+    for (final b in _bookedPaseos) {
+      if (b['date'] != dateStr) continue;
+      final sp = (b['startTime'] as String).split(':');
+      final bStart = int.parse(sp[0]) * 60 + int.parse(sp[1]);
+      final bEnd = bStart + (b['duration'] as int? ?? 30) + 30;
+      if (newStart < bEnd && newEnd > bStart) return true;
+    }
+    return false;
+  }
+
+  Widget _buildTimeChips(Map<String, dynamic> slot, DateTime date) {
+    final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
     final startParts = (slot['start'] as String).split(':');
     final endParts = (slot['end'] as String).split(':');
     final startHour = int.parse(startParts[0]);
     final endHour = int.parse(endParts[0]);
-    
+
     final timeSlots = <String>[];
     for (int h = startHour; h < endHour; h++) {
       for (int m = 0; m < 60; m += 30) {
@@ -674,24 +795,48 @@ class _BookingScreenState extends State<BookingScreen> {
       }
     }
 
+    // Ocultar horarios que ya están reservados (incluye buffer de descanso)
+    final available = timeSlots.where((t) => !_isTimeConflicting(t, dateStr)).toList();
+
+    if (available.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 4),
+        child: Text('No hay horarios disponibles en este bloque',
+            style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary, fontSize: 12)),
+      );
+    }
+
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: timeSlots.map((time) {
+      children: available.map((time) {
         final isSelected = _selectedStartTime == time;
         return GestureDetector(
           onTap: () => setState(() => _selectedStartTime = time),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: isSelected ? GardenColors.primary : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: isSelected ? GardenColors.primary : GardenColors.darkBorder),
-            ),
+            decoration: isSelected
+                ? BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        GardenColors.primary.withValues(alpha: 0.18),
+                        GardenColors.primary.withValues(alpha: 0.08),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: GardenColors.primary.withValues(alpha: 0.35), width: 1.0),
+                  )
+                : BoxDecoration(
+                    color: themeNotifier.isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white.withValues(alpha: 0.40),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: themeNotifier.isDark ? GardenColors.darkBorder : GardenColors.lightBorder, width: 1.0),
+                  ),
             child: Text(
               time,
               style: TextStyle(
-                color: isSelected ? Colors.white : themeNotifier.isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
+                color: isSelected ? GardenColors.primary : themeNotifier.isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
             ),
@@ -723,6 +868,7 @@ class _BookingScreenState extends State<BookingScreen> {
           const SizedBox(height: 12),
           _summaryRow(Icons.pets, 'Mascota', petName),
           _summaryRow(Icons.settings, 'Servicio', _selectedService == 'PASEO' ? 'Paseo' : 'Hospedaje'),
+          if (_selectedService == 'PASEO') _summaryRow(Icons.timer_outlined, 'Duración', '60 min'),
           _summaryRow(Icons.calendar_today, 'Fecha', formatDate(_selectedDate!)),
           if (_selectedService == 'PASEO') _summaryRow(Icons.access_time, 'Hora', _selectedStartTime ?? ''),
           const Divider(height: 24),
@@ -772,21 +918,30 @@ class _ServiceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = themeNotifier.isDark;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isSelected ? GardenColors.primary.withOpacity(0.12) : surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected ? GardenColors.primary : borderColor,
-            width: isSelected ? 2 : 1,
-          ),
-        ),
+        decoration: isSelected
+            ? BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    GardenColors.primary.withValues(alpha: 0.18),
+                    GardenColors.primary.withValues(alpha: 0.08),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.35), width: 1.0),
+              )
+            : BoxDecoration(
+                color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white.withValues(alpha: 0.40),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: borderColor, width: 1.0),
+              ),
         child: Column(
           children: [
             Text(emoji, style: const TextStyle(fontSize: 32)),

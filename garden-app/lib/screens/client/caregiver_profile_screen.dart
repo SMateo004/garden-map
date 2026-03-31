@@ -141,9 +141,13 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     final zone = _caregiver!['zone'] as String? ?? '';
     final bio = _caregiver!['bio'] as String? ?? '';
     final verified = _caregiver!['verified'] == true;
-    final pricePerWalk = _caregiver!['pricePerWalk30'];
+    final pricePerWalk60 = _caregiver!['pricePerWalk60'];
     final pricePerDay = _caregiver!['pricePerDay'];
-    final priceDisplay = pricePerWalk != null ? 'Bs $pricePerWalk/paseo' : pricePerDay != null ? 'Bs $pricePerDay/noche' : 'Consultar';
+    final priceDisplay = pricePerWalk60 != null
+        ? 'Bs $pricePerWalk60/hora'
+        : pricePerDay != null
+            ? 'Bs $pricePerDay/noche'
+            : 'Consultar';
 
     return Scaffold(
       backgroundColor: bg,
@@ -162,7 +166,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                       height: 320,
                       child: photos.isNotEmpty
                           ? Image.network(
-                              photos[_selectedPhotoIndex],
+                              fixImageUrl(photos[_selectedPhotoIndex]),
                               fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) => Container(
                                 color: GardenColors.primary.withOpacity(0.1),
@@ -251,7 +255,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(4),
-                                  child: Image.network(e.value, fit: BoxFit.cover),
+                                  child: Image.network(fixImageUrl(e.value), fit: BoxFit.cover),
                                 ),
                               ),
                             );
@@ -399,12 +403,12 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                                   Text(isWalk ? 'Paseo' : 'Hospedaje',
                                     style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
                                   const SizedBox(height: 4),
-                                  Text(
-                                    isWalk
-                                      ? 'Bs ${pricePerWalk ?? '—'} / 30 min'
-                                      : 'Bs ${pricePerDay ?? '—'} / noche',
-                                    style: const TextStyle(color: GardenColors.primary, fontSize: 14, fontWeight: FontWeight.w600),
-                                  ),
+                                  if (isWalk) ...[
+                                    Text('Bs ${pricePerWalk60 ?? '—'} / 1 hora',
+                                        style: const TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                                  ] else
+                                    Text('Bs ${pricePerDay ?? '—'} / noche',
+                                        style: const TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
                                 ],
                               ),
                             ),
@@ -565,7 +569,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(10),
-                                  child: Image.network(photos[index], fit: BoxFit.cover),
+                                  child: Image.network(fixImageUrl(photos[index]), fit: BoxFit.cover),
                                 ),
                               ),
                             ),
@@ -629,7 +633,6 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         final prefs = await SharedPreferences.getInstance();
                         final token = prefs.getString('access_token') ?? '';
                         if (token.isEmpty) {
-                          // No hay sesión, ir al login
                           if (!mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -641,9 +644,46 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           await Future.delayed(const Duration(seconds: 1));
                           if (!mounted) return;
                           context.push('/login');
-                        } else {
-                          context.push('/booking/${widget.caregiverId}');
+                          return;
                         }
+                        // Verificar que el cliente tenga mascotas registradas
+                        try {
+                          final res = await http.get(
+                            Uri.parse('$_baseUrl/client/pets'),
+                            headers: {'Authorization': 'Bearer $token'},
+                          );
+                          final data = jsonDecode(res.body);
+                          final pets = data['success'] == true ? (data['data'] as List? ?? []) : [];
+                          if (!mounted) return;
+                          if (pets.isEmpty) {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Primero agrega una mascota'),
+                                content: const Text(
+                                  'Necesitas registrar al menos una mascota para hacer una reserva.',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: const Text('Cancelar'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      Navigator.pop(ctx);
+                                      context.push('/my-pets');
+                                    },
+                                    child: const Text('Agregar mascota',
+                                      style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700)),
+                                  ),
+                                ],
+                              ),
+                            );
+                            return;
+                          }
+                        } catch (_) {}
+                        if (!mounted) return;
+                        context.push('/booking/${widget.caregiverId}');
                       },
                     ),
                   ),

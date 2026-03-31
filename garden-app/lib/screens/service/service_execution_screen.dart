@@ -1,20 +1,21 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http_parser/http_parser.dart';
-import 'package:intl/intl.dart';
-import 'dart:html' as html;
+import 'package:image_picker/image_picker.dart';
 import '../../theme/garden_theme.dart';
 import '../chat/chat_screen.dart';
+import 'gps_tracking_screen.dart';
+import 'meet_and_greet_screen.dart';
 
 class ServiceExecutionScreen extends StatefulWidget {
   final String bookingId;
   final String role; // 'CAREGIVER' o 'CLIENT'
-  const ServiceExecutionScreen({super.key, required this.bookingId, required this.role});
+  final String? token; // Token opcional para evitar re-leer SharedPreferences
+  const ServiceExecutionScreen({super.key, required this.bookingId, required this.role, this.token});
 
   @override
   State<ServiceExecutionScreen> createState() => _ServiceExecutionScreenState();
@@ -62,6 +63,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       final prefs = await SharedPreferences.getInstance();
       _token = prefs.getString('access_token') ?? '';
       _userId = prefs.getString('user_id') ?? '';
+      // Fallback: usar token pasado por navegación si SharedPreferences está vacío
+      if (_token.isEmpty && widget.token != null && widget.token!.isNotEmpty) {
+        _token = widget.token!;
+      }
       
       debugPrint('SERVICE: Loading booking ${widget.bookingId} with token: ${_token.length > 20 ? _token.substring(0, 20) : _token}...');
       
@@ -409,6 +414,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   ),
                   const SizedBox(height: 24),
 
+                  // Meet & Greet card (solo para HOSPEDAJE)
+                  if (_booking?['serviceType'] == 'HOSPEDAJE') ...[
+                    _buildMeetAndGreetCard(),
+                    const SizedBox(height: 16),
+                  ],
+
                   // Checklist pre-servicio
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -466,114 +477,585 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     );
   }
 
+  Widget _buildMeetAndGreetCard() {
+    final mg = _booking?['meetAndGreet'] as Map<String, dynamic>?;
+    final status = mg?['status'] as String?;
+
+    Color bgColor;
+    Color borderColor;
+    String emoji;
+    String title;
+    String subtitle;
+    String btnLabel;
+
+    if (status == null || status == 'PENDING_PROPOSAL') {
+      bgColor = GardenColors.warning.withValues(alpha: 0.08);
+      borderColor = GardenColors.warning.withValues(alpha: 0.35);
+      emoji = '🤝';
+      title = 'Meet & Greet recomendado';
+      subtitle = 'Reúnete antes del hospedaje';
+      btnLabel = 'Coordinar';
+    } else if (status == 'PROPOSED') {
+      bgColor = GardenColors.primary.withValues(alpha: 0.07);
+      borderColor = GardenColors.primary.withValues(alpha: 0.3);
+      emoji = '📅';
+      title = 'Propuesta pendiente';
+      subtitle = 'Hay una fecha propuesta';
+      btnLabel = 'Ver';
+    } else if (status == 'ACCEPTED') {
+      bgColor = GardenColors.success.withValues(alpha: 0.08);
+      borderColor = GardenColors.success.withValues(alpha: 0.3);
+      emoji = '✅';
+      title = 'Meet & Greet confirmado';
+      subtitle = 'Reunión confirmada';
+      btnLabel = 'Ver';
+    } else if (status == 'COMPLETED' && mg?['approved'] == true) {
+      bgColor = GardenColors.success.withValues(alpha: 0.08);
+      borderColor = GardenColors.success.withValues(alpha: 0.3);
+      emoji = '✅';
+      title = 'Meet & Greet completado';
+      subtitle = 'Compatibilidad confirmada';
+      btnLabel = 'Ver';
+    } else if (status == 'COMPLETED' && mg?['approved'] == false) {
+      bgColor = GardenColors.error.withValues(alpha: 0.07);
+      borderColor = GardenColors.error.withValues(alpha: 0.3);
+      emoji = '❌';
+      title = 'Reserva cancelada';
+      subtitle = 'Incompatibilidad detectada';
+      btnLabel = 'Ver';
+    } else {
+      bgColor = GardenColors.warning.withValues(alpha: 0.08);
+      borderColor = GardenColors.warning.withValues(alpha: 0.35);
+      emoji = '🤝';
+      title = 'Meet & Greet';
+      subtitle = status;
+      btnLabel = 'Ver';
+    }
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MeetAndGreetScreen(
+            bookingId: widget.bookingId,
+            role: widget.role,
+          ),
+        ),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 24)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                  Text(subtitle, style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: GardenColors.primary,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(btnLabel, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // --- VISTA: IN PROGRESS ---
   Widget _buildInProgressView() {
+    return widget.role == 'CAREGIVER'
+        ? _buildCaregiverInProgress()
+        : _buildClientInProgress();
+  }
+
+  // ── CLIENTE: vista en servicio activo ────────────────────────────────────
+  Widget _buildClientInProgress() {
     final isDark = themeNotifier.isDark;
     final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-
-    final timerStr = '${_elapsed.inHours.toString().padLeft(2,'0')}:${(_elapsed.inMinutes%60).toString().padLeft(2,'0')}:${(_elapsed.inSeconds%60).toString().padLeft(2,'0')}';
+    final isPaseo = _booking?['serviceType'] == 'PASEO';
+    final timerStr = isPaseo
+        ? '${_elapsed.inHours.toString().padLeft(2,'0')}:${(_elapsed.inMinutes%60).toString().padLeft(2,'0')}:${(_elapsed.inSeconds%60).toString().padLeft(2,'0')}'
+        : '${_elapsed.inHours}h con tu cuidador';
+    final incidents = (_booking?['serviceEvents'] as List<dynamic>? ?? [])
+        .where((e) => e['type'] == 'INCIDENT').toList();
+    final lastPhoto = _serviceEvents.isNotEmpty ? _serviceEvents.last : null;
 
     return Scaffold(
       backgroundColor: bg,
       body: CustomScrollView(
         slivers: [
-          // SliverAppBar con header animado
-          SliverAppBar(
-            expandedHeight: 200,
-            pinned: true,
-            backgroundColor: GardenColors.success,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
-              onPressed: () => Navigator.pop(context),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF1A9954), GardenColors.success],
+          // ── Hero ilustración del servicio ──────────────────────────────
+          SliverToBoxAdapter(
+            child: Stack(
+              children: [
+                Container(
+                  height: 260,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: isPaseo
+                          ? [const Color(0xFF0F7A3E), const Color(0xFF1DB954)]
+                          : [const Color(0xFFBF4B00), GardenColors.primary],
+                    ),
                   ),
-                ),
-                child: SafeArea(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const SizedBox(height: 40),
-                      // Indicador pulsante
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _PulsingDot(),
-                          const SizedBox(width: 8),
-                          const Text('EN CURSO', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 2)),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      // Timer grande
-                      Text(timerStr,
-                        style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.w900, letterSpacing: 2)),
-                      const SizedBox(height: 8),
-                      // Badge blockchain
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(20),
+                  child: SafeArea(
+                    bottom: false,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const SizedBox(height: 8),
+                        // Ilustración animada
+                        AnimatedBuilder(
+                          animation: _pulseController,
+                          builder: (context, _) {
+                            return Transform.translate(
+                              offset: Offset(0, _pulseController.value * -4),
+                              child: isPaseo
+                                  ? _WalkIllustration(petName: _booking?['petName'] ?? '')
+                                  : _StayIllustration(petName: _booking?['petName'] ?? ''),
+                            );
+                          },
                         ),
-                        child: const Text('⬡ Escrow activo en Polygon',
-                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
-                      ),
-                    ],
+                        const SizedBox(height: 10),
+                        // Live badge + timer
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _PulsingDot(),
+                            const SizedBox(width: 6),
+                            Text('EN VIVO  $timerStr',
+                              style: const TextStyle(color: Colors.white, fontSize: 14,
+                                  fontWeight: FontWeight.w800, letterSpacing: 1.5)),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+                // Botón atrás
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 8, left: 8,
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 36, height: 36,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
 
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Info compacta de la reserva
+
+                  // ── Alerta de incidente (si hay) ───────────────────────
+                  if (incidents.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: GardenColors.warning.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              '⚠️ Tu cuidador reportó un incidente: "${incidents.last['description'] ?? ''}"',
+                              style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // ── Card mascota ────────────────────────────────────────
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: surface,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: borderColor),
                     ),
                     child: Row(
                       children: [
-                        const Text('🐾', style: TextStyle(fontSize: 28)),
+                        Container(
+                          width: 44, height: 44,
+                          decoration: BoxDecoration(
+                            color: GardenColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Center(child: Text('🐾', style: TextStyle(fontSize: 22))),
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(_booking?['petName'] as String? ?? '—',
-                                style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 16)),
-                              Text(_booking?['clientName'] as String? ?? '—',
-                                style: TextStyle(color: subtextColor, fontSize: 13)),
+                                style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                              if ((_booking?['petBreed'] as String? ?? '').isNotEmpty)
+                                Text(_booking!['petBreed'] as String,
+                                  style: TextStyle(color: subtextColor, fontSize: 12)),
                             ],
                           ),
                         ),
-                        Text('Bs ${_booking?['totalAmount'] ?? '—'}',
-                          style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w800, fontSize: 16)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: GardenColors.success.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _PulsingDot(size: 6, color: GardenColors.success),
+                              const SizedBox(width: 5),
+                              Text('Cuidado activo',
+                                style: TextStyle(color: GardenColors.success, fontSize: 11, fontWeight: FontWeight.w700)),
+                            ],
+                          ),
+                        ),
                       ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ── Card cuidador (tappable → info completa) ────────────
+                  GestureDetector(
+                    onTap: _showServiceInfoSheet,
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Row(
+                        children: [
+                          GardenAvatar(
+                            imageUrl: _booking?['caregiverPhoto'] as String?,
+                            size: 44,
+                            initials: (_booking?['caregiverName'] as String? ?? 'C')[0],
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(_booking?['caregiverName'] as String? ?? 'Cuidador',
+                                  style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.star_rounded, color: GardenColors.star, size: 13),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      _booking?['caregiverRating'] != null
+                                          ? (_booking!['caregiverRating'] as num).toStringAsFixed(1)
+                                          : 'Nuevo',
+                                      style: TextStyle(color: subtextColor, fontSize: 12),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text('· Tu cuidador',
+                                      style: TextStyle(color: subtextColor, fontSize: 12)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.chevron_right_rounded, color: subtextColor),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 20),
 
-                  // Acciones del CUIDADOR
-                  if (widget.role == 'CAREGIVER') ...[
-                    Text('Acciones', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+                  // ── GPS: ver dónde está la mascota (solo PASEO) ──────────
+                  if (_booking?['serviceType'] == 'PASEO') ...[
+                    GardenButton(
+                      label: '🗺️ Ver dónde está ${_booking?['petName'] ?? 'mi mascota'}',
+                      color: GardenColors.success,
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => GpsTrackingScreen(
+                            bookingId: widget.bookingId,
+                            role: 'CLIENT',
+                            petName: _booking?['petName'] ?? '',
+                            token: _token,
+                            petPhoto: _booking?['petPhoto'] as String?,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // ── Última foto recibida ────────────────────────────────
+                  if (lastPhoto != null) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Última foto', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+                        if (_serviceEvents.length > 1)
+                          Text('${_serviceEvents.length} fotos en total',
+                            style: TextStyle(color: subtextColor, fontSize: 12)),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    GestureDetector(
+                      onTap: () => _showPhotoFullscreen(lastPhoto['photoUrl'] as String),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Stack(
+                          children: [
+                            Image.network(
+                              fixImageUrl(lastPhoto['photoUrl'] as String),
+                              width: double.infinity,
+                              height: 200,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                height: 200,
+                                color: GardenColors.primary.withValues(alpha: 0.08),
+                                child: const Center(child: Icon(Icons.image_outlined, color: GardenColors.primary, size: 40)),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 10, right: 10,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.55),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.access_time, color: Colors.white, size: 11),
+                                    const SizedBox(width: 4),
+                                    Text(_formatEventTime(lastPhoto['timestamp'] as String? ?? ''),
+                                      style: const TextStyle(color: Colors.white, fontSize: 11)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // ── Cuando no hay fotos aún ─────────────────────────────
+                  if (lastPhoto == null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: GardenColors.primary.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.15)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Text('📸', style: TextStyle(fontSize: 22)),
+                          const SizedBox(width: 12),
+                          Expanded(child: Text('El cuidador te enviará fotos pronto',
+                            style: TextStyle(color: subtextColor, fontSize: 13))),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+
+      // ── Botones sticky ──────────────────────────────────────────────────
+      bottomNavigationBar: Container(
+        padding: EdgeInsets.fromLTRB(20, 14, 20, MediaQuery.of(context).padding.bottom + 14),
+        decoration: BoxDecoration(
+          color: surface,
+          border: Border(top: BorderSide(color: borderColor)),
+          boxShadow: GardenShadows.elevated,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.info_outline_rounded, size: 18),
+                label: const Text('Info'),
+                onPressed: _showServiceInfoSheet,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  side: BorderSide(color: borderColor),
+                  foregroundColor: textColor,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
+                label: const Text('Foto', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                onPressed: _requestPhotoFromCaregiver,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: GardenColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18, color: Colors.white),
+                label: const Text('Chat', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => ChatScreen(
+                    bookingId: widget.bookingId,
+                    otherPersonName: _booking?['caregiverName'] ?? 'Cuidador',
+                    token: _token,
+                  ),
+                )),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: GardenColors.secondary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── CUIDADOR: vista en servicio activo ───────────────────────────────────
+  Widget _buildCaregiverInProgress() {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final isHospedaje = _booking?['serviceType'] == 'HOSPEDAJE';
+    final timerStr = isHospedaje
+        ? '${_elapsed.inHours}h'
+        : '${_elapsed.inHours.toString().padLeft(2,'0')}:${(_elapsed.inMinutes%60).toString().padLeft(2,'0')}:${(_elapsed.inSeconds%60).toString().padLeft(2,'0')}';
+    final timerLabel = isHospedaje ? 'cuidando' : 'activo';
+
+    return Scaffold(
+      backgroundColor: bg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ── Header compacto con timer ────────────────────────────────
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isHospedaje
+                      ? [const Color(0xFFBF4B00), GardenColors.primary]
+                      : [const Color(0xFF0F7A3E), GardenColors.success],
+                ),
+              ),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            _PulsingDot(size: 7),
+                            const SizedBox(width: 6),
+                            Text(_booking?['petName'] as String? ?? 'Servicio activo',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+                          ],
+                        ),
+                        Text('Dueño: ${_booking?['clientName'] ?? '—'}',
+                          style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  // Timer
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(timerStr,
+                          style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w900,
+                            fontSize: isHospedaje ? 20 : 16, letterSpacing: 1)),
+                        if (isHospedaje)
+                          Text(timerLabel,
+                            style: const TextStyle(color: Colors.white70, fontSize: 10)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Contenido scrollable ────────────────────────────────────
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Acciones ─────────────────────────────────────────
+                    Text('Acciones rápidas', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
                     const SizedBox(height: 12),
                     GridView.count(
                       crossAxisCount: 2,
@@ -581,119 +1063,441 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       physics: const NeverScrollableScrollPhysics(),
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 12,
-                      childAspectRatio: 1.4,
+                      childAspectRatio: 1.35,
                       children: [
-                        GestureDetector(
+                        _ActionTile(
+                          icon: Icons.camera_alt_rounded,
+                          label: 'Enviar foto',
+                          sublabel: 'Al dueño',
+                          color: GardenColors.primary,
                           onTap: _sendServicePhoto,
-                          child: _actionButton('Enviar foto', 'Al dueño', Icons.camera_alt_outlined, GardenColors.primary),
+                          isDark: isDark,
                         ),
-                        GestureDetector(
+                        _ActionTile(
+                          icon: Icons.chat_bubble_rounded,
+                          label: 'Chat',
+                          sublabel: 'Con el dueño',
+                          color: GardenColors.secondary,
                           onTap: () => Navigator.push(context, MaterialPageRoute(
-                            builder: (_) => ChatScreen(bookingId: widget.bookingId, otherPersonName: _booking?['clientName'] ?? 'Dueño'),
+                            builder: (_) => ChatScreen(
+                              bookingId: widget.bookingId,
+                              otherPersonName: _booking?['clientName'] ?? 'Dueño',
+                              token: _token,
+                            ),
                           )),
-                          child: _actionButton('Chat', 'Con el dueño', Icons.chat_outlined, GardenColors.secondary),
+                          isDark: isDark,
                         ),
-                        GestureDetector(
+                        _ActionTile(
+                          icon: Icons.warning_amber_rounded,
+                          label: 'Reportar',
+                          sublabel: 'Incidente',
+                          color: GardenColors.warning,
                           onTap: _showReportDialog,
-                          child: _actionButton('Reportar', 'Incidente', Icons.warning_amber_outlined, GardenColors.warning),
+                          isDark: isDark,
                         ),
-                        GestureDetector(
+                        _ActionTile(
+                          icon: Icons.check_circle_rounded,
+                          label: 'Finalizar',
+                          sublabel: 'Servicio',
+                          color: GardenColors.success,
                           onTap: _showFinishConfirmation,
-                          child: _actionButton('Finalizar', 'Terminar', Icons.check_circle_outline, GardenColors.success),
+                          isDark: isDark,
                         ),
                       ],
                     ),
-                  ],
+                    const SizedBox(height: 16),
 
-                  // Vista del CLIENTE
-                  if (widget.role == 'CLIENT') ...[
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: GardenColors.success.withOpacity(0.06),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: GardenColors.success.withOpacity(0.2)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.pets, color: GardenColors.success, size: 28),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Tu mascota está siendo cuidada 🐾',
-                                  style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
-                                Text('El cuidador te enviará fotos durante el servicio',
-                                  style: TextStyle(color: subtextColor, fontSize: 12)),
-                              ],
+                    // ── GPS: compartir ubicación (solo PASEO) ────────────
+                    if (_booking?['serviceType'] == 'PASEO') ...[
+                      GardenButton(
+                        label: '📍 Compartir ubicación GPS',
+                        color: GardenColors.success,
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => GpsTrackingScreen(
+                              bookingId: widget.bookingId,
+                              role: 'CAREGIVER',
+                              petName: _booking?['petName'] ?? '',
+                              token: _token,
+                              petPhoto: _booking?['petPhoto'] as String?,
                             ),
                           ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
+                    const SizedBox(height: 16),
+
+                    // ── Fotos enviadas ────────────────────────────────────
+                    Builder(builder: (_) {
+                      final minPhotos = isHospedaje ? 4 : 2;
+                      final photoCount = _serviceEvents.length;
+                      final isPhotoMet = photoCount >= minPhotos;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isPhotoMet
+                              ? GardenColors.success.withValues(alpha: 0.08)
+                              : GardenColors.warning.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isPhotoMet
+                                ? GardenColors.success.withValues(alpha: 0.3)
+                                : GardenColors.warning.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isPhotoMet ? Icons.check_circle_rounded : Icons.camera_alt_rounded,
+                              color: isPhotoMet ? GardenColors.success : GardenColors.warning,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                isPhotoMet
+                                    ? 'Fotos enviadas: $photoCount/$minPhotos ✓'
+                                    : 'Fotos enviadas: $photoCount/$minPhotos — faltan ${minPhotos - photoCount}',
+                                style: TextStyle(
+                                  color: isPhotoMet ? GardenColors.success : GardenColors.warning,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    if (_serviceEvents.isNotEmpty) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Fotos enviadas', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                          Text('${_serviceEvents.length}', style: TextStyle(color: subtextColor, fontSize: 13)),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        height: 120,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _serviceEvents.length,
+                          itemBuilder: (_, i) {
+                            final e = _serviceEvents[_serviceEvents.length - 1 - i];
+                            final url = e['photoUrl']?.toString() ?? '';
+                            if (url.isEmpty) return const SizedBox();
+                            return GestureDetector(
+                              onTap: () => _showPhotoFullscreen(url),
+                              child: Container(
+                                margin: const EdgeInsets.only(right: 10),
+                                width: 120,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: GardenShadows.card,
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      Image.network(fixImageUrl(url), fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => Container(
+                                          color: GardenColors.primary.withValues(alpha: 0.1),
+                                          child: const Icon(Icons.image_outlined, color: GardenColors.primary),
+                                        )),
+                                      Positioned(
+                                        bottom: 5, left: 5,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(alpha: 0.5),
+                                            borderRadius: BorderRadius.circular(5),
+                                          ),
+                                          child: Text(_formatEventTime(e['timestamp'] as String? ?? ''),
+                                            style: const TextStyle(color: Colors.white, fontSize: 9)),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
+                    // ── Log de incidentes ─────────────────────────────────
+                    Builder(builder: (_) {
+                      final incidents = (_booking?['serviceEvents'] as List<dynamic>? ?? [])
+                          .where((e) => e['type'] == 'INCIDENT').toList();
+                      if (incidents.isEmpty) return const SizedBox();
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Incidentes reportados',
+                            style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                          const SizedBox(height: 10),
+                          ...incidents.map((inc) => Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: GardenColors.warning.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: GardenColors.warning.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 16),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(inc['description'] as String? ?? '—',
+                                        style: TextStyle(color: textColor, fontSize: 13)),
+                                      Text(_formatEventTime(inc['timestamp'] as String? ?? ''),
+                                        style: TextStyle(color: subtextColor, fontSize: 11)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )),
+                          const SizedBox(height: 8),
+                        ],
+                      );
+                    }),
+
+                    // ── Badge blockchain compacto ─────────────────────────
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: GardenColors.polygon.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: GardenColors.polygon.withValues(alpha: 0.25)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('⬡', style: TextStyle(color: GardenColors.polygon, fontSize: 13)),
+                          const SizedBox(width: 6),
+                          Text('Escrow activo · Pago protegido',
+                            style: TextStyle(color: GardenColors.polygon, fontSize: 12, fontWeight: FontWeight.w600)),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    GardenButton(
-                      label: 'Chat con el cuidador',
-                      icon: Icons.chat_outlined,
-                      outline: true,
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(
-                        builder: (_) => ChatScreen(bookingId: widget.bookingId, otherPersonName: _booking?['caregiverName'] ?? 'Cuidador'),
-                      )),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Info del servicio (sheet para el cliente) ────────────────────────────
+  void _showServiceInfoSheet() {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        maxChildSize: 0.92,
+        minChildSize: 0.4,
+        expand: false,
+        builder: (_, ctrl) => SingleChildScrollView(
+          controller: ctrl,
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 40),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Handle
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: subtextColor.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text('Info del servicio',
+                style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 20),
+
+              // Cuidador
+              _InfoSection(
+                title: 'Tu cuidador',
+                borderColor: borderColor,
+                child: Row(
+                  children: [
+                    GardenAvatar(
+                      imageUrl: _booking?['caregiverPhoto'] as String?,
+                      size: 52,
+                      initials: (_booking?['caregiverName'] as String? ?? 'C')[0],
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_booking?['caregiverName'] as String? ?? '—',
+                            style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 16)),
+                          Row(
+                            children: [
+                              const Icon(Icons.star_rounded, color: GardenColors.star, size: 14),
+                              const SizedBox(width: 3),
+                              Text(
+                                _booking?['caregiverRating'] != null
+                                    ? '${(_booking!['caregiverRating'] as num).toStringAsFixed(1)} · Cuidador certificado'
+                                    : 'Nuevo cuidador',
+                                style: TextStyle(color: subtextColor, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                          if (_booking?['caregiverPhone'] != null) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(Icons.phone_outlined, size: 13, color: subtextColor),
+                                const SizedBox(width: 4),
+                                Text(_booking!['caregiverPhone'] as String,
+                                  style: TextStyle(color: subtextColor, fontSize: 12)),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                   ],
+                ),
+              ),
+              const SizedBox(height: 14),
 
-                  // Fotos enviadas
-                  if (_serviceEvents.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // Mascota
+              _InfoSection(
+                title: 'Mascota',
+                borderColor: borderColor,
+                child: Column(
+                  children: [
+                    _InfoRow('Nombre', _booking?['petName'] as String? ?? '—', textColor, subtextColor),
+                    if ((_booking?['petBreed'] as String? ?? '').isNotEmpty)
+                      _InfoRow('Raza', _booking!['petBreed'] as String, textColor, subtextColor),
+                    if (_booking?['petAge'] != null)
+                      _InfoRow('Edad', '${_booking!['petAge']} años', textColor, subtextColor),
+                    if ((_booking?['specialNeeds'] as String? ?? '').isNotEmpty)
+                      _InfoRow('Necesidades', _booking!['specialNeeds'] as String, textColor, subtextColor),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Servicio
+              _InfoSection(
+                title: 'Reserva',
+                borderColor: borderColor,
+                child: Column(
+                  children: [
+                    _InfoRow('Tipo', _booking?['serviceType'] == 'PASEO' ? '🦮 Paseo' : '🏠 Hospedaje', textColor, subtextColor),
+                    _InfoRow('Fecha', _booking?['walkDate'] ?? _booking?['startDate'] ?? '—', textColor, subtextColor),
+                    if (_booking?['startTime'] != null)
+                      _InfoRow('Hora', _booking!['startTime'] as String, textColor, subtextColor),
+                    _InfoRow('Total', 'Bs ${_booking?['totalAmount'] ?? '—'}', textColor, subtextColor),
+                    _InfoRow('Escrow', '⬡ Activo en Polygon', textColor, subtextColor),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Helpers de UI ────────────────────────────────────────────────────────
+  Widget _InfoRow(String label, String value, Color textColor, Color subtextColor) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: TextStyle(color: subtextColor, fontSize: 13)),
+        Text(value, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
+      ],
+    ),
+  );
+
+  // Fotos enviadas (legacy path mantained below for backward compat)
+  Widget _buildPhotosLegacy(Color textColor, Color subtextColor) {
+    if (_serviceEvents.isEmpty) return const SizedBox();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Fotos del servicio', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+            Text('${_serviceEvents.length} foto${_serviceEvents.length > 1 ? 's' : ''}',
+              style: TextStyle(color: subtextColor, fontSize: 13)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 140,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _serviceEvents.length,
+            itemBuilder: (context, index) {
+              final event = _serviceEvents[_serviceEvents.length - 1 - index];
+              final photoUrl = event['photoUrl']?.toString() ?? '';
+              if (photoUrl.isEmpty) return const SizedBox();
+              return GestureDetector(
+                onTap: () => _showPhotoFullscreen(photoUrl),
+                child: Container(
+                  margin: const EdgeInsets.only(right: 10),
+                  width: 140,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: GardenShadows.card,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: Stack(
+                      fit: StackFit.expand,
                       children: [
-                        Text('Fotos del servicio', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
-                        Text('${_serviceEvents.length} foto${_serviceEvents.length > 1 ? 's' : ''}',
-                          style: TextStyle(color: subtextColor, fontSize: 13)),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 140,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _serviceEvents.length,
-                        itemBuilder: (context, index) {
-                          final event = _serviceEvents[_serviceEvents.length - 1 - index]; // más reciente primero
-                          final photoUrl = event['photoUrl']?.toString() ?? '';
-                          if (photoUrl.isEmpty) return const SizedBox();
-                          return GestureDetector(
-                            onTap: () => _showPhotoFullscreen(photoUrl),
-                            child: Container(
-                              margin: const EdgeInsets.only(right: 10),
-                              width: 140,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(14),
-                                boxShadow: GardenShadows.card,
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(14),
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    Image.network(photoUrl, fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(
-                                        color: GardenColors.primary.withOpacity(0.1),
-                                        child: const Icon(Icons.image_outlined, color: GardenColors.primary),
-                                      )),
-                                    // Timestamp
-                                    Positioned(
-                                      bottom: 6, left: 6,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withOpacity(0.5),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          _formatEventTime(event['timestamp'] as String? ?? ''),
+                        Image.network(fixImageUrl(photoUrl), fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: GardenColors.primary.withValues(alpha: 0.1),
+                            child: const Icon(Icons.image_outlined, color: GardenColors.primary),
+                          )),
+                        Positioned(
+                          bottom: 6, left: 6,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.5),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              _formatEventTime(event['timestamp'] as String? ?? ''),
                                           style: const TextStyle(color: Colors.white, fontSize: 10),
                                         ),
                                       ),
@@ -706,14 +1510,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         },
                       ),
                     ),
-                  ],
-                  const SizedBox(height: 40),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -725,7 +1522,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         insetPadding: EdgeInsets.zero,
         child: Stack(
           children: [
-            Center(child: Image.network(url, fit: BoxFit.contain)),
+            Center(child: Image.network(fixImageUrl(url), fit: BoxFit.contain)),
             Positioned(
               top: 40, right: 16,
               child: GestureDetector(
@@ -774,7 +1571,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 return ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: Image.network(
-                    url,
+                    fixImageUrl(url),
                     width: 100, height: 100,
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => const SizedBox(),
@@ -792,7 +1589,6 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   // --- VISTA: COMPLETED ---
   Widget _buildCompletedView() {
     final isDark = themeNotifier.isDark;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
@@ -821,8 +1617,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   style: TextStyle(color: subtextColor, fontSize: 15, height: 1.5)),
               const SizedBox(height: 48),
               GardenButton(
-                label: 'Volver a Mis Reservas',
-                onPressed: () => context.go('/marketplace'),
+                label: widget.role == 'CAREGIVER' ? 'Volver al panel' : 'Volver a Mis Reservas',
+                onPressed: () => context.go(
+                  widget.role == 'CAREGIVER' ? '/caregiver/home' : '/marketplace',
+                ),
               ),
             ],
           ),
@@ -856,18 +1654,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   }
 
   Future<void> _sendServicePhoto() async {
-    final input = html.FileUploadInputElement();
-    input.accept = 'image/*';
-    input.setAttribute('capture', 'environment');
-    input.click();
-    await input.onChange.first;
-    final file = input.files?.first;
-    if (file == null) return;
-
-    final reader = html.FileReader();
-    reader.readAsArrayBuffer(file);
-    await reader.onLoad.first;
-    final bytes = Uint8List.fromList(reader.result as List<int>);
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    final fileName = picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
 
     try {
       final uri = Uri.parse('$_baseUrl/bookings/${widget.bookingId}/event');
@@ -877,8 +1668,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       request.fields['description'] = 'Foto del servicio';
       request.files.add(http.MultipartFile.fromBytes(
         'photo', bytes,
-        filename: 'service-${DateTime.now().millisecondsSinceEpoch}.jpg',
-        contentType: MediaType.parse('image/jpeg'),
+        filename: fileName,
+        contentType: MediaType('image', 'jpeg'),
       ));
       final streamed = await request.send();
       final response = await http.Response.fromStream(streamed);
@@ -894,27 +1685,167 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     }
   }
 
-  void _showFinishConfirmation() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: themeNotifier.isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
-        title: const Text('¿Finalizar servicio?', style: TextStyle(fontWeight: FontWeight.w800)),
-        content: Text(
-          'Al finalizar, el dueño recibirá una encuesta de satisfacción. El smart contract liberará el pago según la calificación.',
-          style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: GardenColors.success),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _concludeService();
-            },
-            child: const Text('Sí, finalizar', style: TextStyle(color: Colors.white)),
+  Future<void> _requestPhotoFromCaregiver() async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/chat/${widget.bookingId}/messages'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({'message': '📸 ¿Puedes enviarme una foto de mi mascota?'}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Solicitud enviada al cuidador'),
+            backgroundColor: GardenColors.success,
           ),
-        ],
+        );
+      }
+    } catch (e) {
+      debugPrint('Error requesting photo: $e');
+    }
+  }
+
+  void _showFinishConfirmation() {
+    final isHospedaje = _booking?['serviceType'] == 'HOSPEDAJE';
+    final minPhotos = isHospedaje ? 4 : 2;
+    if (_serviceEvents.length < minPhotos) {
+      final remaining = minPhotos - _serviceEvents.length;
+      final isDark = themeNotifier.isDark;
+      final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+      final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+      final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: bg,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (ctx) => Padding(
+          padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(ctx).padding.bottom + 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: subtextColor.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Container(
+                width: 64, height: 64,
+                decoration: BoxDecoration(
+                  color: GardenColors.warning.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.camera_alt_rounded, color: GardenColors.warning, size: 36),
+              ),
+              const SizedBox(height: 16),
+              Text('Faltan fotos', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 10),
+              Text(
+                'Debes enviar al menos $minPhotos fotos para finalizar este servicio.\nTe faltan $remaining foto${remaining > 1 ? 's' : ''} más.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
+              ),
+              const SizedBox(height: 28),
+              GardenButton(
+                label: '📸 Enviar foto ahora',
+                color: GardenColors.primary,
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _sendServicePhoto();
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+      return;
+    }
+
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(ctx).padding.bottom + 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: subtextColor.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Container(
+              width: 64, height: 64,
+              decoration: BoxDecoration(
+                color: GardenColors.success.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 36),
+            ),
+            const SizedBox(height: 16),
+            Text('¿Finalizar servicio?',
+              style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
+            Text(
+              'El dueño recibirá una encuesta de satisfacción.\nEl smart contract liberará el pago según la calificación.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
+            ),
+            const SizedBox(height: 28),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: BorderSide(color: subtextColor.withValues(alpha: 0.4)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text('Cancelar', style: TextStyle(color: subtextColor)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GardenColors.success,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _concludeService();
+                    },
+                    child: const Text('Sí, finalizar',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -942,46 +1873,137 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
   void _showReportDialog() {
     final reportController = TextEditingController();
-    showDialog(
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final fieldBg = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
+
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: themeNotifier.isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
-        title: const Text('Reportar incidente'),
-        content: Column(
+      isScrollControlled: true,
+      backgroundColor: bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(ctx).viewInsets.bottom + 32),
+        child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Describe el incidente o problema:', style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary)),
-            const SizedBox(height: 12),
+            // Handle
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: subtextColor.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Título
+            Row(
+              children: [
+                Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    color: GardenColors.warning.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Text('Reportar incidente',
+                  style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text('El dueño será notificado inmediatamente',
+              style: TextStyle(color: subtextColor, fontSize: 13)),
+            const SizedBox(height: 20),
+
+            // Campo de descripción
+            Text('¿Qué ocurrió?', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
+            const SizedBox(height: 8),
             TextField(
               controller: reportController,
               maxLines: 4,
-              style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary),
+              autofocus: true,
+              style: TextStyle(color: textColor),
               decoration: InputDecoration(
-                hintText: 'Describe qué ocurrió...',
-                hintStyle: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+                hintText: 'Describe el incidente con el mayor detalle posible...',
+                hintStyle: TextStyle(color: subtextColor),
                 filled: true,
-                fillColor: themeNotifier.isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                fillColor: fieldBg,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.all(14),
               ),
+            ),
+            const SizedBox(height: 20),
+
+            // Botones
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: BorderSide(color: subtextColor.withValues(alpha: 0.4)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text('Cancelar', style: TextStyle(color: subtextColor)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GardenColors.warning,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () async {
+                      final desc = reportController.text.trim();
+                      if (desc.isEmpty) return;
+                      Navigator.pop(ctx);
+                      try {
+                        final res = await http.post(
+                          Uri.parse('$_baseUrl/bookings/${widget.bookingId}/event'),
+                          headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+                          body: jsonEncode({'type': 'INCIDENT', 'description': desc}),
+                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text(res.statusCode == 200
+                                ? '⚠️ Incidente reportado. El dueño fue notificado.'
+                                : 'Error al enviar el reporte. Intenta de nuevo.'),
+                            backgroundColor: res.statusCode == 200 ? GardenColors.warning : GardenColors.error,
+                            duration: const Duration(seconds: 4),
+                          ));
+                        }
+                      } catch (_) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Sin conexión. Verifica tu internet.'),
+                            backgroundColor: GardenColors.error,
+                          ));
+                        }
+                      }
+                    },
+                    child: const Text('Enviar reporte', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: GardenColors.warning),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await http.post(
-                Uri.parse('$_baseUrl/bookings/${widget.bookingId}/event'),
-                headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
-                body: jsonEncode({'type': 'INCIDENT', 'description': reportController.text.trim()}),
-              );
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reporte enviado al equipo GARDEN'), backgroundColor: GardenColors.warning));
-            },
-            child: const Text('Enviar reporte', style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }
@@ -1172,17 +2194,18 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
   void _showSmartContractDialog(int rating) {
     final isDark = themeNotifier.isDark;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => Dialog(
-        backgroundColor: surface,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: Padding(
+        child: GlassBox(
+          borderRadius: BorderRadius.circular(24),
           padding: const EdgeInsets.all(32),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1217,8 +2240,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               GardenButton(
                 label: 'Finalizar',
                 onPressed: () {
-                  Navigator.pop(ctx);
-                  context.go('/marketplace');
+                  Navigator.pop(context);
+                  context.go(
+                    widget.role == 'CAREGIVER' ? '/caregiver/home' : '/marketplace',
+                  );
                 },
               ),
             ],
@@ -1269,6 +2294,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 // --- HELPERS LOCALES PARA EL DISEÑO ---
 
 class _PulsingDot extends StatefulWidget {
+  final double size;
+  final Color color;
+  const _PulsingDot({this.size = 8, this.color = Colors.white});
   @override
   _PulsingDotState createState() => _PulsingDotState();
 }
@@ -1286,7 +2314,134 @@ class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderState
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _controller,
-      child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
+      child: Container(
+        width: widget.size, height: widget.size,
+        decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
+      ),
+    );
+  }
+}
+
+class _WalkIllustration extends StatelessWidget {
+  final String petName;
+  const _WalkIllustration({required this.petName});
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text('🦮', style: TextStyle(fontSize: 56)),
+        const SizedBox(height: 4),
+        Text(petName,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+      ],
+    );
+  }
+}
+
+class _StayIllustration extends StatelessWidget {
+  final String petName;
+  const _StayIllustration({required this.petName});
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text('🏠', style: TextStyle(fontSize: 56)),
+        const SizedBox(height: 4),
+        Text(petName,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+      ],
+    );
+  }
+}
+
+class _ActionTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String sublabel;
+  final Color color;
+  final VoidCallback onTap;
+  final bool isDark;
+  const _ActionTile({
+    required this.icon,
+    required this.label,
+    required this.sublabel,
+    required this.color,
+    required this.onTap,
+    required this.isDark,
+  });
+  @override
+  Widget build(BuildContext context) {
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+          boxShadow: GardenShadows.card,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(height: 8),
+            Text(label,
+              style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
+            Text(sublabel,
+              style: TextStyle(color: subtextColor, fontSize: 11)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoSection extends StatelessWidget {
+  final String title;
+  final Widget child;
+  final Color borderColor;
+  const _InfoSection({required this.title, required this.child, required this.borderColor});
+  @override
+  Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+            style: TextStyle(
+              color: subtextColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            )),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
     );
   }
 }

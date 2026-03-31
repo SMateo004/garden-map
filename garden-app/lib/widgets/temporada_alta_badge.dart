@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import '../services/agentes_service.dart';
 
@@ -10,13 +11,13 @@ class TemporadaAltaBadge extends StatefulWidget {
   final AgentesService agentesService;
 
   const TemporadaAltaBadge({
-    Key? key,
+    super.key,
     required this.zona,
     required this.porcentajeAjuste,
     required this.motivo,
     required this.fechaVueltaNormal,
     required this.agentesService,
-  }) : super(key: key);
+  });
 
   @override
   State<TemporadaAltaBadge> createState() => _TemporadaAltaBadgeState();
@@ -62,23 +63,23 @@ class _TemporadaAltaBadgeState extends State<TemporadaAltaBadge> with SingleTick
         return FutureBuilder<Map<String, dynamic>>(
           future: _explicacionFuture,
           builder: (context, snapshot) {
-            return ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(24),
-                topRight: Radius.circular(24),
-              ),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
+            final useBlur = kIsWeb ||
+                defaultTargetPlatform == TargetPlatform.iOS ||
+                defaultTargetPlatform == TargetPlatform.macOS;
+            const sheetRadius = BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            );
+            final sheetContent = Container(
                   width: double.infinity,
                   padding: const EdgeInsets.only(
                     top: 24, left: 24, right: 24, bottom: 48,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0A0E1A).withOpacity(0.8),
+                    color: const Color(0xFF0A0E1A).withValues(alpha: useBlur ? 0.8 : 0.97),
                     border: Border(
                       top: BorderSide(
-                        color: Colors.white.withOpacity(0.1),
+                        color: Colors.white.withValues(alpha: 0.1),
                         width: 1,
                       ),
                     ),
@@ -189,8 +190,15 @@ class _TemporadaAltaBadgeState extends State<TemporadaAltaBadge> with SingleTick
                       ],
                     ],
                   ),
-                ),
-              ),
+            );
+            return ClipRRect(
+              borderRadius: sheetRadius,
+              child: useBlur
+                  ? BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: sheetContent,
+                    )
+                  : sheetContent,
             );
           },
         );

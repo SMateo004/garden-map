@@ -8,12 +8,16 @@ class ChatScreen extends StatefulWidget {
   final String bookingId;
   final String otherPersonName;
   final String? otherPersonPhoto;
+  final String? token;
+  final String? meetAndGreetNote; // Banner fijo: fecha/hora del M&G cuando está ACCEPTED
 
   const ChatScreen({
     super.key,
     required this.bookingId,
     required this.otherPersonName,
     this.otherPersonPhoto,
+    this.token,
+    this.meetAndGreetNote,
   });
 
   @override
@@ -21,7 +25,7 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  late ChatService _chatService;
+  ChatService? _chatService;
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   String _currentUserId = '';
@@ -42,21 +46,30 @@ class _ChatScreenState extends State<ChatScreen> {
     _token = prefs.getString('access_token') ?? '';
     _currentUserId = prefs.getString('user_id') ?? '';
 
+    // Fallback: usar token pasado por el caller si SharedPreferences está vacío
+    if (_token.isEmpty && widget.token != null && widget.token!.isNotEmpty) {
+      _token = widget.token!;
+    }
+
+    if (!mounted) return;
+
     _chatService = ChatService(
       baseUrl: _baseUrl,
       token: _token,
       currentUserId: _currentUserId,
     );
 
-    _chatService.addListener(_onChatUpdate);
-    await _chatService.loadHistory(widget.bookingId);
-    _chatService.connect();
+    _chatService!.addListener(_onChatUpdate);
 
-    // Esperar conexión antes de unirse a la sala
-    await Future.delayed(const Duration(milliseconds: 500));
-    _chatService.joinBooking(widget.bookingId);
-    _chatService.markRead(widget.bookingId);
+    // Conectar y unirse a la sala ANTES de cargar historial para no perder mensajes
+    _chatService!.joinBooking(widget.bookingId); // se auto-une cuando conecte
+    _chatService!.connect();
 
+    await _chatService!.loadHistory(widget.bookingId);
+
+    if (!mounted) return;
+
+    _chatService!.markRead(widget.bookingId);
     setState(() => _initialized = true);
     _scrollToBottom();
   }
@@ -83,14 +96,14 @@ class _ChatScreenState extends State<ChatScreen> {
   void _sendMessage() {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
-    _chatService.sendMessage(widget.bookingId, text);
+    _chatService?.sendMessage(widget.bookingId, text);
     _messageController.clear();
   }
 
   @override
   void dispose() {
-    _chatService.removeListener(_onChatUpdate);
-    _chatService.dispose();
+    _chatService?.removeListener(_onChatUpdate);
+    _chatService?.dispose();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -137,13 +150,13 @@ class _ChatScreenState extends State<ChatScreen> {
                           Container(
                             width: 7, height: 7,
                             decoration: BoxDecoration(
-                              color: _initialized && _chatService.connected ? GardenColors.success : subtextColor,
+                              color: _initialized && (_chatService?.connected ?? false) ? GardenColors.success : subtextColor,
                               shape: BoxShape.circle,
                             ),
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            _initialized && _chatService.connected ? 'En línea' : 'Conectando...',
+                            _initialized && (_chatService?.connected ?? false) ? 'En línea' : 'Conectando...',
                             style: TextStyle(color: subtextColor, fontSize: 11),
                           ),
                         ],
@@ -158,9 +171,31 @@ class _ChatScreenState extends State<ChatScreen> {
             ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
             : Column(
                 children: [
+                  // Banner Meet & Greet (cuando está ACCEPTED)
+                  if (widget.meetAndGreetNote != null)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: GardenColors.success.withValues(alpha: 0.1),
+                        border: Border(bottom: BorderSide(color: GardenColors.success.withValues(alpha: 0.25))),
+                      ),
+                      child: Row(
+                        children: [
+                          const Text('🤝', style: TextStyle(fontSize: 15)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              widget.meetAndGreetNote!,
+                              style: const TextStyle(color: GardenColors.success, fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   // Lista de mensajes
                   Expanded(
-                    child: _chatService.messages.isEmpty
+                    child: (_chatService?.messages ?? []).isEmpty
                       ? GardenEmptyState(
                           type: GardenEmptyType.chat,
                           title: 'Empieza la conversación',
@@ -170,9 +205,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       : ListView.builder(
                           controller: _scrollController,
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          itemCount: _chatService.messages.length,
+                          itemCount: _chatService!.messages.length,
                           itemBuilder: (context, index) {
-                            final msg = _chatService.messages[index];
+                            final msg = _chatService!.messages[index];
                             final isMe = msg.senderId == _currentUserId;
                             return _buildMessageBubble(msg, isMe, textColor, subtextColor);
                           },
@@ -231,6 +266,46 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildMessageBubble(ChatMessage msg, bool isMe, Color textColor, Color subtextColor) {
+    // Mensaje de sistema (M&G events)
+    if (msg.isSystem) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: msg.message.startsWith('✅')
+                  ? GardenColors.success.withValues(alpha: 0.1)
+                  : msg.message.startsWith('❌')
+                      ? GardenColors.error.withValues(alpha: 0.08)
+                      : GardenColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: msg.message.startsWith('✅')
+                    ? GardenColors.success.withValues(alpha: 0.3)
+                    : msg.message.startsWith('❌')
+                        ? GardenColors.error.withValues(alpha: 0.25)
+                        : GardenColors.primary.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Text(
+              msg.message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: msg.message.startsWith('✅')
+                    ? GardenColors.success
+                    : msg.message.startsWith('❌')
+                        ? GardenColors.error
+                        : GardenColors.primary,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     final isDark = themeNotifier.isDark;
     final time = '${msg.createdAt.hour.toString().padLeft(2, '0')}:${msg.createdAt.minute.toString().padLeft(2, '0')}';
 
