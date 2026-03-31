@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "dev:safe": "npm run db:push && npm run dev",
-    "build": "tsc",
+    "build": "prisma generate && tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "start:safe": "npm run db:push && npm run start",
     "test": "jest",
