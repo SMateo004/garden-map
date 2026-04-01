@@ -545,10 +545,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           'acceptSeniors': _acceptSeniors,
                     if (_profilePhotoUrl != null) 'profilePhoto': _profilePhotoUrl,
           'caredOthers': _caredOthers,
-          'whyCaregiver': _whyCaregiverController.text.trim(),
-          'whatDiffers': _whatDiffersController.text.trim(),
-          'handleAnxious': _handleAnxiousController.text.trim(),
-          'emergencyResponse': _emergencyResponseController.text.trim(),
+          if (_whyCaregiverController.text.trim().length >= 5)
+            'whyCaregiver': _whyCaregiverController.text.trim(),
+          if (_whatDiffersController.text.trim().length >= 5)
+            'whatDiffers': _whatDiffersController.text.trim(),
+          if (_handleAnxiousController.text.trim().length >= 5)
+            'handleAnxious': _handleAnxiousController.text.trim(),
+          if (_emergencyResponseController.text.trim().length >= 5)
+            'emergencyResponse': _emergencyResponseController.text.trim(),
           'acceptAggressive': _acceptAggressive,
           'hasChildren': _hasChildren,
           'petsSleep': 'INSIDE',
@@ -556,8 +560,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           'workFromHome': _workFromHome,
           'maxPets': _maxPets,
           'oftenOut': _oftenOut,
-          'typicalDay': _typicalDayController.text.trim(),
-          'bioDetail': _bioDetailController.text.trim(),
+          if (_typicalDayController.text.trim().length >= 5)
+            'typicalDay': _typicalDayController.text.trim(),
+          if (_bioDetailController.text.trim().length >= 5)
+            'bioDetail': _bioDetailController.text.trim(),
         },
       };
 
