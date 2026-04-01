@@ -354,14 +354,18 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
   }
 
   if (profile.status === CaregiverStatus.PENDING_REVIEW) {
-    throw new ConflictError(
-      'Ya enviaste tu solicitud y está en revisión. Te notificaremos por email/WhatsApp.',
-      'ALREADY_PENDING_REVIEW'
-    );
+    // Ya enviado — devolver éxito silencioso (el wizard puede llamar esto varias veces)
+    return {
+      success: true,
+      message: 'Tu perfil ya está en revisión. Te notificaremos cuando sea aprobado.',
+    };
   }
 
   if (profile.status === CaregiverStatus.APPROVED) {
-    throw new BadRequestError('Tu perfil ya está aprobado.', 'ALREADY_APPROVED');
+    return {
+      success: true,
+      message: 'Tu perfil ya está aprobado.',
+    };
   }
 
   const missing = getMissingRequiredFieldsForSubmit(profile);
@@ -378,11 +382,7 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
     await tx.caregiverProfile.update({
       where: { id: (profile as any).id },
       data: {
-        status: CaregiverStatus.APPROVED,
-        profileStatus: 'APPROVED',
-        verified: true,
-        verifiedAt: new Date(),
-        approvedAt: new Date(),
+        status: CaregiverStatus.PENDING_REVIEW,
         termsAcceptedAt: new Date(),
         termsAccepted: true,
         privacyAccepted: true,
@@ -390,37 +390,17 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
       } as any,
     });
 
-    // 1. Welcome Notification
+    // Notificación al cuidador: perfil en revisión
     await tx.notification.create({
       data: {
         userId,
-        title: '¡Bienvenido a GARDEN! Tu perfil ha sido aprobado',
-        message: 'Felicidades, ya eres parte oficial de nuestra red de cuidadores. Tu perfil ahora es visible para miles de dueños de mascotas. ¡Esperamos que tengas una excelente experiencia en la plataforma!',
-        type: 'PROFILE_APPROVED',
-      },
-    });
-
-    // 2. Terms Notification
-    await tx.notification.create({
-      data: {
-        userId,
-        title: 'Términos y Condiciones de Uso',
-        message: 'Al ser un cuidador verificado, te comprometes a cumplir con nuestros estándares de cuidado, puntualidad y honestidad. Puedes revisar los términos completos en la sección de configuración de tu cuenta en cualquier momento.',
+        title: 'Perfil enviado para revisión',
+        message: '¡Gracias por completar tu perfil! Nuestro equipo lo revisará en los próximos días hábiles. Te notificaremos por email y WhatsApp cuando sea aprobado.',
         type: 'SYSTEM',
       },
     });
 
-    // 3. Company Contacts Notification
-    await tx.notification.create({
-      data: {
-        userId,
-        title: 'Contacto y Soporte GARDEN',
-        message: 'Estamos aquí para ayudarte. Si tienes alguna duda o emergencia durante un servicio, contáctanos: WhatsApp: +591 75933133, Email: soporte@garden.com. ¡Estamos contigo!',
-        type: 'SYSTEM',
-      },
-    });
-
-    // Admin still gets a notification but for record/welcome, not for action
+    // Notificación al admin para revisar el perfil
     await tx.adminNotification.create({
       data: {
         type: ADMIN_NOTIFICATION_TYPE_SUBMIT,
@@ -429,23 +409,23 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
     });
   });
 
-  // Sincronizar con Blockchain (asíncrono)
+  // Sincronizar con Blockchain como no verificado aún
   blockchainService.syncProfileOnChain(
     userId,
     `${profile.user.firstName} ${profile.user.lastName}`,
     'CAREGIVER',
-    true // APPROVED means verified in this context
+    false // Pendiente de revisión, no verificado aún
   ).catch(err => logger.error('Blockchain sync failed (caregiver)', { userId, err }));
 
-  logger.info('CaregiverProfile: aprobado automáticamente', {
+  logger.info('CaregiverProfile: enviado a revisión', {
     profileId: profile.id,
     userId,
-    message: 'Perfil completo → APROBADO AUTOMATICAMENTE',
+    message: 'Perfil completo → PENDING_REVIEW, esperando aprobación admin',
   });
 
   return {
     success: true,
-    message: '¡Felicidades! Tu perfil ha sido aprobado automáticamente y ya eres visible en Garden.',
+    message: 'Tu perfil ha sido enviado para revisión. Te notificaremos cuando sea aprobado.',
   };
 }
 
