@@ -25,7 +25,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   List<Map<String, dynamic>> _bookings = [];
   bool _isLoading = true;
   bool _setupPending = false; // true = show resume-registration screen
-  String _pendingStatus = 'DRAFT'; // 'DRAFT' = incomplete, 'PENDING_REVIEW' = waiting admin
   String _caregiverToken = '';
   Map<String, dynamic>? _caregiver;
   Map<String, dynamic>? _dashboardStats;
@@ -73,14 +72,11 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         _loadDashboardStats(),
       ]);
 
-      // Siempre verificar el estado real del backend para mostrar pantalla de setup pendiente
+      // Siempre verificar el estado real del backend
       if (_caregiver != null) {
         final status = (_caregiver!['status'] as String? ?? '').toUpperCase();
         if (status != 'APPROVED') {
-          if (mounted) setState(() {
-            _setupPending = true;
-            _pendingStatus = status; // 'DRAFT' o 'PENDING_REVIEW'
-          });
+          if (mounted) setState(() => _setupPending = true);
         }
       }
 
@@ -2521,8 +2517,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
-    final isPendingReview = _pendingStatus == 'PENDING_REVIEW';
-
     return Container(
       color: bg,
       child: SafeArea(
@@ -2532,36 +2526,29 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Icon
                 Container(
                   width: 96,
                   height: 96,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: isPendingReview
-                          ? [const Color(0xFF1565C0), const Color(0xFF0D47A1)]
-                          : [GardenColors.primary, const Color(0xFF1B5E20)],
+                    gradient: const LinearGradient(
+                      colors: [GardenColors.primary, Color(0xFF1B5E20)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: (isPendingReview ? const Color(0xFF1565C0) : GardenColors.primary).withOpacity(0.35),
+                        color: GardenColors.primary.withOpacity(0.35),
                         blurRadius: 28,
                         spreadRadius: 4,
                       ),
                     ],
                   ),
-                  child: Icon(
-                    isPendingReview ? Icons.hourglass_top_rounded : Icons.assignment_late_outlined,
-                    color: Colors.white,
-                    size: 48,
-                  ),
+                  child: const Icon(Icons.assignment_late_outlined, color: Colors.white, size: 48),
                 ),
                 const SizedBox(height: 28),
                 Text(
-                  isPendingReview ? 'Perfil en revisión' : 'Completa tu registro',
+                  'Completa tu registro',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: textColor,
@@ -2571,9 +2558,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  isPendingReview
-                      ? 'Tu perfil fue enviado y está siendo revisado por nuestro equipo. Te notificaremos por WhatsApp y email cuando sea aprobado. Este proceso suele tomar 1-2 días hábiles.'
-                      : 'Tu perfil aún no está listo para ser visible en el marketplace. Finaliza los pasos pendientes para que los dueños puedan encontrarte.',
+                  'Tu perfil aún no está completo. Termina los pasos pendientes para que tu perfil sea visible en el marketplace.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: subtextColor,
@@ -2582,62 +2567,33 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 40),
-                if (!isPendingReview) ...[
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: GardenColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        elevation: 0,
-                      ),
-                      onPressed: () => context.go('/caregiver/onboarding'),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.arrow_forward_rounded, size: 22),
-                          SizedBox(width: 10),
-                          Text(
-                            'Continuar registro',
-                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-                          ),
-                        ],
-                      ),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GardenColors.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 0,
+                    ),
+                    onPressed: () => context.go('/caregiver/onboarding'),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.arrow_forward_rounded, size: 22),
+                        SizedBox(width: 10),
+                        Text(
+                          'Continuar registro',
+                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                ] else ...[
-                  // Refresh button for pending_review
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: GardenColors.primary, width: 1.5),
-                        foregroundColor: GardenColors.primary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                      onPressed: _initData,
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.refresh_rounded, size: 22),
-                          SizedBox(width: 10),
-                          Text(
-                            'Verificar estado',
-                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
+                ),
+                const SizedBox(height: 16),
                 TextButton(
                   onPressed: () async {
-                    // Allow logout from resume screen
                     final prefs = await SharedPreferences.getInstance();
                     await prefs.remove('access_token');
                     await prefs.remove('user_name');

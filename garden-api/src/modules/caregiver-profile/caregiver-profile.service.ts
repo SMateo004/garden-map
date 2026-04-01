@@ -353,14 +353,6 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
     throw new BadRequestError('No tienes perfil de cuidador', 'CAREGIVER_PROFILE_NOT_FOUND');
   }
 
-  if (profile.status === CaregiverStatus.PENDING_REVIEW) {
-    // Ya enviado — devolver éxito silencioso (el wizard puede llamar esto varias veces)
-    return {
-      success: true,
-      message: 'Tu perfil ya está en revisión. Te notificaremos cuando sea aprobado.',
-    };
-  }
-
   if (profile.status === CaregiverStatus.APPROVED) {
     return {
       success: true,
@@ -371,10 +363,7 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
   const missing = getMissingRequiredFieldsForSubmit(profile);
 
   if (missing.length > 0) {
-    const needsIdentity = missing.includes('identityVerified');
-    const message = needsIdentity
-      ? 'Debes verificar tu identidad escaneando el código QR antes de enviar la solicitud.'
-      : `Completa los siguientes campos antes de enviar: ${missing.join(', ')}`;
+    const message = `Completa los siguientes campos antes de enviar: ${missing.join(', ')}`;
     throw new BadRequestError(message, 'MISSING_REQUIRED_FIELDS');
   }
 
@@ -382,7 +371,11 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
     await tx.caregiverProfile.update({
       where: { id: (profile as any).id },
       data: {
-        status: CaregiverStatus.PENDING_REVIEW,
+        status: CaregiverStatus.APPROVED,
+        profileStatus: 'APPROVED',
+        verified: true,
+        verifiedAt: new Date(),
+        approvedAt: new Date(),
         termsAcceptedAt: new Date(),
         termsAccepted: true,
         privacyAccepted: true,
@@ -390,17 +383,16 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
       } as any,
     });
 
-    // Notificación al cuidador: perfil en revisión
+    // Notificación de bienvenida al cuidador
     await tx.notification.create({
       data: {
         userId,
-        title: 'Perfil enviado para revisión',
-        message: '¡Gracias por completar tu perfil! Nuestro equipo lo revisará en los próximos días hábiles. Te notificaremos por email y WhatsApp cuando sea aprobado.',
-        type: 'SYSTEM',
+        title: '¡Bienvenido a GARDEN! Tu perfil está activo',
+        message: 'Felicidades, completaste tu registro exitosamente. Tu perfil ya es visible para los dueños de mascotas. ¡Esperamos que tengas una excelente experiencia!',
+        type: 'PROFILE_APPROVED',
       },
     });
 
-    // Notificación al admin para revisar el perfil
     await tx.adminNotification.create({
       data: {
         type: ADMIN_NOTIFICATION_TYPE_SUBMIT,
@@ -409,23 +401,22 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
     });
   });
 
-  // Sincronizar con Blockchain como no verificado aún
+  // Sincronizar con Blockchain como verificado
   blockchainService.syncProfileOnChain(
     userId,
     `${profile.user.firstName} ${profile.user.lastName}`,
     'CAREGIVER',
-    false // Pendiente de revisión, no verificado aún
+    true
   ).catch(err => logger.error('Blockchain sync failed (caregiver)', { userId, err }));
 
-  logger.info('CaregiverProfile: enviado a revisión', {
+  logger.info('CaregiverProfile: aprobado al completar los 10 pasos', {
     profileId: profile.id,
     userId,
-    message: 'Perfil completo → PENDING_REVIEW, esperando aprobación admin',
   });
 
   return {
     success: true,
-    message: 'Tu perfil ha sido enviado para revisión. Te notificaremos cuando sea aprobado.',
+    message: '¡Felicidades! Tu registro está completo y tu perfil ya es visible en Garden.',
   };
 }
 
