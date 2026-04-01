@@ -409,6 +409,94 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     }
   }
 
+  Future<void> _deleteCaregiver(String id, String nombre) async {
+    final reasonController = TextEditingController();
+    final passwordController = TextEditingController();
+    bool obscure = true;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          backgroundColor: themeNotifier.isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(children: [
+            const Icon(Icons.delete_forever, color: GardenColors.error),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Eliminar cuidador', style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary, fontSize: 17, fontWeight: FontWeight.bold))),
+          ]),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Se eliminará permanentemente el perfil de $nombre y toda su información. Esta acción NO se puede deshacer.', style: TextStyle(color: GardenColors.error, fontSize: 13, height: 1.4)),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: reasonController,
+                  maxLines: 2,
+                  decoration: InputDecoration(
+                    labelText: 'Motivo de eliminación',
+                    hintText: 'Ej: Perfil falso, incumplimiento de normas…',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: passwordController,
+                  obscureText: obscure,
+                  decoration: InputDecoration(
+                    labelText: 'Tu contraseña de admin',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    suffixIcon: IconButton(
+                      icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setS(() => obscure = !obscure),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error, foregroundColor: Colors.white),
+              onPressed: () {
+                if (reasonController.text.trim().isEmpty || passwordController.text.isEmpty) return;
+                Navigator.pop(ctx, true);
+              },
+              child: const Text('Eliminar definitivamente'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirm != true) return;
+    try {
+      final response = await http.delete(
+        Uri.parse('$_baseUrl/admin/caregivers/$id'),
+        headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'reason': reasonController.text.trim(), 'adminPassword': passwordController.text}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadCaregivers();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Perfil de $nombre eliminado permanentemente'), backgroundColor: GardenColors.error),
+        );
+      } else {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['error']?['message'] ?? 'Error al eliminar'), backgroundColor: GardenColors.error),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: GardenColors.error),
+      );
+    }
+  }
+
   Future<void> _revokeCaregiver(String id) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -946,6 +1034,21 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   maximumSize: const Size(42, 38),
                 ),
                 onPressed: () => _showCaregiverProfile(caregiver),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.delete_forever, size: 20, color: GardenColors.error),
+                tooltip: 'Eliminar perfil permanentemente',
+                style: IconButton.styleFrom(
+                  side: const BorderSide(color: GardenColors.error),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  minimumSize: const Size(42, 38),
+                  maximumSize: const Size(42, 38),
+                ),
+                onPressed: () => _deleteCaregiver(
+                  caregiver['id'] as String,
+                  '${caregiver['firstName'] ?? ''} ${caregiver['lastName'] ?? ''}'.trim(),
+                ),
               ),
             ],
           ),
