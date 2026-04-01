@@ -161,16 +161,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         return;
       }
 
-      // Step 7: Identity verification — avanza si ya subió las fotos (cualquier estado)
+      // Step 7: Verificación de identidad — requiere identityVerificationStatus VERIFIED
       final identityStatus = (profile['identityVerificationStatus'] as String? ?? '').toUpperCase();
-      final hasCiPhotos = (profile['ciAnversoUrl'] as String? ?? '').isNotEmpty &&
-          (profile['ciReversoUrl'] as String? ?? '').isNotEmpty;
-      if (identityStatus == 'PENDING' && !hasCiPhotos) {
+      if (identityStatus != 'VERIFIED' && identityStatus != 'APPROVED') {
         setState(() => _currentStep = 7);
         return;
       }
 
-      // Step 8: Email verification — avanza si ya está verificado
+      // Step 8: Verificación de email — requiere emailVerified true
       final emailVerified = profile['emailVerified'] == true;
       final userEmailVerified = (profile['user'] as Map<String, dynamic>?)?['emailVerified'] == true;
       if (!emailVerified && !userEmailVerified) {

@@ -128,8 +128,9 @@ export function getMissingRequiredFieldsForSubmit(profile: any): RequiredSubmitF
 
   if (!profile.profilePhoto) missing.push('profilePhoto');
 
-  // Verificación de identidad y email son pasos del wizard pero no bloquean
-  // la aprobación automática — se marcan al completar los pasos correspondientes.
+  // Verificación de identidad (IA) y email son obligatorios para aprobar
+  if (profile.identityVerificationStatus !== 'VERIFIED') missing.push('identityVerified');
+  if (profile.emailVerified !== true && profile.user?.emailVerified !== true) missing.push('emailVerified');
 
   // New questions
   if (!profile.experienceYears) missing.push('experienceYears');
