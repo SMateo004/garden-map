@@ -332,7 +332,7 @@ export async function submitVerification(
 
       // If it's a technical failure (AWS, connection, etc), don't just reject with score 0.
       // Throw a friendly error so the frontend shows the "Service Unavailable" screen.
-      throw new BadRequestError('Nuestros servicios de validación de identidad no están disponibles en este momento. Por favor, intenta de nuevo más tarde o contacta a soporte.');
+      throw new BadRequestError(`Error técnico: ${err.message || err.code || JSON.stringify(err)}`);
     }
 
     let finalStatus = scoringResult.status;
