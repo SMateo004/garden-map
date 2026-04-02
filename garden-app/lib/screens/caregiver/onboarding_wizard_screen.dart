@@ -201,7 +201,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     setState(() => _isLoading = true);
     try {
       final response = await http.post(
-        Uri.parse('$_baseUrl/caregiver/profile/submit'),
+        Uri.parse('$_baseUrl/caregiver/submit'),
         headers: {
           'Authorization': 'Bearer $_authToken',
           'Content-Type': 'application/json',
