@@ -363,7 +363,27 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
   const missing = getMissingRequiredFieldsForSubmit(profile);
 
   if (missing.length > 0) {
-    const message = `Completa los siguientes campos antes de enviar: ${missing.join(', ')}`;
+    const fieldLabels: Record<string, string> = {
+      bio: 'descripción del perfil (paso 6)',
+      zone: 'zona de servicio (paso 6)',
+      servicesOffered: 'servicios ofrecidos (paso 6)',
+      photos: 'fotos del perfil (paso 6)',
+      profilePhoto: 'foto de perfil (paso 6)',
+      identityVerified: 'verificación de identidad (paso 7)',
+      emailVerified: 'verificación de email (paso 8)',
+      experienceYears: 'años de experiencia (paso 6)',
+      experienceDescription: 'descripción de experiencia (paso 6)',
+      whyCaregiver: 'motivación como cuidador (paso 6)',
+      whatDiffers: 'qué te diferencia (paso 6)',
+      handleAnxious: 'manejo de mascotas ansiosas (paso 6)',
+      emergencyResponse: 'respuesta a emergencias (paso 6)',
+      acceptAggressive: 'mascotas agresivas (paso 6)',
+      acceptPuppies: 'cachorros (paso 6)',
+      acceptSeniors: 'mascotas mayores (paso 6)',
+      sizesAccepted: 'tamaños aceptados (paso 6)',
+    };
+    const labels = missing.map(f => fieldLabels[f] ?? f);
+    const message = `Faltan completar: ${labels.join(', ')}`;
     throw new BadRequestError(message, 'MISSING_REQUIRED_FIELDS');
   }
 

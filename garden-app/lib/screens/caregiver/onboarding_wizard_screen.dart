@@ -19,11 +19,16 @@ import 'email_verification_screen.dart';
 class OnboardingWizardScreen extends StatefulWidget {
   final String initialEmail;
   final String initialPassword;
+  /// When true, the wizard will query the backend on load to jump to the
+  /// first incomplete post-registration step (6-9). Set to true when
+  /// navigating from the home screen's "Continuar registro" button.
+  final bool resumeMode;
 
   const OnboardingWizardScreen({
     super.key,
     this.initialEmail = '',
     this.initialPassword = '',
+    this.resumeMode = false,
   });
 
   @override
@@ -110,9 +115,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
     setState(() => _authToken = token);
 
-    // Always compute which step to resume at so returning users
-    // land on the correct pending step (identity, email, availability, etc.)
-    if (token.isNotEmpty) {
+    // Only compute resume step when explicitly navigating back from home screen.
+    // This prevents overriding the user's manual step navigation mid-wizard.
+    if (token.isNotEmpty && widget.resumeMode) {
       await _computeAndSetResumeStep(token);
     }
   }
@@ -239,11 +244,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           SnackBar(
             content: Text(errorMsg),
             backgroundColor: Colors.red.shade700,
-            duration: const Duration(seconds: 6),
+            duration: const Duration(seconds: 8),
           ),
         );
-        // Recompute which step is still pending
-        await _computeAndSetResumeStep(_authToken);
+        // Do NOT auto-redirect — user stays on current step and sees the error.
+        // They can manually go back to the indicated step.
       }
     } catch (e) {
       setState(() => _isLoading = false);

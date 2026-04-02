@@ -120,6 +120,7 @@ final GoRouter _router = GoRouter(
         return OnboardingWizardScreen(
           initialEmail: extra['email'] as String? ?? '',
           initialPassword: extra['password'] as String? ?? '',
+          resumeMode: extra['resumeMode'] as bool? ?? false,
         );
       },
     ),

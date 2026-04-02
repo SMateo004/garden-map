@@ -2580,7 +2580,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     onPressed: () async {
                       final prefs = await SharedPreferences.getInstance();
                       await prefs.setBool('caregiver_setup_complete', false);
-                      if (context.mounted) context.go('/caregiver/onboarding');
+                      if (context.mounted) {
+                        context.go('/caregiver/onboarding', extra: {'resumeMode': true});
+                      }
                     },
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
