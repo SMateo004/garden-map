@@ -18,6 +18,7 @@ export interface ExtractedCIData {
   confidence: number;
   source: 'textract' | 'rekognition';
   hasExplicitLabels?: boolean;
+  ocrUnavailable?: boolean;
 }
 
 function getTextractClient(): TextractClient | null {
@@ -384,6 +385,7 @@ export async function extractCIData(image: Buffer): Promise<ExtractedCIData> {
         hasExplicitLabels: true,
       };
     }
+    logger.warn('OCR unavailable (both Textract and Rekognition DetectText failed). Verification will rely on face biometrics only.');
     return {
       firstName: null,
       lastName: null,
@@ -394,6 +396,7 @@ export async function extractCIData(image: Buffer): Promise<ExtractedCIData> {
       confidence: 0,
       source: 'rekognition',
       hasExplicitLabels: false,
+      ocrUnavailable: true,
     };
   }
 

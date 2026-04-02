@@ -305,11 +305,13 @@ export async function submitVerification(
 
       // 6. Multi-Signal Trust Score Calculation
       logger.info('Step 5.8: Calculating final trust score', { sessionId });
+      const ocrUnavailable = (crossValResult.ocrData as any)?.ocrUnavailable === true;
       scoringResult = calculateDetailedTrustScore({
         faceSimilarity: faceSimilarityValue,
         livenessScore: livenessScore,
-        nameSimilarity: crossValResult.nameSimilarity,
-        ocrConfidence: crossValResult.documentConfidence * 100,
+        // When OCR is unavailable, use neutral 50 so it doesn't drag down the total score
+        nameSimilarity: ocrUnavailable ? 50 : crossValResult.nameSimilarity,
+        ocrConfidence: ocrUnavailable ? 50 : crossValResult.documentConfidence * 100,
         docConfidence: docValidation.confidence,
         sharpness: selfieFace.Quality?.Sharpness ?? 0,
         brightness: selfieFace.Quality?.Brightness ?? 50,
@@ -332,7 +334,7 @@ export async function submitVerification(
 
       // If it's a technical failure (AWS, connection, etc), don't just reject with score 0.
       // Throw a friendly error so the frontend shows the "Service Unavailable" screen.
-      throw new BadRequestError(`Error técnico: ${err.message || err.code || JSON.stringify(err)}`);
+      throw new BadRequestError(`Nuestros servicios de verificación de identidad no están disponibles en este momento. Detalle: ${err.message || err.code || 'error desconocido'}`);
     }
 
     let finalStatus = scoringResult.status;

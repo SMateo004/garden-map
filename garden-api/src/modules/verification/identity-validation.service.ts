@@ -246,23 +246,29 @@ export async function crossValidate(
   let suggestedStatus: 'VERIFIED' | 'REJECTED' = 'VERIFIED';
   let reason: string | undefined;
 
-  if (nameSimilarity < 85 || lastNameMismatch) {
-    suggestedStatus = 'REJECTED';
-    reason = lastNameMismatch ? 'El apellido en el documento no coincide con el registro' : 'El nombre no coincide suficientemente';
-    fraudFlags.push('name_mismatch');
-  } else if (ciNumberMissing || !ciNumberMatch) {
-    suggestedStatus = 'REJECTED';
-    reason = ciNumberMissing ? 'No se pudo leer el número de CI' : 'El número de CI no coincide';
-    fraudFlags.push(ciNumberMissing ? 'missing_ci' : 'ci_mismatch');
-  } else if (!birthDateMatch && userBirthDate) {
-    suggestedStatus = 'REJECTED';
-    reason = 'La fecha de nacimiento no coincide';
-    fraudFlags.push('dob_mismatch');
-  }
+  // When OCR service is unavailable (Textract not subscribed, etc.), skip OCR-based rejections.
+  // Face biometrics will be the primary security gate in this case.
+  const ocrSkipped = (ocrData as any).ocrUnavailable === true;
 
-  if (ocrData.confidence < 70) {
-    suggestedStatus = 'REJECTED';
-    reason = 'Baja calidad de lectura del documento';
+  if (!ocrSkipped) {
+    if (nameSimilarity < 85 || lastNameMismatch) {
+      suggestedStatus = 'REJECTED';
+      reason = lastNameMismatch ? 'El apellido en el documento no coincide con el registro' : 'El nombre no coincide suficientemente';
+      fraudFlags.push('name_mismatch');
+    } else if (ciNumberMissing || !ciNumberMatch) {
+      suggestedStatus = 'REJECTED';
+      reason = ciNumberMissing ? 'No se pudo leer el número de CI' : 'El número de CI no coincide';
+      fraudFlags.push(ciNumberMissing ? 'missing_ci' : 'ci_mismatch');
+    } else if (!birthDateMatch && userBirthDate) {
+      suggestedStatus = 'REJECTED';
+      reason = 'La fecha de nacimiento no coincide';
+      fraudFlags.push('dob_mismatch');
+    }
+
+    if (ocrData.confidence < 70) {
+      suggestedStatus = 'REJECTED';
+      reason = 'Baja calidad de lectura del documento';
+    }
   }
 
   return {

@@ -73,7 +73,13 @@ export async function detectFacesWithDetails(image: Buffer): Promise<FaceDetecti
     Image: { Bytes: image },
     Attributes: ['ALL'],
   });
-  const response = await client.send(command);
+  let response;
+  try {
+    response = await client.send(command);
+  } catch (err: any) {
+    logger.error('Rekognition DetectFaces failed', { error: err.message, code: err.code });
+    throw new Error(`Error al detectar rostros con AWS Rekognition: ${err.message}`);
+  }
   const faceDetails = response.FaceDetails ?? [];
   const faceCount = faceDetails.length;
 
@@ -170,7 +176,13 @@ export async function compareFaces(sourceCropped: Buffer, targetCropped: Buffer)
     TargetImage: { Bytes: targetCropped },
     SimilarityThreshold: 0,
   });
-  const response = await client.send(command);
+  let response;
+  try {
+    response = await client.send(command);
+  } catch (err: any) {
+    logger.error('Rekognition CompareFaces failed', { error: err.message, code: err.code });
+    throw new Error(`Error al comparar rostros con AWS Rekognition: ${err.message}`);
+  }
   const matches = response.FaceMatches ?? [];
 
   if (matches.length === 0) return 0;
@@ -195,8 +207,13 @@ export async function detectLabels(image: Buffer): Promise<Label[]> {
     MaxLabels: 10,
     MinConfidence: 70,
   });
-  const response = await client.send(command);
-  return response.Labels ?? [];
+  try {
+    const response = await client.send(command);
+    return response.Labels ?? [];
+  } catch (err: any) {
+    logger.warn('Rekognition DetectLabels failed, skipping document validation', { error: err.message });
+    return [];
+  }
 }
 
 /**
