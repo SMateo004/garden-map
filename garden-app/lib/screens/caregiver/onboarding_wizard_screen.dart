@@ -208,7 +208,23 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         },
       );
 
-      final body = jsonDecode(response.body);
+      // Guard against HTML error pages (502/503 from server)
+      Map<String, dynamic> body = {};
+      try {
+        body = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (_) {
+        // Server returned non-JSON (e.g. HTML 502 page) — treat as server error
+        setState(() => _isLoading = false);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('El servidor no está disponible (${response.statusCode}). Intenta de nuevo en unos segundos.'),
+            backgroundColor: Colors.orange.shade800,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+        return;
+      }
 
       if (response.statusCode == 200 && body['success'] == true) {
         final prefs = await SharedPreferences.getInstance();
@@ -234,7 +250,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error de conexión: ${e.toString()}'),
+          content: Text('Sin conexión al servidor. Verifica tu internet e intenta de nuevo.'),
           backgroundColor: Colors.red.shade700,
           duration: const Duration(seconds: 5),
         ),
