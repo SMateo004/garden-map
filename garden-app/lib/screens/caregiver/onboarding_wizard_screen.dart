@@ -110,12 +110,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
     setState(() => _authToken = token);
 
-    // If already registered, compute which post-registration step to resume at
+    // Always compute which step to resume at so returning users
+    // land on the correct pending step (identity, email, availability, etc.)
     if (token.isNotEmpty) {
-      final setupComplete = prefs.getBool('caregiver_setup_complete') ?? false;
-      if (!setupComplete) {
-        await _computeAndSetResumeStep(token);
-      }
+      await _computeAndSetResumeStep(token);
     }
   }
 
@@ -184,8 +182,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         return;
       }
 
-      // All done
-      _completeWizard();
+      // All steps complete — put user on step 9 so they can confirm and submit
+      setState(() => _currentStep = 9);
     } catch (_) {
       // If error, stay at step 0 (new registration)
     }
@@ -202,20 +200,46 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   Future<void> _completeWizard() async {
     setState(() => _isLoading = true);
     try {
-      await http.post(
+      final response = await http.post(
         Uri.parse('$_baseUrl/caregiver/profile/submit'),
         headers: {
           'Authorization': 'Bearer $_authToken',
           'Content-Type': 'application/json',
         },
       );
-    } catch (_) {}
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('caregiver_setup_complete', true);
+      final body = jsonDecode(response.body);
 
-    if (!mounted) return;
-    context.go('/caregiver/home');
+      if (response.statusCode == 200 && body['success'] == true) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('caregiver_setup_complete', true);
+        if (!mounted) return;
+        context.go('/caregiver/home');
+      } else {
+        setState(() => _isLoading = false);
+        final errorMsg = body['error']?['message'] ?? body['message'] ?? 'No se pudo completar el registro';
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMsg),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 6),
+          ),
+        );
+        // Recompute which step is still pending
+        await _computeAndSetResumeStep(_authToken);
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error de conexión: ${e.toString()}'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
   }
 
   @override

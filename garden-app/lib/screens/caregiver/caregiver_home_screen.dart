@@ -2577,7 +2577,11 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       elevation: 0,
                     ),
-                    onPressed: () => context.go('/caregiver/onboarding'),
+                    onPressed: () async {
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool('caregiver_setup_complete', false);
+                      if (context.mounted) context.go('/caregiver/onboarding');
+                    },
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
