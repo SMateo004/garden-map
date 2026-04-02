@@ -161,9 +161,15 @@ export async function cropFaceFromImage(image: Buffer, boundingBox: BoundingBox)
 }
 
 /**
- * Compare two face images (must be pre-cropped). Returns similarity 0-100.
+ * Compare two face images. Returns similarity 0-100.
+ * Tries cropped images first, falls back to originals if Rekognition rejects parameters.
  */
-export async function compareFaces(sourceCropped: Buffer, targetCropped: Buffer): Promise<number> {
+export async function compareFaces(
+  sourceCropped: Buffer,
+  targetCropped: Buffer,
+  sourceOriginal?: Buffer,
+  targetOriginal?: Buffer,
+): Promise<number> {
   const client = getRekognitionClient();
   if (!client) {
     const mock = 96 + Math.random() * 3;
@@ -171,28 +177,40 @@ export async function compareFaces(sourceCropped: Buffer, targetCropped: Buffer)
     return mock;
   }
 
-  const command = new CompareFacesCommand({
-    SourceImage: { Bytes: sourceCropped },
-    TargetImage: { Bytes: targetCropped },
-    SimilarityThreshold: 0,
-  });
-  let response;
+  const tryCompare = async (source: Buffer, target: Buffer): Promise<number> => {
+    const command = new CompareFacesCommand({
+      SourceImage: { Bytes: source },
+      TargetImage: { Bytes: target },
+      SimilarityThreshold: 0,
+    });
+    const response = await client.send(command);
+    const matches = response.FaceMatches ?? [];
+    if (matches.length === 0) return 0;
+    return matches.reduce((max, m) => {
+      const sim = m.Similarity ?? 0;
+      return sim > max ? sim : max;
+    }, 0);
+  };
+
+  // First attempt: cropped faces (faster + more precise)
   try {
-    response = await client.send(command);
+    return await tryCompare(sourceCropped, targetCropped);
   } catch (err: any) {
-    logger.error('Rekognition CompareFaces failed', { error: err.message, code: err.code });
-    throw new Error(`Error al comparar rostros con AWS Rekognition: ${err.message}`);
+    logger.warn('CompareFaces with cropped images failed, trying full images', { error: err.message, code: err.code });
   }
-  const matches = response.FaceMatches ?? [];
 
-  if (matches.length === 0) return 0;
+  // Second attempt: full original images (wider context, Rekognition finds faces itself)
+  if (sourceOriginal && targetOriginal) {
+    try {
+      return await tryCompare(sourceOriginal, targetOriginal);
+    } catch (err: any) {
+      logger.error('CompareFaces with full images also failed', { error: err.message, code: err.code });
+      throw new Error(`Error al comparar rostros con AWS Rekognition: ${err.message}`);
+    }
+  }
 
-  const best = matches.reduce((max, m) => {
-    const sim = m.Similarity ?? 0;
-    return sim > max ? sim : max;
-  }, 0);
-
-  return best;
+  // No fallback available
+  throw new Error('Error al comparar rostros: imágenes inválidas para Rekognition');
 }
 
 /**

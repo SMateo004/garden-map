@@ -264,7 +264,8 @@ export async function submitVerification(
       croppedSelfie = croppedSResult;
       croppedDoc = croppedDResult;
 
-      faceSimilarityValue = await compareFaces(croppedDoc, croppedSelfie);
+      // Pass original buffers as fallback in case cropped images are rejected by Rekognition
+      faceSimilarityValue = await compareFaces(croppedDoc, croppedSelfie, ciFrontBuffer, selfieBuffer);
 
       // 5. OCR & Name Matching (HARDENED)
       logger.info('Step 5: OCR with Amazon Textract', { sessionId });
