@@ -187,9 +187,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       final sizesAccepted = (profile['sizesAccepted'] as List?) ?? [];
       final animalTypes = (profile['animalTypes'] as List?) ?? [];
 
-      final profileComplete = bio.length >= 45 &&
+      final profileComplete = bio.length >= 10 &&
           bioDetail.length >= 3 &&
-          experienceDesc.length >= 15 &&
+          experienceDesc.length >= 5 &&
           whyCaregiver.length >= 3 &&
           whatDiffers.length >= 3 &&
           handleAnxious.isNotEmpty &&

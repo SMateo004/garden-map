@@ -115,7 +115,7 @@ export type RequiredSubmitField = (typeof REQUIRED_FIELDS_FOR_SUBMIT)[number];
 /** Devuelve los nombres de campos obligatorios que faltan o están vacíos en el perfil. */
 export function getMissingRequiredFieldsForSubmit(profile: any): RequiredSubmitField[] {
   const missing: RequiredSubmitField[] = [];
-  if (!profile.bio || profile.bio.trim().length < 50) missing.push('bio');
+  if (!profile.bio || profile.bio.trim().length < 10) missing.push('bio');
   if (!profile.zone) missing.push('zone');
 
   const services = Array.isArray(profile.servicesOffered) ? profile.servicesOffered : [];
@@ -132,13 +132,13 @@ export function getMissingRequiredFieldsForSubmit(profile: any): RequiredSubmitF
   if (profile.identityVerificationStatus !== 'VERIFIED') missing.push('identityVerified');
   if (profile.emailVerified !== true && profile.user?.emailVerified !== true) missing.push('emailVerified');
 
-  // New questions
-  if (!profile.experienceYears) missing.push('experienceYears');
-  if (!profile.experienceDescription || profile.experienceDescription.length < 20) missing.push('experienceDescription');
-  if (!profile.whyCaregiver || profile.whyCaregiver.length < 5) missing.push('whyCaregiver');
-  if (!profile.whatDiffers || profile.whatDiffers.length < 5) missing.push('whatDiffers');
-  if (!profile.handleAnxious) missing.push('handleAnxious');
-  if (!profile.emergencyResponse) missing.push('emergencyResponse');
+  // Paso 7 (Perfil profesional): validate existence only — length/format enforced by the screen itself
+  if (profile.experienceYears === null || profile.experienceYears === undefined) missing.push('experienceYears');
+  if (!profile.experienceDescription || profile.experienceDescription.trim().length < 5) missing.push('experienceDescription');
+  if (!profile.whyCaregiver || profile.whyCaregiver.trim().length < 3) missing.push('whyCaregiver');
+  if (!profile.whatDiffers || profile.whatDiffers.trim().length < 3) missing.push('whatDiffers');
+  if (!profile.handleAnxious || profile.handleAnxious.trim().length < 3) missing.push('handleAnxious');
+  if (!profile.emergencyResponse || profile.emergencyResponse.trim().length < 3) missing.push('emergencyResponse');
   if (profile.acceptAggressive === null || profile.acceptAggressive === undefined) missing.push('acceptAggressive');
   if (profile.acceptPuppies === null || profile.acceptPuppies === undefined) missing.push('acceptPuppies');
   if (profile.acceptSeniors === null || profile.acceptSeniors === undefined) missing.push('acceptSeniors');
