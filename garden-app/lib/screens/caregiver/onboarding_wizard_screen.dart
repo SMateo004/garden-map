@@ -127,7 +127,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     defaultValue: 'https://garden-api-1ldd.onrender.com/api',
   );
 
-  /// For returning users: load profile and jump to the first incomplete step (6-9).
+  /// For returning users: load profile and jump to the first incomplete step (1-8).
   Future<void> _computeAndSetResumeStep(String token) async {
     try {
       final res = await http.get(
@@ -137,6 +137,44 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       final data = jsonDecode(res.body);
       if (data['success'] != true) return;
       final profile = data['data'] as Map<String, dynamic>;
+
+      // Step 1: Services & zone
+      final zone = profile['zone'];
+      final servicesOffered = (profile['servicesOffered'] as List?) ?? [];
+      if (zone == null || servicesOffered.isEmpty) {
+        setState(() => _currentStep = 1);
+        return;
+      }
+
+      // Step 2: Availability
+      final svcAvail = profile['serviceAvailability'] as Map?;
+      if (svcAvail == null || svcAvail.isEmpty) {
+        setState(() => _currentStep = 2);
+        return;
+      }
+
+      // Step 3: Photos
+      final photos = (profile['photos'] as List?) ?? [];
+      final minPhotos = servicesOffered.contains('HOSPEDAJE') ? 4 : 2;
+      if (photos.length < minPhotos) {
+        setState(() => _currentStep = 3);
+        return;
+      }
+
+      // Step 4: Price
+      final priceDay = profile['pricePerDay'];
+      final priceWalk = profile['pricePerWalk60'];
+      final hasPrice = (priceDay != null && priceDay != 0) || (priceWalk != null && priceWalk != 0);
+      if (!hasPrice) {
+        setState(() => _currentStep = 4);
+        return;
+      }
+
+      // Step 5: Profile photo
+      if (profile['profilePhoto'] == null) {
+        setState(() => _currentStep = 5);
+        return;
+      }
 
       // Step 6: Professional profile (CaregiverProfileDataScreen)
       final bio = (profile['bio'] as String? ?? '').trim();
@@ -179,27 +217,15 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         return;
       }
 
-      // Step 9: Availability — check if any availability has been configured
-      final availSet = profile['availabilityConfigured'] == true ||
-          profile['hasServiceAvailability'] == true;
-      if (!availSet) {
-        setState(() => _currentStep = 9);
-        return;
-      }
-
-      // All steps complete — put user on step 9 so they can confirm and submit
-      setState(() => _currentStep = 9);
+      // All steps complete — attempt submit (handles already-approved case)
+      await _completeWizard();
     } catch (_) {
       // If error, stay at step 0 (new registration)
     }
   }
 
   void _advanceStep() {
-    if (_currentStep >= 9) {
-      _completeWizard();
-    } else {
-      setState(() => _currentStep++);
-    }
+    setState(() => _currentStep++);
   }
 
   Future<void> _completeWizard() async {
@@ -367,7 +393,47 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   }
 
   Future<void> _nextStep() async {
-    // Paso de fotos (index 3): subir antes de validar
+    // Step 0: Datos personales → register with minimal data
+    if (_currentStep == 0) {
+      if (!_validateCurrentStep()) return;
+      await _registerMinimalAndAdvance();
+      return;
+    }
+
+    // Step 1: Servicios y zona → PATCH profile
+    if (_currentStep == 1) {
+      if (!_validateCurrentStep()) return;
+      setState(() => _isLoading = true);
+      await _patchProfile({
+        'zone': _selectedZone,
+        'servicesOffered': _servicesOffered,
+        if (_homeType != null) 'homeType': _homeType,
+        'hasYard': _hasYard,
+      });
+      setState(() { _isLoading = false; _currentStep++; });
+      return;
+    }
+
+    // Step 2: Disponibilidad → PATCH profile
+    if (_currentStep == 2) {
+      if (!_validateCurrentStep()) return;
+      setState(() => _isLoading = true);
+      final svcAvail = <String, dynamic>{};
+      for (final svc in _servicesOffered) {
+        svcAvail[svc] = {
+          'weekdays': _weekdays,
+          'weekends': _weekends,
+          'holidays': _holidays,
+          'times': _times,
+          'lastMinute': false,
+        };
+      }
+      await _patchProfile({'serviceAvailability': svcAvail});
+      setState(() { _isLoading = false; _currentStep++; });
+      return;
+    }
+
+    // Step 3: Fotos del hogar → upload then PATCH
     if (_currentStep == 3) {
       final minFotos = _servicesOffered.contains('HOSPEDAJE') ? 4 : 2;
       final total = _localPhotos.length + _photoUrls.length;
@@ -390,20 +456,189 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         );
         return;
       }
-      setState(() => _currentStep++);
+      setState(() => _isLoading = true);
+      await _patchProfile({'photos': _photoUrls});
+      setState(() { _isLoading = false; _currentStep++; });
       return;
     }
 
-    // Paso de foto de perfil (index 5): validar y crear cuenta
+    // Step 4: Precio → PATCH profile
+    if (_currentStep == 4) {
+      if (!_validateCurrentStep()) return;
+      setState(() => _isLoading = true);
+      await _patchProfile({
+        if (_servicesOffered.contains('HOSPEDAJE')) 'pricePerDay': _precioFinal.toInt(),
+        if (_servicesOffered.contains('PASEO')) 'pricePerWalk60': _precioFinal.toInt(),
+      });
+      setState(() { _isLoading = false; _currentStep++; });
+      return;
+    }
+
+    // Step 5: Foto de perfil → upload then PATCH profile
     if (_currentStep == 5) {
       if (!_validateCurrentStep()) return;
-      await _submitWizard(); // creates account, then advances to step 6
+      setState(() => _isLoading = true);
+      if (_localProfilePhoto != null && _profilePhotoUrl == null) {
+        try {
+          final uri = Uri.parse('$_baseUrl/upload/public-single-photo');
+          final request = http.MultipartRequest('POST', uri);
+          final bytes = await _localProfilePhoto!.readAsBytes();
+          String mimeType = _localProfilePhoto!.mimeType ?? '';
+          if (mimeType == 'image/jpg' || mimeType.isEmpty) mimeType = 'image/jpeg';
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'photo',
+              bytes,
+              filename: _localProfilePhoto!.name.isEmpty ? 'profile.jpg' : _localProfilePhoto!.name,
+              contentType: MediaType.parse(mimeType),
+            ),
+          );
+          final streamed = await request.send();
+          final response = await http.Response.fromStream(streamed);
+          final data = jsonDecode(response.body);
+          if (response.statusCode == 200 && data['success'] == true) {
+            _profilePhotoUrl = data['data']['url'].toString();
+          } else {
+            throw Exception('Error subiendo foto de perfil');
+          }
+        } catch (e) {
+          setState(() => _isLoading = false);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error foto perfil: $e'), backgroundColor: Colors.red.shade700),
+            );
+          }
+          return;
+        }
+      }
+      await _patchProfile({
+        if (_profilePhotoUrl != null) 'profilePhoto': _profilePhotoUrl,
+      });
+      setState(() { _isLoading = false; _currentStep++; });
       return;
     }
 
-    if (!_validateCurrentStep()) return;
-    if (_currentStep < 9) {
-      setState(() => _currentStep++);
+    // Steps 6-8 handled by embedded screens
+  }
+
+  /// Step 0 → 1: Register with minimal data, get token, advance.
+  Future<void> _registerMinimalAndAdvance() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/auth/caregiver/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'user': {
+            'email': _emailController.text.trim(),
+            'password': _passwordController.text,
+            'firstName': _firstNameController.text.trim(),
+            'lastName': _lastNameController.text.trim(),
+            'phone': _phoneController.text.trim(),
+            'dateOfBirth': _dateOfBirth!.toIso8601String(),
+            'country': 'Bolivia',
+            'city': 'Santa Cruz de la Sierra',
+            'isOver18': true,
+          },
+          'profile': {
+            'bio': _bioController.text.trim(),
+            'address': _addressController.text.trim(),
+          },
+        }),
+      );
+
+      Map<String, dynamic> data = {};
+      try {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (_) {
+        throw Exception('El servidor no está disponible. Intenta de nuevo en unos segundos.');
+      }
+
+      if (response.statusCode == 201 && data['success'] == true) {
+        final authService = AuthService();
+        await authService.saveToken(data['data']['accessToken']);
+        await authService.saveUserData(data['data']['user']);
+        setState(() {
+          _authToken = data['data']['accessToken'] as String? ?? _authToken;
+          _currentStep = 1;
+        });
+      } else {
+        if (data['errors'] != null) {
+          final errors = (data['errors'] as List)
+              .map((e) => '${e['field']}: ${e['message']}')
+              .join('\n');
+          throw Exception(errors);
+        }
+        throw Exception(
+          data['error']?['message'] ?? data['message'] ?? 'Error al crear la cuenta',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Row(children: [
+            Icon(Icons.error_outline, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Error al registrarse'),
+          ]),
+          content: SingleChildScrollView(
+            child: Text(msg, style: const TextStyle(fontSize: 14)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// PATCH /caregiver/profile with partial data (silent on error — non-blocking).
+  Future<void> _patchProfile(Map<String, dynamic> data) async {
+    try {
+      await http.patch(
+        Uri.parse('$_baseUrl/caregiver/profile'),
+        headers: {
+          'Authorization': 'Bearer $_authToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(data),
+      );
+    } catch (_) {}
+  }
+
+  /// Step 7 → 8: Only advance if identityVerificationStatus == VERIFIED.
+  Future<void> _onIdentityVerificationComplete() async {
+    setState(() => _isLoading = true);
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/caregiver/my-profile'),
+        headers: {'Authorization': 'Bearer $_authToken'},
+      );
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final status = ((body['data'] as Map<String, dynamic>?)?['identityVerificationStatus'] as String? ?? '').toUpperCase();
+      if (status == 'VERIFIED' || status == 'APPROVED') {
+        setState(() => _currentStep = 8);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Text('Debes completar y aprobar la verificación de identidad para continuar.'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 5),
+          ));
+        }
+      }
+    } catch (_) {
+      // Network error — stay on step 7
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -499,181 +734,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     }
   }
 
-
-  Future<void> _submitWizard() async {
-    if (!_validateCurrentStep()) return;
-    setState(() => _isLoading = true);
-    
-    // Si hay foto de perfil local, subirla primero
-    if (_localProfilePhoto != null && _profilePhotoUrl == null) {
-      try {
-        final uri = Uri.parse('${const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api')}/upload/public-single-photo');
-        final request = http.MultipartRequest('POST', uri);
-        final bytes = await _localProfilePhoto!.readAsBytes();
-        
-        String mimeType = _localProfilePhoto!.mimeType ?? '';
-        if (mimeType == 'image/jpg' || mimeType.isEmpty) mimeType = 'image/jpeg';
-        
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'photo',
-            bytes,
-            filename: _localProfilePhoto!.name.isEmpty ? 'profile.jpg' : _localProfilePhoto!.name,
-            contentType: MediaType.parse(mimeType),
-          ),
-        );
-        final streamed = await request.send();
-        final response = await http.Response.fromStream(streamed);
-        final data = jsonDecode(response.body);
-        if (response.statusCode == 200 && data['success'] == true) {
-          final raw = data['data']['url'];
-          _profilePhotoUrl = raw.toString();
-        } else {
-          throw Exception('Error subiendo foto perfil');
-        }
-      } catch (e) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error foto perfil: $e')));
-        return;
-      }
-    }
-
-    try {
-      final availabilityItem = {
-
-        'weekdays': _weekdays,
-        'weekends': _weekends,
-        'holidays': _holidays,
-        'times': _times, // ['MORNING', 'AFTERNOON', 'NIGHT']
-        'lastMinute': false,
-      };
-
-      final serviceAvailability = <String, dynamic>{};
-      if (_servicesOffered.contains('HOSPEDAJE')) {
-        serviceAvailability['HOSPEDAJE'] = availabilityItem;
-      }
-      if (_servicesOffered.contains('PASEO')) {
-        serviceAvailability['PASEO'] = availabilityItem;
-      }
-
-      // Construir el body completo
-      final body = {
-        'user': {
-          'email': _emailController.text.trim(),
-          'password': _passwordController.text,
-          'firstName': _firstNameController.text.trim(),
-          'lastName': _lastNameController.text.trim(),
-          'phone': _phoneController.text.trim(),
-          'dateOfBirth': _dateOfBirth!.toIso8601String(),
-          'country': 'Bolivia',
-          'city': 'Santa Cruz de la Sierra',
-          'isOver18': true,
-        },
-        'profile': {
-          'bio': _bioController.text.trim(),
-          'zone': _selectedZone,
-          'servicesOffered': _servicesOffered,
-          'photos': _photoUrls,
-          'serviceAvailability': serviceAvailability,
-          if (_servicesOffered.contains('HOSPEDAJE'))
-            'pricePerDay': _precioFinal.toInt(),
-          if (_servicesOffered.contains('PASEO'))
-            'pricePerWalk60': _precioFinal.toInt(),
-          if (_homeType != null) 'homeType': _homeType,
-          'hasYard': _hasYard,
-          'address': _addressController.text.trim(),
-          'sizesAccepted': _sizesAccepted,
-          'animalTypes': _animalTypes,
-          'experienceYears': _experienceYears,
-          'ownPets': _ownPets,
-          'acceptPuppies': _acceptPuppies,
-          'acceptSeniors': _acceptSeniors,
-                    if (_profilePhotoUrl != null) 'profilePhoto': _profilePhotoUrl,
-          'caredOthers': _caredOthers,
-          if (_whyCaregiverController.text.trim().length >= 5)
-            'whyCaregiver': _whyCaregiverController.text.trim(),
-          if (_whatDiffersController.text.trim().length >= 5)
-            'whatDiffers': _whatDiffersController.text.trim(),
-          if (_handleAnxiousController.text.trim().length >= 5)
-            'handleAnxious': _handleAnxiousController.text.trim(),
-          if (_emergencyResponseController.text.trim().length >= 5)
-            'emergencyResponse': _emergencyResponseController.text.trim(),
-          'acceptAggressive': _acceptAggressive,
-          'hasChildren': _hasChildren,
-          'petsSleep': 'INSIDE',
-          'hoursAlone': _hoursAlone,
-          'workFromHome': _workFromHome,
-          'maxPets': _maxPets,
-          'oftenOut': _oftenOut,
-          if (_typicalDayController.text.trim().length >= 5)
-            'typicalDay': _typicalDayController.text.trim(),
-          if (_bioDetailController.text.trim().length >= 5)
-            'bioDetail': _bioDetailController.text.trim(),
-        },
-      };
-
-      final response = await http.post(
-        Uri.parse(
-          '${const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api')}/auth/caregiver/register',
-        ),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body),
-      );
-
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 201 && data['success'] == true) {
-        // Save token and user data
-        final authService = AuthService();
-        await authService.saveToken(data['data']['accessToken']);
-        await authService.saveUserData(data['data']['user']);
-
-        // Update local token so post-registration steps can use the API
-        setState(() => _authToken = data['data']['accessToken'] as String? ?? _authToken);
-
-        if (!mounted) return;
-
-        // Seamlessly advance to step 6 (Professional Profile)
-        setState(() => _currentStep = 6);
-
-      } else {
-        // Manejo de errores de validación
-        if (data['errors'] != null) {
-          final errors = (data['errors'] as List)
-              .map((e) => '${e['field']}: ${e['message']}')
-              .join('\n');
-          throw Exception(errors);
-        }
-        throw Exception(
-          data['error']?['message'] ?? data['message'] ?? 'Error al crear perfil',
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      final msg = e.toString().replaceFirst('Exception: ', '');
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Row(children: [
-            Icon(Icons.error_outline, color: Colors.red),
-            SizedBox(width: 8),
-            Text('Error al registrarse'),
-          ]),
-          content: SingleChildScrollView(
-            child: Text(msg, style: const TextStyle(fontSize: 14)),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Entendido'),
-            ),
-          ],
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
 
   // ── PASO 1: Datos personales ──────────────────────────────
   Widget _buildStep1() {
@@ -1569,192 +1629,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     );
   }
 
-  // ── PASO 10: Disponibilidad detallada ─────────────────────────────────────
-  bool _availWeekdays = true;
-  bool _availWeekends = false;
-  bool _availHolidays = false;
-  bool _availMorning = true;
-  bool _availAfternoon = true;
-  bool _availNight = false;
-  bool _savingAvailability = false;
-
-  Future<void> _saveAvailabilityAndFinish() async {
-    setState(() => _savingAvailability = true);
-    try {
-      await http.patch(
-        Uri.parse('$_baseUrl/caregiver/availability'),
-        headers: {
-          'Authorization': 'Bearer $_authToken',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'defaultSchedule': {
-            'weekdays': _availWeekdays,
-            'weekends': _availWeekends,
-            'holidays': _availHolidays,
-            'times': [
-              if (_availMorning) 'MORNING',
-              if (_availAfternoon) 'AFTERNOON',
-              if (_availNight) 'NIGHT',
-            ],
-          },
-        }),
-      );
-    } catch (_) {}
-    if (mounted) setState(() => _savingAvailability = false);
-    _completeWizard();
-  }
-
-  Widget _buildStepAvailability() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Configura tu disponibilidad',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Dinos cuándo puedes atender mascotas. Los dueños solo podrán reservarte en los días y horarios que actives.',
-            style: TextStyle(fontSize: 14, color: kTextSecondary),
-          ),
-          const SizedBox(height: 28),
-
-          const Text('Días disponibles', style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold, fontSize: 15)),
-          const SizedBox(height: 12),
-          _availDayTile(
-            icon: Icons.work_outline_rounded,
-            title: 'Días de semana',
-            subtitle: 'Lunes a Viernes',
-            value: _availWeekdays,
-            onChanged: (v) => setState(() => _availWeekdays = v),
-          ),
-          const SizedBox(height: 10),
-          _availDayTile(
-            icon: Icons.weekend_outlined,
-            title: 'Fines de semana',
-            subtitle: 'Sábado y Domingo',
-            value: _availWeekends,
-            onChanged: (v) => setState(() => _availWeekends = v),
-          ),
-          const SizedBox(height: 10),
-          _availDayTile(
-            icon: Icons.event_outlined,
-            title: 'Feriados',
-            subtitle: 'Días festivos nacionales',
-            value: _availHolidays,
-            onChanged: (v) => setState(() => _availHolidays = v),
-          ),
-
-          const SizedBox(height: 28),
-          const Text('Horarios de atención', style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold, fontSize: 15)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _availTimeChip('Mañana', '6am–12pm', Icons.wb_sunny_outlined, _availMorning, (v) => setState(() => _availMorning = v))),
-              const SizedBox(width: 10),
-              Expanded(child: _availTimeChip('Tarde', '12pm–7pm', Icons.wb_cloudy_outlined, _availAfternoon, (v) => setState(() => _availAfternoon = v))),
-              const SizedBox(width: 10),
-              Expanded(child: _availTimeChip('Noche', '7pm–10pm', Icons.nights_stay_outlined, _availNight, (v) => setState(() => _availNight = v))),
-            ],
-          ),
-
-          const SizedBox(height: 36),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: kPrimaryColor.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: kPrimaryColor.withOpacity(0.25)),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.info_outline_rounded, color: kPrimaryColor, size: 20),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Podrás ajustar días específicos en cualquier momento desde tu panel de disponibilidad.',
-                    style: TextStyle(color: kTextSecondary, fontSize: 12),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 32),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kPrimaryColor,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 0,
-              ),
-              onPressed: _savingAvailability ? null : _saveAvailabilityAndFinish,
-              child: _savingAvailability
-                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Finalizar y entrar a GARDEN', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-            ),
-          ),
-          const SizedBox(height: 40),
-        ],
-      ),
-    );
-  }
-
-  Widget _availDayTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: kSurfaceColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: value ? kPrimaryColor.withOpacity(0.4) : Colors.transparent, width: 1.5),
-      ),
-      child: SwitchListTile(
-        secondary: Icon(icon, color: value ? kPrimaryColor : kTextSecondary, size: 22),
-        title: Text(title, style: TextStyle(color: Colors.white, fontWeight: value ? FontWeight.w600 : FontWeight.normal)),
-        subtitle: Text(subtitle, style: const TextStyle(color: kTextSecondary, fontSize: 12)),
-        value: value,
-        activeColor: kPrimaryColor,
-        onChanged: onChanged,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-
-  Widget _availTimeChip(String label, String hours, IconData icon, bool selected, ValueChanged<bool> onChanged) {
-    return GestureDetector(
-      onTap: () => onChanged(!selected),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-        decoration: BoxDecoration(
-          color: selected ? kPrimaryColor.withOpacity(0.15) : kSurfaceColor,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? kPrimaryColor : GardenColors.darkBorder, width: 1.5),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: selected ? kPrimaryColor : kTextSecondary, size: 22),
-            const SizedBox(height: 6),
-            Text(label, style: TextStyle(color: selected ? Colors.white : kTextSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
-            const SizedBox(height: 2),
-            Text(hours, style: const TextStyle(color: kTextSecondary, fontSize: 10)),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     // ─── Steps 6-9 are post-registration embedded screens ───────────────────
@@ -1769,30 +1643,27 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     } else if (_currentStep == 7) {
       postRegStep = VerificationScreen(
         showAppBar: false,
-        onComplete: _advanceStep,
+        onComplete: _onIdentityVerificationComplete,
       );
     } else if (_currentStep == 8) {
       postRegStep = EmailVerificationScreen(
         showAppBar: false,
-        onComplete: _advanceStep,
+        onComplete: () { _completeWizard(); },
       );
-    } else if (_currentStep == 9) {
-      postRegStep = _buildStepAvailability();
     } else {
       postRegStep = const SizedBox.shrink();
     }
 
     final steps = [
-      _buildStep1(),   // 0: Datos personales
+      _buildStep1(),   // 0: Datos personales → register
       _buildStep3(),   // 1: Servicios y zona
       _buildStep4(),   // 2: Disponibilidad básica
       _buildStep2(),   // 3: Fotos del lugar
       _buildStep5(),   // 4: Precio
-      _buildStep7(),   // 5: Foto de perfil → triggers registration
+      _buildStep7(),   // 5: Foto de perfil
       postRegStep,     // 6: Perfil profesional
       postRegStep,     // 7: Verificación de identidad
       postRegStep,     // 8: Verificación de email
-      postRegStep,     // 9: Disponibilidad
     ];
 
     final stepTitles = [
@@ -1805,13 +1676,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       'Perfil profesional',
       'Verificación ID',
       'Verificación Email',
-      'Tu agenda',
     ];
 
-    // Steps 6-9 are embedded screens that manage their own "Continue" buttons.
+    // Steps 6-8 are embedded screens that manage their own "Continue" buttons.
     // The wizard hides the bottom nav bar for those steps.
     final bool showNavButtons = _currentStep <= 5;
-    final bool isRegistrationStep = _currentStep == 5;
+    final bool isRegistrationStep = _currentStep == 0;
 
     return Theme(
       data: ThemeData(
@@ -1876,12 +1746,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       backgroundColor: GardenColors.lightBackground,
       appBar: AppBar(
         title: const Text('Crear perfil de cuidador'),
-        // Show back arrow only for pre-registration steps (0-4)
+        // Show back arrow only for pre-registration steps (0-4); steps 5+ use nav buttons or embedded screens
         automaticallyImplyLeading: _currentStep < 5,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(6),
           child: LinearProgressIndicator(
-            value: (_currentStep + 1) / 10,
+            value: (_currentStep + 1) / 9,
             backgroundColor: kSurfaceColor,
             valueColor: const AlwaysStoppedAnimation<Color>(kPrimaryColor),
             minHeight: 6,
@@ -1898,7 +1768,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Paso ${_currentStep + 1} de 10',
+                  'Paso ${_currentStep + 1} de 9',
                   style: const TextStyle(color: kTextSecondary, fontSize: 12),
                 ),
                 Container(

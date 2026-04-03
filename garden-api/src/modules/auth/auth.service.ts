@@ -112,7 +112,7 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
         spaceType: Array.isArray(profileInput.spaceType) ? profileInput.spaceType : (profileInput.spaceType ? [profileInput.spaceType] : []),
         address: profileInput.address ?? null,
         photos: ensureAbsoluteUrls(profileInput.photos ?? []),
-        servicesOffered: profileInput.servicesOffered,
+        servicesOffered: profileInput.servicesOffered ?? [],
         serviceAvailability: (profileInput.serviceAvailability ?? null) as object,
         pricePerDay: profileInput.pricePerDay ?? null,
         pricePerWalk30: profileInput.pricePerWalk30 ?? null,

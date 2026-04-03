@@ -103,11 +103,13 @@ export const registerCaregiverProfileSchema = z.object({
   bio: z
     .string()
     .min(50, 'La descripción debe tener al menos 50 caracteres')
-    .max(500, 'La descripción no puede superar 500 caracteres'),
+    .max(500, 'La descripción no puede superar 500 caracteres')
+    .optional(),
+  // zone, servicesOffered, and photos are optional at registration time —
+  // they are saved later via PATCH /caregiver/profile (step-by-step wizard).
   zone: z.nativeEnum(Zone, {
-    required_error: 'Elige una zona',
     invalid_type_error: 'Zona no válida; elige una de la lista',
-  }),
+  }).optional(),
   spaceType: z
     .array(z.enum(['Casa con patio', 'Casa sin patio', 'Departamento pequeño', 'Departamento amplio']))
     .min(1, 'Selecciona al menos un tipo de espacio')
@@ -116,7 +118,8 @@ export const registerCaregiverProfileSchema = z.object({
 
   servicesOffered: z
     .array(z.nativeEnum(ServiceType))
-    .min(1, 'Elige al menos un servicio (Hospedaje o Paseo)'),
+    .min(1, 'Elige al menos un servicio (Hospedaje o Paseo)')
+    .optional(),
   serviceAvailability: serviceAvailabilitySchema,
   pricePerDay: z.number().int().min(0).optional(),
   pricePerWalk30: z.number().int().min(0).optional(),
@@ -155,8 +158,8 @@ export const registerCaregiverProfileSchema = z.object({
   typicalDay: z.string().min(MIN_TEXT_DRAFT).optional(),
   photos: z
     .array(z.string().url('Cada foto debe ser una URL válida'))
-    .min(2, 'Mínimo 2 fotos')
-    .max(6, 'Máximo 6 fotos'),
+    .max(6, 'Máximo 6 fotos')
+    .optional(),
   idDocument: z.string().url().optional(),
   selfie: z.string().url().optional(),
   ciAnversoUrl: z.string().url().optional(),
@@ -171,8 +174,10 @@ export const registerCaregiverSchema = z
     profile: registerCaregiverProfileSchema,
   })
   .superRefine((data, ctx) => {
-    const services = data.profile.servicesOffered ?? [];
-    const photos = data.profile.photos ?? [];
+    // Only cross-validate photos vs services when both are provided
+    const services = data.profile.servicesOffered;
+    const photos = data.profile.photos;
+    if (!services || !photos || photos.length === 0) return;
     const paseoOnly = services.length === 1 && services.includes('PASEO');
     if (paseoOnly) {
       if (photos.length < 2) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Paseo: sube al menos 2 fotos personales (máx. 4)', path: ['profile', 'photos'] });
