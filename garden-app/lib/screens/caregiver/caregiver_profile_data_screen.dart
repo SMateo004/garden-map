@@ -276,7 +276,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         'acceptAggressive': _acceptAggressive ?? false,
         'acceptPuppies': _acceptPuppies ?? false,
         'acceptSeniors': _acceptSeniors ?? false,
-        'sizesAccepted': _sizesAccepted,
+        'sizesAccepted': _acceptedSizes,
         'serviceDetails': {
           'allowsLargePets': _allowsLargePets,
           'allowsMultiplePets': _allowsMultiplePets,
