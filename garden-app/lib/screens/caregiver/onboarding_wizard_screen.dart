@@ -614,7 +614,39 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     } catch (_) {}
   }
 
-  /// Step 7 → 8: Only advance if identityVerificationStatus == VERIFIED.
+  /// Step 6 → next: check backend to auto-skip steps 7/8 if already verified.
+  Future<void> _afterStep6Save() async {
+    setState(() => _isLoading = true);
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/caregiver/my-profile'),
+        headers: {'Authorization': 'Bearer $_authToken'},
+      );
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final profile = data['data'] as Map<String, dynamic>? ?? {};
+
+      final identityStatus = (profile['identityVerificationStatus'] as String? ?? '').toUpperCase();
+      final identityDone = identityStatus == 'VERIFIED' || identityStatus == 'APPROVED';
+
+      final emailVerified = profile['emailVerified'] == true ||
+          (profile['user'] as Map?)?['emailVerified'] == true;
+
+      if (identityDone && emailVerified) {
+        await _completeWizard();
+      } else if (identityDone) {
+        setState(() => _currentStep = 8);
+      } else {
+        setState(() => _currentStep = 7);
+      }
+    } catch (_) {
+      setState(() => _currentStep = 7);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Step 7 → next: only advance if identityVerificationStatus == VERIFIED,
+  /// and auto-skip step 8 if email is already verified.
   Future<void> _onIdentityVerificationComplete() async {
     setState(() => _isLoading = true);
     try {
@@ -623,9 +655,17 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         headers: {'Authorization': 'Bearer $_authToken'},
       );
       final body = jsonDecode(res.body) as Map<String, dynamic>;
-      final status = ((body['data'] as Map<String, dynamic>?)?['identityVerificationStatus'] as String? ?? '').toUpperCase();
+      final profile = body['data'] as Map<String, dynamic>? ?? {};
+      final status = (profile['identityVerificationStatus'] as String? ?? '').toUpperCase();
+
       if (status == 'VERIFIED' || status == 'APPROVED') {
-        setState(() => _currentStep = 8);
+        final emailVerified = profile['emailVerified'] == true ||
+            (profile['user'] as Map?)?['emailVerified'] == true;
+        if (emailVerified) {
+          await _completeWizard();
+        } else {
+          setState(() => _currentStep = 8);
+        }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1638,7 +1678,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     if (_currentStep == 6) {
       postRegStep = CaregiverProfileDataScreen(
         embeddedMode: true,
-        onSaveComplete: _advanceStep,
+        onSaveComplete: _afterStep6Save,
       );
     } else if (_currentStep == 7) {
       postRegStep = VerificationScreen(
