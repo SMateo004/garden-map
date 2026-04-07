@@ -261,4 +261,67 @@ router.get('/dashboard-stats', authMiddleware, requireRole('CAREGIVER'),
   })
 );
 
+/**
+ * GET /api/caregiver/bookings/:bookingId/pet
+ * Devuelve el perfil completo de la mascota asociada a una reserva del cuidador.
+ * Solo accesible para reservas en estado WAITING_CAREGIVER_APPROVAL, CONFIRMED o IN_PROGRESS.
+ */
+router.get('/bookings/:bookingId/pet', asyncHandler(async (req, res) => {
+  const userId = (req as any).user.userId;
+  const { bookingId } = req.params;
+
+  // Obtener el perfil del cuidador
+  const caregiverProfile = await prisma.caregiverProfile.findFirst({
+    where: { userId },
+    select: { id: true },
+  });
+  if (!caregiverProfile) {
+    return res.status(404).json({ success: false, error: { message: 'Perfil de cuidador no encontrado' } });
+  }
+
+  // Verificar que la reserva pertenece a este cuidador y está en un estado permitido
+  const booking = await prisma.booking.findFirst({
+    where: {
+      id: bookingId,
+      caregiverId: caregiverProfile.id,
+      status: { in: ['WAITING_CAREGIVER_APPROVAL', 'CONFIRMED', 'IN_PROGRESS'] },
+    },
+    select: { petId: true },
+  });
+  if (!booking) {
+    return res.status(404).json({ success: false, error: { message: 'Reserva no encontrada o acceso no permitido' } });
+  }
+  if (!booking.petId) {
+    return res.status(404).json({ success: false, error: { message: 'Esta reserva no tiene mascota asociada' } });
+  }
+
+  // Obtener perfil completo de la mascota
+  const pet = await prisma.pet.findUnique({
+    where: { id: booking.petId },
+    select: {
+      id: true,
+      name: true,
+      breed: true,
+      age: true,
+      size: true,
+      photoUrl: true,
+      specialNeeds: true,
+      notes: true,
+      gender: true,
+      weight: true,
+      color: true,
+      sterilized: true,
+      microchipNumber: true,
+      extraPhotos: true,
+      vaccinePhotos: true,
+      documents: true,
+    },
+  });
+  if (!pet) {
+    return res.status(404).json({ success: false, error: { message: 'Mascota no encontrada' } });
+  }
+
+  res.json({ success: true, data: pet });
+}));
+
 export default router;

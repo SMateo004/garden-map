@@ -10,6 +10,7 @@ import '../../widgets/notification_bell.dart';
 import '../../main.dart';
 import '../chat/chat_screen.dart';
 import '../service/service_execution_screen.dart';
+import '../../widgets/pet_profile_sheet.dart';
 
 
 class CaregiverHomeScreen extends StatefulWidget {
@@ -2780,50 +2781,90 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
               // Datos de la mascota
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-                child: Text('Mascota', style: TextStyle(color: widget.subtextColor, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
                 child: Row(
                   children: [
-                    Container(
-                      width: 36, height: 36,
-                      decoration: BoxDecoration(
-                        color: GardenColors.primary.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.pets, color: GardenColors.primary, size: 18),
-                    ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(booking['petName'] as String? ?? '—',
-                          style: TextStyle(color: widget.textColor, fontWeight: FontWeight.w600, fontSize: 14)),
-                        Text(
-                          [
-                            if (booking['petBreed'] != null) booking['petBreed'] as String,
-                            if (booking['petAge'] != null) '${booking['petAge']} años',
-                          ].join(' · '),
-                          style: TextStyle(color: widget.subtextColor, fontSize: 12),
+                    Text('Mascota', style: TextStyle(color: widget.subtextColor, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
+                    const Spacer(),
+                    // Botón "Ver perfil" solo para reservas activas/pendientes
+                    if (['WAITING_CAREGIVER_APPROVAL', 'CONFIRMED', 'IN_PROGRESS'].contains(status) &&
+                        booking['petId'] != null)
+                      GestureDetector(
+                        onTap: () => showPetProfileSheet(
+                          context: context,
+                          bookingId: booking['id'] as String,
+                          token: widget.token,
+                          petName: booking['petName'] as String? ?? 'Mascota',
                         ),
-                      ],
-                    ),
-                    if (booking['specialNeeds'] != null && (booking['specialNeeds'] as String).isNotEmpty)
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: GardenColors.warning.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Text('⚠️ Especial', style: TextStyle(color: GardenColors.warning, fontSize: 11)),
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Ver perfil completo', style: TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w600)),
+                            const SizedBox(width: 3),
+                            const Icon(Icons.arrow_forward_ios_rounded, color: GardenColors.primary, size: 10),
+                          ],
                         ),
                       ),
                   ],
+                ),
+              ),
+              GestureDetector(
+                onTap: ['WAITING_CAREGIVER_APPROVAL', 'CONFIRMED', 'IN_PROGRESS'].contains(status) && booking['petId'] != null
+                    ? () => showPetProfileSheet(
+                        context: context,
+                        bookingId: booking['id'] as String,
+                        token: widget.token,
+                        petName: booking['petName'] as String? ?? 'Mascota',
+                      )
+                    : null,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 36, height: 36,
+                        decoration: BoxDecoration(
+                          color: GardenColors.primary.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.pets, color: GardenColors.primary, size: 18),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(booking['petName'] as String? ?? '—',
+                              style: TextStyle(
+                                color: ['WAITING_CAREGIVER_APPROVAL', 'CONFIRMED', 'IN_PROGRESS'].contains(status) && booking['petId'] != null
+                                    ? GardenColors.primary
+                                    : widget.textColor,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                decoration: ['WAITING_CAREGIVER_APPROVAL', 'CONFIRMED', 'IN_PROGRESS'].contains(status) && booking['petId'] != null
+                                    ? TextDecoration.underline
+                                    : TextDecoration.none,
+                              )),
+                            Text(
+                              [
+                                if (booking['petBreed'] != null) booking['petBreed'] as String,
+                                if (booking['petAge'] != null) '${booking['petAge']} años',
+                              ].join(' · '),
+                              style: TextStyle(color: widget.subtextColor, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (booking['specialNeeds'] != null && (booking['specialNeeds'] as String).isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: GardenColors.warning.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text('⚠️ Especial', style: TextStyle(color: GardenColors.warning, fontSize: 11)),
+                        ),
+                    ],
+                  ),
                 ),
               ),
 
