@@ -231,21 +231,56 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
   Future<void> _saveAllData() async {
     // ── Validación de campos obligatorios ──
-    if (_bioController.text.trim().isEmpty) {
-      return _showValidationError('La bio es obligatoria');
+    final bio = _bioController.text.trim();
+    if (bio.length < 10) {
+      return _showValidationError('La bio debe tener al menos 10 caracteres');
     }
     if (_selectedServices.isEmpty) {
       return _showValidationError('Selecciona al menos un servicio');
     }
     if (_selectedServices.contains('PASEO')) {
-      if ((_pricePerWalk60Controller.text.trim().isEmpty) || (double.tryParse(_pricePerWalk60Controller.text) ?? 0) <= 0) {
+      if ((_pricePerWalk60Controller.text.trim().isEmpty) ||
+          (double.tryParse(_pricePerWalk60Controller.text) ?? 0) <= 0) {
         return _showValidationError('Ingresa el precio del paseo (1 hora)');
       }
     }
     if (_selectedServices.contains('HOSPEDAJE')) {
-      if ((_pricePerDayController.text.trim().isEmpty) || (double.tryParse(_pricePerDayController.text) ?? 0) <= 0) {
+      if ((_pricePerDayController.text.trim().isEmpty) ||
+          (double.tryParse(_pricePerDayController.text) ?? 0) <= 0) {
         return _showValidationError('Ingresa el precio por noche del hospedaje');
       }
+    }
+    // Campos del perfil profesional (deben coincidir con lo que exige submitProfile en el backend)
+    final expYearsText = _experienceYearsController.text.trim().replaceAll('+', '');
+    if (expYearsText.isEmpty || int.tryParse(expYearsText) == null) {
+      return _showValidationError('Ingresa los años de experiencia');
+    }
+    if (_experienceDescController.text.trim().length < 5) {
+      return _showValidationError('Describe tu experiencia (mínimo 5 caracteres)');
+    }
+    if (_whyCaregiverController.text.trim().length < 3) {
+      return _showValidationError('Explica por qué eres cuidador (mínimo 3 caracteres)');
+    }
+    if (_whatDiffersController.text.trim().length < 3) {
+      return _showValidationError('Explica qué te diferencia (mínimo 3 caracteres)');
+    }
+    if (_handleAnxiousController.text.trim().length < 3) {
+      return _showValidationError('Describe cómo manejas mascotas ansiosas');
+    }
+    if (_emergencyResponseController.text.trim().length < 3) {
+      return _showValidationError('Describe cómo respondes a emergencias');
+    }
+    if (_acceptAggressive == null) {
+      return _showValidationError('Indica si aceptas mascotas agresivas (Sí/No)');
+    }
+    if (_acceptPuppies == null) {
+      return _showValidationError('Indica si aceptas cachorros (Sí/No)');
+    }
+    if (_acceptSeniors == null) {
+      return _showValidationError('Indica si aceptas mascotas mayores (Sí/No)');
+    }
+    if (_acceptedSizes.isEmpty) {
+      return _showValidationError('Selecciona al menos un tamaño de mascota aceptado');
     }
 
     setState(() => _isSaving = true);
@@ -976,7 +1011,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                image: DecorationImage(image: NetworkImage(_photos[index]), fit: BoxFit.cover),
+                image: DecorationImage(image: NetworkImage(fixImageUrl(_photos[index])), fit: BoxFit.cover),
               ),
             ),
             Positioned(

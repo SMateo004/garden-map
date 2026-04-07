@@ -128,6 +128,54 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   );
 
   /// For returning users: load profile and jump to the first incomplete step (1-8).
+  /// Reads a backend profile map and populates all wizard state variables so that
+  /// resuming a session shows previously filled data instead of blank fields.
+  void _populateStateFromProfile(Map<String, dynamic> profile) {
+    final services = (profile['servicesOffered'] as List? ?? []).cast<String>();
+    final hasHospedaje = services.contains('HOSPEDAJE');
+
+    // Read availability from serviceAvailability (what the wizard saves in step 2)
+    final svcAvail = profile['serviceAvailability'] as Map?;
+    bool weekdays = false, weekends = false, holidays = false;
+    final times = <String>[];
+    if (svcAvail != null && svcAvail.isNotEmpty) {
+      final firstVal = svcAvail.values.first as Map? ?? {};
+      weekdays = firstVal['weekdays'] as bool? ?? false;
+      weekends = firstVal['weekends'] as bool? ?? false;
+      holidays = firstVal['holidays'] as bool? ?? false;
+      times.addAll(List<String>.from(firstVal['times'] ?? []));
+    }
+
+    setState(() {
+      // Step 1: Services & zone
+      _servicesOffered
+        ..clear()
+        ..addAll(services);
+      _selectedZone = profile['zone'] as String?;
+      _homeType = profile['homeType'] as String?;
+      _hasYard = profile['hasYard'] as bool? ?? false;
+
+      // Step 2: Availability
+      _weekdays = weekdays;
+      _weekends = weekends;
+      _holidays = holidays;
+      _times
+        ..clear()
+        ..addAll(times);
+
+      // Step 3: Photos — restore confirmed URLs (shown with green checkmark in grid)
+      _photoUrls = List<String>.from(profile['photos'] ?? []);
+
+      // Step 4: Price
+      _precioFinal = hasHospedaje
+          ? ((profile['pricePerDay'] ?? 0) as num).toDouble()
+          : ((profile['pricePerWalk60'] ?? 0) as num).toDouble();
+
+      // Step 5: Profile photo
+      _profilePhotoUrl = profile['profilePhoto'] as String?;
+    });
+  }
+
   Future<void> _computeAndSetResumeStep(String token) async {
     try {
       final res = await http.get(
@@ -137,6 +185,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       final data = jsonDecode(res.body);
       if (data['success'] != true) return;
       final profile = data['data'] as Map<String, dynamic>;
+
+      // Pre-populate all wizard state variables from the saved profile
+      _populateStateFromProfile(profile);
 
       // Step 1: Services & zone
       final zone = profile['zone'];
@@ -428,7 +479,21 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           'lastMinute': false,
         };
       }
-      await _patchProfile({'serviceAvailability': svcAvail});
+      await _patchProfile({
+        'serviceAvailability': svcAvail, // used by _computeAndSetResumeStep on resume
+        'serviceDetails': {              // synced by backend to defaultAvailabilitySchedule
+          'availability': {
+            'weekdays': _weekdays,
+            'weekends': _weekends,
+            'holidays': _holidays,
+            'slots': {
+              'morning':   _times.contains('MORNING'),
+              'afternoon': _times.contains('AFTERNOON'),
+              'night':     _times.contains('NIGHT'),
+            },
+          },
+        },
+      });
       setState(() { _isLoading = false; _currentStep++; });
       return;
     }

@@ -164,26 +164,31 @@ export async function submitVerification(
       throw new BadRequestError('Esta verificación ya fue procesada');
     }
 
-    // 0. Attempt Limit System
-    const caregiver = await prisma.caregiverProfile.findUnique({
-      where: { userId: session.userId },
-      // @ts-ignore
-      select: { verificationAttempts: true, verificationLockUntil: true }
-    });
+    // 0. Attempt Limit System (wrapped in try-catch: columns may not exist on all environments)
+    let caregiver: { verificationAttempts?: number; verificationLockUntil?: Date | null } | null = null;
+    try {
+      caregiver = await (prisma.caregiverProfile as any).findUnique({
+        where: { userId: session.userId },
+        select: { verificationAttempts: true, verificationLockUntil: true },
+      });
+    } catch (e) {
+      logger.warn('Could not read verificationAttempts (column may not exist yet)', { userId: session.userId });
+    }
 
-    // @ts-ignore
     if (caregiver?.verificationLockUntil && caregiver.verificationLockUntil > new Date()) {
       throw new BadRequestError('Cuenta bloqueada temporalmente por demasiados intentos. Por favor espera 24h.');
     }
 
-    // @ts-ignore
     const maxAttempts = env.NODE_ENV === 'development' ? 20 : 3;
-    if (caregiver && caregiver.verificationAttempts >= maxAttempts) {
-      await prisma.caregiverProfile.update({
-        where: { userId: session.userId },
-        // @ts-ignore
-        data: { verificationLockUntil: new Date(Date.now() + 24 * 60 * 60 * 1000) }
-      });
+    if (caregiver && (caregiver.verificationAttempts ?? 0) >= maxAttempts) {
+      try {
+        await (prisma.caregiverProfile as any).update({
+          where: { userId: session.userId },
+          data: { verificationLockUntil: new Date(Date.now() + 24 * 60 * 60 * 1000) },
+        });
+      } catch (e) {
+        logger.warn('Could not set verificationLockUntil', { userId: session.userId });
+      }
       throw new BadRequestError('Límite de intentos alcanzado. Cuenta bloqueada por 24h.');
     }
 
@@ -364,13 +369,21 @@ export async function submitVerification(
 
     // 6. Persistence & Final Result
     logger.info('Step 6: Persisting results', { sessionId });
-    const [selfieUrl, ciFrontUrl, ciBackUrl, croppedSelfieUrl, croppedDocUrl] = await Promise.all([
-      uploadVerificationImage(selfieBuffer, `selfie-${sessionId}`, session.userId),
-      uploadVerificationImage(ciFrontBuffer, `ci-front-${sessionId}`, session.userId),
-      uploadVerificationImage(ciBackBuffer, `ci-back-${sessionId}`, session.userId),
-      uploadVerificationImage(croppedSelfie, `cropped-selfie-${sessionId}`, session.userId),
-      uploadVerificationImage(croppedDoc, `cropped-doc-${sessionId}`, session.userId),
-    ]);
+    let selfieUrl = '', ciFrontUrl = '', ciBackUrl = '', croppedSelfieUrl = '', croppedDocUrl = '';
+    try {
+      [selfieUrl, ciFrontUrl, ciBackUrl, croppedSelfieUrl, croppedDocUrl] = await Promise.all([
+        uploadVerificationImage(selfieBuffer, `selfie-${sessionId}`, session.userId),
+        uploadVerificationImage(ciFrontBuffer, `ci-front-${sessionId}`, session.userId),
+        uploadVerificationImage(ciBackBuffer, `ci-back-${sessionId}`, session.userId),
+        uploadVerificationImage(croppedSelfie, `cropped-selfie-${sessionId}`, session.userId),
+        uploadVerificationImage(croppedDoc, `cropped-doc-${sessionId}`, session.userId),
+      ]);
+    } catch (uploadErr: any) {
+      logger.error('Image upload failed during verification — continuing without stored images', {
+        sessionId, error: uploadErr.message,
+      });
+      // Non-fatal: verification result can still be persisted without image URLs
+    }
 
     try {
       await prisma.$transaction([
@@ -456,7 +469,8 @@ export async function submitVerification(
         logger.error('Duplicate CI detected during transaction', { sessionId, userId: session.userId });
         throw new BadRequestError('Este número de documento ya está siendo utilizado por otro usuario.');
       }
-      throw error;
+      logger.error('Prisma transaction failed during verification', { sessionId, error: error.message, code: error.code });
+      throw new BadRequestError('Error al guardar los resultados de verificación. Por favor intenta de nuevo.');
     }
 
     // 7. Verification finalized
@@ -483,11 +497,13 @@ export async function submitVerification(
       stack: error.stack,
       token: token.substring(0, 8) + '...',
     });
-    // If it's already a known error type, rethrow it
+    // If it's already a known error type, rethrow it as-is (400/404)
     if (error instanceof BadRequestError || error instanceof NotFoundError) {
       throw error;
     }
-    // Otherwise, throw a structured 500 equivalent (AppError handles the conversion)
-    throw error;
+    // Convert any unexpected error to a user-friendly 400 instead of letting it become a 500
+    throw new BadRequestError(
+      `Error inesperado en la verificación. Por favor intenta de nuevo. (${error.message ?? 'error desconocido'})`
+    );
   }
 }

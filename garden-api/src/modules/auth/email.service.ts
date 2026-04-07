@@ -148,8 +148,13 @@ export async function verifyCode(userId: string, code: string): Promise<{ succes
     }),
   ]);
 
-  const { checkAndAutoSubmitProfile } = await import('../caregiver-profile/caregiver-profile-completion.helper.js');
-  await checkAndAutoSubmitProfile(userId);
+  try {
+    const { checkAndAutoSubmitProfile } = await import('../caregiver-profile/caregiver-profile-completion.helper.js');
+    await checkAndAutoSubmitProfile(userId);
+  } catch (err: any) {
+    logger.error('Error in checkAndAutoSubmitProfile after email verify', { userId, error: err.message, stack: err.stack });
+    // No relanzar — el email ya quedó verificado correctamente
+  }
 
   return { success: true, message: '¡Email verificado correctamente!' };
 }

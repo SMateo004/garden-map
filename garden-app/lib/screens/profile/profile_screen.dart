@@ -556,7 +556,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Row(
           children: [
             GardenAvatar(
-              imageUrl: user['profilePicture'],
+              imageUrl: (_caregiverProfile?['profilePhoto'] as String?)?.isNotEmpty == true
+                  ? _caregiverProfile!['profilePhoto'] as String
+                  : user['profilePicture'] as String?,
               size: 80,
               initials: '${user['firstName']} ${user['lastName']}',
             ),
