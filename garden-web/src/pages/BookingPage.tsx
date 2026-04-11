@@ -186,7 +186,6 @@ export function BookingPage() {
       };
     }
 
-    console.log('Datos enviados a /bookings:', body);
     setServerErrors([]);
     try {
       const res = await createBookingMutation.mutateAsync(body);

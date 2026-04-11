@@ -1,4 +1,4 @@
-import 'dart:convert' show base64Decode, jsonDecode, jsonEncode;
+import 'dart:convert' show base64Decode, jsonDecode;
 import 'dart:html' as html;
 import 'dart:typed_data';
 // ignore: avoid_web_libraries_in_flutter
@@ -27,7 +27,6 @@ class VerificationScreen extends StatefulWidget {
 class _VerificationScreenState extends State<VerificationScreen> {
   String _caregiverToken = '';
   String _verificationToken = '';
-  bool _isLoading = false;
   bool _generatingToken = false;
 
   // Fotos capturadas
@@ -38,8 +37,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
   // Variables de cámara
   html.MediaStream? _mediaStream;
   html.VideoElement? _videoElement;
-  String _activeCameraType = '';
-  bool _cameraReady = false;
 
   // Estado del proceso
   int _currentStep = 0; // 0: intro, 1: selfie, 2: CI frontal, 3: CI trasero, 4: enviando, 5: resultado
@@ -101,10 +98,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
   }
 
   Future<void> _openCamera(String type) async {
-    setState(() {
-      _activeCameraType = type;
-      _cameraReady = false;
-    });
 
     try {
       // Solicitar stream de cámara
@@ -138,8 +131,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
         viewId,
         (int id) => _videoElement!,
       );
-
-      setState(() => _cameraReady = true);
 
       if (mounted) {
         await showModalBottomSheet(
@@ -309,10 +300,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
       );
       return;
     }
-    setState(() {
-      _isLoading = true;
-      _currentStep = 4;
-    });
+    setState(() { _currentStep = 4; });
     try {
       final uri = Uri.parse('$_baseUrl/verification/submit');
       final request = http.MultipartRequest('POST', uri);
@@ -356,8 +344,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
       );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 

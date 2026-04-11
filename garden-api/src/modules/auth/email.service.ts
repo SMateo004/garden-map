@@ -23,11 +23,7 @@ function hashCode(code: string): string {
 export async function sendVerificationEmail(email: string, code: string): Promise<void> {
   const isDev = env.NODE_ENV !== 'production';
 
-  // LOG THE CODE CLEARLY FOR DEVELOPMENT
-  console.log('\n' + '='.repeat(50));
-  console.log(`📩 VERIFICATION CODE FOR ${email}: [ ${code} ]`);
-  console.log('='.repeat(50) + '\n');
-
+  logger.info(`📩 Verification code for ${email}: [ ${code} ]`);
   logger.info(`📩 Attempting to send email to: ${email}`);
   try {
     const { Resend } = await import('resend');

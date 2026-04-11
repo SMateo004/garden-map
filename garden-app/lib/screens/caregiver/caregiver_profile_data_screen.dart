@@ -25,8 +25,6 @@ class CaregiverProfileDataScreen extends StatefulWidget {
 }
 
 class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen> {
-  Map<String, dynamic>? _profile;
-  Map<String, dynamic>? _user;
   bool _isLoading = true;
   bool _isSaving = false;
   String _caregiverToken = '';
@@ -53,7 +51,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   bool? _acceptAggressive;
   bool? _acceptPuppies;
   bool? _acceptSeniors;
-  List<String> _sizesAccepted = [];
 
   // Selecciones
   String _selectedZone = 'EQUIPETROL';
@@ -130,7 +127,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         final profile = data['data'];
-        final user = profile['user'];
         final details = profile['serviceDetails'] ?? {};
         final faq = details['faq'] ?? {};
         final availability = details['availability'] ?? {};
@@ -139,8 +135,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         final paseoBlocks = defaultSchedule['paseoTimeBlocks'] ?? {};
 
         setState(() {
-          _profile = profile;
-          _user = user;
           _bioController.text = profile['bio'] ?? '';
           _bioDetailController.text = profile['bioDetail'] ?? '';
           _addressController.text = profile['address'] ?? '';
@@ -179,7 +173,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
           _acceptAggressive = profile['acceptAggressive'] as bool?;
           _acceptPuppies = profile['acceptPuppies'] as bool?;
           _acceptSeniors = profile['acceptSeniors'] as bool?;
-          _sizesAccepted = (profile['sizesAccepted'] as List? ?? []).cast<String>();
         });
         _computeCompletion();
       }
@@ -703,91 +696,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
           ],
         ),
     );
-  }
-
-  Future<void> _submitProfile() async {
-    // Primero guardar cambios
-    await _saveAllData();
-    
-    setState(() => _isSaving = true);
-    try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/caregiver/submit'),
-        headers: {
-          'Authorization': 'Bearer $_caregiverToken',
-          'Content-Type': 'application/json',
-        },
-      );
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        await _loadData();
-        if (!mounted) return;
-        showDialog(
-          context: context,
-          builder: (ctx) => Dialog(
-            backgroundColor: themeNotifier.isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            child: Padding(
-              padding: const EdgeInsets.all(28),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    duration: const Duration(milliseconds: 600),
-                    curve: Curves.elasticOut,
-                    builder: (_, value, __) => Transform.scale(
-                      scale: value,
-                      child: Container(
-                        width: 80, height: 80,
-                        decoration: BoxDecoration(
-                          color: GardenColors.success.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: GardenColors.success, width: 2),
-                        ),
-                        child: const Icon(Icons.check_rounded, color: GardenColors.success, size: 44),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text('¡Perfil aprobado!',
-                    style: TextStyle(
-                      color: themeNotifier.isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
-                      fontSize: 22, fontWeight: FontWeight.w800,
-                    )),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Ya apareces en el marketplace. Los dueños de mascotas pueden encontrarte y reservar contigo.',
-                    style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary, fontSize: 14, height: 1.5),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  GardenButton(
-                    label: 'Ver mi perfil público',
-                    icon: Icons.visibility_outlined,
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      context.push('/caregiver/${_profile!['id']}');
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      } else {
-        final errorMsg = data['error']?['message'] ?? 'Error al enviar';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMsg), backgroundColor: GardenColors.error, duration: const Duration(seconds: 5)),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-      );
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
   }
 
   Widget _sectionField(String label, TextEditingController controller, String hint, {int maxLines = 1}) {

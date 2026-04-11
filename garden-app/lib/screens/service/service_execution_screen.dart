@@ -26,7 +26,6 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   bool _isLoading = true;
   bool _isProcessing = false;
   String _token = '';
-  String _userId = '';
   late AnimationController _pulseController;
   Timer? _serviceTimer;
   Timer? _photoRefreshTimer;
@@ -62,7 +61,6 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     try {
       final prefs = await SharedPreferences.getInstance();
       _token = prefs.getString('access_token') ?? '';
-      _userId = prefs.getString('user_id') ?? '';
       // Fallback: usar token pasado por navegación si SharedPreferences está vacío
       if (_token.isEmpty && widget.token != null && widget.token!.isNotEmpty) {
         _token = widget.token!;
@@ -119,13 +117,6 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     _serviceTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _elapsed += const Duration(seconds: 1));
     });
-  }
-
-  String _formatDuration(Duration d) {
-    String twoDigits(int n) => n.toString().padLeft(2, "0");
-    String twoDigitMinutes = twoDigits(d.inMinutes.remainder(60));
-    String twoDigitSeconds = twoDigits(d.inSeconds.remainder(60));
-    return "${twoDigits(d.inHours)}:$twoDigitMinutes:$twoDigitSeconds";
   }
 
   @override
@@ -974,10 +965,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   Widget _buildCaregiverInProgress() {
     final isDark = themeNotifier.isDark;
     final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
     final isHospedaje = _booking?['serviceType'] == 'HOSPEDAJE';
     final timerStr = isHospedaje
         ? '${_elapsed.inHours}h'
@@ -1444,76 +1433,6 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     ),
   );
 
-  // Fotos enviadas (legacy path mantained below for backward compat)
-  Widget _buildPhotosLegacy(Color textColor, Color subtextColor) {
-    if (_serviceEvents.isEmpty) return const SizedBox();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 24),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Fotos del servicio', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
-            Text('${_serviceEvents.length} foto${_serviceEvents.length > 1 ? 's' : ''}',
-              style: TextStyle(color: subtextColor, fontSize: 13)),
-          ],
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 140,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: _serviceEvents.length,
-            itemBuilder: (context, index) {
-              final event = _serviceEvents[_serviceEvents.length - 1 - index];
-              final photoUrl = event['photoUrl']?.toString() ?? '';
-              if (photoUrl.isEmpty) return const SizedBox();
-              return GestureDetector(
-                onTap: () => _showPhotoFullscreen(photoUrl),
-                child: Container(
-                  margin: const EdgeInsets.only(right: 10),
-                  width: 140,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: GardenShadows.card,
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.network(fixImageUrl(photoUrl), fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: GardenColors.primary.withValues(alpha: 0.1),
-                            child: const Icon(Icons.image_outlined, color: GardenColors.primary),
-                          )),
-                        Positioned(
-                          bottom: 6, left: 6,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.5),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              _formatEventTime(event['timestamp'] as String? ?? ''),
-                                          style: const TextStyle(color: Colors.white, fontSize: 10),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-      ],
-    );
-  }
-
   void _showPhotoFullscreen(String url) {
     showDialog(
       context: context,
@@ -1546,44 +1465,6 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       final date = DateTime.parse(isoDate).toLocal();
       return '${date.hour.toString().padLeft(2,'0')}:${date.minute.toString().padLeft(2,'0')}';
     } catch (_) { return ''; }
-  }
-
-  Widget _buildTimeline() {
-    final events = _booking?['serviceEvents'] as List<dynamic>? ?? [];
-    if (events.isEmpty) return const SizedBox();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Resumen de actividad', style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 100,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: events.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (ctx, i) {
-              final e = events[i];
-              if (e['type'] == 'PHOTO') {
-                final url = e['photoUrl']?.toString() ?? '';
-                if (url.isEmpty) return const SizedBox();
-                return ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    fixImageUrl(url),
-                    width: 100, height: 100,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const SizedBox(),
-                  ),
-                );
-              }
-              return Container(width: 100, decoration: BoxDecoration(color: GardenColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(e['type'] == 'START' ? Icons.play_arrow_rounded : Icons.info_outline));
-            },
-          ),
-        ),
-      ],
-    );
   }
 
   // --- VISTA: COMPLETED ---
@@ -2253,42 +2134,6 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     );
   }
 
-  Widget _actionButton(String title, String subtitle, IconData icon, Color color) {
-    final isDark = themeNotifier.isDark;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(height: 8),
-          Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
-          Text(subtitle, style: TextStyle(color: subtextColor, fontSize: 11)),
-        ],
-      ),
-    );
-  }
 }
 
 // --- HELPERS LOCALES PARA EL DISEÑO ---

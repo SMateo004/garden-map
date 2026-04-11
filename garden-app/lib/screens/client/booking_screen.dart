@@ -718,51 +718,6 @@ class _BookingScreenState extends State<BookingScreen> {
     }
   }
 
-  Widget _buildDurationChip(int minutes, dynamic price, Color textColor) {
-    final isDark = themeNotifier.isDark;
-    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-    final isSelected = _selectedDuration == minutes;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() {
-          _selectedDuration = minutes;
-          _selectedStartTime = null;
-        }),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-          decoration: isSelected
-              ? BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      GardenColors.primary.withValues(alpha: 0.18),
-                      GardenColors.primary.withValues(alpha: 0.08),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: GardenColors.primary.withValues(alpha: 0.35), width: 1.0),
-                )
-              : BoxDecoration(
-                  color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white.withValues(alpha: 0.40),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: borderColor, width: 1.0),
-                ),
-          child: Column(children: [
-            Icon(Icons.timer_outlined, color: isSelected ? GardenColors.primary : textColor, size: 22),
-            const SizedBox(height: 6),
-            Text('$minutes min',
-                style: TextStyle(color: isSelected ? GardenColors.primary : textColor, fontWeight: FontWeight.w700, fontSize: 15)),
-            const SizedBox(height: 2),
-            Text(price != null ? 'Bs $price' : '—',
-                style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w800, fontSize: 16)),
-          ]),
-        ),
-      ),
-    );
-  }
-
   bool _isTimeConflicting(String time, String dateStr) {
     if (_bookedPaseos.isEmpty) return false;
     final parts = time.split(':');

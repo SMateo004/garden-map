@@ -40,14 +40,3 @@ export function getCaregiverAvailability(
   return api.get(`/api/caregivers/${id}/availability`, { params }).then((r) => r.data);
 }
 
-export function createCaregiverProfile(
-  body: CreateCaregiverProfileBody,
-  photos: File[]
-): Promise<ApiResponse<CaregiverDetail>> {
-  const formData = new FormData();
-  formData.append('data', JSON.stringify(body));
-  photos.forEach((f) => formData.append('photos', f));
-  return api
-    .postForm('/api/caregivers', formData)
-    .then((r) => r.data);
-}

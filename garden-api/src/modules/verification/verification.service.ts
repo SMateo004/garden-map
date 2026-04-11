@@ -104,13 +104,7 @@ export async function submitVerification(
   message: string;
 }> {
   try {
-    console.log("➡️ Incoming verification request");
-    logger.info('Starting verification submission', { token: token.substring(0, 8) + '...' });
-    console.log("📸 Files received:", {
-      selfie: selfieBuffer?.length,
-      ciFront: ciFrontBuffer?.length,
-      ciBack: ciBackBuffer?.length
-    });
+    logger.info('Starting verification submission', { token: token.substring(0, 8) + '...', selfieLen: selfieBuffer?.length, ciFrontLen: ciFrontBuffer?.length, ciBackLen: ciBackBuffer?.length });
 
     // 0. Strict Image Validation
     if (!selfieBuffer || selfieBuffer.length === 0) {
@@ -217,7 +211,7 @@ export async function submitVerification(
         livenessScore = 95;
         livenessStatus = 'PASSED';
       } else {
-        console.log("🧠 Starting liveness check...");
+        logger.info('Starting liveness check', { sessionId, livenessSessionId });
         const livenessResult = await performLivenessCheck({ sessionId: livenessSessionId }, 'AWS_REKOGNITION');
         livenessScore = livenessResult.score;
         livenessStatus = livenessResult.status;
@@ -263,7 +257,7 @@ export async function submitVerification(
 
       // 4. Face Comparison
       logger.info('Step 4: Comparing faces', { sessionId });
-      console.log("🧠 Starting face comparison...");
+      logger.info('Step 4: Starting face comparison', { sessionId });
       const croppedSResult = await cropFaceFromImage(selfieBuffer, selfieFace.BoundingBox!);
       const croppedDResult = await cropFaceFromImage(ciFrontBuffer, docFace.BoundingBox!);
       croppedSelfie = croppedSResult;
@@ -274,7 +268,7 @@ export async function submitVerification(
 
       // 5. OCR & Name Matching (HARDENED)
       logger.info('Step 5: OCR with Amazon Textract', { sessionId });
-      console.log("🧠 Starting OCR...");
+      logger.info('Step 5: Starting OCR', { sessionId });
       crossValResult = await crossValidate(ciFrontBuffer, user.firstName, user.lastName, user.dateOfBirth, user.id, ciBackBuffer);
       finalFraudFlags = [...crossValResult.fraudFlags];
 
@@ -346,7 +340,7 @@ export async function submitVerification(
     let finalStatus = scoringResult.status;
     const trustScore = scoringResult.trustScore;
 
-    console.log("📊 Final score:", trustScore, "Status:", finalStatus);
+    logger.info('Verification final score', { sessionId, trustScore, finalStatus });
 
     // Additional Hard Block Conditions (Business Overrides)
     const hasIdentityReuse = finalFraudFlags.includes('duplicate_identity');

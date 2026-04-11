@@ -132,16 +132,6 @@ export function VerifyIdentityPage() {
       // For demo/test, we send a dummy livenessSessionId since we can't integrate the real SDK component here
       const dummyLivenessId = 'session-' + Math.random().toString(36).substring(7);
 
-      console.log("🚀 Sending verification request", {
-        token: token.substring(0, 10) + "...",
-        livenessSessionId: dummyLivenessId,
-        files: {
-          selfie: selfie.name,
-          ciFront: ciFront.name,
-          ciBack: ciBack.name
-        }
-      });
-
       const res = await submitVerification(token, selfie, ciFront, ciBack, [], dummyLivenessId);
       setResult(res);
       setFlow('result');

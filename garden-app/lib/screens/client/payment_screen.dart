@@ -23,7 +23,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Map<String, dynamic>? _qrResponse;
   bool _isSubmitting = false;
   bool _paymentInitiated = false;
-  String _bookingStatus = '';
 
   @override
   void initState() {
@@ -177,7 +176,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 onPressed: () {
                   setState(() {
                     _paymentInitiated = true;
-                    _bookingStatus = 'PAYMENT_PENDING_APPROVAL';
                   });
                 },
               ),

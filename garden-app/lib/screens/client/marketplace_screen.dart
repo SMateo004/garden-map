@@ -181,7 +181,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   bool _showFilters = true;
   bool _showMap = false;
   String _authToken = '';
-  String? _userPhoto;
   String? _userName;
 
   // ── Controllers ──
@@ -314,7 +313,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     if (mounted) {
       setState(() {
         _authToken = token;
-        _userPhoto = prefs.getString('user_photo');
         _userName = prefs.getString('user_name');
       });
     }

@@ -25,7 +25,6 @@ class VerificationScreen extends StatefulWidget {
 class _VerificationScreenState extends State<VerificationScreen> {
   String _caregiverToken = '';
   String _verificationToken = '';
-  bool _isLoading = false;
   bool _generatingToken = false;
 
   // Fotos capturadas
@@ -164,7 +163,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
     }
 
     setState(() {
-      _isLoading = true;
       _currentStep = 4;
     });
 
@@ -214,8 +212,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
           SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
         );
       }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 

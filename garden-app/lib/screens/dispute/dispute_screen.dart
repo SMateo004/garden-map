@@ -23,7 +23,6 @@ class DisputeScreen extends StatefulWidget {
 
 class _DisputeScreenState extends State<DisputeScreen> {
   String _token = '';
-  bool _isLoading = false;
   int _step = 0; // 0: encuesta, 1: procesando IA, 2: resultado
   final List<String> _selectedReasons = [];
   Map<String, dynamic>? _resolution;
@@ -63,7 +62,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
 
   Future<void> _submitClientReport() async {
     if (_selectedReasons.isEmpty) return;
-    setState(() { _isLoading = true; _step = 1; });
+    setState(() { _step = 1; });
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/disputes/${widget.bookingId}/client-report'),
@@ -72,12 +71,12 @@ class _DisputeScreenState extends State<DisputeScreen> {
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
-        setState(() { _step = 2; _isLoading = false; });
+        setState(() { _step = 2; });
       } else {
         throw Exception(data['error']?['message'] ?? 'Error');
       }
     } catch (e) {
-      setState(() { _step = 0; _isLoading = false; });
+      setState(() { _step = 0; });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
       );
@@ -86,7 +85,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
 
   Future<void> _submitCaregiverResponse() async {
     if (_selectedReasons.isEmpty) return;
-    setState(() { _isLoading = true; _step = 1; });
+    setState(() { _step = 1; });
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/disputes/${widget.bookingId}/caregiver-response'),
@@ -98,13 +97,12 @@ class _DisputeScreenState extends State<DisputeScreen> {
         setState(() {
           _resolution = data['data'];
           _step = 2;
-          _isLoading = false;
         });
       } else {
         throw Exception(data['error']?['message'] ?? 'Error');
       }
     } catch (e) {
-      setState(() { _step = 0; _isLoading = false; });
+      setState(() { _step = 0; });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
       );

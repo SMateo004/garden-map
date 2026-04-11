@@ -1076,29 +1076,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     );
   }
 
-  Widget _profileDetailItem(String label, String value) => Padding(
-    padding: const EdgeInsets.only(bottom: 20),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label.toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
-        const SizedBox(height: 4),
-        Text(value, style: const TextStyle(fontSize: 15)),
-      ],
-    ),
-  );
-
-  Widget _profileCheckItem(String label, bool checked) => Padding(
-    padding: const EdgeInsets.only(bottom: 12),
-    child: Row(
-      children: [
-        Icon(checked ? Icons.check_circle : Icons.error_outline, size: 18, color: checked ? GardenColors.success : GardenColors.error),
-        const SizedBox(width: 10),
-        Text(label, style: const TextStyle(fontSize: 14)),
-      ],
-    ),
-  );
-
   Widget _buildIdentityList(Color surface, Color textColor, Color subtextColor, Color borderColor) {
     final filterOptions = [
       ('Pendientes', 'REVIEW'),

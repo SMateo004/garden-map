@@ -11,8 +11,7 @@ const httpServer = createServer(app);
 
 async function start() {
   httpServer.listen(PORT, '0.0.0.0', async () => {
-    logger.info(`GARDEN API listening on port ${PORT}`);
-    console.log(`\n🚀 GARDEN API RUNNING ON http://localhost:${PORT}\n`);
+    logger.info(`🚀 GARDEN API RUNNING ON http://localhost:${PORT}`);
     
     // Defer Socket.io to prevent main thread blocking during module load
     try {
@@ -34,7 +33,7 @@ async function start() {
 
   // Defer heavy background jobs by 10s to let the API warm up
   setTimeout(() => {
-    console.log('⏳ Starting background jobs (Pricing dynamic adjustment)...');
+    logger.info('Starting background jobs (Pricing dynamic adjustment)...');
     iniciarJobAjustePrecios();
   }, 10000);
 }

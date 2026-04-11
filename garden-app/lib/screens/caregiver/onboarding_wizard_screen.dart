@@ -275,10 +275,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     }
   }
 
-  void _advanceStep() {
-    setState(() => _currentStep++);
-  }
-
   Future<void> _completeWizard() async {
     setState(() => _isLoading = true);
     try {

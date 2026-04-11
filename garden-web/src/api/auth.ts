@@ -121,16 +121,6 @@ export async function registerCaregiver(payload: RegisterCaregiverPayload): Prom
 }
 
 export async function registerClient(payload: RegisterClientPayload): Promise<RegisterClientResponse['data']> {
-  const logPayload = {
-    fullName: payload.fullName,
-    email: payload.email,
-    phone: payload.phone,
-    address: payload.address ?? null,
-    passwordLength: payload.password?.length ?? 0,
-  };
-  if (typeof console !== 'undefined') {
-    console.log('[registerClient] Body enviado a POST /api/auth/client/register (password oculto):', logPayload);
-  }
   try {
     const res = await api.post<RegisterClientResponse>('/api/auth/client/register', payload);
     if (!res.data.success || !res.data.data) {
