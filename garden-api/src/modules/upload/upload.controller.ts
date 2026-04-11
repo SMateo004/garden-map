@@ -113,7 +113,7 @@ async function uploadSinglePetPhoto(buffer: Buffer, userId: string): Promise<str
     .jpeg({ quality: 85 })
     .toBuffer();
 
-  const publicId = `pet_${userId}_${Date.now()}`;
+  const publicId = `pet_${userId}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
