@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
@@ -816,56 +818,71 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     const SizedBox(height: 16),
                   ],
 
-                  // ── Última foto recibida ────────────────────────────────
-                  if (lastPhoto != null) ...[
+                  // ── Fotos del servicio (galería deslizable) ─────────────
+                  if (_serviceEvents.isNotEmpty) ...[
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Última foto', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
-                        if (_serviceEvents.length > 1)
-                          Text('${_serviceEvents.length} fotos en total',
-                            style: TextStyle(color: subtextColor, fontSize: 12)),
+                        Text('Fotos del servicio', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+                        Text(
+                          '${_serviceEvents.length} foto${_serviceEvents.length == 1 ? '' : 's'}',
+                          style: TextStyle(color: subtextColor, fontSize: 12),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 10),
-                    GestureDetector(
-                      onTap: () => _showPhotoFullscreen(lastPhoto['photoUrl'] as String),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Stack(
-                          children: [
-                            Image.network(
-                              fixImageUrl(lastPhoto['photoUrl'] as String),
-                              width: double.infinity,
-                              height: 200,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                height: 200,
-                                color: GardenColors.primary.withValues(alpha: 0.08),
-                                child: const Center(child: Icon(Icons.image_outlined, color: GardenColors.primary, size: 40)),
+                    SizedBox(
+                      height: 200,
+                      child: PageView.builder(
+                        itemCount: _serviceEvents.length,
+                        itemBuilder: (ctx, i) {
+                          final photo = _serviceEvents[i];
+                          return GestureDetector(
+                            onTap: () => _showPhotoFullscreen(photo['photoUrl'] as String),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Stack(
+                                children: [
+                                  Image.network(
+                                    fixImageUrl(photo['photoUrl'] as String),
+                                    width: double.infinity,
+                                    height: 200,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      height: 200,
+                                      color: GardenColors.primary.withValues(alpha: 0.08),
+                                      child: const Center(child: Icon(Icons.image_outlined, color: GardenColors.primary, size: 40)),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    bottom: 10, right: 10,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.55),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (_serviceEvents.length > 1) ...[
+                                            Text('${i + 1}/${_serviceEvents.length}',
+                                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+                                            const SizedBox(width: 6),
+                                          ],
+                                          const Icon(Icons.access_time, color: Colors.white, size: 11),
+                                          const SizedBox(width: 4),
+                                          Text(_formatEventTime(photo['timestamp'] as String? ?? ''),
+                                            style: const TextStyle(color: Colors.white, fontSize: 11)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            Positioned(
-                              bottom: 10, right: 10,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.55),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.access_time, color: Colors.white, size: 11),
-                                    const SizedBox(width: 4),
-                                    Text(_formatEventTime(lastPhoto['timestamp'] as String? ?? ''),
-                                      style: const TextStyle(color: Colors.white, fontSize: 11)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -1512,6 +1529,29 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
   // --- LOGICA DE ACCIONES ---
   Future<void> _startService() async {
+    // Para paseos en móvil, verificar permiso de ubicación antes de iniciar
+    if (!kIsWeb && _booking?['serviceType'] == 'PASEO') {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Necesitas permitir el acceso a la ubicación para iniciar un paseo'),
+              backgroundColor: GardenColors.error,
+              action: SnackBarAction(
+                label: 'Configuración',
+                textColor: Colors.white,
+                onPressed: Geolocator.openAppSettings,
+              ),
+            ),
+          );
+        }
+        return;
+      }
+    }
     setState(() => _isProcessing = true);
     try {
       final response = await http.post(

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'local_notification_service.dart';
 
 class ChatMessage {
   final String id;
@@ -104,9 +105,15 @@ class ChatService extends ChangeNotifier {
       _socket!.on('new_message', (data) {
         if (_isDisposed) return;
         try {
-          final msg = ChatMessage.fromJson(data as Map<String, dynamic>);
+          final msg = ChatMessage.fromJson(Map<String, dynamic>.from(data as Map));
           _messages.add(msg);
-          if (msg.senderId != _currentUserId) _unreadCount++;
+          if (msg.senderId != _currentUserId) {
+            _unreadCount++;
+            LocalNotificationService.show(
+              title: msg.senderName,
+              body: msg.message,
+            );
+          }
           notifyListeners();
         } catch (e) {
           debugPrint('Chat: Error parsing message: $e');

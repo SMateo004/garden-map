@@ -1399,7 +1399,22 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final countdown = _getCountdown(dateStr, startTime);
     final isUrgent = countdown != null;
 
-    return Container(
+    return GestureDetector(
+      onTap: () {
+        final bookingId = nextBooking['id'] as String?;
+        if (bookingId == null) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ServiceExecutionScreen(
+              bookingId: bookingId,
+              role: 'CAREGIVER',
+              token: _caregiverToken,
+            ),
+          ),
+        );
+      },
+      child: Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isUrgent
@@ -1474,6 +1489,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             Icon(Icons.chevron_right, color: subtextColor),
         ],
       ),
+    ),
     );
   }
 

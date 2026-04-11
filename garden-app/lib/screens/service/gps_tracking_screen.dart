@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
@@ -94,13 +95,31 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
     }
   }
 
-  // ── CUIDADOR: inicia stream GPS del navegador ─────────────────────────────
-  void _startGps() {
-    if (!kIsWeb) {
-      setState(() => _gpsBlocked = true);
+  // ── CUIDADOR: inicia stream GPS ──────────────────────────────────────────
+  Future<void> _startGps() async {
+    if (kIsWeb) {
+      _gpsSub = watchGpsPosition().listen(
+        (pos) => _onLocation(pos['lat']!, pos['lng']!, pos['accuracy'] ?? 0),
+        onError: (_) { if (mounted) setState(() => _gpsBlocked = true); },
+      );
       return;
     }
-    _gpsSub = watchGpsPosition().listen(
+    // Mobile: request permission via geolocator
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      if (mounted) setState(() => _gpsBlocked = true);
+      return;
+    }
+    _gpsSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5,
+      ),
+    ).map((p) => {'lat': p.latitude, 'lng': p.longitude, 'accuracy': p.accuracy})
+     .listen(
       (pos) => _onLocation(pos['lat']!, pos['lng']!, pos['accuracy'] ?? 0),
       onError: (_) { if (mounted) setState(() => _gpsBlocked = true); },
     );
@@ -548,32 +567,17 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
                   style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
                   textAlign: TextAlign.center,
                 ),
-                if (!kIsWeb) ...[
-                  const SizedBox(height: 24),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: GardenColors.warning.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                          color: GardenColors.warning.withValues(alpha: 0.3)),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.info_outline_rounded,
-                            color: GardenColors.warning, size: 20),
-                        SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'El GPS en tiempo real está disponible en la versión web de GARDEN.',
-                            style: TextStyle(
-                                color: GardenColors.warning, fontSize: 13),
-                          ),
-                        ),
-                      ],
-                    ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () => Geolocator.openAppSettings(),
+                  icon: const Icon(Icons.settings),
+                  label: const Text('Abrir configuración de permisos'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: GardenColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   ),
-                ],
+                ),
               ],
             ),
           ),

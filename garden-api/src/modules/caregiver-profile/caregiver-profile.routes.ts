@@ -196,7 +196,7 @@ router.get('/dashboard-stats', authMiddleware, requireRole('CAREGIVER'),
           OR: [{ walkDate: { gte: today } }, { startDate: { gte: today } }],
         },
         orderBy: [{ walkDate: 'asc' }, { startDate: 'asc' }],
-        select: { walkDate: true, startDate: true, petName: true, serviceType: true, startTime: true },
+        select: { id: true, walkDate: true, startDate: true, petName: true, serviceType: true, startTime: true },
       }),
       prisma.walletTransaction.aggregate({
         where: { userId, type: 'EARNING', createdAt: { gte: startOfMonth } },
@@ -221,6 +221,7 @@ router.get('/dashboard-stats', authMiddleware, requireRole('CAREGIVER'),
 
     // Próxima reserva
     const nextBooking = nextBookingRaw ? {
+      id: nextBookingRaw.id,
       date: (nextBookingRaw.walkDate ?? nextBookingRaw.startDate)?.toISOString().substring(0, 10) ?? null,
       petName: nextBookingRaw.petName,
       serviceType: String(nextBookingRaw.serviceType),
