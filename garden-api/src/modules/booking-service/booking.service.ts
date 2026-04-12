@@ -1389,8 +1389,8 @@ export async function addServiceEvent(
   events.push({
     type,
     description,
-    photoUrl,
-    timestamp: new Date(),
+    photoUrl: photoUrl ?? null,
+    timestamp: new Date().toISOString(),
   });
 
   const updated = await prisma.booking.update({

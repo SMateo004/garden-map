@@ -17,31 +17,38 @@ export const addEvent = asyncHandler(async (req: Request, res: Response) => {
     let photoUrl = req.body.photoUrl;
 
     if (req.file) {
-        const { isCloudinaryConfigured, CLOUDINARY_FOLDER } = await import('../../config/cloudinary.js');
-        if (isCloudinaryConfigured()) {
-            const { v2: cloudinary } = await import('cloudinary');
-            const folder = `${CLOUDINARY_FOLDER}/service-events`;
-            const publicId = `event_${bookingId}_${Date.now()}`;
-            photoUrl = await new Promise<string>((resolve, reject) => {
-                const stream = cloudinary.uploader.upload_stream(
-                    { folder, resource_type: 'image', public_id: publicId },
-                    (err, result) => {
-                        if (err) reject(err);
-                        else if (result) resolve(result.secure_url);
-                        else reject(new Error('No response from Cloudinary'));
-                    }
-                );
-                stream.end(req.file!.buffer);
-            });
-        } else {
-            // Fallback to local filesystem when Cloudinary is not configured
+        let uploaded = false;
+        try {
+            const { isCloudinaryConfigured, CLOUDINARY_FOLDER } = await import('../../config/cloudinary.js');
+            if (isCloudinaryConfigured()) {
+                const { v2: cloudinary } = await import('cloudinary');
+                const folder = `${CLOUDINARY_FOLDER}/service-events`;
+                const publicId = `event_${bookingId}_${Date.now()}`;
+                photoUrl = await new Promise<string>((resolve, reject) => {
+                    const stream = cloudinary.uploader.upload_stream(
+                        { folder, resource_type: 'image', public_id: publicId },
+                        (err, result) => {
+                            if (err) reject(err);
+                            else if (result) resolve(result.secure_url);
+                            else reject(new Error('No response from Cloudinary'));
+                        }
+                    );
+                    stream.end(req.file!.buffer);
+                });
+                uploaded = true;
+            }
+        } catch (err) {
+            console.error('[addEvent] Cloudinary upload failed, falling back to local:', err);
+        }
+        if (!uploaded) {
+            // Fallback to local filesystem
             const fs = await import('fs/promises');
             const path = await import('path');
             const filename = `event-${bookingId}-${Date.now()}.jpg`;
             const uploadDir = path.join(process.cwd(), 'uploads', 'service-events');
             await fs.mkdir(uploadDir, { recursive: true });
             await fs.writeFile(path.join(uploadDir, filename), req.file.buffer);
-            photoUrl = `${process.env.API_BASE_URL || 'http://localhost:3000'}/uploads/service-events/${filename}`;
+            photoUrl = `${process.env.API_PUBLIC_URL || process.env.API_BASE_URL || 'http://localhost:3000'}/uploads/service-events/${filename}`;
         }
     }
 
