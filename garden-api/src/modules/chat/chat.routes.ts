@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import prisma from '../../config/database.js';
+import { getIO } from '../../services/socket.service.js';
 
 const router = Router();
 
@@ -123,19 +124,24 @@ router.post('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Req
         }
     }
 
-    res.status(201).json({
-        success: true,
-        data: {
-            id: newMessage.id,
-            bookingId: newMessage.bookingId,
-            senderId: newMessage.senderId,
-            senderName: `${(newMessage as any).sender.firstName} ${(newMessage as any).sender.lastName}`,
-            senderRole: newMessage.senderRole,
-            message: newMessage.message,
-            read: newMessage.read,
-            createdAt: newMessage.createdAt.toISOString(),
-        },
-    });
+    const payload = {
+        id: newMessage.id,
+        bookingId: newMessage.bookingId,
+        senderId: newMessage.senderId,
+        senderName: `${(newMessage as any).sender.firstName} ${(newMessage as any).sender.lastName}`,
+        senderRole: newMessage.senderRole,
+        message: newMessage.message,
+        read: newMessage.read,
+        createdAt: newMessage.createdAt.toISOString(),
+    };
+
+    // Broadcast en tiempo real a ambos participantes via Socket.io
+    const io = getIO();
+    if (io) {
+        io.to(`booking:${bookingId}`).emit('new_message', payload);
+    }
+
+    res.status(201).json({ success: true, data: payload });
 }));
 
 // GET /api/chat/unread-count - Contar mensajes no leídos

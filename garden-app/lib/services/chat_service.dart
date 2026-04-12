@@ -106,6 +106,8 @@ class ChatService extends ChangeNotifier {
         if (_isDisposed) return;
         try {
           final msg = ChatMessage.fromJson(Map<String, dynamic>.from(data as Map));
+          // Deduplicar: puede que ya esté si se envió por HTTP
+          if (_messages.any((m) => m.id == msg.id)) return;
           _messages.add(msg);
           if (msg.senderId != _currentUserId) {
             _unreadCount++;
@@ -144,12 +146,30 @@ class ChatService extends ChangeNotifier {
     // If not yet connected, onConnect will auto-join using _pendingBookingId
   }
 
-  void sendMessage(String bookingId, String message) {
+  // Envía siempre por HTTP (confiable), el backend broadcastea via socket al receptor
+  Future<void> sendMessage(String bookingId, String message) async {
     if (message.trim().isEmpty) return;
-    _socket?.emit('send_message', {
-      'bookingId': bookingId,
-      'message': message.trim(),
-    });
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/chat/$bookingId/messages'),
+        headers: {
+          'Authorization': 'Bearer $_token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'message': message.trim()}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        final msg = ChatMessage.fromJson(Map<String, dynamic>.from(data['data'] as Map));
+        // Agregar al historial local (el socket también lo recibirá, deduplicamos por id)
+        if (!_messages.any((m) => m.id == msg.id)) {
+          _messages.add(msg);
+          if (!_isDisposed) notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('Chat: Error enviando mensaje: $e');
+    }
   }
 
   void markRead(String bookingId) {

@@ -96,8 +96,8 @@ class _ChatScreenState extends State<ChatScreen> {
   void _sendMessage() {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
+    _messageController.clear(); // Limpiar inmediatamente para mejor UX
     _chatService?.sendMessage(widget.bookingId, text);
-    _messageController.clear();
   }
 
   @override
@@ -150,13 +150,21 @@ class _ChatScreenState extends State<ChatScreen> {
                           Container(
                             width: 7, height: 7,
                             decoration: BoxDecoration(
-                              color: _initialized && (_chatService?.connected ?? false) ? GardenColors.success : subtextColor,
+                              color: !_initialized
+                                  ? subtextColor
+                                  : (_chatService?.connected ?? false)
+                                      ? GardenColors.success
+                                      : GardenColors.warning,
                               shape: BoxShape.circle,
                             ),
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            _initialized && (_chatService?.connected ?? false) ? 'En línea' : 'Conectando...',
+                            !_initialized
+                                ? 'Cargando...'
+                                : (_chatService?.connected ?? false)
+                                    ? 'En línea'
+                                    : 'Disponible',
                             style: TextStyle(color: subtextColor, fontSize: 11),
                           ),
                         ],
