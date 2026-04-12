@@ -11,6 +11,7 @@ import '../../main.dart';
 import '../chat/chat_screen.dart';
 import '../service/service_execution_screen.dart';
 import '../../widgets/pet_profile_sheet.dart';
+import '../../widgets/price_suggestion_banner.dart';
 
 
 class CaregiverHomeScreen extends StatefulWidget {
@@ -567,6 +568,14 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               pendingCount: pendingCount,
             ),
             const SizedBox(height: 16),
+
+            // ── SUGERENCIAS DE PRECIO IA ───────────────────
+            PriceSuggestionBanner(
+              token: _caregiverToken,
+              baseUrl: _baseUrl,
+              onPriceUpdated: _loadCaregiverProfile,
+            ),
+            const SizedBox(height: 8),
 
             // ── 2. SOLICITUDES PENDIENTES (máxima prioridad) ──
             ..._buildPendingRequestsSection(

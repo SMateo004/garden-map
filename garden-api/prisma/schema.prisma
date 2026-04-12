@@ -163,6 +163,7 @@ model CaregiverProfile {
   bookings                        Booking[]          @relation("CaregiverBookings")
   user                            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   reviews                         Review[]
+  sugerencias                     SugerenciaPrecio[]
 
   @@index([status])
   @@index([userId])
@@ -689,6 +690,25 @@ model MeetAndGreet {
   approved       Boolean?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+}
+
+model SugerenciaPrecio {
+  id               String   @id @default(uuid())
+  caregiverId      String
+  serviceType      String   // PASEO | HOSPEDAJE
+  precioActual     Int
+  precioSugerido   Int
+  porcentajeCambio Int
+  motivo           String
+  explicacion      String   @db.Text
+  confianza        String   // alta | media | baja
+  modeloUsado      String   // prophet+arima | arima | reglas | claude
+  tendencia        String   // rising | stable | falling
+  status           String   @default("PENDING") // PENDING | ACCEPTED | REJECTED
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  caregiver        CaregiverProfile @relation(fields: [caregiverId], references: [id])
 }
 
 model Dispute {

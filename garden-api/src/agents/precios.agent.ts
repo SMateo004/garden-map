@@ -126,3 +126,62 @@ Responde con este JSON exacto:
 
     return await callClaude(SYSTEM_PROMPT_PRECIOS, mensaje, 256);
 }
+
+// — Calcular sugerencia de precio para un cuidador específico —
+export async function calcularSugerenciaCuidador(data: {
+    caregiverId: string;
+    zona: string;
+    serviceType: 'PASEO' | 'HOSPEDAJE';
+    precioActual: number;
+    forecastDemand: number;
+    tendencia: 'rising' | 'stable' | 'falling';
+    confianzaModelo: 'alta' | 'media' | 'baja';
+    modeloUsado: string;
+    reservasUltimos30Dias: number;
+    ocupacionPorcentaje: number;
+    precioPromedioZona: number;
+    precioMinZona: number;
+    precioMaxZona: number;
+    diasSinReserva: number;
+}): Promise<{
+    precioSugerido: number;
+    porcentajeCambio: number;
+    motivo: string;
+    explicacion: string;
+    debeActualizar: boolean;
+}> {
+    const mensaje = `
+Analiza si este cuidador debe ajustar su precio y cuánto:
+
+Zona: ${data.zona}, Santa Cruz de la Sierra
+Servicio: ${data.serviceType === 'PASEO' ? 'Paseo de mascotas' : 'Hospedaje'}
+Precio actual: Bs ${data.precioActual}
+Precio promedio de la zona: Bs ${data.precioPromedioZona}
+Rango en la zona: Bs ${data.precioMinZona} - Bs ${data.precioMaxZona}
+Demanda pronosticada próximos 7 días: ${data.forecastDemand.toFixed(1)} reservas
+Tendencia: ${data.tendencia === 'rising' ? 'al alza' : data.tendencia === 'falling' ? 'a la baja' : 'estable'}
+Confianza del pronóstico: ${data.confianzaModelo}
+Reservas últimos 30 días: ${data.reservasUltimos30Dias}
+Ocupación: ${data.ocupacionPorcentaje.toFixed(0)}%
+Días sin nueva reserva: ${data.diasSinReserva}
+
+Reglas ESTRICTAS:
+- Máximo ajuste: +20% / -15%
+- Si precio actual ya es óptimo, pon debeActualizar: false
+- Solo sugiere cambio si el beneficio es claro
+- Si ocupación > 80% y tendencia al alza → sube precio
+- Si días sin reserva > 14 → baja precio para atraer clientes
+- Si precio < promedio de zona y ocupación > 50% → sube hacia promedio
+
+Responde con este JSON exacto:
+{
+  "precioSugerido": numero en Bs (entero),
+  "porcentajeCambio": numero entero (positivo sube, negativo baja),
+  "motivo": "máximo 4 palabras",
+  "explicacion": "2 oraciones amigables explicando el cambio al cuidador",
+  "debeActualizar": true | false
+}
+    `;
+
+    return await callClaude(SYSTEM_PROMPT_PRECIOS, mensaje, 512);
+}
