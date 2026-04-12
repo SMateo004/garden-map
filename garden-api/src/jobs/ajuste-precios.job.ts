@@ -144,7 +144,7 @@ async function generarSugerenciaCuidador(
                 body: JSON.stringify({ service_type: serviceType, history, forecast_days: 7 }),
                 signal: AbortSignal.timeout(10000),
             });
-            if (resp.ok) forecastData = await resp.json();
+            if (resp.ok) forecastData = await resp.json() as typeof forecastData;
         } catch (err) {
             logger.warn(`[PRICING JOB] Python service unavailable, using fallback for ${caregiverId}`);
         }
