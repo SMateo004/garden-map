@@ -38,6 +38,13 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   int _surveyRating = 0;
   final TextEditingController _surveyCommentController = TextEditingController();
 
+  // Photo upload state
+  bool _isSendingPhoto = false;
+
+  // GPS monitoring (PASEO only)
+  StreamSubscription<ServiceStatus>? _gpsStatusSub;
+  bool _gpsDialogShown = false;
+
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
   bool get _alreadyRated => _booking?['ownerRating'] != null;
 
@@ -59,6 +66,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     _serviceTimer?.cancel();
     _photoRefreshTimer?.cancel();
     _surveyCommentController.dispose();
+    _gpsStatusSub?.cancel();
     super.dispose();
   }
 
@@ -97,6 +105,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         
         if (_booking?['status'] == 'IN_PROGRESS') {
           _startTimer();
+          // Start GPS monitoring for caregiver on PASEO
+          if (widget.role == 'CAREGIVER' && _booking?['serviceType'] == 'PASEO') {
+            _startGpsMonitoring();
+          }
           if (widget.role == 'CLIENT' && _photoRefreshTimer == null) {
             _photoRefreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _loadBooking());
           }
@@ -111,6 +123,131 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     } catch (e) {
       debugPrint('SERVICE ERROR: $e');
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _startGpsMonitoring() {
+    _gpsStatusSub?.cancel();
+    _gpsDialogShown = false;
+    if (kIsWeb) return;
+    _gpsStatusSub = Geolocator.getServiceStatusStream().listen((status) {
+      if (status == ServiceStatus.disabled && mounted && !_gpsDialogShown) {
+        _showGpsDisabledDialog();
+      }
+    });
+  }
+
+  void _showGpsDisabledDialog() {
+    _gpsDialogShown = true;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        int _secondsLeft = 30;
+        Timer? _countdown;
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            _countdown ??= Timer.periodic(const Duration(seconds: 1), (t) {
+              if (_secondsLeft <= 1) {
+                t.cancel();
+                Navigator.of(ctx, rootNavigator: true).pop();
+                _cancelServiceGpsPenalty();
+              } else {
+                setLocal(() => _secondsLeft--);
+              }
+            });
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Row(
+                children: [
+                  Text('⚠️', style: TextStyle(fontSize: 22)),
+                  SizedBox(width: 8),
+                  Expanded(child: Text('GPS desactivado', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Por seguridad, el GPS debe estar activo durante el paseo.\n\n'
+                    'Activa el GPS de tu teléfono ahora. Si no lo haces en:',
+                    style: TextStyle(fontSize: 13, height: 1.5),
+                  ),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: Text(
+                      '$_secondsLeft s',
+                      style: const TextStyle(
+                        fontSize: 40, fontWeight: FontWeight.w900,
+                        color: GardenColors.error,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: GardenColors.error.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      '⚠️ El servicio se cancelará automáticamente y se aplicará un descuento por incumplimiento.',
+                      style: TextStyle(fontSize: 12, color: GardenColors.error, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () async {
+                    _countdown?.cancel();
+                    Navigator.of(ctx, rootNavigator: true).pop();
+                    // Verificar si el GPS ya está activo
+                    await Future.delayed(const Duration(seconds: 2));
+                    final enabled = await Geolocator.isLocationServiceEnabled();
+                    if (!enabled && mounted) {
+                      _gpsDialogShown = false;
+                      _showGpsDisabledDialog();
+                    } else {
+                      if (mounted) _gpsDialogShown = false;
+                    }
+                  },
+                  child: const Text('Ya lo activé', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _cancelServiceGpsPenalty() async {
+    if (!mounted) return;
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/cancel'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({'reason': 'GPS desactivado durante el paseo — cancelación automática por seguridad'}),
+      );
+      final data = jsonDecode(response.body);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['success'] == true
+                ? 'Servicio cancelado por desactivación de GPS.'
+                : 'Error al cancelar. Contacta a soporte.'),
+            backgroundColor: GardenColors.error,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+        if (data['success'] == true) {
+          await _loadBooking();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error cancelling by GPS: $e');
     }
   }
 
@@ -417,6 +554,41 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   // Meet & Greet card (solo para HOSPEDAJE)
                   if (_booking?['serviceType'] == 'HOSPEDAJE') ...[
                     _buildMeetAndGreetCard(),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Recomendación GPS (solo PASEO)
+                  if (_booking?['serviceType'] == 'PASEO') ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: GardenColors.success.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: GardenColors.success.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('📍', style: TextStyle(fontSize: 22)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Mantén el GPS activado',
+                                  style: TextStyle(color: GardenColors.success, fontWeight: FontWeight.w700, fontSize: 14)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Durante el paseo tu ubicación se comparte en tiempo real con el dueño. '
+                                  'Si desactivas el GPS, el servicio se cancelará automáticamente por razones de seguridad.',
+                                  style: TextStyle(color: subtextColor, fontSize: 12, height: 1.45),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 16),
                   ],
 
@@ -1080,11 +1252,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       children: [
                         _ActionTile(
                           icon: Icons.camera_alt_rounded,
-                          label: 'Enviar foto',
+                          label: _isSendingPhoto ? 'Enviando...' : 'Enviar foto',
                           sublabel: 'Al dueño',
                           color: GardenColors.primary,
-                          onTap: _sendServicePhoto,
+                          onTap: _isSendingPhoto ? () {} : _sendServicePhoto,
                           isDark: isDark,
+                          loading: _isSendingPhoto,
                         ),
                         _ActionTile(
                           icon: Icons.chat_bubble_rounded,
@@ -1119,27 +1292,6 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       ],
                     ),
                     const SizedBox(height: 16),
-
-                    // ── GPS: compartir ubicación (solo PASEO) ────────────
-                    if (_booking?['serviceType'] == 'PASEO') ...[
-                      GardenButton(
-                        label: '📍 Compartir ubicación GPS',
-                        color: GardenColors.success,
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => GpsTrackingScreen(
-                              bookingId: widget.bookingId,
-                              role: 'CAREGIVER',
-                              petName: _booking?['petName'] ?? '',
-                              token: _token,
-                              petPhoto: _booking?['petPhoto'] as String?,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
 
                     const SizedBox(height: 16),
 
@@ -1582,6 +1734,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   }
 
   Future<void> _sendServicePhoto() async {
+    if (_isSendingPhoto) return;
+
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -1609,14 +1763,19 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       ),
     );
     if (source == null) return;
+    if (!mounted) return;
 
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: source, imageQuality: 85);
     if (picked == null) return;
-    final bytes = await picked.readAsBytes();
-    final fileName = picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
+    if (!mounted) return;
+
+    setState(() => _isSendingPhoto = true);
 
     try {
+      final bytes = await picked.readAsBytes();
+      final fileName = picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
+
       final uri = Uri.parse('$_baseUrl/bookings/${widget.bookingId}/event');
       final request = http.MultipartRequest('POST', uri);
       request.headers['Authorization'] = 'Bearer $_token';
@@ -1632,12 +1791,31 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         await _loadBooking();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('📸 Foto enviada al dueño'), backgroundColor: GardenColors.success),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('📸 Foto enviada al dueño'), backgroundColor: GardenColors.success),
+          );
+        }
+      } else {
+        if (mounted) {
+          final msg = data['error']?['message'] as String? ?? 'Error al enviar la foto';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), backgroundColor: GardenColors.error),
+          );
+        }
       }
     } catch (e) {
       debugPrint('Error sending photo: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No se pudo enviar la foto. Intenta de nuevo.'),
+            backgroundColor: GardenColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSendingPhoto = false);
     }
   }
 
@@ -2278,6 +2456,7 @@ class _ActionTile extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
   final bool isDark;
+  final bool loading;
   const _ActionTile({
     required this.icon,
     required this.label,
@@ -2285,6 +2464,7 @@ class _ActionTile extends StatelessWidget {
     required this.color,
     required this.onTap,
     required this.isDark,
+    this.loading = false,
   });
   @override
   Widget build(BuildContext context) {
@@ -2292,33 +2472,41 @@ class _ActionTile extends StatelessWidget {
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
-          boxShadow: GardenShadows.card,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
+      onTap: loading ? null : onTap,
+      child: Opacity(
+        opacity: loading ? 0.7 : 1.0,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withValues(alpha: 0.2)),
+            boxShadow: GardenShadows.card,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: loading
+                    ? Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: color),
+                      )
+                    : Icon(icon, color: color, size: 20),
               ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(height: 8),
-            Text(label,
-              style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
-            Text(sublabel,
-              style: TextStyle(color: subtextColor, fontSize: 11)),
-          ],
+              const SizedBox(height: 8),
+              Text(label,
+                style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
+              Text(sublabel,
+                style: TextStyle(color: subtextColor, fontSize: 11)),
+            ],
+          ),
         ),
       ),
     );
