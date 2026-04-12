@@ -36,6 +36,34 @@ async function start() {
     logger.info('Starting background jobs (Pricing dynamic adjustment)...');
     iniciarJobAjustePrecios();
   }, 10000);
+
+  // Auto-release payment 24h after service ends if owner hasn't reviewed
+  // Runs every hour, processes any bookings past the 24h window
+  setInterval(async () => {
+    try {
+      const { confirmReceiptByClient } = await import('./modules/booking-service/booking.service.js');
+      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const overdueBookings = await prisma.booking.findMany({
+        where: {
+          status: 'COMPLETED',
+          ownerRated: false,
+          payoutStatus: 'PENDING',
+          serviceEndedAt: { lte: cutoff },
+        },
+        select: { id: true, clientId: true },
+      });
+      for (const booking of overdueBookings) {
+        try {
+          await confirmReceiptByClient(booking.id, booking.clientId, 3, 'Auto-liberación tras 24h sin reseña');
+          logger.info('[AutoRelease] Booking auto-released after 24h', { bookingId: booking.id });
+        } catch (err: any) {
+          logger.error('[AutoRelease] Failed to auto-release booking', { bookingId: booking.id, error: err.message });
+        }
+      }
+    } catch (err: any) {
+      logger.error('[AutoRelease] Cron job failed', { error: err.message });
+    }
+  }, 60 * 60 * 1000); // Every hour
 }
 
 process.on('SIGTERM', async () => {

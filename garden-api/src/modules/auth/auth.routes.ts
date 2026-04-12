@@ -19,4 +19,7 @@ router.post('/verify-email', authMiddleware, authController.verifyEmail);
 /** DELETE /api/auth/account — authenticated user deletes their own account */
 router.delete('/account', authMiddleware, authController.deleteAccount);
 
+/** PUT /api/auth/fcm-token — saves FCM device token for push notifications */
+router.put('/fcm-token', authMiddleware, authController.updateFcmToken);
+
 export default router;

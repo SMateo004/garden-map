@@ -18,6 +18,7 @@ import {
 import logger from '../../shared/logger.js';
 import * as notificationService from '../../services/notification.service.js';
 import { blockchainService } from '../../services/blockchain.service.js';
+import { sendPushToUser } from '../../services/firebase.service.js';
 import { getIO } from '../../services/socket.service.js';
 import type {
   CreateBookingBody,
@@ -99,6 +100,24 @@ export async function createBooking(
       throw new ForbiddenError(
         'Debes completar el perfil de tu mascota primero',
         'CLIENT_PROFILE_INCOMPLETE'
+      );
+    }
+
+    // Block new reservations if client has a completed service pending review (within 24h window)
+    const pendingReview = await tx.booking.findFirst({
+      where: {
+        clientId,
+        status: BookingStatus.COMPLETED,
+        ownerRated: false,
+        payoutStatus: 'PENDING',
+        serviceEndedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+      },
+      select: { id: true },
+    });
+    if (pendingReview) {
+      throw new ForbiddenError(
+        'Debes calificar el servicio anterior antes de hacer una nueva reserva.',
+        'PENDING_REVIEW'
       );
     }
 
@@ -269,6 +288,7 @@ export async function createBooking(
           type: 'NEW_BOOKING',
         },
       });
+      sendPushToUser(caregiverUser.userId, '¡Nueva solicitud de reserva! 🐾', `${pet.name} necesita un cuidador. Revisa tu buzón.`).catch(() => {});
     }
 
     logger.info('Cliente seleccionó mascota para reserva', {
@@ -628,9 +648,9 @@ export async function requestCancellationByCaregiver(
       include: { client: { select: { id: true } } }
     });
     if (!booking) throw new BookingNotFoundError(bookingId);
-    if (booking.status !== BookingStatus.CONFIRMED && booking.status !== BookingStatus.IN_PROGRESS) {
+    if (booking.status !== BookingStatus.CONFIRMED) {
       throw new BookingValidationError(
-        'Solo se puede cancelar reservas confirmadas o en curso'
+        'Solo se puede cancelar una reserva confirmada. Una vez iniciado el servicio ya no es posible cancelarlo.'
       );
     }
 
@@ -796,12 +816,13 @@ export async function cancelBooking(
         booking.status === BookingStatus.PAYMENT_PENDING_APPROVAL) &&
       !booking.paidAt
     ) {
+      // No payment was made yet — nothing to refund
       refundAmount = 0;
       refundStatus = RefundStatus.REJECTED;
     } else {
-      const calc = calculateRefund(booking, now);
-      refundAmount = calc.refundAmount;
-      refundStatus = calc.refundStatus;
+      // Refund policy: return the service price only — Garden keeps its commission
+      refundAmount = Math.max(0, Number(booking.totalAmount) - Number(booking.commissionAmount));
+      refundStatus = refundAmount > 0 ? RefundStatus.APPROVED : RefundStatus.REJECTED;
     }
 
     const updated = await tx.booking.update({
@@ -820,7 +841,7 @@ export async function cancelBooking(
       data: {
         userId: clientId,
         title: 'Has cancelado tu reserva',
-        message: `Tu reserva ${bookingId} ha sido cancelada. El reembolso calculado es de Bs ${refundAmount.toFixed(2)} (${refundStatus}). El equipo de soporte procesará la devolución si corresponde.`,
+        message: `Tu reserva ha sido cancelada. Se te devolverá Bs ${refundAmount.toFixed(2)} (el costo del servicio sin comisión de Garden). El equipo de soporte procesará el reembolso pronto.`,
         type: 'BOOKING_CANCELLED',
       }
     });
@@ -1245,6 +1266,7 @@ export async function acceptBooking(bookingId: string, caregiverUserId: string):
       type: 'BOOKING_ACCEPTED',
     },
   });
+  sendPushToUser(updated.clientId, '¡Tu reserva fue aceptada! 🐾', `El cuidador confirmó la reserva para ${updated.petName}.`).catch(() => {});
 
   notificationService.onBookingAccepted(bookingId).catch(err => {
     logger.error('Error sending onBookingAccepted notification', { bookingId, err });
@@ -1294,6 +1316,7 @@ export async function rejectBooking(bookingId: string, caregiverUserId: string, 
       type: 'BOOKING_REJECTED',
     },
   });
+  sendPushToUser(booking.clientId, 'Reserva rechazada ❌', `El cuidador no pudo aceptar la reserva de ${booking.petName}.`).catch(() => {});
 
   notificationService.onBookingRejected(bookingId, reason).catch(err => {
     logger.error('Error sending onBookingRejected notification', { bookingId, err });
@@ -1339,6 +1362,7 @@ export async function startService(bookingId: string, caregiverUserId: string, p
         type: 'SERVICE_STARTED',
       },
     });
+    sendPushToUser(booking.clientId, '¡El servicio ha comenzado! 🐕', `El cuidador está cuidando a ${booking.petName}.`).catch(() => {});
 
     return bookingToResponse(updated);
   });
@@ -1502,6 +1526,7 @@ export async function concludeService(
         type: 'SERVICE_COMPLETED',
       },
     });
+    sendPushToUser(booking.clientId, 'Servicio finalizado ✅', `El cuidador terminó. Deja tu reseña para liberar el pago.`).catch(() => {});
 
     return bookingToResponse(updated);
   });
@@ -1564,13 +1589,15 @@ export async function confirmReceiptByClient(
 
     const updated = await tx.booking.update({
       where: { id: bookingId },
-      data: { 
+      data: {
         payoutStatus: 'PAID',
         ownerRated: true,
         ownerRating: rating,
         ownerComment: comment,
       }
     });
+
+    sendPushToUser(updatedProfile.userId, '¡Pago liberado! 💸', `Recibiste el pago por el servicio de ${booking.petName}. Revisa tu billetera.`).catch(() => {});
 
     // Create Review natively
     await tx.review.create({

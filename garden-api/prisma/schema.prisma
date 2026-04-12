@@ -17,6 +17,7 @@ model User {
   phone                        String                        @unique
   isDeleted                    Boolean                       @default(false)
   deletedAt                    DateTime?
+  fcmToken                     String?
   profilePicture               String?
   country                      String?
   city                         String?

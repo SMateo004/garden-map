@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
+import '../../services/fcm_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -38,6 +39,8 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await _authService.login(email: email, password: password);
       if (!mounted) return;
+      // Register FCM token now that the user is authenticated
+      FcmService.registerAfterLogin();
       final prefs = await SharedPreferences.getInstance();
       final role = prefs.getString('user_role') ?? '';
       if (!mounted) return;

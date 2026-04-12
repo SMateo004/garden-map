@@ -3,6 +3,7 @@ import { authMiddleware } from '../../middleware/auth.middleware.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import prisma from '../../config/database.js';
 import { getIO } from '../../services/socket.service.js';
+import { sendPushToUser } from '../../services/firebase.service.js';
 
 const router = Router();
 
@@ -140,6 +141,10 @@ router.post('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Req
     if (io) {
         io.to(`booking:${bookingId}`).emit('new_message', payload);
     }
+
+    // Push notification al destinatario (siempre, no solo el primer mensaje)
+    const senderName = payload.senderName;
+    sendPushToUser(recipientId, `Mensaje de ${senderName} 💬`, message.trim()).catch(() => {});
 
     res.status(201).json({ success: true, data: payload });
 }));

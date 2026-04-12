@@ -34,6 +34,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   Duration _elapsed = Duration.zero;
   List<Map<String, dynamic>> _serviceEvents = [];
 
+  // Survey state — must be class-level to survive parent rebuilds (e.g. themeNotifier)
+  int _surveyRating = 0;
+  final TextEditingController _surveyCommentController = TextEditingController();
+
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
   bool get _alreadyRated => _booking?['ownerRating'] != null;
 
@@ -44,6 +48,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
+    // Rebuild when comment text changes so the submit button enables/disables correctly
+    _surveyCommentController.addListener(() { if (mounted) setState(() {}); });
     _loadInitialData();
   }
 
@@ -52,6 +58,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     _pulseController.dispose();
     _serviceTimer?.cancel();
     _photoRefreshTimer?.cancel();
+    _surveyCommentController.dispose();
     super.dispose();
   }
 
@@ -1575,8 +1582,36 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   }
 
   Future<void> _sendServicePhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.camera_alt_rounded),
+                title: const Text('Cámara', style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_rounded),
+                title: const Text('Galería'),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (source == null) return;
+
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    final picked = await picker.pickImage(source: source, imageQuality: 85);
     if (picked == null) return;
     final bytes = await picked.readAsBytes();
     final fileName = picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
@@ -1930,149 +1965,144 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   }
 
   Widget _buildSatisfactionSurvey() {
-    int selectedRating = 0;
-    final commentController = TextEditingController();
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
-    return StatefulBuilder(
-      builder: (context, setSurvey) {
-        final isDark = themeNotifier.isDark;
-        final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
-        final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-        final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-        final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-        final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final canSubmit = _surveyRating > 0 && _surveyCommentController.text.trim().isNotEmpty;
 
-        return Scaffold(
-          backgroundColor: bg,
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-            child: Column(
-              children: [
-                const SizedBox(height: 20),
-                const Text('🐾', style: TextStyle(fontSize: 60)),
-                const SizedBox(height: 24),
-                Text('¿Qué tal estuvo el servicio?',
-                    style: TextStyle(color: textColor, fontSize: 26, fontWeight: FontWeight.w900),
-                    textAlign: TextAlign.center),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(
-                    'Tu calificación es clave para que el Smart Contract libere el pago al cuidador.',
-                    style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const SizedBox(height: 48),
+    return Scaffold(
+      backgroundColor: bg,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+            const Text('🐾', style: TextStyle(fontSize: 60)),
+            const SizedBox(height: 24),
+            Text('¿Qué tal estuvo el servicio?',
+                style: TextStyle(color: textColor, fontSize: 26, fontWeight: FontWeight.w900),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Text(
+                'Tu calificación es clave para que el Smart Contract libere el pago al cuidador.',
+                style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 48),
 
-                // Selector de estrellas gigante con feedback visual
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(5, (index) {
-                    final ratingValue = index + 1;
-                    final isSelected = ratingValue <= selectedRating;
-                    return GestureDetector(
-                      onTap: () => setSurvey(() => selectedRating = ratingValue),
-                      child: TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 1.0, end: isSelected ? 1.2 : 1.0),
-                        duration: const Duration(milliseconds: 200),
-                        builder: (context, scale, child) {
-                          return Transform.scale(
-                            scale: scale,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
-                              child: Icon(
-                                isSelected ? Icons.star_rounded : Icons.star_outline_rounded,
-                                color: isSelected ? GardenColors.star : subtextColor.withOpacity(0.3),
-                                size: 52,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    );
-                  }),
-                ),
-
-                if (selectedRating > 0) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    ['', 'Terrible', 'Malo', 'Normal', 'Bueno', '¡Excelente!'][selectedRating],
-                    style: const TextStyle(color: GardenColors.star, fontWeight: FontWeight.w800, fontSize: 18),
-                  ),
-                ],
-
-                const SizedBox(height: 48),
-
-                // Caja de comentarios Premium
-                Container(
-                  decoration: BoxDecoration(
-                    color: surface,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: borderColor),
-                    boxShadow: GardenShadows.card,
-                  ),
-                  child: TextField(
-                    controller: commentController,
-                    maxLines: 4,
-                    style: TextStyle(color: textColor),
-                    decoration: InputDecoration(
-                      hintText: 'Cuéntanos un poco más...',
-                      hintStyle: TextStyle(color: subtextColor.withOpacity(0.5)),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.all(20),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-
-                // Feedback visual del Smart Contract
-                if (selectedRating > 0)
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: (selectedRating >= 3 ? GardenColors.success : GardenColors.error).withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: (selectedRating >= 3 ? GardenColors.success : GardenColors.error).withOpacity(0.3),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          selectedRating >= 3 ? Icons.lock_open_rounded : Icons.lock_clock_rounded,
-                          color: selectedRating >= 3 ? GardenColors.success : GardenColors.error,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            selectedRating >= 3
-                                ? 'El smart contract liberará el pago automáticamente.'
-                                : 'El pago se retendrá para revisión manual por seguridad.',
-                            style: TextStyle(
-                              color: selectedRating >= 3 ? GardenColors.success : GardenColors.error,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
+            // Selector de estrellas gigante con feedback visual
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(5, (index) {
+                final ratingValue = index + 1;
+                final isSelected = ratingValue <= _surveyRating;
+                return GestureDetector(
+                  onTap: () => setState(() => _surveyRating = ratingValue),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 1.0, end: isSelected ? 1.2 : 1.0),
+                    duration: const Duration(milliseconds: 200),
+                    builder: (context, scale, child) {
+                      return Transform.scale(
+                        scale: scale,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Icon(
+                            isSelected ? Icons.star_rounded : Icons.star_outline_rounded,
+                            color: isSelected ? GardenColors.star : subtextColor.withOpacity(0.3),
+                            size: 52,
                           ),
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
-
-                const SizedBox(height: 40),
-                GardenButton(
-                  label: _isProcessing ? 'Procesando en Blockchain...' : 'Confirmar calificación',
-                  loading: _isProcessing,
-                  onPressed: selectedRating == 0 ? null : () => _submitRating(selectedRating, commentController.text),
-                ),
-              ],
+                );
+              }),
             ),
-          ),
-        );
-      },
+
+            if (_surveyRating > 0) ...[
+              const SizedBox(height: 16),
+              Text(
+                ['', 'Terrible', 'Malo', 'Normal', 'Bueno', '¡Excelente!'][_surveyRating],
+                style: const TextStyle(color: GardenColors.star, fontWeight: FontWeight.w800, fontSize: 18),
+              ),
+            ],
+
+            const SizedBox(height: 48),
+
+            // Caja de comentarios Premium
+            Container(
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: borderColor),
+                boxShadow: GardenShadows.card,
+              ),
+              child: TextField(
+                controller: _surveyCommentController,
+                maxLines: 4,
+                style: TextStyle(color: textColor),
+                decoration: InputDecoration(
+                  hintText: 'Cuéntanos un poco más... (requerido)',
+                  hintStyle: TextStyle(color: subtextColor.withOpacity(0.5)),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.all(20),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 32),
+
+            // Feedback visual del Smart Contract
+            if (_surveyRating > 0)
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: (_surveyRating >= 3 ? GardenColors.success : GardenColors.error).withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: (_surveyRating >= 3 ? GardenColors.success : GardenColors.error).withOpacity(0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _surveyRating >= 3 ? Icons.lock_open_rounded : Icons.lock_clock_rounded,
+                      color: _surveyRating >= 3 ? GardenColors.success : GardenColors.error,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _surveyRating >= 3
+                            ? 'El smart contract liberará el pago automáticamente.'
+                            : 'El pago se retendrá para revisión manual por seguridad.',
+                        style: TextStyle(
+                          color: _surveyRating >= 3 ? GardenColors.success : GardenColors.error,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            const SizedBox(height: 40),
+            GardenButton(
+              label: _isProcessing ? 'Procesando en Blockchain...' : 'Confirmar calificación',
+              loading: _isProcessing,
+              onPressed: canSubmit ? () => _submitRating(_surveyRating, _surveyCommentController.text) : null,
+            ),
+          ],
+        ),
+      ),
     );
   }
 

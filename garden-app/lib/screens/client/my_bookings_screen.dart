@@ -317,7 +317,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                     Text('Bs ${booking['totalAmount']}', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w900, fontSize: 18)),
                   ],
                 ),
-                if (status == 'CONFIRMED' || status == 'COMPLETED' || status == 'IN_PROGRESS') ...[
+                if (status == 'WAITING_CAREGIVER_APPROVAL' || status == 'CONFIRMED' || status == 'COMPLETED' || status == 'IN_PROGRESS') ...[
                   const SizedBox(height: 16),
                   Row(
                     children: [
@@ -334,9 +334,10 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                             ),
                           ),
                         ),
-                      if (status == 'CONFIRMED' || status == 'IN_PROGRESS')
-                        const SizedBox(width: 12),
-                      if (status == 'CONFIRMED' || status == 'IN_PROGRESS')
+                      // Cancel is allowed before service starts — not once IN_PROGRESS
+                      if (status == 'WAITING_CAREGIVER_APPROVAL' || status == 'CONFIRMED')
+                        const SizedBox(width: 8),
+                      if (status == 'WAITING_CAREGIVER_APPROVAL' || status == 'CONFIRMED')
                         Expanded(
                           child: OutlinedButton(
                             onPressed: () => _cancelBooking(booking['id']),

@@ -34,8 +34,10 @@ import 'screens/onboarding/mobile_splash_screen.dart';
 import 'screens/onboarding/mobile_onboarding_screen.dart';
 import 'screens/onboarding/mobile_service_selector_screen.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:firebase_core/firebase_core.dart';
 import 'theme/garden_theme.dart';
 import 'services/local_notification_service.dart';
+import 'services/fcm_service.dart';
 
 // ── Compatibilidad con sistema anterior (Legacy Constants) ──
 const kBackgroundColor = GardenColors.background;
@@ -334,6 +336,10 @@ final GoRouter _router = GoRouter(
 // ── App Entry Point ────────────────────────────────────────
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (!kIsWeb) {
+    await Firebase.initializeApp();
+    await FcmService.init();
+  }
   await LocalNotificationService.init();
   await LocalNotificationService.requestPermission();
   runApp(const GardenApp());

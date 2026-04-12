@@ -236,11 +236,13 @@ export const uploadPetPhotoHandler = [
         url = await uploadSinglePetPhoto(file.buffer, userId);
       } catch (err) {
         logger.error('Fallo al subir petPhoto a Cloudinary, intentando local', { error: err });
-        const urls = await saveRegistrationPhotosToLocal([file.buffer], `pet-${userId}`);
+        // Use unique folder per upload so each photo gets a distinct URL
+        const urls = await saveRegistrationPhotosToLocal([file.buffer], `pet-${userId}-${Date.now()}`);
         url = urls[0]!;
       }
     } else {
-      const urls = await saveRegistrationPhotosToLocal([file.buffer], `pet-${userId}`);
+      // Use unique folder per upload so each photo gets a distinct URL
+      const urls = await saveRegistrationPhotosToLocal([file.buffer], `pet-${userId}-${Date.now()}`);
       url = urls[0]!;
       logger.info('Foto mascota guardada localmente (Cloudinary off)', { url, userId });
     }

@@ -402,3 +402,22 @@ export const deleteAccount = asyncHandler(async (req: Request, res: Response) =>
 
   res.json({ success: true, data: { message: 'Cuenta eliminada correctamente' } });
 });
+
+/** PUT /api/auth/fcm-token — saves or updates the FCM device token for push notifications. */
+export const updateFcmToken = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const { fcmToken } = req.body as { fcmToken?: string };
+
+  if (!fcmToken || typeof fcmToken !== 'string') {
+    res.status(400).json({ success: false, error: 'fcmToken is required' });
+    return;
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { fcmToken },
+  });
+
+  res.json({ success: true });
+});
+
