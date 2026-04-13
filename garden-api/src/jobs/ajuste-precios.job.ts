@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { calcularAjusteDinamico, calcularSugerenciaCuidador } from '../agents/precios.agent.js';
+import { calcularAjusteDinamico, calcularSugerenciaCuidador, PricingAnalysis } from '../agents/precios.agent.js';
 import prisma from '../config/database.js';
 import logger from '../shared/logger.js';
 
@@ -135,48 +135,77 @@ async function generarSugerenciaCuidador(
             date, count: v.count, revenue: v.revenue,
         }));
 
-        // Llamar al microservicio Python
-        let forecastData = { forecast_demand: 2.0, trend: 'stable', model_used: 'reglas', confidence: 'baja' };
-        try {
-            const resp = await fetch(`${PRICING_SERVICE_URL}/forecast`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ service_type: serviceType, history, forecast_days: 7 }),
-                signal: AbortSignal.timeout(10000),
-            });
-            if (resp.ok) forecastData = await resp.json() as typeof forecastData;
-        } catch (err) {
-            logger.warn(`[PRICING JOB] Python service unavailable, using fallback for ${caregiverId}`);
-        }
-
-        // Estadísticas de zona para comparación
+        // Estadísticas de zona para comparación (necesarias para el /analyze)
         const zonePrices = await obtenerPreciosZona(zona, serviceType);
 
-        // Calcular métricas del cuidador
-        const reservasUltimos30Dias = bookings.filter(
-            b => b.createdAt >= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-        ).length;
+        // Llamar al microservicio Python → análisis matemático completo
+        const fallbackAnalysis: PricingAnalysis = {
+            demanda_forecast_7d: 2.0,
+            demanda_forecast_30d: 2.0,
+            tendencia: 'stable',
+            fuerza_tendencia: 0.0,
+            precio_optimo_matematico: precioActual,
+            elasticidad_precio: serviceType === 'PASEO' ? -1.2 : -0.8,
+            ingreso_proyectado_actual: precioActual * 2,
+            ingreso_proyectado_optimo: precioActual * 2,
+            mejora_ingreso_pct: 0.0,
+            rango_precio_seguro: {
+                min: Math.max(zonePrices.min, Math.round(precioActual * 0.85)),
+                max: Math.min(zonePrices.max, Math.round(precioActual * 1.20)),
+            },
+            factor_estacional_actual: 1.0,
+            dias_peak_proximos_7: [],
+            dias_slow_proximos_7: [],
+            patron_semanal: { lunes: 0.70, martes: 0.70, miercoles: 0.75, jueves: 0.80, viernes: 1.10, sabado: 1.30, domingo: 1.20 },
+            reservas_7d: 0,
+            reservas_30d: 0,
+            reservas_90d: 0,
+            variacion_vs_mes_anterior_pct: 0,
+            dias_sin_reserva: 30,
+            ingreso_promedio_por_reserva: precioActual,
+            percentil_precio_zona: 50,
+            precio_vs_promedio_zona_pct: 0,
+            modelo_usado: 'reglas',
+            confianza: 'baja',
+            puntos_de_datos: 0,
+        };
 
-        const diasDesdeUltimaReserva = bookings.length > 0
-            ? Math.floor((Date.now() - bookings[bookings.length - 1]!.createdAt.getTime()) / (24 * 60 * 60 * 1000))
-            : 30;
+        let analysis: PricingAnalysis = fallbackAnalysis;
+        try {
+            const resp = await fetch(`${PRICING_SERVICE_URL}/analyze`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    service_type: serviceType,
+                    history: history.map(h => ({ ...h, price: precioActual })),
+                    precio_actual: precioActual,
+                    precio_promedio_zona: zonePrices.avg,
+                    precio_min_zona: zonePrices.min,
+                    precio_max_zona: zonePrices.max,
+                    forecast_days: 7,
+                }),
+                signal: AbortSignal.timeout(30000),
+            });
+            if (resp.ok) {
+                analysis = await resp.json() as PricingAnalysis;
+                logger.info(`[PRICING JOB] Python analysis OK for ${caregiverId} (${analysis.modelo_usado}, confianza: ${analysis.confianza})`);
+            } else {
+                logger.warn(`[PRICING JOB] Python service returned ${resp.status} for ${caregiverId}, using fallback`);
+            }
+        } catch (err) {
+            logger.warn(`[PRICING JOB] Python service unavailable for ${caregiverId}, using fallback`);
+        }
 
-        // Llamar a Claude para la sugerencia final
+        // Llamar a Claude para la decisión final (solo razonamiento, no cálculos)
         const sugerencia = await calcularSugerenciaCuidador({
             caregiverId,
             zona,
             serviceType,
             precioActual,
-            forecastDemand: forecastData.forecast_demand,
-            tendencia: forecastData.trend as 'rising' | 'stable' | 'falling',
-            confianzaModelo: forecastData.confidence as 'alta' | 'media' | 'baja',
-            modeloUsado: forecastData.model_used,
-            reservasUltimos30Dias,
-            ocupacionPorcentaje: reservasUltimos30Dias > 0 ? Math.min(100, reservasUltimos30Dias * 3.3) : 0,
             precioPromedioZona: zonePrices.avg,
             precioMinZona: zonePrices.min,
             precioMaxZona: zonePrices.max,
-            diasSinReserva: diasDesdeUltimaReserva,
+            analysis,
         });
 
         if (!sugerencia.debeActualizar) return;
@@ -192,9 +221,9 @@ async function generarSugerenciaCuidador(
                 porcentajeCambio: sugerencia.porcentajeCambio,
                 motivo: sugerencia.motivo,
                 explicacion: sugerencia.explicacion,
-                confianza: forecastData.confidence,
-                modeloUsado: forecastData.model_used,
-                tendencia: forecastData.trend,
+                confianza: analysis.confianza,
+                modeloUsado: analysis.modelo_usado,
+                tendencia: analysis.tendencia,
                 status: 'PENDING',
                 expiresAt,
             },
