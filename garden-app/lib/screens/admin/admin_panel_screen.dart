@@ -8,6 +8,7 @@ import '../../theme/garden_theme.dart';
 import 'admin_owners_screen.dart';
 import 'admin_general_screen.dart';
 import 'admin_technical_screen.dart';
+import 'admin_notifications_screen.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -683,6 +684,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     AdminOwnersScreen(adminToken: _adminToken),
                     AdminGeneralScreen(adminToken: _adminToken),
                     AdminTechnicalScreen(adminToken: _adminToken),
+                    AdminNotificationsScreen(adminToken: _adminToken),
                   ],
                 ),
               ),
@@ -706,6 +708,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       ('Dueños', Icons.pets_rounded),
       ('Administración', Icons.business_center_rounded),
       ('Técnica', Icons.developer_mode_rounded),
+      ('Notificaciones', Icons.campaign_rounded),
     ];
     return Container(
       color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,

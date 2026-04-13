@@ -115,9 +115,23 @@ router.patch('/zones/:zone/toggle', adminController.toggleZone);
 router.get('/settings', adminController.getSettings);
 /** PATCH /api/admin/settings/:key — update a setting value */
 router.patch('/settings/:key', adminController.updateSetting);
-/** GET /api/admin/agent-logs — get recent agent logs */
+/** GET /api/admin/agent-logs — get recent agent logs (?type=PRECIO|...) */
 router.get('/agent-logs', adminController.getAgentLogs);
+/** GET /api/admin/agent-stats — conteo por tipo y estado */
+router.get('/agent-stats', adminController.getAgentStats);
 /** POST /api/admin/agent-logs — post a custom agent instruction */
 router.post('/agent-logs', adminController.postAgentInstruction);
+
+// ── Notificaciones Admin ───────────────────────────────────────────────────
+/** POST /api/admin/notifications/send — broadcast inmediato */
+router.post('/notifications/send', adminController.sendAdminNotification);
+/** POST /api/admin/notifications/schedule — programar */
+router.post('/notifications/schedule', adminController.scheduleAdminNotification);
+/** GET /api/admin/notifications/scheduled — listar programadas */
+router.get('/notifications/scheduled', adminController.getScheduledNotifications);
+/** DELETE /api/admin/notifications/scheduled/:id — cancelar programada */
+router.delete('/notifications/scheduled/:id', adminController.cancelScheduledNotification);
+/** GET /api/admin/notifications/history — historial de enviadas */
+router.get('/notifications/history', adminController.getNotificationHistory);
 
 export default router;

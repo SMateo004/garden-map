@@ -711,6 +711,24 @@ model SugerenciaPrecio {
   caregiver        CaregiverProfile @relation(fields: [caregiverId], references: [id])
 }
 
+/// Notificaciones broadcast enviadas por el admin a segmentos de usuarios.
+model AdminBroadcastNotification {
+  id          String    @id @default(uuid())
+  title       String    @db.VarChar(200)
+  message     String    @db.Text
+  target      String    @db.VarChar(20)   // 'ALL' | 'CUIDADORES' | 'DUENOS'
+  type        String    @db.VarChar(30)   @default("SYSTEM")
+  sentCount   Int       @default(0)
+  status      String    @db.VarChar(20)   @default("SENT")  // 'SENT' | 'SCHEDULED' | 'CANCELLED'
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  @@index([status])
+  @@index([scheduledAt])
+  @@map("admin_broadcast_notifications")
+}
+
 model Dispute {
   id                String   @id @default(uuid())
   bookingId         String   @unique

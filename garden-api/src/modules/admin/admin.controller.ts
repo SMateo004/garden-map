@@ -490,14 +490,35 @@ export const updateSetting = asyncHandler(async (req: Request, res: Response) =>
   res.json({ success: true, data: stored });
 });
 
-/** GET /api/admin/agent-logs */
+/** GET /api/admin/agent-logs — soporta ?type=PRECIO|... y ?limit= */
 export const getAgentLogs = asyncHandler(async (req: Request, res: Response) => {
   const limit = Math.min(parseInt((req.query.limit as string) ?? '50'), 200);
+  const type = typeof req.query.type === 'string' && req.query.type !== 'ALL'
+    ? req.query.type
+    : undefined;
   const logs = await prisma.agentLog.findMany({
+    where: type ? { agentType: type } : undefined,
     orderBy: { createdAt: 'desc' },
     take: limit,
   });
   res.json({ success: true, data: logs });
+});
+
+/** GET /api/admin/agent-stats — estadísticas del monitor de agentes */
+export const getAgentStats = asyncHandler(async (_req: Request, res: Response) => {
+  const [total, byType, byStatus, last24h] = await Promise.all([
+    prisma.agentLog.count(),
+    prisma.agentLog.groupBy({ by: ['agentType'], _count: { id: true } }),
+    prisma.agentLog.groupBy({ by: ['status'], _count: { id: true } }),
+    prisma.agentLog.count({
+      where: { createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+    }),
+  ]);
+  const typeMap: Record<string, number> = {};
+  for (const r of byType) typeMap[r.agentType] = r._count.id;
+  const statusMap: Record<string, number> = {};
+  for (const r of byStatus) statusMap[r.status] = r._count.id;
+  res.json({ success: true, data: { total, last24h, byType: typeMap, byStatus: statusMap } });
 });
 
 /** POST /api/admin/agent-logs — post a custom instruction/event */
@@ -514,4 +535,118 @@ export const postAgentInstruction = asyncHandler(async (req: Request, res: Respo
     },
   });
   res.json({ success: true, data: log });
+});
+
+// ─────────────────────────────────────────────
+//  NOTIFICACIONES ADMIN
+// ─────────────────────────────────────────────
+
+import { sendPush } from '../../services/firebase.service.js';
+
+/** POST /api/admin/notifications/send — broadcast inmediato */
+export const sendAdminNotification = asyncHandler(async (req: Request, res: Response) => {
+  const { title, message, target, type = 'SYSTEM' } = req.body as {
+    title: string; message: string; target: string; type?: string;
+  };
+  if (!title || !message || !target) {
+    return res.status(400).json({ success: false, error: { message: 'title, message y target son requeridos' } });
+  }
+
+  const adminId = req.user?.userId;
+
+  // Determinar qué usuarios reciben la notificación
+  let whereRole: object = {};
+  if (target === 'CUIDADORES') whereRole = { role: 'CAREGIVER' };
+  else if (target === 'DUENOS') whereRole = { role: 'CLIENT' };
+
+  const users = await prisma.user.findMany({
+    where: { ...whereRole, isDeleted: false },
+    select: { id: true, fcmToken: true },
+  });
+
+  // Crear notificaciones en DB y enviar push en paralelo
+  const notifData = users.map(u => ({
+    userId: u.id, title, message, type, read: false,
+  }));
+
+  let sentCount = 0;
+  await prisma.notification.createMany({ data: notifData });
+
+  // Push FCM (best-effort, no bloquea)
+  const pushPromises = users
+    .filter(u => !!u.fcmToken)
+    .map(u => sendPush(u.fcmToken!, title, message).then(() => { sentCount++; }));
+  await Promise.allSettled(pushPromises);
+  sentCount = users.length; // contamos todos (DB entregado)
+
+  // Guardar historial
+  const record = await prisma.adminBroadcastNotification.create({
+    data: {
+      title, message, target, type,
+      sentCount,
+      status: 'SENT',
+      sentAt: new Date(),
+      createdBy: adminId,
+    },
+  });
+
+  res.json({ success: true, data: { id: record.id, sentCount } });
+});
+
+/** POST /api/admin/notifications/schedule — programar para fecha futura */
+export const scheduleAdminNotification = asyncHandler(async (req: Request, res: Response) => {
+  const { title, message, target, type = 'SYSTEM', scheduledAt } = req.body as {
+    title: string; message: string; target: string; type?: string; scheduledAt: string;
+  };
+  if (!title || !message || !target || !scheduledAt) {
+    return res.status(400).json({ success: false, error: { message: 'title, message, target y scheduledAt son requeridos' } });
+  }
+  const scheduledDate = new Date(scheduledAt);
+  if (isNaN(scheduledDate.getTime()) || scheduledDate <= new Date()) {
+    return res.status(400).json({ success: false, error: { message: 'scheduledAt debe ser una fecha futura válida' } });
+  }
+  const adminId = req.user?.userId;
+  const record = await prisma.adminBroadcastNotification.create({
+    data: {
+      title, message, target, type,
+      status: 'SCHEDULED',
+      scheduledAt: scheduledDate,
+      createdBy: adminId,
+    },
+  });
+  res.json({ success: true, data: record });
+});
+
+/** GET /api/admin/notifications/scheduled — listar notificaciones programadas */
+export const getScheduledNotifications = asyncHandler(async (_req: Request, res: Response) => {
+  const items = await prisma.adminBroadcastNotification.findMany({
+    where: { status: 'SCHEDULED' },
+    orderBy: { scheduledAt: 'asc' },
+  });
+  res.json({ success: true, data: items });
+});
+
+/** DELETE /api/admin/notifications/scheduled/:id — cancelar notificación programada */
+export const cancelScheduledNotification = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const item = await prisma.adminBroadcastNotification.findUnique({ where: { id } });
+  if (!item || item.status !== 'SCHEDULED') {
+    return res.status(404).json({ success: false, error: { message: 'Notificación programada no encontrada' } });
+  }
+  await prisma.adminBroadcastNotification.update({
+    where: { id },
+    data: { status: 'CANCELLED' },
+  });
+  res.json({ success: true, data: { cancelled: true } });
+});
+
+/** GET /api/admin/notifications/history — historial de notificaciones enviadas */
+export const getNotificationHistory = asyncHandler(async (req: Request, res: Response) => {
+  const limit = Math.min(parseInt((req.query.limit as string) ?? '50'), 200);
+  const items = await prisma.adminBroadcastNotification.findMany({
+    where: { status: { in: ['SENT', 'CANCELLED'] } },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+  });
+  res.json({ success: true, data: items });
 });

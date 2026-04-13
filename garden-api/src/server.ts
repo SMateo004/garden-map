@@ -4,6 +4,7 @@ import { env } from './config/env.js';
 import prisma from './config/database.js';
 import logger from './shared/logger.js';
 import { iniciarJobAjustePrecios } from './jobs/ajuste-precios.job.js';
+import { iniciarJobNotificacionesProgramadas } from './jobs/scheduled-notifications.job.js';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
@@ -33,8 +34,9 @@ async function start() {
 
   // Defer heavy background jobs by 10s to let the API warm up
   setTimeout(() => {
-    logger.info('Starting background jobs (Pricing dynamic adjustment)...');
+    logger.info('Starting background jobs...');
     iniciarJobAjustePrecios();
+    iniciarJobNotificacionesProgramadas();
   }, 10000);
 
   // Auto-release payment 24h after service ends if owner hasn't reviewed
