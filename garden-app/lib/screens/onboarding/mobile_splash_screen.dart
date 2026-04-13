@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 
@@ -107,14 +109,43 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
     await _navigate();
   }
 
+  static const _baseUrl = String.fromEnvironment('API_URL',
+      defaultValue: 'https://garden-api-1ldd.onrender.com/api');
+
   Future<void> _navigate() async {
     final prefs = await SharedPreferences.getInstance();
     final seen = prefs.getBool('mobile_onboarding_seen') ?? false;
     if (!mounted) return;
     if (!seen) {
       context.go('/onboarding');
-    } else {
-      _goToHome(prefs);
+      return;
+    }
+
+    final role = prefs.getString('user_role') ?? '';
+
+    // Los admins siempre pasan, nunca ven pantalla de mantenimiento
+    if (role != 'ADMIN') {
+      final inMaintenance = await _checkMaintenance();
+      if (!mounted) return;
+      if (inMaintenance) {
+        context.go('/maintenance');
+        return;
+      }
+    }
+
+    if (!mounted) return;
+    _goToHome(prefs);
+  }
+
+  Future<bool> _checkMaintenance() async {
+    try {
+      final res = await http
+          .get(Uri.parse('$_baseUrl/settings'))
+          .timeout(const Duration(seconds: 6));
+      final data = jsonDecode(res.body);
+      return data['data']?['maintenanceMode'] == true;
+    } catch (_) {
+      return false; // Si falla la petición, no bloquear al usuario
     }
   }
 

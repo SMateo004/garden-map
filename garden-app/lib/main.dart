@@ -33,6 +33,7 @@ import 'screens/client/client_shell_screen.dart';
 import 'screens/onboarding/mobile_splash_screen.dart';
 import 'screens/onboarding/mobile_onboarding_screen.dart';
 import 'screens/onboarding/mobile_service_selector_screen.dart';
+import 'screens/onboarding/maintenance_screen.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
 import 'theme/garden_theme.dart';
@@ -89,6 +90,11 @@ final GoRouter _router = GoRouter(
       path: '/splash',
       name: 'splash',
       builder: (context, state) => const MobileSplashScreen(),
+    ),
+    GoRoute(
+      path: '/maintenance',
+      name: 'maintenance',
+      builder: (context, state) => const MaintenanceScreen(),
     ),
     GoRoute(
       path: '/onboarding',

@@ -108,6 +108,48 @@ app.get('/api/settings', async (_req, res) => {
   }
 });
 
+// ── Middleware de mantenimiento ────────────────────────────────────────────
+// Se evalúa DESPUÉS de registrar las rutas públicas (/health, /api/settings,
+// /api/auth, /api/admin) para que el admin siempre tenga acceso.
+let _maintenanceCached = false;
+let _maintenanceCacheTs = 0;
+const MAINTENANCE_CACHE_TTL = 30_000; // 30 segundos
+
+async function isMaintenanceOn(): Promise<boolean> {
+  const now = Date.now();
+  if (now - _maintenanceCacheTs < MAINTENANCE_CACHE_TTL) return _maintenanceCached;
+  try {
+    const setting = await prisma.appSettings.findUnique({ where: { key: 'maintenanceMode' } });
+    _maintenanceCached = setting ? JSON.parse(setting.value) === true : false;
+  } catch {
+    _maintenanceCached = false;
+  }
+  _maintenanceCacheTs = now;
+  return _maintenanceCached;
+}
+
+/** Fuerza recarga del cache de mantenimiento (llamar tras updateSetting) */
+export function invalidateMaintenanceCache() {
+  _maintenanceCacheTs = 0;
+}
+
+app.use(async (req, res, next) => {
+  // Rutas siempre accesibles: health, settings públicos, auth, admin
+  const bypass = ['/health', '/api/settings', '/api/auth', '/api/admin', '/uploads', '/api/payments/webhook'];
+  if (bypass.some(p => req.path.startsWith(p))) return next();
+
+  if (await isMaintenanceOn()) {
+    return res.status(503).json({
+      success: false,
+      error: {
+        code: 'MAINTENANCE_MODE',
+        message: 'El servicio está temporalmente en mantenimiento. Inténtalo en unos minutos.',
+      },
+    });
+  }
+  next();
+});
+
 app.use(errorHandler);
 
 export default app;

@@ -487,6 +487,11 @@ export const updateSetting = asyncHandler(async (req: Request, res: Response) =>
     update: { value: JSON.stringify(value), updatedBy: adminId },
     create: { key, value: JSON.stringify(value), updatedBy: adminId },
   });
+  // Invalida el cache de mantenimiento para que el cambio sea inmediato
+  if (key === 'maintenanceMode') {
+    const { invalidateMaintenanceCache } = await import('../../app.js');
+    invalidateMaintenanceCache();
+  }
   res.json({ success: true, data: stored });
 });
 
