@@ -13,6 +13,15 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 // POST /api/disputes/:bookingId/client-report — cliente reporta razones
 router.post('/:bookingId/client-report', authMiddleware, requireRole('CLIENT'),
   asyncHandler(async (req: Request, res: Response) => {
+    // Verificar si las disputas están habilitadas
+    const { getBoolSetting } = await import('../../utils/settings-cache.js');
+    if (!await getBoolSetting('disputasEnabled', true)) {
+      return res.status(503).json({
+        success: false,
+        error: { code: 'DISPUTAS_DISABLED', message: 'El sistema de disputas está temporalmente deshabilitado. Contacta al soporte.' },
+      });
+    }
+
     const { bookingId } = req.params;
     const userId = (req as any).user.userId;
     const { reasons } = req.body; // string[]

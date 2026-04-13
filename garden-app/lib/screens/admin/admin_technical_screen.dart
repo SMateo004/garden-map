@@ -18,12 +18,31 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
       defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
   // Valores por defecto para cada setting (se usan si la API no devuelve el valor)
-  static const Map<String, bool> _settingDefaults = {
+  static const Map<String, bool> _boolDefaults = {
     'marketplaceEnabled':      true,
     'paymentsEnabled':         true,
     'newRegistrationsEnabled': true,
     'maintenanceMode':         false,
     'walk30Enabled':           false,
+    'hospedajeEnabled':        true,
+    'paseoEnabled':            true,
+    'retirosEnabled':          true,
+    'disputasEnabled':         true,
+    'preciosDinamicosEnabled': true,
+    'meetGreetEnabled':        true,
+  };
+
+  static const Map<String, num> _numericDefaults = {
+    'platformCommissionPct':   10,
+    'montoMinimoRetiro':       50,
+    'qrValidityHours':         24,
+    'qrValidityMinutes':       15,
+    'autoReleasePaymentHoras': 24,
+    'hospedajeRefundAdminFeeBS': 10,
+    'hospedajeRefund100Horas': 48,
+    'hospedajeRefund50Horas':  24,
+    'paseoRefund100Horas':     12,
+    'paseoRefund50Horas':      6,
   };
 
   // Settings
@@ -290,7 +309,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
             ]),
             const SizedBox(height: 24),
 
-            // ── FEATURE FLAGS ──────────────────────────────
+            // ── CONFIGURACIÓN DEL SISTEMA ──────────────────
             _sectionTitle('Configuración del Sistema', textColor),
             const SizedBox(height: 4),
             Text('Los cambios se aplican al instante para todos los usuarios.',
@@ -298,68 +317,122 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
             const SizedBox(height: 12),
 
             if (_loadingSettings)
-              const Center(
-                  child:
-                      CircularProgressIndicator(color: GardenColors.primary))
+              const Center(child: CircularProgressIndicator(color: GardenColors.primary))
             else
-              Container(
-                decoration: BoxDecoration(
-                  color: surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: borderColor),
-                ),
-                child: Column(children: [
-                  _buildSettingTile(
-                    icon: Icons.store_mall_directory_outlined,
-                    iconColor: GardenColors.primary,
-                    title: 'Marketplace activo',
-                    subtitle: 'Los cuidadores son visibles para dueños',
-                    settingKey: 'marketplaceEnabled',
-                    enabled: true,
-                    surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
-                  ),
-                  Divider(height: 1, color: borderColor),
-                  _buildSettingTile(
-                    icon: Icons.payment_outlined,
-                    iconColor: Colors.green,
-                    title: 'Pagos habilitados',
-                    subtitle: 'Los usuarios pueden realizar pagos',
-                    settingKey: 'paymentsEnabled',
-                    enabled: true,
-                    surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
-                  ),
-                  Divider(height: 1, color: borderColor),
-                  _buildSettingTile(
-                    icon: Icons.person_add_outlined,
-                    iconColor: Colors.orange,
-                    title: 'Nuevos registros',
-                    subtitle: 'Se pueden crear nuevas cuentas',
-                    settingKey: 'newRegistrationsEnabled',
-                    enabled: true,
-                    surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
-                  ),
-                  Divider(height: 1, color: borderColor),
-                  _buildSettingTile(
-                    icon: Icons.construction_rounded,
-                    iconColor: Colors.red,
-                    title: 'Modo mantenimiento',
-                    subtitle: 'Muestra aviso de mantenimiento a usuarios',
-                    settingKey: 'maintenanceMode',
-                    enabled: true,
-                    surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
-                  ),
-                  Divider(height: 1, color: borderColor),
-                  _buildSettingTile(
-                    icon: Icons.directions_walk_rounded,
-                    iconColor: Colors.blue,
-                    title: 'Paseos de 30 min',
-                    subtitle: 'Deshabilitado por política actual',
-                    settingKey: 'walk30Enabled',
-                    enabled: false, // feature aún no disponible
-                    surface: surface, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
-                  ),
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // ── Categoría: Servicios ───────────────────
+                _categoryHeader('🐾 Servicios', subtextColor),
+                _settingsCard(surface, borderColor, [
+                  _buildBoolTile(icon: Icons.store_mall_directory_outlined, iconColor: GardenColors.primary,
+                    title: 'Marketplace activo', subtitle: 'Cuidadores visibles para dueños',
+                    settingKey: 'marketplaceEnabled', surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
+                  _buildBoolTile(icon: Icons.home_outlined, iconColor: Colors.indigo,
+                    title: 'Hospedaje habilitado', subtitle: 'Permite reservas de hospedaje',
+                    settingKey: 'hospedajeEnabled', surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
+                  _buildBoolTile(icon: Icons.pets_outlined, iconColor: Colors.teal,
+                    title: 'Paseos habilitados', subtitle: 'Permite reservas de paseos',
+                    settingKey: 'paseoEnabled', surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
+                  _buildBoolTile(icon: Icons.handshake_outlined, iconColor: Colors.amber,
+                    title: 'Meet & Greet activo', subtitle: 'Reuniones de presentación',
+                    settingKey: 'meetGreetEnabled', surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
+                  _buildBoolTile(icon: Icons.directions_walk_rounded, iconColor: Colors.blue,
+                    title: 'Paseos de 30 min', subtitle: 'Deshabilitado por política actual',
+                    settingKey: 'walk30Enabled', enabled: false, surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
+                  _buildBoolTile(icon: Icons.trending_up_rounded, iconColor: Colors.deepOrange,
+                    title: 'Precios dinámicos', subtitle: 'Ajuste automático por demanda/temporada',
+                    settingKey: 'preciosDinamicosEnabled', surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
                 ]),
-              ),
+                const SizedBox(height: 16),
+
+                // ── Categoría: Usuarios ────────────────────
+                _categoryHeader('👤 Usuarios y Seguridad', subtextColor),
+                _settingsCard(surface, borderColor, [
+                  _buildBoolTile(icon: Icons.person_add_outlined, iconColor: Colors.orange,
+                    title: 'Nuevos registros', subtitle: 'Se pueden crear nuevas cuentas',
+                    settingKey: 'newRegistrationsEnabled', surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
+                  _buildBoolTile(icon: Icons.construction_rounded, iconColor: Colors.red,
+                    title: 'Modo mantenimiento', subtitle: 'Muestra aviso a todos los usuarios',
+                    settingKey: 'maintenanceMode', surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
+                ]),
+                const SizedBox(height: 16),
+
+                // ── Categoría: Pagos y Finanzas ────────────
+                _categoryHeader('💰 Pagos y Finanzas', subtextColor),
+                _settingsCard(surface, borderColor, [
+                  _buildBoolTile(icon: Icons.payment_outlined, iconColor: Colors.green,
+                    title: 'Pagos habilitados', subtitle: 'Los usuarios pueden realizar pagos',
+                    settingKey: 'paymentsEnabled', surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
+                  _buildBoolTile(icon: Icons.account_balance_wallet_outlined, iconColor: Colors.cyan,
+                    title: 'Retiros habilitados', subtitle: 'Cuidadores pueden solicitar retiros',
+                    settingKey: 'retirosEnabled', surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
+                  _buildBoolTile(icon: Icons.gavel_rounded, iconColor: Colors.purple,
+                    title: 'Disputas habilitadas', subtitle: 'Clientes pueden abrir disputas',
+                    settingKey: 'disputasEnabled', surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
+                  _buildNumericTile(icon: Icons.percent_rounded, iconColor: Colors.green,
+                    title: 'Comisión GARDEN', subtitle: 'Porcentaje aplicado a cada reserva',
+                    settingKey: 'platformCommissionPct', unit: '%', surface: surface,
+                    textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                  _buildNumericTile(icon: Icons.arrow_downward_rounded, iconColor: Colors.cyan,
+                    title: 'Retiro mínimo', subtitle: 'Monto mínimo para solicitar retiro',
+                    settingKey: 'montoMinimoRetiro', unit: 'Bs', surface: surface,
+                    textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                  _buildNumericTile(icon: Icons.qr_code_2_rounded, iconColor: Colors.indigo,
+                    title: 'Validez QR (horas)', subtitle: 'Horas de vigencia del QR de pago',
+                    settingKey: 'qrValidityHours', unit: 'h', surface: surface,
+                    textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                  _buildNumericTile(icon: Icons.timer_outlined, iconColor: Colors.teal,
+                    title: 'Ventana QR (minutos)', subtitle: 'Minutos para iniciar pago con QR',
+                    settingKey: 'qrValidityMinutes', unit: 'min', surface: surface,
+                    textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                  _buildNumericTile(icon: Icons.auto_mode_rounded, iconColor: Colors.amber,
+                    title: 'Auto-liberación (horas)', subtitle: 'Horas para liberar pago sin reseña',
+                    settingKey: 'autoReleasePaymentHoras', unit: 'h', surface: surface,
+                    textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                ]),
+                const SizedBox(height: 16),
+
+                // ── Categoría: Política HOSPEDAJE ──────────
+                _categoryHeader('🏠 Política Cancelación — Hospedaje', subtextColor),
+                _settingsCard(surface, borderColor, [
+                  _buildNumericTile(icon: Icons.monetization_on_outlined, iconColor: Colors.orange,
+                    title: 'Tarifa admin (Bs)', subtitle: 'Fee fijo que retiene GARDEN al cancelar',
+                    settingKey: 'hospedajeRefundAdminFeeBS', unit: 'Bs', surface: surface,
+                    textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                  _buildNumericTile(icon: Icons.check_circle_outline_rounded, iconColor: Colors.green,
+                    title: 'Reembolso 100% (horas)', subtitle: 'Horas antes del servicio → 100% devuelto',
+                    settingKey: 'hospedajeRefund100Horas', unit: 'h', surface: surface,
+                    textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                  _buildNumericTile(icon: Icons.timelapse_rounded, iconColor: Colors.amber,
+                    title: 'Reembolso 50% (horas)', subtitle: 'Horas antes del servicio → 50% devuelto',
+                    settingKey: 'hospedajeRefund50Horas', unit: 'h', surface: surface,
+                    textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                ]),
+                const SizedBox(height: 16),
+
+                // ── Categoría: Política PASEO ──────────────
+                _categoryHeader('🦮 Política Cancelación — Paseo', subtextColor),
+                _settingsCard(surface, borderColor, [
+                  _buildNumericTile(icon: Icons.check_circle_outline_rounded, iconColor: Colors.green,
+                    title: 'Reembolso 100% (horas)', subtitle: 'Horas antes del paseo → 100% devuelto',
+                    settingKey: 'paseoRefund100Horas', unit: 'h', surface: surface,
+                    textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                  _buildNumericTile(icon: Icons.timelapse_rounded, iconColor: Colors.amber,
+                    title: 'Reembolso 50% (horas)', subtitle: 'Horas antes del paseo → 50% devuelto',
+                    settingKey: 'paseoRefund50Horas', unit: 'h', surface: surface,
+                    textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                ]),
+              ]),
 
             const SizedBox(height: 28),
 
@@ -717,13 +790,33 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
     );
   }
 
-  Widget _buildSettingTile({
+  Widget _categoryHeader(String title, Color subtextColor) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(title,
+        style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.4)),
+  );
+
+  Widget _settingsCard(Color surface, Color borderColor, List<Widget> tiles) {
+    final divider = Divider(height: 1, color: borderColor);
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        children: tiles.expand((w) => [w, divider]).toList()..removeLast(),
+      ),
+    );
+  }
+
+  Widget _buildBoolTile({
     required IconData icon,
     required Color iconColor,
     required String title,
     required String subtitle,
     required String settingKey,
-    required bool enabled,
+    bool enabled = true,
     required Color surface,
     required Color textColor,
     required Color subtextColor,
@@ -732,19 +825,16 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
     // Si la API devolvió el valor → úsalo; si no → usa el default correcto
     final value = _settings.containsKey(settingKey)
         ? _settings[settingKey] == true
-        : (_settingDefaults[settingKey] ?? false);
+        : (_boolDefaults[settingKey] ?? false);
     return ListTile(
       leading: Container(
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: enabled
-              ? iconColor.withOpacity(0.12)
-              : Colors.grey.withOpacity(0.1),
+          color: enabled ? iconColor.withOpacity(0.12) : Colors.grey.withOpacity(0.1),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(icon,
-            color: enabled ? iconColor : Colors.grey.shade500, size: 18),
+        child: Icon(icon, color: enabled ? iconColor : Colors.grey.shade500, size: 18),
       ),
       title: Text(title,
           style: TextStyle(
@@ -767,19 +857,128 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
         ],
       ]),
       trailing: _savingSetting
-          ? const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: GardenColors.primary))
+          ? const SizedBox(width: 24, height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))
           : Switch(
               value: value,
-              onChanged: enabled
-                  ? (v) => _updateSetting(settingKey, v)
-                  : null, // deshabilitado
+              onChanged: enabled ? (v) => _updateSetting(settingKey, v) : null,
               activeColor: GardenColors.primary,
             ),
     );
+  }
+
+  Widget _buildNumericTile({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required String settingKey,
+    required String unit,
+    required Color surface,
+    required Color textColor,
+    required Color subtextColor,
+    required Color borderColor,
+  }) {
+    final raw = _settings[settingKey];
+    final value = raw != null
+        ? (raw is num ? raw : num.tryParse(raw.toString()) ?? _numericDefaults[settingKey] ?? 0)
+        : (_numericDefaults[settingKey] ?? 0);
+
+    return ListTile(
+      leading: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: iconColor.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: iconColor, size: 18),
+      ),
+      title: Text(title,
+          style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
+      subtitle: Text(subtitle, style: TextStyle(color: subtextColor, fontSize: 11)),
+      trailing: GestureDetector(
+        onTap: () => _showNumericDialog(settingKey, title, value, unit, textColor, subtextColor, surface, borderColor),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: iconColor.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: iconColor.withOpacity(0.3)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Text('$value',
+                style: TextStyle(color: iconColor, fontSize: 15, fontWeight: FontWeight.w800)),
+            const SizedBox(width: 3),
+            Text(unit, style: TextStyle(color: iconColor.withOpacity(0.7), fontSize: 11)),
+            const SizedBox(width: 4),
+            Icon(Icons.edit_rounded, color: iconColor.withOpacity(0.6), size: 13),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showNumericDialog(
+    String settingKey,
+    String title,
+    num currentValue,
+    String unit,
+    Color textColor,
+    Color subtextColor,
+    Color surface,
+    Color borderColor,
+  ) async {
+    final ctrl = TextEditingController(text: currentValue.toString());
+    final result = await showDialog<num>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(title, style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('Valor actual: $currentValue $unit',
+              style: TextStyle(color: subtextColor, fontSize: 12)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: ctrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            autofocus: true,
+            style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w600),
+            decoration: InputDecoration(
+              suffixText: unit,
+              suffixStyle: TextStyle(color: subtextColor),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: borderColor)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: GardenColors.primary, width: 2)),
+              filled: true,
+              fillColor: GardenColors.primary.withOpacity(0.05),
+            ),
+          ),
+        ]),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancelar', style: TextStyle(color: subtextColor)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: GardenColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              final parsed = num.tryParse(ctrl.text.trim());
+              if (parsed != null && parsed >= 0) Navigator.pop(ctx, parsed);
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (result != null) await _updateSetting(settingKey, result);
   }
 
   Widget _emergencyBtn(

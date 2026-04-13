@@ -96,8 +96,23 @@ router.post('/withdraw', authMiddleware, asyncHandler(async (req: Request, res: 
   const userId = (req as any).user.userId;
   const { amount } = req.body;
 
+  // Verificar si los retiros están habilitados
+  const { getBoolSetting, getNumericSetting } = await import('../../utils/settings-cache.js');
+  if (!await getBoolSetting('retirosEnabled', true)) {
+    return res.status(503).json({
+      success: false,
+      error: { code: 'RETIROS_DISABLED', message: 'Los retiros están temporalmente deshabilitados. Inténtalo más tarde.' },
+    });
+  }
+
   if (!amount || amount <= 0) {
     return res.status(400).json({ success: false, error: { message: 'Monto inválido' } });
+  }
+
+  // Verificar monto mínimo de retiro
+  const montoMinimo = await getNumericSetting('montoMinimoRetiro', 50);
+  if (amount < montoMinimo) {
+    return res.status(400).json({ success: false, error: { message: `El monto mínimo de retiro es Bs ${montoMinimo}` } });
   }
 
   // Verificar saldo disponible

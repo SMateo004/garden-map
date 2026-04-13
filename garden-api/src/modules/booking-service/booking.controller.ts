@@ -57,6 +57,21 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
     throw error;
   }
 
+  // Verificar si el tipo de servicio está habilitado
+  const { getBoolSetting } = await import('../../utils/settings-cache.js');
+  if (body.serviceType === 'HOSPEDAJE' && !await getBoolSetting('hospedajeEnabled', true)) {
+    return res.status(503).json({
+      success: false,
+      error: { code: 'HOSPEDAJE_DISABLED', message: 'El servicio de hospedaje está temporalmente deshabilitado.' },
+    });
+  }
+  if (body.serviceType === 'PASEO' && !await getBoolSetting('paseoEnabled', true)) {
+    return res.status(503).json({
+      success: false,
+      error: { code: 'PASEO_DISABLED', message: 'El servicio de paseos está temporalmente deshabilitado.' },
+    });
+  }
+
   try {
     const booking = await bookingService.createBooking(clientId, body);
     res.status(201).json({ success: true, data: booking });

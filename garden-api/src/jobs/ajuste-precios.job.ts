@@ -21,6 +21,13 @@ export function iniciarJobAjustePrecios() {
 }
 
 export async function runPricingJob() {
+    // Verificar si los precios dinámicos están habilitados
+    const { getBoolSetting } = await import('../utils/settings-cache.js');
+    if (!await getBoolSetting('preciosDinamicosEnabled', true)) {
+        logger.info('[PRICING JOB] Precios dinámicos deshabilitados por admin. Saltando...');
+        return;
+    }
+
     // 1. Ajustes por zona (AjustePrecio — afecta al marketplace general)
     for (const zona of ZONAS_SANTA_CRUZ) {
         for (const servicio of SERVICIOS) {
