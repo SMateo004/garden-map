@@ -17,6 +17,15 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
   static const _baseUrl = String.fromEnvironment('API_URL',
       defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
+  // Valores por defecto para cada setting (se usan si la API no devuelve el valor)
+  static const Map<String, bool> _settingDefaults = {
+    'marketplaceEnabled':      true,
+    'paymentsEnabled':         true,
+    'newRegistrationsEnabled': true,
+    'maintenanceMode':         false,
+    'walk30Enabled':           false,
+  };
+
   // Settings
   Map<String, dynamic> _settings = {};
   bool _loadingSettings = true;
@@ -720,7 +729,10 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
     required Color subtextColor,
     required Color borderColor,
   }) {
-    final value = _settings[settingKey] == true;
+    // Si la API devolvió el valor → úsalo; si no → usa el default correcto
+    final value = _settings.containsKey(settingKey)
+        ? _settings[settingKey] == true
+        : (_settingDefaults[settingKey] ?? false);
     return ListTile(
       leading: Container(
         width: 36,

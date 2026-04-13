@@ -32,6 +32,23 @@ async function start() {
     if (process.env.NODE_ENV !== 'production') process.exit(1);
   }
 
+  // Seed settings defaults (solo crea si no existen — nunca sobreescribe)
+  try {
+    await prisma.appSettings.createMany({
+      data: [
+        { key: 'marketplaceEnabled',      value: 'true'  },
+        { key: 'paymentsEnabled',          value: 'true'  },
+        { key: 'newRegistrationsEnabled',  value: 'true'  },
+        { key: 'walk30Enabled',            value: 'false' },
+        { key: 'maintenanceMode',          value: 'false' },
+      ],
+      skipDuplicates: true, // No sobreescribe valores ya guardados por el admin
+    });
+    logger.info('[Settings] Defaults seeded OK');
+  } catch (e) {
+    logger.warn('[Settings] Could not seed defaults', e);
+  }
+
   // Defer heavy background jobs by 10s to let the API warm up
   setTimeout(() => {
     logger.info('Starting background jobs...');
