@@ -82,6 +82,13 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
 
 /** POST /api/auth/caregiver/register - Registro cuidador (full submit). */
 export const registerCaregiver = asyncHandler(async (req: Request, res: Response) => {
+  const { getBoolSetting } = await import('../../utils/settings-cache.js');
+  if (!await getBoolSetting('newRegistrationsEnabled', true)) {
+    return res.status(403).json({
+      success: false,
+      error: { code: 'REGISTRATIONS_DISABLED', message: 'Los registros están temporalmente deshabilitados.' },
+    });
+  }
   const files = req.files as Express.Multer.File[] | undefined;
   const safeBody = req.body
     ? {
@@ -131,6 +138,13 @@ export const registerCaregiver = asyncHandler(async (req: Request, res: Response
 
 /** POST /api/auth/client/register - Registro cliente (dueño de mascota). Role siempre CLIENT en backend. */
 export const registerClient = asyncHandler(async (req: Request, res: Response) => {
+  const { getBoolSetting } = await import('../../utils/settings-cache.js');
+  if (!await getBoolSetting('newRegistrationsEnabled', true)) {
+    return res.status(403).json({
+      success: false,
+      error: { code: 'REGISTRATIONS_DISABLED', message: 'Los registros están temporalmente deshabilitados.' },
+    });
+  }
   const safeBody = req.body
     ? {
         ...req.body,

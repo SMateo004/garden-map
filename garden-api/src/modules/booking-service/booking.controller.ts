@@ -163,6 +163,13 @@ export const getConfirm = asyncHandler(async (req: Request, res: Response) => {
  * Inicia pago: genera QR (placeholder) o solicita aprobación manual. Solo cliente titular; reserva PENDING_PAYMENT.
  */
 export const initPayment = asyncHandler(async (req: Request, res: Response) => {
+  const { getBoolSetting } = await import('../../utils/settings-cache.js');
+  if (!await getBoolSetting('paymentsEnabled', true)) {
+    return res.status(503).json({
+      success: false,
+      error: { code: 'PAYMENTS_DISABLED', message: 'Los pagos están temporalmente deshabilitados. Inténtalo más tarde.' },
+    });
+  }
   const bookingId = req.params.id!;
   const clientId = req.user!.userId;
   const body = initPaymentBodySchema.parse(req.body);

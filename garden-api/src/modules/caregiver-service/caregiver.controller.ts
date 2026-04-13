@@ -20,6 +20,13 @@ import prisma from '../../config/database.js';
  * Query: page (default 1), limit (default 10, max 50). Orden: rating DESC, createdAt DESC.
  */
 export const list = asyncHandler(async (req: Request, res: Response) => {
+  const { getBoolSetting } = await import('../../utils/settings-cache.js');
+  if (!await getBoolSetting('marketplaceEnabled', true)) {
+    return res.status(503).json({
+      success: false,
+      error: { code: 'MARKETPLACE_DISABLED', message: 'El marketplace está temporalmente deshabilitado.' },
+    });
+  }
   try {
     const query = listCaregiversQuerySchema.parse(req.query);
     const normalizedService = query.service?.toLowerCase();
