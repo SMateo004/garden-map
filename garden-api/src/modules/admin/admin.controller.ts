@@ -445,14 +445,14 @@ export const getFinancialStats = asyncHandler(async (_req: Request, res: Respons
 
 /** GET /api/admin/zones */
 export const getZones = asyncHandler(async (_req: Request, res: Response) => {
-  const data = adminService.getZonesConfig();
+  const data = await adminService.getZonesConfig();
   res.json({ success: true, data });
 });
 
 /** PATCH /api/admin/zones/:zone/toggle */
 export const toggleZone = asyncHandler(async (req: Request, res: Response) => {
   const zone = req.params.zone!.toUpperCase();
-  const data = adminService.toggleZone(zone);
+  const data = await adminService.toggleZone(zone);
   res.json({ success: true, data });
 });
 

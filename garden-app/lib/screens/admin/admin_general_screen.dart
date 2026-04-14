@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -85,6 +86,8 @@ class _LiveStatsTab extends StatefulWidget {
 class _LiveStatsTabState extends State<_LiveStatsTab> {
   Map<String, dynamic>? _data;
   bool _isLoading = true;
+  bool _autoRefresh = true;
+  Timer? _refreshTimer;
 
   String get _baseUrl => const String.fromEnvironment(
         'API_URL',
@@ -95,6 +98,23 @@ class _LiveStatsTabState extends State<_LiveStatsTab> {
   void initState() {
     super.initState();
     _load();
+    _startTimer();
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startTimer() {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (_autoRefresh && mounted) _load();
+    });
+  }
+
+  void _toggleAutoRefresh() {
+    setState(() => _autoRefresh = !_autoRefresh);
   }
 
   Future<void> _load() async {
@@ -152,33 +172,65 @@ class _LiveStatsTabState extends State<_LiveStatsTab> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    GardenColors.success.withValues(alpha: 0.15),
+                    (_autoRefresh ? GardenColors.success : GardenColors.warning).withValues(alpha: 0.15),
                     GardenColors.primary.withValues(alpha: 0.08),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                    color: GardenColors.success.withValues(alpha: 0.3)),
+                    color: (_autoRefresh ? GardenColors.success : GardenColors.warning).withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
-                  Container(
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
                     width: 8,
                     height: 8,
-                    decoration: const BoxDecoration(
-                        color: GardenColors.success, shape: BoxShape.circle),
+                    decoration: BoxDecoration(
+                      color: _autoRefresh ? GardenColors.success : GardenColors.warning,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                   const SizedBox(width: 8),
-                  Text('Datos en tiempo real',
-                      style: TextStyle(
-                          color: textColor,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13)),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _autoRefresh ? 'En vivo — actualiza cada 30s' : 'Actualización pausada',
+                        style: TextStyle(
+                            color: textColor,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12),
+                      ),
+                    ],
+                  ),
                   const Spacer(),
                   GestureDetector(
                     onTap: _load,
                     child: const Icon(Icons.refresh_rounded,
                         color: GardenColors.primary, size: 18),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: _toggleAutoRefresh,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _autoRefresh
+                            ? GardenColors.success.withValues(alpha: 0.15)
+                            : GardenColors.warning.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        _autoRefresh ? '⏸ Pausar' : '▶ Reanudar',
+                        style: TextStyle(
+                          color: _autoRefresh ? GardenColors.success : GardenColors.warning,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -1081,7 +1133,9 @@ class _FinancialTabState extends State<_FinancialTab>
   Widget _serviceBreakdownCard(String label, Map<String, dynamic> data,
       Color color, Color surface, Color borderColor, Color textColor, Color subtextColor) {
     final count = data['count'] as int? ?? 0;
-    final total = (data['total'] as num?)?.toDouble() ?? 0.0;
+    final billed = (data['billedToClient'] as num?)?.toDouble() ?? 0.0;
+    final gardenEarns = (data['gardenEarnings'] as num?)?.toDouble() ?? 0.0;
+    final caregiverEarns = (data['caregiverEarnings'] as num?)?.toDouble() ?? 0.0;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1093,14 +1147,35 @@ class _FinancialTabState extends State<_FinancialTab>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label,
-              style: TextStyle(
-                  color: color, fontWeight: FontWeight.w800, fontSize: 13)),
+              style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 13)),
           const SizedBox(height: 6),
-          Text('$count reservas',
-              style: TextStyle(color: subtextColor, fontSize: 11)),
-          Text('Bs ${_fmt(total)}',
-              style: TextStyle(
-                  color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+          Text('$count reservas completadas',
+              style: TextStyle(color: subtextColor, fontSize: 10)),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Facturado:', style: TextStyle(color: subtextColor, fontSize: 11)),
+              Text('Bs ${_fmt(billed)}',
+                  style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
+            ],
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('GARDEN (10%):', style: TextStyle(color: subtextColor, fontSize: 11)),
+              Text('Bs ${_fmt(gardenEarns)}',
+                  style: TextStyle(color: GardenColors.success, fontWeight: FontWeight.w700, fontSize: 13)),
+            ],
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Cuidadores:', style: TextStyle(color: subtextColor, fontSize: 11)),
+              Text('Bs ${_fmt(caregiverEarns)}',
+                  style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12)),
+            ],
+          ),
         ],
       ),
     );
@@ -1170,7 +1245,7 @@ class _MonthlyBarChart extends StatelessWidget {
     if (data.isEmpty) return const SizedBox.shrink();
 
     final maxVal = data
-        .map((d) => (d['income'] as num?)?.toDouble() ?? 0.0)
+        .map((d) => (d['commission'] as num?)?.toDouble() ?? 0.0)
         .reduce(math.max);
 
     return Container(
@@ -1187,7 +1262,7 @@ class _MonthlyBarChart extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: data.map((d) {
-                final income = (d['income'] as num?)?.toDouble() ?? 0.0;
+                final income = (d['commission'] as num?)?.toDouble() ?? 0.0;
                 final fraction = maxVal > 0 ? income / maxVal : 0.0;
                 return Expanded(
                   child: Padding(

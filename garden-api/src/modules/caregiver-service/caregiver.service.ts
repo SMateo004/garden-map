@@ -68,6 +68,13 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       : undefined;
   const zonesFilter = zones?.length ? zones : undefined;
 
+  // Zonas bloqueadas por admin — se excluyen del marketplace en tiempo real
+  let blockedZones: string[] = [];
+  try {
+    const { getBlockedZonesList } = await import('../admin/admin.service.js');
+    blockedZones = await getBlockedZonesList();
+  } catch { /* Si falla, no bloquear nada */ }
+
   const where: Prisma.CaregiverProfileWhereInput = {
     suspended: false,
     status: CaregiverStatus.APPROVED,
@@ -78,7 +85,12 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
   } as Prisma.CaregiverProfileWhereInput;
 
   if (zonesFilter?.length) {
-    where.zone = { in: zonesFilter };
+    // Si el usuario filtra por zona, intersectar con zonas no bloqueadas
+    const allowedFromFilter = zonesFilter.filter((z) => !blockedZones.includes(z));
+    where.zone = { in: allowedFromFilter.length ? allowedFromFilter : zonesFilter };
+  } else if (blockedZones.length > 0) {
+    // Sin filtro del usuario: excluir zonas bloqueadas
+    where.zone = { notIn: blockedZones as Zone[] };
   }
 
   if (service === ServiceType.PASEO || service === ServiceType.HOSPEDAJE) {

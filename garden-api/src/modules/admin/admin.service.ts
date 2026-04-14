@@ -1501,7 +1501,16 @@ export async function getFinancialStats() {
     (acc, gc) => acc + Number(gc.amount) * gc.usedBy.length,
     0,
   );
-  const monthGiftCodes = giftCodes.reduce((acc, gc) => acc + Number(gc.amount), 0); // aproximado
+  // Gasto real de marketing este mes: transacciones de tipo REFUND por código de regalo
+  const monthGiftCodeTxns = await prisma.walletTransaction.aggregate({
+    where: {
+      type: 'REFUND',
+      description: { contains: 'Código de regalo' },
+      createdAt: { gte: startOfMonth },
+    },
+    _sum: { amount: true },
+  });
+  const monthGiftCodes = Number(monthGiftCodeTxns._sum.amount ?? 0);
 
   // ── Gráfica mensual (últimos 6 meses) ────────────────────────
   // Mostramos: comisión GARDEN (ganancia real) y facturación total al cliente
@@ -1669,29 +1678,58 @@ export async function getFinancialStats() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ZONES CONFIG (in-memory, resets on restart; MVP approach)
+// ZONES CONFIG — persistido en AppSettings como JSON array (clave: blockedZones)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const _blockedZones = new Set<string>();
+const ALL_ZONES = [
+  'EQUIPETROL', 'URBARI', 'NORTE', 'LAS_PALMAS', 'CENTRO',
+  'REMANZO', 'SUR', 'URUBO_NORTE', 'URUBO_SUR', 'OTROS',
+] as const;
 
-export function getZonesConfig() {
-  const allZones = [
-    'EQUIPETROL', 'URBARI', 'NORTE', 'LAS_PALMAS', 'CENTRO',
-    'REMANZO', 'SUR', 'URUBO_NORTE', 'URUBO_SUR', 'OTROS',
-  ];
-  return allZones.map((z) => ({ zone: z, blocked: _blockedZones.has(z) }));
-}
-
-export function toggleZone(zone: string) {
-  if (_blockedZones.has(zone)) {
-    _blockedZones.delete(zone);
-    return { zone, blocked: false };
-  } else {
-    _blockedZones.add(zone);
-    return { zone, blocked: true };
+async function _getBlockedZones(): Promise<Set<string>> {
+  try {
+    const setting = await prisma.appSettings.findUnique({ where: { key: 'blockedZones' } });
+    if (!setting || setting.value === 'null' || setting.value === '[]') return new Set();
+    const parsed = JSON.parse(setting.value);
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
   }
 }
 
-export function isZoneBlocked(zone: string): boolean {
-  return _blockedZones.has(zone);
+async function _saveBlockedZones(blocked: Set<string>): Promise<void> {
+  const value = JSON.stringify([...blocked]);
+  await prisma.appSettings.upsert({
+    where: { key: 'blockedZones' },
+    update: { value },
+    create: { key: 'blockedZones', value },
+  });
+}
+
+export async function getZonesConfig() {
+  const blocked = await _getBlockedZones();
+  return ALL_ZONES.map((z) => ({ zone: z, blocked: blocked.has(z) }));
+}
+
+export async function toggleZone(zone: string) {
+  const blocked = await _getBlockedZones();
+  if (blocked.has(zone)) {
+    blocked.delete(zone);
+  } else {
+    blocked.add(zone);
+  }
+  await _saveBlockedZones(blocked);
+  // Invalidar caché del listado de cuidadores para que el cambio sea inmediato
+  await delByPrefix('caregivers:list:');
+  return { zone, blocked: blocked.has(zone) };
+}
+
+export async function isZoneBlocked(zone: string): Promise<boolean> {
+  const blocked = await _getBlockedZones();
+  return blocked.has(zone);
+}
+
+export async function getBlockedZonesList(): Promise<string[]> {
+  const blocked = await _getBlockedZones();
+  return [...blocked];
 }
