@@ -26,13 +26,41 @@ import meetAndGreetRoutes from './modules/meet-and-greet/meet-and-greet.routes.j
 const app = express();
 
 app.use(helmet());
+
+// ── CORS ──────────────────────────────────────────────────────────────────
+// En producción, solo se permiten los orígenes configurados en ALLOWED_ORIGINS
+// (variable de entorno en Render). Las apps móviles nativas (Flutter) no envían
+// cabecera Origin, por lo que no se ven afectadas por CORS en absoluto.
+// En desarrollo se suman patrones de localhost y red local para poder usar
+// el simulador, Postman o el panel web en localhost.
+const _explicitOrigins: string[] = env.ALLOWED_ORIGINS
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+const _devPatterns: (RegExp | string)[] = env.NODE_ENV !== 'production'
+  ? [
+      /^http:\/\/localhost:\d+$/,
+      /^http:\/\/127\.0\.0\.1:\d+$/,
+      /^http:\/\/192\.168\.\d+\.\d+:\d+$/,  // red local (simulador / dispositivo físico)
+    ]
+  : [];
+
 app.use(cors({
-  origin: [
-    /http:\/\/localhost:\d+/,
-    /http:\/\/127\.0\.0\.1:\d+/,
-    /http:\/\/192\.168\.\d+\.\d+:\d+/,  // red local (dispositivos móviles)
-    'http://localhost:5173',
-  ],
+  origin: (origin, callback) => {
+    // Peticiones sin Origin (apps móviles nativas, Postman, curl) → siempre permitidas
+    if (!origin) return callback(null, true);
+
+    // Orígenes explícitos configurados vía env
+    if (_explicitOrigins.includes(origin)) return callback(null, true);
+
+    // Patrones adicionales (solo en desarrollo)
+    if (_devPatterns.some(p => (typeof p === 'string' ? p === origin : p.test(origin)))) {
+      return callback(null, true);
+    }
+
+    callback(new Error(`CORS: origin not allowed — ${origin}`));
+  },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,

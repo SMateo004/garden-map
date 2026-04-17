@@ -8,10 +8,31 @@ import logger from '../shared/logger.js';
 let io: SocketServer | null = null;
 
 export function initSocketServer(httpServer: HttpServer): SocketServer {
+    const explicitOrigins = env.ALLOWED_ORIGINS
+        .split(',')
+        .map((o: string) => o.trim())
+        .filter(Boolean);
+
+    const devPatterns: (RegExp | string)[] = env.NODE_ENV !== 'production'
+        ? [
+            /^http:\/\/localhost:\d+$/,
+            /^http:\/\/127\.0\.0\.1:\d+$/,
+            /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
+          ]
+        : [];
+
     io = new SocketServer(httpServer, {
         cors: {
-            origin: '*',
+            origin: (origin, callback) => {
+                if (!origin) return callback(null, true);
+                if (explicitOrigins.includes(origin)) return callback(null, true);
+                if (devPatterns.some((p: RegExp | string) =>
+                    typeof p === 'string' ? p === origin : p.test(origin)
+                )) return callback(null, true);
+                callback(new Error(`CORS: socket origin not allowed — ${origin}`));
+            },
             methods: ['GET', 'POST'],
+            credentials: true,
         },
     });
 
