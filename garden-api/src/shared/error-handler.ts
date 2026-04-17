@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
+import * as Sentry from '@sentry/node';
 import { AppError } from './errors.js';
 import logger from './logger.js';
 
@@ -50,6 +51,19 @@ export function errorHandler(
     return res.status(400).json({
       message: 'Datos inválidos',
       errors,
+    });
+  }
+
+  // Capturar en Sentry (solo errores no manejados — los AppError son expected)
+  if (process.env.SENTRY_DSN) {
+    Sentry.withScope((scope) => {
+      scope.setTag('path', req.path);
+      scope.setTag('method', req.method);
+      scope.setExtra('query', req.query);
+      scope.setExtra('body', req.body);
+      const userId = (req as Request & { user?: { userId?: string } }).user?.userId;
+      if (userId) scope.setUser({ id: userId });
+      Sentry.captureException(err);
     });
   }
 

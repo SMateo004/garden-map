@@ -35,10 +35,18 @@ import 'screens/onboarding/mobile_onboarding_screen.dart';
 import 'screens/onboarding/mobile_service_selector_screen.dart';
 import 'screens/onboarding/maintenance_screen.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
+import 'package:posthog_flutter/posthog_flutter.dart';
 import 'theme/garden_theme.dart';
 import 'services/local_notification_service.dart';
 import 'services/fcm_service.dart';
+
+// ── Build-time env (set via --dart-define) ─────────────────
+const _kSentryDsn    = String.fromEnvironment('SENTRY_DSN');
+const _kPostHogKey   = String.fromEnvironment('POSTHOG_API_KEY');
 
 // ── Compatibilidad con sistema anterior (Legacy Constants) ──
 const kBackgroundColor = GardenColors.background;
@@ -340,15 +348,49 @@ final GoRouter _router = GoRouter(
 );
 
 // ── App Entry Point ────────────────────────────────────────
-void main() async {
+Future<void> _bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   if (!kIsWeb) {
     await Firebase.initializeApp();
+
+    // Crashlytics: captura errores de Flutter y de la plataforma nativa
+    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+
     await FcmService.init();
   }
+
+  // PostHog: analytics de producto (solo si la key está configurada en build)
+  if (_kPostHogKey.isNotEmpty) {
+    await Posthog().setup(_kPostHogKey, host: 'https://app.posthog.com');
+  }
+
   await LocalNotificationService.init();
   await LocalNotificationService.requestPermission();
-  runApp(const GardenApp());
+}
+
+void main() async {
+  // Sentry: error monitoring (solo si el DSN está configurado en build)
+  if (_kSentryDsn.isNotEmpty) {
+    await SentryFlutter.init(
+      (options) {
+        options.dsn = _kSentryDsn;
+        options.tracesSampleRate = 0.2;
+        options.environment = const String.fromEnvironment('APP_ENV', defaultValue: 'production');
+      },
+      appRunner: () async {
+        await _bootstrap();
+        runApp(const GardenApp());
+      },
+    );
+  } else {
+    await _bootstrap();
+    runApp(const GardenApp());
+  }
 }
 
 class GardenApp extends StatelessWidget {

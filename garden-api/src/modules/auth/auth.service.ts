@@ -10,6 +10,7 @@ import { ensureAbsoluteUrl, ensureAbsoluteUrls } from '../../shared/upload-utils
 import type { LoginBody, RegisterCaregiverBody, RegisterClientBody, PatchCaregiverProfileBody } from './auth.validation.js';
 import type { JwtPayload } from '../../middleware/auth.middleware.js';
 import logger from '../../shared/logger.js';
+import { track, identify } from '../../shared/analytics.js';
 import { blockchainService } from '../../services/blockchain.service.js';
 
 const SALT_ROUNDS = 12;
@@ -270,6 +271,10 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
   const { token: accessToken, expiresIn } = signAccessToken(payload);
   const refreshToken = await createRefreshToken(result.user.id);
 
+  // Analytics: caregiver registered
+  track(result.user.id, 'user_registered', { role: 'CAREGIVER', email: result.user.email });
+  identify(result.user.id, { role: 'CAREGIVER', email: result.user.email, firstName: result.user.firstName, lastName: result.user.lastName });
+
   return {
     user: {
       id: result.user.id,
@@ -443,6 +448,9 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
     const { token, expiresIn } = signAccessToken(payload);
     const refreshToken = await createRefreshToken(user.id);
     logger.info('Cliente registrado exitosamente', { userId: user.id, email: user.email });
+    // Analytics: client registered
+    track(user.id, 'user_registered', { role: 'CLIENT', email: user.email });
+    identify(user.id, { role: 'CLIENT', email: user.email, firstName: user.firstName, lastName: user.lastName });
     return {
       user,
       profileId: profile.id,

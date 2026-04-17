@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import Anthropic from '@anthropic-ai/sdk';
 import { blockchainService } from '../../services/blockchain.service.js';
 import logger from '../../shared/logger.js';
+import { track } from '../../shared/analytics.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -51,6 +52,7 @@ router.post('/:bookingId/client-report', authMiddleware, requireRole('CLIENT'),
       },
     });
 
+    track(userId, 'dispute_opened', { bookingId, disputeId: dispute.id, reasons });
     res.json({ success: true, data: { disputeId: dispute.id, status: dispute.status } });
   })
 );

@@ -1,8 +1,21 @@
+// ── Sentry debe inicializarse ANTES que cualquier otro módulo ─────────────────
+import * as Sentry from '@sentry/node';
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV ?? 'development',
+    tracesSampleRate: 0.2,          // 20% de transacciones — suficiente para MVP
+    profilesSampleRate: 0.1,        // 10% de profiling
+    integrations: [Sentry.prismaIntegration()],
+  });
+}
+
 import { createServer } from 'http';
 import app from './app.js';
 import { env } from './config/env.js';
 import prisma from './config/database.js';
 import logger from './shared/logger.js';
+import { shutdownAnalytics } from './shared/analytics.js';
 import { iniciarJobAjustePrecios } from './jobs/ajuste-precios.job.js';
 import { iniciarJobNotificacionesProgramadas } from './jobs/scheduled-notifications.job.js';
 
@@ -109,6 +122,7 @@ async function start() {
 }
 
 process.on('SIGTERM', async () => {
+  await shutdownAnalytics();
   await prisma.$disconnect();
   process.exit(0);
 });

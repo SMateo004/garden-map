@@ -30,6 +30,9 @@ const envSchema = z.object({
   // Email (Resend is the ONLY provider)
   RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY is required for email delivery'),
   EMAIL_FROM: z.string().min(1, 'EMAIL_FROM is required for email delivery'),
+  // Observabilidad
+  SENTRY_DSN: z.string().url().optional(),
+  POSTHOG_API_KEY: z.string().optional(),
   // Blockchain (Smart Contracts)
   BLOCKCHAIN_RPC_URL: z.string().optional(),
   BLOCKCHAIN_PRIVATE_KEY: z.string().optional(),

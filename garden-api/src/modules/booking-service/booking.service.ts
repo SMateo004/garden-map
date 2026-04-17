@@ -16,6 +16,7 @@ import {
   ForbiddenError,
 } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
+import { track } from '../../shared/analytics.js';
 import * as notificationService from '../../services/notification.service.js';
 import { blockchainService } from '../../services/blockchain.service.js';
 import { sendPushToUser } from '../../services/firebase.service.js';
@@ -320,6 +321,13 @@ export async function createBooking(
       caregiverId: body.caregiverId,
       serviceType: body.serviceType,
       totalAmount: String(booking.totalAmount),
+    });
+    // Analytics: booking created
+    track(clientId, 'booking_created', {
+      bookingId: booking.id,
+      serviceType: body.serviceType,
+      totalAmount: Number(booking.totalAmount),
+      caregiverId: body.caregiverId,
     });
 
     return bookingToResponse(booking);

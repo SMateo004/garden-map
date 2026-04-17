@@ -5,6 +5,7 @@ import { stripe } from '../../config/stripe.js';
 import { env } from '../../config/env.js';
 import { BadRequestError, NotFoundError } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
+import { track } from '../../shared/analytics.js';
 import * as notificationService from '../../services/notification.service.js';
 import { blockchainService } from '../../services/blockchain.service.js';
 
@@ -140,6 +141,11 @@ export async function handleCheckoutCompleted(
     bookingId,
     sessionId: session.id,
   });
+  track(booking.clientId, 'payment_completed', {
+    bookingId,
+    method: 'stripe',
+    amount: Number(booking.totalAmount),
+  });
   notificationService.onBookingWaitingApproval(bookingId).catch((err) => {
     logger.error('Notification onBookingWaitingApproval failed (Stripe)', { bookingId, err });
   });
@@ -196,6 +202,11 @@ export async function verifyPaymentByQr(qrId: string): Promise<{ bookingId: stri
   });
 
   logger.info('Booking waiting for caregiver approval via QR verify', { bookingId: booking.id, qrId });
+  track(booking.clientId, 'payment_completed', {
+    bookingId: booking.id,
+    method: 'qr',
+    amount: Number(booking.totalAmount),
+  });
   notificationService.onBookingWaitingApproval(booking.id).catch((err) => {
     logger.error('Notification onBookingWaitingApproval failed', { bookingId: booking.id, err });
   });
@@ -257,6 +268,11 @@ export async function verifyPaymentManual(
   });
 
   logger.info('Pago aprobado manualmente por admin; esperando aprobación cuidador', { bookingId });
+  track(booking.clientId, 'payment_completed', {
+    bookingId,
+    method: 'manual_admin',
+    amount: Number(booking.totalAmount),
+  });
   notificationService.onBookingWaitingApproval(bookingId).catch((err) => {
     logger.error('Notification onBookingWaitingApproval failed', { bookingId, err });
   });

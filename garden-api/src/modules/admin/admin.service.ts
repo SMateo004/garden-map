@@ -6,6 +6,7 @@ import * as caregiverProfileService from '../caregiver-profile/caregiver-profile
 import { checkAndAutoSubmitProfile } from '../caregiver-profile/caregiver-profile-completion.helper.js';
 import { getCache, delByPrefix } from '../../shared/cache.js';
 import logger from '../../shared/logger.js';
+import { track } from '../../shared/analytics.js';
 import type {
   PendingCaregiversResult,
   PendingCaregiverItem,
@@ -456,6 +457,7 @@ export async function reviewCaregiver(
       caregiverEmail: profile.user?.email,
       message: 'Perfil verificado y visible en GET /api/caregivers',
     });
+    track(caregiverUserId, 'caregiver_approved', { profileId, adminId });
 
     return { id: updated.id, status: updated.status, action: 'approve' };
   }
