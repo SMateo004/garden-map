@@ -14,10 +14,16 @@ class CaregiverProfileDataScreen extends StatefulWidget {
   final bool embeddedMode;
   final VoidCallback? onSaveComplete;
 
+  /// Optional pre-loaded profile data (e.g. passed from the setup flow).
+  /// When provided, fields are filled immediately — no loading spinner — and
+  /// the API is called in the background to refresh with the latest values.
+  final Map<String, dynamic>? initialProfile;
+
   const CaregiverProfileDataScreen({
     super.key,
     this.embeddedMode = false,
     this.onSaveComplete,
+    this.initialProfile,
   });
 
   @override
@@ -99,7 +105,15 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   @override
   void initState() {
     super.initState();
-    _loadData();
+    if (widget.initialProfile != null) {
+      // Pre-fill immediately from the parent-provided data (no spinner),
+      // then silently refresh from the API in the background.
+      _applyProfile(widget.initialProfile!);
+      _isLoading = false;
+      Future.microtask(_refreshFromApi);
+    } else {
+      _loadData();
+    }
   }
 
   /// Reads the enabled flag from multiple possible sources in priority order:
@@ -114,6 +128,55 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     return defaultValue;
   }
 
+  /// Populates all state variables from a profile map.
+  /// Does NOT call setState — callers are responsible for wrapping in
+  /// setState when appropriate (or calling directly in initState).
+  void _applyProfile(Map<String, dynamic> profile) {
+    final details = profile['serviceDetails'] ?? {};
+    final faq = details['faq'] ?? {};
+    final availability = details['availability'] ?? {};
+    final slots = availability['slots'] ?? {};
+    final defaultSchedule = profile['defaultAvailabilitySchedule'] ?? {};
+    final paseoBlocks = defaultSchedule['paseoTimeBlocks'] ?? {};
+
+    _bioController.text = profile['bio'] ?? '';
+    _bioDetailController.text = profile['bioDetail'] ?? '';
+    _addressController.text = profile['address'] ?? '';
+    _pricePerDayController.text = (profile['pricePerDay'] ?? 0).toString();
+    _pricePerWalk30Controller.text = (profile['pricePerWalk30'] ?? 0).toString();
+    _pricePerWalk60Controller.text = (profile['pricePerWalk60'] ?? 0).toString();
+    _includesController.text = faq['includes'] ?? '';
+    _emergencyController.text = faq['emergency'] ?? '';
+    _requirementsController.text = faq['requirements'] ?? '';
+    _selectedZone = profile['zone'] ?? 'EQUIPETROL';
+    _selectedServices = List<String>.from(profile['servicesOffered'] ?? []);
+    _selectedHomeTypes = List<String>.from(profile['spaceType'] ?? []);
+    _hasYard = profile['hasYard'] ?? false;
+    _allowsLargePets = details['allowsLargePets'] ?? false;
+    _allowsMultiplePets = details['allowsMultiplePets'] ?? false;
+    _maxPets = details['maxPets'] ?? 1;
+    _acceptedPetTypes = List<String>.from(details['acceptedPetTypes'] ?? []);
+    _acceptedSizes = List<String>.from(details['acceptedSizes'] ?? []);
+    _weekdays = availability['weekdays'] ?? defaultSchedule['weekdays'] ?? true;
+    _weekends = availability['weekends'] ?? defaultSchedule['weekends'] ?? false;
+    _holidays = availability['holidays'] ?? defaultSchedule['holidays'] ?? false;
+    _morningSlot   = _extractBlockEnabled(slots['morning'],   paseoBlocks['morning'],   paseoBlocks['MANANA'],   defaultValue: true);
+    _afternoonSlot = _extractBlockEnabled(slots['afternoon'], paseoBlocks['afternoon'], paseoBlocks['TARDE'],    defaultValue: true);
+    _nightSlot     = _extractBlockEnabled(slots['night'],     paseoBlocks['night'],     paseoBlocks['NOCHE'],    defaultValue: false);
+    _photos = List<String>.from(profile['photos'] ?? []);
+
+    _experienceYearsController.text = (profile['experienceYears'] ?? '').toString();
+    if (_experienceYearsController.text == '5') _experienceYearsController.text = '5+';
+    _experienceDescController.text = profile['experienceDescription'] as String? ?? '';
+    _whyCaregiverController.text = profile['whyCaregiver'] as String? ?? '';
+    _whatDiffersController.text = profile['whatDiffers'] as String? ?? '';
+    _handleAnxiousController.text = profile['handleAnxious'] as String? ?? '';
+    _emergencyResponseController.text = profile['emergencyResponse'] as String? ?? '';
+    _acceptAggressive = profile['acceptAggressive'] as bool?;
+    _acceptPuppies = profile['acceptPuppies'] as bool?;
+    _acceptSeniors = profile['acceptSeniors'] as bool?;
+  }
+
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final prefs = await SharedPreferences.getInstance();
@@ -126,60 +189,34 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
-        final profile = data['data'];
-        final details = profile['serviceDetails'] ?? {};
-        final faq = details['faq'] ?? {};
-        final availability = details['availability'] ?? {};
-        final slots = availability['slots'] ?? {};
-        final defaultSchedule = profile['defaultAvailabilitySchedule'] ?? {};
-        final paseoBlocks = defaultSchedule['paseoTimeBlocks'] ?? {};
-
-        setState(() {
-          _bioController.text = profile['bio'] ?? '';
-          _bioDetailController.text = profile['bioDetail'] ?? '';
-          _addressController.text = profile['address'] ?? '';
-          _pricePerDayController.text = (profile['pricePerDay'] ?? 0).toString();
-          _pricePerWalk30Controller.text = (profile['pricePerWalk30'] ?? 0).toString();
-          _pricePerWalk60Controller.text = (profile['pricePerWalk60'] ?? 0).toString();
-          _includesController.text = faq['includes'] ?? '';
-          _emergencyController.text = faq['emergency'] ?? '';
-          _requirementsController.text = faq['requirements'] ?? '';
-          _selectedZone = profile['zone'] ?? 'EQUIPETROL';
-          _selectedServices = List<String>.from(profile['servicesOffered'] ?? []);
-          _selectedHomeTypes = List<String>.from(profile['spaceType'] ?? []);
-          _hasYard = profile['hasYard'] ?? false;
-          _allowsLargePets = details['allowsLargePets'] ?? false;
-          _allowsMultiplePets = details['allowsMultiplePets'] ?? false;
-          _maxPets = details['maxPets'] ?? 1;
-          _acceptedPetTypes = List<String>.from(details['acceptedPetTypes'] ?? []);
-          _acceptedSizes = List<String>.from(details['acceptedSizes'] ?? []);
-          _weekdays = availability['weekdays'] ?? defaultSchedule['weekdays'] ?? true;
-          _weekends = availability['weekends'] ?? defaultSchedule['weekends'] ?? false;
-          _holidays = availability['holidays'] ?? defaultSchedule['holidays'] ?? false;
-          _morningSlot   = _extractBlockEnabled(slots['morning'],   paseoBlocks['morning'],   paseoBlocks['MANANA'],   defaultValue: true);
-          _afternoonSlot = _extractBlockEnabled(slots['afternoon'], paseoBlocks['afternoon'], paseoBlocks['TARDE'],    defaultValue: true);
-          _nightSlot     = _extractBlockEnabled(slots['night'],     paseoBlocks['night'],     paseoBlocks['NOCHE'],    defaultValue: false);
-          _photos = List<String>.from(profile['photos'] ?? []);
-
-          // Nuevos campos simplificados
-          _experienceYearsController.text = (profile['experienceYears'] ?? '').toString();
-          if (_experienceYearsController.text == '5') _experienceYearsController.text = '5+';
-          
-          _experienceDescController.text = profile['experienceDescription'] as String? ?? '';
-          _whyCaregiverController.text = profile['whyCaregiver'] as String? ?? '';
-          _whatDiffersController.text = profile['whatDiffers'] as String? ?? '';
-          _handleAnxiousController.text = profile['handleAnxious'] as String? ?? '';
-          _emergencyResponseController.text = profile['emergencyResponse'] as String? ?? '';
-          _acceptAggressive = profile['acceptAggressive'] as bool?;
-          _acceptPuppies = profile['acceptPuppies'] as bool?;
-          _acceptSeniors = profile['acceptSeniors'] as bool?;
-        });
+        setState(() => _applyProfile(data['data']));
         _computeCompletion();
       }
     } catch (e) {
       debugPrint('Error loading data: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Silently refreshes fields from the API without showing a loading spinner.
+  /// Called in the background when [initialProfile] was provided.
+  Future<void> _refreshFromApi() async {
+    if (!mounted) return;
+    final prefs = await SharedPreferences.getInstance();
+    _caregiverToken = prefs.getString('access_token') ?? '';
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/caregiver/my-profile'),
+        headers: {'Authorization': 'Bearer $_caregiverToken'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true && mounted) {
+        setState(() => _applyProfile(data['data']));
+        _computeCompletion();
+      }
+    } catch (e) {
+      debugPrint('Background profile refresh error: $e');
     }
   }
 

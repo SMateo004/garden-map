@@ -138,6 +138,29 @@ class _CaregiverSetupFlowScreenState extends State<CaregiverSetupFlowScreen> {
     }
   }
 
+  /// Goes back one step and reloads the profile so the previous step is
+  /// pre-filled with the latest saved data.
+  Future<void> _goBack() async {
+    if (_currentStep <= 0) return;
+    // Reload profile to ensure the previous step shows fresh data
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/caregiver/my-profile'),
+        headers: _authHeaders,
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] == true && mounted) {
+        setState(() {
+          _profile = data['data'];
+          _currentStep--;
+        });
+        return;
+      }
+    } catch (_) {}
+    // Fallback: navigate back with whatever profile we already have
+    if (mounted) setState(() => _currentStep--);
+  }
+
   Future<void> _completeFlow() async {
     setState(() => _isLoading = true);
 
@@ -182,9 +205,16 @@ class _CaregiverSetupFlowScreenState extends State<CaregiverSetupFlowScreen> {
       return Scaffold(backgroundColor: bg, body: const Center(child: CircularProgressIndicator(color: GardenColors.primary)));
     }
 
-    return Scaffold(
-      backgroundColor: bg,
-      body: SafeArea(
+    return PopScope(
+      // Allow system back only on step 0 (exits the flow); on later steps
+      // intercept and go back to the previous step instead.
+      canPop: _currentStep == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _currentStep > 0) _goBack();
+      },
+      child: Scaffold(
+        backgroundColor: bg,
+        body: SafeArea(
         child: Column(
           children: [
             // ── Top progress header ────────────────────────────────
@@ -201,6 +231,26 @@ class _CaregiverSetupFlowScreenState extends State<CaregiverSetupFlowScreen> {
                   // Step counter
                   Row(
                     children: [
+                      // Back button (only visible on steps > 0)
+                      if (_currentStep > 0)
+                        GestureDetector(
+                          onTap: _goBack,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              Icons.arrow_back_ios_new_rounded,
+                              size: 16,
+                              color: subtextColor,
+                            ),
+                          ),
+                        )
+                      else
+                        const SizedBox(width: 28),
+                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
@@ -294,6 +344,7 @@ class _CaregiverSetupFlowScreenState extends State<CaregiverSetupFlowScreen> {
           ],
         ),
       ),
+      ),
     );
   }
 
@@ -303,6 +354,7 @@ class _CaregiverSetupFlowScreenState extends State<CaregiverSetupFlowScreen> {
         return CaregiverProfileDataScreen(
           embeddedMode: true,
           onSaveComplete: _advanceStep,
+          initialProfile: _profile,
         );
       case 1:
         return VerificationScreen(
