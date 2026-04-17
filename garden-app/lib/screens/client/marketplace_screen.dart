@@ -183,6 +183,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   String _authToken = '';
   String? _userName;
 
+  /// Callback that rebuilds the active filter sheet (if open).
+  VoidCallback? _refreshSheet;
+
   // ── Controllers ──
   final TextEditingController _searchController = TextEditingController();
   Timer? _searchDebounce;
@@ -386,6 +389,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   void _selectZone(String? zone) {
     setState(() => _selectedZone = zone);
+    _refreshSheet?.call();
     _loadCaregivers(reset: true);
     if (zone != null && _showMap) {
       final center = _kZoneCenters[zone];
@@ -642,7 +646,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => GlassBox(
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          _refreshSheet = () => setSheetState(() {});
+          return GlassBox(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 24),
         child: SingleChildScrollView(
@@ -675,8 +682,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             ],
           ),
         ),
+          );
+        },
       ),
-    );
+    ).whenComplete(() => _refreshSheet = null);
   }
 
   void _showMobileMapSheet(bool isDark) {
@@ -1149,7 +1158,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                         'Bs ${_priceRange.start.toInt()}',
                         _priceRange.end >= 500 ? 'Bs 500+' : 'Bs ${_priceRange.end.toInt()}',
                       ),
-                      onChanged: (v) => setState(() => _priceRange = v),
+                      onChanged: (v) {
+                        setState(() => _priceRange = v);
+                        _refreshSheet?.call();
+                      },
                       onChangeEnd: (_) => setState(() {}),
                     ),
                   ),
@@ -1189,14 +1201,17 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   const SizedBox(height: 4),
                   _filterSwitch('Acepta perros agresivos', Icons.warning_amber_rounded, _filterAggressive, (v) {
                     setState(() => _filterAggressive = v);
+                    _refreshSheet?.call();
                     _loadCaregivers(reset: true);
                   }, textColor, subtextColor),
                   _filterSwitch('Acepta cachorros', Icons.child_care_rounded, _filterPuppies, (v) {
                     setState(() => _filterPuppies = v);
+                    _refreshSheet?.call();
                     _loadCaregivers(reset: true);
                   }, textColor, subtextColor),
                   _filterSwitch('Acepta perros seniors', Icons.elderly_rounded, _filterSeniors, (v) {
                     setState(() => _filterSeniors = v);
+                    _refreshSheet?.call();
                     _loadCaregivers(reset: true);
                   }, textColor, subtextColor),
                   _divider(border),
@@ -1222,7 +1237,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     'Solo verificados blockchain',
                     Icons.link_rounded,
                     _filterVerifiedOnly,
-                    (v) => setState(() => _filterVerifiedOnly = v),
+                    (v) {
+                      setState(() => _filterVerifiedOnly = v);
+                      _refreshSheet?.call();
+                    },
                     textColor, subtextColor,
                   ),
                 ],
@@ -1250,6 +1268,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       child: GestureDetector(
         onTap: () {
           setState(() => _selectedService = value);
+          _refreshSheet?.call();
           _loadCaregivers(reset: true);
         },
         child: AnimatedContainer(
@@ -1278,6 +1297,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     return GestureDetector(
       onTap: () {
         setState(() => _minExperienceYears = selected ? null : val);
+        _refreshSheet?.call();
         _loadCaregivers(reset: true);
       },
       child: _smallChip(label, selected, textColor),
@@ -1289,6 +1309,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     return GestureDetector(
       onTap: () {
         setState(() => selected ? _selectedSizes.remove(val) : _selectedSizes.add(val));
+        _refreshSheet?.call();
         _loadCaregivers(reset: true);
       },
       child: _smallChip(label, selected, textColor),
@@ -1298,7 +1319,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   Widget _ratingChip(double val, String label, Color textColor) {
     final selected = _minRating == val;
     return GestureDetector(
-      onTap: () => setState(() => _minRating = selected ? 0 : val),
+      onTap: () {
+        setState(() => _minRating = selected ? 0 : val);
+        _refreshSheet?.call();
+      },
       child: _smallChip(label, selected, textColor),
     );
   }

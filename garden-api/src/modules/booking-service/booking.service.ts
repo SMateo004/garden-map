@@ -46,24 +46,40 @@ function rangesOverlap(s1: number, e1: number, s2: number, e2: number): boolean 
 const ADMIN_NOTIFICATION_PAYMENT_APPROVAL = 'PAYMENT_APPROVAL_REQUEST';
 const ADMIN_NOTIFICATION_CANCELLATION_REQUEST = 'CANCELLATION_REQUEST';
 
-/** Comisión plataforma (MVP). */
-const COMMISSION_RATE = 0.1;
+import { getNumericSetting } from '../../utils/settings-cache.js';
 
-/** Admin fee (Bs) descontado del reembolso 100% en hospedaje (MVP). */
-const HOSPEDAJE_REFUND_ADMIN_FEE_BS = 10;
-
-/** Límites de horas para reembolso hospedaje (MVP). */
-const HOSPEDAJE_REFUND_100_HOURS = 48;
-const HOSPEDAJE_REFUND_50_HOURS = 24;
-
-/** Límites de horas para reembolso paseo (MVP). */
-const PASEO_REFUND_100_HOURS = 12;
-const PASEO_REFUND_50_HOURS = 6;
-
-/** QR válido 24h por defecto (legacy/otros flujos). */
-const QR_VALIDITY_HOURS = 24;
-/** QR en página de pago: 15 minutos (Subfase 2.3). */
-const QR_VALIDITY_MINUTES_PAYMENT = 15;
+/** Lee los parámetros del negocio desde AppSettings (con cache 30s). */
+async function getBookingSettings() {
+    const [
+        commissionPct,
+        hospedajeAdminFee,
+        hospedaje100h,
+        hospedaje50h,
+        paseo100h,
+        paseo50h,
+        qrValidityHours,
+        qrValidityMinutes,
+    ] = await Promise.all([
+        getNumericSetting('platformCommissionPct',   10),
+        getNumericSetting('hospedajeRefundAdminFeeBS', 10),
+        getNumericSetting('hospedajeRefund100Horas', 48),
+        getNumericSetting('hospedajeRefund50Horas',  24),
+        getNumericSetting('paseoRefund100Horas',     12),
+        getNumericSetting('paseoRefund50Horas',       6),
+        getNumericSetting('qrValidityHours',         24),
+        getNumericSetting('qrValidityMinutes',       15),
+    ]);
+    return {
+        COMMISSION_RATE:              commissionPct / 100,
+        HOSPEDAJE_REFUND_ADMIN_FEE_BS: hospedajeAdminFee,
+        HOSPEDAJE_REFUND_100_HOURS:   hospedaje100h,
+        HOSPEDAJE_REFUND_50_HOURS:    hospedaje50h,
+        PASEO_REFUND_100_HOURS:       paseo100h,
+        PASEO_REFUND_50_HOURS:        paseo50h,
+        QR_VALIDITY_HOURS:            qrValidityHours,
+        QR_VALIDITY_MINUTES_PAYMENT:  qrValidityMinutes,
+    };
+}
 
 /**
  * Crea una reserva (hospedaje o paseo) en transacción:
@@ -76,6 +92,8 @@ export async function createBooking(
   clientId: string,
   body: CreateBookingBody
 ): Promise<BookingCreateResult> {
+  // Leer configuración dinámica fuera de la transacción
+  const cfg = await getBookingSettings();
   return prisma.$transaction(async (tx) => {
     const clientProfile = await tx.clientProfile.findUnique({
       where: { userId: clientId },
@@ -237,10 +255,10 @@ export async function createBooking(
     }
 
     const subtotal = totalAmount;
-    totalAmount = Math.round(subtotal * (1 + COMMISSION_RATE));
+    totalAmount = Math.round(subtotal * (1 + cfg.COMMISSION_RATE));
     const commissionAmount = totalAmount - subtotal;
     // Client sees the unit price with markup
-    pricePerUnit = Math.round(pricePerUnit * (1 + COMMISSION_RATE));
+    pricePerUnit = Math.round(pricePerUnit * (1 + cfg.COMMISSION_RATE));
 
     const bookingData: Prisma.BookingCreateInput = {
       client: { connect: { id: clientId } },
@@ -537,7 +555,7 @@ export interface GenerateQRResult {
  */
 export function generateQR(
   _bookingId: string,
-  validityMinutes: number = QR_VALIDITY_HOURS * 60
+  validityMinutes: number = 24 * 60  // default 24h; overridden by initPayment usando el setting
 ): GenerateQRResult {
   const qrId = crypto.randomUUID();
   const qrExpiresAt = new Date(Date.now() + validityMinutes * 60 * 1000);
@@ -560,6 +578,7 @@ export async function initPayment(
   clientId: string,
   method: InitPaymentBody['method']
 ): Promise<{ qrId?: string; qrImageUrl?: string; qrExpiresAt?: string; status: string }> {
+  const cfg = await getBookingSettings();
   return prisma.$transaction(async (tx) => {
     const booking = await tx.booking.findFirst({
       where: { id: bookingId, clientId },
@@ -579,7 +598,7 @@ export async function initPayment(
     if (method === 'qr') {
       const { qrId, qrImageUrl, qrExpiresAt } = generateQR(
         bookingId,
-        QR_VALIDITY_MINUTES_PAYMENT
+        cfg.QR_VALIDITY_MINUTES_PAYMENT
       );
       await tx.booking.update({
         where: { id: bookingId },
@@ -716,13 +735,14 @@ export interface CalculateRefundResult {
  * @param booking Reserva con serviceType, fechas y totalAmount
  * @param cancellationDate Fecha/hora en que se solicita la cancelación (normalmente now)
  */
-export function calculateRefund(
+export async function calculateRefund(
   booking: Pick<
     Booking,
     'serviceType' | 'startDate' | 'endDate' | 'walkDate' | 'timeSlot' | 'totalAmount'
   >,
   cancellationDate: Date
-): CalculateRefundResult {
+): Promise<CalculateRefundResult> {
+  const cfg = await getBookingSettings();
   const total = Number(booking.totalAmount);
 
   if (booking.serviceType === ServiceType.HOSPEDAJE) {
@@ -733,15 +753,15 @@ export function calculateRefund(
       return { refundAmount: 0, refundStatus: RefundStatus.REJECTED, refundPercent: 0 };
     }
     const hoursUntil = (start.getTime() - cancellationDate.getTime()) / (60 * 60 * 1000);
-    if (hoursUntil > HOSPEDAJE_REFUND_100_HOURS) {
-      const amount = Math.max(0, total - HOSPEDAJE_REFUND_ADMIN_FEE_BS);
+    if (hoursUntil > cfg.HOSPEDAJE_REFUND_100_HOURS) {
+      const amount = Math.max(0, total - cfg.HOSPEDAJE_REFUND_ADMIN_FEE_BS);
       return {
         refundAmount: Math.round(amount * 100) / 100,
         refundStatus: RefundStatus.APPROVED,
         refundPercent: 100,
       };
     }
-    if (hoursUntil > HOSPEDAJE_REFUND_50_HOURS) {
+    if (hoursUntil > cfg.HOSPEDAJE_REFUND_50_HOURS) {
       const amount = total * 0.5;
       return {
         refundAmount: Math.round(amount * 100) / 100,
@@ -767,14 +787,14 @@ export function calculateRefund(
     return { refundAmount: 0, refundStatus: RefundStatus.REJECTED, refundPercent: 0 };
   }
   const hoursUntil = (walkDate.getTime() - cancellationDate.getTime()) / (60 * 60 * 1000);
-  if (hoursUntil > PASEO_REFUND_100_HOURS) {
+  if (hoursUntil > cfg.PASEO_REFUND_100_HOURS) {
     return {
       refundAmount: Math.round(total * 100) / 100,
       refundStatus: RefundStatus.APPROVED,
       refundPercent: 100,
     };
   }
-  if (hoursUntil > PASEO_REFUND_50_HOURS) {
+  if (hoursUntil > cfg.PASEO_REFUND_50_HOURS) {
     const amount = total * 0.5;
     return {
       refundAmount: Math.round(amount * 100) / 100,
@@ -902,6 +922,7 @@ export async function extendBooking(
   clientId: string,
   newEndDate: Date
 ): Promise<BookingCreateResult> {
+  const cfg = await getBookingSettings();
   return prisma.$transaction(async (tx) => {
     const booking = await tx.booking.findFirst({
       where: { id: bookingId, clientId },
@@ -975,10 +996,10 @@ export async function extendBooking(
     const totalDaysNew = Math.ceil((newEndNorm.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
     // Derive original caregiver price from the marked-up pricePerUnit
     const pricePerUnitClient = Number(booking.pricePerUnit);
-    const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + COMMISSION_RATE));
+    const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
 
     const subtotalCaregiver = totalDaysNew * pricePerUnitCaregiver;
-    const totalAmountNew = Math.round(subtotalCaregiver * (1 + COMMISSION_RATE));
+    const totalAmountNew = Math.round(subtotalCaregiver * (1 + cfg.COMMISSION_RATE));
     const commissionAmount = totalAmountNew - subtotalCaregiver;
 
     const updated = await tx.booking.update({
@@ -1012,6 +1033,7 @@ export async function changeDatesBooking(
   newStartDate: Date,
   newEndDate: Date
 ): Promise<BookingCreateResult> {
+  const cfg = await getBookingSettings();
   return prisma.$transaction(async (tx) => {
     const booking = await tx.booking.findFirst({
       where: { id: bookingId, clientId },
@@ -1083,10 +1105,10 @@ export async function changeDatesBooking(
     const totalDaysNew = Math.ceil((endNorm.getTime() - startNorm.getTime()) / (24 * 60 * 60 * 1000));
     // Derive original caregiver price
     const pricePerUnitClient = Number(booking.pricePerUnit);
-    const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + COMMISSION_RATE));
+    const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
 
     const subtotalCaregiver = totalDaysNew * pricePerUnitCaregiver;
-    const totalAmountNew = Math.round(subtotalCaregiver * (1 + COMMISSION_RATE));
+    const totalAmountNew = Math.round(subtotalCaregiver * (1 + cfg.COMMISSION_RATE));
     const commissionAmount = totalAmountNew - subtotalCaregiver;
 
     const updated = await tx.booking.update({
