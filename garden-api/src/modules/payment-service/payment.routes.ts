@@ -106,7 +106,7 @@ webhookRouter.post('/', (req: Request, res: Response) => {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session;
     paymentService
-      .handleCheckoutCompleted(session)
+      .handleCheckoutCompleted(session, event.id) // event.id para idempotencia fuerte
       .then(() => res.status(200).send())
       .catch(() => res.status(500).send());
     return;

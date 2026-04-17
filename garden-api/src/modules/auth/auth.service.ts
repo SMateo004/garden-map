@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { createHash } from 'crypto';
 import { UserRole, VerificationStatus, CaregiverStatus } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import prisma from '../../config/database.js';
@@ -15,6 +16,7 @@ const SALT_ROUNDS = 12;
 
 export interface AuthTokens {
   accessToken: string;
+  refreshToken: string;
   expiresIn: string;
   user: { id: string; email: string; role: string; firstName: string; lastName: string; profilePicture?: string | null };
 }
@@ -24,6 +26,7 @@ export interface RegisterCaregiverResult {
   profileId: string;
   verificationStatus: VerificationStatus;
   accessToken: string;
+  refreshToken: string;
   expiresIn: string;
 }
 
@@ -31,6 +34,7 @@ export interface RegisterClientResult {
   user: { id: string; email: string; role: string; firstName: string; lastName: string; profilePicture?: string | null };
   profileId: string;
   accessToken: string;
+  refreshToken: string;
   expiresIn: string;
 }
 
@@ -49,6 +53,64 @@ function signAccessToken(payload: JwtPayload): { token: string; expiresIn: strin
   const expiresIn = env.JWT_EXPIRES_IN;
   const token = jwt.sign(payload, env.JWT_SECRET, { expiresIn } as jwt.SignOptions);
   return { token, expiresIn };
+}
+
+const REFRESH_TOKEN_EXPIRY_DAYS = 30;
+
+/**
+ * Genera un refresh token opaco (64 bytes hex), lo almacena hasheado (SHA-256),
+ * y devuelve el token en claro para enviarlo al cliente.
+ */
+export async function createRefreshToken(userId: string): Promise<string> {
+  const raw = randomBytes(64).toString('hex');
+  const tokenHash = createHash('sha256').update(raw).digest('hex');
+  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+  await prisma.refreshToken.create({ data: { userId, tokenHash, expiresAt } });
+  return raw;
+}
+
+/**
+ * Rota el refresh token:
+ *   1. Busca el token por hash
+ *   2. Verifica que no esté revocado ni expirado
+ *   3. Revoca el token actual
+ *   4. Emite un nuevo access token + nuevo refresh token
+ * Devuelve null si el token es inválido, expirado o ya fue usado.
+ */
+export async function rotateRefreshToken(
+  rawToken: string
+): Promise<{ accessToken: string; refreshToken: string; expiresIn: string } | null> {
+  const tokenHash = createHash('sha256').update(rawToken).digest('hex');
+  const stored = await prisma.refreshToken.findUnique({ where: { tokenHash } });
+
+  if (!stored || stored.revokedAt !== null || stored.expiresAt < new Date()) {
+    return null;
+  }
+
+  // Revocar el token usado (evita reuso — token rotation)
+  await prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
+
+  const user = await prisma.user.findUnique({
+    where: { id: stored.userId },
+    select: { id: true, role: true, isDeleted: true },
+  });
+  if (!user || user.isDeleted) return null;
+
+  const { token: accessToken, expiresIn } = signAccessToken({ userId: user.id, role: user.role });
+  const newRefreshToken = await createRefreshToken(user.id);
+
+  return { accessToken, refreshToken: newRefreshToken, expiresIn };
+}
+
+/**
+ * Revoca todos los refresh tokens activos de un usuario.
+ * Usar en logout para invalidar todas las sesiones.
+ */
+export async function revokeAllRefreshTokens(userId: string): Promise<void> {
+  await prisma.refreshToken.updateMany({
+    where: { userId, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
 }
 
 /**
@@ -206,6 +268,7 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
     role: result.user.role,
   };
   const { token: accessToken, expiresIn } = signAccessToken(payload);
+  const refreshToken = await createRefreshToken(result.user.id);
 
   return {
     user: {
@@ -219,6 +282,7 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
     profileId: result.profile.id,
     verificationStatus: result.profile.verificationStatus,
     accessToken,
+    refreshToken,
     expiresIn,
   };
 }
@@ -377,11 +441,13 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
   try {
     const payload: JwtPayload = { userId: user.id, role: user.role };
     const { token, expiresIn } = signAccessToken(payload);
+    const refreshToken = await createRefreshToken(user.id);
     logger.info('Cliente registrado exitosamente', { userId: user.id, email: user.email });
     return {
       user,
       profileId: profile.id,
       accessToken: token,
+      refreshToken,
       expiresIn,
     };
   } catch (error: unknown) {
@@ -429,9 +495,11 @@ export async function login(
 
   const payload: JwtPayload = { userId: user.id, role: user.role };
   const { token: accessToken, expiresIn } = signAccessToken(payload);
+  const refreshToken = await createRefreshToken(user.id);
 
   return {
     accessToken,
+    refreshToken,
     expiresIn,
     user: {
       id: user.id,

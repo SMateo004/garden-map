@@ -435,3 +435,52 @@ export const updateFcmToken = asyncHandler(async (req: Request, res: Response) =
   res.json({ success: true });
 });
 
+/**
+ * POST /api/auth/refresh
+ * Rota el refresh token y devuelve un nuevo access token + nuevo refresh token.
+ * El token anterior queda revocado inmediatamente.
+ * Body: { refreshToken: string }
+ */
+export const refreshToken = asyncHandler(async (req: Request, res: Response) => {
+  const { refreshToken: raw } = req.body as { refreshToken?: string };
+
+  if (!raw || typeof raw !== 'string') {
+    res.status(400).json({
+      success: false,
+      error: { code: 'MISSING_REFRESH_TOKEN', message: 'Se requiere el campo refreshToken.' },
+    });
+    return;
+  }
+
+  const result = await authService.rotateRefreshToken(raw);
+
+  if (!result) {
+    res.status(401).json({
+      success: false,
+      error: { code: 'INVALID_REFRESH_TOKEN', message: 'Token inválido, expirado o ya utilizado. Inicia sesión de nuevo.' },
+    });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      expiresIn: result.expiresIn,
+    },
+  });
+});
+
+/**
+ * POST /api/auth/logout
+ * Revoca todos los refresh tokens activos del usuario.
+ * El access token actual expirará naturalmente (7 días).
+ */
+export const logout = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  await authService.revokeAllRefreshTokens(userId);
+  logger.info('User logged out — all refresh tokens revoked', { userId });
+  res.json({ success: true, data: { message: 'Sesión cerrada correctamente.' } });
+});
+

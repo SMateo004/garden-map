@@ -17,36 +17,103 @@ class AuthService {
     'Authorization': 'Bearer $token',
   };
 
-  // Guardar token en SharedPreferences
+  // ── Token storage ───────────────────────────────────────────────────────────
+
   Future<void> saveToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('access_token', token);
   }
 
-  // Leer token guardado
   Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('access_token');
   }
 
-  // Eliminar token (logout)
+  Future<void> saveRefreshToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('refresh_token', token);
+  }
+
+  Future<String?> getRefreshToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('refresh_token');
+  }
+
+  /// Guarda access + refresh tokens de una respuesta de la API.
+  Future<void> _saveTokens(Map<String, dynamic> data) async {
+    if (data['accessToken'] != null) await saveToken(data['accessToken'] as String);
+    if (data['refreshToken'] != null) await saveRefreshToken(data['refreshToken'] as String);
+  }
+
   Future<void> clearToken() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
+    await prefs.remove('refresh_token');
     await prefs.remove('user_role');
     await prefs.remove('user_id');
+    await prefs.remove('user_name');
+    await prefs.remove('user_photo');
   }
 
-  // Guardar datos del usuario
+  // ── User data storage ───────────────────────────────────────────────────────
+
   Future<void> saveUserData(Map<String, dynamic> user) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('user_role', user['role'] ?? '');
-    await prefs.setString('user_id', user['id'] ?? '');
-    await prefs.setString('user_name', user['fullName'] ?? '${user['firstName']} ${user['lastName']}');
-    await prefs.setString('user_photo', user['profilePicture'] ?? '');
+    await prefs.setString('user_role', user['role'] as String? ?? '');
+    await prefs.setString('user_id', user['id'] as String? ?? '');
+    await prefs.setString(
+      'user_name',
+      user['fullName'] as String? ?? '${user['firstName']} ${user['lastName']}',
+    );
+    await prefs.setString('user_photo', user['profilePicture'] as String? ?? '');
   }
 
-  // LOGIN
+  // ── Session refresh ─────────────────────────────────────────────────────────
+
+  /// Renueva el access token usando el refresh token almacenado.
+  /// Devuelve el nuevo access token o null si la sesión expiró.
+  Future<String?> renewAccessToken() async {
+    final refreshToken = await getRefreshToken();
+    if (refreshToken == null) return null;
+
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/refresh'),
+        headers: _headers,
+        body: jsonEncode({'refreshToken': refreshToken}),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        if (data['success'] == true) {
+          final tokens = data['data'] as Map<String, dynamic>;
+          await saveToken(tokens['accessToken'] as String);
+          await saveRefreshToken(tokens['refreshToken'] as String);
+          return tokens['accessToken'] as String;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Ejecuta una petición HTTP autenticada con auto-renovación de token.
+  /// Si recibe 401, intenta renovar el token una vez y reintenta.
+  Future<http.Response> authenticatedRequest(
+    Future<http.Response> Function(String token) request,
+  ) async {
+    final token = await getToken() ?? '';
+    var response = await request(token);
+
+    if (response.statusCode == 401) {
+      final newToken = await renewAccessToken();
+      if (newToken != null) {
+        response = await request(newToken);
+      }
+    }
+    return response;
+  }
+
+  // ── Auth endpoints ──────────────────────────────────────────────────────────
+
   Future<Map<String, dynamic>> login({
     required String email,
     required String password,
@@ -56,18 +123,20 @@ class AuthService {
       headers: _headers,
       body: jsonEncode({'email': email, 'password': password}),
     );
-    final data = jsonDecode(response.body);
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
     if (response.statusCode == 200 && data['success'] == true) {
-      await saveToken(data['data']['accessToken']);
-      await saveUserData(data['data']['user']);
-      return data['data'];
+      final result = data['data'] as Map<String, dynamic>;
+      await _saveTokens(result);
+      await saveUserData(result['user'] as Map<String, dynamic>);
+      return result;
     }
     throw Exception(
-      data['error']?['message'] ?? data['message'] ?? 'Error al iniciar sesión',
+      (data['error'] as Map<String, dynamic>?)?['message'] ??
+          data['message'] ??
+          'Error al iniciar sesión',
     );
   }
 
-  // REGISTRO CLIENTE (dueño)
   Future<Map<String, dynamic>> registerClient({
     required String firstName,
     required String lastName,
@@ -89,33 +158,50 @@ class AuthService {
       headers: _headers,
       body: jsonEncode(body),
     );
-    final data = jsonDecode(response.body);
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
     if (response.statusCode == 201 && data['success'] == true) {
-      await saveToken(data['data']['accessToken']);
-      await saveUserData(data['data']['user']);
-      return data['data'];
+      final result = data['data'] as Map<String, dynamic>;
+      await _saveTokens(result);
+      await saveUserData(result['user'] as Map<String, dynamic>);
+      return result;
     }
-    // Manejo de errores de validación del backend
     if (data['errors'] != null) {
       final errors = (data['errors'] as List)
-          .map((e) => e['message'] as String)
+          .map((e) => (e as Map<String, dynamic>)['message'] as String)
           .join(', ');
       throw Exception(errors);
     }
     throw Exception(
-      data['error']?['message'] ?? data['message'] ?? 'Error al registrarse',
+      (data['error'] as Map<String, dynamic>?)?['message'] ??
+          data['message'] ??
+          'Error al registrarse',
     );
   }
 
-  // OBTENER USUARIO ACTUAL
+  Future<void> logout() async {
+    try {
+      final token = await getToken();
+      if (token != null) {
+        await http.post(
+          Uri.parse('$baseUrl/auth/logout'),
+          headers: authHeaders(token),
+        );
+      }
+    } catch (_) {
+      // Continuar con limpieza local aunque el request falle
+    } finally {
+      await clearToken();
+    }
+  }
+
   Future<Map<String, dynamic>> getMe(String token) async {
     final response = await http.get(
       Uri.parse('$baseUrl/auth/me'),
       headers: authHeaders(token),
     );
-    final data = jsonDecode(response.body);
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
     if (response.statusCode == 200 && data['success'] == true) {
-      return data['data'];
+      return data['data'] as Map<String, dynamic>;
     }
     throw Exception('Sesión expirada');
   }

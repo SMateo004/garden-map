@@ -1,18 +1,66 @@
 import { Router } from 'express';
-import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
+import rateLimit from 'express-rate-limit';
+import { authMiddleware } from '../../middleware/auth.middleware.js';
 import * as authController from './auth.controller.js';
 
+// ── Rate limiters ────────────────────────────────────────────────────────────
+// 5 intentos por 15 min — bloquea brute force; no cuenta logins exitosos
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados intentos. Espera 15 minutos e inténtalo de nuevo.' } },
+});
+
+// 3 registros por hora por IP — evita creación masiva de cuentas
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados intentos de registro. Espera 1 hora.' } },
+});
+
+// 3 envíos de código por hora — previene spam de email
+const emailCodeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados envíos de código. Espera 1 hora.' } },
+});
+
+// 10 intentos de refresh por hora — permite uso normal, bloquea abuso
+const refreshLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiadas renovaciones de sesión.' } },
+});
+
+// ── Rutas ────────────────────────────────────────────────────────────────────
 const router = Router();
 
 router.get('/me', authMiddleware, authController.me);
 router.patch('/me', authMiddleware, authController.patchMe);
 router.get('/check-email', authController.checkEmail);
-router.post('/caregiver/register', authController.registerCaregiver);
-router.post('/client/register', authController.registerClient);
-router.post('/login', authController.login);
 
-/** POST /api/auth/send-verification-email — authenticated user; sends 6-digit code (10 min). */
-router.post('/send-verification-email', authMiddleware, authController.sendVerificationEmail);
+router.post('/caregiver/register', registerLimiter, authController.registerCaregiver);
+router.post('/client/register',    registerLimiter, authController.registerClient);
+router.post('/login',              loginLimiter,    authController.login);
+
+/** POST /api/auth/refresh — body: { refreshToken }. Rota el refresh token y devuelve nuevos tokens. */
+router.post('/refresh', refreshLimiter, authController.refreshToken);
+
+/** POST /api/auth/logout — revoca todos los refresh tokens del usuario. */
+router.post('/logout', authMiddleware, authController.logout);
+
+/** POST /api/auth/send-verification-email — sends 6-digit code (10 min expiry). */
+router.post('/send-verification-email', authMiddleware, emailCodeLimiter, authController.sendVerificationEmail);
+
 /** POST /api/auth/verify-email — body: { code }. Validates code, marks user verified. */
 router.post('/verify-email', authMiddleware, authController.verifyEmail);
 

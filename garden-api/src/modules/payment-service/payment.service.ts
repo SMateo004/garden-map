@@ -84,11 +84,26 @@ export async function createCheckoutSession(
   return { sessionId: session.id, url };
 }
 
-export async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promise<void> {
+export async function handleCheckoutCompleted(
+  session: Stripe.Checkout.Session,
+  stripeEventId: string
+): Promise<void> {
+  // ── Idempotencia fuerte: verificar por Stripe Event ID ─────────────────────
+  // Stripe puede reenviar el mismo evento si no recibió 200 a tiempo.
+  // Guardamos el eventId con @unique para que el segundo intento falle silenciosamente.
+  const alreadyProcessed = await prisma.booking.findFirst({
+    where: { stripeEventId },
+  });
+  if (alreadyProcessed) {
+    logger.info('Stripe webhook: evento ya procesado (idempotencia)', { stripeEventId, bookingId: alreadyProcessed.id });
+    return;
+  }
+
   const bookingId = session.client_reference_id ?? session.metadata?.bookingId;
   if (!bookingId) {
     logger.warn('Stripe webhook: checkout.session.completed without bookingId', {
       sessionId: session.id,
+      stripeEventId,
     });
     return;
   }
@@ -98,11 +113,11 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session):
   });
 
   if (!booking) {
-    logger.warn('Stripe webhook: booking not found', { bookingId });
+    logger.warn('Stripe webhook: booking not found', { bookingId, stripeEventId });
     return;
   }
   if (booking.paidAt) {
-    logger.info('Stripe webhook: booking already paid', { bookingId });
+    logger.info('Stripe webhook: booking already paid (paidAt check)', { bookingId, stripeEventId });
     return;
   }
 
@@ -117,6 +132,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session):
       status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
       paidAt: new Date(),
       stripePaymentIntentId: paymentIntentId ?? undefined,
+      stripeEventId, // ← persiste para idempotencia
     },
   });
 
