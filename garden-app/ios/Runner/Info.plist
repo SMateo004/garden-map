@@ -45,5 +45,44 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<!-- ── App Transport Security ──────────────────────────────────────────
+	     Fuerza HTTPS en todas las conexiones de red.
+	     NSAllowsArbitraryLoads = false  → ATS activo (default iOS 9+, explícito aquí)
+	     Excepción solo para localhost en builds de debug (simulador).
+	───────────────────────────────────────────────────────────────────── -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<!-- API de producción: HTTPS requerido, sin forward secrecy relajada -->
+			<key>garden-api-1ldd.onrender.com</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+			<!-- Cloudinary: HTTPS requerido -->
+			<key>res.cloudinary.com</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+			<!-- Simulador / desarrollo local: permite HTTP solo en localhost -->
+			<key>localhost</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<false/>
+			</dict>
+		</dict>
+	</dict>
+
 </dict>
 </plist>

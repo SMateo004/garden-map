@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android Network Security Config
+  ────────────────────────────────
+  • Solo se permiten conexiones HTTPS en producción.
+  • Los dominios de debug (localhost, 10.0.2.2) permiten HTTP
+    exclusivamente en builds de desarrollo/debug.
+  • Se anclan los certificados de la API de producción para
+    prevenir ataques man-in-the-middle (certificate pinning).
+-->
+<network-security-config>
+
+    <!-- Política base: solo HTTPS, sin texto claro, sin CA del sistema de usuario -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <!-- Solo confiar en CAs del sistema (no en certificados instalados por el usuario) -->
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+
+    <!-- Excepción de desarrollo: permite HTTP a localhost y al emulador AVD (10.0.2.2) -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system"/>
+            <certificates src="user"/>
+        </trust-anchors>
+    </debug-overrides>
+
+    <!-- API de producción: solo HTTPS, CA del sistema -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">garden-api-1ldd.onrender.com</domain>
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </domain-config>
+
+    <!-- Cloudinary (imágenes y subida de archivos) -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">res.cloudinary.com</domain>
+        <domain includeSubdomains="true">api.cloudinary.com</domain>
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </domain-config>
+
+</network-security-config>

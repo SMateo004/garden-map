@@ -25,7 +25,68 @@ import meetAndGreetRoutes from './modules/meet-and-greet/meet-and-greet.routes.j
 
 const app = express();
 
-app.use(helmet());
+// ── Security headers (helmet 7) ──────────────────────────────────────────
+app.use(helmet({
+  // CSP: esta API solo devuelve JSON — no necesita política de scripts/estilos.
+  // Se deshabilita para no interferir con respuestas JSON.
+  contentSecurityPolicy: false,
+
+  // COEP: deshabilitado en APIs puras (rompería clientes cross-origin legítimos)
+  crossOriginEmbedderPolicy: false,
+
+  // COOP: same-origin — impide que ventanas externas referencien esta API
+  crossOriginOpenerPolicy: { policy: 'same-origin' },
+
+  // CORP: cross-origin — permite que el cliente Flutter web consuma la API
+  // y que los /uploads sean embebibles desde la app
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+
+  // X-DNS-Prefetch-Control: off — evita prefetch de DNS no solicitado
+  dnsPrefetchControl: { allow: false },
+
+  // X-Frame-Options: DENY — impide que la API sea embebida en un <iframe>
+  frameguard: { action: 'deny' },
+
+  // Oculta X-Powered-By (no revelar Express)
+  hidePoweredBy: true,
+
+  // HSTS: solo en producción; 2 años, subdomains, preload
+  hsts: env.NODE_ENV === 'production'
+    ? { maxAge: 63072000, includeSubDomains: true, preload: true }
+    : false,
+
+  // X-Download-Options: noopen (IE legacy, pero no cuesta nada)
+  ieNoOpen: true,
+
+  // X-Content-Type-Options: nosniff — evita MIME sniffing
+  noSniff: true,
+
+  // Origin-Agent-Cluster: ?1 — aísla el proceso del agente por origen
+  originAgentCluster: true,
+
+  // X-Permitted-Cross-Domain-Policies: none — bloquea Adobe Flash/Reader
+  permittedCrossDomainPolicies: { permittedPolicies: 'none' },
+
+  // Referrer-Policy: no-referrer — no filtra la URL en cabecera Referer
+  referrerPolicy: { policy: 'no-referrer' },
+}));
+
+// Permissions-Policy — desactiva características del navegador no necesarias
+// (helmet 7 no lo incluye de forma nativa)
+app.use((_req, res, next) => {
+  res.setHeader(
+    'Permissions-Policy',
+    'accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), ' +
+    'camera=(), cross-origin-isolated=(), display-capture=(), ' +
+    'document-domain=(), encrypted-media=(), execution-while-not-rendered=(), ' +
+    'execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), ' +
+    'gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), ' +
+    'navigation-override=(), payment=(), picture-in-picture=(), ' +
+    'publickey-credentials-get=(), screen-wake-lock=(), sync-xhr=(), ' +
+    'usb=(), web-share=(), xr-spatial-tracking=()',
+  );
+  next();
+});
 
 // ── CORS ──────────────────────────────────────────────────────────────────
 // En producción, solo se permiten los orígenes configurados en ALLOWED_ORIGINS
