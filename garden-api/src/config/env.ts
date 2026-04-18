@@ -30,6 +30,8 @@ const envSchema = z.object({
   // Email (Resend is the ONLY provider)
   RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY is required for email delivery'),
   EMAIL_FROM: z.string().min(1, 'EMAIL_FROM is required for email delivery'),
+  // Redis (cache + Socket.io adapter)
+  REDIS_URL: z.string().url().optional(),
   // Observabilidad
   SENTRY_DSN: z.string().url().optional(),
   POSTHOG_API_KEY: z.string().optional(),

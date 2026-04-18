@@ -1,7 +1,9 @@
 import { Server as SocketServer } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
 import { Server as HttpServer } from 'http';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
+import { getRedisClient } from '../config/redis.js';
 import prisma from '../config/database.js';
 import logger from '../shared/logger.js';
 
@@ -21,6 +23,10 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
           ]
         : [];
 
+    // Redis adapter: pub + sub son clientes separados (requisito de ioredis)
+    const redisPub = getRedisClient();
+    const redisSub = redisPub?.duplicate() ?? null;
+
     io = new SocketServer(httpServer, {
         cors: {
             origin: (origin, callback) => {
@@ -35,6 +41,14 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
             credentials: true,
         },
     });
+
+    // Activar Redis adapter si está disponible
+    if (redisPub && redisSub) {
+        io.adapter(createAdapter(redisPub, redisSub));
+        logger.info('Socket.io usando Redis adapter');
+    } else {
+        logger.info('Socket.io usando adapter in-memory (sin REDIS_URL)');
+    }
 
     io.use((socket, next) => {
         const token = socket.handshake.auth.token as string;

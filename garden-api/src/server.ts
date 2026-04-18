@@ -16,6 +16,7 @@ import { env } from './config/env.js';
 import prisma from './config/database.js';
 import logger from './shared/logger.js';
 import { shutdownAnalytics } from './shared/analytics.js';
+import { shutdownRedis } from './config/redis.js';
 import { iniciarJobAjustePrecios } from './jobs/ajuste-precios.job.js';
 import { iniciarJobNotificacionesProgramadas } from './jobs/scheduled-notifications.job.js';
 
@@ -123,6 +124,7 @@ async function start() {
 
 process.on('SIGTERM', async () => {
   await shutdownAnalytics();
+  await shutdownRedis();
   await prisma.$disconnect();
   process.exit(0);
 });
