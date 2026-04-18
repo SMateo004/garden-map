@@ -2,9 +2,12 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
+import rateLimit from 'express-rate-limit';
 import { env } from './config/env.js';
 import { errorHandler } from './shared/error-handler.js';
 import prisma from './config/database.js';
+import { getRedisClient } from './config/redis.js';
+import { maintenanceMiddleware } from './middleware/maintenance.middleware.js';
 import caregiverRoutes from './modules/caregiver-service/caregiver.routes.js';
 import userRoutes from './modules/user-service/user.routes.js';
 import adminRoutes from './modules/admin/admin.routes.js';
@@ -127,6 +130,30 @@ app.use(cors({
   credentials: true,
 }));
 
+// ── Global rate limiter ────────────────────────────────────────────────────
+// 200 requests per IP per minute for all endpoints except /health.
+// Auth-specific endpoints apply stricter limits on top of this (see auth.routes.ts).
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1_000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path === '/health',
+  message: {
+    success: false,
+    error: {
+      code: 'RATE_LIMITED',
+      message: 'Demasiadas peticiones. Intenta de nuevo en un minuto.',
+    },
+  },
+});
+app.use(globalLimiter);
+
+// ── Maintenance mode ───────────────────────────────────────────────────────
+// Checked after global rate limit; returns 503 when maintenanceMode=true.
+// /health, /api/admin and Stripe webhooks are always allowed through.
+app.use(maintenanceMiddleware);
+
 // Stripe webhook
 app.use(
   '/api/payments/webhook',
@@ -147,12 +174,48 @@ app.use('/uploads', (_req, res, next) => {
 });
 app.use('/uploads', express.static(uploadsDir));
 
-app.get('/health', (_req, res) => {
-  res.json({
-    success: true,
+/**
+ * GET /health — liveness + readiness probe.
+ *
+ * Render and other platforms hit this endpoint to decide whether to route
+ * traffic to this instance.  Returns 200 when all critical services are
+ * reachable, 503 when any required service is down.
+ *
+ * Redis is optional (falls back to in-memory cache) so a Redis failure is
+ * flagged but does NOT make the pod unhealthy.
+ */
+app.get('/health', async (_req, res) => {
+  const checks: Record<string, 'ok' | 'error' | 'disabled'> = {};
+
+  // 1. Database — required
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    checks.db = 'ok';
+  } catch {
+    checks.db = 'error';
+  }
+
+  // 2. Redis — optional (in-memory fallback active when absent)
+  try {
+    const redis = getRedisClient();
+    if (redis) {
+      await redis.ping();
+      checks.redis = 'ok';
+    } else {
+      checks.redis = 'disabled'; // Running without Redis — not an error
+    }
+  } catch {
+    checks.redis = 'error'; // Redis configured but unreachable
+  }
+
+  const healthy = checks.db === 'ok'; // DB is the only required dependency
+  res.status(healthy ? 200 : 503).json({
+    success: healthy,
     data: {
-      status: 'ok',
-      port: process.env.PORT || 3000,
+      status: healthy ? 'ok' : 'degraded',
+      checks,
+      version: process.env.npm_package_version ?? 'unknown',
+      uptime: Math.floor(process.uptime()),
       timestamp: new Date().toISOString(),
     },
   });

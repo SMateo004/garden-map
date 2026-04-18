@@ -172,6 +172,8 @@ export const registerCaregiverSchema = z
   .object({
     user: registerCaregiverUserSchema,
     profile: registerCaregiverProfileSchema,
+    /** Código de invitación beta. Solo requerido cuando betaInviteRequired=true en AppSettings. */
+    inviteCode: z.string().max(64).optional(),
   })
   .superRefine((data, ctx) => {
     // Only cross-validate photos vs services when both are provided
@@ -247,6 +249,8 @@ export const registerClientSchema = z.object({
   password: z.string().min(8, 'Mínimo 8 caracteres'),
   phone: phoneClientSchema,
   address: z.string().max(500, 'Máximo 500 caracteres').optional().transform((v) => (v && v.trim() ? v.trim() : undefined)),
+  /** Código de invitación beta. Solo requerido cuando betaInviteRequired=true en AppSettings. */
+  inviteCode: z.string().max(64).optional(),
 });
 
 export type LoginBody = z.infer<typeof loginSchema>;

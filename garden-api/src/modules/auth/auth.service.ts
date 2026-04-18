@@ -12,6 +12,7 @@ import type { JwtPayload } from '../../middleware/auth.middleware.js';
 import logger from '../../shared/logger.js';
 import { track, identify } from '../../shared/analytics.js';
 import { blockchainService } from '../../services/blockchain.service.js';
+import { getBoolSetting, getStringSetting } from '../../utils/settings-cache.js';
 
 const SALT_ROUNDS = 12;
 
@@ -119,8 +120,38 @@ export async function revokeAllRefreshTokens(userId: string): Promise<void> {
  * Transacción: crear User (role CAREGIVER) + CaregiverProfile (verificationStatus PENDING_REVIEW).
  * Valida uniques: email y phone. 409 si ya existen.
  */
+/**
+ * Beta-access guard — shared by both register flows.
+ *
+ * When `betaInviteRequired` AppSetting is true the caller must supply an
+ * `inviteCode` that matches one of the codes stored in `betaInviteCodes`
+ * (JSON array of strings).  If the code is missing or invalid a
+ * `BadRequestError` with code `INVALID_INVITE_CODE` is thrown.
+ *
+ * When `betaInviteRequired` is false (the default) the function is a no-op.
+ */
+async function assertBetaAccess(inviteCode?: string): Promise<void> {
+  const required = await getBoolSetting('betaInviteRequired', false);
+  if (!required) return;
+
+  const raw = await getStringSetting('betaInviteCodes', '[]');
+  let codes: string[] = [];
+  try { codes = JSON.parse(raw) as string[]; } catch { codes = []; }
+
+  const submitted = (inviteCode ?? '').trim();
+  if (!submitted || !codes.includes(submitted)) {
+    throw new BadRequestError(
+      'Código de invitación inválido o no proporcionado. GARDEN está en beta cerrada.',
+      'INVALID_INVITE_CODE'
+    );
+  }
+}
+
 export async function registerCaregiver(body: RegisterCaregiverBody): Promise<RegisterCaregiverResult> {
   const { user: userInput, profile: profileInput } = body;
+
+  // Beta access gate — no-op when betaInviteRequired=false
+  await assertBetaAccess(body.inviteCode);
 
   const [existingEmail, existingPhone] = await Promise.all([
     prisma.user.findUnique({ where: { email: userInput.email.toLowerCase() } }),
@@ -307,6 +338,9 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
     logger.error('Prisma Client sin modelo user; ejecuta npx prisma generate');
     throw new Error('Database client not available');
   }
+  // Beta access gate — no-op when betaInviteRequired=false
+  await assertBetaAccess(body.inviteCode);
+
   logger.info('Inicio registro cliente', {
     input: {
       firstName: body.firstName,

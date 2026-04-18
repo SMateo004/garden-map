@@ -10,6 +10,23 @@ if (process.env.SENTRY_DSN) {
   });
 }
 
+// ── Process-level error handlers — before any async code ──────────────────────
+// These are the last line of defence. Node exits after uncaughtException because
+// the process may be in an undefined state; we log + capture to Sentry first.
+process.on('uncaughtException', (err: Error) => {
+  console.error('[CRITICAL] Uncaught exception:', err.message, err.stack);
+  if (process.env.SENTRY_DSN) Sentry.captureException(err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason: unknown) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  console.error('[CRITICAL] Unhandled promise rejection:', err.message, err.stack);
+  if (process.env.SENTRY_DSN) Sentry.captureException(err);
+  // Do NOT exit — the current request will bubble to the error handler naturally.
+  // If it is truly unrecoverable, Sentry will alert.
+});
+
 import { createServer } from 'http';
 import app from './app.js';
 import { env } from './config/env.js';
@@ -24,10 +41,50 @@ const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
 const httpServer = createServer(app);
 
+/** Maximum time (ms) to wait for in-flight requests before forcing exit. */
+const SHUTDOWN_TIMEOUT_MS = 30_000;
+
+/**
+ * Graceful shutdown sequence:
+ * 1. Stop accepting new HTTP connections.
+ * 2. Flush analytics + close Redis + disconnect Prisma.
+ * 3. Exit 0 (or 1 on error / timeout).
+ *
+ * Handles both SIGTERM (Render rolling deploy) and SIGINT (Ctrl-C in dev).
+ */
+async function shutdown(signal: string): Promise<void> {
+  logger.info(`[Shutdown] ${signal} received — starting graceful shutdown`);
+
+  // Hard-kill timer: if shutdown takes longer than SHUTDOWN_TIMEOUT_MS, force exit.
+  const hardKill = setTimeout(() => {
+    logger.error(`[Shutdown] Timeout after ${SHUTDOWN_TIMEOUT_MS}ms — forcing exit`);
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS);
+  hardKill.unref(); // Don't keep the event loop alive just for this timeout.
+
+  // Stop accepting new requests; wait for in-flight ones to complete.
+  httpServer.close(() => logger.info('[Shutdown] HTTP server closed'));
+
+  try {
+    await shutdownAnalytics();
+    await shutdownRedis();
+    await prisma.$disconnect();
+    logger.info('[Shutdown] All resources released — exiting cleanly');
+    clearTimeout(hardKill);
+    process.exit(0);
+  } catch (err) {
+    logger.error('[Shutdown] Error during shutdown', err);
+    process.exit(1);
+  }
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
+
 async function start() {
   httpServer.listen(PORT, '0.0.0.0', async () => {
     logger.info(`🚀 GARDEN API RUNNING ON http://localhost:${PORT}`);
-    
+
     // Defer Socket.io to prevent main thread blocking during module load
     try {
         const { initSocketServer } = await import('./services/socket.service.js');
@@ -62,6 +119,11 @@ async function start() {
         { key: 'disputasEnabled',          value: 'true'  },
         { key: 'preciosDinamicosEnabled',  value: 'true'  },
         { key: 'meetGreetEnabled',         value: 'true'  },
+        // ── Beta access control ──────────────────────────────────────────────
+        { key: 'betaInviteRequired',       value: 'false' },
+        // JSON array of valid invite codes: ["GARDEN2025","BETA01"]
+        // Update via PATCH /api/admin/settings/betaInviteCodes
+        { key: 'betaInviteCodes',          value: '[]'    },
         // ── Pagos y finanzas (numeric) ───────────────────────────────────────
         { key: 'platformCommissionPct',    value: '10'    },
         { key: 'montoMinimoRetiro',        value: '50'    },
@@ -121,13 +183,6 @@ async function start() {
     }
   }, 60 * 60 * 1000); // Every hour
 }
-
-process.on('SIGTERM', async () => {
-  await shutdownAnalytics();
-  await shutdownRedis();
-  await prisma.$disconnect();
-  process.exit(0);
-});
 
 start().catch(err => {
   logger.error('Fatal startup error', err);
