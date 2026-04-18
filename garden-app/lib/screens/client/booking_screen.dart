@@ -460,7 +460,7 @@ class _BookingScreenState extends State<BookingScreen> {
                   )
                 else
                   SizedBox(
-                    height: 100,
+                    height: 80,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
                       itemCount: _pets.length,
@@ -469,9 +469,11 @@ class _BookingScreenState extends State<BookingScreen> {
                         final isSelected = _selectedPetId == pet['id'];
                         return GestureDetector(
                           onTap: () => setState(() => _selectedPetId = pet['id']),
-                          child: Container(
-                            width: 100,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            width: 180,
                             margin: const EdgeInsets.only(right: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                             decoration: isSelected
                                 ? BoxDecoration(
                                     gradient: LinearGradient(
@@ -483,31 +485,60 @@ class _BookingScreenState extends State<BookingScreen> {
                                       ],
                                     ),
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: GardenColors.primary.withValues(alpha: 0.35), width: 1.0),
+                                    border: Border.all(color: GardenColors.primary, width: 1.5),
                                   )
                                 : BoxDecoration(
-                                    color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white.withValues(alpha: 0.40),
+                                    color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white.withValues(alpha: 0.60),
                                     borderRadius: BorderRadius.circular(16),
                                     border: Border.all(color: borderColor, width: 1.0),
                                   ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                            child: Row(
                               children: [
-                                GardenAvatar(
-                                  imageUrl: pet['photoUrl'],
-                                  size: 40,
-                                  initials: pet['name']?[0] ?? 'P',
+                                // Foto de la mascota
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: pet['photoUrl'] != null && (pet['photoUrl'] as String).isNotEmpty
+                                      ? Image.network(
+                                          pet['photoUrl'],
+                                          width: 48,
+                                          height: 56,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => _petPlaceholder(pet, isSelected, textColor),
+                                        )
+                                      : _petPlaceholder(pet, isSelected, textColor),
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  pet['name'] ?? '',
-                                  style: TextStyle(
-                                    color: isSelected ? GardenColors.primary : textColor,
-                                    fontSize: 13,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                const SizedBox(width: 10),
+                                // Nombre y especie
+                                Expanded(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        pet['name'] ?? '',
+                                        style: TextStyle(
+                                          color: isSelected ? GardenColors.primary : textColor,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      if ((pet['breed'] ?? '').toString().isNotEmpty)
+                                        Text(
+                                          pet['breed'] ?? '',
+                                          style: TextStyle(
+                                            color: isSelected
+                                                ? GardenColors.primary.withValues(alpha: 0.7)
+                                                : (isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+                                            fontSize: 11,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                    ],
                                   ),
-                                  overflow: TextOverflow.ellipsis,
                                 ),
+                                if (isSelected)
+                                  const Icon(Icons.check_circle_rounded, color: GardenColors.primary, size: 16),
                               ],
                             ),
                           ),
@@ -893,6 +924,27 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
+  Widget _petPlaceholder(Map<String, dynamic> pet, bool isSelected, Color textColor) {
+    return Container(
+      width: 48,
+      height: 56,
+      decoration: BoxDecoration(
+        color: GardenColors.primary.withValues(alpha: isSelected ? 0.15 : 0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Center(
+        child: Text(
+          (pet['name'] as String? ?? 'P')[0].toUpperCase(),
+          style: TextStyle(
+            color: GardenColors.primary,
+            fontWeight: FontWeight.w900,
+            fontSize: 20,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSummary(double price) {
     if (_selectedPetId == null || _selectedService == null || _selectedDate == null) {
       return const SizedBox();
@@ -915,7 +967,7 @@ class _BookingScreenState extends State<BookingScreen> {
           const SizedBox(height: 12),
           _summaryRow(Icons.pets, 'Mascota', petName),
           _summaryRow(Icons.settings, 'Servicio', _selectedService == 'PASEO' ? 'Paseo' : 'Hospedaje'),
-          if (_selectedService == 'PASEO') _summaryRow(Icons.timer_outlined, 'Duración', '60 min'),
+          if (_selectedService == 'PASEO') _summaryRow(Icons.timer_outlined, 'Duración', '$_selectedDuration min'),
           _summaryRow(Icons.calendar_today, 'Fecha', formatDate(_selectedDate!)),
           if (_selectedService == 'PASEO') _summaryRow(Icons.access_time, 'Hora', _selectedStartTime ?? ''),
           const Divider(height: 24),
