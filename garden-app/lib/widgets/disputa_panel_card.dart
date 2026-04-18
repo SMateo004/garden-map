@@ -118,7 +118,7 @@ class _DisputaPanelCardState extends State<DisputaPanelCard>
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4F8EF7),
+                backgroundColor: GardenColors.info,
               ),
               onPressed: () {
                 Navigator.pop(dialogContext);
@@ -196,7 +196,7 @@ class _DisputaPanelCardState extends State<DisputaPanelCard>
           onPressed: _fetchDisputa,
           child: const Text(
             "Reintentar",
-            style: TextStyle(color: Color(0xFF4F8EF7)),
+            style: TextStyle(color: GardenColors.info),
           ),
         ),
       ],
@@ -293,7 +293,7 @@ class _DisputaPanelCardState extends State<DisputaPanelCard>
               const Text(
                 "ANÁLISIS DE GARDEN IA",
                 style: TextStyle(
-                  color: Color(0xFF4F8EF7),
+                  color: GardenColors.info,
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
                 ),
@@ -329,10 +329,10 @@ class _DisputaPanelCardState extends State<DisputaPanelCard>
           width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF4F8EF7).withOpacity(0.15),
+            color: GardenColors.info.withOpacity(0.15),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: const Color(0xFF4F8EF7).withOpacity(0.3),
+              color: GardenColors.info.withOpacity(0.3),
             ),
           ),
           child: Text(
@@ -362,7 +362,7 @@ class _DisputaPanelCardState extends State<DisputaPanelCard>
         // 6 Botones
         ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF4F8EF7),
+            backgroundColor: GardenColors.info,
             minimumSize: const Size(double.infinity, 50),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),

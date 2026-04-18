@@ -173,7 +173,7 @@ class _NotificationBellState extends State<NotificationBell> {
                 width: 18,
                 height: 18,
                 decoration: const BoxDecoration(
-                  color: Color(0xFFE53935),
+                  color: GardenColors.error,
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,
@@ -495,7 +495,7 @@ class _NotificationRow extends StatelessWidget {
       case 'BOOKING_REJECTED': return GardenColors.error;
       case 'BOOKING_CANCELLED': return GardenColors.warning;
       case 'PAYMENT_RECEIVED': return GardenColors.accent;
-      case 'REVIEW_RECEIVED': return const Color(0xFFFFB300);
+      case 'REVIEW_RECEIVED': return GardenColors.warning;
       case 'SERVICE_STARTED': return GardenColors.accent;
       case 'SERVICE_COMPLETED': return GardenColors.success;
       case 'CHAT_MESSAGE': return GardenColors.primary;

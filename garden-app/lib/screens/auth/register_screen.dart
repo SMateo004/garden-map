@@ -132,7 +132,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF1A1F2E), Color(0xFF0A0E1A)],
+          colors: [GardenColors.navy, GardenColors.navyDark],
         ),
       ),
       child: Stack(

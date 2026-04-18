@@ -1142,6 +1142,124 @@ export async function changeDatesBooking(
 }
 
 /**
+ * Extiende un paseo en curso (IN_PROGRESS) sumando 15, 30 o 60 minutos adicionales.
+ * Recalcula el monto total prorrateando el precio por minuto del cuidador (precio de 60 min).
+ * Notifica al cuidador por in-app + push. Registra evento en serviceEvents y en blockchain.
+ */
+export async function extendPaseoWalk(
+  bookingId: string,
+  clientId: string,
+  additionalMinutes: number
+): Promise<BookingCreateResult> {
+  const cfg = await getBookingSettings();
+
+  let caregiverUserId: string | null = null;
+
+  const result = await prisma.$transaction(async (tx) => {
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, clientId },
+      select: {
+        id: true,
+        serviceType: true,
+        status: true,
+        duration: true,
+        totalAmount: true,
+        commissionAmount: true,
+        pricePerUnit: true,
+        caregiverId: true,
+        petName: true,
+        serviceEvents: true,
+      },
+    });
+
+    if (!booking) throw new BookingNotFoundError(bookingId);
+
+    if (booking.serviceType !== ServiceType.PASEO) {
+      throw new BookingValidationError('Solo se puede extender un paseo');
+    }
+    if (booking.status !== BookingStatus.IN_PROGRESS) {
+      throw new BookingValidationError('Solo se puede extender un paseo que está en curso');
+    }
+
+    // pricePerUnit es el precio de 60 min que se guardó en la reserva (con comisión incluida)
+    const pricePerUnitClient = Number(booking.pricePerUnit); // precio total de 60 min con comisión
+    const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
+    const ratePerMinCaregiver = pricePerUnitCaregiver / 60;
+
+    const extraBase = Math.round(ratePerMinCaregiver * additionalMinutes);
+    const extraTotal = Math.round(extraBase * (1 + cfg.COMMISSION_RATE));
+    const extraCommission = extraTotal - extraBase;
+
+    const currentDuration = booking.duration ?? 60;
+    const newDuration = currentDuration + additionalMinutes;
+    const newTotal = Number(booking.totalAmount) + extraTotal;
+    const newCommission = Number(booking.commissionAmount) + extraCommission;
+
+    // Append extension event to serviceEvents array
+    const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
+    events.push({
+      type: 'EXTENSION_CONFIRMED',
+      additionalMinutes,
+      extraAmount: extraTotal,
+      timestamp: new Date().toISOString(),
+    });
+
+    const updated = await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        duration: newDuration,
+        totalAmount: new Prisma.Decimal(newTotal),
+        commissionAmount: new Prisma.Decimal(newCommission),
+        serviceEvents: events,
+      },
+    });
+
+    // Notificación in-app al cuidador
+    const caregiver = await tx.caregiverProfile.findFirst({
+      where: { id: booking.caregiverId },
+      select: { userId: true },
+    });
+    if (caregiver) {
+      caregiverUserId = caregiver.userId;
+      await tx.notification.create({
+        data: {
+          userId: caregiver.userId,
+          title: '⏱️ Extensión de paseo confirmada',
+          message: `El cliente ha confirmado ${additionalMinutes} minutos adicionales para el paseo de ${booking.petName ?? 'la mascota'}. Bs ${extraTotal} adicionales han sido pagados.`,
+          type: 'SERVICE_EXTENSION',
+        },
+      });
+    }
+
+    logger.info('Paseo walk extended', {
+      bookingId,
+      additionalMinutes,
+      newDuration,
+      extraTotal,
+      newTotal,
+    });
+
+    return bookingToResponse(updated);
+  });
+
+  // Push notification al cuidador (fuera de la transacción)
+  if (caregiverUserId) {
+    sendPushToUser(
+      caregiverUserId,
+      '⏱️ Extensión de paseo confirmada',
+      `${additionalMinutes} minutos adicionales — Bs ${result.totalAmount}`
+    ).catch((err) => logger.error('Push extension failed', { bookingId, err }));
+  }
+
+  // Registro en blockchain (asíncrono — mock si no está configurado)
+  blockchainService.recordWalkExtensionOnChain(bookingId, additionalMinutes, parseFloat(result.totalAmount)).catch((err) => {
+    logger.error('Blockchain walk extension failed', { bookingId, err });
+  });
+
+  return result;
+}
+
+/**
  * Obtiene las reservas del cliente autenticado, paginadas.
  * Retorna lista ordenada por createdAt DESC con metadata de paginación.
  */

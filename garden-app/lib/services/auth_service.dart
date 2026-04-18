@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -118,12 +119,24 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/login'),
-      headers: _headers,
-      body: jsonEncode({'email': email, 'password': password}),
-    );
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse('$baseUrl/auth/login'),
+        headers: _headers,
+        body: jsonEncode({'email': email, 'password': password}),
+      ).timeout(const Duration(seconds: 20));
+    } catch (_) {
+      throw Exception('No se pudo conectar con el servidor. Verifica tu internet e intenta de nuevo.');
+    }
+
+    Map<String, dynamic> data;
+    try {
+      data = jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw Exception('El servidor no respondió correctamente (${response.statusCode}). Intenta de nuevo en unos segundos.');
+    }
+
     if (response.statusCode == 200 && data['success'] == true) {
       final result = data['data'] as Map<String, dynamic>;
       await _saveTokens(result);
@@ -153,12 +166,23 @@ class AuthService {
       'phone': phone,
       if (address != null && address.isNotEmpty) 'address': address,
     };
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/client/register'),
-      headers: _headers,
-      body: jsonEncode(body),
-    );
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse('$baseUrl/auth/client/register'),
+        headers: _headers,
+        body: jsonEncode(body),
+      ).timeout(const Duration(seconds: 20));
+    } catch (_) {
+      throw Exception('No se pudo conectar con el servidor. Verifica tu internet e intenta de nuevo.');
+    }
+
+    Map<String, dynamic> data;
+    try {
+      data = jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw Exception('El servidor no respondió correctamente (${response.statusCode}). Intenta de nuevo en unos segundos.');
+    }
     if (response.statusCode == 201 && data['success'] == true) {
       final result = data['data'] as Map<String, dynamic>;
       await _saveTokens(result);

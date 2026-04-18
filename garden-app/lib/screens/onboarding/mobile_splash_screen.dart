@@ -285,30 +285,28 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
                         position: _textSlide,
                         child: FadeTransition(
                           opacity: _textOpacity,
-                          child: const Text(
+                          child: Text(
                             'GARDEN',
-                            style: TextStyle(
+                            style: GardenText.h2.copyWith(
                               color: Colors.white,
-                              fontSize: 40,
+                              fontSize: 48,
                               fontWeight: FontWeight.w900,
-                              letterSpacing: 8,
+                              letterSpacing: 10,
                             ),
                           ),
                         ),
                       ),
 
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
 
                       // Tagline
                       FadeTransition(
                         opacity: _taglineOpacity,
-                        child: const Text(
+                        child: Text(
                           'Cuidado de mascotas en Santa Cruz',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w400,
-                            letterSpacing: 0.5,
+                          style: GardenText.body.copyWith(
+                            color: Colors.white.withValues(alpha: 0.80),
+                            letterSpacing: 0.3,
                           ),
                         ),
                       ),

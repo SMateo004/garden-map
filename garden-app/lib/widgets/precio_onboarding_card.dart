@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/garden_theme.dart';
 
 class PrecioOnboardingCard extends StatefulWidget {
   final String zona;
@@ -100,7 +101,7 @@ class _PrecioOnboardingCardState extends State<PrecioOnboardingCard> {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: const Color(0xFF162610),
+        color: GardenColors.darkSurface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white.withOpacity(0.12)),
       ),
@@ -144,11 +145,11 @@ class _PrecioOnboardingCardState extends State<PrecioOnboardingCard> {
           // Slider
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
-              activeTrackColor: const Color(0xFF778C43),
+              activeTrackColor: GardenColors.primary,
               inactiveTrackColor: Colors.white24,
               thumbColor: Colors.white,
               overlayColor: const Color(0x33778C43),
-              valueIndicatorColor: const Color(0xFF778C43),
+              valueIndicatorColor: GardenColors.primary,
               valueIndicatorTextStyle: const TextStyle(color: Colors.white),
             ),
             child: Slider(

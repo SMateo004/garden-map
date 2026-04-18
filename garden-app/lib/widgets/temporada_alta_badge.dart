@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import '../services/agentes_service.dart';
+import '../theme/garden_theme.dart';
 
 class TemporadaAltaBadge extends StatefulWidget {
   final String zona;
@@ -76,7 +77,7 @@ class _TemporadaAltaBadgeState extends State<TemporadaAltaBadge> with SingleTick
                     top: 24, left: 24, right: 24, bottom: 48,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0A0E1A).withValues(alpha: useBlur ? 0.8 : 0.97),
+                    color: GardenColors.navyDark.withValues(alpha: useBlur ? 0.8 : 0.97),
                     border: Border(
                       top: BorderSide(
                         color: Colors.white.withValues(alpha: 0.1),
@@ -171,7 +172,7 @@ class _TemporadaAltaBadgeState extends State<TemporadaAltaBadge> with SingleTick
                         const SizedBox(height: 32),
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFFF6B35),
+                            backgroundColor: GardenColors.orange,
                             minimumSize: const Size(double.infinity, 50),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -213,7 +214,7 @@ class _TemporadaAltaBadgeState extends State<TemporadaAltaBadge> with SingleTick
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: const Color(0xFFFF6B35),
+          color: GardenColors.orange,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(

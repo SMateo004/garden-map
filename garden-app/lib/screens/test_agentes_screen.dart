@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/garden_theme.dart';
 import '../services/agentes_service.dart';
 import '../widgets/precio_onboarding_card.dart';
 import '../widgets/temporada_alta_badge.dart';
@@ -24,10 +25,10 @@ class _TestAgentesScreenState extends State<TestAgentesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0E1A),
+      backgroundColor: GardenColors.navyDark,
       appBar: AppBar(
         title: const Text('Test Agentes IA', style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF1A1F2E),
+        backgroundColor: GardenColors.navy,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: SingleChildScrollView(

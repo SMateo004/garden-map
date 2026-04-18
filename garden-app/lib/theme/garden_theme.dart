@@ -1,6 +1,7 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 // ── PALETA OFICIAL GARDEN ──────────────────────────────────────────────────
 // Paleta: oliva #778C43 · vivid-green #58E262 · lima #D9EF9F · beige #DBD0C4
@@ -35,9 +36,17 @@ class GardenColors {
   static const secondary    = Color(0xFF58E262); // alias de accent para actions secundarias
   static const polygon      = Color(0xFF8247E5); // blockchain purple
   static const success      = Color(0xFF58E262); // vivid green = éxito
+  static const successDark  = Color(0xFF1A9954); // deep success (gradients, pressed)
+  static const forest       = Color(0xFF0F7A3E); // deep forest green (HOSPEDAJE, active service)
   static const warning      = Color(0xFFFFB020); // ámbar
   static const error        = Color(0xFFE74C3C); // rojo
-  static const star         = Color(0xFFFFB020); // estrella
+  static const star         = Color(0xFFFFB020); // estrella/rating
+  static const info         = Color(0xFF4F8EF7); // info/AI/link blue
+  static const infoDark     = Color(0xFF2D6FE0); // darker info blue
+  static const orange       = Color(0xFFFF6B35); // notification/energy orange
+  static const orangeDark   = Color(0xFFE55A25); // darker orange
+  static const navy         = Color(0xFF1A1F2E); // dark navy card background
+  static const navyDark     = Color(0xFF0A0E1A); // near-black navy (dark screens)
 
   // ── ALIASES (resuelven a light mode — nuevo default) ────────────────────
   static const background      = lightBackground;
@@ -98,28 +107,71 @@ class GardenGradients {
 }
 
 // ── TIPOGRAFÍA ─────────────────────────────────────────────────────────────
+// Fuentes: Nunito (400–900) para UI · JetBrains Mono (600) para metadata/monoespaciado
+// Escala: H1 72/900 · H2 48/800 · H3 28/800 · H4 20/700 · Body 16/500 · Meta 13/600
 class GardenText {
-  static const String fontFamily = 'Inter';
+  // ── Escala principal ─────────────────────────────────────────────────────
 
-  static const displayLarge  = TextStyle(fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.5, height: 1.2);
-  static const displayMedium = TextStyle(fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.3, height: 1.2);
-  static const displaySmall  = TextStyle(fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.2, height: 1.3);
+  /// 72sp · Nunito Black 900 · ls -0.04em — pantallas hero, splash
+  static TextStyle get h1 => GoogleFonts.nunito(
+    fontSize: 72, fontWeight: FontWeight.w900,
+    letterSpacing: -2.88,   // -0.04em × 72
+    height: 1.10,
+  );
 
-  static const headingLarge  = TextStyle(fontSize: 20, fontWeight: FontWeight.w700, height: 1.3);
-  static const headingMedium = TextStyle(fontSize: 18, fontWeight: FontWeight.w600, height: 1.4);
-  static const headingSmall  = TextStyle(fontSize: 16, fontWeight: FontWeight.w600, height: 1.4);
+  /// 48sp · Nunito ExtraBold 800 · ls -0.03em — títulos principales de sección
+  static TextStyle get h2 => GoogleFonts.nunito(
+    fontSize: 48, fontWeight: FontWeight.w800,
+    letterSpacing: -1.44,   // -0.03em × 48
+    height: 1.15,
+  );
 
-  static const bodyLarge  = TextStyle(fontSize: 15, fontWeight: FontWeight.w400, height: 1.6);
-  static const bodyMedium = TextStyle(fontSize: 14, fontWeight: FontWeight.w400, height: 1.5);
-  static const bodySmall  = TextStyle(fontSize: 13, fontWeight: FontWeight.w400, height: 1.5);
+  /// 28sp · Nunito ExtraBold 800 · ls -0.02em — subtítulos de pantalla
+  static TextStyle get h3 => GoogleFonts.nunito(
+    fontSize: 28, fontWeight: FontWeight.w800,
+    letterSpacing: -0.56,   // -0.02em × 28
+    height: 1.20,
+  );
 
-  static const labelLarge  = TextStyle(fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.3);
-  static const labelMedium = TextStyle(fontSize: 12, fontWeight: FontWeight.w500, letterSpacing: 0.2);
-  static const labelSmall  = TextStyle(fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 0.3);
+  /// 20sp · Nunito Bold 700 — encabezados de tarjeta
+  static TextStyle get h4 => GoogleFonts.nunito(
+    fontSize: 20, fontWeight: FontWeight.w700,
+    height: 1.30,
+  );
 
-  static const caption     = TextStyle(fontSize: 11, fontWeight: FontWeight.w400, height: 1.4);
-  static const price       = TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: GardenColors.primary, letterSpacing: -0.3);
-  static const priceSmall  = TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: GardenColors.primary);
+  /// 16sp · Nunito Medium 500 · height 1.5 — cuerpo de texto estándar
+  static TextStyle get body => GoogleFonts.nunito(
+    fontSize: 16, fontWeight: FontWeight.w500,
+    height: 1.50,
+  );
+
+  /// 13sp · JetBrains Mono SemiBold 600 — precios, métricas, timestamps
+  static TextStyle get metadata => GoogleFonts.jetBrainsMono(
+    fontSize: 13, fontWeight: FontWeight.w600,
+    height: 1.40,
+  );
+
+  // ── Aliases para compatibilidad con código existente ─────────────────────
+
+  static TextStyle get displayLarge  => GoogleFonts.nunito(fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.5, height: 1.2);
+  static TextStyle get displayMedium => h3;
+  static TextStyle get displaySmall  => GoogleFonts.nunito(fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.2, height: 1.3);
+
+  static TextStyle get headingLarge  => h4;
+  static TextStyle get headingMedium => GoogleFonts.nunito(fontSize: 18, fontWeight: FontWeight.w600, height: 1.4);
+  static TextStyle get headingSmall  => GoogleFonts.nunito(fontSize: 16, fontWeight: FontWeight.w600, height: 1.4);
+
+  static TextStyle get bodyLarge  => GoogleFonts.nunito(fontSize: 15, fontWeight: FontWeight.w400, height: 1.6);
+  static TextStyle get bodyMedium => GoogleFonts.nunito(fontSize: 14, fontWeight: FontWeight.w400, height: 1.5);
+  static TextStyle get bodySmall  => GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w400, height: 1.5);
+
+  static TextStyle get labelLarge  => GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.3);
+  static TextStyle get labelMedium => GoogleFonts.nunito(fontSize: 12, fontWeight: FontWeight.w500, letterSpacing: 0.2);
+  static TextStyle get labelSmall  => GoogleFonts.nunito(fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 0.3);
+
+  static TextStyle get caption    => GoogleFonts.nunito(fontSize: 11, fontWeight: FontWeight.w400, height: 1.4);
+  static TextStyle get price      => GoogleFonts.jetBrainsMono(fontSize: 18, fontWeight: FontWeight.w800, color: GardenColors.primary, letterSpacing: -0.3);
+  static TextStyle get priceSmall => GoogleFonts.jetBrainsMono(fontSize: 14, fontWeight: FontWeight.w700, color: GardenColors.primary);
 
   GardenText._();
 }
@@ -337,10 +389,10 @@ class LiquidGlassNavBar extends StatelessWidget {
                       const SizedBox(height: 3),
                       AnimatedDefaultTextStyle(
                         duration: const Duration(milliseconds: 240),
-                        style: TextStyle(
+                        style: GoogleFonts.nunito(
                           color: labelColor,
                           fontSize: 10,
-                          fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                           letterSpacing: selected ? 0.1 : 0,
                         ),
                         child: Text(item.label),
@@ -402,7 +454,7 @@ class GardenGlassDialog extends StatelessWidget {
           children: [
             if (title != null)
               DefaultTextStyle(
-                style: TextStyle(
+                style: GoogleFonts.nunito(
                   color: textColor,
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
@@ -413,9 +465,10 @@ class GardenGlassDialog extends StatelessWidget {
             if (title != null && content != null) const SizedBox(height: 12),
             if (content != null)
               DefaultTextStyle(
-                style: TextStyle(
+                style: GoogleFonts.nunito(
                   color: subtextColor,
                   fontSize: 14,
+                  fontWeight: FontWeight.w400,
                   height: 1.5,
                   decoration: TextDecoration.none,
                 ),
@@ -820,11 +873,11 @@ class GardenButton extends StatelessWidget {
         children: [
           Icon(icon, color: textColor, size: 18),
           const SizedBox(width: 8),
-          Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+          Text(label, style: GoogleFonts.nunito(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
         ],
       );
     }
-    return Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15));
+    return Text(label, style: GoogleFonts.nunito(color: textColor, fontWeight: FontWeight.w700, fontSize: 15));
   }
 }
 
@@ -959,10 +1012,19 @@ ThemeData gardenTheme({bool dark = false}) {
 
   final textH    = dark ? GardenColors.darkTextHint        : GardenColors.lightTextHint;
 
+  // Base text theme con Nunito. Todos los widgets de Material que usan el
+  // textTheme del theme (AppBar, ListTile, etc.) heredan Nunito automáticamente.
+  final baseTextTheme = ThemeData(brightness: dark ? Brightness.dark : Brightness.light).textTheme;
+  final nunitoTextTheme = GoogleFonts.nunitoTextTheme(baseTextTheme).apply(
+    bodyColor: textP,
+    displayColor: textP,
+  );
+
   return ThemeData(
     brightness: dark ? Brightness.dark : Brightness.light,
     primaryColor: GardenColors.primary,
     scaffoldBackgroundColor: bg,
+    textTheme: nunitoTextTheme,
     colorScheme: ColorScheme(
       brightness: dark ? Brightness.dark : Brightness.light,
       primary: GardenColors.primary,
@@ -991,7 +1053,7 @@ ThemeData gardenTheme({bool dark = false}) {
       scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,
       centerTitle: false,
-      titleTextStyle: TextStyle(
+      titleTextStyle: GoogleFonts.nunito(
         fontSize: 18,
         fontWeight: FontWeight.w700,
         color: textP,
@@ -1004,7 +1066,7 @@ ThemeData gardenTheme({bool dark = false}) {
         foregroundColor: Colors.white,
         minimumSize: const Size(double.infinity, 52),
         shape: RoundedRectangleBorder(borderRadius: GardenRadius.md_),
-        textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+        textStyle: GoogleFonts.nunito(fontWeight: FontWeight.w700, fontSize: 15),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -1045,7 +1107,7 @@ ThemeData gardenTheme({bool dark = false}) {
           : Colors.white.withValues(alpha: 0.55),
       selectedColor: GardenColors.primary.withValues(alpha: 0.18),
       checkmarkColor: GardenColors.primary,
-      labelStyle: TextStyle(color: textP, fontSize: 13),
+      labelStyle: GoogleFonts.nunito(color: textP, fontSize: 13, fontWeight: FontWeight.w500),
       side: BorderSide(color: border),
       shape: RoundedRectangleBorder(borderRadius: GardenRadius.md_),
       elevation: 0,
@@ -1081,7 +1143,7 @@ ThemeData gardenTheme({bool dark = false}) {
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: dark ? GardenColors.darkSurfaceElevated : GardenColors.primaryDark,
-      contentTextStyle: const TextStyle(color: Colors.white),
+      contentTextStyle: GoogleFonts.nunito(color: Colors.white, fontWeight: FontWeight.w500),
       shape: RoundedRectangleBorder(borderRadius: GardenRadius.md_),
       behavior: SnackBarBehavior.floating,
     ),

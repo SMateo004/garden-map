@@ -109,7 +109,7 @@ class _LoginScreenState extends State<LoginScreen> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFFFF6B35), Color(0xFFFF4500)],
+          colors: [GardenColors.orange, Color(0xFFFF4500)],
         ),
       ),
       child: Stack(
@@ -146,19 +146,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: const Icon(Icons.pets, color: Colors.white, size: 40),
                   ),
                   const SizedBox(height: 32),
-                  const Text(
+                  Text(
                     'GARDEN',
-                    style: TextStyle(
+                    style: GardenText.h2.copyWith(
                       color: Colors.white,
-                      fontSize: 48,
                       fontWeight: FontWeight.w900,
                       letterSpacing: -1,
                     ),
                   ),
                   const SizedBox(height: 12),
-                  const Text(
+                  Text(
                     'Cuidado profesional\nverificado para\ntu mascota',
-                    style: TextStyle(
+                    style: GardenText.h4.copyWith(
                       color: Colors.white,
                       fontSize: 22,
                       fontWeight: FontWeight.w400,
@@ -195,8 +194,8 @@ class _LoginScreenState extends State<LoginScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(value, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
-            Text(label, style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13)),
+            Text(value, style: GardenText.h4.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
+            Text(label, style: GardenText.metadata.copyWith(color: Colors.white.withValues(alpha: 0.70))),
           ],
         ),
       ],
@@ -216,9 +215,9 @@ class _LoginScreenState extends State<LoginScreen> {
               // En móvil muestra logo, en desktop está en el panel izquierdo
               LayoutBuilder(
                 builder: (context, constraints) {
-                  return const Text(
+                  return Text(
                     'GARDEN',
-                    style: TextStyle(
+                    style: GardenText.h3.copyWith(
                       color: GardenColors.primary,
                       fontSize: 24,
                       fontWeight: FontWeight.w900,
@@ -229,13 +228,13 @@ class _LoginScreenState extends State<LoginScreen> {
             ],
           ),
           const SizedBox(height: 48),
-          Text('Bienvenido de nuevo', style: TextStyle(color: textColor, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+          Text('Bienvenido de nuevo', style: GardenText.h3.copyWith(color: textColor, letterSpacing: -0.5)),
           const SizedBox(height: 8),
-          Text('Inicia sesión para gestionar tus reservas', style: TextStyle(color: subtextColor, fontSize: 15)),
+          Text('Inicia sesión para gestionar tus reservas', style: GardenText.body.copyWith(color: subtextColor, fontSize: 15)),
           const SizedBox(height: 40),
 
           // Campo email
-          Text('Correo electrónico', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
+          Text('Correo electrónico', style: GardenText.metadata.copyWith(color: textColor, fontSize: 14)),
           const SizedBox(height: 8),
           TextField(
             controller: _emailController,
@@ -256,7 +255,7 @@ class _LoginScreenState extends State<LoginScreen> {
           const SizedBox(height: 20),
 
           // Campo contraseña
-          Text('Contraseña', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
+          Text('Contraseña', style: GardenText.metadata.copyWith(color: textColor, fontSize: 14)),
           const SizedBox(height: 8),
           TextField(
             controller: _passwordController,
@@ -316,10 +315,10 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('¿No tienes cuenta? ', style: TextStyle(color: subtextColor, fontSize: 14)),
+                Text('¿No tienes cuenta? ', style: GardenText.metadata.copyWith(color: subtextColor, fontSize: 14)),
                 GestureDetector(
                   onTap: () => context.go('/register'),
-                  child: const Text('Regístrate', style: TextStyle(color: GardenColors.primary, fontSize: 14, fontWeight: FontWeight.w600)),
+                  child: Text('Regístrate', style: GardenText.metadata.copyWith(color: GardenColors.primary, fontSize: 14)),
                 ),
               ],
             ),

@@ -9,7 +9,7 @@ plugins {
 android {
     namespace = "com.example.garden_app"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "26.3.11579264"
+    ndkVersion = "30.0.14904198"
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
@@ -26,7 +26,7 @@ android {
         applicationId = "com.example.garden_app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 21 // Firebase Messaging requires API 21+
+        minSdk = 23 // posthog-android 3.41+ requires API 23+
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

@@ -786,7 +786,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: isPaseo
-                          ? [const Color(0xFF0F7A3E), const Color(0xFF1DB954)]
+                          ? [GardenColors.forest, const Color(0xFF1DB954)]
                           : [const Color(0xFFBF4B00), GardenColors.primary],
                     ),
                   ),
@@ -1181,7 +1181,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 gradient: LinearGradient(
                   colors: isHospedaje
                       ? [const Color(0xFFBF4B00), GardenColors.primary]
-                      : [const Color(0xFF0F7A3E), GardenColors.success],
+                      : [GardenColors.forest, GardenColors.success],
                 ),
               ),
               child: Row(

@@ -106,3 +106,12 @@ export const cancellationRequestBodySchema = z.object({
 });
 
 export type CancellationRequestBody = z.infer<typeof cancellationRequestBodySchema>;
+
+/** POST /api/bookings/:id/extend-paseo — cliente solicita extensión de paseo en curso. */
+export const extendPaseoBodySchema = z.object({
+  additionalMinutes: z.number().int().refine((n) => [15, 30, 60].includes(n), {
+    message: 'additionalMinutes debe ser 15, 30 o 60',
+  }),
+});
+
+export type ExtendPaseoBody = z.infer<typeof extendPaseoBodySchema>;

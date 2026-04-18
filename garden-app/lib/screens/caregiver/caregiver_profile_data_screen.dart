@@ -808,7 +808,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: _completionPercentage == 100
-              ? [GardenColors.success, const Color(0xFF1A9954)]
+              ? [GardenColors.success, GardenColors.successDark]
               : [GardenColors.primary, GardenColors.primaryDark],
         ),
         borderRadius: BorderRadius.circular(20),

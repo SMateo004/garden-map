@@ -249,7 +249,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
   }
 
   Widget _buildHeader(BuildContext context) {
-    final headerColor = _isCaregiver ? const Color(0xFF0F7A3E) : GardenColors.secondary;
+    final headerColor = _isCaregiver ? GardenColors.forest : GardenColors.secondary;
     final isActive = _isCaregiver ? _isSharing : true;
 
     return Container(

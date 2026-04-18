@@ -10,6 +10,7 @@ import {
   changeDatesBookingBodySchema,
   initPaymentBodySchema,
   cancellationRequestBodySchema,
+  extendPaseoBodySchema,
 } from './booking.validation.js';
 import * as bookingService from './booking.service.js';
 
@@ -207,6 +208,18 @@ export const requestCancellationByCaregiver = asyncHandler(async (req: Request, 
     caregiverUserId,
     body.reason
   );
+  res.json({ success: true, data: booking });
+});
+
+/**
+ * POST /api/bookings/:id/extend-paseo
+ * Cliente extiende un paseo en curso (IN_PROGRESS). Body: { additionalMinutes: 15 | 30 | 60 }.
+ */
+export const extendPaseo = asyncHandler(async (req: Request, res: Response) => {
+  const bookingId = req.params.id!;
+  const clientId = req.user!.userId;
+  const body = extendPaseoBodySchema.parse(req.body);
+  const booking = await bookingService.extendPaseoWalk(bookingId, clientId, body.additionalMinutes);
   res.json({ success: true, data: booking });
 });
 

@@ -191,7 +191,7 @@ class _ReviewCard extends StatelessWidget {
           // Stars
           Row(children: List.generate(5, (i) => Icon(
             i < rating ? Icons.star_rounded : Icons.star_outline_rounded,
-            color: i < rating ? const Color(0xFFFFC107) : subtextColor,
+            color: i < rating ? GardenColors.star : subtextColor,
             size: 20,
           ))),
           if (comment != null && comment.isNotEmpty) ...[

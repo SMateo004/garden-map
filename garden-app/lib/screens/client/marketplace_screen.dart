@@ -400,6 +400,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     }
   }
 
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  String _getGreeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Buenos días,';
+    if (h < 19) return 'Buenas tardes,';
+    return 'Buenas noches,';
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -512,10 +521,41 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             ),
             Container(height: 1, color: border),
 
+            // ── Saludo ────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_getGreeting(),
+                            style: GardenText.metadata.copyWith(color: subtextColor)),
+                        const SizedBox(height: 2),
+                        RichText(
+                          text: TextSpan(children: [
+                            TextSpan(
+                              text: _userName?.split(' ').first ?? 'tú',
+                              style: GardenText.h3.copyWith(
+                                  color: textColor, fontWeight: FontWeight.w900),
+                            ),
+                            const TextSpan(text: ' 🌿',
+                                style: TextStyle(fontSize: 22)),
+                          ]),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+
             // ── Barra de búsqueda ──────────────────────────────────────
             Container(
-              color: surface,
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+              color: Colors.transparent,
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
               child: Row(
                 children: [
                   Expanded(
@@ -1371,7 +1411,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           children: [
             const Icon(Icons.error_outline_rounded, color: GardenColors.error, size: 50),
             const SizedBox(height: 16),
-            const Text('No pudimos conectar', style: GardenText.headingMedium),
+            Text('No pudimos conectar', style: GardenText.headingMedium),
             const SizedBox(height: 20),
             GardenButton(label: 'Reintentar', onPressed: () => _loadCaregivers(reset: true), width: 140),
           ],
@@ -1386,9 +1426,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             Icon(Icons.search_off_rounded,
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.2), size: 70),
             const SizedBox(height: 16),
-            const Text('Sin resultados', style: GardenText.headingMedium),
+            Text('Sin resultados', style: GardenText.headingMedium),
             const SizedBox(height: 8),
-            const Text('Intenta cambiar los filtros', style: GardenText.bodySmall),
+            Text('Intenta cambiar los filtros', style: GardenText.bodySmall),
             if (_activeFilterCount > 0) ...[
               const SizedBox(height: 20),
               GardenButton(label: 'Limpiar filtros', onPressed: _clearAllFilters, width: 160),
@@ -1549,16 +1589,33 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       ],
                     ),
                   ),
-                  if (priceLabel != null) ...[
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(priceLabel, style: const TextStyle(color: GardenColors.primary, fontSize: 15, fontWeight: FontWeight.w900)),
-                        Text(priceUnit!, style: TextStyle(color: subtextColor, fontSize: 10)),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (priceLabel != null) ...[
+                        Text(priceLabel,
+                            style: GardenText.metadata.copyWith(
+                                color: GardenColors.primary,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 14)),
+                        Text(priceUnit!,
+                            style: TextStyle(color: subtextColor, fontSize: 10)),
+                        const SizedBox(height: 8),
                       ],
-                    ),
-                  ],
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: GardenColors.primary,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text('Reservar',
+                            style: GardenText.metadata.copyWith(
+                                color: Colors.white, fontSize: 12)),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),

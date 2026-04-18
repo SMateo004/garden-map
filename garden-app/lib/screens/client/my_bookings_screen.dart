@@ -120,6 +120,205 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     }
   }
 
+  Future<void> _extendPaseo(String bookingId, int additionalMinutes, double pricePerWalk60) async {
+    final ratePerMin = pricePerWalk60 / 60;
+    final extraAmount = (ratePerMin * additionalMinutes).ceil();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => GardenGlassDialog(
+        title: const Text('Confirmar extensión'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Ampliar $additionalMinutes minutos adicionales al paseo en curso.'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: GardenColors.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Costo adicional', style: TextStyle(fontWeight: FontWeight.w600)),
+                  Text('Bs $extraAmount', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w900, fontSize: 16)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: GardenColors.primary),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirmar pago', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/bookings/$bookingId/extend-paseo'),
+        headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'additionalMinutes': additionalMinutes}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadBookings();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ Paseo ampliado $additionalMinutes min · Cuidador notificado'),
+              backgroundColor: GardenColors.success,
+            ),
+          );
+        }
+      } else {
+        throw Exception(data['error']?['message'] ?? data['message'] ?? 'Error al ampliar');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+        );
+      }
+    }
+  }
+
+  void _showExtendPaseoSheet(String bookingId, double pricePerWalk60) {
+    int selectedMinutes = 15;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final isDark = themeNotifier.isDark;
+          final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+          final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+          final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+          Widget durationChip(int minutes) {
+            final isSelected = selectedMinutes == minutes;
+            final cost = ((pricePerWalk60 / 60) * minutes).ceil();
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => setSheetState(() => selectedMinutes = minutes),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: isSelected ? GardenColors.primary : (isDark ? GardenColors.darkBackground : GardenColors.lightBackground),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isSelected ? GardenColors.primary : (isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '+$minutes min',
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : textColor,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Bs $cost',
+                        style: TextStyle(
+                          color: isSelected ? Colors.white70 : subtextColor,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+
+          return Container(
+            padding: EdgeInsets.only(
+              left: 20, right: 20, top: 24,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 28,
+            ),
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text('Ampliar tiempo del paseo', style: GardenText.h4.copyWith(color: textColor)),
+                const SizedBox(height: 4),
+                Text(
+                  'Selecciona cuántos minutos adicionales necesitas.',
+                  style: GardenText.metadata.copyWith(color: subtextColor),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [15, 30, 60].map(durationChip).toList(),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: GardenColors.primary.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: GardenColors.primary.withOpacity(0.2)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Costo adicional', style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
+                      Text(
+                        'Bs ${((pricePerWalk60 / 60) * selectedMinutes).ceil()}',
+                        style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w900, fontSize: 18),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: GardenButton(
+                    label: 'Confirmar y pagar',
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _extendPaseo(bookingId, selectedMinutes, pricePerWalk60);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   void _showRatingDialog(String bookingId) {
     showModalBottomSheet(
       context: context,
@@ -359,6 +558,24 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         ),
                     ],
                   ),
+                  // Ampliar tiempo — solo PASEO IN_PROGRESS
+                  if (status == 'IN_PROGRESS' && isPaseo) ...[
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        final price60 = double.tryParse(booking['pricePerUnit']?.toString() ?? '') ?? 0.0;
+                        _showExtendPaseoSheet(booking['id'] as String, price60);
+                      },
+                      icon: const Icon(Icons.add_alarm_rounded, size: 16),
+                      label: const Text('Ampliar tiempo', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: GardenColors.primary,
+                        side: const BorderSide(color: GardenColors.primary),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        minimumSize: const Size(double.infinity, 42),
+                      ),
+                    ),
+                  ],
                   // Meet & Greet para HOSPEDAJE CONFIRMED
                   if (status == 'CONFIRMED' && !isPaseo) ...[
                     const SizedBox(height: 10),
@@ -639,7 +856,7 @@ class _RatingSheetState extends State<_RatingSheet> {
                       padding: const EdgeInsets.symmetric(horizontal: 6),
                       child: Icon(
                         starIndex <= _rating ? Icons.star_rounded : Icons.star_outline_rounded,
-                        color: starIndex <= _rating ? const Color(0xFFFFB800) : subtextColor.withOpacity(0.2),
+                        color: starIndex <= _rating ? GardenColors.star : subtextColor.withOpacity(0.2),
                         size: 48,
                       ),
                     ),

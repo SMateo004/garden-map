@@ -94,7 +94,7 @@ class _WalletScreenState extends State<WalletScreen> {
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: [const Color(0xFF1A1F2E), GardenColors.primary.withOpacity(0.8)],
+                            colors: [GardenColors.navy, GardenColors.primary.withOpacity(0.8)],
                           ),
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: GardenShadows.elevated,

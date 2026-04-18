@@ -256,6 +256,31 @@ class BlockchainService {
         }
     }
 
+    /**
+     * Registra la extensión de un paseo en la blockchain.
+     * El contrato GardenEscrow no tiene todavía un método extendWalk;
+     * por ahora se registra como log informativo (mock) y se actualiza el
+     * monto total mediante cancelBooking + createBooking si es necesario.
+     * Para el MVP se deja en mock mode: registra en los logs del servidor
+     * y retorna null hasta que se despliegue la versión del contrato con extendWalk.
+     */
+    async recordWalkExtensionOnChain(
+        bookingId: string,
+        additionalMinutes: number,
+        newTotalAmountBs: number
+    ): Promise<string | null> {
+        // MOCK MODE: el contrato actual no tiene extendWalk.
+        // Cuando se despliegue GardenEscrow v2 con `extendWalk(string _bookingId, uint256 _additionalMinutes, uint256 _newAmountBs)`
+        // se podrá usar escrowContract.extendWalk(...) aquí.
+        logger.info('[Blockchain] Mock: recordWalkExtension', {
+            bookingId,
+            additionalMinutes,
+            newTotalAmountBs,
+            note: 'Pending GardenEscrow v2 deployment with extendWalk()',
+        });
+        return null;
+    }
+
     async getCaregiverReputation(id: string) {
         if (!this.ensureInitialized()) return null;
         return { average: 5.0, count: 0 };

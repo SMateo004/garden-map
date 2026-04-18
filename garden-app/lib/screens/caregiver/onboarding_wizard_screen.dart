@@ -932,7 +932,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                         surface: Color(0xFF1A2E10),
                         onSurface: Colors.white,
                       ),
-                      dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF162610)),
+                      dialogTheme: const DialogThemeData(backgroundColor: GardenColors.darkSurface),
                     ),
                     child: child!,
                   );

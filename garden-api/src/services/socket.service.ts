@@ -26,6 +26,8 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
     // Redis adapter: pub + sub son clientes separados (requisito de ioredis)
     const redisPub = getRedisClient();
     const redisSub = redisPub?.duplicate() ?? null;
+    // El duplicate no hereda el error handler — añadirlo para evitar crash
+    redisSub?.on('error', (err: Error) => logger.error('Redis sub error', { err: err.message }));
 
     io = new SocketServer(httpServer, {
         cors: {

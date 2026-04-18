@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../theme/garden_theme.dart';
 
 // ── Modelo ──────────────────────────────────────────────────────────────────
 
@@ -168,10 +169,9 @@ class _MobileOnboardingScreenState extends State<MobileOnboardingScreen>
                     Text(
                       step.title,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: GardenText.h3.copyWith(
                         color: Colors.white,
                         fontSize: 26,
-                        fontWeight: FontWeight.w800,
                         height: 1.2,
                       ),
                     ),
@@ -179,10 +179,9 @@ class _MobileOnboardingScreenState extends State<MobileOnboardingScreen>
                     Text(
                       step.subtitle,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: GardenText.body.copyWith(
                         color: Colors.white.withValues(alpha: 0.85),
                         fontSize: 15,
-                        height: 1.5,
                       ),
                     ),
                     const SizedBox(height: 28),
@@ -223,10 +222,9 @@ class _MobileOnboardingScreenState extends State<MobileOnboardingScreen>
                         onPressed: _next,
                         child: Text(
                           _page == _kSteps.length - 1 ? '¡Comenzar!' : 'Siguiente',
-                          style: TextStyle(
+                          style: GardenText.body.copyWith(
                             color: step.color,
                             fontWeight: FontWeight.w800,
-                            fontSize: 16,
                           ),
                         ),
                       ),
@@ -239,9 +237,8 @@ class _MobileOnboardingScreenState extends State<MobileOnboardingScreen>
                         onTap: _finish,
                         child: Text(
                           'Saltar introducción',
-                          style: TextStyle(
+                          style: GardenText.metadata.copyWith(
                             color: Colors.white.withValues(alpha: 0.55),
-                            fontSize: 13,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -403,10 +400,9 @@ class _StepIllustrationState extends State<_StepIllustration>
                   const SizedBox(width: 6),
                   Text(
                     'Paso ${widget.stepIndex + 1} de ${_kSteps.length}',
-                    style: const TextStyle(
+                    style: GardenText.metadata.copyWith(
                       color: Colors.white,
                       fontSize: 12,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],

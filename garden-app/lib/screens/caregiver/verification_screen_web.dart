@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
+import '../../theme/garden_theme.dart';
 
 class VerificationScreen extends StatefulWidget {
   final VoidCallback? onComplete;
@@ -552,20 +553,20 @@ class _VerificationScreenState extends State<VerificationScreen> {
                     margin: const EdgeInsets.only(top: 16),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1A1F2E),
+                      color: GardenColors.navy,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF8247E5).withOpacity(0.5)),
+                      border: Border.all(color: GardenColors.polygon.withOpacity(0.5)),
                     ),
                     child: Row(
                       children: [
                         Container(
                           width: 32, height: 32,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF8247E5).withOpacity(0.2),
+                            color: GardenColors.polygon.withOpacity(0.2),
                             shape: BoxShape.circle,
                           ),
                           child: const Center(
-                            child: Text('⬡', style: TextStyle(color: Color(0xFF8247E5), fontSize: 16)),
+                            child: Text('⬡', style: TextStyle(color: GardenColors.polygon, fontSize: 16)),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -576,7 +577,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                               Text('Badge registrado en Polygon',
                                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                               Text('Tu verificación quedó registrada de forma inmutable en la blockchain',
-                                style: TextStyle(color: Color(0xFF8247E5), fontSize: 11)),
+                                style: TextStyle(color: GardenColors.polygon, fontSize: 11)),
                             ],
                           ),
                         ),
