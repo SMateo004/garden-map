@@ -32,6 +32,9 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().min(1, 'EMAIL_FROM is required for email delivery'),
   // Redis (cache + Socket.io adapter)
   REDIS_URL: z.string().url().optional(),
+  // Prisma connection pool (appended to DATABASE_URL if not already present)
+  DB_POOL_SIZE: z.coerce.number().int().min(1).max(100).default(10),
+  DB_POOL_TIMEOUT: z.coerce.number().int().min(1).max(300).default(30),
   // Observabilidad
   SENTRY_DSN: z.string().url().optional(),
   POSTHOG_API_KEY: z.string().optional(),

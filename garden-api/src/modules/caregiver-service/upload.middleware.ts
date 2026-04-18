@@ -65,7 +65,7 @@ export async function processAndUploadToCloudinary(
     try {
       const processed = await sharp(buffers[i])
         .resize(SHARP_MAX_SIZE, SHARP_MAX_SIZE, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 85 })
+        .jpeg({ quality: 85, progressive: true })
         .toBuffer();
 
       const result = await new Promise<{ secure_url: string }>((resolve, reject) => {

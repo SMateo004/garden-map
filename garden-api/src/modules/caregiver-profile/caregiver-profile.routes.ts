@@ -55,7 +55,7 @@ router.post('/profile/service-photo', authMiddleware, requireRole('CAREGIVER'),
     // Resize image before upload
     const processed = await sharp(file.buffer)
       .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality: 85 })
+      .jpeg({ quality: 85, progressive: true })
       .toBuffer();
 
     let photoUrl: string;

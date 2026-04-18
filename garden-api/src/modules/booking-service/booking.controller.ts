@@ -141,13 +141,15 @@ export const changeDates = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/bookings/my
- * Obtiene todas las reservas del cliente autenticado.
+ * GET /api/bookings/my?page=1&limit=20
+ * Obtiene las reservas del cliente autenticado, paginadas.
  */
 export const getMyBookings = asyncHandler(async (req: Request, res: Response) => {
   const clientId = req.user!.userId;
-  const bookings = await bookingService.getMyBookings(clientId);
-  res.json({ success: true, data: bookings });
+  const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? '20'), 10) || 20));
+  const result = await bookingService.getMyBookings(clientId, page, limit);
+  res.json({ success: true, data: result.bookings, pagination: result.pagination });
 });
 
 /**

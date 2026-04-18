@@ -21,7 +21,7 @@ const VERIFICATION_FOLDER = 'garden/verification';
 export async function uploadVerificationImage(buffer: Buffer, prefix: string, userId: string): Promise<string> {
   const processed = await sharp(buffer)
     .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 85 })
+    .jpeg({ quality: 85, progressive: true })
     .toBuffer();
 
   if (isS3Configured()) {

@@ -49,6 +49,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
       search: query.search,
       page: query.page,
       limit: query.limit,
+      cursor: query.cursor,
     });
     res.json({ success: true, data: result });
   } catch (err) {

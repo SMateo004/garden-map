@@ -78,6 +78,8 @@ export interface CaregiverFilters {
   spaceTypes?: string[]; // Array de tipos de espacio para filtrado multi-select
   page?: number;
   limit?: number;
+  /** Cursor para infinite-scroll: ID del último cuidador de la página anterior. */
+  cursor?: string;
   experienceYears?: any;
   acceptAggressive?: boolean;
   acceptPuppies?: boolean;
@@ -94,6 +96,8 @@ export interface PaginatedCaregivers {
     currentPage: number;
     pages: number;
     limit: number;
+    /** ID del último elemento: pasar como ?cursor= para obtener la siguiente página. */
+    nextCursor: string | null;
   };
 }
 

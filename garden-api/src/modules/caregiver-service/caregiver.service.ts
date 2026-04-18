@@ -41,7 +41,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
     service, zone, priceRange, spaceTypes,
     experienceYears, acceptAggressive, acceptPuppies, acceptSeniors, sizesAccepted,
     search,
-    page = 1, limit = 10
+    page = 1, limit = 10, cursor,
   } = filters;
 
   const cacheKey = `caregivers:list:${JSON.stringify({
@@ -57,6 +57,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
     search: search ?? '',
     page,
     limit,
+    cursor: cursor ?? '',
   })}`;
   const cached = await cache.get<PaginatedCaregivers>(cacheKey);
   if (cached) return cached;
@@ -149,18 +150,24 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
     };
   }
 
+  // Cursor-based pagination: when a cursor is provided use it for efficient
+  // infinite-scroll without a full COUNT query.  Offset pagination is kept as
+  // the fallback for numbered pages.
+  const useCursor = Boolean(cursor);
+
+  const include = { user: { select: { firstName: true, lastName: true, profilePicture: true } } } as const;
+  const orderBy = [{ rating: 'desc' as const }, { createdAt: 'desc' as const }];
+
   const [caregivers, total] = await Promise.all([
-    prisma.caregiverProfile.findMany({
-      where,
-      include: { user: { select: { firstName: true, lastName: true, profilePicture: true } } },
-      orderBy: [{ rating: 'desc' }, { createdAt: 'desc' }],
-      skip: (page - 1) * limit,
-      take: limit,
-    }),
-    prisma.caregiverProfile.count({ where }),
+    useCursor
+      ? prisma.caregiverProfile.findMany({ where, include, orderBy, take: limit, cursor: { id: cursor! }, skip: 1 })
+      : prisma.caregiverProfile.findMany({ where, include, orderBy, take: limit, skip: (page - 1) * limit }),
+    // Skip the expensive COUNT when cursor is in use (infinite-scroll pattern)
+    useCursor ? Promise.resolve(-1) : prisma.caregiverProfile.count({ where }),
   ]);
 
-  const pages = Math.ceil(total / limit) || 1;
+  const nextCursor = caregivers.length === limit ? (caregivers[caregivers.length - 1]?.id ?? null) : null;
+  const pages = total >= 0 ? (Math.ceil(total / limit) || 1) : -1;
   const result: PaginatedCaregivers = {
     caregivers: caregivers.map((c) => ({
       id: c.id,
@@ -196,6 +203,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       currentPage: page,
       pages,
       limit,
+      nextCursor,
     },
   };
 

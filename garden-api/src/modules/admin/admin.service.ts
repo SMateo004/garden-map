@@ -600,26 +600,31 @@ export async function reviewCaregiver(
 // Pagos pendientes de aprobación manual (Subfase 2.3)
 // ---------------------------------------------------------------------------
 
-/** GET /api/admin/payments-pending — reservas en PAYMENT_PENDING_APPROVAL. */
-export async function getPaymentsPending(): Promise<PendingPaymentsResult> {
-  const bookings = await prisma.booking.findMany({
-    where: { 
-      status: { 
-        in: [BookingStatus.PAYMENT_PENDING_APPROVAL, BookingStatus.PENDING_PAYMENT] 
-      } 
-    },
-    include: {
-      client: { select: { email: true } },
-      caregiver: {
-        select: {
-          user: {
-            select: { firstName: true, lastName: true },
-          },
+/** GET /api/admin/payments-pending — reservas en PAYMENT_PENDING_APPROVAL, paginadas. */
+export async function getPaymentsPending(
+  page = 1,
+  limit = 50
+): Promise<PendingPaymentsResult & { pagination: { page: number; limit: number; total: number; pages: number } }> {
+  const where = {
+    status: { in: [BookingStatus.PAYMENT_PENDING_APPROVAL, BookingStatus.PENDING_PAYMENT] },
+  };
+  const skip = (page - 1) * limit;
+
+  const [bookings, total] = await Promise.all([
+    prisma.booking.findMany({
+      where,
+      include: {
+        client: { select: { email: true } },
+        caregiver: {
+          select: { user: { select: { firstName: true, lastName: true } } },
         },
       },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.booking.count({ where }),
+  ]);
 
   const items: PendingPaymentItem[] = bookings.map((b) => ({
     id: b.id,
@@ -640,7 +645,11 @@ export async function getPaymentsPending(): Promise<PendingPaymentsResult> {
         : undefined,
   }));
 
-  return { bookings: items, total: items.length };
+  return {
+    bookings: items,
+    total,
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) || 1 },
+  };
 }
 
 /** POST /api/admin/bookings/:id/reject-payment — rechazar pago manual; vuelve a PENDING_PAYMENT. */
@@ -677,25 +686,35 @@ const VALID_BOOKING_STATUSES = [
   'CANCELLED',
 ] as const;
 
-/** GET /api/admin/reservations — todas las reservas, opcional ?status= */
-export async function getReservations(status?: string): Promise<AdminReservationsResult> {
+/** GET /api/admin/reservations — listado de reservas con paginación, opcional ?status= */
+export async function getReservations(
+  status?: string,
+  page = 1,
+  limit = 50
+): Promise<AdminReservationsResult & { pagination: { page: number; limit: number; total: number; pages: number } }> {
   const where: { status?: BookingStatus } = {};
   if (status && VALID_BOOKING_STATUSES.includes(status as (typeof VALID_BOOKING_STATUSES)[number])) {
     where.status = status as BookingStatus;
   }
 
-  const bookings = await prisma.booking.findMany({
-    where: Object.keys(where).length ? where : undefined,
-    include: {
-      client: { select: { email: true } },
-      caregiver: {
-        select: {
-          user: { select: { firstName: true, lastName: true } },
+  const whereClause = Object.keys(where).length ? where : undefined;
+  const skip = (page - 1) * limit;
+
+  const [bookings, total] = await Promise.all([
+    prisma.booking.findMany({
+      where: whereClause,
+      include: {
+        client: { select: { email: true } },
+        caregiver: {
+          select: { user: { select: { firstName: true, lastName: true } } },
         },
       },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.booking.count({ where: whereClause }),
+  ]);
 
   const reservations: AdminReservationItem[] = bookings.map((b) => ({
     id: b.id,
@@ -718,7 +737,11 @@ export async function getReservations(status?: string): Promise<AdminReservation
         : undefined,
   }));
 
-  return { reservations, total: reservations.length };
+  return {
+    reservations,
+    total,
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) || 1 },
+  };
 }
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -918,37 +941,43 @@ export async function listIdentityReviews(status?: string) {
   }));
 }
 
-/** GET /api/admin/payments-history — todos los pagos confirmados (paidAt != null) */
-export async function getPaymentsHistory(limit = 100) {
-  const bookings = await prisma.booking.findMany({
-    where: {
-      paidAt: { not: null },
-      // Incluimos todos los estados post-pago: confirmados, en progreso, completados, y en espera de cuidador
-      status: { notIn: ['PENDING_PAYMENT', 'PAYMENT_PENDING_APPROVAL'] as any[] },
-    },
-    select: {
-      id: true,
-      status: true,
-      petName: true,
-      totalAmount: true,
-      commissionAmount: true,
-      paidAt: true,
-      serviceType: true,
-      startDate: true,
-      endDate: true,
-      walkDate: true,
-      qrId: true,
-      stripePaymentIntentId: true,
-      payoutStatus: true,
-      clientId: true,
-      client: { select: { firstName: true, lastName: true, email: true } },
-      caregiver: { include: { user: { select: { firstName: true, lastName: true } } } },
-    },
-    orderBy: { paidAt: 'desc' },
-    take: limit,
-  });
+/** GET /api/admin/payments-history — pagos confirmados (paidAt != null), paginados. */
+export async function getPaymentsHistory(page = 1, limit = 50) {
+  const where = {
+    paidAt: { not: null },
+    status: { notIn: ['PENDING_PAYMENT', 'PAYMENT_PENDING_APPROVAL'] as any[] },
+  };
+  const skip = (page - 1) * limit;
 
-  return bookings.map((b) => {
+  const [bookings, total] = await Promise.all([
+    prisma.booking.findMany({
+      where,
+      select: {
+        id: true,
+        status: true,
+        petName: true,
+        totalAmount: true,
+        commissionAmount: true,
+        paidAt: true,
+        serviceType: true,
+        startDate: true,
+        endDate: true,
+        walkDate: true,
+        qrId: true,
+        stripePaymentIntentId: true,
+        payoutStatus: true,
+        clientId: true,
+        client: { select: { firstName: true, lastName: true, email: true } },
+        caregiver: { include: { user: { select: { firstName: true, lastName: true } } } },
+      },
+      orderBy: { paidAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.booking.count({ where }),
+  ]);
+
+  const items = bookings.map((b) => {
     // Inferir método de pago: QR manual vs Stripe
     const paymentMethod = b.qrId ? 'QR/Transferencia' : b.stripePaymentIntentId ? 'Stripe' : 'Manual';
     return {
@@ -969,6 +998,12 @@ export async function getPaymentsHistory(limit = 100) {
       caregiverName: `${b.caregiver.user.firstName} ${b.caregiver.user.lastName}`,
     };
   });
+
+  return {
+    payments: items,
+    total,
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) || 1 },
+  };
 }
 
 /** GET detalles sesión identidad con URLs firmadas para imágenes */

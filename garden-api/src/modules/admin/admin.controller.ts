@@ -86,15 +86,19 @@ export const toggleVerify = asyncHandler(async (req: Request, res: Response) => 
   res.json({ success: true, data: { caregiver: result } });
 });
 
-/** GET /api/admin/payments-pending — reservas en PAYMENT_PENDING_APPROVAL. */
-export const getPaymentsPending = asyncHandler(async (_req: Request, res: Response) => {
-  const result = await adminService.getPaymentsPending();
+/** GET /api/admin/payments-pending?page=1&limit=50 — reservas en PAYMENT_PENDING_APPROVAL. */
+export const getPaymentsPending = asyncHandler(async (req: Request, res: Response) => {
+  const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? '50'), 10) || 50));
+  const result = await adminService.getPaymentsPending(page, limit);
   res.json({ success: true, data: result });
 });
 
-/** GET /api/admin/payments-history — pagos procesados (paidAt != null). */
-export const getPaymentsHistory = asyncHandler(async (_req: Request, res: Response) => {
-  const result = await adminService.getPaymentsHistory();
+/** GET /api/admin/payments-history?page=1&limit=50 — pagos procesados (paidAt != null). */
+export const getPaymentsHistory = asyncHandler(async (req: Request, res: Response) => {
+  const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? '50'), 10) || 50));
+  const result = await adminService.getPaymentsHistory(page, limit);
   res.json({ success: true, data: result });
 });
 
@@ -145,10 +149,12 @@ export const approvePayment = asyncHandler(async (req: Request, res: Response) =
   res.json({ success: true, data: { status: 'WAITING_CAREGIVER_APPROVAL' } });
 });
 
-/** GET /api/admin/reservations — listado de reservas, opcional ?status= */
+/** GET /api/admin/reservations?status=&page=1&limit=50 — listado de reservas paginado */
 export const getReservations = asyncHandler(async (req: Request, res: Response) => {
   const status = typeof req.query.status === 'string' ? req.query.status : undefined;
-  const result = await adminService.getReservations(status);
+  const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? '50'), 10) || 50));
+  const result = await adminService.getReservations(status, page, limit);
   res.json({ success: true, data: result });
 });
 

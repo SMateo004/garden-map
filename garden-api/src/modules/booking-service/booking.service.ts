@@ -1142,33 +1142,46 @@ export async function changeDatesBooking(
 }
 
 /**
- * Obtiene todas las reservas del cliente autenticado.
- * Retorna lista ordenada por createdAt DESC.
+ * Obtiene las reservas del cliente autenticado, paginadas.
+ * Retorna lista ordenada por createdAt DESC con metadata de paginación.
  */
-export async function getMyBookings(clientId: string): Promise<BookingCreateResult[]> {
-  const bookings = await prisma.booking.findMany({
-    where: { clientId },
-    include: {
-      caregiver: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-              profilePicture: true,
+export async function getMyBookings(
+  clientId: string,
+  page = 1,
+  limit = 20
+): Promise<{ bookings: BookingCreateResult[]; pagination: { page: number; limit: number; total: number; pages: number } }> {
+  const skip = (page - 1) * limit;
+  const [bookings, total] = await Promise.all([
+    prisma.booking.findMany({
+      where: { clientId },
+      include: {
+        caregiver: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                profilePicture: true,
+              },
             },
           },
         },
+        dispute: true,
+        meetAndGreet: true,
       },
-      dispute: true,
-      meetAndGreet: true,
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.booking.count({ where: { clientId } }),
+  ]);
 
-  return bookings.map(bookingToResponse);
+  return {
+    bookings: bookings.map(bookingToResponse),
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) || 1 },
+  };
 }
 
 /**
@@ -1227,36 +1240,50 @@ export async function getBookingById(
 }
 
 /**
- * Lista reservas asignadas al cuidador (por userId del cuidador).
+ * Lista reservas asignadas al cuidador (por userId del cuidador), paginadas.
  */
 export async function getBookingsByCaregiverUserId(
-  caregiverUserId: string
-): Promise<BookingCreateResult[]> {
+  caregiverUserId: string,
+  page = 1,
+  limit = 20
+): Promise<{ bookings: BookingCreateResult[]; pagination: { page: number; limit: number; total: number; pages: number } }> {
   const profile = await prisma.caregiverProfile.findFirst({
     where: { userId: caregiverUserId },
     select: { id: true },
   });
-  if (!profile) return [];
+  if (!profile) return { bookings: [], pagination: { page, limit, total: 0, pages: 1 } };
 
-  const bookings = await prisma.booking.findMany({
-    where: { caregiverId: profile.id },
-    include: {
-      client: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          phone: true,
-          profilePicture: true,
+  const skip = (page - 1) * limit;
+  const where = { caregiverId: profile.id };
+
+  const [bookings, total] = await Promise.all([
+    prisma.booking.findMany({
+      where,
+      include: {
+        client: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            profilePicture: true,
+          },
         },
+        dispute: true,
+        meetAndGreet: true,
       },
-      dispute: true,
-      meetAndGreet: true,
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-  return bookings.map(bookingToResponse);
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.booking.count({ where }),
+  ]);
+
+  return {
+    bookings: bookings.map(bookingToResponse),
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) || 1 },
+  };
 }
 
 /**

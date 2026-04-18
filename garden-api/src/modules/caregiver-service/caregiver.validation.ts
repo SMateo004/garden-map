@@ -41,6 +41,8 @@ export const listCaregiversQuerySchema = z.object({
   search: z.string().max(80).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(10),
+  /** Cursor para infinite-scroll: ID del último cuidador de la página anterior. */
+  cursor: z.string().optional(),
 });
 
 /** Mapeo query zone (lowercase) → Prisma Zone enum */

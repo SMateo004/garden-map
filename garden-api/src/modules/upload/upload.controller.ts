@@ -38,7 +38,7 @@ async function saveRegistrationPhotosToLocal(
     try {
       const processed = await sharp(buffers[i])
         .resize(SHARP_MAX_SIZE, SHARP_MAX_SIZE, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 85 })
+        .jpeg({ quality: 85, progressive: true })
         .toBuffer();
       const filename = `photo_${i + 1}.jpg`;
       const filePath = path.join(baseDir, filename);

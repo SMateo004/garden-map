@@ -104,11 +104,13 @@ export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
   res.json(result);
 });
 
-/** GET /api/caregiver/bookings - Reservas asignadas al cuidador logueado. */
+/** GET /api/caregiver/bookings?page=1&limit=20 - Reservas asignadas al cuidador logueado, paginadas. */
 export const getMyBookingsAsCaregiver = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const bookings = await bookingService.getBookingsByCaregiverUserId(userId);
-  res.json({ success: true, data: bookings });
+  const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? '20'), 10) || 20));
+  const result = await bookingService.getBookingsByCaregiverUserId(userId, page, limit);
+  res.json({ success: true, data: result.bookings, pagination: result.pagination });
 });
 
 /** GET /api/caregiver/notifications - Bandeja de notificaciones (APPROVED, REJECTED, REVIEW). */
