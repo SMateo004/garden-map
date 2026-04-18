@@ -34,8 +34,9 @@ import 'screens/onboarding/mobile_splash_screen.dart';
 import 'screens/onboarding/mobile_onboarding_screen.dart';
 import 'screens/onboarding/mobile_service_selector_screen.dart';
 import 'screens/onboarding/maintenance_screen.dart';
+import 'screens/legal/legal_screen.dart';
+import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -344,6 +345,16 @@ final GoRouter _router = GoRouter(
         );
       },
     ),
+    GoRoute(
+      path: '/privacy',
+      name: 'privacy',
+      builder: (context, state) => const PrivacyPolicyScreen(),
+    ),
+    GoRoute(
+      path: '/terms',
+      name: 'terms',
+      builder: (context, state) => const TermsOfServiceScreen(),
+    ),
   ],
 );
 
@@ -366,7 +377,9 @@ Future<void> _bootstrap() async {
 
   // PostHog: analytics de producto (solo si la key está configurada en build)
   if (_kPostHogKey.isNotEmpty) {
-    await Posthog().setup(_kPostHogKey, host: 'https://app.posthog.com');
+    final phConfig = PostHogConfig(_kPostHogKey)
+      ..host = 'https://us.i.posthog.com';
+    await Posthog().setup(phConfig);
   }
 
   await LocalNotificationService.init();

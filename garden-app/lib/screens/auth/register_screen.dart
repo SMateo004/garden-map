@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:go_router/go_router.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
+import '../legal/legal_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -19,6 +20,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _authService         = AuthService();
   bool _isLoading            = false;
   bool _obscurePassword      = true;
+  bool _acceptedTerms        = false;
   String _selectedRole       = 'owner'; // 'owner' o 'caregiver'
 
   @override
@@ -52,6 +54,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (password.length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('La contraseña debe tener al menos 8 caracteres')),
+      );
+      return;
+    }
+    if (!_acceptedTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Debes aceptar los Términos de Servicio y la Política de Privacidad')),
       );
       return;
     }
@@ -338,6 +346,46 @@ class _RegisterScreenState extends State<RegisterScreen> {
             Text('8 dígitos, empieza con 6 o 7', style: TextStyle(color: subtextColor, fontSize: 12)),
             const SizedBox(height: 32),
           ],
+
+          // Checkbox de términos
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: Checkbox(
+                  value: _acceptedTerms,
+                  onChanged: (v) => setState(() => _acceptedTerms = v ?? false),
+                  activeColor: GardenColors.primary,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Wrap(
+                  children: [
+                    Text('Acepto los ', style: TextStyle(color: subtextColor, fontSize: 13)),
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const TermsOfServiceScreen()),
+                      ),
+                      child: const Text('Términos de Servicio', style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                    ),
+                    Text(' y la ', style: TextStyle(color: subtextColor, fontSize: 13)),
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+                      ),
+                      child: const Text('Política de Privacidad', style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                    ),
+                    Text(' de Garden.', style: TextStyle(color: subtextColor, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
 
           // Botón registro
           GardenButton(
