@@ -11,6 +11,9 @@ jest.mock('../../src/config/database', () => ({
       update: jest.fn(),
       count: jest.fn(),
     },
+    availability: {
+      count: jest.fn().mockResolvedValue(1),
+    },
     adminAction: { create: jest.fn() },
   },
 }));
@@ -19,7 +22,13 @@ jest.mock('../../src/shared/cache', () => ({
   getCache: () => ({
     del: jest.fn().mockResolvedValue(undefined),
   }),
+  delByPrefix: jest.fn().mockResolvedValue(undefined),
   caregiverDetailCacheKey: (id: string) => `caregivers:detail:${id}`,
+}));
+
+jest.mock('../../src/shared/analytics', () => ({
+  track: jest.fn(),
+  identify: jest.fn(),
 }));
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
@@ -42,9 +51,13 @@ describe('AdminService', () => {
         suspended: false,
         userId: 'u1',
         zone: 'EQUIPETROL',
-        photos: [],
-        servicesOffered: [],
-        bio: null,
+        photos: ['https://x.co/1.jpg'],
+        servicesOffered: ['HOSPEDAJE'],
+        bio: 'Bio de más de cincuenta caracteres para pasar la validación del servicio',
+        profilePhoto: 'https://x.co/photo.jpg',
+        emailVerified: true,
+        identityVerificationStatus: 'VERIFIED',
+        defaultAvailabilitySchedule: { lunes: true },
         spaceType: null,
         pricePerDay: null,
         pricePerWalk30: null,
@@ -58,6 +71,7 @@ describe('AdminService', () => {
         verificationNotes: null,
         suspendedAt: null,
         suspensionReason: null,
+        user: { id: 'u1' },
       };
       (mockPrisma.caregiverProfile.findUnique as jest.Mock).mockResolvedValue(profile as never);
       (mockPrisma.caregiverProfile.update as jest.Mock).mockResolvedValue({

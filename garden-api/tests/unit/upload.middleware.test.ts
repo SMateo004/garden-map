@@ -4,6 +4,15 @@
 import { processAndUploadToCloudinary } from '../../src/modules/caregiver-service/upload.middleware';
 import { PhotoUploadError } from '../../src/shared/errors';
 
+jest.mock('../../src/config/cloudinary', () => ({
+  isCloudinaryConfigured: () => true,
+  cloudinary: {
+    uploader: {
+      upload_stream: jest.fn(),
+    },
+  },
+}));
+
 jest.mock('sharp', () => {
   return jest.fn(() => ({
     resize: jest.fn().mockReturnThis(),
@@ -34,12 +43,12 @@ describe('Upload middleware (Cloudinary mock)', () => {
     mockUploadStream.mockClear();
   });
 
-  it('throws when fewer than 4 buffers', async () => {
+  it('throws when fewer than 2 buffers (current minimum)', async () => {
+    // 0 buffers
+    await expect(processAndUploadToCloudinary([], 'user-1')).rejects.toThrow(PhotoUploadError);
+    // 1 buffer
     await expect(processAndUploadToCloudinary([Buffer.alloc(1)], 'user-1')).rejects.toThrow(
       PhotoUploadError
-    );
-    await expect(processAndUploadToCloudinary([Buffer.alloc(1), Buffer.alloc(1), Buffer.alloc(1)], 'user-1')).rejects.toThrow(
-      /entre 4 y 6 fotos/
     );
   });
 

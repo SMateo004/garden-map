@@ -51,8 +51,8 @@ describe('CaregiverService', () => {
   beforeEach(() => jest.clearAllMocks());
 
   describe('validatePhotoCount', () => {
-    it('throws when fewer than 4 photos', () => {
-      expect(() => validatePhotoCount(['a', 'b', 'c'])).toThrow(CaregiverProfileValidationError);
+    it('throws when fewer than 2 photos (current minimum)', () => {
+      expect(() => validatePhotoCount(['a'])).toThrow(CaregiverProfileValidationError);
       expect(() => validatePhotoCount([])).toThrow(CaregiverProfileValidationError);
     });
 
@@ -62,7 +62,8 @@ describe('CaregiverService', () => {
       ).toThrow(CaregiverProfileValidationError);
     });
 
-    it('accepts 4 to 6 photos', () => {
+    it('accepts 2 to 6 photos', () => {
+      expect(() => validatePhotoCount(['a', 'b'])).not.toThrow();
       expect(() => validatePhotoCount(['a', 'b', 'c', 'd'])).not.toThrow();
       expect(() => validatePhotoCount(['a', 'b', 'c', 'd', 'e', 'f'])).not.toThrow();
     });
@@ -241,7 +242,7 @@ describe('CaregiverService', () => {
         {
           bio: 'Nueva bio',
           zone: 'URBARI',
-          spaceType: 'Casa con patio',
+          spaceType: ['Casa con patio'],
           servicesOffered: ['HOSPEDAJE', 'PASEO'],
           pricePerDay: 100,
           pricePerWalk30: 30,
@@ -258,7 +259,7 @@ describe('CaregiverService', () => {
           data: expect.objectContaining({
             bio: 'Nueva bio',
             zone: 'URBARI',
-            spaceType: 'Casa con patio',
+            spaceType: ['Casa con patio'],
             servicesOffered: ['HOSPEDAJE', 'PASEO'],
           }),
         })

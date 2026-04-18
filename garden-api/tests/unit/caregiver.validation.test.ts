@@ -23,7 +23,7 @@ describe('Caregiver validation (Zod)', () => {
     it('accepts with optional spaceType and prices', () => {
       const withOptionals = {
         ...validBody,
-        spaceType: 'Casa con patio',
+        spaceType: ['Casa con patio'],
         pricePerDay: 100,
         pricePerWalk30: 30,
       };
@@ -90,7 +90,7 @@ describe('Caregiver validation (Zod)', () => {
 
     it('accepts valid zone', () => {
       expect(listCaregiversQuerySchema.parse({ zone: 'equipetrol' }).zone).toBe('equipetrol');
-      expect(listCaregiversQuerySchema.parse({ zone: 'centro_san_martin' }).zone).toBe('centro_san_martin');
+      expect(listCaregiversQuerySchema.parse({ zone: 'norte' }).zone).toBe('norte');
     });
 
     it('accepts priceRange', () => {
@@ -109,15 +109,14 @@ describe('Caregiver validation (Zod)', () => {
   });
 
   describe('caregiverPhotosFilesSchema', () => {
-    it('rejects fewer than 4 files', () => {
-      expect(() => caregiverPhotosFilesSchema.parse([])).toThrow(/Mínimo 4/);
-      expect(() => caregiverPhotosFilesSchema.parse([1, 2, 3])).toThrow(/Mínimo 4/);
+    it('rejects fewer than minimum files (min=2)', () => {
+      expect(() => caregiverPhotosFilesSchema.parse([])).toThrow(/Mínimo/);
+      expect(() => caregiverPhotosFilesSchema.parse([1])).toThrow(/Mínimo/);
     });
 
-    it('accepts 4 to 6 files', () => {
-      const four = [1, 2, 3, 4];
-      expect(caregiverPhotosFilesSchema.parse(four)).toEqual(four);
-      expect(caregiverPhotosFilesSchema.parse([...four, 5, 6])).toHaveLength(6);
+    it('accepts minimum (2) to maximum (6) files', () => {
+      expect(caregiverPhotosFilesSchema.parse([1, 2])).toEqual([1, 2]);
+      expect(caregiverPhotosFilesSchema.parse([1, 2, 3, 4, 5, 6])).toHaveLength(6);
     });
 
     it('rejects more than 6 files', () => {

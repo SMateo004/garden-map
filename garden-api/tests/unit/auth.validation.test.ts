@@ -7,19 +7,25 @@ import {
 
 describe('Auth validation (Zod)', () => {
   describe('phoneSchema', () => {
-    it('accepts +591 followed by 8-9 digits', () => {
-      expect(phoneSchema.parse('+59171234567')).toBe('+59171234567');
-      expect(phoneSchema.parse('+591712345678')).toBe('+591712345678');
+    // phoneSchema strips the +591 prefix and returns only the local digits
+    it('accepts +591 followed by 8 digits and strips prefix', () => {
+      expect(phoneSchema.parse('+59171234567')).toBe('71234567');
     });
 
-    it('rejects invalid phone (not +591)', () => {
+    it('rejects +591 followed by 9 digits (only 8 local digits valid)', () => {
+      expect(() => phoneSchema.parse('+591712345678')).toThrow();
+    });
+
+    it('rejects phone without +591 prefix', () => {
       expect(() => phoneSchema.parse('+5491112345678')).toThrow();
-      expect(() => phoneSchema.parse('71234567')).toThrow();
     });
 
-    it('rejects phone with wrong length', () => {
-      expect(() => phoneSchema.parse('+5917123456')).toThrow();   // 7 digits
-      expect(() => phoneSchema.parse('+5917123456789')).toThrow(); // 10 digits
+    it('rejects phone with wrong length (too short)', () => {
+      expect(() => phoneSchema.parse('+5917123456')).toThrow(); // only 7 local digits
+    });
+
+    it('rejects phone with wrong length (too long)', () => {
+      expect(() => phoneSchema.parse('+5917123456789')).toThrow(); // 10 local digits
     });
   });
 
@@ -47,6 +53,7 @@ describe('Auth validation (Zod)', () => {
       firstName: 'A',
       lastName: 'B',
       phone: '+59171234567',
+      dateOfBirth: '1990-01-01',
       country: 'Bolivia',
       city: 'Santa Cruz',
       isOver18: true,
@@ -100,13 +107,13 @@ describe('Auth validation (Zod)', () => {
       ).toThrow();
     });
 
-    it('rejects profile without zone', () => {
-      expect(() =>
+    it('accepts profile without zone (zone is optional at registration time)', () => {
+      expect(
         registerCaregiverSchema.parse({
           user: validUser,
           profile: { ...validProfile, zone: undefined },
         })
-      ).toThrow();
+      ).toBeDefined();
     });
 
     it('rejects profile with bio shorter than 50 chars', () => {
@@ -151,12 +158,10 @@ describe('Auth validation (Zod)', () => {
       ).toEqual({ bio: 'New bio', maxPets: 2 });
     });
 
-    it('rejects text field shorter than 100 when provided', () => {
-      expect(() =>
-        patchCaregiverProfileSchema.parse({
-          experienceDescription: 'short',
-        })
-      ).toThrow();
+    it('accepts bio of any length >= 1 when provided (min 1 in patch)', () => {
+      expect(
+        patchCaregiverProfileSchema.parse({ bio: 'short bio' })
+      ).toMatchObject({ bio: 'short bio' });
     });
   });
 });

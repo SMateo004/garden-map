@@ -15,6 +15,11 @@ jest.mock('../../src/config/database', () => {
     create: jest.fn(),
   };
   const caregiverProfile = { create: jest.fn() };
+  const refreshToken = {
+    create: jest.fn().mockResolvedValue({ id: 'rt-1', tokenHash: 'hash', expiresAt: new Date() }),
+    findFirst: jest.fn(),
+    updateMany: jest.fn(),
+  };
   const transactionTx = {
     user: { findUnique: jest.fn(), create: jest.fn() },
     caregiverProfile: { create: jest.fn() },
@@ -24,10 +29,23 @@ jest.mock('../../src/config/database', () => {
     default: {
       user,
       caregiverProfile,
+      refreshToken,
       $transaction: jest.fn((fn: (tx: typeof transactionTx) => Promise<unknown>) => fn(transactionTx)),
     },
   };
 });
+
+jest.mock('../../src/shared/analytics', () => ({
+  track: jest.fn(),
+  identify: jest.fn(),
+}));
+
+jest.mock('../../src/services/blockchain.service', () => ({
+  blockchainService: {
+    registerUser: jest.fn(),
+    syncProfileOnChain: jest.fn().mockResolvedValue(null),
+  },
+}));
 
 jest.mock('bcrypt', () => ({
   hash: jest.fn((pw: string) => Promise.resolve(`hashed_${pw}`)),
@@ -45,6 +63,7 @@ const validRegisterBody: RegisterCaregiverBody = {
     firstName: 'Juan',
     lastName: 'Pérez',
     phone: '+59171234567',
+    dateOfBirth: new Date('1990-01-01'),
     country: 'Bolivia',
     city: 'Santa Cruz',
     isOver18: true,
