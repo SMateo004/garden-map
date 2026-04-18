@@ -237,22 +237,15 @@ export async function createBooking(
       totalAmount = (totalDays ?? 0) * pricePerUnit;
     } else {
       const duration = (body as any).duration;
-      const p30 = caregiver.pricePerWalk30 ?? 0;
       const p60 = caregiver.pricePerWalk60 ?? 0;
 
-      if (duration === 30) {
-        if (p30 <= 0) {
-          throw new BookingValidationError('El cuidador no tiene precio de paseo 30min', 'BOOKING_VALIDATION');
-        }
-        pricePerUnit = p30;
-        totalAmount = p30;
-      } else {
-        if (p60 <= 0) {
-          throw new BookingValidationError('El cuidador no tiene precio de paseo 60min para calcular el total', 'BOOKING_VALIDATION');
-        }
-        pricePerUnit = p60;
-        totalAmount = (p60 * duration) / 60;
+      if (p60 <= 0) {
+        throw new BookingValidationError('El cuidador no tiene precio de paseo configurado', 'BOOKING_VALIDATION', 'caregiverId');
       }
+
+      // 30 min = mitad del precio de 60 min (sin campo separado en BD)
+      pricePerUnit = duration === 30 ? Math.round(p60 / 2) : p60;
+      totalAmount = pricePerUnit;
     }
 
     const subtotal = totalAmount;
