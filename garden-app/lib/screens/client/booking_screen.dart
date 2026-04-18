@@ -87,7 +87,11 @@ class _BookingScreenState extends State<BookingScreen> {
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         if (mounted) {
-          setState(() => _pets = (data['data'] as List).cast<Map<String, dynamic>>());
+          final pets = (data['data'] as List).cast<Map<String, dynamic>>();
+          for (final p in pets) {
+            debugPrint('PET: ${p['name']} photoUrl=${p['photoUrl']}');
+          }
+          setState(() => _pets = pets);
           if (_pets.isNotEmpty) {
             _selectedPetId = _pets.first['id'];
           } else {
@@ -497,15 +501,26 @@ class _BookingScreenState extends State<BookingScreen> {
                                 // Foto de la mascota
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(10),
-                                  child: pet['photoUrl'] != null && (pet['photoUrl'] as String).isNotEmpty
-                                      ? Image.network(
-                                          pet['photoUrl'],
-                                          width: 48,
-                                          height: 56,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => _petPlaceholder(pet, isSelected, textColor),
-                                        )
-                                      : _petPlaceholder(pet, isSelected, textColor),
+                                  child: SizedBox(
+                                    width: 48,
+                                    height: 56,
+                                    child: () {
+                                      final rawUrl = pet['photoUrl'] as String? ?? '';
+                                      final url = rawUrl.isNotEmpty ? fixImageUrl(rawUrl) : '';
+                                      if (url.isEmpty) return _petPlaceholder(pet, isSelected, textColor);
+                                      return Image.network(
+                                        url,
+                                        width: 48,
+                                        height: 56,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => _petPlaceholder(pet, isSelected, textColor),
+                                        loadingBuilder: (_, child, progress) {
+                                          if (progress == null) return child;
+                                          return _petPlaceholder(pet, isSelected, textColor);
+                                        },
+                                      );
+                                    }(),
+                                  ),
                                 ),
                                 const SizedBox(width: 10),
                                 // Nombre y especie
