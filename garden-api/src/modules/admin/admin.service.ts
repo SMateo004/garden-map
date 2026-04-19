@@ -678,20 +678,22 @@ export async function rejectPayment(bookingId: string, adminId: string): Promise
 // ---------------------------------------------------------------------------
 
 /** GET /api/admin/extension-payments-pending — extensiones pendientes de aprobación.
- *  Consulta directamente los bookings IN_PROGRESS PASEO para no depender de AdminNotification.
+ *  Consulta directamente los bookings PASEO recientes (30 días) sin filtrar por status,
+ *  para cubrir walks que ya terminaron pero tienen extensiones aún pendientes.
  */
 export async function getExtensionPaymentsPending(): Promise<{ items: any[] }> {
-  // Obtener todos los paseos en curso — no hay muchos simultáneamente
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const bookings = await prisma.booking.findMany({
     where: {
       serviceType: 'PASEO',
-      status: { in: [BookingStatus.IN_PROGRESS, BookingStatus.CONFIRMED, BookingStatus.WAITING_CAREGIVER_APPROVAL] },
+      createdAt: { gte: since },
     },
     include: {
       client: { select: { email: true, firstName: true, lastName: true } },
       caregiver: { select: { user: { select: { firstName: true, lastName: true } } } },
     },
     orderBy: { createdAt: 'desc' },
+    take: 200,
   });
 
   const items: any[] = [];

@@ -95,25 +95,36 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   Future<void> _loadPayments() async {
     setState(() => _isLoadingPayments = true);
     try {
+      // Cargar pagos principales
       final results = await Future.wait([
         http.get(Uri.parse('$_baseUrl/admin/payments-pending'), headers: {'Authorization': 'Bearer $_adminToken'}),
         http.get(Uri.parse('$_baseUrl/admin/payments-history'), headers: {'Authorization': 'Bearer $_adminToken'}),
-        http.get(Uri.parse('$_baseUrl/admin/extension-payments-pending'), headers: {'Authorization': 'Bearer $_adminToken'}),
       ]);
       final pending = jsonDecode(results[0].body);
       final history = jsonDecode(results[1].body);
-      final extPending = jsonDecode(results[2].body);
       if (pending['success'] == true) {
         setState(() => _pendingPayments = (pending['data']['bookings'] as List).cast<Map<String, dynamic>>());
       }
       if (history['success'] == true) {
         setState(() => _paymentsHistory = (history['data'] as List).cast<Map<String, dynamic>>());
       }
-      if (extPending['success'] == true) {
-        setState(() => _extensionPaymentsPending = ((extPending['data']?['items'] ?? []) as List).cast<Map<String, dynamic>>());
+    } catch (e) {
+      debugPrint('Error loading main payments: $e');
+    }
+
+    // Cargar extensiones pendientes por separado para no bloquear los demás
+    try {
+      final extRes = await http.get(
+        Uri.parse('$_baseUrl/admin/extension-payments-pending'),
+        headers: {'Authorization': 'Bearer $_adminToken'},
+      );
+      final extData = jsonDecode(extRes.body);
+      if (extData['success'] == true) {
+        final items = (extData['data']?['items'] ?? []) as List;
+        setState(() => _extensionPaymentsPending = items.cast<Map<String, dynamic>>());
       }
     } catch (e) {
-      debugPrint('Error loading payments: $e');
+      debugPrint('Error loading extension payments: $e');
     } finally {
       setState(() => _isLoadingPayments = false);
     }
@@ -2104,19 +2115,30 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           ],
 
           // ── EXTENSION PAYMENTS PENDING ─────────────────────────
-          if (_extensionPaymentsPending.isNotEmpty) ...[
-            Row(children: [
-              const Icon(Icons.add_alarm_rounded, size: 16, color: Colors.deepOrange),
-              const SizedBox(width: 6),
-              const Text('Extensiones de paseo', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.deepOrange)),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(10)),
-                child: Text('${_extensionPaymentsPending.length}',
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-              ),
-            ]),
+          Row(children: [
+            const Icon(Icons.add_alarm_rounded, size: 16, color: Colors.deepOrange),
+            const SizedBox(width: 6),
+            const Text('Extensiones de paseo', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.deepOrange)),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(color: _extensionPaymentsPending.isEmpty ? Colors.grey : Colors.deepOrange, borderRadius: BorderRadius.circular(10)),
+              child: Text('${_extensionPaymentsPending.length}',
+                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+            ),
+          ]),
+          const SizedBox(height: 10),
+          if (_extensionPaymentsPending.isEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+              decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor)),
+              child: Row(children: [
+                Icon(Icons.check_circle_outline_rounded, size: 16, color: subtextColor),
+                const SizedBox(width: 8),
+                Text('Sin extensiones pendientes', style: TextStyle(color: subtextColor, fontSize: 13)),
+              ]),
+            )
+          else ...[
             const SizedBox(height: 10),
             ..._extensionPaymentsPending.map((ext) {
               final bookingId = ext['bookingId'] as String;
@@ -2217,8 +2239,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 ]),
               );
             }),
-            const SizedBox(height: 20),
           ],
+          const SizedBox(height: 20),
 
           // ── PENDING PAYMENTS ───────────────────────────────────
           Row(children: [
