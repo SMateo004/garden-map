@@ -1252,6 +1252,198 @@ export async function changeDatesBooking(
 }
 
 /**
+ * Crea una solicitud de pago de extensión de paseo (genera QR o solicitud manual).
+ * No aplica los minutos todavía — se aplican en confirmWalkExtensionQr o cuando el admin aprueba.
+ */
+export async function requestWalkExtensionPayment(
+  bookingId: string,
+  clientId: string,
+  additionalMinutes: number,
+  method: 'qr' | 'manual'
+): Promise<{ extensionId: string; extraAmount: number; qrId?: string; qrImageUrl?: string; qrExpiresAt?: string; status: string }> {
+  const cfg = await getBookingSettings();
+
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, clientId },
+    select: {
+      id: true, serviceType: true, status: true,
+      pricePerUnit: true, caregiverId: true, serviceEvents: true,
+    },
+  });
+
+  if (!booking) throw new BookingNotFoundError(bookingId);
+  if (booking.serviceType !== ServiceType.PASEO) throw new BookingValidationError('Solo se puede extender un paseo');
+  if (booking.status !== BookingStatus.IN_PROGRESS) throw new BookingValidationError('Solo se puede extender un paseo en curso');
+
+  const pricePerUnitClient = Number(booking.pricePerUnit);
+  const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
+  const ratePerMinCaregiver = pricePerUnitCaregiver / 60;
+  const extraBase = Math.round(ratePerMinCaregiver * additionalMinutes);
+  const extraTotal = Math.round(extraBase * (1 + cfg.COMMISSION_RATE));
+
+  const extensionId = crypto.randomUUID();
+  const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
+
+  if (method === 'qr') {
+    const { qrId, qrImageUrl, qrExpiresAt } = generateQR(bookingId, 15); // 15 min de validez para extensiones
+    events.push({
+      type: 'EXTENSION_PENDING_PAYMENT',
+      extensionId,
+      additionalMinutes,
+      extraAmount: extraTotal,
+      method: 'qr',
+      qrId,
+      qrImageUrl,
+      qrExpiresAt: qrExpiresAt.toISOString(),
+      timestamp: new Date().toISOString(),
+    });
+
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data: { serviceEvents: events },
+    });
+
+    logger.info('Walk extension QR payment initiated', { bookingId, extensionId, additionalMinutes, extraTotal });
+    return {
+      extensionId,
+      extraAmount: extraTotal,
+      qrId,
+      qrImageUrl,
+      qrExpiresAt: qrExpiresAt.toISOString(),
+      status: 'PENDING_QR',
+    };
+  }
+
+  // Manual: notificar al admin
+  const manualPaymentId = `EXT-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+  events.push({
+    type: 'EXTENSION_PENDING_PAYMENT',
+    extensionId,
+    additionalMinutes,
+    extraAmount: extraTotal,
+    method: 'manual',
+    paymentId: manualPaymentId,
+    timestamp: new Date().toISOString(),
+  });
+
+  const caregiver = await prisma.caregiverProfile.findFirst({
+    where: { id: booking.caregiverId },
+    select: { id: true },
+  });
+
+  await prisma.$transaction([
+    prisma.booking.update({ where: { id: bookingId }, data: { serviceEvents: events } }),
+    ...(caregiver ? [prisma.adminNotification.create({
+      data: {
+        type: 'EXTENSION_PAYMENT_APPROVAL',
+        caregiverId: caregiver.id,
+        bookingId,
+      },
+    })] : []),
+  ]);
+
+  logger.info('Walk extension manual payment requested', { bookingId, extensionId, manualPaymentId, extraTotal });
+  return { extensionId, extraAmount: extraTotal, status: 'PENDING_MANUAL', qrId: manualPaymentId };
+}
+
+/**
+ * Confirma el pago QR de una extensión de paseo y aplica los minutos adicionales.
+ */
+export async function confirmWalkExtensionQr(
+  bookingId: string,
+  qrId: string
+): Promise<BookingCreateResult> {
+  const cfg = await getBookingSettings();
+
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId },
+    select: {
+      id: true, clientId: true, caregiverId: true, serviceType: true, status: true,
+      duration: true, totalAmount: true, commissionAmount: true, pricePerUnit: true,
+      petName: true, serviceEvents: true,
+    },
+  });
+
+  if (!booking) throw new BookingNotFoundError(bookingId);
+  if (booking.status !== BookingStatus.IN_PROGRESS) throw new BookingValidationError('El paseo ya no está en curso');
+
+  const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
+  const pendingIdx = events.findIndex(
+    e => e.type === 'EXTENSION_PENDING_PAYMENT' && e.method === 'qr' && e.qrId === qrId
+  );
+
+  if (pendingIdx === -1) throw new BookingValidationError('QR de extensión no válido o ya procesado');
+
+  const pending = events[pendingIdx];
+  const qrExpiry = new Date(pending.qrExpiresAt);
+  if (qrExpiry < new Date()) throw new BookingValidationError('El QR de extensión ha expirado. Genera uno nuevo.');
+
+  const { additionalMinutes, extraAmount, extensionId } = pending;
+
+  // Aplicar extensión
+  const pricePerUnitClient = Number(booking.pricePerUnit);
+  const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
+  const extraCommission = extraAmount - Math.round((pricePerUnitCaregiver / 60) * additionalMinutes);
+
+  const newDuration = (booking.duration ?? 60) + additionalMinutes;
+  const newTotal = Number(booking.totalAmount) + extraAmount;
+  const newCommission = Number(booking.commissionAmount) + extraCommission;
+
+  // Reemplazar PENDING → EXTENSION_CONFIRMED
+  events[pendingIdx] = {
+    type: 'EXTENSION_CONFIRMED',
+    extensionId,
+    additionalMinutes,
+    extraAmount,
+    method: 'qr',
+    paidAt: new Date().toISOString(),
+    timestamp: new Date().toISOString(),
+  };
+
+  let caregiverUserId: string | null = null;
+
+  const result = await prisma.$transaction(async (tx) => {
+    const updated = await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        duration: newDuration,
+        totalAmount: new Prisma.Decimal(newTotal),
+        commissionAmount: new Prisma.Decimal(newCommission),
+        serviceEvents: events,
+      },
+    });
+
+    const caregiver = await tx.caregiverProfile.findFirst({
+      where: { id: booking.caregiverId },
+      select: { userId: true },
+    });
+    if (caregiver) {
+      caregiverUserId = caregiver.userId;
+      await tx.notification.create({
+        data: {
+          userId: caregiver.userId,
+          title: '⏱️ Extensión de paseo confirmada',
+          message: `El cliente pagó ${additionalMinutes} min adicionales para el paseo de ${booking.petName ?? 'la mascota'}. Bs ${extraAmount} adicionales.`,
+          type: 'SERVICE_EXTENSION',
+        },
+      });
+    }
+
+    logger.info('Walk extension QR confirmed', { bookingId, extensionId, additionalMinutes, newDuration, newTotal });
+    return bookingToResponse(updated);
+  });
+
+  if (caregiverUserId) {
+    sendPushToUser(caregiverUserId, '⏱️ Extensión confirmada', `+${additionalMinutes} min · Bs ${extraAmount} adicionales`)
+      .catch(() => {});
+  }
+
+  blockchainService.recordWalkExtensionOnChain(bookingId, additionalMinutes, newTotal).catch(() => {});
+
+  return result;
+}
+
+/**
  * Extiende un paseo en curso (IN_PROGRESS) sumando 15, 30 o 60 minutos adicionales.
  * Recalcula el monto total prorrateando el precio por minuto del cuidador (precio de 60 min).
  * Notifica al cuidador por in-app + push. Registra evento en serviceEvents y en blockchain.

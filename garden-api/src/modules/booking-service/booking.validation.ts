@@ -107,6 +107,19 @@ export const cancellationRequestBodySchema = z.object({
 
 export type CancellationRequestBody = z.infer<typeof cancellationRequestBodySchema>;
 
+/** POST /api/bookings/:id/request-extension-payment — inicia pago de extensión de paseo. */
+export const requestExtensionPaymentBodySchema = z.object({
+  additionalMinutes: z.number().int().refine((n) => [15, 30, 60].includes(n), {
+    message: 'additionalMinutes debe ser 15, 30 o 60',
+  }),
+  method: z.enum(['qr', 'manual'], { required_error: 'method es requerido (qr | manual)' }),
+});
+
+/** POST /api/bookings/:id/confirm-extension-qr — confirma pago QR de extensión. */
+export const confirmExtensionQrBodySchema = z.object({
+  qrId: z.string().min(1, 'qrId requerido'),
+});
+
 /** POST /api/bookings/:id/extend-paseo — cliente solicita extensión de paseo en curso. */
 export const extendPaseoBodySchema = z.object({
   additionalMinutes: z.number().int().refine((n) => [15, 30, 60].includes(n), {

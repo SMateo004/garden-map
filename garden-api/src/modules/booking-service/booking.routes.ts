@@ -78,6 +78,21 @@ router.post(
   bookingController.changeDates
 );
 
+/** POST /api/bookings/:id/request-extension-payment — iniciar pago extensión paseo (QR o manual). */
+router.post(
+  '/:id/request-extension-payment',
+  authMiddleware,
+  requireRole('CLIENT'),
+  bookingController.requestExtensionPayment
+);
+
+/** POST /api/bookings/:id/confirm-extension-qr — confirmar pago QR y aplicar minutos. */
+router.post(
+  '/:id/confirm-extension-qr',
+  authMiddleware,
+  bookingController.confirmExtensionQr
+);
+
 /** GET /api/bookings/:id/extension-availability — minutos disponibles para extender paseo. */
 router.get(
   '/:id/extension-availability',

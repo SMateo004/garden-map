@@ -771,28 +771,40 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     } catch (_) {}
   }
 
-  Future<void> _requestExtension(int minutes) async {
+  Future<void> _requestExtensionPayment(int minutes, String method) async {
     setState(() => _loadingExtension = true);
     try {
       final response = await http.post(
-        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/extend-paseo'),
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/request-extension-payment'),
         headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
-        body: jsonEncode({'additionalMinutes': minutes}),
+        body: jsonEncode({'additionalMinutes': minutes, 'method': method}),
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
-        await _loadBooking();
-        await _loadExtensionAvailability();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ +$minutes min añadidos · Cuidador notificado'),
-              backgroundColor: GardenColors.success,
+        final payData = data['data'] as Map<String, dynamic>;
+        if (!mounted) return;
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _WalkExtensionPaymentScreen(
+              bookingId: widget.bookingId,
+              token: _token,
+              baseUrl: _baseUrl,
+              additionalMinutes: minutes,
+              extraAmount: (payData['extraAmount'] as num).toDouble(),
+              qrId: payData['qrId'] as String?,
+              qrImageUrl: payData['qrImageUrl'] as String?,
+              qrExpiresAt: payData['qrExpiresAt'] as String?,
+              method: method,
+              onConfirmed: () async {
+                await _loadBooking();
+                await _loadExtensionAvailability();
+              },
             ),
-          );
-        }
+          ),
+        );
       } else {
-        throw Exception(data['error']?['message'] ?? data['message'] ?? 'Error al ampliar');
+        throw Exception(data['error']?['message'] ?? data['message'] ?? 'Error al iniciar pago');
       }
     } catch (e) {
       if (mounted) {
@@ -808,6 +820,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   void _showExtendTimeSheet() {
     final price60 = double.tryParse(_booking?['pricePerUnit']?.toString() ?? '') ?? 0.0;
     int selectedMinutes = _allowedExtensionMinutes >= 15 ? 15 : 0;
+    String selectedMethod = 'qr'; // default: QR payment
 
     showModalBottomSheet(
       context: context,
@@ -822,7 +835,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
           final available = [15, 30, 60].where((m) => m <= _allowedExtensionMinutes).toList();
 
-          Widget chip(int minutes) {
+          Widget minuteChip(int minutes) {
             final isSelected = selectedMinutes == minutes;
             final cost = ((price60 / 60) * minutes).ceil();
             return Expanded(
@@ -843,6 +856,33 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       Text('+$minutes min', style: TextStyle(color: isSelected ? Colors.white : textColor, fontWeight: FontWeight.w800, fontSize: 14)),
                       const SizedBox(height: 2),
                       Text('Bs $cost', style: TextStyle(color: isSelected ? Colors.white70 : subtextColor, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+
+          Widget methodChip(String method, String label, IconData icon) {
+            final isSelected = selectedMethod == method;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => setSheetState(() => selectedMethod = method),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isSelected ? GardenColors.primary.withValues(alpha: 0.12) : (isDark ? GardenColors.darkBackground : GardenColors.lightBackground),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: isSelected ? GardenColors.primary : (isDark ? GardenColors.darkBorder : GardenColors.lightBorder), width: isSelected ? 1.5 : 1),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(icon, size: 16, color: isSelected ? GardenColors.primary : subtextColor),
+                      const SizedBox(width: 6),
+                      Text(label, style: TextStyle(color: isSelected ? GardenColors.primary : subtextColor, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, fontSize: 13)),
                     ],
                   ),
                 ),
@@ -875,7 +915,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     child: const Text('No hay tiempo disponible para ampliar (próximas reservas del cuidador o fin de bloque horario).', style: TextStyle(color: Colors.orange, fontSize: 13)),
                   )
                 else ...[
-                  Row(children: available.map(chip).toList()),
+                  Row(children: available.map(minuteChip).toList()),
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -889,13 +929,20 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     ),
                   ),
                   const SizedBox(height: 20),
+                  Text('Método de pago', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    methodChip('qr', 'QR', Icons.qr_code_rounded),
+                    methodChip('manual', 'Transferencia', Icons.account_balance_rounded),
+                  ]),
+                  const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
                     child: GardenButton(
-                      label: 'Confirmar y pagar',
+                      label: 'Ir a pagar',
                       onPressed: selectedMinutes == 0 ? null : () {
                         Navigator.pop(ctx);
-                        _requestExtension(selectedMinutes);
+                        _requestExtensionPayment(selectedMinutes, selectedMethod);
                       },
                     ),
                   ),
@@ -984,11 +1031,17 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     ),
                   ),
                 ),
-                // Botón atrás
+                // Botones de navegación (CLIENT: atrás→mis reservas, X→inicio)
                 Positioned(
                   top: MediaQuery.of(context).padding.top + 8, left: 8,
                   child: GestureDetector(
-                    onTap: () => Navigator.pop(context),
+                    onTap: () {
+                      if (widget.role == 'CLIENT') {
+                        context.go('/my-bookings-tab');
+                      } else {
+                        Navigator.pop(context);
+                      }
+                    },
                     child: Container(
                       width: 36, height: 36,
                       decoration: BoxDecoration(
@@ -999,6 +1052,21 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     ),
                   ),
                 ),
+                if (widget.role == 'CLIENT')
+                  Positioned(
+                    top: MediaQuery.of(context).padding.top + 8, right: 8,
+                    child: GestureDetector(
+                      onTap: () => context.go('/marketplace'),
+                      child: Container(
+                        width: 36, height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.25),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -2725,6 +2793,294 @@ class _InfoSection extends StatelessWidget {
           child,
         ],
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PANTALLA DE PAGO DE EXTENSIÓN DE PASEO
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _WalkExtensionPaymentScreen extends StatefulWidget {
+  final String bookingId;
+  final String token;
+  final String baseUrl;
+  final int additionalMinutes;
+  final double extraAmount;
+  final String? qrId;
+  final String? qrImageUrl;
+  final String? qrExpiresAt;
+  final String method; // 'qr' | 'manual'
+  final Future<void> Function() onConfirmed;
+
+  const _WalkExtensionPaymentScreen({
+    required this.bookingId,
+    required this.token,
+    required this.baseUrl,
+    required this.additionalMinutes,
+    required this.extraAmount,
+    required this.method,
+    required this.onConfirmed,
+    this.qrId,
+    this.qrImageUrl,
+    this.qrExpiresAt,
+  });
+
+  @override
+  State<_WalkExtensionPaymentScreen> createState() => _WalkExtensionPaymentScreenState();
+}
+
+class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen> {
+  bool _isConfirming = false;
+  bool _confirmed = false;
+  String? _errorMsg;
+  Timer? _countdownTimer;
+  Duration _remaining = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.method == 'qr' && widget.qrExpiresAt != null) {
+      final expiresAt = DateTime.tryParse(widget.qrExpiresAt!);
+      if (expiresAt != null) {
+        _remaining = expiresAt.difference(DateTime.now());
+        if (_remaining.isNegative) _remaining = Duration.zero;
+        _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+          if (!mounted) return;
+          setState(() {
+            _remaining = _remaining.inSeconds > 0 ? _remaining - const Duration(seconds: 1) : Duration.zero;
+          });
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _confirmQrPayment() async {
+    if (widget.qrId == null) return;
+    setState(() { _isConfirming = true; _errorMsg = null; });
+    try {
+      final response = await http.post(
+        Uri.parse('${widget.baseUrl}/bookings/${widget.bookingId}/confirm-extension-qr'),
+        headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+        body: jsonEncode({'qrId': widget.qrId}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        setState(() { _confirmed = true; _isConfirming = false; });
+        await widget.onConfirmed();
+        if (mounted) {
+          await Future.delayed(const Duration(seconds: 2));
+          if (mounted) Navigator.pop(context);
+        }
+      } else {
+        setState(() {
+          _isConfirming = false;
+          _errorMsg = data['error']?['message'] ?? data['message'] ?? 'Error al confirmar el pago.';
+        });
+      }
+    } catch (e) {
+      setState(() { _isConfirming = false; _errorMsg = 'Error de conexión. Intenta de nuevo.'; });
+    }
+  }
+
+  String _formatCountdown(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(
+        backgroundColor: bg,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_rounded, color: textColor),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text('Pagar extensión', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 18)),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: _confirmed ? _buildSuccessView(textColor) : _buildPaymentView(surface, textColor, subtextColor, borderColor, isDark),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSuccessView(Color textColor) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const SizedBox(height: 60),
+        Container(
+          width: 80, height: 80,
+          decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.12), shape: BoxShape.circle),
+          child: const Icon(Icons.check_circle_rounded, color: GardenColors.primary, size: 48),
+        ),
+        const SizedBox(height: 24),
+        Text('¡Extensión confirmada!', style: TextStyle(color: textColor, fontWeight: FontWeight.w900, fontSize: 22)),
+        const SizedBox(height: 8),
+        Text('+${widget.additionalMinutes} minutos agregados al paseo.', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 16)),
+        const SizedBox(height: 8),
+        Text('Tu cuidador ha sido notificado.', style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
+      ],
+    );
+  }
+
+  Widget _buildPaymentView(Color surface, Color textColor, Color subtextColor, Color borderColor, bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Resumen de la extensión
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: borderColor)),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Tiempo adicional', style: TextStyle(color: subtextColor, fontSize: 14)),
+                  Text('+${widget.additionalMinutes} min', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Total a pagar', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 16)),
+                  Text('Bs ${widget.extraAmount.toStringAsFixed(0)}', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w900, fontSize: 22)),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        if (widget.method == 'qr') ...[
+          // QR countdown
+          if (_remaining.inSeconds > 0)
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(color: _remaining.inSeconds < 60 ? GardenColors.error.withValues(alpha: 0.12) : GardenColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
+                child: Text(
+                  'QR válido por: ${_formatCountdown(_remaining)}',
+                  style: TextStyle(color: _remaining.inSeconds < 60 ? GardenColors.error : GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+              ),
+            )
+          else
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+                child: const Text('QR expirado', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.w700, fontSize: 13)),
+              ),
+            ),
+          const SizedBox(height: 16),
+
+          // QR image
+          if (widget.qrImageUrl != null && widget.qrImageUrl!.isNotEmpty)
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 12)]),
+                child: Image.network(widget.qrImageUrl!, width: 200, height: 200, fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const SizedBox(width: 200, height: 200, child: Center(child: Icon(Icons.qr_code_rounded, size: 80, color: Colors.grey)))),
+              ),
+            )
+          else
+            Center(
+              child: Container(
+                width: 200, height: 200,
+                decoration: BoxDecoration(color: isDark ? GardenColors.darkSurface : Colors.grey.shade100, borderRadius: BorderRadius.circular(16), border: Border.all(color: borderColor)),
+                child: const Center(child: Icon(Icons.qr_code_rounded, size: 80, color: GardenColors.primary)),
+              ),
+            ),
+          const SizedBox(height: 16),
+          Center(
+            child: Text('Escanea el QR con tu app de pago y luego presiona "Ya pagué".',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5)),
+          ),
+          const SizedBox(height: 28),
+
+          if (_errorMsg != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: GardenColors.error.withValues(alpha: 0.3))),
+              child: Text(_errorMsg!, style: const TextStyle(color: GardenColors.error, fontSize: 13)),
+            ),
+
+          SizedBox(
+            width: double.infinity,
+            child: GardenButton(
+              label: _isConfirming ? 'Verificando...' : 'Ya pagué',
+              onPressed: (_isConfirming || _remaining.inSeconds == 0) ? null : _confirmQrPayment,
+            ),
+          ),
+        ] else ...[
+          // Manual payment instructions
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: borderColor)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  const Icon(Icons.account_balance_rounded, color: GardenColors.primary, size: 20),
+                  const SizedBox(width: 8),
+                  Text('Transferencia manual', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                ]),
+                const SizedBox(height: 12),
+                Text(
+                  'Realiza la transferencia de Bs ${widget.extraAmount.toStringAsFixed(0)} a la cuenta de Garden Bolivia y envía el comprobante al administrador.\n\nUna vez aprobado, los minutos se agregarán automáticamente.',
+                  style: TextStyle(color: subtextColor, fontSize: 13, height: 1.6),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.withValues(alpha: 0.25))),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline_rounded, color: Colors.blue, size: 18),
+                SizedBox(width: 8),
+                Expanded(child: Text('El administrador revisará tu pago y aprobará la extensión.', style: TextStyle(color: Colors.blue, fontSize: 12))),
+              ],
+            ),
+          ),
+          const SizedBox(height: 28),
+          SizedBox(
+            width: double.infinity,
+            child: GardenButton(
+              label: 'Entendido',
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

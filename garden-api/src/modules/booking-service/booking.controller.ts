@@ -11,6 +11,8 @@ import {
   initPaymentBodySchema,
   cancellationRequestBodySchema,
   extendPaseoBodySchema,
+  requestExtensionPaymentBodySchema,
+  confirmExtensionQrBodySchema,
 } from './booking.validation.js';
 import * as bookingService from './booking.service.js';
 
@@ -209,6 +211,29 @@ export const requestCancellationByCaregiver = asyncHandler(async (req: Request, 
     body.reason
   );
   res.json({ success: true, data: booking });
+});
+
+/**
+ * POST /api/bookings/:id/request-extension-payment
+ * Inicia el pago de una extensión de paseo (QR o manual).
+ */
+export const requestExtensionPayment = asyncHandler(async (req: Request, res: Response) => {
+  const bookingId = req.params.id!;
+  const clientId = req.user!.userId;
+  const body = requestExtensionPaymentBodySchema.parse(req.body);
+  const result = await bookingService.requestWalkExtensionPayment(bookingId, clientId, body.additionalMinutes, body.method);
+  res.json({ success: true, data: result });
+});
+
+/**
+ * POST /api/bookings/:id/confirm-extension-qr
+ * Confirma el pago QR de extensión y aplica los minutos adicionales.
+ */
+export const confirmExtensionQr = asyncHandler(async (req: Request, res: Response) => {
+  const bookingId = req.params.id!;
+  const body = confirmExtensionQrBodySchema.parse(req.body);
+  const result = await bookingService.confirmWalkExtensionQr(bookingId, body.qrId);
+  res.json({ success: true, data: result });
 });
 
 /**
