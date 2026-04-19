@@ -46,6 +46,15 @@ router.post('/bookings/:id/reject-payment', adminController.rejectPayment);
 /** POST /api/admin/bookings/:id/approve-payment — aprobar pago manual. */
 router.post('/bookings/:id/approve-payment', adminController.approvePayment);
 
+/** GET /api/admin/extension-payments-pending — extensiones de paseo pendientes de aprobación. */
+router.get('/extension-payments-pending', adminController.getExtensionPaymentsPending);
+
+/** POST /api/admin/bookings/:id/approve-extension-payment — aprobar extensión manual. */
+router.post('/bookings/:id/approve-extension-payment', adminController.approveExtensionPayment);
+
+/** POST /api/admin/bookings/:id/reject-extension-payment — rechazar extensión manual. */
+router.post('/bookings/:id/reject-extension-payment', adminController.rejectExtensionPayment);
+
 /** GET /api/admin/reservations — listado de reservas, ?status= opcional. */
 router.get('/reservations', adminController.getReservations);
 

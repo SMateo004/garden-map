@@ -149,6 +149,32 @@ export const approvePayment = asyncHandler(async (req: Request, res: Response) =
   res.json({ success: true, data: { status: 'WAITING_CAREGIVER_APPROVAL' } });
 });
 
+/** GET /api/admin/extension-payments-pending — extensiones de paseo pendientes de aprobación */
+export const getExtensionPaymentsPending = asyncHandler(async (req: Request, res: Response) => {
+  const result = await adminService.getExtensionPaymentsPending();
+  res.json({ success: true, data: result });
+});
+
+/** POST /api/admin/bookings/:id/approve-extension-payment — aprobar extensión manual */
+export const approveExtensionPayment = asyncHandler(async (req: Request, res: Response) => {
+  const bookingId = req.params.id!;
+  const { extensionId } = req.body;
+  const adminId = req.user!.userId;
+  if (!extensionId) return res.status(400).json({ success: false, error: { message: 'extensionId requerido' } });
+  const result = await adminService.approveExtensionPayment(bookingId, extensionId, adminId);
+  res.json({ success: true, data: result });
+});
+
+/** POST /api/admin/bookings/:id/reject-extension-payment — rechazar extensión manual */
+export const rejectExtensionPayment = asyncHandler(async (req: Request, res: Response) => {
+  const bookingId = req.params.id!;
+  const { extensionId } = req.body;
+  const adminId = req.user!.userId;
+  if (!extensionId) return res.status(400).json({ success: false, error: { message: 'extensionId requerido' } });
+  const result = await adminService.rejectExtensionPayment(bookingId, extensionId, adminId);
+  res.json({ success: true, data: result });
+});
+
 /** GET /api/admin/reservations?status=&page=1&limit=50 — listado de reservas paginado */
 export const getReservations = asyncHandler(async (req: Request, res: Response) => {
   const status = typeof req.query.status === 'string' ? req.query.status : undefined;

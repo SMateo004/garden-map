@@ -27,6 +27,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   List<Map<String, dynamic>> _disputes = [];
   List<Map<String, dynamic>> _pendingPayments = [];
   List<Map<String, dynamic>> _paymentsHistory = [];
+  List<Map<String, dynamic>> _extensionPaymentsPending = [];
   String _reservationsFilter = 'todas';
   String _withdrawalsFilter = 'PENDING';
   String _disputesFilter = '';
@@ -97,14 +98,19 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       final results = await Future.wait([
         http.get(Uri.parse('$_baseUrl/admin/payments-pending'), headers: {'Authorization': 'Bearer $_adminToken'}),
         http.get(Uri.parse('$_baseUrl/admin/payments-history'), headers: {'Authorization': 'Bearer $_adminToken'}),
+        http.get(Uri.parse('$_baseUrl/admin/extension-payments-pending'), headers: {'Authorization': 'Bearer $_adminToken'}),
       ]);
       final pending = jsonDecode(results[0].body);
       final history = jsonDecode(results[1].body);
+      final extPending = jsonDecode(results[2].body);
       if (pending['success'] == true) {
         setState(() => _pendingPayments = (pending['data']['bookings'] as List).cast<Map<String, dynamic>>());
       }
       if (history['success'] == true) {
         setState(() => _paymentsHistory = (history['data'] as List).cast<Map<String, dynamic>>());
+      }
+      if (extPending['success'] == true) {
+        setState(() => _extensionPaymentsPending = ((extPending['data']?['items'] ?? []) as List).cast<Map<String, dynamic>>());
       }
     } catch (e) {
       debugPrint('Error loading payments: $e');
@@ -2097,6 +2103,116 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             const SizedBox(height: 20),
           ],
 
+          // ── EXTENSION PAYMENTS PENDING ─────────────────────────
+          if (_extensionPaymentsPending.isNotEmpty) ...[
+            Row(children: [
+              const Icon(Icons.add_alarm_rounded, size: 16, color: Colors.deepOrange),
+              const SizedBox(width: 6),
+              const Text('Extensiones de paseo', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.deepOrange)),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(10)),
+                child: Text('${_extensionPaymentsPending.length}',
+                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+              ),
+            ]),
+            const SizedBox(height: 10),
+            ..._extensionPaymentsPending.map((ext) {
+              final bookingId = ext['bookingId'] as String;
+              final extensionId = ext['extensionId'] as String;
+              final paymentId = ext['paymentId'] as String? ?? '—';
+              final minutes = ext['additionalMinutes'] as int? ?? 0;
+              final amount = ext['extraAmount'];
+              final petName = ext['petName'] as String? ?? '—';
+              final client = ext['clientEmail'] as String? ?? ext['clientName'] as String? ?? '—';
+              final caregiver = ext['caregiverName'] as String? ?? '—';
+              final walkDate = ext['walkDate'] as String? ?? '—';
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(
+                  color: surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.deepOrange.withOpacity(0.4)),
+                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.deepOrange.withOpacity(0.08),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.add_alarm_rounded, size: 14, color: Colors.deepOrange),
+                      const SizedBox(width: 6),
+                      const Text('Extensión de paseo', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.deepOrange)),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(color: GardenColors.warning.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                        child: const Text('Pendiente de pago', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: GardenColors.warning)),
+                      ),
+                    ]),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(petName, style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 16)),
+                          const SizedBox(height: 2),
+                          Text(walkDate, style: TextStyle(color: subtextColor, fontSize: 12)),
+                        ])),
+                        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                          Text('+$minutes min', style: const TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.w900, fontSize: 18)),
+                          Text('Bs $amount', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 14)),
+                        ]),
+                      ]),
+                      const SizedBox(height: 8),
+                      Row(children: [
+                        const Icon(Icons.person_outline, size: 13, color: GardenColors.primary),
+                        const SizedBox(width: 4),
+                        Expanded(child: Text(client, style: TextStyle(color: subtextColor, fontSize: 12), overflow: TextOverflow.ellipsis)),
+                      ]),
+                      const SizedBox(height: 3),
+                      Row(children: [
+                        const Icon(Icons.supervisor_account_outlined, size: 13, color: GardenColors.primary),
+                        const SizedBox(width: 4),
+                        Expanded(child: Text(caregiver, style: TextStyle(color: subtextColor, fontSize: 12), overflow: TextOverflow.ellipsis)),
+                      ]),
+                      const SizedBox(height: 8),
+                      _idBadge('ID Pago', paymentId),
+                      const SizedBox(height: 12),
+                      Row(children: [
+                        Expanded(child: GardenButton(
+                          label: 'Aprobar',
+                          icon: Icons.check_rounded,
+                          height: 40,
+                          color: GardenColors.success,
+                          onPressed: () async {
+                            await _approveExtensionPayment(bookingId, extensionId);
+                          },
+                        )),
+                        const SizedBox(width: 10),
+                        Expanded(child: GardenButton(
+                          label: 'Rechazar',
+                          icon: Icons.close_rounded,
+                          height: 40,
+                          color: GardenColors.error,
+                          outline: true,
+                          onPressed: () async {
+                            await _rejectExtensionPayment(bookingId, extensionId);
+                          },
+                        )),
+                      ]),
+                    ]),
+                  ),
+                ]),
+              );
+            }),
+            const SizedBox(height: 20),
+          ],
+
           // ── PENDING PAYMENTS ───────────────────────────────────
           Row(children: [
             const Icon(Icons.pending_actions_rounded, size: 16, color: GardenColors.warning),
@@ -2254,6 +2370,56 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         ])),
       ]),
     );
+  }
+
+  Future<void> _approveExtensionPayment(String bookingId, String extensionId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/admin/bookings/$bookingId/approve-extension-payment'),
+        headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'extensionId': extensionId}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadPayments();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Extensión aprobada'), backgroundColor: GardenColors.success),
+        );
+      } else {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['error']?['message'] ?? 'Error'), backgroundColor: GardenColors.error),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
+      );
+    }
+  }
+
+  Future<void> _rejectExtensionPayment(String bookingId, String extensionId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/admin/bookings/$bookingId/reject-extension-payment'),
+        headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'extensionId': extensionId}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadPayments();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Extensión rechazada'), backgroundColor: GardenColors.error),
+        );
+      } else {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['error']?['message'] ?? 'Error'), backgroundColor: GardenColors.error),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
+      );
+    }
   }
 
   Future<void> _approvePayment(String bookingId) async {

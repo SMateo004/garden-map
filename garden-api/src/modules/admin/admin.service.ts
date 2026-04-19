@@ -1,4 +1,4 @@
-import { BookingStatus, CaregiverStatus, VerificationStatus } from '@prisma/client';
+import { BookingStatus, CaregiverStatus, Prisma, VerificationStatus } from '@prisma/client';
 import prisma from '../../config/database.js';
 import * as bookingService from '../booking-service/booking.service.js';
 import { BadRequestError, CaregiverNotFoundError, NotFoundError, UnauthorizedError } from '../../shared/errors.js';
@@ -671,6 +671,183 @@ export async function rejectPayment(bookingId: string, adminId: string): Promise
 
   logger.info('Admin: pago manual rechazado', { bookingId, adminId });
   return { id: updated.id, status: updated.status };
+}
+
+// ---------------------------------------------------------------------------
+// Pagos de extensión de paseo — aprobación/rechazo manual
+// ---------------------------------------------------------------------------
+
+/** GET /api/admin/extension-payments-pending — extensiones pendientes de aprobación (método manual). */
+export async function getExtensionPaymentsPending(): Promise<{ items: any[] }> {
+  // Buscar AdminNotifications de tipo EXTENSION_PAYMENT_APPROVAL no leídas
+  const notifications = await prisma.adminNotification.findMany({
+    where: { type: 'EXTENSION_PAYMENT_APPROVAL', readAt: null },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const items: any[] = [];
+  for (const notif of notifications) {
+    if (!notif.bookingId) continue;
+    const booking = await prisma.booking.findUnique({
+      where: { id: notif.bookingId },
+      include: {
+        client: { select: { email: true, firstName: true, lastName: true } },
+        caregiver: { select: { user: { select: { firstName: true, lastName: true } } } },
+      },
+    });
+    if (!booking) continue;
+
+    const events: any[] = Array.isArray(booking.serviceEvents) ? booking.serviceEvents as any[] : [];
+    const pending = events.filter((e: any) => e.type === 'EXTENSION_PENDING_PAYMENT' && e.method === 'manual');
+    for (const evt of pending) {
+      items.push({
+        notificationId: notif.id,
+        bookingId: booking.id,
+        extensionId: evt.extensionId,
+        paymentId: evt.paymentId,
+        additionalMinutes: evt.additionalMinutes,
+        extraAmount: evt.extraAmount,
+        petName: booking.petName,
+        walkDate: booking.walkDate?.toISOString().slice(0, 10) ?? null,
+        clientEmail: booking.client?.email,
+        clientName: booking.client ? `${booking.client.firstName} ${booking.client.lastName}`.trim() : null,
+        caregiverName: booking.caregiver?.user ? `${booking.caregiver.user.firstName} ${booking.caregiver.user.lastName}`.trim() : null,
+        timestamp: evt.timestamp,
+      });
+    }
+  }
+  return { items };
+}
+
+/** POST /api/admin/bookings/:id/approve-extension-payment — aprueba extensión; aplica minutos y monto. */
+export async function approveExtensionPayment(
+  bookingId: string,
+  extensionId: string,
+  adminId: string
+): Promise<{ success: boolean }> {
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { caregiver: { select: { userId: true } } },
+  });
+  if (!booking) throw new NotFoundError('Reserva no encontrada');
+
+  const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
+  const idx = events.findIndex((e: any) => e.type === 'EXTENSION_PENDING_PAYMENT' && e.extensionId === extensionId);
+  if (idx === -1) throw new BadRequestError('Extensión no encontrada o ya procesada');
+
+  const evt = events[idx];
+  const { additionalMinutes, extraAmount } = evt;
+  const commissionPct = await (await import('../../utils/settings-cache.js')).getNumericSetting('commissionPct', 10);
+  const COMMISSION_RATE = commissionPct / 100;
+
+  const pricePerUnitClient = Number(booking.pricePerUnit);
+  const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + COMMISSION_RATE));
+  const extraCommission = extraAmount - Math.round((pricePerUnitCaregiver / 60) * additionalMinutes);
+  const newDuration = (booking.duration ?? 60) + additionalMinutes;
+  const newTotal = Number(booking.totalAmount) + extraAmount;
+  const newCommission = Number(booking.commissionAmount) + extraCommission;
+
+  events[idx] = {
+    type: 'EXTENSION_CONFIRMED',
+    extensionId,
+    additionalMinutes,
+    extraAmount,
+    method: 'manual',
+    approvedBy: adminId,
+    paidAt: new Date().toISOString(),
+    timestamp: new Date().toISOString(),
+  };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        duration: newDuration,
+        totalAmount: new Prisma.Decimal(newTotal),
+        commissionAmount: new Prisma.Decimal(newCommission),
+        serviceEvents: events,
+      },
+    });
+    // Marcar notificación como leída
+    await tx.adminNotification.updateMany({
+      where: { type: 'EXTENSION_PAYMENT_APPROVAL', bookingId, readAt: null },
+      data: { readAt: new Date() },
+    });
+    // Notificar al cliente
+    await tx.notification.create({
+      data: {
+        userId: booking.clientId,
+        title: '⏱️ Extensión aprobada',
+        message: `Se aprobó tu extensión de +${additionalMinutes} min. Ya fueron agregados al paseo.`,
+        type: 'SERVICE_EXTENSION',
+      },
+    });
+    // Notificar al cuidador
+    if (booking.caregiver?.userId) {
+      await tx.notification.create({
+        data: {
+          userId: booking.caregiver.userId,
+          title: '⏱️ Extensión de paseo aprobada',
+          message: `El pago de la extensión (+${additionalMinutes} min · Bs ${extraAmount}) fue aprobado.`,
+          type: 'SERVICE_EXTENSION',
+        },
+      });
+    }
+  });
+
+  const { sendPushToUser } = await import('../../services/firebase.service.js');
+  sendPushToUser(booking.clientId, '⏱️ Extensión aprobada', `+${additionalMinutes} minutos agregados al paseo`).catch(() => {});
+  if (booking.caregiver?.userId) {
+    sendPushToUser(booking.caregiver.userId, '⏱️ Extensión aprobada', `+${additionalMinutes} min · Bs ${extraAmount} adicionales`).catch(() => {});
+  }
+
+  logger.info('Admin: extensión de paseo aprobada', { bookingId, extensionId, adminId, additionalMinutes });
+  return { success: true };
+}
+
+/** POST /api/admin/bookings/:id/reject-extension-payment — rechaza extensión; elimina el evento pendiente. */
+export async function rejectExtensionPayment(
+  bookingId: string,
+  extensionId: string,
+  adminId: string
+): Promise<{ success: boolean }> {
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { caregiver: { select: { userId: true } } },
+  });
+  if (!booking) throw new NotFoundError('Reserva no encontrada');
+
+  const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
+  const idx = events.findIndex((e: any) => e.type === 'EXTENSION_PENDING_PAYMENT' && e.extensionId === extensionId);
+  if (idx === -1) throw new BadRequestError('Extensión no encontrada o ya procesada');
+
+  const { additionalMinutes } = events[idx];
+  events[idx] = {
+    type: 'EXTENSION_REJECTED',
+    extensionId,
+    additionalMinutes,
+    rejectedBy: adminId,
+    timestamp: new Date().toISOString(),
+  };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.booking.update({ where: { id: bookingId }, data: { serviceEvents: events } });
+    await tx.adminNotification.updateMany({
+      where: { type: 'EXTENSION_PAYMENT_APPROVAL', bookingId, readAt: null },
+      data: { readAt: new Date() },
+    });
+    await tx.notification.create({
+      data: {
+        userId: booking.clientId,
+        title: '❌ Extensión rechazada',
+        message: `Tu solicitud de extensión (+${additionalMinutes} min) no pudo ser aprobada.`,
+        type: 'SERVICE_EXTENSION',
+      },
+    });
+  });
+
+  logger.info('Admin: extensión de paseo rechazada', { bookingId, extensionId, adminId });
+  return { success: true };
 }
 
 // ---------------------------------------------------------------------------
