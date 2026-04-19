@@ -779,7 +779,15 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
         body: jsonEncode({'additionalMinutes': minutes, 'method': method}),
       );
-      final data = jsonDecode(response.body);
+
+      // Guard: server may return HTML (503, 404, etc.) — parse safely
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (_) {
+        throw Exception('Error del servidor (${response.statusCode}). Intenta de nuevo en un momento.');
+      }
+
       if (data['success'] == true) {
         final payData = data['data'] as Map<String, dynamic>;
         if (!mounted) return;
@@ -792,7 +800,6 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               baseUrl: _baseUrl,
               additionalMinutes: minutes,
               extraAmount: (payData['extraAmount'] as num).toDouble(),
-              qrId: payData['qrId'] as String?,
               qrImageUrl: payData['qrImageUrl'] as String?,
               qrExpiresAt: payData['qrExpiresAt'] as String?,
               method: method,
@@ -809,7 +816,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: Colors.red.shade700),
         );
       }
     } finally {
@@ -2799,6 +2806,10 @@ class _InfoSection extends StatelessWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PANTALLA DE PAGO DE EXTENSIÓN DE PASEO
+// Flujo igual al de pago de reserva:
+//   QR → muestra imagen → "Ya realicé el pago" → pantalla espera
+//   Manual → directo a pantalla espera
+//   Pantalla espera → polling /bookings/:id hasta EXTENSION_CONFIRMED → éxito
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _WalkExtensionPaymentScreen extends StatefulWidget {
@@ -2807,7 +2818,6 @@ class _WalkExtensionPaymentScreen extends StatefulWidget {
   final String baseUrl;
   final int additionalMinutes;
   final double extraAmount;
-  final String? qrId;
   final String? qrImageUrl;
   final String? qrExpiresAt;
   final String method; // 'qr' | 'manual'
@@ -2821,7 +2831,6 @@ class _WalkExtensionPaymentScreen extends StatefulWidget {
     required this.extraAmount,
     required this.method,
     required this.onConfirmed,
-    this.qrId,
     this.qrImageUrl,
     this.qrExpiresAt,
   });
@@ -2831,15 +2840,17 @@ class _WalkExtensionPaymentScreen extends StatefulWidget {
 }
 
 class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen> {
-  bool _isConfirming = false;
+  // false = mostrando QR/instrucciones | true = esperando confirmación
+  bool _waitingConfirmation = false;
   bool _confirmed = false;
-  String? _errorMsg;
   Timer? _countdownTimer;
+  Timer? _pollTimer;
   Duration _remaining = Duration.zero;
 
   @override
   void initState() {
     super.initState();
+    // Iniciar countdown del QR
     if (widget.method == 'qr' && widget.qrExpiresAt != null) {
       final expiresAt = DateTime.tryParse(widget.qrExpiresAt!);
       if (expiresAt != null) {
@@ -2853,40 +2864,52 @@ class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen
         });
       }
     }
+    // Manual: ir directo a espera
+    if (widget.method == 'manual') {
+      _waitingConfirmation = true;
+      _startPolling();
+    }
   }
 
   @override
   void dispose() {
     _countdownTimer?.cancel();
+    _pollTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _confirmQrPayment() async {
-    if (widget.qrId == null) return;
-    setState(() { _isConfirming = true; _errorMsg = null; });
-    try {
-      final response = await http.post(
-        Uri.parse('${widget.baseUrl}/bookings/${widget.bookingId}/confirm-extension-qr'),
-        headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
-        body: jsonEncode({'qrId': widget.qrId}),
-      );
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        setState(() { _confirmed = true; _isConfirming = false; });
-        await widget.onConfirmed();
-        if (mounted) {
-          await Future.delayed(const Duration(seconds: 2));
-          if (mounted) Navigator.pop(context);
+  /// El usuario ya escaneó el QR — pasar a pantalla de espera y comenzar polling
+  void _onPaymentDone() {
+    setState(() => _waitingConfirmation = true);
+    _startPolling();
+  }
+
+  /// Consulta el booking cada 10s; cuando serviceEvents tiene EXTENSION_CONFIRMED → éxito
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
+      if (!mounted || _confirmed) return;
+      try {
+        final response = await http.get(
+          Uri.parse('${widget.baseUrl}/bookings/${widget.bookingId}'),
+          headers: {'Authorization': 'Bearer ${widget.token}'},
+        );
+        if (response.statusCode != 200) return;
+        final data = jsonDecode(response.body);
+        if (data['success'] != true) return;
+        final events = (data['data']?['serviceEvents'] as List? ?? []);
+        final isConfirmed = events.any((e) => e is Map && e['type'] == 'EXTENSION_CONFIRMED');
+        if (isConfirmed && mounted) {
+          _pollTimer?.cancel();
+          setState(() => _confirmed = true);
+          await widget.onConfirmed();
+          if (mounted) {
+            await Future.delayed(const Duration(seconds: 2));
+            if (mounted) Navigator.pop(context);
+          }
         }
-      } else {
-        setState(() {
-          _isConfirming = false;
-          _errorMsg = data['error']?['message'] ?? data['message'] ?? 'Error al confirmar el pago.';
-        });
-      }
-    } catch (e) {
-      setState(() { _isConfirming = false; _errorMsg = 'Error de conexión. Intenta de nuevo.'; });
-    }
+      } catch (_) {}
+    });
   }
 
   String _formatCountdown(Duration d) {
@@ -2899,14 +2922,11 @@ class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen
   Widget build(BuildContext context) {
     final isDark = themeNotifier.isDark;
     final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
+      appBar: _confirmed || _waitingConfirmation ? null : AppBar(
         backgroundColor: bg,
         elevation: 0,
         leading: IconButton(
@@ -2916,171 +2936,285 @@ class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen
         title: Text('Pagar extensión', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 18)),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: _confirmed ? _buildSuccessView(textColor) : _buildPaymentView(surface, textColor, subtextColor, borderColor, isDark),
+        child: AnimatedBuilder(
+          animation: themeNotifier,
+          builder: (context, _) {
+            if (_confirmed) return _buildSuccessView();
+            if (_waitingConfirmation) return _buildWaitingView();
+            return _buildQrView();
+          },
         ),
       ),
     );
   }
 
-  Widget _buildSuccessView(Color textColor) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const SizedBox(height: 60),
-        Container(
-          width: 80, height: 80,
-          decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.12), shape: BoxShape.circle),
-          child: const Icon(Icons.check_circle_rounded, color: GardenColors.primary, size: 48),
-        ),
-        const SizedBox(height: 24),
-        Text('¡Extensión confirmada!', style: TextStyle(color: textColor, fontWeight: FontWeight.w900, fontSize: 22)),
-        const SizedBox(height: 8),
-        Text('+${widget.additionalMinutes} minutos agregados al paseo.', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 16)),
-        const SizedBox(height: 8),
-        Text('Tu cuidador ha sido notificado.', style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
-      ],
-    );
-  }
+  // ── Vista QR ─────────────────────────────────────────────────────────────
+  Widget _buildQrView() {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
-  Widget _buildPaymentView(Color surface, Color textColor, Color subtextColor, Color borderColor, bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Resumen de la extensión
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: borderColor)),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Tiempo adicional', style: TextStyle(color: subtextColor, fontSize: 14)),
-                  Text('+${widget.additionalMinutes} min', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Total a pagar', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 16)),
-                  Text('Bs ${widget.extraAmount.toStringAsFixed(0)}', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w900, fontSize: 22)),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        if (widget.method == 'qr') ...[
-          // QR countdown
-          if (_remaining.inSeconds > 0)
-            Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(color: _remaining.inSeconds < 60 ? GardenColors.error.withValues(alpha: 0.12) : GardenColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
-                child: Text(
-                  'QR válido por: ${_formatCountdown(_remaining)}',
-                  style: TextStyle(color: _remaining.inSeconds < 60 ? GardenColors.error : GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
-                ),
-              ),
-            )
-          else
-            Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-                child: const Text('QR expirado', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.w700, fontSize: 13)),
-              ),
-            ),
-          const SizedBox(height: 16),
-
-          // QR image
-          if (widget.qrImageUrl != null && widget.qrImageUrl!.isNotEmpty)
-            Center(
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 12)]),
-                child: Image.network(widget.qrImageUrl!, width: 200, height: 200, fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const SizedBox(width: 200, height: 200, child: Center(child: Icon(Icons.qr_code_rounded, size: 80, color: Colors.grey)))),
-              ),
-            )
-          else
-            Center(
-              child: Container(
-                width: 200, height: 200,
-                decoration: BoxDecoration(color: isDark ? GardenColors.darkSurface : Colors.grey.shade100, borderRadius: BorderRadius.circular(16), border: Border.all(color: borderColor)),
-                child: const Center(child: Icon(Icons.qr_code_rounded, size: 80, color: GardenColors.primary)),
-              ),
-            ),
-          const SizedBox(height: 16),
-          Center(
-            child: Text('Escanea el QR con tu app de pago y luego presiona "Ya pagué".',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5)),
-          ),
-          const SizedBox(height: 28),
-
-          if (_errorMsg != null)
-            Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: GardenColors.error.withValues(alpha: 0.3))),
-              child: Text(_errorMsg!, style: const TextStyle(color: GardenColors.error, fontSize: 13)),
-            ),
-
-          SizedBox(
-            width: double.infinity,
-            child: GardenButton(
-              label: _isConfirming ? 'Verificando...' : 'Ya pagué',
-              onPressed: (_isConfirming || _remaining.inSeconds == 0) ? null : _confirmQrPayment,
-            ),
-          ),
-        ] else ...[
-          // Manual payment instructions
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          // Resumen
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: borderColor)),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(children: [
-                  const Icon(Icons.account_balance_rounded, color: GardenColors.primary, size: 20),
-                  const SizedBox(width: 8),
-                  Text('Transferencia manual', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  Text('Tiempo adicional', style: TextStyle(color: subtextColor, fontSize: 14)),
+                  Text('+${widget.additionalMinutes} min', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
                 ]),
-                const SizedBox(height: 12),
-                Text(
-                  'Realiza la transferencia de Bs ${widget.extraAmount.toStringAsFixed(0)} a la cuenta de Garden Bolivia y envía el comprobante al administrador.\n\nUna vez aprobado, los minutos se agregarán automáticamente.',
-                  style: TextStyle(color: subtextColor, fontSize: 13, height: 1.6),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.withValues(alpha: 0.25))),
-            child: const Row(
-              children: [
-                Icon(Icons.info_outline_rounded, color: Colors.blue, size: 18),
-                SizedBox(width: 8),
-                Expanded(child: Text('El administrador revisará tu pago y aprobará la extensión.', style: TextStyle(color: Colors.blue, fontSize: 12))),
+                const SizedBox(height: 10),
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  Text('Total a pagar', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 16)),
+                  Text('Bs ${widget.extraAmount.toStringAsFixed(0)}', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w900, fontSize: 22)),
+                ]),
               ],
             ),
           ),
           const SizedBox(height: 28),
+
+          // Countdown badge
+          if (_remaining.inSeconds > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: _remaining.inSeconds < 60 ? GardenColors.error.withValues(alpha: 0.12) : GardenColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                'QR válido por: ${_formatCountdown(_remaining)}',
+                style: TextStyle(color: _remaining.inSeconds < 60 ? GardenColors.error : GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+              child: const Text('QR expirado', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.w700, fontSize: 13)),
+            ),
+          const SizedBox(height: 24),
+
+          // QR image
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, 8))],
+            ),
+            child: widget.qrImageUrl != null && widget.qrImageUrl!.isNotEmpty
+                ? Image.network(widget.qrImageUrl!, width: 230, height: 230, fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const SizedBox(width: 230, height: 230,
+                        child: Center(child: Icon(Icons.qr_code_rounded, size: 90, color: GardenColors.primary))))
+                : const SizedBox(width: 230, height: 230,
+                    child: Center(child: Icon(Icons.qr_code_rounded, size: 90, color: GardenColors.primary))),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Escanea este código con tu app bancaria\no Tigo Money para pagar.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
+          ),
+          const SizedBox(height: 32),
+
           SizedBox(
             width: double.infinity,
             child: GardenButton(
-              label: 'Entendido',
-              onPressed: () => Navigator.pop(context),
+              label: 'Ya realicé el pago',
+              onPressed: _remaining.inSeconds == 0 ? null : _onPaymentDone,
             ),
           ),
+          const SizedBox(height: 12),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancelar', style: TextStyle(color: subtextColor)),
+          ),
         ],
+      ),
+    );
+  }
+
+  // ── Vista de espera (polling) ─────────────────────────────────────────────
+  Widget _buildWaitingView() {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    return Container(
+      color: bg,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+        child: Column(
+          children: [
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 700),
+              curve: Curves.elasticOut,
+              builder: (_, v, child) => Transform.scale(scale: v, child: child),
+              child: Container(
+                width: 96, height: 96,
+                decoration: BoxDecoration(
+                  color: GardenColors.warning.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4), width: 3),
+                ),
+                child: const Icon(Icons.access_time_rounded, color: GardenColors.warning, size: 48),
+              ),
+            ),
+            const SizedBox(height: 28),
+            Text('Pago en revisión', style: TextStyle(color: textColor, fontWeight: FontWeight.w900, fontSize: 24)),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: GardenColors.warning.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: GardenColors.warning.withValues(alpha: 0.3)),
+              ),
+              child: const Text('Verificando pago...', style: TextStyle(color: GardenColors.warning, fontWeight: FontWeight.w700, fontSize: 13)),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              widget.method == 'qr'
+                  ? 'Tu pago QR está siendo verificado. Los minutos adicionales se agregarán automáticamente cuando se confirme.'
+                  : 'Tu solicitud de transferencia fue enviada al administrador. Los minutos se agregarán cuando sea aprobada.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6),
+            ),
+            const SizedBox(height: 32),
+
+            // Resumen
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: borderColor)),
+              child: Column(
+                children: [
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Text('Tiempo adicional', style: TextStyle(color: subtextColor, fontSize: 14)),
+                    Text('+${widget.additionalMinutes} min', style: TextStyle(color: textColor, fontWeight: FontWeight.w700)),
+                  ]),
+                  const SizedBox(height: 10),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Text('Monto pagado', style: TextStyle(color: subtextColor, fontSize: 14)),
+                    Text('Bs ${widget.extraAmount.toStringAsFixed(0)}', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w900, fontSize: 18)),
+                  ]),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
+
+            // Pasos
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: GardenColors.primary.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.15)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('¿Qué sigue?', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
+                  const SizedBox(height: 16),
+                  _waitStep('1', widget.method == 'qr' ? 'GARDEN verifica tu pago QR' : 'El admin aprueba tu transferencia', GardenColors.warning, textColor),
+                  const SizedBox(height: 12),
+                  _waitStep('2', 'Los minutos se agregan al paseo', GardenColors.primary, textColor),
+                  const SizedBox(height: 12),
+                  _waitStep('3', 'Tu cuidador recibe la notificación', Colors.green, textColor),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+            const SizedBox(
+              width: 28, height: 28,
+              child: CircularProgressIndicator(strokeWidth: 2.5, color: GardenColors.primary),
+            ),
+            const SizedBox(height: 8),
+            Text('Verificando automáticamente...', style: TextStyle(color: subtextColor, fontSize: 12)),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: borderColor),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: Text('Volver al servicio', style: TextStyle(color: subtextColor, fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _waitStep(String num, String text, Color color, Color textColor) {
+    return Row(
+      children: [
+        Container(
+          width: 28, height: 28,
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
+          child: Center(child: Text(num, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w800))),
+        ),
+        const SizedBox(width: 14),
+        Expanded(child: Text(text, style: TextStyle(color: textColor, fontSize: 14))),
       ],
+    );
+  }
+
+  // ── Vista de éxito ────────────────────────────────────────────────────────
+  Widget _buildSuccessView() {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+
+    return Container(
+      color: bg,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 800),
+                curve: Curves.elasticOut,
+                builder: (_, v, child) => Transform.scale(scale: v, child: child),
+                child: Container(
+                  width: 96, height: 96,
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.green.withValues(alpha: 0.4), width: 3),
+                  ),
+                  child: const Icon(Icons.check_rounded, color: Colors.green, size: 52),
+                ),
+              ),
+              const SizedBox(height: 28),
+              Text('¡Extensión confirmada!', style: TextStyle(color: textColor, fontWeight: FontWeight.w900, fontSize: 24)),
+              const SizedBox(height: 12),
+              Text(
+                '+${widget.additionalMinutes} minutos agregados al paseo.\nTu cuidador ha sido notificado.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 16, height: 1.5),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
