@@ -78,6 +78,14 @@ router.post(
   bookingController.changeDates
 );
 
+/** GET /api/bookings/:id/extension-availability — minutos disponibles para extender paseo. */
+router.get(
+  '/:id/extension-availability',
+  authMiddleware,
+  requireRole('CLIENT'),
+  bookingController.extensionAvailability
+);
+
 /** POST /api/bookings/:id/extend-paseo — cliente extiende paseo en curso (15/30/60 min). */
 router.post(
   '/:id/extend-paseo',

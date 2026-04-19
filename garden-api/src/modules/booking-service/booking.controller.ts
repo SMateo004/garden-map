@@ -212,6 +212,17 @@ export const requestCancellationByCaregiver = asyncHandler(async (req: Request, 
 });
 
 /**
+ * GET /api/bookings/:id/extension-availability
+ * Devuelve cuántos minutos puede extenderse el paseo en curso.
+ */
+export const extensionAvailability = asyncHandler(async (req: Request, res: Response) => {
+  const bookingId = req.params.id!;
+  const clientId = req.user!.userId;
+  const result = await bookingService.checkExtensionAvailability(bookingId, clientId);
+  res.json({ success: true, data: result });
+});
+
+/**
  * POST /api/bookings/:id/extend-paseo
  * Cliente extiende un paseo en curso (IN_PROGRESS). Body: { additionalMinutes: 15 | 30 | 60 }.
  */

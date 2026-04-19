@@ -534,6 +534,123 @@ async function assertPaseoAvailability(
 }
 
 // ---------------------------------------------------------------------------
+// Walk extension availability check
+// ---------------------------------------------------------------------------
+
+/**
+ * Devuelve cuántos minutos puede extenderse un paseo IN_PROGRESS según:
+ *  - Próximas reservas del cuidador ese mismo día (buffer de 30 min)
+ *  - Slots bloqueados (MANANA/TARDE/NOCHE) del cuidador en el calendario
+ *  - Horas personalizadas bloqueadas (inicio/fin de cada bloque)
+ *
+ * Reglas de disponibilidad progresiva:
+ *  - próxima reserva en < 60 min → 0 min (no puede extender)
+ *  - próxima reserva en 60-89 min → 15 min
+ *  - próxima reserva en 90-149 min → 30 min
+ *  - próxima reserva en ≥ 150 min, o sin reservas → 60 min
+ *  Además se limita por el final del bloque horario del cuidador.
+ */
+export async function checkExtensionAvailability(
+  bookingId: string,
+  clientId: string
+): Promise<{ allowedMinutes: number; reason: string }> {
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, clientId },
+    select: {
+      id: true, serviceType: true, status: true,
+      caregiverId: true, walkDate: true, startTime: true,
+      duration: true, timeSlot: true,
+    },
+  });
+
+  if (!booking) return { allowedMinutes: 0, reason: 'Reserva no encontrada' };
+  if (booking.serviceType !== ServiceType.PASEO) return { allowedMinutes: 0, reason: 'Solo paseos pueden extenderse' };
+  if (booking.status !== BookingStatus.IN_PROGRESS) return { allowedMinutes: 0, reason: 'El paseo no está en curso' };
+
+  const now = new Date();
+  const startTimeParts = (booking.startTime ?? '00:00').split(':');
+  const startMins = parseInt(startTimeParts[0] ?? '0') * 60 + parseInt(startTimeParts[1] ?? '0');
+  const currentDuration = booking.duration ?? 60;
+  const serviceEndMins = startMins + currentDuration; // minuto del día en que termina el servicio actual
+
+  // 1. Próximas reservas del cuidador ese día (excluyendo la actual)
+  const dayStart = new Date(booking.walkDate!);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  const nextBookings = await prisma.booking.findMany({
+    where: {
+      caregiverId: booking.caregiverId,
+      id: { not: bookingId },
+      status: { in: [BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS, BookingStatus.WAITING_CAREGIVER_APPROVAL, BookingStatus.PAYMENT_PENDING_APPROVAL] },
+      walkDate: booking.walkDate,
+      startTime: { not: null },
+    },
+    select: { startTime: true, duration: true },
+    orderBy: { startTime: 'asc' },
+  });
+
+  // Minutos hasta la próxima reserva (desde el fin actual, incluyendo buffer 30 min)
+  let minutesToNextBooking = Infinity;
+  for (const nb of nextBookings) {
+    if (!nb.startTime) continue;
+    const parts = nb.startTime.split(':');
+    const nbStart = parseInt(parts[0] ?? '0') * 60 + parseInt(parts[1] ?? '0');
+    const gap = nbStart - serviceEndMins - 30; // descontar buffer de descanso
+    if (gap < minutesToNextBooking) minutesToNextBooking = gap;
+  }
+
+  // 2. Límite del bloque horario del cuidador
+  const profile = await prisma.caregiverProfile.findUnique({
+    where: { id: booking.caregiverId },
+    select: { defaultAvailabilitySchedule: true },
+  });
+  const avail = await prisma.availability.findUnique({
+    where: { caregiverId_date: { caregiverId: booking.caregiverId, date: booking.walkDate! } },
+  });
+  let blockEndMins = Infinity;
+  const schedule = (avail?.timeBlocks ?? (profile?.defaultAvailabilitySchedule as any)?.paseoTimeBlocks) as Record<string, any> | null;
+  if (schedule && booking.timeSlot) {
+    const slots = parseTimeBlocks(schedule);
+    const currentSlot = slots.find(s => s.slot === booking.timeSlot);
+    if (currentSlot?.end) {
+      const ep = currentSlot.end.split(':');
+      blockEndMins = parseInt(ep[0] ?? '0') * 60 + parseInt(ep[1] ?? '0');
+    }
+  }
+  const minsUntilBlockEnd = blockEndMins - serviceEndMins;
+
+  // 3. Máximo posible considerando ambas restricciones
+  const maxByCalendar = Math.min(
+    minutesToNextBooking === Infinity ? 60 : minutesToNextBooking,
+    minsUntilBlockEnd === Infinity ? 60 : minsUntilBlockEnd
+  );
+
+  let allowedMinutes: number;
+  let reason: string;
+
+  if (maxByCalendar < 15) {
+    allowedMinutes = 0;
+    reason = 'El cuidador tiene otra reserva muy pronto';
+  } else if (minutesToNextBooking < 60) {
+    allowedMinutes = 0;
+    reason = 'No hay tiempo suficiente antes de la próxima reserva';
+  } else if (minutesToNextBooking < 90) {
+    allowedMinutes = Math.min(15, Math.floor(maxByCalendar / 15) * 15);
+    reason = '15 min disponibles';
+  } else if (minutesToNextBooking < 150) {
+    allowedMinutes = Math.min(30, Math.floor(maxByCalendar / 15) * 15);
+    reason = '30 min disponibles';
+  } else {
+    allowedMinutes = Math.min(60, Math.floor(maxByCalendar / 15) * 15);
+    reason = '60 min disponibles';
+  }
+
+  return { allowedMinutes, reason };
+}
+
+// ---------------------------------------------------------------------------
 // Pago: QR placeholder (API bancaria futura) e iniciar pago / aprobación manual
 // ---------------------------------------------------------------------------
 

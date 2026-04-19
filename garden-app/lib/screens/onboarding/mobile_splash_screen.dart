@@ -149,18 +149,45 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
     }
   }
 
-  void _goToHome(SharedPreferences prefs) {
+  Future<void> _goToHome(SharedPreferences prefs) async {
     final token = prefs.getString('access_token') ?? '';
     final role = prefs.getString('user_role') ?? '';
     if (token.isEmpty) {
       context.go('/login');
-    } else if (role == 'ADMIN') {
-      context.go('/admin');
-    } else if (role == 'CAREGIVER') {
-      context.go('/caregiver/home');
-    } else {
-      context.go('/service-selector');
+      return;
     }
+    if (role == 'ADMIN') {
+      context.go('/admin');
+      return;
+    }
+    if (role == 'CAREGIVER') {
+      context.go('/caregiver/home');
+      return;
+    }
+
+    // CLIENT: verificar si tiene un paseo/hospedaje IN_PROGRESS → ir directo al servicio
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/bookings/my?limit=5&page=1'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          final bookings = (data['data'] as List).cast<Map<String, dynamic>>();
+          final active = bookings.where((b) => b['status'] == 'IN_PROGRESS').firstOrNull;
+          if (active != null && mounted) {
+            context.go(
+              '/service/${active['id']}',
+              extra: {'role': 'CLIENT', 'token': token},
+            );
+            return;
+          }
+        }
+      }
+    } catch (_) {}
+
+    if (mounted) context.go('/service-selector');
   }
 
   @override

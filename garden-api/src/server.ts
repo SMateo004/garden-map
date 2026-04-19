@@ -36,6 +36,7 @@ import { shutdownAnalytics } from './shared/analytics.js';
 import { shutdownRedis } from './config/redis.js';
 import { iniciarJobAjustePrecios } from './jobs/ajuste-precios.job.js';
 import { iniciarJobNotificacionesProgramadas } from './jobs/scheduled-notifications.job.js';
+import { iniciarJobWalkExpiry } from './jobs/walk-expiry.job.js';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
@@ -150,6 +151,7 @@ async function start() {
     logger.info('Starting background jobs...');
     iniciarJobAjustePrecios();
     iniciarJobNotificacionesProgramadas();
+    iniciarJobWalkExpiry();
   }, 10000);
 
   // Auto-release payment after service ends if owner hasn't reviewed

@@ -38,6 +38,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   int _surveyRating = 0;
   final TextEditingController _surveyCommentController = TextEditingController();
 
+  // Walk extension state
+  int _allowedExtensionMinutes = 0;
+  bool _loadingExtension = false;
+
   // Photo upload state
   bool _isSendingPhoto = false;
 
@@ -111,6 +115,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           }
           if (widget.role == 'CLIENT' && _photoRefreshTimer == null) {
             _photoRefreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _loadBooking());
+          }
+          // Load extension availability for CLIENT on PASEO
+          if (widget.role == 'CLIENT' && _booking?['serviceType'] == 'PASEO') {
+            _loadExtensionAvailability();
           }
         } else {
           _serviceTimer?.cancel();
@@ -748,6 +756,158 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     );
   }
 
+  Future<void> _loadExtensionAvailability() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/extension-availability'),
+        headers: {'Authorization': 'Bearer $_token'},
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && mounted) {
+          setState(() => _allowedExtensionMinutes = (data['data']['allowedMinutes'] as num?)?.toInt() ?? 0);
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _requestExtension(int minutes) async {
+    setState(() => _loadingExtension = true);
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/extend-paseo'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({'additionalMinutes': minutes}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadBooking();
+        await _loadExtensionAvailability();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ +$minutes min añadidos · Cuidador notificado'),
+              backgroundColor: GardenColors.success,
+            ),
+          );
+        }
+      } else {
+        throw Exception(data['error']?['message'] ?? data['message'] ?? 'Error al ampliar');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingExtension = false);
+    }
+  }
+
+  void _showExtendTimeSheet() {
+    final price60 = double.tryParse(_booking?['pricePerUnit']?.toString() ?? '') ?? 0.0;
+    int selectedMinutes = _allowedExtensionMinutes >= 15 ? 15 : 0;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final isDark = themeNotifier.isDark;
+          final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+          final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+          final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+          final available = [15, 30, 60].where((m) => m <= _allowedExtensionMinutes).toList();
+
+          Widget chip(int minutes) {
+            final isSelected = selectedMinutes == minutes;
+            final cost = ((price60 / 60) * minutes).ceil();
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => setSheetState(() => selectedMinutes = minutes),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: isSelected ? GardenColors.primary : (isDark ? GardenColors.darkBackground : GardenColors.lightBackground),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: isSelected ? GardenColors.primary : (isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('+$minutes min', style: TextStyle(color: isSelected ? Colors.white : textColor, fontWeight: FontWeight.w800, fontSize: 14)),
+                      const SizedBox(height: 2),
+                      Text('Bs $cost', style: TextStyle(color: isSelected ? Colors.white70 : subtextColor, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+
+          return Container(
+            padding: EdgeInsets.only(left: 20, right: 20, top: 24, bottom: MediaQuery.of(ctx).viewInsets.bottom + 28),
+            decoration: BoxDecoration(color: surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder, borderRadius: BorderRadius.circular(2)))),
+                const SizedBox(height: 20),
+                Text('Ampliar tiempo del paseo', style: GardenText.h4.copyWith(color: textColor)),
+                const SizedBox(height: 4),
+                Text(
+                  _allowedExtensionMinutes == 0
+                      ? 'El cuidador no tiene disponibilidad en este momento.'
+                      : 'Selecciona cuántos minutos adicionales necesitas.',
+                  style: GardenText.metadata.copyWith(color: subtextColor),
+                ),
+                const SizedBox(height: 20),
+                if (available.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.orange.withValues(alpha: 0.3))),
+                    child: const Text('No hay tiempo disponible para ampliar (próximas reservas del cuidador o fin de bloque horario).', style: TextStyle(color: Colors.orange, fontSize: 13)),
+                  )
+                else ...[
+                  Row(children: available.map(chip).toList()),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12), border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2))),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Costo adicional', style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
+                        Text('Bs ${((price60 / 60) * selectedMinutes).ceil()}', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w900, fontSize: 18)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: GardenButton(
+                      label: 'Confirmar y pagar',
+                      onPressed: selectedMinutes == 0 ? null : () {
+                        Navigator.pop(ctx);
+                        _requestExtension(selectedMinutes);
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   // --- VISTA: IN PROGRESS ---
   Widget _buildInProgressView() {
     return widget.role == 'CAREGIVER'
@@ -992,6 +1152,26 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             petPhoto: _booking?['petPhoto'] as String?,
                           ),
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // ── Ampliar tiempo ──────────────────────────────────────
+                    OutlinedButton.icon(
+                      onPressed: _loadingExtension ? null : _showExtendTimeSheet,
+                      icon: _loadingExtension
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))
+                          : const Icon(Icons.add_alarm_rounded, size: 18),
+                      label: Text(
+                        _allowedExtensionMinutes == 0
+                            ? 'Ampliar tiempo'
+                            : 'Ampliar tiempo (hasta $_allowedExtensionMinutes min)',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: GardenColors.primary,
+                        side: const BorderSide(color: GardenColors.primary),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        minimumSize: const Size(double.infinity, 44),
                       ),
                     ),
                     const SizedBox(height: 16),
