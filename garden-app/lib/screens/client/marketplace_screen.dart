@@ -183,6 +183,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   String _authToken = '';
   String? _userName;
 
+  // ── Reserva activa / próxima ──
+  Map<String, dynamic>? _activeBooking;
+
   /// Callback that rebuilds the active filter sheet (if open).
   VoidCallback? _refreshSheet;
 
@@ -299,7 +302,34 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   Future<void> _loadInitialData() async {
     await _loadToken();
-    await _loadCaregivers(reset: true);
+    await Future.wait([_loadCaregivers(reset: true), _loadActiveBooking()]);
+  }
+
+
+
+  Future<void> _loadActiveBooking() async {
+    if (_authToken.isEmpty) return;
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/bookings/my?limit=5&page=1'),
+        headers: {'Authorization': 'Bearer $_authToken'},
+      );
+      if (response.statusCode != 200) return;
+      final data = jsonDecode(response.body);
+      if (data['success'] != true) return;
+      final bookings = (data['data'] as List).cast<Map<String, dynamic>>();
+      // Prioridad: IN_PROGRESS > CONFIRMED > WAITING_CAREGIVER_APPROVAL
+      // Desaparece solo cuando tiene ownerRating (fue calificado)
+      const activeStatuses = ['IN_PROGRESS', 'CONFIRMED', 'WAITING_CAREGIVER_APPROVAL'];
+      Map<String, dynamic>? found;
+      for (final s in activeStatuses) {
+        found = bookings.where((b) =>
+          b['status'] == s && b['ownerRating'] == null
+        ).firstOrNull;
+        if (found != null) break;
+      }
+      if (mounted) setState(() => _activeBooking = found);
+    } catch (_) {}
   }
 
   Future<void> _checkOnboarding() async {
@@ -407,6 +437,132 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     if (h < 12) return 'Buenos días,';
     if (h < 19) return 'Buenas tardes,';
     return 'Buenas noches,';
+  }
+
+  String _formatBookingTime(Map<String, dynamic> b) {
+    // Paseo: mostrar hora específica si está disponible
+    final startTime = b['startTime'] as String?;
+    if (startTime != null && startTime.isNotEmpty) {
+      try {
+        final parts = startTime.split(':');
+        final h = int.parse(parts[0]);
+        final m = int.parse(parts[1]);
+        final period = h >= 12 ? 'pm' : 'am';
+        final h12 = h > 12 ? h - 12 : (h == 0 ? 12 : h);
+        final mStr = m.toString().padLeft(2, '0');
+        return '$h12:$mStr $period';
+      } catch (_) {}
+    }
+    // Fallback: timeSlot
+    final slot = b['timeSlot'] as String?;
+    if (slot == 'MANANA') return 'por la mañana';
+    if (slot == 'TARDE') return 'por la tarde';
+    if (slot == 'NOCHE') return 'por la noche';
+    return '';
+  }
+
+  Widget _buildActiveBookingBanner() {
+    final b = _activeBooking;
+    if (b == null) return const SizedBox.shrink();
+
+    final status = b['status'] as String;
+    final isInProgress = status == 'IN_PROGRESS';
+    final isPaseo = b['serviceType'] == 'PASEO';
+    final petName = b['petName'] as String? ?? 'tu mascota';
+    final caregiverName = (b['caregiverName'] as String? ?? 'el cuidador').split(' ').first;
+    final duration = b['duration'] as int?;
+    final timeStr = _formatBookingTime(b);
+
+    // Texto principal y sublabel según estado
+    String mainText;
+    String subText;
+    IconData actionIcon;
+
+    if (isInProgress) {
+      mainText = isPaseo
+          ? '$petName está de paseo 🐕'
+          : '$petName está con $caregiverName';
+      subText = 'con $caregiverName${duration != null ? ' · $duration min' : ''}';
+      actionIcon = Icons.play_circle_fill_rounded;
+    } else if (status == 'CONFIRMED') {
+      final walkDate = b['walkDate'] as String?;
+      String fechaStr = '';
+      if (walkDate != null) {
+        try {
+          final d = DateTime.parse(walkDate);
+          const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+          fechaStr = '${d.day} ${months[d.month - 1]}';
+        } catch (_) {}
+      }
+      mainText = isPaseo
+          ? '$petName pasea${timeStr.isNotEmpty ? ' a las $timeStr' : ''}'
+          : '$petName se queda con $caregiverName';
+      subText = 'con $caregiverName${fechaStr.isNotEmpty ? ' · $fechaStr' : ''}${duration != null && isPaseo ? ' · $duration min' : ''}';
+      actionIcon = Icons.calendar_today_rounded;
+    } else {
+      mainText = 'Reserva pendiente de confirmación';
+      subText = 'con $caregiverName · $petName';
+      actionIcon = Icons.hourglass_top_rounded;
+    }
+
+    return GestureDetector(
+      onTap: () => context.push('/my-bookings'),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          color: GardenColors.primary,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isInProgress ? 'EN CURSO' : 'PRÓXIMA SESIÓN',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    mainText,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subText,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(actionIcon, color: Colors.white, size: 24),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -551,6 +707,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               ),
             ),
             const SizedBox(height: 8),
+
+            // ── Banner reserva activa / próxima ───────────────────────
+            _buildActiveBookingBanner(),
+            if (_activeBooking != null) const SizedBox(height: 8),
 
             // ── Barra de búsqueda ──────────────────────────────────────
             Container(
