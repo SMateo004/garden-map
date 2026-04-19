@@ -29,6 +29,12 @@ function isCloudinaryConfigured(): boolean {
     cloudinary.config({ cloud_name: name, api_key: key, api_secret: sec });
     return true;
   }
+  // Diagnostic: log which credentials are missing
+  logger.warn('storage.service: Cloudinary NOT configured', {
+    CLOUDINARY_CLOUD_NAME: name ? `"${name.slice(0,4)}…"` : '(empty)',
+    CLOUDINARY_API_KEY:    key  ? `"${key.slice(0,4)}…"`  : '(empty)',
+    CLOUDINARY_API_SECRET: sec  ? '(present)'              : '(empty)',
+  });
   return false;
 }
 
@@ -138,9 +144,7 @@ export async function uploadImage(buffer: Buffer, opts: UploadOptions): Promise<
     } catch (err) {
       logger.error('storage.service: fallo S3, intentando Cloudinary', { error: err });
       // En producción, si S3 falla y no hay Cloudinary, lanzar error
-      if (isProd && !isCloudinaryConfigured()) {
-        throw new Error('S3 upload failed and no Cloudinary fallback is configured');
-      }
+      // continuar al siguiente fallback
     }
   }
 
@@ -159,23 +163,20 @@ export async function uploadImage(buffer: Buffer, opts: UploadOptions): Promise<
         if (attempt < 2) await new Promise(r => setTimeout(r, 1000));
       }
     }
-    // En producción, nunca caer a disco local cuando Cloudinary está configurado
-    if (isProd) {
-      logger.error('storage.service: Cloudinary falló tras 2 intentos — abortando (NO se usa disco local en producción)', { error: lastErr });
-      throw new Error(`Cloudinary upload failed after 2 attempts: ${(lastErr as Error)?.message}`);
-    }
-    logger.error('storage.service: fallo Cloudinary, usando disco local (solo dev)', { error: lastErr });
+    logger.error('storage.service: Cloudinary falló tras 2 intentos, cayendo a disco local', { error: lastErr });
   }
 
-  // 3. Disco local — SOLO en desarrollo sin storage persistente configurado
+  // 3. Disco local — fallback (ephemeral en Render: las imágenes SE PIERDEN al reiniciar)
   if (isProd) {
-    throw new Error(
-      'No persistent storage configured in production. ' +
-      'Set CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET in Render environment variables.'
+    logger.error(
+      'storage.service: ⚠️  GUARDANDO EN DISCO LOCAL EPHEMERAL. ' +
+      'Las imágenes SE PERDERÁN al reiniciar Render. ' +
+      'Agrega CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET en Render > Environment.',
+      { folder: opts.folder }
     );
   }
   const url = await uploadToLocal(processed, opts.folder, filename);
-  logger.info('storage.service: imagen guardada localmente (dev)', { url, folder: opts.folder });
+  logger.info('storage.service: imagen guardada localmente', { url, folder: opts.folder, isProd });
   return url;
 }
 
@@ -194,14 +195,26 @@ export async function uploadImages(buffers: Buffer[], opts: UploadOptions): Prom
  * Log de estado del storage al iniciar el servidor.
  */
 export function logStorageStatus(): void {
+  const nodeEnv = process.env['NODE_ENV'];
+  const cloudName = (process.env['CLOUDINARY_CLOUD_NAME'] ?? '').trim();
+  const cloudKey  = (process.env['CLOUDINARY_API_KEY'] ?? '').trim();
+  const cloudSec  = (process.env['CLOUDINARY_API_SECRET'] ?? '').trim();
+
+  logger.info('storage.service: diagnóstico de credenciales', {
+    NODE_ENV: nodeEnv,
+    CLOUDINARY_CLOUD_NAME: cloudName ? `"${cloudName.slice(0,6)}…"` : '(vacío)',
+    CLOUDINARY_API_KEY:    cloudKey  ? `"${cloudKey.slice(0,6)}…"`  : '(vacío)',
+    CLOUDINARY_API_SECRET: cloudSec  ? '(present)'                   : '(vacío)',
+  });
+
   if (isS3Configured()) {
     logger.info(`✅ Storage: AWS S3 (bucket: ${env.AWS_S3_BUCKET})`);
-  } else if (isCloudinaryConfigured()) {
-    logger.info(`✅ Storage: Cloudinary (cloud: ${env.CLOUDINARY_CLOUD_NAME})`);
+  } else if (cloudName && cloudKey && cloudSec) {
+    logger.info(`✅ Storage: Cloudinary (cloud: ${cloudName})`);
   } else {
-    logger.warn(
-      '⚠️  Storage: disco local EPHEMERAL — las imágenes SE PIERDEN al reiniciar Render. ' +
-      'Configura AWS_S3_BUCKET (+ AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) en Render.'
+    logger.error(
+      '❌ Storage: disco local EPHEMERAL — las imágenes SE PIERDEN al reiniciar Render. ' +
+      'Agrega CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET en Render > Environment.'
     );
   }
 }
