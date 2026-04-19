@@ -146,6 +146,9 @@ async function start() {
     logger.warn('[Settings] Could not seed defaults', e);
   }
 
+  // Log storage status on startup
+  import('./services/storage.service.js').then(m => m.logStorageStatus()).catch(() => {});
+
   // Defer heavy background jobs by 10s to let the API warm up
   setTimeout(() => {
     logger.info('Starting background jobs...');
