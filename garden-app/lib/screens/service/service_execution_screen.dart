@@ -798,6 +798,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               bookingId: widget.bookingId,
               token: _token,
               baseUrl: _baseUrl,
+              extensionId: payData['extensionId'] as String,
               additionalMinutes: minutes,
               extraAmount: (payData['extraAmount'] as num).toDouble(),
               qrImageUrl: payData['qrImageUrl'] as String?,
@@ -2816,6 +2817,7 @@ class _WalkExtensionPaymentScreen extends StatefulWidget {
   final String bookingId;
   final String token;
   final String baseUrl;
+  final String extensionId; // ID único de esta extensión — el polling lo valida
   final int additionalMinutes;
   final double extraAmount;
   final String? qrImageUrl;
@@ -2827,6 +2829,7 @@ class _WalkExtensionPaymentScreen extends StatefulWidget {
     required this.bookingId,
     required this.token,
     required this.baseUrl,
+    required this.extensionId,
     required this.additionalMinutes,
     required this.extraAmount,
     required this.method,
@@ -2898,7 +2901,10 @@ class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen
         final data = jsonDecode(response.body);
         if (data['success'] != true) return;
         final events = (data['data']?['serviceEvents'] as List? ?? []);
-        final isConfirmed = events.any((e) => e is Map && e['type'] == 'EXTENSION_CONFIRMED');
+        final isConfirmed = events.any((e) =>
+            e is Map &&
+            e['type'] == 'EXTENSION_CONFIRMED' &&
+            e['extensionId'] == widget.extensionId);
         if (isConfirmed && mounted) {
           _pollTimer?.cancel();
           setState(() => _confirmed = true);
