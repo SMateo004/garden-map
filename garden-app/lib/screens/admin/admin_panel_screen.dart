@@ -2122,7 +2122,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               final bookingId = ext['bookingId'] as String;
               final extensionId = ext['extensionId'] as String;
               final paymentId = ext['paymentId'] as String? ?? '—';
-              final minutes = ext['additionalMinutes'] as int? ?? 0;
+              final method = ext['method'] as String? ?? 'manual';
+              final minutes = (ext['additionalMinutes'] as num?)?.toInt() ?? 0;
               final amount = ext['extraAmount'];
               final petName = ext['petName'] as String? ?? '—';
               final client = ext['clientEmail'] as String? ?? ext['clientName'] as String? ?? '—';
@@ -2149,8 +2150,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                       const Spacer(),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(color: Colors.blue.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                        child: Text(method == 'qr' ? 'QR' : 'Transferencia', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blue)),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(color: GardenColors.warning.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-                        child: const Text('Pendiente de pago', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: GardenColors.warning)),
+                        child: const Text('Pendiente', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: GardenColors.warning)),
                       ),
                     ]),
                   ),

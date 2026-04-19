@@ -677,34 +677,41 @@ export async function rejectPayment(bookingId: string, adminId: string): Promise
 // Pagos de extensión de paseo — aprobación/rechazo manual
 // ---------------------------------------------------------------------------
 
-/** GET /api/admin/extension-payments-pending — extensiones pendientes de aprobación (método manual). */
+/** GET /api/admin/extension-payments-pending — extensiones pendientes de aprobación.
+ *  Consulta directamente los bookings IN_PROGRESS PASEO para no depender de AdminNotification.
+ */
 export async function getExtensionPaymentsPending(): Promise<{ items: any[] }> {
-  // Buscar AdminNotifications de tipo EXTENSION_PAYMENT_APPROVAL no leídas
-  const notifications = await prisma.adminNotification.findMany({
-    where: { type: 'EXTENSION_PAYMENT_APPROVAL', readAt: null },
+  // Obtener todos los paseos en curso — no hay muchos simultáneamente
+  const bookings = await prisma.booking.findMany({
+    where: {
+      serviceType: 'PASEO',
+      status: { in: [BookingStatus.IN_PROGRESS, BookingStatus.CONFIRMED, BookingStatus.WAITING_CAREGIVER_APPROVAL] },
+    },
+    include: {
+      client: { select: { email: true, firstName: true, lastName: true } },
+      caregiver: { select: { user: { select: { firstName: true, lastName: true } } } },
+    },
     orderBy: { createdAt: 'desc' },
   });
 
   const items: any[] = [];
-  for (const notif of notifications) {
-    if (!notif.bookingId) continue;
-    const booking = await prisma.booking.findUnique({
-      where: { id: notif.bookingId },
-      include: {
-        client: { select: { email: true, firstName: true, lastName: true } },
-        caregiver: { select: { user: { select: { firstName: true, lastName: true } } } },
-      },
-    });
-    if (!booking) continue;
-
+  for (const booking of bookings) {
     const events: any[] = Array.isArray(booking.serviceEvents) ? booking.serviceEvents as any[] : [];
-    const pending = events.filter((e: any) => e.type === 'EXTENSION_PENDING_PAYMENT' && e.method === 'manual');
+    // Buscar eventos EXTENSION_PENDING_PAYMENT de cualquier método que no tengan ya un EXTENSION_CONFIRMED/REJECTED con el mismo extensionId
+    const confirmedIds = new Set(
+      events
+        .filter((e: any) => e.type === 'EXTENSION_CONFIRMED' || e.type === 'EXTENSION_REJECTED')
+        .map((e: any) => e.extensionId)
+    );
+    const pending = events.filter(
+      (e: any) => e.type === 'EXTENSION_PENDING_PAYMENT' && !confirmedIds.has(e.extensionId)
+    );
     for (const evt of pending) {
       items.push({
-        notificationId: notif.id,
         bookingId: booking.id,
         extensionId: evt.extensionId,
-        paymentId: evt.paymentId,
+        paymentId: evt.paymentId ?? evt.qrId ?? '—',
+        method: evt.method,
         additionalMinutes: evt.additionalMinutes,
         extraAmount: evt.extraAmount,
         petName: booking.petName,
