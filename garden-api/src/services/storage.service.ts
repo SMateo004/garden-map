@@ -14,10 +14,23 @@ import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { v2 as cloudinary } from 'cloudinary';
 import { randomUUID } from 'crypto';
 import { env } from '../config/env.js';
-import { isCloudinaryConfigured } from '../config/cloudinary.js';
 import logger from '../shared/logger.js';
 
 const SHARP_MAX = 1024;
+
+// ── Cloudinary setup ──────────────────────────────────────────────────────────
+// Read directly from process.env (bypasses Zod parsing issues with empty strings
+// from committed .env file overriding Render panel values).
+function isCloudinaryConfigured(): boolean {
+  const name = (process.env['CLOUDINARY_CLOUD_NAME'] ?? '').trim();
+  const key  = (process.env['CLOUDINARY_API_KEY'] ?? '').trim();
+  const sec  = (process.env['CLOUDINARY_API_SECRET'] ?? '').trim();
+  if (name && key && sec) {
+    cloudinary.config({ cloud_name: name, api_key: key, api_secret: sec });
+    return true;
+  }
+  return false;
+}
 
 // ── S3 ───────────────────────────────────────────────────────────────────────
 
@@ -114,6 +127,7 @@ export async function uploadImage(buffer: Buffer, opts: UploadOptions): Promise<
   const processed = await processImage(buffer);
   const name = opts.name ?? randomUUID();
   const filename = `${name}.jpg`;
+  const isProd = env.NODE_ENV === 'production';
 
   // 1. S3 (preferido — persistente, gratis dentro del free tier)
   if (isS3Configured()) {
@@ -123,31 +137,45 @@ export async function uploadImage(buffer: Buffer, opts: UploadOptions): Promise<
       return url;
     } catch (err) {
       logger.error('storage.service: fallo S3, intentando Cloudinary', { error: err });
+      // En producción, si S3 falla y no hay Cloudinary, lanzar error
+      if (isProd && !isCloudinaryConfigured()) {
+        throw new Error('S3 upload failed and no Cloudinary fallback is configured');
+      }
     }
   }
 
-  // 2. Cloudinary (fallback)
+  // 2. Cloudinary (preferido cuando S3 no está — persistente)
   if (isCloudinaryConfigured()) {
-    try {
-      const url = await uploadToCloudinary(processed, `garden/${opts.folder}`, name);
-      logger.info('storage.service: imagen subida a Cloudinary', { url, folder: opts.folder });
-      return url;
-    } catch (err) {
-      logger.error('storage.service: fallo Cloudinary, usando disco local', { error: err });
+    // Reintentar hasta 2 veces en caso de error transitorio
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const url = await uploadToCloudinary(processed, `garden/${opts.folder}`, name);
+        logger.info('storage.service: imagen subida a Cloudinary', { url, folder: opts.folder });
+        return url;
+      } catch (err) {
+        lastErr = err;
+        logger.warn(`storage.service: fallo Cloudinary intento ${attempt}/2`, { error: err });
+        if (attempt < 2) await new Promise(r => setTimeout(r, 1000));
+      }
     }
+    // En producción, nunca caer a disco local cuando Cloudinary está configurado
+    if (isProd) {
+      logger.error('storage.service: Cloudinary falló tras 2 intentos — abortando (NO se usa disco local en producción)', { error: lastErr });
+      throw new Error(`Cloudinary upload failed after 2 attempts: ${(lastErr as Error)?.message}`);
+    }
+    logger.error('storage.service: fallo Cloudinary, usando disco local (solo dev)', { error: lastErr });
   }
 
-  // 3. Disco local (solo dev — ephemeral en Render)
-  if (env.NODE_ENV === 'production') {
-    logger.error(
-      'storage.service: ⚠️  NINGÚN STORAGE PERSISTENTE CONFIGURADO. ' +
-      'Las imágenes se perderán al reiniciar. ' +
-      'Configura AWS_S3_BUCKET o CLOUDINARY_* en las variables de entorno de Render.',
-      { folder: opts.folder }
+  // 3. Disco local — SOLO en desarrollo sin storage persistente configurado
+  if (isProd) {
+    throw new Error(
+      'No persistent storage configured in production. ' +
+      'Set CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET in Render environment variables.'
     );
   }
   const url = await uploadToLocal(processed, opts.folder, filename);
-  logger.info('storage.service: imagen guardada localmente', { url, folder: opts.folder });
+  logger.info('storage.service: imagen guardada localmente (dev)', { url, folder: opts.folder });
   return url;
 }
 

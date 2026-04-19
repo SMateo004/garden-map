@@ -4,11 +4,7 @@ import * as caregiverProfileController from './caregiver-profile.controller.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import { prisma } from '../../config/database.js';
 import multer from 'multer';
-import { isCloudinaryConfigured, cloudinary } from '../../config/cloudinary.js';
-import { env } from '../../config/env.js';
-import sharp from 'sharp';
-import path from 'path';
-import fs from 'fs/promises';
+import { uploadImage } from '../../services/storage.service.js';
 import logger from '../../shared/logger.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -52,46 +48,10 @@ router.post('/profile/service-photo', authMiddleware, requireRole('CAREGIVER'),
     const file = req.file;
     if (!file) return res.status(400).json({ success: false, error: { message: 'No se proporcionó foto' } });
 
-    // Resize image before upload
-    const processed = await sharp(file.buffer)
-      .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality: 85, progressive: true })
-      .toBuffer();
-
-    let photoUrl: string;
-
-    if (isCloudinaryConfigured()) {
-      // Upload to Cloudinary for persistent storage
-      try {
-        photoUrl = await new Promise<string>((resolve, reject) => {
-          const stream = cloudinary.uploader.upload_stream(
-            { folder: `garden/caregivers/${userId}/service`, resource_type: 'image', public_id: `service_${Date.now()}` },
-            (err, result) => {
-              if (err) reject(err);
-              else if (result) resolve(result.secure_url);
-              else reject(new Error('No response from Cloudinary'));
-            }
-          );
-          stream.end(processed);
-        });
-      } catch (err) {
-        logger.error('Fallo al subir service-photo a Cloudinary, usando fallback local', { userId, error: err });
-        const filename = `service-${userId}-${Date.now()}.jpg`;
-        const uploadDir = path.join(process.cwd(), 'uploads', 'service-photos');
-        await fs.mkdir(uploadDir, { recursive: true });
-        await fs.writeFile(path.join(uploadDir, filename), processed);
-        const baseUrl = env.API_PUBLIC_URL || 'http://localhost:3000';
-        photoUrl = `${baseUrl.replace(/\/$/, '')}/uploads/service-photos/${filename}`;
-      }
-    } else {
-      // Local disk fallback
-      const filename = `service-${userId}-${Date.now()}.jpg`;
-      const uploadDir = path.join(process.cwd(), 'uploads', 'service-photos');
-      await fs.mkdir(uploadDir, { recursive: true });
-      await fs.writeFile(path.join(uploadDir, filename), processed);
-      const baseUrl = env.API_PUBLIC_URL || 'http://localhost:3000';
-      photoUrl = `${baseUrl.replace(/\/$/, '')}/uploads/service-photos/${filename}`;
-    }
+    const photoUrl = await uploadImage(file.buffer, {
+      folder: 'caregivers',
+      name: `service_${userId}_${Date.now()}`,
+    });
 
     // Obtener fotos actuales para no sobrescribir, sino agregar
     const profile = await prisma.caregiverProfile.findFirst({ where: { userId } });
@@ -109,25 +69,20 @@ router.post('/profile/service-photo', authMiddleware, requireRole('CAREGIVER'),
   })
 );
 
-router.post('/profile/photo', authMiddleware, requireRole('CAREGIVER'), 
-  upload.single('photo'), 
+router.post('/profile/photo', authMiddleware, requireRole('CAREGIVER'),
+  upload.single('photo'),
   asyncHandler(async (req, res) => {
     const userId = (req as any).user.userId;
     const file = req.file;
     if (!file) {
       return res.status(400).json({ success: false, error: { message: 'No se proporcionó foto' } });
     }
-    
-    // Guardar en uploads/profile
-    const fs = await import('fs/promises');
-    const path = await import('path');
-    const filename = `profile-${userId}-${Date.now()}.jpg`;
-    const uploadDir = path.join(process.cwd(), 'uploads', 'profiles');
-    await fs.mkdir(uploadDir, { recursive: true });
-    await fs.writeFile(path.join(uploadDir, filename), file.buffer);
-    
-    const photoUrl = `${process.env.API_BASE_URL || 'http://localhost:3000'}/uploads/profiles/${filename}`;
-    
+
+    const photoUrl = await uploadImage(file.buffer, {
+      folder: 'caregivers',
+      name: `profile-${userId}-${Date.now()}`,
+    });
+
     // Actualizar en DB tanto el perfil como el usuario para consistencia
     await prisma.$transaction([
       prisma.caregiverProfile.update({
@@ -139,7 +94,7 @@ router.post('/profile/photo', authMiddleware, requireRole('CAREGIVER'),
         data: { profilePicture: photoUrl },
       }),
     ]);
-    
+
     res.json({ success: true, data: { photoUrl } });
   })
 );
