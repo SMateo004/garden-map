@@ -2641,28 +2641,27 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                if (_conversionInProgress)
-                  _isAbandoningConversion
-                      ? const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : TextButton(
-                          onPressed: _confirmAbandonConversion,
-                          child: Text(
-                            'Abandonar registro',
-                            style: TextStyle(
-                              color: GardenColors.error,
-                              fontSize: 14,
-                              decoration: TextDecoration.underline,
-                              decorationColor: GardenColors.error,
-                            ),
+                _isAbandoningConversion
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : TextButton(
+                        onPressed: _confirmAbandonConversion,
+                        child: Text(
+                          'Abandonar registro',
+                          style: TextStyle(
+                            color: GardenColors.error,
+                            fontSize: 14,
+                            decoration: TextDecoration.underline,
+                            decorationColor: GardenColors.error,
                           ),
                         ),
+                      ),
                 TextButton(
                   onPressed: () async {
                     final prefs = await SharedPreferences.getInstance();
