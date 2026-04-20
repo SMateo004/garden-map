@@ -21,6 +21,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = true;
   bool _isDeletingAccount = false;
   bool _isSwitchingRole = false;
+  bool _conversionInProgress = false;
+  bool _isAbandoningConversion = false;
   String _token = '';
   String _role = '';
   String _activeRole = '';
@@ -43,6 +45,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _token = prefs.getString('access_token') ?? '';
       _role = prefs.getString('user_role') ?? '';
       _activeRole = prefs.getString('active_role') ?? '';
+      _conversionInProgress = prefs.getBool('client_conversion_in_progress') ?? false;
     });
     if (_token.isNotEmpty) {
       await _loadProfile();
@@ -698,6 +701,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(height: 28),
 
+        // ── Banner: conversión CLIENT→CAREGIVER en progreso ──────────
+        if (_role == 'CAREGIVER' && _conversionInProgress) ...[
+          _buildConversionBanner(textColor, subtextColor),
+          const SizedBox(height: 20),
+        ],
+
         _sectionLabel('Mi cuenta', textColor),
         const SizedBox(height: 10),
         
@@ -1077,6 +1086,190 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     } finally {
       if (mounted) setState(() => _isSwitchingRole = false);
+    }
+  }
+
+  // ── Conversión CLIENT→CAREGIVER en progreso ─────────────────────────────────
+
+  Widget _buildConversionBanner(Color textColor, Color subtextColor) {
+    final isDark = themeNotifier.isDark;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: GardenColors.primary.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(GardenRadius.xl),
+        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.20)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: GardenColors.primary.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.pending_actions_rounded,
+                    color: GardenColors.primary, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Registro de cuidador en progreso',
+                        style: TextStyle(
+                            color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
+                    const SizedBox(height: 2),
+                    Text('Completa el formulario para activar tu perfil.',
+                        style: TextStyle(color: subtextColor, fontSize: 12)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          GardenButton(
+            label: 'Continuar formulario',
+            onPressed: () => context.push('/caregiver/onboarding',
+                extra: {'clientConversionMode': true}),
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: GestureDetector(
+              onTap: _isAbandoningConversion ? null : _confirmAbandonConversion,
+              child: _isAbandoningConversion
+                  ? const SizedBox(
+                      width: 14, height: 14,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 1.5, color: GardenColors.error),
+                    )
+                  : Text(
+                      'Abandonar formulario',
+                      style: TextStyle(
+                        color: GardenColors.error.withValues(alpha: 0.55),
+                        fontSize: 12,
+                        decoration: TextDecoration.underline,
+                        decorationColor: GardenColors.error.withValues(alpha: 0.35),
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmAbandonConversion() {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 52, height: 52,
+                decoration: BoxDecoration(
+                    color: GardenColors.error.withValues(alpha: 0.10),
+                    shape: BoxShape.circle),
+                child: const Icon(Icons.cancel_outlined,
+                    color: GardenColors.error, size: 26),
+              ),
+              const SizedBox(height: 14),
+              Text('¿Abandonar el registro?',
+                  style: TextStyle(
+                      color: textColor, fontSize: 17, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              Text(
+                'Tu cuenta volverá al modo dueño de mascota. Podrás iniciar el proceso de nuevo cuando quieras.',
+                style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text('Cancelar',
+                          style: TextStyle(color: subtextColor)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: GardenColors.error,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _abandonConversion();
+                      },
+                      child: const Text('Abandonar',
+                          style: TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _abandonConversion() async {
+    if (_isAbandoningConversion) return;
+    setState(() => _isAbandoningConversion = true);
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/auth/abandon-caregiver-profile'),
+        headers: {'Authorization': 'Bearer $_token'},
+      );
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode == 200 && data['success'] == true) {
+        final result = data['data'] as Map<String, dynamic>;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('access_token', result['accessToken'] as String);
+        await prefs.setString('refresh_token', result['refreshToken'] as String);
+        await prefs.setString('user_role', 'CLIENT');
+        await prefs.remove('active_role');
+        await prefs.remove('client_conversion_in_progress');
+        if (!mounted) return;
+        context.go('/service-selector');
+      } else {
+        final msg = (data['error'] as Map<String, dynamic>?)?['message']
+            ?? 'No se pudo abandonar el proceso.';
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), backgroundColor: GardenColors.error),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error de conexión. Intenta de nuevo.'),
+          backgroundColor: GardenColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isAbandoningConversion = false);
     }
   }
 

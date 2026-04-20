@@ -752,3 +752,53 @@ export async function initCaregiverProfile(userId: string): Promise<SwitchRoleRe
 
   return { accessToken, refreshToken: newRefreshToken, expiresIn, activeRole: UserRole.CAREGIVER };
 }
+
+// ── Abandon Caregiver Profile (CAREGIVER → CLIENT revert) ────────────────────
+
+/**
+ * Revierte la conversión CLIENT→CAREGIVER:
+ *  - Elimina el CaregiverProfile si está en estado DRAFT (no aprobado).
+ *  - Restaura user.role a CLIENT.
+ *  - Devuelve nuevos tokens con role=CLIENT.
+ *
+ * Solo funciona si el perfil está en DRAFT (no se puede abandonar si ya está aprobado).
+ */
+export async function abandonCaregiverProfile(userId: string): Promise<SwitchRoleResult> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, isDeleted: true },
+  });
+
+  if (!user || user.isDeleted) throw new UnauthorizedError('Usuario no encontrado');
+
+  if (user.role !== UserRole.CAREGIVER) {
+    throw new ForbiddenError('Solo cuentas de cuidador pueden abandonar el proceso.', 'WRONG_ROLE');
+  }
+
+  const profile = await prisma.caregiverProfile.findUnique({ where: { userId } });
+  if (!profile) {
+    // No profile — just revert role
+    await prisma.user.update({ where: { id: userId }, data: { role: UserRole.CLIENT, activeRole: null } });
+  } else {
+    if (profile.status !== CaregiverStatus.DRAFT) {
+      throw new ForbiddenError(
+        'No puedes abandonar el proceso una vez que el perfil ha sido enviado a revisión.',
+        'PROFILE_NOT_DRAFT'
+      );
+    }
+    await prisma.$transaction([
+      prisma.caregiverProfile.delete({ where: { userId } }),
+      prisma.user.update({ where: { id: userId }, data: { role: UserRole.CLIENT, activeRole: null } }),
+    ]);
+  }
+
+  await revokeAllRefreshTokens(userId);
+
+  const payload: JwtPayload = { userId, role: UserRole.CLIENT };
+  const { token: accessToken, expiresIn } = signAccessToken(payload);
+  const newRefreshToken = await createRefreshToken(userId);
+
+  logger.info('auth.service: CAREGIVER conversion abandoned → CLIENT', { userId });
+
+  return { accessToken, refreshToken: newRefreshToken, expiresIn, activeRole: UserRole.CLIENT };
+}

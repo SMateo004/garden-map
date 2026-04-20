@@ -531,3 +531,20 @@ export const initCaregiverProfile = asyncHandler(async (req: Request, res: Respo
     },
   });
 });
+
+/**
+ * POST /api/auth/abandon-caregiver-profile
+ * Revierte la conversión CLIENT→CAREGIVER. Solo funciona si el perfil está en DRAFT.
+ */
+export const abandonCaregiverProfile = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const result = await authService.abandonCaregiverProfile(userId);
+  res.json({
+    success: true,
+    data: {
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      expiresIn: result.expiresIn,
+    },
+  });
+});

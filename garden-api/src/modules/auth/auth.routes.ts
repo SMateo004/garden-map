@@ -76,4 +76,7 @@ router.post('/switch-role', authMiddleware, authController.switchRole);
 /** POST /api/auth/init-caregiver-profile — convierte CLIENT en CAREGIVER creando CaregiverProfile vacío. */
 router.post('/init-caregiver-profile', authMiddleware, authController.initCaregiverProfile);
 
+/** POST /api/auth/abandon-caregiver-profile — revierte conversión CLIENT→CAREGIVER (solo perfil en DRAFT). */
+router.post('/abandon-caregiver-profile', authMiddleware, authController.abandonCaregiverProfile);
+
 export default router;

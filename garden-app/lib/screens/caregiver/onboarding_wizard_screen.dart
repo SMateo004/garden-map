@@ -121,8 +121,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     setState(() => _authToken = token);
 
     // clientConversionMode: the account + empty CaregiverProfile already exist.
-    // Skip step 0 (registration) and start at step 1 (services & zone).
+    // Pre-fill step 0 from existing user data, then jump to step 1.
     if (token.isNotEmpty && widget.clientConversionMode) {
+      await _prefillFromExistingUser(token);
       setState(() => _currentStep = 1);
       return;
     }
@@ -138,6 +139,32 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     'API_URL',
     defaultValue: 'https://garden-api-1ldd.onrender.com/api',
   );
+
+  /// Rellena los controladores del paso 0 con los datos del usuario ya registrado.
+  /// Solo se usa en clientConversionMode.
+  Future<void> _prefillFromExistingUser(String token) async {
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/auth/me'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (data['success'] == true) {
+        final user = data['data'] as Map<String, dynamic>;
+        setState(() {
+          _firstNameController.text = user['firstName'] as String? ?? '';
+          _lastNameController.text = user['lastName'] as String? ?? '';
+          _emailController.text = user['email'] as String? ?? '';
+          _phoneController.text = user['phone'] as String? ?? '';
+          if (user['dateOfBirth'] != null) {
+            try {
+              _dateOfBirth = DateTime.parse(user['dateOfBirth'] as String);
+            } catch (_) {}
+          }
+        });
+      }
+    } catch (_) {}
+  }
 
   /// For returning users: load profile and jump to the first incomplete step (1-8).
   /// Reads a backend profile map and populates all wizard state variables so that
@@ -319,6 +346,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       if (response.statusCode == 200 && body['success'] == true) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('caregiver_setup_complete', true);
+        await prefs.remove('client_conversion_in_progress');
         if (!mounted) return;
         context.go('/caregiver/home');
       } else {
@@ -452,6 +480,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   }
 
   Future<void> _nextStep() async {
+    // Step 0: en clientConversionMode el usuario ya está registrado, solo avanzar
+    if (_currentStep == 0 && widget.clientConversionMode) {
+      setState(() => _currentStep = 1);
+      return;
+    }
+
     // Step 0: Datos personales → register with minimal data
     if (_currentStep == 0) {
       if (!_validateCurrentStep()) return;
