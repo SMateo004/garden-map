@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/language_service.dart';
+import '../../services/auth_service.dart';
 import '../client/my_data_screen.dart';
 import '../client/my_ratings_screen.dart';
 
@@ -19,9 +20,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
   bool _isDeletingAccount = false;
+  bool _isSwitchingRole = false;
   String _token = '';
   String _role = '';
+  String _activeRole = '';
   Map<String, dynamic>? _caregiverProfile;
+
+  /// Rol efectivo: activeRole si está activo, si no el rol permanente.
+  String get _effectiveRole => _activeRole.isNotEmpty ? _activeRole : _role;
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
@@ -36,6 +42,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() {
       _token = prefs.getString('access_token') ?? '';
       _role = prefs.getString('user_role') ?? '';
+      _activeRole = prefs.getString('active_role') ?? '';
     });
     if (_token.isNotEmpty) {
       await _loadProfile();
@@ -55,12 +62,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
+          final prefs = await SharedPreferences.getInstance();
+          final apiActiveRole = data['data']?['activeRole'] as String? ?? '';
+          // Sincronizar active_role desde la API (fuente de verdad)
+          if (apiActiveRole.isNotEmpty) {
+            await prefs.setString('active_role', apiActiveRole);
+          } else {
+            await prefs.remove('active_role');
+          }
           setState(() {
             _userData = data['data'];
             _role = _userData?['role'] ?? _role;
+            _activeRole = apiActiveRole;
           });
 
-          // Si es CAREGIVER, cargar también el perfil profesional
+          // Si el rol permanente es CAREGIVER, cargar también el perfil profesional
           if (_role == 'CAREGIVER') {
             try {
               final profileResponse = await http.get(
@@ -413,25 +429,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String title,
     required VoidCallback onTap,
   }) {
-    final theme = Theme.of(context);
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final hintColor = isDark ? GardenColors.darkTextHint : GardenColors.lightTextHint;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        onTap: onTap,
-        tileColor: theme.colorScheme.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: Icon(icon, color: GardenColors.primary),
-        title: Text(title, style: TextStyle(color: theme.colorScheme.onSurface)),
-        trailing: const Icon(Icons.chevron_right),
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: surface,
+        borderRadius: BorderRadius.circular(GardenRadius.md),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(GardenRadius.md),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(GardenRadius.md),
+              border: Border.all(color: borderColor),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: GardenColors.primary.withValues(alpha: 0.09),
+                    borderRadius: BorderRadius.circular(GardenRadius.sm),
+                  ),
+                  child: Icon(icon, color: GardenColors.primary, size: 17),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(title,
+                      style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
+                ),
+                Icon(Icons.chevron_right_rounded, color: hintColor, size: 18),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildAccountInfoTile() {
-    final theme = Theme.of(context);
     final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
     final user = _userData;
     if (user == null) return const SizedBox.shrink();
 
@@ -446,34 +492,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
+        color: surface,
+        borderRadius: BorderRadius.circular(GardenRadius.md),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         children: [
-          _infoRow(Icons.calendar_today_outlined, 'Miembro desde', createdAt.isNotEmpty ? createdAt : 'N/A', subtextColor),
+          _infoRow(Icons.calendar_today_outlined, 'Miembro desde', createdAt.isNotEmpty ? createdAt : 'N/A', textColor, subtextColor),
           if (walletAddress.isNotEmpty) ...[
-            Divider(height: 1, color: theme.dividerColor),
-            _infoRow(Icons.account_balance_wallet_outlined, 'Wallet blockchain', '${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}', subtextColor),
+            Divider(height: 1, color: borderColor),
+            _infoRow(Icons.account_balance_wallet_outlined, 'Wallet blockchain', '${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}', textColor, subtextColor),
           ],
-          Divider(height: 1, color: theme.dividerColor),
-          _infoRow(Icons.fingerprint_outlined, 'ID de cuenta', (user['id'] as String? ?? '').isNotEmpty ? '${(user['id'] as String).substring(0, 8)}...' : 'N/A', subtextColor),
+          Divider(height: 1, color: borderColor),
+          _infoRow(Icons.fingerprint_outlined, 'ID de cuenta', (user['id'] as String? ?? '').isNotEmpty ? '${(user['id'] as String).substring(0, 8)}...' : 'N/A', textColor, subtextColor),
         ],
       ),
     );
   }
 
-  Widget _infoRow(IconData icon, String label, String value, Color subtextColor) {
-    final theme = Theme.of(context);
+  Widget _infoRow(IconData icon, String label, String value, Color textColor, Color subtextColor) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: GardenColors.primary),
+          Icon(icon, size: 16, color: GardenColors.primary),
           const SizedBox(width: 12),
-          Text(label, style: TextStyle(color: theme.colorScheme.onSurface, fontSize: 14)),
+          Text(label, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w500)),
           const Spacer(),
-          Text(value, style: TextStyle(color: subtextColor, fontSize: 13)),
+          Text(value, style: TextStyle(color: subtextColor, fontSize: 12)),
         ],
       ),
     );
@@ -481,18 +527,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final hintColor = isDark ? GardenColors.darkTextHint : GardenColors.lightTextHint;
+
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      backgroundColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
       appBar: AppBar(
-        title: const Text('Mi perfil'),
-        backgroundColor: theme.colorScheme.surface,
+        backgroundColor: surface,
         elevation: 0,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: GardenColors.primary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(GardenRadius.sm),
+              ),
+              child: const Icon(Icons.person_rounded, color: GardenColors.primary, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Text('Mi Perfil', style: GardenText.h4.copyWith(color: textColor)),
+          ],
+        ),
+        centerTitle: true,
         actions: [
           if (_token.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.logout),
+              icon: Icon(Icons.logout_rounded, color: hintColor, size: 20),
               onPressed: _logout,
             ),
         ],
@@ -532,100 +596,112 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildAuthenticatedState() {
-    final theme = Theme.of(context);
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final user = _userData!;
-    
+
     String roleLabel = 'Usuario';
     Color roleColor = GardenColors.primary;
-    if (_role == 'CLIENT') {
-      roleLabel = 'Dueño de mascota';
-      roleColor = Colors.green;
-    } else if (_role == 'CAREGIVER') {
+    if (_effectiveRole == 'CLIENT') {
+      roleLabel = _role == 'CAREGIVER' ? 'Dueño de mascota (modo temporal)' : 'Dueño de mascota';
+      roleColor = GardenColors.success;
+    } else if (_effectiveRole == 'CAREGIVER') {
       roleLabel = 'Cuidador';
       roleColor = GardenColors.primary;
-    } else if (_role == 'ADMIN') {
+    } else if (_effectiveRole == 'ADMIN') {
       roleLabel = 'Administrador';
-      roleColor = Colors.blue;
+      roleColor = GardenColors.info;
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header
-        Row(
-          children: [
-            GardenAvatar(
-              imageUrl: (_caregiverProfile?['profilePhoto'] as String?)?.isNotEmpty == true
-                  ? _caregiverProfile!['profilePhoto'] as String
-                  : user['profilePicture'] as String?,
-              size: 80,
-              initials: '${user['firstName']} ${user['lastName']}',
+        // ── Header card ───────────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                GardenColors.primary.withValues(alpha: 0.07),
+                GardenColors.lime.withValues(alpha: 0.25),
+              ],
             ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('${user['firstName']} ${user['lastName']}',
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  // Fila unificada de email y verificación
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.email_outlined, size: 14, color: theme.colorScheme.onSurface.withOpacity(0.6)),
-                      const SizedBox(width: 8),
-                      Text(
-                        user['email'] as String? ?? '',
-                        style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.6), fontSize: 13),
-                      ),
-                      const SizedBox(width: 10),
-                      if (user['emailVerified'] != true)
-                        GestureDetector(
-                          onTap: _sendVerificationEmail,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: GardenColors.warning.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: GardenColors.warning.withOpacity(0.4)),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.mark_email_unread_outlined, size: 12, color: GardenColors.warning),
-                                SizedBox(width: 4),
-                                Text('Verificar',
-                                  style: TextStyle(color: GardenColors.warning, fontSize: 11, fontWeight: FontWeight.w700)),
-                              ],
-                            ),
+            borderRadius: BorderRadius.circular(GardenRadius.xl),
+            border: Border.all(color: GardenColors.primary.withValues(alpha: 0.12)),
+          ),
+          child: Row(
+            children: [
+              GardenAvatar(
+                imageUrl: (_caregiverProfile?['profilePhoto'] as String?)?.isNotEmpty == true
+                    ? _caregiverProfile!['profilePhoto'] as String
+                    : user['profilePicture'] as String?,
+                size: 72,
+                initials: '${user['firstName']} ${user['lastName']}',
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${user['firstName']} ${user['lastName']}',
+                        style: GardenText.h4.copyWith(color: textColor)),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.email_outlined, size: 12, color: subtextColor),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            user['email'] as String? ?? '',
+                            style: GardenText.bodySmall.copyWith(color: subtextColor),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      if (user['emailVerified'] == true)
-                        const Icon(Icons.verified_outlined, size: 16, color: GardenColors.success),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: roleColor.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(20),
+                        const SizedBox(width: 6),
+                        if (user['emailVerified'] == true)
+                          const Icon(Icons.verified_rounded, size: 14, color: GardenColors.success)
+                        else
+                          GestureDetector(
+                            onTap: _sendVerificationEmail,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: GardenColors.warning.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(GardenRadius.full),
+                                border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4)),
+                              ),
+                              child: const Text('Verificar',
+                                style: TextStyle(color: GardenColors.warning, fontSize: 11, fontWeight: FontWeight.w700)),
+                            ),
+                          ),
+                      ],
                     ),
-                    child: Text(roleLabel,
-                        style: TextStyle(color: roleColor, fontSize: 12, fontWeight: FontWeight.bold)),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: roleColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(GardenRadius.full),
+                        border: Border.all(color: roleColor.withValues(alpha: 0.25)),
+                      ),
+                      child: Text(roleLabel,
+                          style: TextStyle(color: roleColor, fontSize: 12, fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        const SizedBox(height: 40),
+        const SizedBox(height: 28),
+
+        _sectionLabel('Mi cuenta', textColor),
+        const SizedBox(height: 10),
         
-        const Text('Mi cuenta', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
-        
-        if (_role == 'CLIENT') ...[
+        if (_effectiveRole == 'CLIENT') ...[
           _profileTile(icon: Icons.person_outlined, title: 'Mis Datos', onTap: () async {
             final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const MyDataScreen()));
             if (result == true && mounted) _loadProfile();
@@ -636,9 +712,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _profileTile(icon: Icons.star_outline, title: 'Mis calificaciones',
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyRatingsScreen()))),
           _profileTile(icon: Icons.account_balance_wallet_outlined, title: 'Mi billetera', onTap: () => context.push('/wallet')),
+          // Solo para CLIENT permanente (no para CAREGIVER actuando como CLIENT)
+          if (_role == 'CLIENT')
+            _profileTile(
+              icon: Icons.volunteer_activism_outlined,
+              title: 'Conviérteme en cuidador',
+              onTap: () => context.push('/become-caregiver'),
+            ),
         ],
-        
-        if (_role == 'CAREGIVER') ...[
+
+        if (_effectiveRole == 'CAREGIVER') ...[
           _profileTile(
             icon: Icons.assignment_outlined,
             title: 'Datos del cuidador',
@@ -646,102 +729,366 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           _profileTile(icon: Icons.edit_outlined, title: 'Editar perfil', onTap: () => context.push('/caregiver/edit-profile')),
           _profileTile(icon: Icons.home_outlined, title: 'Mi panel', onTap: () => context.push('/caregiver/home')),
-          // Solo mostrar si no está verificado (NI por admin, NI el perfil completo, NI por IA)
-          if (_caregiverProfile?['verified'] != true && 
+          if (_caregiverProfile?['verified'] != true &&
               _caregiverProfile?['verificationStatus'] != 'VERIFIED' &&
               _caregiverProfile?['identityVerificationStatus'] != 'VERIFIED')
             _profileTile(icon: Icons.verified_user_outlined, title: 'Verificación IA', onTap: () => context.push('/caregiver/verification')),
           _profileTile(icon: Icons.calendar_month, title: 'Mi disponibilidad', onTap: () => context.push('/caregiver/home')),
           _profileTile(icon: Icons.account_balance_wallet_outlined, title: 'Mi billetera', onTap: () => context.push('/wallet')),
         ],
-        
-        if (_role == 'ADMIN') ...[
+
+        if (_effectiveRole == 'ADMIN') ...[
           _profileTile(icon: Icons.admin_panel_settings, title: 'Panel admin', onTap: () => context.push('/admin')),
         ],
 
         const SizedBox(height: 24),
-        const Text('Preferencias', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
-        
+        _sectionLabel('Preferencias', textColor),
+        const SizedBox(height: 10),
+
+        // Modo oscuro
         Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            tileColor: theme.colorScheme.surface,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-            leading: Icon(
-              themeNotifier.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
-              color: GardenColors.primary,
-            ),
-            title: Text('Modo oscuro', style: TextStyle(color: theme.colorScheme.onSurface)),
-            trailing: Switch(
-              value: themeNotifier.isDark,
-              onChanged: (_) => themeNotifier.toggle(),
-              activeColor: GardenColors.primary,
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Material(
+            color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+            borderRadius: BorderRadius.circular(GardenRadius.md),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(GardenRadius.md),
+                border: Border.all(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: GardenColors.primary.withValues(alpha: 0.09),
+                      borderRadius: BorderRadius.circular(GardenRadius.sm),
+                    ),
+                    child: Icon(
+                      themeNotifier.isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                      color: GardenColors.primary, size: 17,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text('Modo oscuro',
+                        style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
+                  ),
+                  Switch(
+                    value: themeNotifier.isDark,
+                    onChanged: (_) => themeNotifier.toggle(),
+                    activeColor: GardenColors.primary,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-        
+
         _profileTile(icon: Icons.notifications_outlined, title: 'Notificaciones',
             onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Próximamente')))),
 
-        if (_role == 'CLIENT')
+        if (_effectiveRole == 'CLIENT')
           AnimatedBuilder(
             animation: languageNotifier,
             builder: (context, _) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: ListTile(
-                onTap: _showLanguageSheet,
-                tileColor: theme.colorScheme.surface,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                leading: const Icon(Icons.language_outlined, color: GardenColors.primary),
-                title: Text('Idioma', style: TextStyle(color: theme.colorScheme.onSurface)),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(languageNotifier.displayName,
-                      style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.5), fontSize: 14)),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.chevron_right),
-                  ],
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Material(
+                color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+                borderRadius: BorderRadius.circular(GardenRadius.md),
+                child: InkWell(
+                  onTap: _showLanguageSheet,
+                  borderRadius: BorderRadius.circular(GardenRadius.md),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(GardenRadius.md),
+                      border: Border.all(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: GardenColors.primary.withValues(alpha: 0.09),
+                            borderRadius: BorderRadius.circular(GardenRadius.sm),
+                          ),
+                          child: const Icon(Icons.language_outlined, color: GardenColors.primary, size: 17),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text('Idioma',
+                              style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
+                        ),
+                        Text(languageNotifier.displayName,
+                            style: TextStyle(color: subtextColor, fontSize: 13)),
+                        const SizedBox(width: 4),
+                        Icon(Icons.chevron_right_rounded,
+                            color: isDark ? GardenColors.darkTextHint : GardenColors.lightTextHint, size: 18),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        
+
         const SizedBox(height: 24),
-        const Text('Accesibilidad', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
+        _sectionLabel('Cuenta', textColor),
+        const SizedBox(height: 10),
+        if (_role == 'CAREGIVER') ...[
+          _switchRoleTile(textColor),
+          const SizedBox(height: 8),
+        ],
         _buildAccountInfoTile(),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            tileColor: GardenColors.error.withOpacity(0.05),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: GardenColors.error.withOpacity(0.3)),
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            leading: _isDeletingAccount
-                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.error))
-                : const Icon(Icons.delete_forever_outlined, color: GardenColors.error),
-            title: const Text('Eliminar cuenta', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.w600)),
-            subtitle: const Text('Esta acción es permanente e irreversible', style: TextStyle(fontSize: 11)),
-            trailing: const Icon(Icons.chevron_right, color: GardenColors.error),
-            onTap: _isDeletingAccount ? null : _deleteAccount,
-          ),
-        ),
-        const SizedBox(height: 40),
+        const SizedBox(height: 8),
+        const SizedBox(height: 28),
         GardenButton(
           label: 'Cerrar sesión',
           outline: true,
           color: GardenColors.error,
           onPressed: _logout,
         ),
+        const SizedBox(height: 20),
+        Center(
+          child: GestureDetector(
+            onTap: _isDeletingAccount ? null : _deleteAccount,
+            child: _isDeletingAccount
+                ? const SizedBox(
+                    width: 14, height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 1.5, color: GardenColors.error),
+                  )
+                : Text(
+                    'Eliminar cuenta',
+                    style: TextStyle(
+                      color: GardenColors.error.withValues(alpha: 0.45),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                      decoration: TextDecoration.underline,
+                      decorationColor: GardenColors.error.withValues(alpha: 0.3),
+                    ),
+                  ),
+          ),
+        ),
         const SizedBox(height: 40),
       ],
     );
   }
+
+  // ── Switch role ─────────────────────────────────────────────────────────────
+
+  Widget _switchRoleTile(Color textColor) {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final isSwitchedToClient = _activeRole == 'CLIENT';
+    final label = isSwitchedToClient ? 'Volver a modo cuidador' : 'Cambiar a modo dueño';
+    final icon = isSwitchedToClient ? Icons.pets : Icons.swap_horiz_rounded;
+    final accent = isSwitchedToClient ? GardenColors.primary : GardenColors.success;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 0),
+      child: Material(
+        color: surface,
+        borderRadius: BorderRadius.circular(GardenRadius.md),
+        child: InkWell(
+          onTap: _isSwitchingRole ? null : () => _onSwitchRoleTap(isSwitchedToClient),
+          borderRadius: BorderRadius.circular(GardenRadius.md),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(GardenRadius.md),
+              border: Border.all(color: borderColor),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.09),
+                    borderRadius: BorderRadius.circular(GardenRadius.sm),
+                  ),
+                  child: _isSwitchingRole
+                      ? SizedBox(
+                          width: 17, height: 17,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: accent),
+                        )
+                      : Icon(icon, color: accent, size: 17),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded,
+                    color: isDark ? GardenColors.darkTextHint : GardenColors.lightTextHint, size: 18),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Verifica reservas activas antes de mostrar el sheet de cambio de rol.
+  Future<void> _onSwitchRoleTap(bool isSwitchedToClient) async {
+    int activeBookings = 0;
+    // Solo verificar si está cambiando de CAREGIVER → CLIENT
+    if (!isSwitchedToClient && _token.isNotEmpty) {
+      try {
+        final res = await http.get(
+          Uri.parse('$_baseUrl/caregiver/bookings?limit=5'),
+          headers: {'Authorization': 'Bearer $_token'},
+        ).timeout(const Duration(seconds: 6));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          if (data['success'] == true) {
+            final bookings = (data['data'] as List? ?? []).cast<Map<String, dynamic>>();
+            activeBookings = bookings.where((b) => b['status'] == 'IN_PROGRESS').length;
+          }
+        }
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    _showSwitchRoleSheet(isSwitchedToClient, activeBookings: activeBookings);
+  }
+
+  void _showSwitchRoleSheet(bool isSwitchedToClient, {int activeBookings = 0}) {
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    final targetRole = isSwitchedToClient ? 'CAREGIVER' : 'CLIENT';
+    final title = isSwitchedToClient ? 'Volver a modo cuidador' : 'Cambiar a modo dueño de mascota';
+    final description = isSwitchedToClient
+        ? 'Volverás a tu interfaz de cuidador. Todas tus opciones de cuidador estarán disponibles nuevamente.'
+        : 'Usarás la app como dueño de mascota. Podrás hacer reservas con otros cuidadores pero no contigo mismo. Tu perfil de cuidador se mantendrá y podrás volver cuando quieras.';
+    final iconData = isSwitchedToClient ? Icons.pets : Icons.swap_horiz_rounded;
+    final accent = isSwitchedToClient ? GardenColors.primary : GardenColors.success;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => GlassBox(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(height: 24),
+            Container(
+              width: 56, height: 56,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.10),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(iconData, color: accent, size: 28),
+            ),
+            const SizedBox(height: 16),
+            Text(title,
+                style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
+            Text(
+              description,
+              style: TextStyle(color: subtextColor, fontSize: 13, height: 1.55),
+              textAlign: TextAlign.center,
+            ),
+            if (activeBookings > 0) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: GardenColors.warning.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(GardenRadius.md),
+                  border: Border.all(color: GardenColors.warning.withValues(alpha: 0.35)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Tienes $activeBookings servicio${activeBookings > 1 ? 's' : ''} en curso. Podrás seguir gestionándolo${activeBookings > 1 ? 's' : ''} desde tu panel de cuidador.',
+                        style: const TextStyle(
+                            color: GardenColors.warning, fontSize: 12, height: 1.45),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 28),
+            GardenButton(
+              label: 'Confirmar',
+              onPressed: () {
+                Navigator.pop(context);
+                _doSwitchRole(targetRole);
+              },
+            ),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancelar', style: TextStyle(color: subtextColor)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _doSwitchRole(String targetRole) async {
+    if (_isSwitchingRole) return;
+    setState(() => _isSwitchingRole = true);
+    try {
+      final authService = AuthService();
+      final effectiveRole = await authService.switchRole(
+        token: _token,
+        targetRole: targetRole,
+      );
+      if (!mounted) return;
+      // Actualizar token local (los nuevos tokens ya están en prefs)
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _token = prefs.getString('access_token') ?? _token;
+        _activeRole = effectiveRole == _role ? '' : effectiveRole;
+      });
+      if (!mounted) return;
+      if (effectiveRole == 'CAREGIVER') {
+        context.go('/caregiver/home');
+      } else {
+        context.go('/service-selector');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: GardenColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSwitchingRole = false);
+    }
+  }
+
+  Widget _sectionLabel(String label, Color textColor) => Padding(
+    padding: const EdgeInsets.only(left: 2),
+    child: Text(
+      label,
+      style: GardenText.labelLarge.copyWith(
+        color: textColor,
+        fontSize: 13,
+        letterSpacing: 0.5,
+      ),
+    ),
+  );
 }

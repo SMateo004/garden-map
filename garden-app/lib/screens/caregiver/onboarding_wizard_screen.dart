@@ -23,12 +23,17 @@ class OnboardingWizardScreen extends StatefulWidget {
   /// first incomplete post-registration step (6-9). Set to true when
   /// navigating from the home screen's "Continuar registro" button.
   final bool resumeMode;
+  /// When true, the user is a CLIENT converting to CAREGIVER. Step 0
+  /// (personal data / registration) is skipped — the account already exists
+  /// and the CaregiverProfile was created via init-caregiver-profile.
+  final bool clientConversionMode;
 
   const OnboardingWizardScreen({
     super.key,
     this.initialEmail = '',
     this.initialPassword = '',
     this.resumeMode = false,
+    this.clientConversionMode = false,
   });
 
   @override
@@ -114,6 +119,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     }
 
     setState(() => _authToken = token);
+
+    // clientConversionMode: the account + empty CaregiverProfile already exist.
+    // Skip step 0 (registration) and start at step 1 (services & zone).
+    if (token.isNotEmpty && widget.clientConversionMode) {
+      setState(() => _currentStep = 1);
+      return;
+    }
 
     // Only compute resume step when explicitly navigating back from home screen.
     // This prevents overriding the user's manual step navigation mid-wizard.

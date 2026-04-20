@@ -70,4 +70,10 @@ router.delete('/account', authMiddleware, authController.deleteAccount);
 /** PUT /api/auth/fcm-token — saves FCM device token for push notifications */
 router.put('/fcm-token', authMiddleware, authController.updateFcmToken);
 
+/** POST /api/auth/switch-role — body: { targetRole }. Cambia el rol activo en sesión sin alterar el rol permanente. */
+router.post('/switch-role', authMiddleware, authController.switchRole);
+
+/** POST /api/auth/init-caregiver-profile — convierte CLIENT en CAREGIVER creando CaregiverProfile vacío. */
+router.post('/init-caregiver-profile', authMiddleware, authController.initCaregiverProfile);
+
 export default router;

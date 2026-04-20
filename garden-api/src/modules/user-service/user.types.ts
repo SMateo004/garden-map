@@ -4,6 +4,7 @@ export interface UserPublic {
   id: string;
   email: string;
   role: UserRole;
+  activeRole?: UserRole | null;
   firstName: string;
   lastName: string;
   phone: string;

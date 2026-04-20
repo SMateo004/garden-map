@@ -5,7 +5,7 @@ import { UserRole, VerificationStatus, CaregiverStatus } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import prisma from '../../config/database.js';
 import { env } from '../../config/env.js';
-import { ConflictError, UnauthorizedError, BadRequestError } from '../../shared/errors.js';
+import { ConflictError, UnauthorizedError, BadRequestError, ForbiddenError } from '../../shared/errors.js';
 import { ensureAbsoluteUrl, ensureAbsoluteUrls } from '../../shared/upload-utils.js';
 import type { LoginBody, RegisterCaregiverBody, RegisterClientBody, PatchCaregiverProfileBody } from './auth.validation.js';
 import type { JwtPayload } from '../../middleware/auth.middleware.js';
@@ -53,7 +53,10 @@ export async function comparePassword(password: string, hash: string): Promise<b
 /** Generar JWT de acceso */
 function signAccessToken(payload: JwtPayload): { token: string; expiresIn: string } {
   const expiresIn = env.JWT_EXPIRES_IN;
-  const token = jwt.sign(payload, env.JWT_SECRET, { expiresIn } as jwt.SignOptions);
+  // Omitir activeRole del token si coincide con el rol permanente (evita payload innecesario)
+  const tokenPayload: JwtPayload = { ...payload };
+  if (tokenPayload.activeRole === tokenPayload.role) delete tokenPayload.activeRole;
+  const token = jwt.sign(tokenPayload, env.JWT_SECRET, { expiresIn } as jwt.SignOptions);
   return { token, expiresIn };
 }
 
@@ -94,11 +97,13 @@ export async function rotateRefreshToken(
 
   const user = await prisma.user.findUnique({
     where: { id: stored.userId },
-    select: { id: true, role: true, isDeleted: true },
+    select: { id: true, role: true, activeRole: true, isDeleted: true },
   });
   if (!user || user.isDeleted) return null;
 
-  const { token: accessToken, expiresIn } = signAccessToken({ userId: user.id, role: user.role });
+  const payload: JwtPayload = { userId: user.id, role: user.role };
+  if (user.activeRole) payload.activeRole = user.activeRole;
+  const { token: accessToken, expiresIn } = signAccessToken(payload);
   const newRefreshToken = await createRefreshToken(user.id);
 
   return { accessToken, refreshToken: newRefreshToken, expiresIn };
@@ -624,4 +629,126 @@ export async function updateCaregiverProfile(
   });
 
   return { profileId: profile.id };
+}
+
+
+// ── Switch Role ───────────────────────────────────────────────────────────────
+
+export interface SwitchRoleResult {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: string;
+  activeRole: string;
+}
+
+/**
+ * Cambia el rol activo en sesión sin modificar el rol permanente del usuario.
+ *
+ * Reglas:
+ *  - Un CAREGIVER puede activar rol CLIENT (para usar la app como dueño de mascota).
+ *  - Cualquier usuario puede volver a su rol permanente pasando targetRole === su role permanente.
+ *  - Un CLIENT no puede activar rol CAREGIVER por este endpoint (debe completar onboarding).
+ *
+ * Persiste `activeRole` en BD para que rotateRefreshToken propague el estado.
+ * Emite nuevos tokens (access + refresh) con el rol activo en el payload.
+ */
+export async function switchRole(userId: string, targetRole: UserRole): Promise<SwitchRoleResult> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, isDeleted: true },
+  });
+
+  if (!user || user.isDeleted) {
+    throw new UnauthorizedError('Usuario no encontrado');
+  }
+
+  // Si el targetRole coincide con el rol permanente, limpiar activeRole
+  const isRestoringOwnRole = targetRole === user.role;
+
+  // Un CLIENT no puede activar rol CAREGIVER sin onboarding
+  if (!isRestoringOwnRole && user.role === UserRole.CLIENT && targetRole === UserRole.CAREGIVER) {
+    throw new ForbiddenError(
+      'Debes completar el proceso de registro como cuidador primero.',
+      'CAREGIVER_ONBOARDING_REQUIRED'
+    );
+  }
+
+  // Un ADMIN no puede cambiar de rol
+  if (user.role === UserRole.ADMIN) {
+    throw new ForbiddenError('Los administradores no pueden cambiar de rol.', 'ADMIN_ROLE_SWITCH_FORBIDDEN');
+  }
+
+  const newActiveRole = isRestoringOwnRole ? null : targetRole;
+
+  // Persistir en BD
+  await prisma.user.update({
+    where: { id: userId },
+    data: { activeRole: newActiveRole },
+  });
+
+  // Revocar tokens anteriores para invalidar sesiones antiguas
+  await revokeAllRefreshTokens(userId);
+
+  const payload: JwtPayload = { userId: user.id, role: user.role };
+  if (newActiveRole) payload.activeRole = newActiveRole;
+
+  const { token: accessToken, expiresIn } = signAccessToken(payload);
+  const newRefreshToken = await createRefreshToken(userId);
+
+  const effectiveRole = newActiveRole ?? user.role;
+  logger.info('auth.service: rol activo cambiado', { userId, permanentRole: user.role, activeRole: effectiveRole });
+
+  return { accessToken, refreshToken: newRefreshToken, expiresIn, activeRole: effectiveRole };
+}
+
+// ── Init Caregiver Profile (CLIENT → CAREGIVER) ──────────────────────────────
+
+/**
+ * Crea un CaregiverProfile vacío para un usuario CLIENT existente y cambia
+ * su rol permanente a CAREGIVER. Devuelve nuevos tokens con role=CAREGIVER.
+ *
+ * Reglas:
+ *  - El usuario debe tener role=CLIENT.
+ *  - No debe tener ya un CaregiverProfile.
+ */
+export async function initCaregiverProfile(userId: string): Promise<SwitchRoleResult> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, isDeleted: true },
+  });
+
+  if (!user || user.isDeleted) throw new UnauthorizedError('Usuario no encontrado');
+
+  if (user.role !== UserRole.CLIENT) {
+    throw new ForbiddenError('Solo cuentas de dueño de mascota pueden iniciar el proceso de cuidador.', 'WRONG_ROLE');
+  }
+
+  const existing = await prisma.caregiverProfile.findUnique({ where: { userId } });
+  if (existing) {
+    throw new ConflictError('Ya tienes un perfil de cuidador registrado.', 'CAREGIVER_PROFILE_EXISTS');
+  }
+
+  await prisma.$transaction([
+    prisma.caregiverProfile.create({
+      data: {
+        userId,
+        status: CaregiverStatus.DRAFT,
+        verificationStatus: VerificationStatus.PENDING_REVIEW,
+      },
+    }),
+    prisma.user.update({
+      where: { id: userId },
+      data: { role: UserRole.CAREGIVER, activeRole: null },
+    }),
+  ]);
+
+  await revokeAllRefreshTokens(userId);
+
+  const payload: JwtPayload = { userId, role: UserRole.CAREGIVER };
+  const { token: accessToken, expiresIn } = signAccessToken(payload);
+  const newRefreshToken = await createRefreshToken(userId);
+
+  logger.info('auth.service: CLIENT → CAREGIVER profile initialized', { userId });
+
+  return { accessToken, refreshToken: newRefreshToken, expiresIn, activeRole: UserRole.CAREGIVER };
 }

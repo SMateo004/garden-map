@@ -785,16 +785,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             ),
 
             // ── Chips de servicio ──────────────────────────────────────
-            Container(
-              color: surface,
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 2, 12, 12),
               child: Row(
                 children: [
-                  _mobileServiceChip('todos', 'Todos', isDark, subtextColor),
+                  _mobileServiceChip('todos', 'Todos', isDark),
                   const SizedBox(width: 8),
-                  _mobileServiceChip('paseo', '🦮 Paseo', isDark, subtextColor),
+                  _mobileServiceChip('paseo', '🦮 Paseo', isDark),
                   const SizedBox(width: 8),
-                  _mobileServiceChip('hospedaje', '🏠 Hospedaje', isDark, subtextColor),
+                  _mobileServiceChip('hospedaje', '🏠 Hospedaje', isDark),
                 ],
               ),
             ),
@@ -814,7 +813,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     );
   }
 
-  Widget _mobileServiceChip(String value, String label, bool isDark, Color subtextColor) {
+  Widget _mobileServiceChip(String value, String label, bool isDark) {
     final isSelected = _selectedService == value;
     return GestureDetector(
       onTap: () {
@@ -822,21 +821,31 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         _loadCaregivers(reset: true);
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? GardenColors.primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected ? GardenColors.primary : (isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
+          color: isSelected
+              ? GardenColors.primary
+              : (isDark
+                  ? GardenColors.primary.withValues(alpha: 0.12)
+                  : GardenColors.lime.withValues(alpha: 0.75)),
+          borderRadius: BorderRadius.circular(GardenRadius.full),
+          boxShadow: isSelected
+              ? [BoxShadow(
+                  color: GardenColors.primary.withValues(alpha: 0.28),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                )]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : GardenColors.primary,
+            fontSize: 13,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
           ),
         ),
-        child: Text(label,
-            style: TextStyle(
-              color: isSelected ? Colors.white : subtextColor,
-              fontSize: 13,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            )),
       ),
     );
   }

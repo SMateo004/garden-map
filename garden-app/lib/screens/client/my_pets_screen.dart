@@ -113,16 +113,48 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
         return Scaffold(
           backgroundColor: bg,
           appBar: AppBar(
-            title: const Text('Mis Mascotas'),
             backgroundColor: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
-            foregroundColor: textColor,
             elevation: 0,
-          ),
-          floatingActionButton: FloatingActionButton(
-            heroTag: 'myPetsFAB',
-            backgroundColor: GardenColors.primary,
-            onPressed: () => _showPetForm(),
-            child: const Icon(Icons.add, color: Colors.white),
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: GardenColors.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(GardenRadius.sm),
+                  ),
+                  child: const Icon(Icons.pets_rounded, color: GardenColors.primary, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Text('Mis Mascotas', style: GardenText.h4.copyWith(color: textColor)),
+              ],
+            ),
+            centerTitle: true,
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () => _showPetForm(),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      gradient: GardenGradients.primary,
+                      borderRadius: BorderRadius.circular(GardenRadius.full),
+                      boxShadow: GardenShadows.primary,
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add_rounded, color: Colors.white, size: 16),
+                        SizedBox(width: 4),
+                        Text('Agregar', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
           body: _isLoading
               ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
@@ -176,18 +208,29 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       child: Padding(
         padding: const EdgeInsets.all(40),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.pets_rounded, size: 80,
-            color: GardenColors.primary.withValues(alpha: 0.35)),
-          const SizedBox(height: 20),
-          Text('Aún no tienes mascotas',
-            style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+          Container(
+            width: 96,
+            height: 96,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [GardenColors.lime, GardenColors.lime.withValues(alpha: 0.4)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.pets_rounded, size: 44, color: GardenColors.primary),
+          ),
+          const SizedBox(height: 24),
+          Text('Aún no tienes mascotas', style: GardenText.h4.copyWith(color: textColor)),
           const SizedBox(height: 8),
           Text('Agrega a tus peludos y gestiona su información',
-            style: TextStyle(color: subtextColor, fontSize: 13),
+            style: GardenText.bodyMedium.copyWith(color: subtextColor),
             textAlign: TextAlign.center),
           const SizedBox(height: 28),
           GardenButton(
             label: 'Agregar mascota',
+            icon: Icons.add_rounded,
             onPressed: () => _showPetForm(),
           ),
         ]),
@@ -236,52 +279,78 @@ class _PetCard extends StatelessWidget {
         margin: const EdgeInsets.symmetric(vertical: 6),
         decoration: BoxDecoration(
           color: surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(GardenRadius.xl),
           border: Border.all(color: borderColor),
+          boxShadow: GardenShadows.card,
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(children: [
             // Photo
-            Container(
-              width: 64, height: 64,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3), width: 1.5),
-                color: GardenColors.primary.withValues(alpha: 0.08),
-              ),
-              child: ClipOval(
-                child: photoUrl != null && photoUrl.isNotEmpty
-                    ? Image.network(fixImageUrl(photoUrl),
-                        width: 64, height: 64, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _iconFallback())
-                    : _iconFallback(),
-              ),
+            Stack(
+              children: [
+                Container(
+                  width: 68, height: 68,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [GardenColors.lime, GardenColors.lime.withValues(alpha: 0.4)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: ClipOval(
+                    child: photoUrl != null && photoUrl.isNotEmpty
+                        ? Image.network(fixImageUrl(photoUrl),
+                            width: 68, height: 68, fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _iconFallback())
+                        : _iconFallback(),
+                  ),
+                ),
+                if (sterilized == true)
+                  Positioned(
+                    bottom: 0, right: 0,
+                    child: Container(
+                      width: 20, height: 20,
+                      decoration: BoxDecoration(
+                        color: GardenColors.success,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: surface, width: 1.5),
+                      ),
+                      child: const Icon(Icons.check_rounded, color: Colors.white, size: 11),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(width: 14),
             // Info
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(name, style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+              Text(name, style: GardenText.h4.copyWith(color: textColor, fontSize: 16)),
               if (breed != null && breed.isNotEmpty) ...[
                 const SizedBox(height: 2),
-                Text(breed, style: TextStyle(color: subtextColor, fontSize: 13)),
+                Text(breed, style: GardenText.bodyMedium.copyWith(color: subtextColor)),
               ],
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Wrap(spacing: 6, runSpacing: 4, children: [
-                if (age != null)
-                  _pill('$age años', GardenColors.primary),
+                if (age != null) _pill('$age años', GardenColors.primary),
                 if (size != null && sizeLabels.containsKey(size))
-                  _pill(sizeLabels[size]!, GardenColors.accent),
-                if (gender == 'MALE') _pill('♂ Macho', GardenColors.secondary),
+                  _pill(sizeLabels[size]!, GardenColors.primaryLight),
+                if (gender == 'MALE') _pill('♂ Macho', GardenColors.info),
                 if (gender == 'FEMALE') _pill('♀ Hembra', GardenColors.accent),
-                if (weight != null) _pill('${weight}kg', GardenColors.primary),
-                if (sterilized == true) _pill('Esterilizado', GardenColors.success),
+                if (weight != null) _pill('${weight}kg', GardenColors.textSecondary),
                 if (specialNeeds != null && specialNeeds.isNotEmpty)
-                  _pill('Necesidades especiales', GardenColors.warning),
-                if (extraPhotos.isNotEmpty) _pill('${extraPhotos.length} fotos', GardenColors.primary),
+                  _pill('⚠ Especial', GardenColors.warning),
+                if (extraPhotos.isNotEmpty) _pill('📷 ${extraPhotos.length}', GardenColors.primary),
               ]),
             ])),
-            Icon(Icons.edit_outlined, color: subtextColor, size: 18),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: GardenColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(GardenRadius.sm),
+              ),
+              child: const Icon(Icons.edit_outlined, color: GardenColors.primary, size: 16),
+            ),
           ]),
         ),
       ),

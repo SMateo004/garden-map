@@ -151,7 +151,10 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
 
   Future<void> _goToHome(SharedPreferences prefs) async {
     final token = prefs.getString('access_token') ?? '';
-    final role = prefs.getString('user_role') ?? '';
+    final permanentRole = prefs.getString('user_role') ?? '';
+    // activeRole puede diferir del rol permanente durante un cambio de rol
+    final activeRole = prefs.getString('active_role') ?? '';
+    final role = activeRole.isNotEmpty ? activeRole : permanentRole;
     if (token.isEmpty) {
       context.go('/login');
       return;

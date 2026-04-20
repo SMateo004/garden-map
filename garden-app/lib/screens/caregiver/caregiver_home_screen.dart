@@ -616,42 +616,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             ),
             const SizedBox(height: 16),
 
-            // ── 4. ACCESOS RÁPIDOS ─────────────────────────────
-            Text('Accesos rápidos',
-              style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(child: _quickAction(
-                  icon: Icons.calendar_month_outlined,
-                  label: 'Disponibilidad',
-                  color: GardenColors.secondary,
-                  onTap: () => setState(() => _selectedTab = 1),
-                  surface: surface, borderColor: borderColor,
-                )),
-                const SizedBox(width: 8),
-                Expanded(child: _quickAction(
-                  icon: Icons.person_outline_rounded,
-                  label: 'Ver mi perfil',
-                  color: GardenColors.primary,
-                  onTap: () {
-                    final caregiverId = _caregiver?['id'] as String?;
-                    if (caregiverId != null) context.push('/caregiver/$caregiverId');
-                  },
-                  surface: surface, borderColor: borderColor,
-                )),
-                const SizedBox(width: 8),
-                Expanded(child: _quickAction(
-                  icon: Icons.account_balance_wallet_outlined,
-                  label: 'Billetera',
-                  color: GardenColors.success,
-                  onTap: () => context.push('/wallet'),
-                  surface: surface, borderColor: borderColor,
-                )),
-              ],
-            ),
-            const SizedBox(height: 16),
-
             // ── 5. BARRA DE COMPLETITUD DEL PERFIL ────────────
             if (completeness < 100 && _caregiver?['status'] != 'APPROVED') ...[
               _buildCompletenessBar(
@@ -1535,38 +1499,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     }
   }
 
-  // ── ACCESO RÁPIDO ───────────────────────────────────────────────────────
-  Widget _quickAction({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-    required Color surface,
-    required Color borderColor,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: GardenRadius.md_,
-          border: Border.all(color: color.withValues(alpha: 0.2)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(height: 5),
-            Text(
-              label,
-              style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   // ── BARRA DE COMPLETITUD ────────────────────────────────────────────────
   Widget _buildCompletenessBar({

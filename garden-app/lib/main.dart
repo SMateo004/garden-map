@@ -23,6 +23,7 @@ import 'screens/profile/profile_screen.dart';
 import 'screens/chat/chat_screen.dart';
 import 'screens/caregiver/caregiver_profile_data_screen.dart';
 import 'screens/caregiver/caregiver_setup_flow_screen.dart';
+import 'screens/caregiver/become_caregiver_screen.dart';
 import 'screens/wallet/wallet_screen.dart';
 import 'screens/service/service_execution_screen.dart';
 import 'screens/service/meet_and_greet_screen.dart';
@@ -139,8 +140,14 @@ final GoRouter _router = GoRouter(
           initialEmail: extra['email'] as String? ?? '',
           initialPassword: extra['password'] as String? ?? '',
           resumeMode: extra['resumeMode'] as bool? ?? false,
+          clientConversionMode: extra['clientConversionMode'] as bool? ?? false,
         );
       },
+    ),
+    GoRoute(
+      path: '/become-caregiver',
+      name: 'becomeCaregiver',
+      builder: (context, state) => const BecomeCaregiverScreen(),
     ),
     GoRoute(
       path: '/client-welcome',

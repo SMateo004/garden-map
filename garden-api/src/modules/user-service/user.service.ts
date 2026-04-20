@@ -8,6 +8,7 @@ export async function getById(id: string): Promise<UserPublic | null> {
       id: true,
       email: true,
       role: true,
+      activeRole: true,
       firstName: true,
       lastName: true,
       phone: true,

@@ -484,3 +484,50 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: { message: 'Sesión cerrada correctamente.' } });
 });
 
+
+/**
+ * POST /api/auth/switch-role
+ * Cambia el rol activo en sesión. Body: { targetRole: 'CLIENT' | 'CAREGIVER' }
+ * Devuelve nuevos tokens con el rol activo incluido en el payload.
+ */
+export const switchRole = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const { targetRole } = req.body as { targetRole?: string };
+
+  if (!targetRole || !['CLIENT', 'CAREGIVER'].includes(targetRole)) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_ROLE', message: 'targetRole debe ser CLIENT o CAREGIVER.' },
+    });
+  }
+
+  const result = await authService.switchRole(userId, targetRole as 'CLIENT' | 'CAREGIVER');
+
+  res.json({
+    success: true,
+    data: {
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      expiresIn: result.expiresIn,
+      activeRole: result.activeRole,
+    },
+  });
+});
+
+/**
+ * POST /api/auth/init-caregiver-profile
+ * Convierte una cuenta CLIENT en CAREGIVER creando un CaregiverProfile vacío.
+ * Devuelve nuevos tokens con role=CAREGIVER.
+ */
+export const initCaregiverProfile = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const result = await authService.initCaregiverProfile(userId);
+  res.json({
+    success: true,
+    data: {
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      expiresIn: result.expiresIn,
+    },
+  });
+});

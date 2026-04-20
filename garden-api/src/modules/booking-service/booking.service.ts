@@ -164,6 +164,7 @@ export async function createBooking(
       },
       select: {
         id: true,
+        userId: true,
         pricePerDay: true,
         pricePerWalk30: true,
         pricePerWalk60: true,
@@ -176,6 +177,14 @@ export async function createBooking(
         'Cuidador no encontrado o no disponible para reservas',
         'CAREGIVER_NOT_FOUND',
         'caregiverId'
+      );
+    }
+
+    // Restricción: un cuidador no puede reservarse a sí mismo
+    if (caregiver.userId === clientId) {
+      throw new ForbiddenError(
+        'No puedes reservar tus propios servicios.',
+        'SELF_BOOKING_FORBIDDEN'
       );
     }
 

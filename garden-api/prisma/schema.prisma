@@ -12,6 +12,7 @@ model User {
   email                        String                        @unique
   passwordHash                 String
   role                         UserRole
+  activeRole                   UserRole?
   firstName                    String
   lastName                     String
   phone                        String                        @unique

@@ -7,6 +7,8 @@ import logger from '../shared/logger.js';
 export interface JwtPayload {
   userId: string;
   role: string;
+  /** Rol activo en sesión (puede diferir del rol permanente durante un cambio de rol). */
+  activeRole?: string;
 }
 
 declare global {
@@ -41,7 +43,8 @@ export function requireRole(...roles: string[]) {
       next(new UnauthorizedError());
       return;
     }
-    if (!roles.includes(req.user.role)) {
+    const effectiveRole = req.user.activeRole ?? req.user.role;
+    if (!roles.includes(effectiveRole)) {
       next(new ForbiddenError('Sin permisos para esta acción'));
       return;
     }

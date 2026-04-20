@@ -46,11 +46,22 @@ class AuthService {
     if (data['refreshToken'] != null) await saveRefreshToken(data['refreshToken'] as String);
   }
 
+  Future<void> saveActiveRole(String activeRole) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('active_role', activeRole);
+  }
+
+  Future<String> getActiveRole() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('active_role') ?? '';
+  }
+
   Future<void> clearToken() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
     await prefs.remove('refresh_token');
     await prefs.remove('user_role');
+    await prefs.remove('active_role');
     await prefs.remove('user_id');
     await prefs.remove('user_name');
     await prefs.remove('user_photo');
@@ -199,6 +210,36 @@ class AuthService {
       (data['error'] as Map<String, dynamic>?)?['message'] ??
           data['message'] ??
           'Error al registrarse',
+    );
+  }
+
+  /// Llama a POST /api/auth/switch-role.
+  /// Guarda los nuevos tokens y el active_role en SharedPreferences.
+  /// Devuelve el effectiveRole resultante ('CLIENT' o 'CAREGIVER').
+  Future<String> switchRole({required String token, required String targetRole}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/switch-role'),
+      headers: authHeaders(token),
+      body: jsonEncode({'targetRole': targetRole}),
+    ).timeout(const Duration(seconds: 15));
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode == 200 && data['success'] == true) {
+      final result = data['data'] as Map<String, dynamic>;
+      await _saveTokens(result);
+      final effectiveRole = result['activeRole'] as String? ?? targetRole;
+      // Si el activeRole coincide con el rol permanente, limpiar active_role
+      final prefs = await SharedPreferences.getInstance();
+      final permanentRole = prefs.getString('user_role') ?? '';
+      if (effectiveRole == permanentRole) {
+        await prefs.remove('active_role');
+      } else {
+        await saveActiveRole(effectiveRole);
+      }
+      return effectiveRole;
+    }
+    throw Exception(
+      (data['error'] as Map<String, dynamic>?)?['message'] ?? 'Error al cambiar de rol',
     );
   }
 
