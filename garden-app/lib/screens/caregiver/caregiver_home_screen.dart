@@ -27,6 +27,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   List<Map<String, dynamic>> _bookings = [];
   bool _isLoading = true;
   bool _setupPending = false; // true = show resume-registration screen
+  bool _conversionInProgress = false; // true = CLIENT→CAREGIVER in progress
+  bool _isAbandoningConversion = false;
   String _caregiverToken = '';
   Map<String, dynamic>? _caregiver;
   Map<String, dynamic>? _dashboardStats;
@@ -62,6 +64,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       if (mounted) context.go('/login');
       return;
     }
+    _conversionInProgress = prefs.getBool('client_conversion_in_progress') ?? false;
     // Cargar nombre desde prefs si existe
     final storedName = prefs.getString('user_name') ?? '';
     if (storedName.isNotEmpty) setState(() => _userName = storedName);
@@ -2470,6 +2473,84 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     );
   }
 
+  void _confirmAbandonConversion() {
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('¿Abandonar registro?',
+            style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 17)),
+        content: Text(
+          'Se eliminará tu perfil de cuidador en proceso y volverás a tu cuenta de dueño de mascota. Esta acción no se puede deshacer.',
+          style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancelar', style: TextStyle(color: subtextColor)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Abandonar', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed == true) _abandonConversion();
+    });
+  }
+
+  Future<void> _abandonConversion() async {
+    if (_isAbandoningConversion) return;
+    setState(() => _isAbandoningConversion = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token') ?? '';
+      final response = await http.post(
+        Uri.parse('$_baseUrl/auth/abandon-caregiver-profile'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode == 200 && data['success'] == true) {
+        final result = data['data'] as Map<String, dynamic>;
+        await prefs.setString('access_token', result['accessToken'] as String);
+        await prefs.setString('refresh_token', result['refreshToken'] as String);
+        await prefs.setString('user_role', 'CLIENT');
+        await prefs.remove('active_role');
+        await prefs.remove('client_conversion_in_progress');
+        if (!mounted) return;
+        context.go('/service-selector');
+      } else {
+        final msg = (data['error'] as Map<String, dynamic>?)?['message']
+            ?? 'No se pudo abandonar el registro. Intenta de nuevo.';
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), backgroundColor: GardenColors.error),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error de conexión. Verifica tu internet.'),
+          backgroundColor: GardenColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isAbandoningConversion = false);
+    }
+  }
+
   Widget _buildResumeRegistrationScreen(bool isDark) {
     final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
@@ -2539,7 +2620,11 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                       final prefs = await SharedPreferences.getInstance();
                       await prefs.setBool('caregiver_setup_complete', false);
                       if (context.mounted) {
-                        context.go('/caregiver/onboarding', extra: {'resumeMode': true});
+                        if (_conversionInProgress) {
+                          context.go('/caregiver/onboarding', extra: {'clientConversionMode': true});
+                        } else {
+                          context.go('/caregiver/onboarding', extra: {'resumeMode': true});
+                        }
                       }
                     },
                     child: const Row(
@@ -2556,6 +2641,28 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                if (_conversionInProgress)
+                  _isAbandoningConversion
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : TextButton(
+                          onPressed: _confirmAbandonConversion,
+                          child: Text(
+                            'Abandonar registro',
+                            style: TextStyle(
+                              color: GardenColors.error,
+                              fontSize: 14,
+                              decoration: TextDecoration.underline,
+                              decorationColor: GardenColors.error,
+                            ),
+                          ),
+                        ),
                 TextButton(
                   onPressed: () async {
                     final prefs = await SharedPreferences.getInstance();

@@ -124,6 +124,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     // Pre-fill step 0 from existing user data, then jump to step 1.
     if (token.isNotEmpty && widget.clientConversionMode) {
       await _prefillFromExistingUser(token);
+      await _tryPopulateCaregiverProfile(token);
       setState(() => _currentStep = 1);
       return;
     }
@@ -162,6 +163,22 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             } catch (_) {}
           }
         });
+      }
+    } catch (_) {}
+  }
+
+  /// In clientConversionMode: tries to load existing CaregiverProfile data and
+  /// pre-populate wizard state (services, zone, availability, photos, price, etc.).
+  /// Does NOT change _currentStep — that is handled by _loadToken.
+  Future<void> _tryPopulateCaregiverProfile(String token) async {
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/caregiver/my-profile'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (data['success'] == true) {
+        _populateStateFromProfile(data['data'] as Map<String, dynamic>);
       }
     } catch (_) {}
   }
