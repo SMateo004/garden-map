@@ -17,14 +17,15 @@
        • default-src 'self'          — bloquea todo lo no listado explícitamente
        • script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'
                                      — Flutter web genera scripts inline y usa WASM
-       • style-src 'self' 'unsafe-inline'
-                                     — Flutter inyecta estilos inline
+       • style-src 'self' 'unsafe-inline' https://fonts.googleapis.com
+                                     — Flutter inline + Google Fonts CSS
        • img-src 'self' data: blob: https:
                                      — imágenes propias, data-URI, blobs y HTTPS externo
        • connect-src 'self' https://garden-api-1ldd.onrender.com
                        wss://garden-api-1ldd.onrender.com
                                      — llamadas a la API REST y WebSocket
-       • font-src 'self' data:       — fuentes embebidas (Flutter las carga como data-URI)
+       • font-src 'self' data: https://fonts.gstatic.com
+                                     — fuentes propias + Google Fonts (Nunito, JetBrains Mono)
        • worker-src 'self' blob:     — service worker de PWA (Flutter lo genera en blob)
        • frame-ancestors 'none'      — impide que esta página sea embebida en un iframe
        • base-uri 'self'             — impide inyección en <base href>
@@ -33,12 +34,12 @@
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
     script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval';
-    style-src 'self' 'unsafe-inline';
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     img-src 'self' data: blob: https:;
     connect-src 'self'
       https://garden-api-1ldd.onrender.com
       wss://garden-api-1ldd.onrender.com;
-    font-src 'self' data:;
+    font-src 'self' data: https://fonts.gstatic.com;
     worker-src 'self' blob:;
     frame-ancestors 'none';
     base-uri 'self';

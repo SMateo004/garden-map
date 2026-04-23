@@ -360,236 +360,286 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final isPaseo = _booking?['serviceType'] == 'PASEO';
+    final heroColors = isPaseo
+        ? [GardenColors.forest, const Color(0xFF0B5C2E)]
+        : [GardenColors.primaryDark, GardenColors.primary];
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
-        backgroundColor: surface,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: textColor),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text('Reserva confirmada', style: TextStyle(color: textColor, fontWeight: FontWeight.w700)),
-      ),
-      body: Column(
-        children: [
-          // Banner superior de estado
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: GardenColors.success.withOpacity(0.08),
-              border: Border(bottom: BorderSide(color: GardenColors.success.withOpacity(0.2))),
-            ),
-            child: Row(
+      body: CustomScrollView(
+        slivers: [
+          // ── Hero header ──────────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Stack(
               children: [
                 Container(
-                  width: 12, height: 12,
-                  decoration: const BoxDecoration(color: GardenColors.success, shape: BoxShape.circle),
+                  height: 260,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: heroColors,
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 10),
-                const Text('Lista para iniciar', style: TextStyle(color: GardenColors.success, fontWeight: FontWeight.w700, fontSize: 15)),
-                const Spacer(),
-                const GardenBadge(text: '⬡ Escrow listo', color: GardenColors.polygon, fontSize: 11),
+                // Subtle pattern overlay
+                Container(
+                  height: 260,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, Colors.black.withValues(alpha: 0.15)],
+                    ),
+                  ),
+                ),
+                SafeArea(
+                  bottom: false,
+                  child: SizedBox(
+                    height: 260,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              GestureDetector(
+                                onTap: () => Navigator.pop(context),
+                                child: Container(
+                                  width: 40, height: 40,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.15),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                                  ),
+                                  child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 17),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: GardenColors.polygon.withValues(alpha: 0.25),
+                                  borderRadius: BorderRadius.circular(GardenRadius.full),
+                                  border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 6, height: 6,
+                                      decoration: const BoxDecoration(color: Color(0xFFAA84F5), shape: BoxShape.circle),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    const Text('⬡ Escrow listo',
+                                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Spacer(),
+                          // Service type chip
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(GardenRadius.full),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(isPaseo ? '🦮' : '🏠', style: const TextStyle(fontSize: 13)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  isPaseo ? 'Paseo confirmado' : 'Hospedaje confirmado',
+                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _booking?['petName'] as String? ?? 'Tu mascota',
+                                      style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900, height: 1.05),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    if ((_booking?['petBreed'] as String? ?? '').isNotEmpty)
+                                      Text(
+                                        _booking!['petBreed'] as String,
+                                        style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 13),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(GardenRadius.lg),
+                                  border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      _booking?['startTime'] ?? _booking?['timeSlot'] ?? '—',
+                                      style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                                    ),
+                                    Text('hora de inicio',
+                                      style: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 10)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
 
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 140),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Card principal de la mascota - estilo Airbnb
+                  // ── Card: Dueño ──────────────────────────────────────────────
                   Container(
-                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
                       color: surface,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(GardenRadius.xl),
                       border: Border.all(color: borderColor),
                       boxShadow: GardenShadows.card,
                     ),
                     child: Column(
                       children: [
-                        // Header con foto del cuidador/mascota
-                        Container(
-                          height: 140,
-                          decoration: BoxDecoration(
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [GardenColors.primary.withOpacity(0.8), GardenColors.primary],
+                        Row(
+                          children: [
+                            GardenAvatar(
+                              imageUrl: null,
+                              size: 56,
+                              initials: (_booking?['clientName'] as String? ?? 'C')[0],
                             ),
-                          ),
-                          child: Stack(
-                            children: [
-                              Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      _booking?['serviceType'] == 'PASEO' ? '🦮' : '🏠',
-                                      style: const TextStyle(fontSize: 48),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      _booking?['serviceType'] == 'PASEO' ? 'Paseo' : 'Hospedaje',
-                                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              // Hora programada
-                              Positioned(
-                                top: 12, right: 12,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    _booking?['startTime'] ?? _booking?['timeSlot'] ?? '—',
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Info de la mascota
-                        Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            children: [
-                              Row(
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Container(
-                                    width: 48, height: 48,
-                                    decoration: BoxDecoration(
-                                      color: GardenColors.primary.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: const Icon(Icons.pets, color: GardenColors.primary, size: 24),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(_booking?['petName'] as String? ?? '—',
-                                          style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
-                                        Text(
-                                          '${_booking?['petBreed'] ?? ''} · ${_booking?['petAge'] != null ? '${_booking!['petAge']} años' : ''}',
-                                          style: TextStyle(color: subtextColor, fontSize: 13),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
                                   Text(
-                                    'Bs ${_booking?['totalAmount'] ?? '—'}',
-                                    style: const TextStyle(color: GardenColors.primary, fontSize: 20, fontWeight: FontWeight.w900),
+                                    _booking?['clientName'] as String? ?? 'Cliente',
+                                    style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w800),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Dueño de ${_booking?['petName'] ?? 'la mascota'}',
+                                    style: TextStyle(color: subtextColor, fontSize: 12),
                                   ),
                                 ],
                               ),
-                              if (_booking?['specialNeeds'] != null && (_booking!['specialNeeds'] as String).isNotEmpty) ...[
-                                const SizedBox(height: 12),
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: GardenColors.warning.withOpacity(0.08),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: GardenColors.warning.withOpacity(0.3)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.info_outline, size: 14, color: GardenColors.warning),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(_booking!['specialNeeds'] as String,
-                                          style: TextStyle(color: subtextColor, fontSize: 12)),
-                                      ),
-                                    ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: GardenColors.primary.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(GardenRadius.md),
+                                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text('Bs ${_booking?['totalAmount'] ?? '—'}',
+                                    style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w900, fontSize: 16)),
+                                  Text('total', style: TextStyle(color: subtextColor, fontSize: 10)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (_booking?['specialNeeds'] != null && (_booking!['specialNeeds'] as String).isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: GardenColors.warning.withValues(alpha: 0.07),
+                              borderRadius: BorderRadius.circular(GardenRadius.md),
+                              border: Border.all(color: GardenColors.warning.withValues(alpha: 0.25)),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.priority_high_rounded, size: 15, color: GardenColors.warning),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _booking!['specialNeeds'] as String,
+                                    style: const TextStyle(color: GardenColors.warning, fontSize: 12, height: 1.4, fontWeight: FontWeight.w600),
                                   ),
                                 ),
                               ],
-                            ],
+                            ),
                           ),
-                        ),
-                        Divider(height: 1, color: borderColor),
-                        // Info del dueño
-                        Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            children: [
-                              GardenAvatar(
-                                imageUrl: null,
-                                size: 44,
-                                initials: (_booking?['clientName'] as String? ?? 'C')[0],
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(_booking?['clientName'] as String? ?? 'Cliente',
-                                      style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 15)),
-                                    Text('Dueño de ${_booking?['petName'] ?? 'la mascota'}',
-                                      style: TextStyle(color: subtextColor, fontSize: 12)),
-                                  ],
-                                ),
-                              ),
-                              if (_booking?['clientPhone'] != null)
-                                Container(
-                                  width: 40, height: 40,
-                                  decoration: BoxDecoration(
-                                    color: GardenColors.success.withOpacity(0.1),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: GardenColors.success.withOpacity(0.3)),
-                                  ),
-                                  child: const Icon(Icons.phone_outlined, color: GardenColors.success, size: 18),
-                                ),
-                            ],
-                          ),
-                        ),
+                        ],
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 14),
 
-                  // Meet & Greet card (solo para HOSPEDAJE)
+                  // ── Meet & Greet (HOSPEDAJE) ─────────────────────────────────
                   if (_booking?['serviceType'] == 'HOSPEDAJE') ...[
                     _buildMeetAndGreetCard(),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                   ],
 
-                  // Recomendación GPS (solo PASEO)
-                  if (_booking?['serviceType'] == 'PASEO') ...[
+                  // ── GPS (PASEO) ──────────────────────────────────────────────
+                  if (isPaseo) ...[
                     Container(
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: GardenColors.success.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: GardenColors.success.withOpacity(0.3)),
+                        color: GardenColors.forest.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(GardenRadius.lg),
+                        border: Border.all(color: GardenColors.forest.withValues(alpha: 0.18)),
                       ),
                       child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('📍', style: TextStyle(fontSize: 22)),
+                          Container(
+                            padding: const EdgeInsets.all(9),
+                            decoration: BoxDecoration(
+                              color: GardenColors.forest.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(GardenRadius.sm),
+                            ),
+                            child: const Icon(Icons.gps_fixed_rounded, color: GardenColors.forest, size: 18),
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('Mantén el GPS activado',
-                                  style: TextStyle(color: GardenColors.success, fontWeight: FontWeight.w700, fontSize: 14)),
-                                const SizedBox(height: 4),
+                                Text('GPS activo durante el paseo',
+                                  style: TextStyle(
+                                    color: isDark ? GardenColors.darkTextPrimary : GardenColors.forest,
+                                    fontWeight: FontWeight.w700, fontSize: 13,
+                                  )),
+                                const SizedBox(height: 3),
                                 Text(
-                                  'Durante el paseo tu ubicación se comparte en tiempo real con el dueño. '
-                                  'Si desactivas el GPS, el servicio se cancelará automáticamente por razones de seguridad.',
-                                  style: TextStyle(color: subtextColor, fontSize: 12, height: 1.45),
+                                  'Tu ubicación se comparte con el dueño en tiempo real.',
+                                  style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4),
                                 ),
                               ],
                             ),
@@ -597,61 +647,92 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                   ],
 
-                  // Checklist pre-servicio
+                  // ── Checklist ────────────────────────────────────────────────
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
                       color: surface,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(GardenRadius.xl),
                       border: Border.all(color: borderColor),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Antes de iniciar', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
-                        const SizedBox(height: 12),
-                        _checkItem('Confirma la identidad del dueño', subtextColor),
-                        _checkItem('Verifica el estado de la mascota', subtextColor),
-                        _checkItem('Revisa las necesidades especiales', subtextColor),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: GardenColors.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(GardenRadius.sm),
+                              ),
+                              child: const Icon(Icons.checklist_rounded, color: GardenColors.primary, size: 16),
+                            ),
+                            const SizedBox(width: 10),
+                            Text('Antes de iniciar',
+                              style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 14)),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        _checkItem('Confirma la identidad del dueño', textColor, subtextColor),
+                        _checkItem('Verifica el estado de la mascota', textColor, subtextColor),
+                        _checkItem('Revisa las necesidades especiales', textColor, subtextColor),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 100),
                 ],
               ),
             ),
           ),
         ],
       ),
-      // Botón sticky
       bottomNavigationBar: Container(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        padding: EdgeInsets.fromLTRB(20, 14, 20, MediaQuery.of(context).padding.bottom + 20),
         decoration: BoxDecoration(
           color: surface,
           border: Border(top: BorderSide(color: borderColor)),
           boxShadow: GardenShadows.elevated,
         ),
-        child: GardenButton(
-          label: _isProcessing ? 'Iniciando...' : '🐾 Iniciar servicio ahora',
-          loading: _isProcessing,
-          color: GardenColors.success,
-          onPressed: _startService,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GardenButton(
+              label: _isProcessing ? 'Iniciando...' : (isPaseo ? '🦮  Iniciar paseo' : '🏠  Iniciar hospedaje'),
+              loading: _isProcessing,
+              color: isPaseo ? GardenColors.forest : GardenColors.primary,
+              onPressed: _startService,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'El pago en escrow se liberará al finalizar',
+              style: TextStyle(color: subtextColor, fontSize: 11),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _checkItem(String text, Color subtextColor) {
+  Widget _checkItem(String text, Color textColor, Color subtextColor) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          const Icon(Icons.check_circle_outline, size: 16, color: GardenColors.success),
-          const SizedBox(width: 10),
-          Text(text, style: TextStyle(color: subtextColor, fontSize: 13)),
+          Container(
+            width: 24, height: 24,
+            decoration: BoxDecoration(
+              color: GardenColors.success.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+              border: Border.all(color: GardenColors.success.withValues(alpha: 0.3)),
+            ),
+            child: const Icon(Icons.check_rounded, size: 14, color: GardenColors.success),
+          ),
+          const SizedBox(width: 12),
+          Text(text, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -985,63 +1066,83 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final incidents = (_booking?['serviceEvents'] as List<dynamic>? ?? [])
         .where((e) => e['type'] == 'INCIDENT').toList();
     final lastPhoto = _serviceEvents.isNotEmpty ? _serviceEvents.last : null;
+    final heroColors = isPaseo
+        ? [GardenColors.forest, const Color(0xFF0B5C2E)]
+        : [const Color(0xFF8C5200), GardenColors.primaryDark];
 
     return Scaffold(
       backgroundColor: bg,
       body: CustomScrollView(
         slivers: [
-          // ── Hero ilustración del servicio ──────────────────────────────
+          // ── Hero inmersivo ─────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Stack(
               children: [
                 Container(
-                  height: 260,
+                  height: 300,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: isPaseo
-                          ? [GardenColors.forest, const Color(0xFF1DB954)]
-                          : [const Color(0xFFBF4B00), GardenColors.primary],
+                      colors: heroColors,
                     ),
                   ),
-                  child: SafeArea(
-                    bottom: false,
+                ),
+                Container(
+                  height: 300,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, Colors.black.withValues(alpha: 0.2)],
+                    ),
+                  ),
+                ),
+                SafeArea(
+                  bottom: false,
+                  child: SizedBox(
+                    height: 300,
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const SizedBox(height: 8),
-                        // Ilustración animada
+                        const SizedBox(height: 6),
                         AnimatedBuilder(
                           animation: _pulseController,
-                          builder: (context, _) {
-                            return Transform.translate(
-                              offset: Offset(0, _pulseController.value * -4),
-                              child: isPaseo
-                                  ? _WalkIllustration(petName: _booking?['petName'] ?? '')
-                                  : _StayIllustration(petName: _booking?['petName'] ?? ''),
-                            );
-                          },
+                          builder: (context, _) => Transform.translate(
+                            offset: Offset(0, _pulseController.value * -6),
+                            child: isPaseo
+                                ? _WalkIllustration(petName: _booking?['petName'] ?? '')
+                                : _StayIllustration(petName: _booking?['petName'] ?? ''),
+                          ),
                         ),
-                        const SizedBox(height: 10),
-                        // Live badge + timer
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _PulsingDot(),
-                            const SizedBox(width: 6),
-                            Text('EN VIVO  $timerStr',
-                              style: const TextStyle(color: Colors.white, fontSize: 14,
-                                  fontWeight: FontWeight.w800, letterSpacing: 1.5)),
-                          ],
+                        const Spacer(),
+                        // Live timer badge
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 20),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.28),
+                            borderRadius: BorderRadius.circular(GardenRadius.full),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _PulsingDot(size: 8),
+                              const SizedBox(width: 10),
+                              Text(
+                                isPaseo ? 'EN VIVO  $timerStr' : 'EN CURSO  $timerStr',
+                                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 1.2),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
                 ),
-                // Botones de navegación (CLIENT: atrás→mis reservas, X→inicio)
+                // Nav buttons
                 Positioned(
-                  top: MediaQuery.of(context).padding.top + 8, left: 8,
+                  top: MediaQuery.of(context).padding.top + 10, left: 12,
                   child: GestureDetector(
                     onTap: () {
                       if (widget.role == 'CLIENT') {
@@ -1051,25 +1152,27 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       }
                     },
                     child: Container(
-                      width: 36, height: 36,
+                      width: 40, height: 40,
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.25),
+                        color: Colors.black.withValues(alpha: 0.28),
                         shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
                       ),
-                      child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                      child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 17),
                     ),
                   ),
                 ),
                 if (widget.role == 'CLIENT')
                   Positioned(
-                    top: MediaQuery.of(context).padding.top + 8, right: 8,
+                    top: MediaQuery.of(context).padding.top + 10, right: 12,
                     child: GestureDetector(
                       onTap: () => context.go('/marketplace'),
                       child: Container(
-                        width: 36, height: 36,
+                        width: 40, height: 40,
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.25),
+                          color: Colors.black.withValues(alpha: 0.28),
                           shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
                         ),
                         child: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
                       ),
@@ -1081,53 +1184,141 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
-                  // ── Alerta de incidente (si hay) ───────────────────────
+                  // ── Alerta incidente ───────────────────────────────────────
                   if (incidents.isNotEmpty) ...[
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: GardenColors.warning.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4)),
+                        color: GardenColors.warning.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(GardenRadius.lg),
+                        border: Border.all(color: GardenColors.warning.withValues(alpha: 0.35)),
                       ),
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 20),
+                          Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              color: GardenColors.warning.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(GardenRadius.sm),
+                            ),
+                            child: const Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 17),
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: Text(
-                              '⚠️ Tu cuidador reportó un incidente: "${incidents.last['description'] ?? ''}"',
-                              style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Incidente reportado',
+                                  style: TextStyle(color: GardenColors.warning, fontSize: 13, fontWeight: FontWeight.w700)),
+                                const SizedBox(height: 3),
+                                Text(
+                                  incidents.last['description']?.toString() ?? '',
+                                  style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                   ],
 
-                  // ── Card mascota ────────────────────────────────────────
+                  // ── Card: Cuidador ──────────────────────────────────────────
+                  GestureDetector(
+                    onTap: _showServiceInfoSheet,
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: surface,
+                        borderRadius: BorderRadius.circular(GardenRadius.xl),
+                        border: Border.all(color: borderColor),
+                        boxShadow: GardenShadows.card,
+                      ),
+                      child: Row(
+                        children: [
+                          GardenAvatar(
+                            imageUrl: _booking?['caregiverPhoto'] as String?,
+                            size: 54,
+                            initials: (_booking?['caregiverName'] as String? ?? 'C')[0],
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _booking?['caregiverName'] as String? ?? 'Cuidador',
+                                  style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.star_rounded, color: GardenColors.star, size: 13),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      _booking?['caregiverRating'] != null
+                                          ? '${(_booking!['caregiverRating'] as num).toStringAsFixed(1)} · Tu cuidador'
+                                          : 'Nuevo · Tu cuidador',
+                                      style: TextStyle(color: subtextColor, fontSize: 12),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: GardenColors.success.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(GardenRadius.full),
+                                  border: Border.all(color: GardenColors.success.withValues(alpha: 0.25)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _PulsingDot(size: 6, color: GardenColors.success),
+                                    const SizedBox(width: 5),
+                                    const Text('Activo',
+                                      style: TextStyle(color: GardenColors.success, fontSize: 11, fontWeight: FontWeight.w700)),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Icon(Icons.chevron_right_rounded, color: subtextColor, size: 18),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // ── Card: Mascota + Escrow ──────────────────────────────────
                   Container(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
                       color: surface,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(GardenRadius.lg),
                       border: Border.all(color: borderColor),
                     ),
                     child: Row(
                       children: [
                         Container(
-                          width: 44, height: 44,
+                          width: 42, height: 42,
                           decoration: BoxDecoration(
-                            color: GardenColors.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
+                            color: GardenColors.primary.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(GardenRadius.md),
                           ),
-                          child: const Center(child: Text('🐾', style: TextStyle(fontSize: 22))),
+                          child: const Center(child: Text('🐾', style: TextStyle(fontSize: 20))),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -1135,7 +1326,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(_booking?['petName'] as String? ?? '—',
-                                style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                                style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
                               if ((_booking?['petBreed'] as String? ?? '').isNotEmpty)
                                 Text(_booking!['petBreed'] as String,
                                   style: TextStyle(color: subtextColor, fontSize: 12)),
@@ -1143,80 +1334,25 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                           decoration: BoxDecoration(
-                            color: GardenColors.success.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(20),
+                            color: GardenColors.polygon.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(GardenRadius.sm),
+                            border: Border.all(color: GardenColors.polygon.withValues(alpha: 0.2)),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _PulsingDot(size: 6, color: GardenColors.success),
-                              const SizedBox(width: 5),
-                              Text('Cuidado activo',
-                                style: TextStyle(color: GardenColors.success, fontSize: 11, fontWeight: FontWeight.w700)),
-                            ],
-                          ),
+                          child: const Text('⬡ Escrow',
+                            style: TextStyle(color: GardenColors.polygon, fontSize: 11, fontWeight: FontWeight.w600)),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-
-                  // ── Card cuidador (tappable → info completa) ────────────
-                  GestureDetector(
-                    onTap: _showServiceInfoSheet,
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: surface,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: Row(
-                        children: [
-                          GardenAvatar(
-                            imageUrl: _booking?['caregiverPhoto'] as String?,
-                            size: 44,
-                            initials: (_booking?['caregiverName'] as String? ?? 'C')[0],
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(_booking?['caregiverName'] as String? ?? 'Cuidador',
-                                  style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.star_rounded, color: GardenColors.star, size: 13),
-                                    const SizedBox(width: 3),
-                                    Text(
-                                      _booking?['caregiverRating'] != null
-                                          ? (_booking!['caregiverRating'] as num).toStringAsFixed(1)
-                                          : 'Nuevo',
-                                      style: TextStyle(color: subtextColor, fontSize: 12),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text('· Tu cuidador',
-                                      style: TextStyle(color: subtextColor, fontSize: 12)),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          Icon(Icons.chevron_right_rounded, color: subtextColor),
-                        ],
-                      ),
-                    ),
-                  ),
                   const SizedBox(height: 20),
 
-                  // ── GPS: ver dónde está la mascota (solo PASEO) ──────────
+                  // ── Acciones GPS/Extensión (PASEO) ──────────────────────────
                   if (_booking?['serviceType'] == 'PASEO') ...[
                     GardenButton(
-                      label: '🗺️ Ver dónde está ${_booking?['petName'] ?? 'mi mascota'}',
-                      color: GardenColors.success,
+                      label: '🗺️  Ver dónde está ${_booking?['petName'] ?? 'mi mascota'}',
+                      color: GardenColors.forest,
                       onPressed: () => Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -1230,8 +1366,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    // ── Ampliar tiempo ──────────────────────────────────────
+                    const SizedBox(height: 10),
                     OutlinedButton.icon(
                       onPressed: _loadingExtension ? null : _showExtendTimeSheet,
                       icon: _loadingExtension
@@ -1239,81 +1374,102 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                           : const Icon(Icons.add_alarm_rounded, size: 18),
                       label: Text(
                         _allowedExtensionMinutes == 0
-                            ? 'Ampliar tiempo'
+                            ? 'Ampliar tiempo del paseo'
                             : 'Ampliar tiempo (hasta $_allowedExtensionMinutes min)',
                         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                       ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: GardenColors.primary,
                         side: const BorderSide(color: GardenColors.primary),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        minimumSize: const Size(double.infinity, 44),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.md)),
+                        minimumSize: const Size(double.infinity, 48),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                   ],
 
-                  // ── Fotos del servicio (galería deslizable) ─────────────
+                  // ── Fotos del servicio ──────────────────────────────────────
                   if (_serviceEvents.isNotEmpty) ...[
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Fotos del servicio', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
-                        Text(
-                          '${_serviceEvents.length} foto${_serviceEvents.length == 1 ? '' : 's'}',
-                          style: TextStyle(color: subtextColor, fontSize: 12),
+                        Text('Fotos del servicio',
+                          style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: GardenColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(GardenRadius.full),
+                          ),
+                          child: Text(
+                            '${_serviceEvents.length} foto${_serviceEvents.length == 1 ? '' : 's'}',
+                            style: const TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w700),
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     SizedBox(
-                      height: 200,
+                      height: 220,
                       child: PageView.builder(
                         itemCount: _serviceEvents.length,
                         itemBuilder: (ctx, i) {
                           final photo = _serviceEvents[i];
                           return GestureDetector(
                             onTap: () => _showPhotoFullscreen(photo['photoUrl'] as String),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: Stack(
-                                children: [
-                                  Image.network(
-                                    fixImageUrl(photo['photoUrl'] as String),
-                                    width: double.infinity,
-                                    height: 200,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      height: 200,
-                                      color: GardenColors.primary.withValues(alpha: 0.08),
-                                      child: const Center(child: Icon(Icons.image_outlined, color: GardenColors.primary, size: 40)),
-                                    ),
-                                  ),
-                                  Positioned(
-                                    bottom: 10, right: 10,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withValues(alpha: 0.55),
-                                        borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 2),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(GardenRadius.xl),
+                                child: Stack(
+                                  children: [
+                                    Image.network(
+                                      fixImageUrl(photo['photoUrl'] as String),
+                                      width: double.infinity, height: 220, fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        height: 220,
+                                        color: GardenColors.primary.withValues(alpha: 0.08),
+                                        child: const Center(child: Icon(Icons.image_outlined, color: GardenColors.primary, size: 40)),
                                       ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (_serviceEvents.length > 1) ...[
-                                            Text('${i + 1}/${_serviceEvents.length}',
-                                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
-                                            const SizedBox(width: 6),
+                                    ),
+                                    Positioned(
+                                      bottom: 0, left: 0, right: 0,
+                                      child: Container(
+                                        padding: const EdgeInsets.fromLTRB(14, 40, 14, 14),
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.bottomCenter,
+                                            end: Alignment.topCenter,
+                                            colors: [Colors.black.withValues(alpha: 0.65), Colors.transparent],
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                const Icon(Icons.access_time_rounded, color: Colors.white, size: 12),
+                                                const SizedBox(width: 4),
+                                                Text(_formatEventTime(photo['timestamp'] as String? ?? ''),
+                                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                                              ],
+                                            ),
+                                            if (_serviceEvents.length > 1)
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black.withValues(alpha: 0.45),
+                                                  borderRadius: BorderRadius.circular(GardenRadius.full),
+                                                ),
+                                                child: Text('${i + 1}/${_serviceEvents.length}',
+                                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+                                              ),
                                           ],
-                                          const Icon(Icons.access_time, color: Colors.white, size: 11),
-                                          const SizedBox(width: 4),
-                                          Text(_formatEventTime(photo['timestamp'] as String? ?? ''),
-                                            style: const TextStyle(color: Colors.white, fontSize: 11)),
-                                        ],
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           );
@@ -1323,21 +1479,38 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     const SizedBox(height: 20),
                   ],
 
-                  // ── Cuando no hay fotos aún ─────────────────────────────
+                  // ── Sin fotos aún ───────────────────────────────────────────
                   if (lastPhoto == null) ...[
                     Container(
-                      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         color: GardenColors.primary.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.15)),
+                        borderRadius: BorderRadius.circular(GardenRadius.xl),
+                        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.12)),
                       ),
                       child: Row(
                         children: [
-                          const Text('📸', style: TextStyle(fontSize: 22)),
-                          const SizedBox(width: 12),
-                          Expanded(child: Text('El cuidador te enviará fotos pronto',
-                            style: TextStyle(color: subtextColor, fontSize: 13))),
+                          Container(
+                            width: 48, height: 48,
+                            decoration: BoxDecoration(
+                              color: GardenColors.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(GardenRadius.md),
+                            ),
+                            child: const Center(child: Text('📸', style: TextStyle(fontSize: 22))),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Esperando fotos',
+                                  style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
+                                const SizedBox(height: 3),
+                                Text('El cuidador te enviará fotos durante el servicio',
+                                  style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4)),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1350,9 +1523,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         ],
       ),
 
-      // ── Botones sticky ──────────────────────────────────────────────────
+      // ── Bottom action bar ──────────────────────────────────────────────────
       bottomNavigationBar: Container(
-        padding: EdgeInsets.fromLTRB(20, 14, 20, MediaQuery.of(context).padding.bottom + 14),
+        padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 14),
         decoration: BoxDecoration(
           color: surface,
           border: Border(top: BorderSide(color: borderColor)),
@@ -1360,52 +1533,34 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         ),
         child: Row(
           children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.info_outline_rounded, size: 18),
-                label: const Text('Info'),
-                onPressed: _showServiceInfoSheet,
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  side: BorderSide(color: borderColor),
-                  foregroundColor: textColor,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
+            _BottomActionBtn(
+              icon: Icons.info_outline_rounded,
+              label: 'Info',
+              onTap: _showServiceInfoSheet,
+              color: textColor,
+              bg: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
             ),
             const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
-                label: const Text('Foto', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                onPressed: _requestPhotoFromCaregiver,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: GardenColors.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
-                ),
-              ),
+            _BottomActionBtn(
+              icon: Icons.camera_alt_rounded,
+              label: 'Pedir foto',
+              onTap: _requestPhotoFromCaregiver,
+              color: Colors.white,
+              bg: GardenColors.primary,
             ),
             const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18, color: Colors.white),
-                label: const Text('Chat', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                onPressed: () => Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => ChatScreen(
-                    bookingId: widget.bookingId,
-                    otherPersonName: _booking?['caregiverName'] ?? 'Cuidador',
-                    token: _token,
-                  ),
-                )),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: GardenColors.secondary,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
+            _BottomActionBtn(
+              icon: Icons.chat_bubble_outline_rounded,
+              label: 'Chat',
+              onTap: () => Navigator.push(context, MaterialPageRoute(
+                builder: (_) => ChatScreen(
+                  bookingId: widget.bookingId,
+                  otherPersonName: _booking?['caregiverName'] ?? 'Cuidador',
+                  token: _token,
                 ),
-              ),
+              )),
+              color: Colors.white,
+              bg: GardenColors.forest,
             ),
           ],
         ),
@@ -1417,109 +1572,232 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   Widget _buildCaregiverInProgress() {
     final isDark = themeNotifier.isDark;
     final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
     final isHospedaje = _booking?['serviceType'] == 'HOSPEDAJE';
     final timerStr = isHospedaje
-        ? '${_elapsed.inHours}h'
+        ? '${_elapsed.inHours}h ${(_elapsed.inMinutes % 60).toString().padLeft(2,'0')}m'
         : '${_elapsed.inHours.toString().padLeft(2,'0')}:${(_elapsed.inMinutes%60).toString().padLeft(2,'0')}:${(_elapsed.inSeconds%60).toString().padLeft(2,'0')}';
-    final timerLabel = isHospedaje ? 'cuidando' : 'activo';
+    final minPhotos = isHospedaje ? 4 : 2;
+    final photoCount = _serviceEvents.length;
+    final isPhotoMet = photoCount >= minPhotos;
+    final photoProgress = (photoCount / minPhotos).clamp(0.0, 1.0);
 
     return Scaffold(
       backgroundColor: bg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // ── Header compacto con timer ────────────────────────────────
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isHospedaje
-                      ? [const Color(0xFFBF4B00), GardenColors.primary]
-                      : [GardenColors.forest, GardenColors.success],
-                ),
-              ),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            _PulsingDot(size: 7),
-                            const SizedBox(width: 6),
-                            Text(_booking?['petName'] as String? ?? 'Servicio activo',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
-                          ],
-                        ),
-                        Text('Dueño: ${_booking?['clientName'] ?? '—'}',
-                          style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                  // Timer
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(timerStr,
-                          style: TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.w900,
-                            fontSize: isHospedaje ? 20 : 16, letterSpacing: 1)),
-                        if (isHospedaje)
-                          Text(timerLabel,
-                            style: const TextStyle(color: Colors.white70, fontSize: 10)),
-                      ],
-                    ),
-                  ),
-                ],
+      body: Column(
+        children: [
+          // ── Header inmersivo ──────────────────────────────────────────────
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: isHospedaje
+                    ? [const Color(0xFF7A3200), GardenColors.primaryDark]
+                    : [GardenColors.forest, const Color(0xFF0B5C2E)],
               ),
             ),
-
-            // ── Contenido scrollable ────────────────────────────────────
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 22),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Acciones ─────────────────────────────────────────
-                    Text('Acciones rápidas', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
-                    const SizedBox(height: 12),
-                    GridView.count(
-                      crossAxisCount: 2,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: 1.35,
+                    // Top row: back + escrow
+                    Row(
                       children: [
-                        _ActionTile(
+                        GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: Container(
+                            width: 40, height: 40,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                            ),
+                            child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 16),
+                          ),
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: GardenColors.polygon.withValues(alpha: 0.25),
+                            borderRadius: BorderRadius.circular(GardenRadius.full),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 6, height: 6,
+                                decoration: const BoxDecoration(color: Color(0xFFAA84F5), shape: BoxShape.circle),
+                              ),
+                              const SizedBox(width: 6),
+                              const Text('⬡ Escrow activo',
+                                style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    // Pet name + timer
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  _PulsingDot(size: 8),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(
+                                      _booking?['petName'] as String? ?? 'Servicio activo',
+                                      style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, height: 1.1),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Dueño: ${_booking?['clientName'] ?? '—'}',
+                                style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.25),
+                            borderRadius: BorderRadius.circular(GardenRadius.lg),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                timerStr,
+                                style: TextStyle(
+                                  color: Colors.white, fontWeight: FontWeight.w900,
+                                  fontSize: isHospedaje ? 16 : 17, letterSpacing: 0.5,
+                                ),
+                              ),
+                              Text(
+                                isHospedaje ? 'cuidando' : 'en curso',
+                                style: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 10),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── Contenido scrollable ──────────────────────────────────────────
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Progreso fotos (barra compacta arriba) ──────────────
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: surface,
+                      borderRadius: BorderRadius.circular(GardenRadius.lg),
+                      border: Border.all(color: isPhotoMet
+                          ? GardenColors.success.withValues(alpha: 0.3)
+                          : borderColor),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('Fotos del servicio',
+                                    style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
+                                  Text(
+                                    '$photoCount / $minPhotos',
+                                    style: TextStyle(
+                                      color: isPhotoMet ? GardenColors.success : GardenColors.warning,
+                                      fontWeight: FontWeight.w800, fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(GardenRadius.full),
+                                child: LinearProgressIndicator(
+                                  value: photoProgress,
+                                  minHeight: 5,
+                                  backgroundColor: isDark ? GardenColors.darkBorder : GardenColors.lightBorder,
+                                  valueColor: AlwaysStoppedAnimation(
+                                    isPhotoMet ? GardenColors.success : GardenColors.warning,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                isPhotoMet
+                                    ? '✓ Requisito cumplido — puedes finalizar'
+                                    : 'Faltan ${minPhotos - photoCount} foto${minPhotos - photoCount > 1 ? 's' : ''} para finalizar',
+                                style: TextStyle(
+                                  color: isPhotoMet ? GardenColors.success : subtextColor,
+                                  fontSize: 11,
+                                  fontWeight: isPhotoMet ? FontWeight.w600 : FontWeight.w400,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ── Grid de acciones ─────────────────────────────────────
+                  Text('Acciones', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ActionTile(
                           icon: Icons.camera_alt_rounded,
-                          label: _isSendingPhoto ? 'Enviando...' : 'Enviar foto',
-                          sublabel: 'Al dueño',
+                          label: _isSendingPhoto ? 'Enviando...' : 'Foto',
+                          sublabel: 'Enviar al dueño',
                           color: GardenColors.primary,
                           onTap: _isSendingPhoto ? () {} : _sendServicePhoto,
                           isDark: isDark,
                           loading: _isSendingPhoto,
                         ),
-                        _ActionTile(
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _ActionTile(
                           icon: Icons.chat_bubble_rounded,
                           label: 'Chat',
                           sublabel: 'Con el dueño',
-                          color: GardenColors.secondary,
+                          color: GardenColors.forest,
                           onTap: () => Navigator.push(context, MaterialPageRoute(
                             builder: (_) => ChatScreen(
                               bookingId: widget.bookingId,
@@ -1529,15 +1807,25 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                           )),
                           isDark: isDark,
                         ),
-                        _ActionTile(
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ActionTile(
                           icon: Icons.warning_amber_rounded,
-                          label: 'Reportar',
-                          sublabel: 'Incidente',
+                          label: 'Incidente',
+                          sublabel: 'Reportar',
                           color: GardenColors.warning,
                           onTap: _showReportDialog,
                           isDark: isDark,
                         ),
-                        _ActionTile(
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _ActionTile(
                           icon: Icons.check_circle_rounded,
                           label: 'Finalizar',
                           sublabel: 'Servicio',
@@ -1545,182 +1833,131 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                           onTap: _showFinishConfirmation,
                           isDark: isDark,
                         ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 22),
+
+                  // ── Fotos enviadas ───────────────────────────────────────
+                  if (_serviceEvents.isNotEmpty) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Fotos enviadas',
+                          style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: GardenColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(GardenRadius.full),
+                          ),
+                          child: Text('${_serviceEvents.length}',
+                            style: const TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w700)),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-
-                    const SizedBox(height: 16),
-
-                    // ── Fotos enviadas ────────────────────────────────────
-                    Builder(builder: (_) {
-                      final minPhotos = isHospedaje ? 4 : 2;
-                      final photoCount = _serviceEvents.length;
-                      final isPhotoMet = photoCount >= minPhotos;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: isPhotoMet
-                              ? GardenColors.success.withValues(alpha: 0.08)
-                              : GardenColors.warning.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isPhotoMet
-                                ? GardenColors.success.withValues(alpha: 0.3)
-                                : GardenColors.warning.withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              isPhotoMet ? Icons.check_circle_rounded : Icons.camera_alt_rounded,
-                              color: isPhotoMet ? GardenColors.success : GardenColors.warning,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                isPhotoMet
-                                    ? 'Fotos enviadas: $photoCount/$minPhotos ✓'
-                                    : 'Fotos enviadas: $photoCount/$minPhotos — faltan ${minPhotos - photoCount}',
-                                style: TextStyle(
-                                  color: isPhotoMet ? GardenColors.success : GardenColors.warning,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 110,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _serviceEvents.length,
+                        itemBuilder: (_, i) {
+                          final e = _serviceEvents[_serviceEvents.length - 1 - i];
+                          final url = e['photoUrl']?.toString() ?? '';
+                          if (url.isEmpty) return const SizedBox();
+                          return GestureDetector(
+                            onTap: () => _showPhotoFullscreen(url),
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 10),
+                              width: 110,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(GardenRadius.lg),
+                                boxShadow: GardenShadows.card,
                               ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                    if (_serviceEvents.isNotEmpty) ...[
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Fotos enviadas', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
-                          Text('${_serviceEvents.length}', style: TextStyle(color: subtextColor, fontSize: 13)),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        height: 120,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _serviceEvents.length,
-                          itemBuilder: (_, i) {
-                            final e = _serviceEvents[_serviceEvents.length - 1 - i];
-                            final url = e['photoUrl']?.toString() ?? '';
-                            if (url.isEmpty) return const SizedBox();
-                            return GestureDetector(
-                              onTap: () => _showPhotoFullscreen(url),
-                              child: Container(
-                                margin: const EdgeInsets.only(right: 10),
-                                width: 120,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: GardenShadows.card,
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Stack(
-                                    fit: StackFit.expand,
-                                    children: [
-                                      Image.network(fixImageUrl(url), fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) => Container(
-                                          color: GardenColors.primary.withValues(alpha: 0.1),
-                                          child: const Icon(Icons.image_outlined, color: GardenColors.primary),
-                                        )),
-                                      Positioned(
-                                        bottom: 5, left: 5,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withValues(alpha: 0.5),
-                                            borderRadius: BorderRadius.circular(5),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(GardenRadius.lg),
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    Image.network(fixImageUrl(url), fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        color: GardenColors.primary.withValues(alpha: 0.1),
+                                        child: const Icon(Icons.image_outlined, color: GardenColors.primary),
+                                      )),
+                                    Positioned(
+                                      bottom: 0, left: 0, right: 0,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.bottomCenter,
+                                            end: Alignment.topCenter,
+                                            colors: [Colors.black.withValues(alpha: 0.6), Colors.transparent],
                                           ),
-                                          child: Text(_formatEventTime(e['timestamp'] as String? ?? ''),
-                                            style: const TextStyle(color: Colors.white, fontSize: 9)),
                                         ),
+                                        child: Text(_formatEventTime(e['timestamp'] as String? ?? ''),
+                                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
-
-                    // ── Log de incidentes ─────────────────────────────────
-                    Builder(builder: (_) {
-                      final incidents = (_booking?['serviceEvents'] as List<dynamic>? ?? [])
-                          .where((e) => e['type'] == 'INCIDENT').toList();
-                      if (incidents.isEmpty) return const SizedBox();
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Incidentes reportados',
-                            style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
-                          const SizedBox(height: 10),
-                          ...incidents.map((inc) => Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: GardenColors.warning.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: GardenColors.warning.withValues(alpha: 0.3)),
                             ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 16),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(inc['description'] as String? ?? '—',
-                                        style: TextStyle(color: textColor, fontSize: 13)),
-                                      Text(_formatEventTime(inc['timestamp'] as String? ?? ''),
-                                        style: TextStyle(color: subtextColor, fontSize: 11)),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )),
-                          const SizedBox(height: 8),
-                        ],
-                      );
-                    }),
-
-                    // ── Badge blockchain compacto ─────────────────────────
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: GardenColors.polygon.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: GardenColors.polygon.withValues(alpha: 0.25)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('⬡', style: TextStyle(color: GardenColors.polygon, fontSize: 13)),
-                          const SizedBox(width: 6),
-                          Text('Escrow activo · Pago protegido',
-                            style: TextStyle(color: GardenColors.polygon, fontSize: 12, fontWeight: FontWeight.w600)),
-                        ],
+                          );
+                        },
                       ),
                     ),
+                    const SizedBox(height: 20),
                   ],
-                ),
+
+                  // ── Incidentes reportados ────────────────────────────────
+                  Builder(builder: (_) {
+                    final incidents = (_booking?['serviceEvents'] as List<dynamic>? ?? [])
+                        .where((e) => e['type'] == 'INCIDENT').toList();
+                    if (incidents.isEmpty) return const SizedBox();
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Incidentes reportados',
+                          style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+                        const SizedBox(height: 10),
+                        ...incidents.map((inc) => Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: GardenColors.warning.withValues(alpha: 0.07),
+                            borderRadius: BorderRadius.circular(GardenRadius.md),
+                            border: Border.all(color: GardenColors.warning.withValues(alpha: 0.25)),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 15),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(inc['description'] as String? ?? '—',
+                                      style: TextStyle(color: textColor, fontSize: 13)),
+                                    const SizedBox(height: 2),
+                                    Text(_formatEventTime(inc['timestamp'] as String? ?? ''),
+                                      style: TextStyle(color: subtextColor, fontSize: 11)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        )),
+                      ],
+                    );
+                  }),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1902,37 +2139,134 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   // --- VISTA: COMPLETED ---
   Widget _buildCompletedView() {
     final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final isCaregiver = widget.role == 'CAREGIVER';
 
     return Scaffold(
-      backgroundColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
+      backgroundColor: bg,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(28, 40, 28, 40),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 100, height: 100,
-                decoration: BoxDecoration(
-                  color: GardenColors.success.withOpacity(0.1),
-                  shape: BoxShape.circle,
+              // ── Ilustración de éxito ───────────────────────────────────
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 700),
+                curve: Curves.elasticOut,
+                builder: (_, v, child) => Transform.scale(scale: v, child: child),
+                child: Container(
+                  width: 110, height: 110,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [GardenColors.success.withValues(alpha: 0.15), GardenColors.primary.withValues(alpha: 0.08)],
+                    ),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: GardenColors.success.withValues(alpha: 0.3), width: 2),
+                  ),
+                  child: const Center(child: Text('🏆', style: TextStyle(fontSize: 52))),
                 ),
-                child: const Center(child: Text('🏆', style: TextStyle(fontSize: 50))),
+              ),
+              const SizedBox(height: 28),
+              Text(
+                '¡Servicio Completado!',
+                style: TextStyle(color: textColor, fontSize: 26, fontWeight: FontWeight.w900, height: 1.1),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                isCaregiver
+                    ? 'Excelente trabajo. El pago será liberado automáticamente.'
+                    : 'Gracias por confiar en GARDEN. ¡Tu mascota fue cuidada con amor!',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: subtextColor, fontSize: 14, height: 1.55),
               ),
               const SizedBox(height: 32),
-              Text('Servicio Completado',
-                  style: TextStyle(color: textColor, fontSize: 26, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 12),
-              Text('El servicio ha finalizado con éxito. Gracias por confiar en GARDEN para el cuidado de tu mascota.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: subtextColor, fontSize: 15, height: 1.5)),
-              const SizedBox(height: 48),
+
+              // ── Resumen del servicio ───────────────────────────────────
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: surface,
+                  borderRadius: BorderRadius.circular(GardenRadius.xl),
+                  border: Border.all(color: borderColor),
+                  boxShadow: GardenShadows.card,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Resumen',
+                      style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+                    const SizedBox(height: 14),
+                    _InfoRow('Mascota', _booking?['petName'] as String? ?? '—', textColor, subtextColor),
+                    _InfoRow('Servicio', _booking?['serviceType'] == 'PASEO' ? '🦮 Paseo' : '🏠 Hospedaje', textColor, subtextColor),
+                    _InfoRow('Total', 'Bs ${_booking?['totalAmount'] ?? '—'}', textColor, subtextColor),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: GardenColors.success.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(GardenRadius.full),
+                        border: Border.all(color: GardenColors.success.withValues(alpha: 0.25)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.check_circle_rounded, size: 13, color: GardenColors.success),
+                          const SizedBox(width: 6),
+                          const Text('Servicio verificado por GARDEN',
+                            style: TextStyle(color: GardenColors.success, fontSize: 11, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // ── Escrow badge ─────────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: GardenColors.polygon.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(GardenRadius.lg),
+                  border: Border.all(color: GardenColors.polygon.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    const Text('⬡', style: TextStyle(fontSize: 20, color: GardenColors.polygon)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Pago en Polygon Amoy',
+                            style: TextStyle(color: GardenColors.polygon, fontWeight: FontWeight.w700, fontSize: 13)),
+                          const SizedBox(height: 2),
+                          Text(
+                            isCaregiver
+                                ? 'Los fondos se liberarán a tu billetera automáticamente.'
+                                : 'El smart contract procesó el pago de forma segura.',
+                            style: TextStyle(color: subtextColor, fontSize: 11, height: 1.4),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 40),
               GardenButton(
-                label: widget.role == 'CAREGIVER' ? 'Volver al panel' : 'Volver a Mis Reservas',
+                label: isCaregiver ? 'Volver al panel' : 'Volver a Mis Reservas',
                 onPressed: () => context.go(
-                  widget.role == 'CAREGIVER' ? '/caregiver/home' : '/marketplace',
+                  isCaregiver ? '/caregiver/home' : '/marketplace',
                 ),
               ),
             ],
@@ -2407,31 +2741,55 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
     final canSubmit = _surveyRating > 0 && _surveyCommentController.text.trim().isNotEmpty;
+    final ratingLabels = ['', 'Terrible', 'Malo', 'Regular', 'Bueno', '¡Excelente!'];
+    final starColor = _surveyRating >= 4
+        ? GardenColors.star
+        : _surveyRating >= 3
+            ? GardenColors.warning
+            : GardenColors.error;
 
     return Scaffold(
       backgroundColor: bg,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+        padding: EdgeInsets.fromLTRB(24, MediaQuery.of(context).padding.top + 24, 24, 48),
         child: Column(
           children: [
-            const SizedBox(height: 20),
-            const Text('🐾', style: TextStyle(fontSize: 60)),
-            const SizedBox(height: 24),
-            Text('¿Qué tal estuvo el servicio?',
-                style: TextStyle(color: textColor, fontSize: 26, fontWeight: FontWeight.w900),
-                textAlign: TextAlign.center),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                'Tu calificación es clave para que el Smart Contract libere el pago al cuidador.',
-                style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
-                textAlign: TextAlign.center,
+            // ── Header ─────────────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    GardenColors.primary.withValues(alpha: 0.08),
+                    GardenColors.lime.withValues(alpha: 0.25),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(GardenRadius.xl),
+                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.14)),
+              ),
+              child: Column(
+                children: [
+                  const Text('🐾', style: TextStyle(fontSize: 52)),
+                  const SizedBox(height: 16),
+                  Text(
+                    '¿Qué tal estuvo el servicio?',
+                    style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w900, height: 1.2),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Tu calificación activa el smart contract para liberar el pago al cuidador.',
+                    style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 48),
+            const SizedBox(height: 32),
 
-            // Selector de estrellas gigante con feedback visual
+            // ── Selector de estrellas ──────────────────────────────────
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(5, (index) {
@@ -2440,17 +2798,17 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 return GestureDetector(
                   onTap: () => setState(() => _surveyRating = ratingValue),
                   child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 1.0, end: isSelected ? 1.2 : 1.0),
-                    duration: const Duration(milliseconds: 200),
+                    tween: Tween(begin: 1.0, end: isSelected ? 1.22 : 1.0),
+                    duration: const Duration(milliseconds: 180),
                     builder: (context, scale, child) {
                       return Transform.scale(
                         scale: scale,
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 5),
                           child: Icon(
                             isSelected ? Icons.star_rounded : Icons.star_outline_rounded,
-                            color: isSelected ? GardenColors.star : subtextColor.withOpacity(0.3),
-                            size: 52,
+                            color: isSelected ? GardenColors.star : borderColor,
+                            size: 54,
                           ),
                         ),
                       );
@@ -2460,79 +2818,100 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               }),
             ),
 
-            if (_surveyRating > 0) ...[
-              const SizedBox(height: 16),
-              Text(
-                ['', 'Terrible', 'Malo', 'Normal', 'Bueno', '¡Excelente!'][_surveyRating],
-                style: const TextStyle(color: GardenColors.star, fontWeight: FontWeight.w800, fontSize: 18),
-              ),
-            ],
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: _surveyRating > 0
+                  ? Padding(
+                      key: ValueKey(_surveyRating),
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(
+                        ratingLabels[_surveyRating],
+                        style: TextStyle(color: starColor, fontWeight: FontWeight.w800, fontSize: 17),
+                      ),
+                    )
+                  : const SizedBox(height: 12),
+            ),
+            const SizedBox(height: 28),
 
-            const SizedBox(height: 48),
-
-            // Caja de comentarios Premium
+            // ── Comentario ─────────────────────────────────────────────
             Container(
               decoration: BoxDecoration(
                 color: surface,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: borderColor),
+                borderRadius: BorderRadius.circular(GardenRadius.xl),
+                border: Border.all(
+                  color: _surveyCommentController.text.trim().isNotEmpty
+                      ? GardenColors.primary.withValues(alpha: 0.4)
+                      : borderColor,
+                ),
                 boxShadow: GardenShadows.card,
               ),
               child: TextField(
                 controller: _surveyCommentController,
                 maxLines: 4,
-                style: TextStyle(color: textColor),
+                style: TextStyle(color: textColor, fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: 'Cuéntanos un poco más... (requerido)',
-                  hintStyle: TextStyle(color: subtextColor.withOpacity(0.5)),
+                  hintText: 'Cuéntanos tu experiencia... (requerido)',
+                  hintStyle: TextStyle(color: subtextColor.withValues(alpha: 0.5), fontSize: 14),
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.all(20),
+                  contentPadding: const EdgeInsets.all(18),
                 ),
               ),
             ),
+            const SizedBox(height: 18),
 
-            const SizedBox(height: 32),
-
-            // Feedback visual del Smart Contract
-            if (_surveyRating > 0)
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: (_surveyRating >= 3 ? GardenColors.success : GardenColors.error).withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: (_surveyRating >= 3 ? GardenColors.success : GardenColors.error).withOpacity(0.3),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      _surveyRating >= 3 ? Icons.lock_open_rounded : Icons.lock_clock_rounded,
-                      color: _surveyRating >= 3 ? GardenColors.success : GardenColors.error,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _surveyRating >= 3
-                            ? 'El smart contract liberará el pago automáticamente.'
-                            : 'El pago se retendrá para revisión manual por seguridad.',
-                        style: TextStyle(
-                          color: _surveyRating >= 3 ? GardenColors.success : GardenColors.error,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+            // ── Feedback Smart Contract ────────────────────────────────
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: _surveyRating > 0
+                  ? Container(
+                      key: ValueKey('sc_$_surveyRating'),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: (_surveyRating >= 3 ? GardenColors.success : GardenColors.error).withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.circular(GardenRadius.lg),
+                        border: Border.all(
+                          color: (_surveyRating >= 3 ? GardenColors.success : GardenColors.error).withValues(alpha: 0.25),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _surveyRating >= 3 ? Icons.lock_open_rounded : Icons.lock_clock_rounded,
+                            color: _surveyRating >= 3 ? GardenColors.success : GardenColors.error,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _surveyRating >= 3
+                                  ? 'El smart contract liberará el pago automáticamente al cuidador.'
+                                  : 'El pago quedará retenido y un administrador revisará el caso.',
+                              style: TextStyle(
+                                color: _surveyRating >= 3 ? GardenColors.success : GardenColors.error,
+                                fontSize: 12, fontWeight: FontWeight.w600, height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
 
-            const SizedBox(height: 40),
+            const SizedBox(height: 32),
             GardenButton(
               label: _isProcessing ? 'Procesando en Blockchain...' : 'Confirmar calificación',
               loading: _isProcessing,
               onPressed: canSubmit ? () => _submitRating(_surveyRating, _surveyCommentController.text) : null,
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text('⬡ ', style: TextStyle(color: GardenColors.polygon, fontSize: 12)),
+                Text('Polygon Amoy Network',
+                  style: TextStyle(color: subtextColor, fontSize: 11)),
+              ],
             ),
           ],
         ),
@@ -2598,7 +2977,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               Container(
                 width: 80, height: 80,
                 decoration: BoxDecoration(
-                  color: (rating >= 3 ? GardenColors.success : GardenColors.warning).withOpacity(0.1),
+                  color: (rating >= 3 ? GardenColors.success : GardenColors.warning).withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Center(
@@ -2679,10 +3058,20 @@ class _WalkIllustration extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text('🦮', style: TextStyle(fontSize: 56)),
-        const SizedBox(height: 4),
-        Text(petName,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+        Container(
+          width: 96, height: 96,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.15),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+          ),
+          child: const Center(child: Text('🦮', style: TextStyle(fontSize: 48))),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          petName,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17, letterSpacing: 0.2),
+        ),
       ],
     );
   }
@@ -2696,10 +3085,20 @@ class _StayIllustration extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text('🏠', style: TextStyle(fontSize: 56)),
-        const SizedBox(height: 4),
-        Text(petName,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+        Container(
+          width: 96, height: 96,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.15),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+          ),
+          child: const Center(child: Text('🏠', style: TextStyle(fontSize: 48))),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          petName,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17, letterSpacing: 0.2),
+        ),
       ],
     );
   }
@@ -2729,14 +3128,15 @@ class _ActionTile extends StatelessWidget {
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     return GestureDetector(
       onTap: loading ? null : onTap,
-      child: Opacity(
-        opacity: loading ? 0.7 : 1.0,
+      child: AnimatedOpacity(
+        opacity: loading ? 0.65 : 1.0,
+        duration: const Duration(milliseconds: 150),
         child: Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: color.withValues(alpha: 0.2)),
+            borderRadius: BorderRadius.circular(GardenRadius.xl),
+            border: Border.all(color: color.withValues(alpha: 0.18)),
             boxShadow: GardenShadows.card,
           ),
           child: Column(
@@ -2744,23 +3144,63 @@ class _ActionTile extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 36, height: 36,
+                width: 40, height: 40,
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
+                  color: color.withValues(alpha: 0.11),
+                  borderRadius: BorderRadius.circular(GardenRadius.md),
                 ),
                 child: loading
                     ? Padding(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(9),
                         child: CircularProgressIndicator(strokeWidth: 2, color: color),
                       )
                     : Icon(icon, color: color, size: 20),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Text(label,
-                style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
+                style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 13)),
+              const SizedBox(height: 1),
               Text(sublabel,
-                style: TextStyle(color: subtextColor, fontSize: 11)),
+                style: TextStyle(color: subtextColor, fontSize: 11, height: 1.2)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomActionBtn extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color color;
+  final Color bg;
+  const _BottomActionBtn({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    required this.color,
+    required this.bg,
+  });
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(GardenRadius.lg),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 22),
+              const SizedBox(height: 4),
+              Text(label,
+                style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
             ],
           ),
         ),
