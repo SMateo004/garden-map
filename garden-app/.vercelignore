@@ -1,0 +1,28 @@
+# Platform-specific folders — only web is needed
+android/
+ios/
+linux/
+macos/
+windows/
+
+# Test files
+test/
+
+# Build artifacts (Vercel builds from source)
+build/
+
+# Dart/Flutter tooling
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+
+# IDE
+.idea/
+.vscode/
+
+# Misc
+*.log
+analyze.txt
+.DS_Store

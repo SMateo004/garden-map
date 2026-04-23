@@ -36,7 +36,6 @@ flutter pub get
 flutter build web \
   --release \
   --dart-define=API_URL="${API_URL:-https://garden-api-1ldd.onrender.com/api}" \
-  --web-renderer canvaskit \
   --pwa-strategy offline-first
 
 echo "✓ Built → build/web ($(du -sh build/web | cut -f1))"

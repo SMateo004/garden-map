@@ -34,7 +34,6 @@ yarn-error.log*
 .DS_Store
 
 # Misc
-.github/
 test_images/
 *.pdf
  *.ts.old
