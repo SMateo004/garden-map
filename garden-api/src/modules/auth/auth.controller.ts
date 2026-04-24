@@ -35,15 +35,20 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
         error: { code: 'USER_NOT_FOUND', message: 'Usuario no encontrado' }
       });
     }
-    // Para CLIENT, incluir clientProfile.isComplete para redirigir a completar perfil de mascota si aplica
+    // Para CLIENT, incluir clientProfile con datos extendidos
     if (user.role === 'CLIENT') {
       const clientProfile = await prisma.clientProfile.findUnique({
         where: { userId: user.id },
-        select: { isComplete: true },
+        select: { isComplete: true, address: true, bio: true },
       });
       return res.json({
         success: true,
-        data: { ...user, clientProfile: clientProfile ? { isComplete: clientProfile.isComplete } : null },
+        data: {
+          ...user,
+          address: clientProfile?.address ?? null,
+          bio: clientProfile?.bio ?? null,
+          clientProfile: clientProfile ? { isComplete: clientProfile.isComplete } : null,
+        },
       });
     }
 
@@ -270,28 +275,61 @@ export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: result });
 });
 
-/** PATCH /api/auth/me - Actualizar datos personales del usuario (firstName, lastName, phone, city, country). */
+/** PATCH /api/auth/me - Actualizar datos personales del usuario. */
 export const patchMe = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { firstName, lastName, phone, city, country } = req.body as {
+  const { firstName, lastName, phone, city, country, dateOfBirth, address, bio } = req.body as {
     firstName?: string; lastName?: string; phone?: string; city?: string; country?: string;
+    dateOfBirth?: string; address?: string; bio?: string;
   };
-  const data: Record<string, string | null> = {};
-  if (firstName && firstName.trim()) data.firstName = firstName.trim();
-  if (lastName && lastName.trim()) data.lastName = lastName.trim();
-  if (phone && phone.trim()) data.phone = phone.trim();
-  if (city !== undefined) data.city = city?.trim() || null;
-  if (country !== undefined) data.country = country?.trim() || null;
-  if (Object.keys(data).length === 0) {
+  const userData: Record<string, unknown> = {};
+  if (firstName && firstName.trim()) userData.firstName = firstName.trim();
+  if (lastName && lastName.trim()) userData.lastName = lastName.trim();
+  if (phone && phone.trim()) userData.phone = phone.trim();
+  if (city !== undefined) userData.city = city?.trim() || null;
+  if (country !== undefined) userData.country = country?.trim() || null;
+  if (dateOfBirth !== undefined) {
+    const d = new Date(dateOfBirth);
+    if (!isNaN(d.getTime())) userData.dateOfBirth = d;
+  }
+
+  const profileData: Record<string, unknown> = {};
+  if (address !== undefined) profileData.address = address?.trim() || null;
+  if (bio !== undefined) profileData.bio = bio?.trim() || null;
+
+  if (Object.keys(userData).length === 0 && Object.keys(profileData).length === 0) {
     return res.status(400).json({ success: false, error: { code: 'EMPTY_BODY', message: 'Nada que actualizar' } });
   }
-  const updated = await prisma.user.update({ where: { id: userId }, data });
+
+  let updated: { firstName: string; lastName: string; phone: string; city: string | null; country: string | null; dateOfBirth: Date | null } | null = null;
+  if (Object.keys(userData).length > 0) {
+    updated = await prisma.user.update({ where: { id: userId }, data: userData });
+  }
+  if (Object.keys(profileData).length > 0) {
+    await prisma.clientProfile.upsert({
+      where: { userId },
+      update: profileData,
+      create: { userId, ...profileData },
+    });
+  }
+
+  const freshUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { firstName: true, lastName: true, phone: true, city: true, country: true, dateOfBirth: true },
+  });
+  const freshProfile = await prisma.clientProfile.findUnique({
+    where: { userId },
+    select: { address: true, bio: true },
+  });
   res.json({ success: true, data: {
-    firstName: updated.firstName,
-    lastName: updated.lastName,
-    phone: updated.phone,
-    city: updated.city,
-    country: updated.country,
+    firstName: freshUser?.firstName,
+    lastName: freshUser?.lastName,
+    phone: freshUser?.phone,
+    city: freshUser?.city,
+    country: freshUser?.country,
+    dateOfBirth: freshUser?.dateOfBirth,
+    address: freshProfile?.address ?? null,
+    bio: freshProfile?.bio ?? null,
   }});
 });
 

@@ -319,6 +319,7 @@ model ClientProfile {
   userId     String   @unique
   address    String?  @db.VarChar(500)
   phone      String?  @db.VarChar(20)
+  bio        String?
   /// URL absoluta Cloudinary de la foto principal de mascota (p. ej. primera mascota).
   petPhoto   String?
   /// true = tiene al menos una mascota completa (name, size, photoUrl); permite reservas.

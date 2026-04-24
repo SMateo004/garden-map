@@ -396,6 +396,7 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
 
   const email = body.email.toLowerCase().trim();
 
+  const bodyExt = body as { dateOfBirth?: Date; bio?: string };
   const userData = {
     email,
     passwordHash,
@@ -406,6 +407,7 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
     country: 'Bolivia',
     city: 'Santa Cruz',
     isOver18: true,
+    ...(bodyExt.dateOfBirth ? { dateOfBirth: bodyExt.dateOfBirth } : {}),
   };
   logger.info('Creando User con role CLIENT', { email: userData.email, phone: userData.phone });
 
@@ -450,6 +452,7 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
     address: body.address != null && typeof body.address === 'string' && body.address.trim() !== '' ? body.address.trim() : null,
     phone: body.phone.trim(),
     isComplete: false,
+    ...(bodyExt.bio ? { bio: bodyExt.bio } : {}),
   };
   logger.info('Creando ClientProfile vacío', { userId: user.id });
 

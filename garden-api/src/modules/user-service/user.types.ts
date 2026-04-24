@@ -11,6 +11,9 @@ export interface UserPublic {
   profilePicture: string | null;
   city: string | null;
   country: string | null;
+  dateOfBirth: Date | null;
+  address: string | null;
+  bio: string | null;
   emailVerified: boolean;
   createdAt: Date;
 }
