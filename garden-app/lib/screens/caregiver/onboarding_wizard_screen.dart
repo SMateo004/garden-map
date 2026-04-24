@@ -1,14 +1,13 @@
 import 'dart:convert';
-import 'package:image_picker/image_picker.dart' as image_picker_pkg;
+import 'dart:html' as html;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
-import 'package:image_picker/image_picker.dart' show XFile;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
-import '../../theme/garden_theme.dart' show fixImageUrl, GardenColors;
+import '../../theme/garden_theme.dart' show fixImageUrl, GardenColors, GardenButton, themeNotifier;
 import '../../services/auth_service.dart';
 import '../../services/agentes_service.dart';
 import '../../widgets/precio_onboarding_card.dart';
@@ -63,12 +62,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
   // Paso 5 (nueva pos): Foto de Perfil
   String? _profilePhotoUrl;
-  XFile? _localProfilePhoto;
+  ({Uint8List bytes, String name, String mimeType})? _localProfilePhoto;
   DateTime? _dateOfBirth;
 
   // Paso 2: Fotos del hogar
   List<String> _photoUrls = [];       // URLs confirmadas en el servidor
-  List<XFile> _localPhotos = [];      // fotos seleccionadas localmente, pendientes de subir
+  List<({Uint8List bytes, String name, String mimeType})> _localPhotos = [];  // fotos en memoria, sin blob URLs
   bool _uploadingPhotos = false;
 
   // Paso 3: Tipo de servicio y zona
@@ -613,8 +612,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         try {
           final uri = Uri.parse('$_baseUrl/upload/public-single-photo');
           final request = http.MultipartRequest('POST', uri);
-          final bytes = await _localProfilePhoto!.readAsBytes();
-          String mimeType = _localProfilePhoto!.mimeType ?? '';
+          // bytes ya en memoria — sin blob URL
+          final bytes = _localProfilePhoto!.bytes;
+          String mimeType = _localProfilePhoto!.mimeType;
           if (mimeType == 'image/jpg' || mimeType.isEmpty) mimeType = 'image/jpeg';
           request.files.add(
             http.MultipartFile.fromBytes(
@@ -819,25 +819,41 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     }
   }
 
-  Future<void> _pickAndUploadPhoto() async {
-    // Usar image_picker para seleccionar fotos (compatible con web y móvil)
+  /// Abre el selector de archivos nativo del navegador usando dart:html FileReader,
+  /// evitando completamente blob URLs (que algunos navegadores bloquean por CSP).
+  void _pickAndUploadPhoto() {
     final isHospedaje = _servicesOffered.contains('HOSPEDAJE');
     final maxFotos = isHospedaje ? 6 : 4;
     if (_localPhotos.length + _photoUrls.length >= maxFotos) return;
 
-    final picked = await image_picker_pkg.ImagePicker().pickImage(
-      source: image_picker_pkg.ImageSource.gallery,
-      imageQuality: 85,
-    );
-    if (picked == null) return;
-    final bytes = await picked.readAsBytes();
-    setState(() {
-      _localPhotos.add(XFile.fromData(
-        Uint8List.fromList(bytes),
-        name: picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name,
-        mimeType: 'image/jpeg',
-      ));
+    final input = html.FileUploadInputElement()
+      ..accept = 'image/*'
+      ..style.display = 'none';
+    html.document.body!.append(input);
+
+    input.onChange.listen((_) {
+      final file = input.files?.first;
+      if (file == null) { input.remove(); return; }
+
+      final reader = html.FileReader();
+      reader.readAsArrayBuffer(file);
+
+      reader.onLoad.listen((_) {
+        if (!mounted) { input.remove(); return; }
+        final result = reader.result;
+        final Uint8List bytes = result is ByteBuffer ? result.asUint8List() : Uint8List.fromList(result as List<int>);
+        final name = file.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : file.name;
+        final mimeType = file.type.isEmpty ? 'image/jpeg' : file.type;
+        setState(() {
+          _localPhotos.add((bytes: bytes, name: name, mimeType: mimeType));
+        });
+        input.remove();
+      });
+
+      reader.onError.listen((_) => input.remove());
     });
+
+    input.click();
   }
 
   Future<void> _uploadAllPhotos() async {
@@ -849,32 +865,19 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       );
       final request = http.MultipartRequest('POST', uri);
       for (final photo in _localPhotos) {
-        final bytes = await photo.readAsBytes();
+        // bytes ya están en memoria — sin blob URL, sin fetch
+        final bytes = photo.bytes;
         final fileName = photo.name.isEmpty
             ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg'
             : photo.name;
+        String mimeType = photo.mimeType;
+        if (mimeType == 'image/jpg' || mimeType.isEmpty) mimeType = 'image/jpeg';
+        if (fileName.toLowerCase().endsWith('.jpg')) mimeType = 'image/jpeg';
+        if (fileName.toLowerCase().endsWith('.png')) mimeType = 'image/png';
 
-        // Normalizar el mimeType para que el backend lo acepte
-        String mimeType = photo.mimeType ?? '';
-        if (mimeType == 'image/jpg' || mimeType.isEmpty) {
-          mimeType = 'image/jpeg';
-        }
-        // Forzar jpeg si el nombre termina en .jpg
-        if (fileName.toLowerCase().endsWith('.jpg')) {
-          mimeType = 'image/jpeg';
-        }
-        if (fileName.toLowerCase().endsWith('.png')) {
-          mimeType = 'image/png';
-        }
-
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'photos',
-            bytes,
-            filename: fileName,
-            contentType: MediaType.parse(mimeType),
-          ),
-        );
+        request.files.add(http.MultipartFile.fromBytes(
+          'photos', bytes, filename: fileName, contentType: MediaType.parse(mimeType),
+        ));
       }
       final streamed = await request.send();
       final response = await http.Response.fromStream(streamed);
@@ -908,119 +911,116 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
   // ── PASO 1: Datos personales ──────────────────────────────
   Widget _buildStep1() {
+    final isDark = themeNotifier.isDark;
+    final textColor    = isDark ? GardenColors.darkTextPrimary    : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary  : GardenColors.lightTextSecondary;
+    final borderColor  = isDark ? GardenColors.darkBorder         : GardenColors.lightBorder;
+    final surfaceEl    = isDark ? GardenColors.darkSurfaceElevated: GardenColors.lightSurfaceElevated;
+
+    InputDecoration _field(String hint, IconData icon) => InputDecoration(
+      hintText: hint,
+      prefixIcon: Icon(icon, color: subtextColor, size: 20),
+    );
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Cuéntanos sobre ti',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: GardenColors.lightTextPrimary),
-          ),
+          Text('Cuéntanos sobre ti',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
+          const SizedBox(height: 6),
+          Text('Esta información aparecerá en tu perfil de cuidador',
+              style: TextStyle(fontSize: 14, color: subtextColor)),
+          const SizedBox(height: 28),
+
+          // Nombre + Apellido
+          Row(children: [
+            Expanded(child: TextFormField(controller: _firstNameController, style: TextStyle(color: textColor),
+                decoration: _field('Nombre', Icons.person_outlined))),
+            const SizedBox(width: 12),
+            Expanded(child: TextFormField(controller: _lastNameController, style: TextStyle(color: textColor),
+                decoration: _field('Apellido', Icons.person_outline))),
+          ]),
+          const SizedBox(height: 16),
+
+          TextFormField(controller: _emailController, keyboardType: TextInputType.emailAddress,
+              style: TextStyle(color: textColor), decoration: _field('Correo electrónico', Icons.email_outlined)),
+          const SizedBox(height: 16),
+
+          TextFormField(controller: _passwordController, obscureText: true,
+              style: TextStyle(color: textColor), decoration: _field('Contraseña (mínimo 8 caracteres)', Icons.lock_outlined)),
+          const SizedBox(height: 16),
+
+          TextFormField(controller: _phoneController, keyboardType: TextInputType.number,
+              style: TextStyle(color: textColor), decoration: _field('Teléfono (ej: 76543210)', Icons.phone_outlined)),
           const SizedBox(height: 4),
-          const Text(
-            'Esta información aparecerá en tu perfil',
-            style: TextStyle(fontSize: 14, color: kTextSecondary),
-          ),
-          const SizedBox(height: 24),
-          TextFormField(
-            controller: _firstNameController,
-            decoration: const InputDecoration(
-              hintText: 'Nombre',
-              prefixIcon: Icon(Icons.person_outlined, color: kTextSecondary),
-            ),
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: Text('8 dígitos, empieza con 6 o 7', style: TextStyle(color: subtextColor, fontSize: 12)),
           ),
           const SizedBox(height: 16),
-          TextFormField(
-            controller: _lastNameController,
-            decoration: const InputDecoration(
-              hintText: 'Apellido',
-              prefixIcon: Icon(Icons.person_outlined, color: kTextSecondary),
-            ),
-          ),
+
+          TextFormField(controller: _addressController,
+              style: TextStyle(color: textColor), decoration: _field('Dirección completa', Icons.home_work_outlined)),
           const SizedBox(height: 16),
-          TextFormField(
-            controller: _emailController,
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              hintText: 'Correo electrónico',
-              prefixIcon: Icon(Icons.email_outlined, color: kTextSecondary),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _passwordController,
-            obscureText: true,
-            decoration: const InputDecoration(
-              hintText: 'Contraseña (mínimo 8 caracteres)',
-              prefixIcon: Icon(Icons.lock_outlined, color: kTextSecondary),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _phoneController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              hintText: 'Teléfono (ej: 76543210)',
-              prefixIcon: Icon(Icons.phone_outlined, color: kTextSecondary),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _addressController,
-            decoration: const InputDecoration(
-              hintText: 'Dirección completa',
-              prefixIcon: Icon(Icons.home_work_outlined, color: kTextSecondary),
-            ),
-          ),
-          const SizedBox(height: 16),
-          ListTile(
-            tileColor: GardenColors.lightSurface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: GardenColors.lightBorder),
-            ),
-            leading: const Icon(Icons.cake_outlined, color: kTextSecondary),
-            title: Text(
-              _dateOfBirth == null ? 'Fecha de nacimiento' : _formatDate(_dateOfBirth!),
-              style: TextStyle(
-                color: _dateOfBirth == null ? GardenColors.lightTextHint : GardenColors.lightTextPrimary,
-              ),
-            ),
+
+          // Date of birth
+          GestureDetector(
             onTap: () async {
               final picked = await showDatePicker(
                 context: context,
                 initialDate: DateTime(2000),
                 firstDate: DateTime(1940),
                 lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
-                builder: (context, child) {
-                  return Theme(
-                    data: ThemeData.dark().copyWith(
-                      colorScheme: const ColorScheme.dark(
-                        primary: kPrimaryColor,
-                        onPrimary: Colors.white,
-                        surface: Color(0xFF1A2E10),
-                        onSurface: Colors.white,
-                      ),
-                      dialogTheme: const DialogThemeData(backgroundColor: GardenColors.darkSurface),
+                builder: (context, child) => Theme(
+                  data: ThemeData.dark().copyWith(
+                    colorScheme: const ColorScheme.dark(
+                      primary: GardenColors.primary,
+                      onPrimary: Colors.white,
+                      surface: Color(0xFF1A2E10),
+                      onSurface: Colors.white,
                     ),
-                    child: child!,
-                  );
-                },
+                    dialogTheme: const DialogThemeData(backgroundColor: GardenColors.darkSurface),
+                  ),
+                  child: child!,
+                ),
               );
               if (picked != null) setState(() => _dateOfBirth = picked);
             },
+            child: Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: surfaceEl,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _dateOfBirth != null ? GardenColors.primary.withValues(alpha: 0.5) : borderColor),
+              ),
+              child: Row(children: [
+                Icon(Icons.cake_outlined, color: subtextColor, size: 20),
+                const SizedBox(width: 12),
+                Text(
+                  _dateOfBirth == null ? 'Fecha de nacimiento' : _formatDate(_dateOfBirth!),
+                  style: TextStyle(color: _dateOfBirth == null ? subtextColor : textColor, fontSize: 14),
+                ),
+                const Spacer(),
+                if (_dateOfBirth != null)
+                  const Icon(Icons.check_circle_rounded, color: GardenColors.primary, size: 18),
+              ]),
+            ),
           ),
           const SizedBox(height: 16),
+
           TextFormField(
             controller: _bioController,
             maxLines: 4,
             maxLength: 500,
-            decoration: const InputDecoration(
+            style: TextStyle(color: textColor, fontSize: 14),
+            decoration: InputDecoration(
               hintText: 'Describe tu experiencia con animales (mínimo 50 caracteres)',
               prefixIcon: Padding(
-                padding: EdgeInsets.only(bottom: 64),
-                child: Icon(Icons.description_outlined, color: kTextSecondary),
+                padding: const EdgeInsets.only(bottom: 60),
+                child: Icon(Icons.description_outlined, color: subtextColor, size: 20),
               ),
               alignLabelWithHint: true,
             ),
@@ -1032,6 +1032,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
   // ── PASO 2 (index 2): Fotos adaptadas al servicio ────────
   Widget _buildStep2() {
+    final isDark = themeNotifier.isDark;
+    final textColor    = isDark ? GardenColors.darkTextPrimary    : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary  : GardenColors.lightTextSecondary;
+    final borderColor  = isDark ? GardenColors.darkBorder         : GardenColors.lightBorder;
+    final surfaceEl    = isDark ? GardenColors.darkSurfaceElevated: GardenColors.lightSurfaceElevated;
+
     final isHospedaje = _servicesOffered.contains('HOSPEDAJE');
     final titulo = isHospedaje ? 'Fotos de tu espacio' : 'Fotos tuyas como cuidador';
     final subtitulo = isHospedaje
@@ -1046,31 +1052,21 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            titulo,
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: GardenColors.lightTextPrimary),
-          ),
+          Text(titulo, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
           const SizedBox(height: 4),
-          Text(
-            subtitulo,
-            style: const TextStyle(fontSize: 14, color: kTextSecondary),
-          ),
+          Text(subtitulo, style: TextStyle(fontSize: 14, color: subtextColor)),
           const SizedBox(height: 16),
 
           // Barra de progreso de subida
-          if (_uploadingPhotos) ...
-            [
-              const Text(
-                'Subiendo fotos...',
-                style: TextStyle(color: kPrimaryColor, fontSize: 12),
-              ),
-              const SizedBox(height: 6),
-              const LinearProgressIndicator(
-                backgroundColor: kSurfaceColor,
-                valueColor: AlwaysStoppedAnimation<Color>(kPrimaryColor),
-              ),
-              const SizedBox(height: 16),
-            ],
+          if (_uploadingPhotos) ...[
+            Text('Subiendo fotos...', style: TextStyle(color: GardenColors.primary, fontSize: 12)),
+            const SizedBox(height: 6),
+            LinearProgressIndicator(
+              backgroundColor: borderColor,
+              valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
+            ),
+            const SizedBox(height: 16),
+          ],
 
           GridView.count(
             crossAxisCount: 2,
@@ -1086,35 +1082,22 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        fixImageUrl(_photoUrls[index]),
-                        fit: BoxFit.cover,
-                      ),
+                      child: Image.network(fixImageUrl(_photoUrls[index]), fit: BoxFit.cover),
                     ),
-                    // Check verde: foto subida con éxito
                     Positioned(
-                      top: 8,
-                      right: 8,
+                      top: 8, right: 8,
                       child: Container(
-                        decoration: const BoxDecoration(
-                          color: Colors.green,
-                          shape: BoxShape.circle,
-                        ),
+                        decoration: const BoxDecoration(color: GardenColors.success, shape: BoxShape.circle),
                         padding: const EdgeInsets.all(4),
                         child: const Icon(Icons.check, color: Colors.white, size: 14),
                       ),
                     ),
-                    // Botón de eliminar
                     Positioned(
-                      bottom: 8,
-                      right: 8,
+                      bottom: 8, right: 8,
                       child: GestureDetector(
                         onTap: () => setState(() => _photoUrls.removeAt(index)),
                         child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade700,
-                            shape: BoxShape.circle,
-                          ),
+                          decoration: BoxDecoration(color: Colors.red.shade700, shape: BoxShape.circle),
                           padding: const EdgeInsets.all(4),
                           child: const Icon(Icons.close, color: Colors.white, size: 14),
                         ),
@@ -1124,53 +1107,37 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 );
               }
 
-              // Celda con foto local pendiente de subir
+              // Celda con foto local pendiente de subir (bytes ya en memoria)
               final localIndex = index - _photoUrls.length;
               if (localIndex >= 0 && localIndex < _localPhotos.length) {
-                return FutureBuilder<Uint8List>(
-                  future: _localPhotos[localIndex].readAsBytes(),
-                  builder: (ctx, snap) {
-                    return Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: snap.hasData
-                              ? Image.memory(snap.data!, fit: BoxFit.cover)
-                              : Container(color: kSurfaceColor),
+                final photo = _localPhotos[localIndex];
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.memory(photo.bytes, fit: BoxFit.cover),
+                    ),
+                    Positioned(
+                      top: 8, right: 8,
+                      child: Container(
+                        decoration: BoxDecoration(color: Colors.orange.shade700, shape: BoxShape.circle),
+                        padding: const EdgeInsets.all(4),
+                        child: const Icon(Icons.cloud_upload_outlined, color: Colors.white, size: 14),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 8, right: 8,
+                      child: GestureDetector(
+                        onTap: () => setState(() => _localPhotos.removeAt(localIndex)),
+                        child: Container(
+                          decoration: BoxDecoration(color: Colors.red.shade700, shape: BoxShape.circle),
+                          padding: const EdgeInsets.all(4),
+                          child: const Icon(Icons.close, color: Colors.white, size: 14),
                         ),
-                        // Ícono de nube: pendiente de subir
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.orange.shade700,
-                              shape: BoxShape.circle,
-                            ),
-                            padding: const EdgeInsets.all(4),
-                            child: const Icon(Icons.cloud_upload_outlined, color: Colors.white, size: 14),
-                          ),
-                        ),
-                        // Botón de eliminar local
-                        Positioned(
-                          bottom: 8,
-                          right: 8,
-                          child: GestureDetector(
-                            onTap: () => setState(() => _localPhotos.removeAt(localIndex)),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.red.shade700,
-                                shape: BoxShape.circle,
-                              ),
-                              padding: const EdgeInsets.all(4),
-                              child: const Icon(Icons.close, color: Colors.white, size: 14),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
+                      ),
+                    ),
+                  ],
                 );
               }
 
@@ -1179,20 +1146,16 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 onTap: (_isLoading || _uploadingPhotos) ? null : _pickAndUploadPhoto,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: kSurfaceColor,
+                    color: surfaceEl,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: kPrimaryColor.withOpacity(0.3)),
+                    border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
                   ),
-                  child: const Column(
+                  child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        Icons.add_photo_alternate_outlined,
-                        color: kPrimaryColor,
-                        size: 40,
-                      ),
-                      SizedBox(height: 8),
-                      Text('Añadir foto', style: TextStyle(color: kTextSecondary, fontSize: 12)),
+                      const Icon(Icons.add_photo_alternate_outlined, color: GardenColors.primary, size: 40),
+                      const SizedBox(height: 8),
+                      Text('Añadir foto', style: TextStyle(color: subtextColor, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -1203,7 +1166,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           Text(
             '$total/$maxFotos fotos · Mínimo $minFotos${_localPhotos.isNotEmpty ? " (${_localPhotos.length} pendientes de subir)" : ""}',
             style: TextStyle(
-              color: _localPhotos.isNotEmpty ? Colors.orange.shade400 : kTextSecondary,
+              color: _localPhotos.isNotEmpty ? Colors.orange.shade400 : subtextColor,
               fontSize: 12,
             ),
           ),
@@ -1214,6 +1177,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
   // ── PASO 3: Servicios y zona ──────────────────────────────
   Widget _buildStep3() {
+    final isDark = themeNotifier.isDark;
+    final textColor    = isDark ? GardenColors.darkTextPrimary    : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary  : GardenColors.lightTextSecondary;
+    final borderColor  = isDark ? GardenColors.darkBorder         : GardenColors.lightBorder;
+    final surfaceEl    = isDark ? GardenColors.darkSurfaceElevated: GardenColors.lightSurfaceElevated;
+
     const zoneLabels = {
       'EQUIPETROL': 'Equipetrol',
       'URBARI': 'Urbari',
@@ -1223,206 +1192,126 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       'OTROS': 'Otros',
     };
 
+    Widget serviceCard(String service, String emoji, String label) {
+      final selected = _servicesOffered.contains(service);
+      return GestureDetector(
+        onTap: () {
+          setState(() {
+            if (selected) { _servicesOffered.remove(service); } else { _servicesOffered.add(service); }
+          });
+          _loadPriceStats();
+        },
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: selected ? GardenColors.primary.withValues(alpha: 0.12) : surfaceEl,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? GardenColors.primary : borderColor,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 36)),
+              const SizedBox(height: 10),
+              Text(label, style: TextStyle(
+                color: selected ? GardenColors.primary : textColor,
+                fontWeight: FontWeight.w700, fontSize: 15,
+              )),
+            ],
+          ),
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '¿Qué ofreces?',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: GardenColors.lightTextPrimary),
-          ),
-          const SizedBox(height: 24),
+          Text('¿Qué ofreces?', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
+          const SizedBox(height: 6),
+          Text('Selecciona los servicios que brindarás', style: TextStyle(fontSize: 14, color: subtextColor)),
+          const SizedBox(height: 28),
 
-          // Servicios
-          const Text('Servicios', style: TextStyle(color: kTextSecondary, fontSize: 14, fontWeight: FontWeight.bold)),
+          Text('Servicios', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
-          Row(
-            children: [
+          Row(children: [
+            Expanded(child: serviceCard('HOSPEDAJE', '🏠', 'Hospedaje')),
+            const SizedBox(width: 12),
+            Expanded(child: serviceCard('PASEO', '🦮', 'Paseo')),
+          ]),
+          const SizedBox(height: 28),
+
+          Text('Zona en Santa Cruz', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _selectedZone,
+            dropdownColor: surfaceEl,
+            style: TextStyle(color: textColor, fontSize: 14),
+            decoration: InputDecoration(
+              prefixIcon: Icon(Icons.location_on_outlined, color: subtextColor, size: 20),
+            ),
+            hint: Text('Selecciona tu zona', style: TextStyle(color: subtextColor)),
+            items: zoneLabels.entries.map((e) => DropdownMenuItem(
+              value: e.key,
+              child: Text(e.value, style: TextStyle(color: textColor)),
+            )).toList(),
+            onChanged: (v) { setState(() => _selectedZone = v); _loadPriceStats(); },
+          ),
+
+          if (_servicesOffered.contains('HOSPEDAJE')) ...[
+            const SizedBox(height: 28),
+            Text('Tu hogar', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: textColor)),
+            const SizedBox(height: 12),
+            Row(children: [
               Expanded(
                 child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      if (_servicesOffered.contains('HOSPEDAJE')) {
-                        _servicesOffered.remove('HOSPEDAJE');
-                      } else {
-                        _servicesOffered.add('HOSPEDAJE');
-                      }
-                    });
-                    _loadPriceStats();
-                  },
+                  onTap: () => setState(() => _homeType = 'HOUSE'),
                   child: Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
                     decoration: BoxDecoration(
-                      color: kSurfaceColor,
+                      color: _homeType == 'HOUSE' ? GardenColors.primary : surfaceEl,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: _servicesOffered.contains('HOSPEDAJE')
-                            ? kPrimaryColor
-                            : kSurfaceColor,
-                        width: 2,
-                      ),
+                      border: Border.all(color: _homeType == 'HOUSE' ? GardenColors.primary : borderColor),
                     ),
-                    child: Column(
-                      children: [
-                        const Text('🏠', style: TextStyle(fontSize: 32)),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Hospedaje',
-                          style: TextStyle(
-                            color: _servicesOffered.contains('HOSPEDAJE') ? kPrimaryColor : GardenColors.lightTextPrimary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
+                    alignment: Alignment.center,
+                    child: Text('Casa 🏡', style: TextStyle(
+                      color: _homeType == 'HOUSE' ? Colors.white : textColor,
+                      fontWeight: _homeType == 'HOUSE' ? FontWeight.bold : FontWeight.normal,
+                    )),
                   ),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      if (_servicesOffered.contains('PASEO')) {
-                        _servicesOffered.remove('PASEO');
-                      } else {
-                        _servicesOffered.add('PASEO');
-                      }
-                    });
-                    _loadPriceStats();
-                  },
+                  onTap: () => setState(() => _homeType = 'APARTMENT'),
                   child: Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
                     decoration: BoxDecoration(
-                      color: kSurfaceColor,
+                      color: _homeType == 'APARTMENT' ? GardenColors.primary : surfaceEl,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: _servicesOffered.contains('PASEO')
-                            ? kPrimaryColor
-                            : kSurfaceColor,
-                        width: 2,
-                      ),
+                      border: Border.all(color: _homeType == 'APARTMENT' ? GardenColors.primary : borderColor),
                     ),
-                    child: Column(
-                      children: [
-                        const Text('🦮', style: TextStyle(fontSize: 32)),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Paseo',
-                          style: TextStyle(
-                            color: _servicesOffered.contains('PASEO') ? kPrimaryColor : GardenColors.lightTextPrimary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
+                    alignment: Alignment.center,
+                    child: Text('Departamento 🏢', style: TextStyle(
+                      color: _homeType == 'APARTMENT' ? Colors.white : textColor,
+                      fontWeight: _homeType == 'APARTMENT' ? FontWeight.bold : FontWeight.normal,
+                    )),
                   ),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Zona
-          const Text('Zona en Santa Cruz', style: TextStyle(color: kTextSecondary, fontSize: 14, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            value: _selectedZone,
-            dropdownColor: kSurfaceColor,
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.location_on_outlined, color: kTextSecondary),
-            ),
-            hint: const Text('Selecciona tu zona', style: TextStyle(color: kTextSecondary)),
-            items: zoneLabels.entries.map((e) => DropdownMenuItem(
-              value: e.key,
-              child: Text(e.value, style: const TextStyle(color: GardenColors.lightTextPrimary)),
-            )).toList(),
-            onChanged: (v) {
-              setState(() => _selectedZone = v);
-              _loadPriceStats();
-            },
-          ),
-
-          // Solo mostrar opciones de hogar si ofrece HOSPEDAJE
-          if (_servicesOffered.contains('HOSPEDAJE')) ...[
-            const SizedBox(height: 24),
-            const Text(
-              'Tu hogar',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: GardenColors.lightTextPrimary,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _homeType = 'HOUSE'),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(
-                        color: _homeType == 'HOUSE' ? kPrimaryColor : kSurfaceColor,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _homeType == 'HOUSE'
-                              ? kPrimaryColor
-                              : Colors.white.withOpacity(0.1),
-                        ),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        'Casa 🏡',
-                        style: TextStyle(
-                          color: _homeType == 'HOUSE' ? Colors.white : kTextSecondary,
-                          fontWeight: _homeType == 'HOUSE'
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _homeType = 'APARTMENT'),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(
-                        color: _homeType == 'APARTMENT' ? kPrimaryColor : kSurfaceColor,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _homeType == 'APARTMENT'
-                              ? kPrimaryColor
-                              : Colors.white.withOpacity(0.1),
-                        ),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        'Departamento 🏢',
-                        style: TextStyle(
-                          color: _homeType == 'APARTMENT' ? Colors.white : kTextSecondary,
-                          fontWeight: _homeType == 'APARTMENT'
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            ]),
             const SizedBox(height: 12),
             SwitchListTile(
-              tileColor: GardenColors.lightSurface,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              title: const Text('¿Tienes patio?', style: TextStyle(color: GardenColors.lightTextPrimary)),
+              title: Text('¿Tienes patio?', style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
               value: _hasYard,
               onChanged: (val) => setState(() => _hasYard = val),
-              activeColor: kPrimaryColor,
+              activeColor: GardenColors.primary,
             ),
           ],
         ],
@@ -1432,79 +1321,67 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
   // ── PASO 4: Disponibilidad ────────────────────────────────
   Widget _buildStep4() {
+    final isDark = themeNotifier.isDark;
+    final textColor    = isDark ? GardenColors.darkTextPrimary    : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary  : GardenColors.lightTextSecondary;
+    final borderColor  = isDark ? GardenColors.darkBorder         : GardenColors.lightBorder;
+    final surfaceEl    = isDark ? GardenColors.darkSurfaceElevated: GardenColors.lightSurfaceElevated;
+
+    Widget availSwitch(String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(color: surfaceEl, borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor)),
+        child: SwitchListTile(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 15)),
+          subtitle: Text(subtitle, style: TextStyle(color: subtextColor, fontSize: 12)),
+          value: value,
+          activeColor: GardenColors.primary,
+          onChanged: onChanged,
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '¿Cuándo estás disponible?',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: GardenColors.lightTextPrimary),
-          ),
-          const SizedBox(height: 24),
-          SwitchListTile(
-            tileColor: GardenColors.lightSurface,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            title: const Text('Días de semana', style: TextStyle(color: GardenColors.lightTextPrimary)),
-            subtitle: const Text('Lunes a Viernes', style: TextStyle(color: kTextSecondary, fontSize: 12)),
-            value: _weekdays,
-            activeColor: kPrimaryColor,
-            onChanged: (v) => setState(() => _weekdays = v),
-          ),
+          Text('¿Cuándo estás disponible?', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
+          const SizedBox(height: 6),
+          Text('Selecciona los días y horarios en que puedes cuidar mascotas', style: TextStyle(fontSize: 14, color: subtextColor)),
+          const SizedBox(height: 28),
+
+          Text('Días disponibles', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
-          SwitchListTile(
-            tileColor: GardenColors.lightSurface,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            title: const Text('Fines de semana', style: TextStyle(color: GardenColors.lightTextPrimary)),
-            subtitle: const Text('Sábado y Domingo', style: TextStyle(color: kTextSecondary, fontSize: 12)),
-            value: _weekends,
-            activeColor: kPrimaryColor,
-            onChanged: (v) => setState(() => _weekends = v),
-          ),
+          availSwitch('Días de semana', 'Lunes a Viernes', _weekdays, (v) => setState(() => _weekdays = v)),
+          availSwitch('Fines de semana', 'Sábado y Domingo', _weekends, (v) => setState(() => _weekends = v)),
+          availSwitch('Feriados', 'Días festivos nacionales', _holidays, (v) => setState(() => _holidays = v)),
+
           const SizedBox(height: 12),
-          SwitchListTile(
-            tileColor: GardenColors.lightSurface,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            title: const Text('Feriados', style: TextStyle(color: GardenColors.lightTextPrimary)),
-            subtitle: const Text('Días festivos nacionales', style: TextStyle(color: kTextSecondary, fontSize: 12)),
-            value: _holidays,
-            activeColor: kPrimaryColor,
-            onChanged: (v) => setState(() => _holidays = v),
-          ),
-          const SizedBox(height: 24),
-          const Text('Horarios', style: TextStyle(color: kTextSecondary, fontSize: 14, fontWeight: FontWeight.bold)),
+          Text('Horarios', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: 8, runSpacing: 8,
             children: [
               {'label': 'Mañana ☀️', 'value': 'MORNING'},
               {'label': 'Tarde 🌤️', 'value': 'AFTERNOON'},
               {'label': 'Noche 🌙', 'value': 'NIGHT'},
             ].map((item) {
               final val = item['value']!;
+              final selected = _times.contains(val);
               return FilterChip(
-                label: Text(item['label']!),
-                selected: _times.contains(val),
-                onSelected: (selected) => setState(() {
-                  if (selected) {
-                    _times.add(val);
-                  } else {
-                    _times.remove(val);
-                  }
-                }),
-                backgroundColor: kSurfaceColor,
-                selectedColor: GardenColors.primary.withValues(alpha: 0.18),
-                labelStyle: TextStyle(
-                  color: _times.contains(val) ? GardenColors.primary : kTextSecondary,
-                  fontWeight: _times.contains(val) ? FontWeight.bold : FontWeight.normal,
-                ),
+                label: Text(item['label']!, style: TextStyle(
+                  color: selected ? GardenColors.primary : subtextColor,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
+                )),
+                selected: selected,
+                onSelected: (s) => setState(() { if (s) { _times.add(val); } else { _times.remove(val); } }),
+                backgroundColor: surfaceEl,
+                selectedColor: GardenColors.primary.withValues(alpha: 0.14),
                 checkmarkColor: GardenColors.primary,
-                side: BorderSide(
-                  color: _times.contains(val)
-                      ? GardenColors.primary.withValues(alpha: 0.4)
-                      : GardenColors.darkBorder,
-                ),
+                side: BorderSide(color: selected ? GardenColors.primary.withValues(alpha: 0.5) : borderColor),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               );
             }).toList(),
           ),
@@ -1515,6 +1392,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
   // ── PASO 5: Precio ────────────────────────────────────────
   Widget _buildStep5() {
+    final isDark = themeNotifier.isDark;
+    final textColor    = isDark ? GardenColors.darkTextPrimary   : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -1524,45 +1405,30 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [kPrimaryColor, Color(0xFF1B5E20)],
+                colors: [GardenColors.primary, Color(0xFF4A5E28)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(color: kPrimaryColor.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4)),
-              ]
+              boxShadow: [BoxShadow(color: GardenColors.primary.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4))],
             ),
-            child: const Row(
-              children: [
-                Icon(Icons.auto_awesome, color: Colors.white, size: 40),
-                SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Precio Dinámico Recomendado',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'GARDEN analiza la demanda en tiempo real para sugerirte el mejor precio inicial según tu zona y experiencia.',
-                        style: TextStyle(fontSize: 12, color: Colors.white70),
-                      ),
-                    ]
-                  )
-                )
-              ]
-            )
+            child: const Row(children: [
+              Icon(Icons.auto_awesome, color: Colors.white, size: 40),
+              SizedBox(width: 16),
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Precio Dinámico Recomendado', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white)),
+                  SizedBox(height: 4),
+                  Text('GARDEN analiza la demanda en tiempo real para sugerirte el mejor precio inicial según tu zona y experiencia.',
+                      style: TextStyle(fontSize: 12, color: Colors.white70)),
+                ],
+              )),
+            ]),
           ),
-          const SizedBox(height: 24),
-          const SizedBox(height: 4),
-          const Text(
-            'Basado en el mercado de tu zona',
-            style: TextStyle(fontSize: 14, color: kTextSecondary),
-          ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
+          Text('Basado en el mercado de tu zona', style: TextStyle(fontSize: 14, color: subtextColor)),
+          const SizedBox(height: 20),
           PrecioOnboardingCard(
             zona: _selectedZone ?? 'EQUIPETROL',
             servicio: _servicesOffered.isNotEmpty ? _servicesOffered.first.toLowerCase() : 'paseo',
@@ -1576,16 +1442,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           ),
           if (_precioFinal > 0) ...[
             const SizedBox(height: 16),
-            Center(
-              child: Text(
-                'Precio seleccionado: Bs ${_precioFinal.toStringAsFixed(0)}',
-                style: const TextStyle(
-                  color: kPrimaryColor,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
+            Center(child: Text(
+              'Precio seleccionado: Bs ${_precioFinal.toStringAsFixed(0)}',
+              style: const TextStyle(color: GardenColors.primary, fontSize: 18, fontWeight: FontWeight.w800),
+            )),
           ],
         ],
       ),
@@ -1733,70 +1593,104 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
 
   // ── PASO 7: Foto de Perfil ────────────────────────────────
-  Future<void> _pickProfilePhoto() async {
-    final picked = await image_picker_pkg.ImagePicker().pickImage(
-      source: image_picker_pkg.ImageSource.gallery,
-      imageQuality: 85,
-    );
-    if (picked == null) return;
-    final bytes = await picked.readAsBytes();
-    setState(() {
-      _profilePhotoUrl = null;
-      _localProfilePhoto = XFile.fromData(
-        Uint8List.fromList(bytes),
-        name: picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name,
-        mimeType: 'image/jpeg',
-      );
+  void _pickProfilePhoto() {
+    final input = html.FileUploadInputElement()
+      ..accept = 'image/*'
+      ..style.display = 'none';
+    html.document.body!.append(input);
+
+    input.onChange.listen((_) {
+      final file = input.files?.first;
+      if (file == null) { input.remove(); return; }
+
+      final reader = html.FileReader();
+      reader.readAsArrayBuffer(file);
+
+      reader.onLoad.listen((_) {
+        if (!mounted) { input.remove(); return; }
+        final result = reader.result;
+        final Uint8List bytes = result is ByteBuffer ? result.asUint8List() : Uint8List.fromList(result as List<int>);
+        final name = file.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : file.name;
+        final mimeType = file.type.isEmpty ? 'image/jpeg' : file.type;
+        setState(() {
+          _profilePhotoUrl = null;
+          _localProfilePhoto = (bytes: bytes, name: name, mimeType: mimeType);
+        });
+        input.remove();
+      });
+
+      reader.onError.listen((_) => input.remove());
     });
+
+    input.click();
   }
 
   Widget _buildStep7() {
+    final isDark = themeNotifier.isDark;
+    final textColor    = isDark ? GardenColors.darkTextPrimary    : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary  : GardenColors.lightTextSecondary;
+    final surfaceEl    = isDark ? GardenColors.darkSurfaceElevated: GardenColors.lightSurfaceElevated;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Text('Tu retrato final', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: GardenColors.lightTextPrimary)),
-          const SizedBox(height: 12),
-          const Text(
+          Text('Tu retrato final', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
+          const SizedBox(height: 10),
+          Text(
             'Sube una foto tuya clara, sonriendo e idealmente con una mascota. Esta será la cara visible de tu negocio en GARDEN.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, color: kTextSecondary)
+            style: TextStyle(fontSize: 14, color: subtextColor),
           ),
-          const SizedBox(height: 48),
-          
+          const SizedBox(height: 40),
+
           GestureDetector(
             onTap: _pickProfilePhoto,
             child: Container(
               width: 200, height: 200,
               decoration: BoxDecoration(
-                color: kSurfaceColor,
+                color: surfaceEl,
                 shape: BoxShape.circle,
-                border: Border.all(color: kPrimaryColor, width: 4),
-                boxShadow: [BoxShadow(color: kPrimaryColor.withOpacity(0.4), blurRadius: 20, spreadRadius: 5)],
+                border: Border.all(color: GardenColors.primary, width: 3),
+                boxShadow: [BoxShadow(color: GardenColors.primary.withValues(alpha: 0.3), blurRadius: 20, spreadRadius: 4)],
               ),
               child: ClipOval(
                 child: _localProfilePhoto != null
-                  ? FutureBuilder<Uint8List>(
-                      future: _localProfilePhoto!.readAsBytes(),
-                      builder: (c, s) => s.hasData ? Image.memory(s.data!, fit: BoxFit.cover) : const CircularProgressIndicator()
-                    )
-                  : const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.camera_alt_outlined, size: 60, color: kTextSecondary),
-                        SizedBox(height: 8),
-                        Text('Subir foto', style: TextStyle(color: kTextSecondary, fontWeight: FontWeight.bold))
-                      ]
-                    )
-              )
-            )
+                    ? Image.memory(_localProfilePhoto!.bytes, fit: BoxFit.cover)
+                    : (_profilePhotoUrl != null
+                        ? Image.network(fixImageUrl(_profilePhotoUrl!), fit: BoxFit.cover)
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.camera_alt_outlined, size: 56, color: subtextColor),
+                              const SizedBox(height: 10),
+                              Text('Subir foto', style: TextStyle(color: subtextColor, fontWeight: FontWeight.w600, fontSize: 14)),
+                            ],
+                          )),
+              ),
+            ),
           ),
-          const SizedBox(height: 48),
-          if (_localProfilePhoto != null)
-            const Text('¡Excelente elección! Estás listo para empezar.', style: TextStyle(color: Colors.greenAccent, fontSize: 16, fontWeight: FontWeight.bold))
-        ]
-      )
+          const SizedBox(height: 20),
+          Text('Toca para seleccionar foto', style: TextStyle(color: subtextColor, fontSize: 12)),
+          const SizedBox(height: 24),
+          if (_localProfilePhoto != null || _profilePhotoUrl != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: GardenColors.success.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: GardenColors.success.withValues(alpha: 0.3)),
+              ),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 20),
+                SizedBox(width: 8),
+                Text('¡Excelente elección! Estás listo para empezar.',
+                    style: TextStyle(color: GardenColors.success, fontSize: 14, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+        ],
+      ),
     );
   }
 
@@ -1854,151 +1748,154 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     final bool showNavButtons = _currentStep <= 5;
     final bool isRegistrationStep = _currentStep == 0;
 
-    return Theme(
-      data: ThemeData(
-        colorScheme: const ColorScheme.light(
-          primary: kPrimaryColor,
-          secondary: kPrimaryColor,
-          surface: GardenColors.lightSurface,
-          onSurface: GardenColors.lightTextPrimary,
-          onPrimary: Colors.white,
-        ),
-        scaffoldBackgroundColor: GardenColors.lightBackground,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: GardenColors.lightSurface,
-          foregroundColor: GardenColors.lightTextPrimary,
-          elevation: 0,
-          iconTheme: IconThemeData(color: GardenColors.lightTextPrimary),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: GardenColors.lightSurfaceElevated,
-          hintStyle: const TextStyle(color: GardenColors.lightTextHint),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: GardenColors.lightBorder),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: GardenColors.lightBorder),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: kPrimaryColor, width: 2),
-          ),
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: kPrimaryColor,
-            foregroundColor: Colors.white,
-            minimumSize: const Size(double.infinity, 50),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-        ),
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-            foregroundColor: kPrimaryColor,
-            side: const BorderSide(color: kPrimaryColor),
-            minimumSize: const Size(double.infinity, 50),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        ),
-        dropdownMenuTheme: const DropdownMenuThemeData(
-          textStyle: TextStyle(color: GardenColors.lightTextPrimary),
-        ),
-        listTileTheme: const ListTileThemeData(
-          textColor: GardenColors.lightTextPrimary,
-          iconColor: GardenColors.lightTextSecondary,
-        ),
-      ),
-      child: Scaffold(
-      backgroundColor: GardenColors.lightBackground,
-      appBar: AppBar(
-        title: const Text('Crear perfil de cuidador'),
-        // Show back arrow only for pre-registration steps (0-4); steps 5+ use nav buttons or embedded screens
-        automaticallyImplyLeading: _currentStep < 5,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(6),
-          child: LinearProgressIndicator(
-            value: (_currentStep + 1) / 9,
-            backgroundColor: kSurfaceColor,
-            valueColor: const AlwaysStoppedAnimation<Color>(kPrimaryColor),
-            minHeight: 6,
-          ),
-        ),
-      ),
-      body: Column(
-        children: [
-          // Step indicator
-          Container(
-            color: kSurfaceColor,
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Paso ${_currentStep + 1} de 9',
-                  style: const TextStyle(color: kTextSecondary, fontSize: 12),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: kPrimaryColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(20),
+    return AnimatedBuilder(
+      animation: themeNotifier,
+      builder: (context, _) {
+        final isDark = themeNotifier.isDark;
+        final bg          = isDark ? GardenColors.darkBackground       : GardenColors.lightBackground;
+        final surface     = isDark ? GardenColors.darkSurface          : GardenColors.lightSurface;
+        final surfaceEl   = isDark ? GardenColors.darkSurfaceElevated  : GardenColors.lightSurfaceElevated;
+        final textColor   = isDark ? GardenColors.darkTextPrimary      : GardenColors.lightTextPrimary;
+        final subtextColor= isDark ? GardenColors.darkTextSecondary    : GardenColors.lightTextSecondary;
+        final borderColor = isDark ? GardenColors.darkBorder           : GardenColors.lightBorder;
+
+        return Theme(
+          data: ThemeData(
+            colorScheme: isDark
+                ? ColorScheme.dark(
+                    primary: GardenColors.primary,
+                    secondary: GardenColors.primary,
+                    surface: GardenColors.darkSurface,
+                    onSurface: GardenColors.darkTextPrimary,
+                    onPrimary: Colors.white,
+                  )
+                : const ColorScheme.light(
+                    primary: GardenColors.primary,
+                    secondary: GardenColors.primary,
+                    surface: GardenColors.lightSurface,
+                    onSurface: GardenColors.lightTextPrimary,
+                    onPrimary: Colors.white,
                   ),
-                  child: Text(
-                    stepTitles[_currentStep],
-                    style: const TextStyle(color: kPrimaryColor, fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
+            scaffoldBackgroundColor: bg,
+            appBarTheme: AppBarTheme(
+              backgroundColor: surface,
+              foregroundColor: textColor,
+              elevation: 0,
+              iconTheme: IconThemeData(color: textColor),
+              titleTextStyle: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            inputDecorationTheme: InputDecorationTheme(
+              filled: true,
+              fillColor: surfaceEl,
+              hintStyle: TextStyle(color: subtextColor),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
+            ),
+            listTileTheme: ListTileThemeData(
+              textColor: textColor,
+              iconColor: subtextColor,
+              tileColor: surfaceEl,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            switchTheme: SwitchThemeData(
+              thumbColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? GardenColors.primary : subtextColor),
+              trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? GardenColors.primary.withValues(alpha: 0.35) : borderColor),
+            ),
+            dropdownMenuTheme: DropdownMenuThemeData(
+              textStyle: TextStyle(color: textColor),
             ),
           ),
-
-          // Step content
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: KeyedSubtree(
-                key: ValueKey(_currentStep),
-                child: steps[_currentStep],
+          child: Scaffold(
+            backgroundColor: bg,
+            appBar: AppBar(
+              title: const Text('Crear perfil de cuidador'),
+              automaticallyImplyLeading: _currentStep < 5,
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(4),
+                child: LinearProgressIndicator(
+                  value: (_currentStep + 1) / 9,
+                  backgroundColor: borderColor,
+                  valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
+                  minHeight: 4,
+                ),
               ),
             ),
-          ),
+            body: Column(
+              children: [
+                // Step indicator
+                Container(
+                  color: surface,
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Paso ${_currentStep + 1} de 9',
+                          style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w500)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: GardenColors.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(stepTitles[_currentStep],
+                            style: const TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w700)),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(height: 1, color: borderColor),
 
-          // Navigation buttons — only for pre-registration steps (0-5)
-          if (showNavButtons)
-            Container(
-              color: kSurfaceColor,
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _currentStep == 0 ? null : _prevStep,
-                      child: const Text('Anterior'),
+                // Step content
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: KeyedSubtree(
+                      key: ValueKey(_currentStep),
+                      child: steps[_currentStep],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _nextStep,
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 24,
-                              width: 24,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                            )
-                          : Text(isRegistrationStep ? 'Crear mi cuenta' : 'Siguiente'),
+                ),
+
+                // Navigation buttons — only for pre-registration steps (0-5)
+                if (showNavButtons) ...[
+                  Container(height: 1, color: borderColor),
+                  Container(
+                    color: surface,
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                    child: Row(
+                      children: [
+                        if (_currentStep > 0) ...[
+                          SizedBox(
+                            width: 110,
+                            child: GardenButton(
+                              label: 'Anterior',
+                              outline: true,
+                              height: 48,
+                              onPressed: _prevStep,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
+                        Expanded(
+                          child: GardenButton(
+                            label: isRegistrationStep ? 'Crear mi cuenta' : 'Siguiente →',
+                            loading: _isLoading,
+                            height: 48,
+                            onPressed: _isLoading ? () {} : _nextStep,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ),
+              ],
             ),
-        ],
-      ),
-    )); // closes Scaffold + Theme
+          ),
+        );
+      },
+    );
   }
 }

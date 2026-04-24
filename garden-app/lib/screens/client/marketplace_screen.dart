@@ -987,17 +987,19 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   ] else ...[
                     TextButton(
                       onPressed: () => context.go('/register'),
+                      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10)),
                       child: const Text('Ser cuidador',
                           style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 13)),
                     ),
                     TextButton(
                       onPressed: () => context.go('/login'),
+                      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10)),
                       child: Text('Iniciar sesión',
                           style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
                     ),
                     Padding(
-                      padding: const EdgeInsets.only(right: 4),
-                      child: GardenButton(label: 'Registrarse', width: 110, onPressed: () => context.go('/register')),
+                      padding: const EdgeInsets.only(right: 8),
+                      child: GardenButton(label: 'Registrarse', width: 130, height: 40, onPressed: () => context.go('/register')),
                     ),
                   ],
                 ],
@@ -1056,17 +1058,17 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             onSelected: (v) => setState(() => _sortBy = v),
             tooltip: 'Ordenar',
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 border: Border.all(color: border),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Icons.sort_rounded, size: 16, color: textColor),
                   const SizedBox(width: 6),
-                  Text(_sortLabel(_sortBy), style: TextStyle(fontSize: 12, color: textColor, fontWeight: FontWeight.w500)),
+                  Text(_sortLabel(_sortBy), style: TextStyle(fontSize: 13, color: textColor, fontWeight: FontWeight.w500)),
                   const SizedBox(width: 4),
                   Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: textColor),
                 ],
@@ -1117,18 +1119,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: active ? GardenColors.primary.withValues(alpha: 0.1) : Colors.transparent,
           border: Border.all(color: active ? GardenColors.primary.withValues(alpha: 0.5) : GardenColors.darkBorder.withValues(alpha: 0.3)),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 16, color: active ? GardenColors.primary : textColor),
             const SizedBox(width: 6),
-            Text(label, style: TextStyle(fontSize: 12, color: active ? GardenColors.primary : textColor, fontWeight: FontWeight.w600)),
+            Text(label, style: TextStyle(fontSize: 13, color: active ? GardenColors.primary : textColor, fontWeight: FontWeight.w600)),
             if (badge > 0) ...[
               const SizedBox(width: 6),
               Container(
@@ -1482,7 +1484,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             color: selected ? GardenColors.primary : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
@@ -1493,7 +1495,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 style: TextStyle(
                   color: selected ? Colors.white : textColor,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  fontSize: 11,
+                  fontSize: 12,
                 )),
           ),
         ),
@@ -1538,16 +1540,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   Widget _smallChip(String label, bool selected, Color textColor) => AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: selected ? GardenColors.primary.withValues(alpha: 0.12) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: selected ? GardenColors.primary : GardenColors.darkBorder.withValues(alpha: 0.3)),
         ),
         child: Text(label,
             style: TextStyle(
               color: selected ? GardenColors.primary : textColor,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               fontSize: 12,
             )),
       );
@@ -1666,17 +1668,17 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     return GestureDetector(
       onTap: () => context.push('/caregiver/${caregiver['id']}'),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
+        margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
           color: cardBg,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: isVerified ? GardenColors.primary.withValues(alpha: 0.3) : borderColor),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.05), blurRadius: 8, offset: const Offset(0, 2))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.06), blurRadius: 10, offset: const Offset(0, 3))],
         ),
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1690,7 +1692,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       ),
                       child: GardenAvatar(
                         imageUrl: caregiver['profilePicture'] as String?,
-                        size: 50,
+                        size: 58,
                         initials: '${firstName.isNotEmpty ? firstName[0] : "C"}${lastName.isNotEmpty ? lastName[0] : ""}',
                       ),
                     ),
@@ -1698,13 +1700,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       Positioned(
                         bottom: 0, right: 0,
                         child: Container(
-                          width: 16, height: 16,
+                          width: 18, height: 18,
                           decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
-                          child: const Icon(Icons.verified_rounded, size: 10, color: Colors.white),
+                          child: const Icon(Icons.verified_rounded, size: 11, color: Colors.white),
                         ),
                       ),
                   ]),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1712,7 +1714,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                         Row(children: [
                           Expanded(
                             child: Text('$firstName $lastName',
-                                style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700),
+                                style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700),
                                 overflow: TextOverflow.ellipsis),
                           ),
                           const SizedBox(width: 6),
@@ -1774,14 +1776,21 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       ],
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 7),
+                            horizontal: 16, vertical: 10),
                         decoration: BoxDecoration(
                           color: GardenColors.primary,
                           borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: GardenColors.primary.withValues(alpha: 0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
                         ),
                         child: Text('Reservar',
                             style: GardenText.metadata.copyWith(
-                                color: Colors.white, fontSize: 12)),
+                                color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
                       ),
                     ],
                   ),
@@ -1791,16 +1800,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             if (isVerified)
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
                   color: GardenColors.polygon.withValues(alpha: 0.07),
-                  borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(14), bottomRight: Radius.circular(14)),
+                  borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(16), bottomRight: Radius.circular(16)),
                 ),
                 child: const Row(children: [
-                  Icon(Icons.link_rounded, size: 11, color: GardenColors.polygon),
-                  SizedBox(width: 5),
+                  Icon(Icons.link_rounded, size: 12, color: GardenColors.polygon),
+                  SizedBox(width: 6),
                   Text('Verificado en Polygon Blockchain',
-                      style: TextStyle(color: GardenColors.polygon, fontSize: 10, fontWeight: FontWeight.w600)),
+                      style: TextStyle(color: GardenColors.polygon, fontSize: 11, fontWeight: FontWeight.w600)),
                 ]),
               ),
           ],
