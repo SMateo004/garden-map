@@ -97,10 +97,15 @@ app.use((_req, res, next) => {
 // cabecera Origin, por lo que no se ven afectadas por CORS en absoluto.
 // En desarrollo se suman patrones de localhost y red local para poder usar
 // el simulador, Postman o el panel web en localhost.
-const _explicitOrigins: string[] = env.ALLOWED_ORIGINS
-  .split(',')
-  .map(o => o.trim())
-  .filter(Boolean);
+const _explicitOrigins: string[] = [
+  ...env.ALLOWED_ORIGINS.split(','),
+  ...env.VERCEL_DOMAINS.split(','),
+].map(o => o.trim()).filter(Boolean);
+
+// Allow any *.vercel.app subdomain for preview deployments when VERCEL_DOMAINS is set
+const _vercelPreviewPattern: RegExp | null = env.VERCEL_DOMAINS
+  ? /^https:\/\/[\w-]+-[\w-]+-[\w-]+\.vercel\.app$/
+  : null;
 
 const _devPatterns: (RegExp | string)[] = env.NODE_ENV !== 'production'
   ? [
@@ -117,6 +122,9 @@ app.use(cors({
 
     // Orígenes explícitos configurados vía env
     if (_explicitOrigins.includes(origin)) return callback(null, true);
+
+    // Vercel preview deployments (*.vercel.app)
+    if (_vercelPreviewPattern?.test(origin)) return callback(null, true);
 
     // Patrones adicionales (solo en desarrollo)
     if (_devPatterns.some(p => (typeof p === 'string' ? p === origin : p.test(origin)))) {

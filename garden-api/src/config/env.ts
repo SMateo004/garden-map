@@ -17,6 +17,8 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().default('http://localhost:5173'),
   API_PUBLIC_URL: z.string().default('http://localhost:3000'),
   ALLOWED_ORIGINS: z.string().default('http://localhost:5173,http://localhost:3000'),
+  // Vercel deployment domains — comma-separated, supports exact or *.vercel.app suffix
+  VERCEL_DOMAINS: z.string().default(''),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
   // AWS Rekognition (identity verification)
   AWS_ACCESS_KEY_ID: z.string().optional(),
