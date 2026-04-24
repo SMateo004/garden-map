@@ -23,7 +23,8 @@
                                      — imágenes propias, data-URI, blobs y HTTPS externo
        • connect-src 'self' https://garden-api-1ldd.onrender.com
                        wss://garden-api-1ldd.onrender.com
-                                     — llamadas a la API REST y WebSocket
+                       https://garden-mvp-three.vercel.app
+                                     — API REST, WebSocket y Vercel production alias
        • font-src 'self' data: https://fonts.gstatic.com
                                      — fuentes propias + Google Fonts (Nunito, JetBrains Mono)
        • worker-src 'self' blob:     — service worker de PWA (Flutter lo genera en blob)
@@ -38,7 +39,8 @@
     img-src 'self' data: blob: https:;
     connect-src 'self'
       https://garden-api-1ldd.onrender.com
-      wss://garden-api-1ldd.onrender.com;
+      wss://garden-api-1ldd.onrender.com
+      https://garden-mvp-three.vercel.app;
     font-src 'self' data: https://fonts.gstatic.com;
     worker-src 'self' blob:;
     frame-ancestors 'none';
