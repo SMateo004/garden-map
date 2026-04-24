@@ -202,16 +202,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Widget _buildFormPanel(Color bg, Color surface, Color surfaceEl, Color textColor, Color subtextColor, Color borderColor, bool isDark) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
-      child: Column(
+    return Center(
+      child: SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 48),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          const Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('GARDEN', style: TextStyle(color: GardenColors.primary, fontSize: 24, fontWeight: FontWeight.w900)),
+              GestureDetector(
+                onTap: () => context.go('/'),
+                child: const Text('GARDEN', style: TextStyle(color: GardenColors.primary, fontSize: 24, fontWeight: FontWeight.w900)),
+              ),
+              TextButton.icon(
+                onPressed: () => context.go('/login'),
+                icon: const Icon(Icons.arrow_back_rounded, size: 16, color: GardenColors.primary),
+                label: Text('Iniciar sesión', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w500)),
+                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
+              ),
             ],
           ),
           const SizedBox(height: 40),
@@ -395,7 +406,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
           const SizedBox(height: 24),
 
-          // Link login
           Center(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -403,12 +413,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 Text('¿Ya tienes cuenta? ', style: TextStyle(color: subtextColor, fontSize: 14)),
                 GestureDetector(
                   onTap: () => context.go('/login'),
-                  child: const Text('Inicia sesión', style: TextStyle(color: GardenColors.primary, fontSize: 14, fontWeight: FontWeight.w600)),
+                  child: const Text('Inicia sesión', style: TextStyle(color: GardenColors.primary, fontSize: 14, fontWeight: FontWeight.w700)),
                 ),
               ],
             ),
           ),
         ],
+      ),
+      ),
       ),
     );
   }

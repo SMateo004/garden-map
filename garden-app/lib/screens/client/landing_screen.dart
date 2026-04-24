@@ -64,20 +64,23 @@ class _LandingScreenState extends State<LandingScreen> {
                 ),
                 actions: [
                   TextButton(
-                    onPressed: () => context.go('/register'), // "Quiero ser cuidador" puede guiar a registro y role
-                    child: const Text('Convertirse en cuidador', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700)),
+                    onPressed: () => context.go('/register'),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10)),
+                    child: const Text('Convertirse en cuidador', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 14)),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 4),
                   TextButton(
                     onPressed: () => context.go('/login'),
-                    child: Text('Iniciar sesión', style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10)),
+                    child: Text('Iniciar sesión', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
                   ),
                   const SizedBox(width: 8),
                   Padding(
-                    padding: const EdgeInsets.only(right: 16.0, top: 10, bottom: 10),
+                    padding: const EdgeInsets.only(right: 20.0, top: 8, bottom: 8),
                     child: GardenButton(
                       label: 'Registrarse',
-                      width: 120,
+                      width: 130,
+                      height: 40,
                       onPressed: () => context.go('/register'),
                     ),
                   ),
@@ -134,109 +137,69 @@ class _LandingScreenState extends State<LandingScreen> {
                             constraints: const BoxConstraints(maxWidth: 1050),
                             decoration: BoxDecoration(
                               color: isDark ? GardenColors.darkSurface : Colors.white,
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(20),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.15),
-                                  blurRadius: 24,
-                                  offset: const Offset(0, 8),
+                                  color: Colors.black.withOpacity(0.18),
+                                  blurRadius: 32,
+                                  offset: const Offset(0, 12),
                                 ),
                               ],
                             ),
                             child: Padding(
-                              padding: const EdgeInsets.all(16.0),
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
                               child: Wrap(
                                 crossAxisAlignment: WrapCrossAlignment.center,
                                 alignment: WrapAlignment.center,
                                 spacing: 12,
-                                runSpacing: 16,
+                                runSpacing: 12,
                                 children: [
                                   // 1. Selector de Servicio
                                   SizedBox(
-                                    width: 250,
+                                    width: 260,
+                                    height: 52,
                                     child: _buildServiceToggle(textColor, subtextColor),
                                   ),
-                                  
+
                                   // 2. Selector de Zona
-                                  Container(
-                                    width: 200,
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
-                                    ),
-                                    child: DropdownButtonHideUnderline(
-                                      child: DropdownButton<String>(
-                                        value: _selectedZone,
-                                        hint: Text('Zona', style: TextStyle(color: subtextColor, fontWeight: FontWeight.w600)),
-                                        isExpanded: true,
-                                        icon: const Icon(Icons.location_on_rounded, color: GardenColors.primary),
-                                        dropdownColor: surface,
-                                        style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14),
-                                        items: _zoneLabels.entries.map((e) {
-                                          return DropdownMenuItem(value: e.key, child: Text(e.value));
-                                        }).toList(),
-                                        onChanged: (val) => setState(() => _selectedZone = val),
-                                      ),
-                                    ),
+                                  _buildDropdown(
+                                    width: 210,
+                                    value: _selectedZone,
+                                    hint: 'Zona',
+                                    icon: Icons.location_on_rounded,
+                                    items: _zoneLabels.entries.map((e) =>
+                                      DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+                                    onChanged: (val) => setState(() => _selectedZone = val),
+                                    isDark: isDark, surface: surface, textColor: textColor, subtextColor: subtextColor,
                                   ),
 
                                   // 3. Mascota
-                                  Container(
-                                    width: 140,
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
-                                    ),
-                                    child: DropdownButtonHideUnderline(
-                                      child: DropdownButton<String>(
-                                        value: _selectedPetType,
-                                        hint: Text('Mascota', style: TextStyle(color: subtextColor, fontWeight: FontWeight.w600)),
-                                        isExpanded: true,
-                                        icon: const Icon(Icons.pets, color: GardenColors.primary, size: 20),
-                                        dropdownColor: surface,
-                                        style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14),
-                                        items: ['Perro', 'Gato'].map((e) {
-                                          return DropdownMenuItem(value: e, child: Text(e));
-                                        }).toList(),
-                                        onChanged: (val) => setState(() => _selectedPetType = val),
-                                      ),
-                                    ),
+                                  _buildDropdown(
+                                    width: 155,
+                                    value: _selectedPetType,
+                                    hint: 'Mascota',
+                                    icon: Icons.pets,
+                                    items: ['Perro', 'Gato'].map((e) =>
+                                      DropdownMenuItem(value: e, child: Text(e))).toList(),
+                                    onChanged: (val) => setState(() => _selectedPetType = val),
+                                    isDark: isDark, surface: surface, textColor: textColor, subtextColor: subtextColor,
                                   ),
 
                                   // 4. Tamaño
-                                  Container(
-                                    width: 160,
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
-                                    ),
-                                    child: DropdownButtonHideUnderline(
-                                      child: DropdownButton<String>(
-                                        value: _selectedSize,
-                                        hint: Text('Tamaño', style: TextStyle(color: subtextColor, fontWeight: FontWeight.w600)),
-                                        isExpanded: true,
-                                        icon: const Icon(Icons.straighten, color: GardenColors.primary, size: 20),
-                                        dropdownColor: surface,
-                                        style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14),
-                                        items: ['PEQUEÑO', 'MEDIANO', 'GRANDE', 'GIGANTE'].map((e) {
-                                          return DropdownMenuItem(value: e, child: Text(
-                                            e[0] + e.substring(1).toLowerCase()
-                                          ));
-                                        }).toList(),
-                                        onChanged: (val) => setState(() => _selectedSize = val),
-                                      ),
-                                    ),
+                                  _buildDropdown(
+                                    width: 170,
+                                    value: _selectedSize,
+                                    hint: 'Tamaño',
+                                    icon: Icons.straighten,
+                                    items: ['PEQUEÑO', 'MEDIANO', 'GRANDE', 'GIGANTE'].map((e) =>
+                                      DropdownMenuItem(value: e, child: Text(e[0] + e.substring(1).toLowerCase()))).toList(),
+                                    onChanged: (val) => setState(() => _selectedSize = val),
+                                    isDark: isDark, surface: surface, textColor: textColor, subtextColor: subtextColor,
                                   ),
-                                  
+
                                   // 5. Botón de Búsqueda
                                   SizedBox(
-                                    width: 140,
+                                    width: 150,
                                     height: 52,
                                     child: GardenButton(
                                       label: 'Buscar',
@@ -314,12 +277,48 @@ class _LandingScreenState extends State<LandingScreen> {
     );
   }
 
+  Widget _buildDropdown<T>({
+    required double width,
+    required T? value,
+    required String hint,
+    required IconData icon,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+    required bool isDark,
+    required Color surface,
+    required Color textColor,
+    required Color subtextColor,
+  }) {
+    return Container(
+      width: width,
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+      decoration: BoxDecoration(
+        color: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder, width: 1.5),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          hint: Text(hint, style: TextStyle(color: subtextColor, fontWeight: FontWeight.w600, fontSize: 14)),
+          isExpanded: true,
+          icon: Icon(icon, color: GardenColors.primary, size: 20),
+          dropdownColor: surface,
+          style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14),
+          items: items,
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+
   Widget _buildServiceToggle(Color textColor, Color subtextColor) {
     return Container(
       decoration: BoxDecoration(
         color: themeNotifier.isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: themeNotifier.isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: themeNotifier.isDark ? GardenColors.darkBorder : GardenColors.lightBorder, width: 1.5),
       ),
       child: Row(
         children: [

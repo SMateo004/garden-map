@@ -109,15 +109,14 @@ class _LoginScreenState extends State<LoginScreen> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [GardenColors.orange, Color(0xFFFF4500)],
+          colors: [GardenColors.primaryDark, Color(0xFF0D1A07)],
         ),
       ),
       child: Stack(
         children: [
-          // Patrón de fondo con íconos de mascotas
           Positioned.fill(
             child: Opacity(
-              opacity: 0.08,
+              opacity: 0.06,
               child: GridView.builder(
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -125,11 +124,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   childAspectRatio: 1,
                 ),
                 itemCount: 50,
-                itemBuilder: (_, __) => const Icon(Icons.pets, color: Colors.white, size: 32),
+                itemBuilder: (_, __) => const Icon(Icons.eco_rounded, color: Colors.white, size: 32),
               ),
             ),
           ),
-          // Contenido central
           Center(
             child: Padding(
               padding: const EdgeInsets.all(48),
@@ -140,10 +138,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   Container(
                     width: 72, height: 72,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: GardenColors.primary.withValues(alpha: 0.25),
                       borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4), width: 1.5),
                     ),
-                    child: const Icon(Icons.pets, color: Colors.white, size: 40),
+                    child: const Icon(Icons.pets, color: GardenColors.accent, size: 40),
                   ),
                   const SizedBox(height: 32),
                   Text(
@@ -151,21 +150,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: GardenText.h2.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: -1,
+                      letterSpacing: -2,
                     ),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     'Cuidado profesional\nverificado para\ntu mascota',
                     style: GardenText.h4.copyWith(
-                      color: Colors.white,
-                      fontSize: 22,
+                      color: Colors.white.withValues(alpha: 0.75),
+                      fontSize: 20,
                       fontWeight: FontWeight.w400,
-                      height: 1.4,
+                      height: 1.5,
                     ),
                   ),
                   const SizedBox(height: 48),
-                  // Stats
                   _statRow('200K+', 'mascotas cuidadas'),
                   const SizedBox(height: 16),
                   _statRow('98.5%', 'verificación IA'),
@@ -203,27 +201,33 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildFormPanel(Color surface, Color textColor, Color subtextColor, Color borderColor, bool isDark) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
-      child: Column(
+    return Center(
+      child: SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 48),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Toggle tema
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // En móvil muestra logo, en desktop está en el panel izquierdo
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  return Text(
-                    'GARDEN',
-                    style: GardenText.h3.copyWith(
-                      color: GardenColors.primary,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  );
-                },
+              GestureDetector(
+                onTap: () => context.go('/'),
+                child: Text(
+                  'GARDEN',
+                  style: GardenText.h3.copyWith(
+                    color: GardenColors.primary,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => context.go('/'),
+                icon: const Icon(Icons.arrow_back_rounded, size: 16, color: GardenColors.primary),
+                label: Text('Volver', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w500)),
+                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
               ),
             ],
           ),
@@ -310,7 +314,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           const SizedBox(height: 24),
 
-          // Link registro
           Center(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -318,12 +321,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 Text('¿No tienes cuenta? ', style: GardenText.metadata.copyWith(color: subtextColor, fontSize: 14)),
                 GestureDetector(
                   onTap: () => context.go('/register'),
-                  child: Text('Regístrate', style: GardenText.metadata.copyWith(color: GardenColors.primary, fontSize: 14)),
+                  child: Text('Regístrate', style: GardenText.metadata.copyWith(color: GardenColors.primary, fontSize: 14, fontWeight: FontWeight.w700)),
                 ),
               ],
             ),
           ),
         ],
+      ),
+      ),
       ),
     );
   }
