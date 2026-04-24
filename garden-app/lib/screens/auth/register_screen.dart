@@ -17,11 +17,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController     = TextEditingController();
   final _passwordController  = TextEditingController();
   final _phoneController     = TextEditingController();
+  final _addressController   = TextEditingController();
+  final _bioController       = TextEditingController();
   final _authService         = AuthService();
   bool _isLoading            = false;
   bool _obscurePassword      = true;
   bool _acceptedTerms        = false;
   String _selectedRole       = 'owner'; // 'owner' o 'caregiver'
+  DateTime? _dateOfBirth;
 
   @override
   void dispose() {
@@ -30,6 +33,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _phoneController.dispose();
+    _addressController.dispose();
+    _bioController.dispose();
     super.dispose();
   }
 
@@ -44,8 +49,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final email     = _emailController.text.trim();
     final password  = _passwordController.text;
     final phone     = _phoneController.text.trim();
+    final address   = _addressController.text.trim();
+    final bio       = _bioController.text.trim();
 
-    if (firstName.isEmpty || lastName.isEmpty || email.isEmpty || password.isEmpty || phone.isEmpty) {
+    if (firstName.isEmpty || lastName.isEmpty || email.isEmpty || password.isEmpty || phone.isEmpty || address.isEmpty || _dateOfBirth == null || bio.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Completa todos los campos')),
       );
@@ -54,6 +61,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (password.length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('La contraseña debe tener al menos 8 caracteres')),
+      );
+      return;
+    }
+    if (bio.length < 20) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La descripción debe tener al menos 20 caracteres')),
       );
       return;
     }
@@ -69,6 +82,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (_selectedRole == 'owner') {
         await _authService.registerClient(
           firstName: firstName, lastName: lastName, email: email, password: password, phone: phone,
+          address: address, dateOfBirth: _dateOfBirth, bio: bio,
         );
         if (!mounted) return;
         if (kIsWeb) {
@@ -355,7 +369,69 @@ class _RegisterScreenState extends State<RegisterScreen> {
             _textField(controller: _phoneController, hint: '76543210', icon: Icons.phone_outlined, keyboardType: TextInputType.phone, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
             const SizedBox(height: 8),
             Text('8 dígitos, empieza con 6 o 7', style: TextStyle(color: subtextColor, fontSize: 12)),
-            const SizedBox(height: 32),
+            const SizedBox(height: 20),
+
+            _fieldLabel('Dirección', textColor),
+            const SizedBox(height: 8),
+            _textField(controller: _addressController, hint: 'Tu dirección completa', icon: Icons.home_work_outlined, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+            const SizedBox(height: 20),
+
+            _fieldLabel('Fecha de nacimiento', textColor),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: DateTime(2000),
+                  firstDate: DateTime(1940),
+                  lastDate: DateTime.now().subtract(const Duration(days: 365 * 13)),
+                );
+                if (picked != null) setState(() => _dateOfBirth = picked);
+              },
+              child: Container(
+                height: 52,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: surfaceEl,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Row(children: [
+                  Icon(Icons.cake_outlined, color: subtextColor, size: 20),
+                  const SizedBox(width: 12),
+                  Text(
+                    _dateOfBirth == null
+                        ? 'Seleccionar fecha'
+                        : '${_dateOfBirth!.day.toString().padLeft(2, '0')}/${_dateOfBirth!.month.toString().padLeft(2, '0')}/${_dateOfBirth!.year}',
+                    style: TextStyle(color: _dateOfBirth == null ? subtextColor : textColor, fontSize: 14),
+                  ),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            _fieldLabel('Descripción breve de ti', textColor),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _bioController,
+              maxLines: 3,
+              maxLength: 300,
+              style: TextStyle(color: textColor, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Cuéntanos un poco sobre ti...',
+                hintStyle: TextStyle(color: subtextColor),
+                prefixIcon: Padding(
+                  padding: const EdgeInsets.only(bottom: 40),
+                  child: Icon(Icons.description_outlined, color: subtextColor, size: 20),
+                ),
+                filled: true, fillColor: surfaceEl,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              ),
+            ),
+            const SizedBox(height: 12),
           ],
 
           // Checkbox de términos

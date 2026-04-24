@@ -24,6 +24,9 @@ class _MyDataScreenState extends State<MyDataScreen> {
   late TextEditingController _phoneCtrl;
   late TextEditingController _cityCtrl;
   late TextEditingController _countryCtrl;
+  late TextEditingController _addressCtrl;
+  late TextEditingController _bioCtrl;
+  DateTime? _dateOfBirth;
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
@@ -35,6 +38,8 @@ class _MyDataScreenState extends State<MyDataScreen> {
     _phoneCtrl = TextEditingController();
     _cityCtrl = TextEditingController();
     _countryCtrl = TextEditingController();
+    _addressCtrl = TextEditingController();
+    _bioCtrl = TextEditingController();
     _loadData();
   }
 
@@ -45,6 +50,8 @@ class _MyDataScreenState extends State<MyDataScreen> {
     _phoneCtrl.dispose();
     _cityCtrl.dispose();
     _countryCtrl.dispose();
+    _addressCtrl.dispose();
+    _bioCtrl.dispose();
     super.dispose();
   }
 
@@ -66,6 +73,12 @@ class _MyDataScreenState extends State<MyDataScreen> {
           _phoneCtrl.text = user['phone'] as String? ?? '';
           _cityCtrl.text = user['city'] as String? ?? '';
           _countryCtrl.text = user['country'] as String? ?? '';
+          _addressCtrl.text = user['address'] as String? ?? '';
+          _bioCtrl.text = user['bio'] as String? ?? '';
+          final dob = user['dateOfBirth'] as String?;
+          if (dob != null && dob.isNotEmpty) {
+            try { _dateOfBirth = DateTime.parse(dob); } catch (_) {}
+          }
         });
       }
     } catch (_) {}
@@ -128,6 +141,9 @@ class _MyDataScreenState extends State<MyDataScreen> {
         'phone': _phoneCtrl.text.trim(),
         'city': _cityCtrl.text.trim(),
         'country': _countryCtrl.text.trim(),
+        'address': _addressCtrl.text.trim(),
+        'bio': _bioCtrl.text.trim(),
+        if (_dateOfBirth != null) 'dateOfBirth': _dateOfBirth!.toIso8601String(),
       };
       final res = await http.patch(
         Uri.parse('$_baseUrl/auth/me'),
@@ -301,7 +317,64 @@ class _MyDataScreenState extends State<MyDataScreen> {
                       TextField(controller: _countryCtrl,
                         style: TextStyle(color: textColor),
                         decoration: fieldDeco('Tu país', Icons.public_outlined)),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 16),
+
+                      // Address
+                      Text('Dirección', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                      TextField(controller: _addressCtrl,
+                        style: TextStyle(color: textColor),
+                        decoration: fieldDeco('Tu dirección', Icons.home_work_outlined)),
+                      const SizedBox(height: 16),
+
+                      // Date of birth
+                      Text('Fecha de nacimiento', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                      GestureDetector(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _dateOfBirth ?? DateTime(1995),
+                            firstDate: DateTime(1940),
+                            lastDate: DateTime.now().subtract(const Duration(days: 365 * 13)),
+                          );
+                          if (picked != null) setState(() => _dateOfBirth = picked);
+                        },
+                        child: Container(
+                          height: 52,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: surfaceEl,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: Row(children: [
+                            Icon(Icons.cake_outlined, color: subtextColor, size: 20),
+                            const SizedBox(width: 12),
+                            Text(
+                              _dateOfBirth == null
+                                  ? 'Seleccionar fecha'
+                                  : '${_dateOfBirth!.day.toString().padLeft(2, '0')}/${_dateOfBirth!.month.toString().padLeft(2, '0')}/${_dateOfBirth!.year}',
+                              style: TextStyle(color: _dateOfBirth == null ? subtextColor : textColor, fontSize: 14),
+                            ),
+                          ]),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Bio
+                      Text('Descripción', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _bioCtrl,
+                        maxLines: 3,
+                        maxLength: 300,
+                        style: TextStyle(color: textColor, fontSize: 14),
+                        decoration: fieldDeco('Una breve descripción de ti', Icons.description_outlined).copyWith(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
 
                       SizedBox(
                         width: double.infinity,

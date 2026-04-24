@@ -168,6 +168,8 @@ class AuthService {
     required String password,
     required String phone,
     String? address,
+    DateTime? dateOfBirth,
+    String? bio,
   }) async {
     final body = {
       'firstName': firstName,
@@ -176,6 +178,8 @@ class AuthService {
       'password': password,
       'phone': phone,
       if (address != null && address.isNotEmpty) 'address': address,
+      if (dateOfBirth != null) 'dateOfBirth': dateOfBirth.toIso8601String(),
+      if (bio != null && bio.isNotEmpty) 'bio': bio,
     };
     final http.Response response;
     try {

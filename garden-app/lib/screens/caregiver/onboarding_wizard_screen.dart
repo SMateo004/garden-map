@@ -157,6 +157,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           _lastNameController.text = user['lastName'] as String? ?? '';
           _emailController.text = user['email'] as String? ?? '';
           _phoneController.text = user['phone'] as String? ?? '';
+          // Pre-fill address and bio from client profile data
+          if ((user['address'] as String? ?? '').isNotEmpty) {
+            _addressController.text = user['address'] as String;
+          }
+          if ((user['bio'] as String? ?? '').isNotEmpty) {
+            _bioController.text = user['bio'] as String;
+          }
           if (user['dateOfBirth'] != null) {
             try {
               _dateOfBirth = DateTime.parse(user['dateOfBirth'] as String);
