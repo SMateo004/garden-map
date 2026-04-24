@@ -102,10 +102,8 @@ const _explicitOrigins: string[] = [
   ...env.VERCEL_DOMAINS.split(','),
 ].map(o => o.trim()).filter(Boolean);
 
-// Allow any *.vercel.app subdomain for preview deployments when VERCEL_DOMAINS is set
-const _vercelPreviewPattern: RegExp | null = env.VERCEL_DOMAINS
-  ? /^https:\/\/[\w-]+-[\w-]+-[\w-]+\.vercel\.app$/
-  : null;
+// Allow garden-* Vercel deployments (production alias + preview URLs for this project)
+const _vercelPreviewPattern = /^https:\/\/garden-[\w-]+\.vercel\.app$/;
 
 const _devPatterns: (RegExp | string)[] = env.NODE_ENV !== 'production'
   ? [
@@ -123,8 +121,8 @@ app.use(cors({
     // Orígenes explícitos configurados vía env
     if (_explicitOrigins.includes(origin)) return callback(null, true);
 
-    // Vercel preview deployments (*.vercel.app)
-    if (_vercelPreviewPattern?.test(origin)) return callback(null, true);
+    // Vercel deployments: garden-*.vercel.app (production alias + previews)
+    if (_vercelPreviewPattern.test(origin)) return callback(null, true);
 
     // Patrones adicionales (solo en desarrollo)
     if (_devPatterns.some(p => (typeof p === 'string' ? p === origin : p.test(origin)))) {
