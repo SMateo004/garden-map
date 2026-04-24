@@ -38,4 +38,15 @@ flutter build web \
   --dart-define=API_URL="${API_URL:-https://garden-api-1ldd.onrender.com/api}" \
   --pwa-strategy offline-first
 
+# ── 5. Patch flutter_bootstrap.js — force local CanvasKit ───────────────────
+# Flutter loads CanvasKit from gstatic.com by default (~2MB external fetch).
+# Injecting canvasKitBaseUrl: "/canvaskit/" makes it use the bundled copy,
+# eliminating the external dependency and dramatically reducing load time.
+BOOTSTRAP="build/web/flutter_bootstrap.js"
+if [ -f "$BOOTSTRAP" ]; then
+  # Replace the loader.load({serviceWorkerSettings:...}) call to include canvasKitBaseUrl
+  sed -i 's/_flutter\.loader\.load({/_flutter.loader.load({canvasKitBaseUrl:"\/canvaskit\/",/' "$BOOTSTRAP"
+  echo "✓ Patched flutter_bootstrap.js → canvasKitBaseUrl=/canvaskit/"
+fi
+
 echo "✓ Built → build/web ($(du -sh build/web | cut -f1))"
