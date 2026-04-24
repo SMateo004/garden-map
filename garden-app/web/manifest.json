@@ -1,11 +1,11 @@
 {
-    "name": "garden_app",
-    "short_name": "garden_app",
-    "start_url": ".",
+    "name": "GARDEN — Cuidado de Mascotas",
+    "short_name": "GARDEN",
+    "start_url": "/",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1A2E1A",
+    "theme_color": "#2D5A27",
+    "description": "Conecta con cuidadores de mascotas de confianza cerca de ti.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

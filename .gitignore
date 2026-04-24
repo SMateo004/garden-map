@@ -43,3 +43,4 @@ test_images/
  cache/
  typechain/
  typechain-types/
+.vercel
