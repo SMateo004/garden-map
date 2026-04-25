@@ -10,7 +10,6 @@ import '../../main.dart';
 import '../../theme/garden_theme.dart' show fixImageUrl, GardenColors, GardenButton, themeNotifier;
 import '../../services/auth_service.dart';
 import '../../services/agentes_service.dart';
-import '../../widgets/precio_onboarding_card.dart';
 import 'caregiver_profile_data_screen.dart';
 import 'verification_screen.dart';
 import 'email_verification_screen.dart';
@@ -1384,12 +1383,37 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     final isDark = themeNotifier.isDark;
     final textColor    = isDark ? GardenColors.darkTextPrimary   : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final bg           = isDark ? GardenColors.darkBackground    : GardenColors.lightBackground;
 
-    return SingleChildScrollView(
+    const double sliderMin = 50.0;
+    const double sliderMax = 290.0;
+
+    // Inicializar precio si todavía es 0
+    if (_precioFinal <= 0) {
+      final avg = (_priceStats?['avgPrice'] as num?)?.toDouble() ?? 90.0;
+      _precioFinal = avg.clamp(sliderMin, sliderMax);
+    }
+
+    final double sliderValue = _precioFinal.clamp(sliderMin, sliderMax);
+
+    // Posición relativa para el badge
+    final double ratio = (sliderValue - sliderMin) / (sliderMax - sliderMin);
+    final String posicion = ratio < 0.33 ? 'ECONÓMICO' : ratio < 0.66 ? 'ESTÁNDAR' : 'PREMIUM';
+    final Color posicionColor = posicion == 'ECONÓMICO'
+        ? const Color(0xFF2196F3)
+        : posicion == 'PREMIUM'
+            ? const Color(0xFFFFD700)
+            : const Color(0xFF4CAF50);
+
+    final bool isPaseo = _servicesOffered.contains('PASEO') && !_servicesOffered.contains('HOSPEDAJE');
+    final String unidad = isPaseo ? '/ 1 hora' : '/ noche';
+
+    return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header banner
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -1407,35 +1431,118 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               Expanded(child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Precio Dinámico Recomendado', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white)),
+                  Text('Elige tu precio', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white)),
                   SizedBox(height: 4),
-                  Text('GARDEN analiza la demanda en tiempo real para sugerirte el mejor precio inicial según tu zona y experiencia.',
+                  Text('Ajusta el precio usando la barra. Puedes cambiarlo en cualquier momento.',
                       style: TextStyle(fontSize: 12, color: Colors.white70)),
                 ],
               )),
             ]),
           ),
-          const SizedBox(height: 20),
-          Text('Basado en el mercado de tu zona', style: TextStyle(fontSize: 14, color: subtextColor)),
-          const SizedBox(height: 20),
-          PrecioOnboardingCard(
-            zona: _selectedZone ?? 'EQUIPETROL',
-            servicio: _servicesOffered.isNotEmpty ? _servicesOffered.first.toLowerCase() : 'paseo',
-            experienciaMeses: 6,
-            trustScore: 85,
-            precioPromedioZona: (_priceStats?['avgPrice'] as num?)?.toDouble() ?? 90.0,
-            precioMinZona: (_priceStats?['minPrice'] as num?)?.toDouble() ?? 50.0,
-            precioMaxZona: (_priceStats?['maxPrice'] as num?)?.toDouble() ?? 290.0,
-            agentesService: AgentesService(authToken: _authToken),
-            onPrecioConfirmado: (precio) => setState(() => _precioFinal = precio),
+          const SizedBox(height: 24),
+
+          // Tarjeta de precio con slider directo
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1C2A1A),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 12, offset: const Offset(0, 4))],
+            ),
+            child: Column(
+              children: [
+                // Precio grande
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    const Text('Bs ', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+                    Text(
+                      sliderValue.toStringAsFixed(0),
+                      style: const TextStyle(fontSize: 60, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                  ],
+                ),
+                Text(unidad, style: const TextStyle(color: Colors.white60, fontSize: 14)),
+                const SizedBox(height: 16),
+
+                // Badge posición
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: posicionColor,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    posicion,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: posicion == 'PREMIUM' ? Colors.black : Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Slider directo en el estado padre — sin widget hijo intermedio
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 6,
+                    activeTrackColor: GardenColors.primary,
+                    inactiveTrackColor: Colors.white24,
+                    thumbColor: Colors.white,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 14),
+                    overlayColor: GardenColors.primary.withValues(alpha: 0.25),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 24),
+                    valueIndicatorColor: GardenColors.primary,
+                    valueIndicatorTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
+                    showValueIndicator: ShowValueIndicator.always,
+                  ),
+                  child: Slider(
+                    value: sliderValue,
+                    min: sliderMin,
+                    max: sliderMax,
+                    divisions: 48, // (290-50)/5 = 48 pasos de 5 Bs
+                    label: 'Bs ${sliderValue.toStringAsFixed(0)}',
+                    onChanged: (v) => setState(() => _precioFinal = v),
+                  ),
+                ),
+
+                // Etiquetas min / max
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Bs ${sliderMin.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                      Text('Bs ${sliderMax.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Info zona
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.info_outline_rounded, color: Colors.white60, size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(
+                      'Precio base recomendado: Bs 90 $unidad · Máximo: Bs 290',
+                      style: const TextStyle(color: Colors.white60, fontSize: 12),
+                    )),
+                  ]),
+                ),
+              ],
+            ),
           ),
-          if (_precioFinal > 0) ...[
-            const SizedBox(height: 16),
-            Center(child: Text(
-              'Precio seleccionado: Bs ${_precioFinal.toStringAsFixed(0)}',
-              style: const TextStyle(color: GardenColors.primary, fontSize: 18, fontWeight: FontWeight.w800),
-            )),
-          ],
         ],
       ),
     );
