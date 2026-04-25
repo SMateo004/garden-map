@@ -1408,7 +1408,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     final bool isPaseo = _servicesOffered.contains('PASEO') && !_servicesOffered.contains('HOSPEDAJE');
     final String unidad = isPaseo ? '/ 1 hora' : '/ noche';
 
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1423,17 +1423,16 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: GardenColors.primary.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4))],
             ),
             child: const Row(children: [
-              Icon(Icons.auto_awesome, color: Colors.white, size: 40),
+              Icon(Icons.payments_outlined, color: Colors.white, size: 36),
               SizedBox(width: 16),
               Expanded(child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Elige tu precio', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white)),
                   SizedBox(height: 4),
-                  Text('Ajusta el precio usando la barra. Puedes cambiarlo en cualquier momento.',
+                  Text('Ajusta la barra para fijar tu tarifa. Puedes cambiarlo después.',
                       style: TextStyle(fontSize: 12, color: Colors.white70)),
                 ],
               )),
@@ -1441,15 +1440,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           ),
           const SizedBox(height: 24),
 
-          // Tarjeta de precio con slider directo
+          // Tarjeta principal
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
             decoration: BoxDecoration(
               color: const Color(0xFF1C2A1A),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 12, offset: const Offset(0, 4))],
+              border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4)),
             ),
             child: Column(
               children: [
@@ -1459,89 +1457,75 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
-                    const Text('Bs ', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+                    const Text('Bs ', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white70)),
                     Text(
                       sliderValue.toStringAsFixed(0),
-                      style: const TextStyle(fontSize: 60, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: const TextStyle(fontSize: 72, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                   ],
                 ),
                 Text(unidad, style: const TextStyle(color: Colors.white60, fontSize: 14)),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
 
                 // Badge posición
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
                   decoration: BoxDecoration(
                     color: posicionColor,
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Text(
-                    posicion,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: posicion == 'PREMIUM' ? Colors.black : Colors.white,
-                    ),
-                  ),
+                  child: Text(posicion,
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold,
+                      color: posicion == 'PREMIUM' ? Colors.black : Colors.white)),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
 
-                // Slider directo en el estado padre — sin widget hijo intermedio
-                SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 6,
-                    activeTrackColor: GardenColors.primary,
-                    inactiveTrackColor: Colors.white24,
-                    thumbColor: Colors.white,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 14),
-                    overlayColor: GardenColors.primary.withValues(alpha: 0.25),
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 24),
-                    valueIndicatorColor: GardenColors.primary,
-                    valueIndicatorTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
-                    showValueIndicator: ShowValueIndicator.always,
-                  ),
-                  child: Slider(
-                    value: sliderValue,
-                    min: sliderMin,
-                    max: sliderMax,
-                    divisions: 48, // (290-50)/5 = 48 pasos de 5 Bs
-                    label: 'Bs ${sliderValue.toStringAsFixed(0)}',
-                    onChanged: (v) => setState(() => _precioFinal = v),
-                  ),
+                // Slider
+                Slider(
+                  value: sliderValue,
+                  min: sliderMin,
+                  max: sliderMax,
+                  divisions: 48,
+                  activeColor: GardenColors.primary,
+                  inactiveColor: Colors.white24,
+                  thumbColor: Colors.white,
+                  label: 'Bs ${sliderValue.toStringAsFixed(0)}',
+                  onChanged: (v) => setState(() => _precioFinal = v),
                 ),
 
                 // Etiquetas min / max
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Bs ${sliderMin.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                      Text('Bs ${sliderMax.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                    ],
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Bs 50', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    Text('Bs 290', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  ],
                 ),
                 const SizedBox(height: 20),
 
-                // Info zona
+                // Nota
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.07),
+                    color: Colors.white.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(children: [
-                    const Icon(Icons.info_outline_rounded, color: Colors.white60, size: 18),
-                    const SizedBox(width: 10),
+                    const Icon(Icons.info_outline, color: Colors.white60, size: 16),
+                    const SizedBox(width: 8),
                     Expanded(child: Text(
-                      'Precio base recomendado: Bs 90 $unidad · Máximo: Bs 290',
+                      'Precio sugerido: Bs 90 $unidad · Máximo: Bs 290',
                       style: const TextStyle(color: Colors.white60, fontSize: 12),
                     )),
                   ]),
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: Text('Precio elegido: Bs ${sliderValue.toStringAsFixed(0)} $unidad',
+              style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
