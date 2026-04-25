@@ -1425,7 +1425,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             trustScore: 85,
             precioPromedioZona: (_priceStats?['avgPrice'] as num?)?.toDouble() ?? 90.0,
             precioMinZona: (_priceStats?['minPrice'] as num?)?.toDouble() ?? 50.0,
-            precioMaxZona: (_priceStats?['maxPrice'] as num?)?.toDouble() ?? 180.0,
+            precioMaxZona: (_priceStats?['maxPrice'] as num?)?.toDouble() ?? 290.0,
             agentesService: AgentesService(authToken: _authToken),
             onPrecioConfirmado: (precio) => setState(() => _precioFinal = precio),
           ),

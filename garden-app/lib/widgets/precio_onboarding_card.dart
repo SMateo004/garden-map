@@ -51,28 +51,18 @@ class _PrecioOnboardingCardState extends State<PrecioOnboardingCard> {
   }
 
   void _initPrices() {
-    // Defaults cuando no hay datos del mercado
-    final bool isPaseo = widget.servicio.toLowerCase() == 'paseo';
-    final double defaultPrice = isPaseo ? 90.0 : 150.0;
-    final double defaultMin = isPaseo ? 50.0 : 80.0;
-    final double defaultMax = isPaseo ? 180.0 : 300.0;
+    // Usar directamente los valores del widget — el caller es responsable de los defaults
+    _sliderMin = widget.precioMinZona;
+    _sliderMax = widget.precioMaxZona;
+    _precioSeleccionado = widget.precioPromedioZona.clamp(_sliderMin, _sliderMax);
 
-    // Detectar si los valores son los defaults (sin datos reales)
-    _hasMarketData = widget.precioPromedioZona != 90.0 ||
-        widget.precioMinZona != 50.0 ||
-        widget.precioMaxZona != 180.0;
+    // Hay datos de mercado si el rango tiene amplitud significativa
+    _hasMarketData = (_sliderMax - _sliderMin) > 30 &&
+        widget.precioPromedioZona != _sliderMin;
 
-    final double avg = _hasMarketData ? widget.precioPromedioZona : defaultPrice;
-    final double min = _hasMarketData ? widget.precioMinZona : defaultMin;
-    final double max = _hasMarketData ? widget.precioMaxZona : defaultMax;
-
-    _sliderMin = min;
-    _sliderMax = max;
-    _precioSeleccionado = avg.clamp(min, max);
-
-    // Notificar precio inicial
+    // Notificar precio inicial al padre
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.onPrecioConfirmado(_precioSeleccionado);
+      if (mounted) widget.onPrecioConfirmado(_precioSeleccionado);
     });
   }
 
@@ -158,10 +148,8 @@ class _PrecioOnboardingCardState extends State<PrecioOnboardingCard> {
               max: _sliderMax,
               divisions: ((_sliderMax - _sliderMin) / 5).round().clamp(1, 100),
               label: 'Bs ${_precioSeleccionado.toStringAsFixed(0)}',
-              onChanged: (v) {
-                setState(() => _precioSeleccionado = v);
-                widget.onPrecioConfirmado(v);
-              },
+              onChanged: (v) => setState(() => _precioSeleccionado = v),
+              onChangeEnd: (v) => widget.onPrecioConfirmado(v),
             ),
           ),
 
