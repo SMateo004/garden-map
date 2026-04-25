@@ -86,71 +86,61 @@ class _MyDataScreenState extends State<MyDataScreen> {
     if (mounted) setState(() => _isLoading = false);
   }
 
-  void _pickAndUploadPhoto() {
+  Future<void> _pickAndUploadPhoto() async {
     final input = html.FileUploadInputElement()
       ..accept = 'image/*'
       ..style.display = 'none';
     html.document.body!.append(input);
 
-    input.onChange.listen((_) {
+    try {
+      input.click();
+      await input.onChange.first;
+
       final file = input.files?.first;
-      if (file == null) { input.remove(); return; }
+      if (file == null) return;
 
       final reader = html.FileReader();
       reader.readAsArrayBuffer(file);
+      await reader.onLoad.first;
 
-      reader.onLoad.listen((_) async {
-        if (!mounted) { input.remove(); return; }
-        final result = reader.result;
-        Uint8List bytes;
-        if (result is ByteBuffer) {
-          bytes = result.asUint8List();
-        } else {
-          bytes = Uint8List.fromList(result as List<int>);
-        }
-        final fileName = file.name.isEmpty
-            ? 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg'
-            : file.name;
-        final mimeType = file.type.isEmpty ? 'image/jpeg' : file.type;
-        input.remove();
+      if (!mounted) return;
+      final result = reader.result;
+      final Uint8List bytes = result is ByteBuffer
+          ? result.asUint8List()
+          : Uint8List.fromList(result as List<int>);
+      final fileName = file.name.isEmpty
+          ? 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg'
+          : file.name;
+      final mimeType = file.type.isEmpty ? 'image/jpeg' : file.type;
 
-        setState(() => _uploadingPhoto = true);
-        try {
-          final uri = Uri.parse('$_baseUrl/upload/user-photo');
-          final request = http.MultipartRequest('POST', uri);
-          request.headers['Authorization'] = 'Bearer $_token';
-          request.files.add(http.MultipartFile.fromBytes(
-            'photo', bytes, filename: fileName,
-            contentType: MediaType.parse(mimeType),
-          ));
-          final response = await http.Response.fromStream(await request.send());
-          final data = jsonDecode(response.body);
-          if (response.statusCode == 200 && data['success'] == true) {
-            setState(() {
-              _userData = {...?_userData, 'profilePicture': data['data']['url']};
-            });
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Foto actualizada'), backgroundColor: GardenColors.success));
-            }
-          } else {
-            throw Exception(data['message'] ?? 'Error al subir foto');
-          }
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(e.toString().replaceFirst('Exception: ', '')),
-                backgroundColor: GardenColors.error));
-          }
-        } finally {
-          if (mounted) setState(() => _uploadingPhoto = false);
-        }
-      });
-
-      reader.onError.listen((_) => input.remove());
-    });
-
-    input.click();
+      setState(() => _uploadingPhoto = true);
+      final uri = Uri.parse('$_baseUrl/upload/user-photo');
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Authorization'] = 'Bearer $_token';
+      request.files.add(http.MultipartFile.fromBytes(
+        'photo', bytes, filename: fileName,
+        contentType: MediaType.parse(mimeType),
+      ));
+      final response = await http.Response.fromStream(await request.send());
+      final data = jsonDecode(response.body);
+      if (!mounted) return;
+      if (response.statusCode == 200 && data['success'] == true) {
+        setState(() => _userData = {...?_userData, 'profilePicture': data['data']['url']});
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Foto actualizada'), backgroundColor: GardenColors.success));
+      } else {
+        throw Exception(data['message'] ?? 'Error al subir foto');
+      }
+    } catch (e) {
+      if (mounted && e.toString().isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: GardenColors.error));
+      }
+    } finally {
+      input.remove();
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
   }
 
   Future<void> _save() async {

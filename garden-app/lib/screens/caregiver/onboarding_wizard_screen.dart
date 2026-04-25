@@ -819,9 +819,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     }
   }
 
-  /// Abre el selector de archivos nativo del navegador usando dart:html FileReader,
-  /// evitando completamente blob URLs (que algunos navegadores bloquean por CSP).
-  void _pickAndUploadPhoto() {
+  Future<void> _pickAndUploadPhoto() async {
     final isHospedaje = _servicesOffered.contains('HOSPEDAJE');
     final maxFotos = isHospedaje ? 6 : 4;
     if (_localPhotos.length + _photoUrls.length >= maxFotos) return;
@@ -831,29 +829,34 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       ..style.display = 'none';
     html.document.body!.append(input);
 
-    input.onChange.listen((_) {
+    try {
+      input.click();
+      await input.onChange.first;   // espera selección real del usuario
+
       final file = input.files?.first;
-      if (file == null) { input.remove(); return; }
+      if (file == null) return;
 
       final reader = html.FileReader();
       reader.readAsArrayBuffer(file);
+      await reader.onLoad.first;    // espera que FileReader termine
 
-      reader.onLoad.listen((_) {
-        if (!mounted) { input.remove(); return; }
-        final result = reader.result;
-        final Uint8List bytes = result is ByteBuffer ? result.asUint8List() : Uint8List.fromList(result as List<int>);
-        final name = file.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : file.name;
-        final mimeType = file.type.isEmpty ? 'image/jpeg' : file.type;
-        setState(() {
-          _localPhotos.add((bytes: bytes, name: name, mimeType: mimeType));
-        });
-        input.remove();
+      if (!mounted) return;
+      final result = reader.result;
+      final Uint8List bytes = result is ByteBuffer
+          ? result.asUint8List()
+          : Uint8List.fromList(result as List<int>);
+      final name = file.name.isEmpty
+          ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg'
+          : file.name;
+      final mimeType = file.type.isEmpty ? 'image/jpeg' : file.type;
+      setState(() {
+        _localPhotos.add((bytes: bytes, name: name, mimeType: mimeType));
       });
-
-      reader.onError.listen((_) => input.remove());
-    });
-
-    input.click();
+    } catch (e) {
+      // usuario canceló o error de lectura — sin acción
+    } finally {
+      input.remove();
+    }
   }
 
   Future<void> _uploadAllPhotos() async {
@@ -1593,36 +1596,41 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
 
   // ── PASO 7: Foto de Perfil ────────────────────────────────
-  void _pickProfilePhoto() {
+  Future<void> _pickProfilePhoto() async {
     final input = html.FileUploadInputElement()
       ..accept = 'image/*'
       ..style.display = 'none';
     html.document.body!.append(input);
 
-    input.onChange.listen((_) {
+    try {
+      input.click();
+      await input.onChange.first;
+
       final file = input.files?.first;
-      if (file == null) { input.remove(); return; }
+      if (file == null) return;
 
       final reader = html.FileReader();
       reader.readAsArrayBuffer(file);
+      await reader.onLoad.first;
 
-      reader.onLoad.listen((_) {
-        if (!mounted) { input.remove(); return; }
-        final result = reader.result;
-        final Uint8List bytes = result is ByteBuffer ? result.asUint8List() : Uint8List.fromList(result as List<int>);
-        final name = file.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : file.name;
-        final mimeType = file.type.isEmpty ? 'image/jpeg' : file.type;
-        setState(() {
-          _profilePhotoUrl = null;
-          _localProfilePhoto = (bytes: bytes, name: name, mimeType: mimeType);
-        });
-        input.remove();
+      if (!mounted) return;
+      final result = reader.result;
+      final Uint8List bytes = result is ByteBuffer
+          ? result.asUint8List()
+          : Uint8List.fromList(result as List<int>);
+      final name = file.name.isEmpty
+          ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg'
+          : file.name;
+      final mimeType = file.type.isEmpty ? 'image/jpeg' : file.type;
+      setState(() {
+        _profilePhotoUrl = null;
+        _localProfilePhoto = (bytes: bytes, name: name, mimeType: mimeType);
       });
-
-      reader.onError.listen((_) => input.remove());
-    });
-
-    input.click();
+    } catch (e) {
+      // usuario canceló o error
+    } finally {
+      input.remove();
+    }
   }
 
   Widget _buildStep7() {
