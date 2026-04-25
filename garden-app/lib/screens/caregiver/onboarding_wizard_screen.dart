@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
 import '../../theme/garden_theme.dart' show fixImageUrl, GardenColors, GardenButton, themeNotifier;
 import '../../services/auth_service.dart';
-import '../../services/agentes_service.dart';
+
 import 'caregiver_profile_data_screen.dart';
 import 'verification_screen.dart';
 import 'email_verification_screen.dart';
@@ -82,7 +82,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   final List<String> _times = [];
 
   // Paso 5: Precio
-  double _precioFinal = 0;
+  double _precioFinal = 90.0;
   String _authToken = '';
   Map<String, dynamic>? _priceStats;
 
