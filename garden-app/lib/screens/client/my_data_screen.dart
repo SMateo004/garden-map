@@ -1,9 +1,8 @@
 import 'dart:convert';
-import 'dart:html' as html;
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 
@@ -87,39 +86,22 @@ class _MyDataScreenState extends State<MyDataScreen> {
   }
 
   Future<void> _pickAndUploadPhoto() async {
-    final input = html.FileUploadInputElement()
-      ..accept = 'image/*'
-      ..style.display = 'none';
-    html.document.body!.append(input);
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (picked == null) return;
 
+    setState(() => _uploadingPhoto = true);
     try {
-      input.click();
-      await input.onChange.first;
-
-      final file = input.files?.first;
-      if (file == null) return;
-
-      final reader = html.FileReader();
-      reader.readAsArrayBuffer(file);
-      await reader.onLoad.first;
-
-      if (!mounted) return;
-      final result = reader.result;
-      final Uint8List bytes = result is ByteBuffer
-          ? result.asUint8List()
-          : Uint8List.fromList(result as List<int>);
-      final fileName = file.name.isEmpty
+      final bytes = await picked.readAsBytes();
+      final fileName = picked.name.isEmpty
           ? 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg'
-          : file.name;
-      final mimeType = file.type.isEmpty ? 'image/jpeg' : file.type;
-
-      setState(() => _uploadingPhoto = true);
+          : picked.name;
       final uri = Uri.parse('$_baseUrl/upload/user-photo');
       final request = http.MultipartRequest('POST', uri);
       request.headers['Authorization'] = 'Bearer $_token';
       request.files.add(http.MultipartFile.fromBytes(
         'photo', bytes, filename: fileName,
-        contentType: MediaType.parse(mimeType),
+        contentType: MediaType('image', 'jpeg'),
       ));
       final response = await http.Response.fromStream(await request.send());
       final data = jsonDecode(response.body);
@@ -132,13 +114,12 @@ class _MyDataScreenState extends State<MyDataScreen> {
         throw Exception(data['message'] ?? 'Error al subir foto');
       }
     } catch (e) {
-      if (mounted && e.toString().isNotEmpty) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(e.toString().replaceFirst('Exception: ', '')),
             backgroundColor: GardenColors.error));
       }
     } finally {
-      input.remove();
       if (mounted) setState(() => _uploadingPhoto = false);
     }
   }

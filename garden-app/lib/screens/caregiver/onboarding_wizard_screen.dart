@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'dart:html' as html;
 import 'dart:typed_data';
+import 'package:image_picker/image_picker.dart' as image_picker_pkg;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -824,38 +824,24 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     final maxFotos = isHospedaje ? 6 : 4;
     if (_localPhotos.length + _photoUrls.length >= maxFotos) return;
 
-    final input = html.FileUploadInputElement()
-      ..accept = 'image/*'
-      ..style.display = 'none';
-    html.document.body!.append(input);
+    final picked = await image_picker_pkg.ImagePicker()
+        .pickImage(source: image_picker_pkg.ImageSource.gallery, imageQuality: 85);
+    if (picked == null || !mounted) return;
 
     try {
-      input.click();
-      await input.onChange.first;   // espera selección real del usuario
-
-      final file = input.files?.first;
-      if (file == null) return;
-
-      final reader = html.FileReader();
-      reader.readAsArrayBuffer(file);
-      await reader.onLoad.first;    // espera que FileReader termine
-
-      if (!mounted) return;
-      final result = reader.result;
-      final Uint8List bytes = result is ByteBuffer
-          ? result.asUint8List()
-          : Uint8List.fromList(result as List<int>);
-      final name = file.name.isEmpty
+      final bytes = await picked.readAsBytes();
+      final name = picked.name.isEmpty
           ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg'
-          : file.name;
-      final mimeType = file.type.isEmpty ? 'image/jpeg' : file.type;
+          : picked.name;
+      final mimeType = picked.mimeType ?? 'image/jpeg';
       setState(() {
         _localPhotos.add((bytes: bytes, name: name, mimeType: mimeType));
       });
     } catch (e) {
-      // usuario canceló o error de lectura — sin acción
-    } finally {
-      input.remove();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error leyendo imagen: $e'), backgroundColor: Colors.red.shade700));
+      }
     }
   }
 
@@ -1597,39 +1583,25 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
   // ── PASO 7: Foto de Perfil ────────────────────────────────
   Future<void> _pickProfilePhoto() async {
-    final input = html.FileUploadInputElement()
-      ..accept = 'image/*'
-      ..style.display = 'none';
-    html.document.body!.append(input);
+    final picked = await image_picker_pkg.ImagePicker()
+        .pickImage(source: image_picker_pkg.ImageSource.gallery, imageQuality: 85);
+    if (picked == null || !mounted) return;
 
     try {
-      input.click();
-      await input.onChange.first;
-
-      final file = input.files?.first;
-      if (file == null) return;
-
-      final reader = html.FileReader();
-      reader.readAsArrayBuffer(file);
-      await reader.onLoad.first;
-
-      if (!mounted) return;
-      final result = reader.result;
-      final Uint8List bytes = result is ByteBuffer
-          ? result.asUint8List()
-          : Uint8List.fromList(result as List<int>);
-      final name = file.name.isEmpty
+      final bytes = await picked.readAsBytes();
+      final name = picked.name.isEmpty
           ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg'
-          : file.name;
-      final mimeType = file.type.isEmpty ? 'image/jpeg' : file.type;
+          : picked.name;
+      final mimeType = picked.mimeType ?? 'image/jpeg';
       setState(() {
         _profilePhotoUrl = null;
         _localProfilePhoto = (bytes: bytes, name: name, mimeType: mimeType);
       });
     } catch (e) {
-      // usuario canceló o error
-    } finally {
-      input.remove();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error leyendo imagen: $e'), backgroundColor: Colors.red.shade700));
+      }
     }
   }
 
