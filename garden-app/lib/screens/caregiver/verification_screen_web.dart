@@ -714,11 +714,11 @@ class _CameraOverlayPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     if (isSelfie) {
-      // Marco oval para cara
+      // Marco oval para cara — más estrecho y alto (proporción real de rostro)
       final cx = size.width / 2;
       final cy = size.height / 2 - 10;
-      final rx = size.width * 0.34;
-      final ry = size.height * 0.40;
+      final rx = size.width * 0.25; // más angosto
+      final ry = size.height * 0.42; // más alto
       final ovalRect = Rect.fromCenter(center: Offset(cx, cy), width: rx * 2, height: ry * 2);
 
       // Sombra alrededor del óvalo
@@ -735,10 +735,12 @@ class _CameraOverlayPainter extends CustomPainter {
       // Esquinas superiores (arcos)
       _drawCornerArcs(canvas, ovalRect, cornerPaint);
     } else {
-      // Marco rectangular para CI
-      final margin = size.width * 0.08;
-      final top = size.height * 0.18;
-      final bottom = size.height * 0.82;
+      // Marco CI — proporción carnet boliviano 85.6×54mm ≈ 1.585:1
+      final cardW = size.width * 0.80;
+      final cardH = cardW / 1.585;
+      final margin = (size.width - cardW) / 2;
+      final top = (size.height - cardH) / 2;
+      final bottom = top + cardH;
       final rect = Rect.fromLTRB(margin, top, size.width - margin, bottom);
 
       // Sombra alrededor del rectángulo

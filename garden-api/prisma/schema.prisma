@@ -658,8 +658,8 @@ model ChatMessage {
   read        Boolean  @default(false)
   createdAt   DateTime @default(now())
 
-  booking     Booking  @relation(fields: [bookingId], references: [id])
-  sender      User     @relation(fields: [senderId], references: [id])
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  sender      User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([bookingId])
   @@index([senderId])
@@ -682,7 +682,7 @@ model GiftCode {
 model MeetAndGreet {
   id             String    @id @default(uuid())
   bookingId      String    @unique
-  booking        Booking   @relation(fields: [bookingId], references: [id])
+  booking        Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   status         String    @default("PENDING_PROPOSAL")
   proposedBy     String
   modalidad      String
@@ -736,7 +736,7 @@ model AdminBroadcastNotification {
 model Dispute {
   id                String   @id @default(uuid())
   bookingId         String   @unique
-  booking           Booking  @relation(fields: [bookingId], references: [id])
+  booking           Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   clientReasons     String[] // razones seleccionadas por el cliente
   caregiverResponse String[] // respuestas seleccionadas por el cuidador
   aiVerdict         String?  // 'CLIENT_WINS' | 'CAREGIVER_WINS' | 'PARTIAL'

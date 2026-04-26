@@ -1430,11 +1430,28 @@ export async function deleteCaregiver(
     },
   });
 
-  // Delete records without cascade (SugerenciaPrecio references CaregiverProfile without cascade)
+  const userId = profile.userId;
+
+  // Collect booking IDs to clean up child records that lack onDelete:Cascade
+  const bookings = await prisma.booking.findMany({
+    where: { caregiverId: profileId },
+    select: { id: true },
+  });
+  const bookingIds = bookings.map((b) => b.id);
+
+  // Delete child records of Booking without cascade
+  if (bookingIds.length > 0) {
+    await prisma.dispute.deleteMany({ where: { bookingId: { in: bookingIds } } });
+    await prisma.meetAndGreet.deleteMany({ where: { bookingId: { in: bookingIds } } });
+    await prisma.chatMessage.deleteMany({ where: { bookingId: { in: bookingIds } } });
+  }
+  // ChatMessages sent by the caregiver user (senderId FK — no cascade)
+  await prisma.chatMessage.deleteMany({ where: { senderId: userId } });
+  // SugerenciaPrecio references CaregiverProfile without cascade
   await prisma.sugerenciaPrecio.deleteMany({ where: { caregiverId: profileId } });
 
-  // Prisma cascade deletes the profile if we delete the user
-  await prisma.user.delete({ where: { id: profile.userId } });
+  // Delete user — Prisma cascades: User → CaregiverProfile → Availability, Booking, Review
+  await prisma.user.delete({ where: { id: userId } });
 
   await getCache().del(`caregivers:detail:${profileId}`);
   await delByPrefix('caregivers:list:');
