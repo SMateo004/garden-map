@@ -1643,25 +1643,25 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final expYears = caregiver['experienceYears'] as int?;
     final services = (caregiver['services'] as List? ?? []).take(2).toList();
 
-    String? priceLabel, priceUnit;
+    // Prices to display — list of (label, unit) pairs
+    final List<(String, String)> prices = [];
     if (_selectedService == 'hospedaje') {
-      if (caregiver['pricePerDay'] != null) {
-        priceLabel = 'Bs ${caregiver['pricePerDay']}'; priceUnit = '/noche';
-      }
+      if (caregiver['pricePerDay'] != null) prices.add(('Bs ${caregiver['pricePerDay']}', '/noche'));
     } else if (_selectedService == 'paseo') {
       if (caregiver['pricePerWalk60'] != null) {
-        priceLabel = 'Bs ${caregiver['pricePerWalk60']}'; priceUnit = '1 hora';
+        prices.add(('Bs ${caregiver['pricePerWalk60']}', '1 hora'));
       } else if (caregiver['pricePerWalk30'] != null) {
-        priceLabel = 'Bs ${caregiver['pricePerWalk30']}'; priceUnit = '1 hora';
+        prices.add(('Bs ${caregiver['pricePerWalk30']}', '30 min'));
       }
     } else {
-      // 'todos' — mostrar paseo si tiene, si no hospedaje
+      // 'todos' — show only prices for services the caregiver actually offers
       if (caregiver['pricePerWalk60'] != null) {
-        priceLabel = 'Bs ${caregiver['pricePerWalk60']}'; priceUnit = '1 hora';
+        prices.add(('Bs ${caregiver['pricePerWalk60']}', '1 hora 🦮'));
       } else if (caregiver['pricePerWalk30'] != null) {
-        priceLabel = 'Bs ${caregiver['pricePerWalk30']}'; priceUnit = '1 hora';
-      } else if (caregiver['pricePerDay'] != null) {
-        priceLabel = 'Bs ${caregiver['pricePerDay']}'; priceUnit = '/noche';
+        prices.add(('Bs ${caregiver['pricePerWalk30']}', '30 min 🦮'));
+      }
+      if (caregiver['pricePerDay'] != null) {
+        prices.add(('Bs ${caregiver['pricePerDay']}', '/noche 🏠'));
       }
     }
 
@@ -1764,14 +1764,20 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      if (priceLabel != null) ...[
-                        Text(priceLabel,
-                            style: GardenText.metadata.copyWith(
-                                color: GardenColors.primary,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 14)),
-                        Text(priceUnit!,
-                            style: TextStyle(color: subtextColor, fontSize: 10)),
+                      if (prices.isNotEmpty) ...[
+                        ...prices.map((p) => Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(p.$1,
+                                style: GardenText.metadata.copyWith(
+                                    color: GardenColors.primary,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 13)),
+                            Text(p.$2,
+                                style: TextStyle(color: subtextColor, fontSize: 10)),
+                            if (prices.length > 1 && p != prices.last) const SizedBox(height: 4),
+                          ],
+                        )),
                         const SizedBox(height: 8),
                       ],
                       Container(

@@ -790,6 +790,29 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         ),
                     ],
                   ),
+                  // Chat button — visible for all active statuses
+                  if (status == 'WAITING_CAREGIVER_APPROVAL' || status == 'CONFIRMED' || status == 'IN_PROGRESS') ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => ChatScreen(
+                          bookingId: booking['id'] as String,
+                          otherPersonName: booking['caregiverName'] as String? ?? 'Cuidador',
+                          token: _clientToken,
+                          role: 'CLIENT',
+                          bookingStatus: status,
+                        ),
+                      )),
+                      icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+                      label: const Text('Abrir chat', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: GardenColors.primary,
+                        side: const BorderSide(color: GardenColors.primary),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        minimumSize: const Size(double.infinity, 40),
+                      ),
+                    ),
+                  ],
                   // Ampliar tiempo — solo PASEO IN_PROGRESS
                   if (status == 'IN_PROGRESS' && isPaseo) ...[
                     const SizedBox(height: 10),
