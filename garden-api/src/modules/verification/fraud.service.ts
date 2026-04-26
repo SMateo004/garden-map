@@ -23,7 +23,8 @@ export interface BehavioralFingerprint {
  */
 export function getDeviceInfo(req: Request): DeviceInfo {
     const userAgent = req.headers['user-agent'] || 'unknown';
-    const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '0.0.0.0';
+    const rawIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '0.0.0.0';
+    const ip = rawIp.split(',')[0]!.trim().substring(0, 45);
 
     // These usually come from frontend client-side fingerprinting and are sent in the body or specific headers
     const resolution = req.body?.resolution || req.headers['x-device-resolution'] || 'unknown';
