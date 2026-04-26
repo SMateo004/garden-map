@@ -278,9 +278,9 @@ export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
 /** PATCH /api/auth/me - Actualizar datos personales del usuario. */
 export const patchMe = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { firstName, lastName, phone, city, country, dateOfBirth, address, bio } = req.body as {
+  const { firstName, lastName, phone, city, country, dateOfBirth, address, bio, email } = req.body as {
     firstName?: string; lastName?: string; phone?: string; city?: string; country?: string;
-    dateOfBirth?: string; address?: string; bio?: string;
+    dateOfBirth?: string; address?: string; bio?: string; email?: string;
   };
   const userData: Record<string, unknown> = {};
   if (firstName && firstName.trim()) userData.firstName = firstName.trim();
@@ -291,6 +291,18 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
   if (dateOfBirth !== undefined) {
     const d = new Date(dateOfBirth);
     if (!isNaN(d.getTime())) userData.dateOfBirth = d;
+  }
+  if (email && email.trim()) {
+    const newEmail = email.trim().toLowerCase();
+    const currentUser = await prisma.user.findUnique({ where: { id: userId }, select: { emailVerified: true } });
+    if (currentUser?.emailVerified) {
+      return res.status(400).json({ success: false, error: { code: 'EMAIL_ALREADY_VERIFIED', message: 'No puedes cambiar un correo ya verificado' } });
+    }
+    const existing = await prisma.user.findUnique({ where: { email: newEmail } });
+    if (existing && existing.id !== userId) {
+      return res.status(409).json({ success: false, error: { code: 'EMAIL_IN_USE', message: 'Ese correo ya está registrado' } });
+    }
+    userData.email = newEmail;
   }
 
   const profileData: Record<string, unknown> = {};

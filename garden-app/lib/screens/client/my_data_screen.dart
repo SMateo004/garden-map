@@ -21,6 +21,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
 
   late TextEditingController _firstCtrl;
   late TextEditingController _lastCtrl;
+  late TextEditingController _emailCtrl;
   late TextEditingController _phoneCtrl;
   late TextEditingController _cityCtrl;
   late TextEditingController _countryCtrl;
@@ -35,6 +36,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
     super.initState();
     _firstCtrl = TextEditingController();
     _lastCtrl = TextEditingController();
+    _emailCtrl = TextEditingController();
     _phoneCtrl = TextEditingController();
     _cityCtrl = TextEditingController();
     _countryCtrl = TextEditingController();
@@ -47,6 +49,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
   void dispose() {
     _firstCtrl.dispose();
     _lastCtrl.dispose();
+    _emailCtrl.dispose();
     _phoneCtrl.dispose();
     _cityCtrl.dispose();
     _countryCtrl.dispose();
@@ -70,6 +73,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
           _userData = user;
           _firstCtrl.text = user['firstName'] as String? ?? '';
           _lastCtrl.text = user['lastName'] as String? ?? '';
+          _emailCtrl.text = user['email'] as String? ?? '';
           _phoneCtrl.text = user['phone'] as String? ?? '';
           _cityCtrl.text = user['city'] as String? ?? '';
           _countryCtrl.text = user['country'] as String? ?? '';
@@ -134,6 +138,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
     }
     setState(() => _saving = true);
     try {
+      final emailVerified = _userData?['emailVerified'] == true;
       final body = <String, dynamic>{
         'firstName': fn,
         'lastName': ln,
@@ -143,6 +148,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
         'address': _addressCtrl.text.trim(),
         'bio': _bioCtrl.text.trim(),
         if (_dateOfBirth != null) 'dateOfBirth': _dateOfBirth!.toIso8601String(),
+        if (!emailVerified && _emailCtrl.text.trim().isNotEmpty) 'email': _emailCtrl.text.trim(),
       };
       final res = await http.patch(
         Uri.parse('$_baseUrl/auth/me'),
@@ -256,26 +262,38 @@ class _MyDataScreenState extends State<MyDataScreen> {
                           style: TextStyle(color: subtextColor, fontSize: 12))),
                       const SizedBox(height: 32),
 
-                      // Email (read-only)
+                      // Email
                       if (_userData?['email'] != null) ...[
                         Text('Correo electrónico', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
                         const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          decoration: BoxDecoration(
-                            color: surfaceEl.withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: borderColor.withValues(alpha: 0.5)),
-                          ),
-                          child: Row(children: [
-                            Icon(Icons.email_outlined, color: subtextColor, size: 20),
-                            const SizedBox(width: 12),
-                            Expanded(child: Text(_userData!['email'] as String,
-                              style: TextStyle(color: subtextColor, fontSize: 14))),
-                            if (_userData?['emailVerified'] == true)
+                        if (_userData?['emailVerified'] == true)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: surfaceEl.withValues(alpha: 0.5),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: borderColor.withValues(alpha: 0.5)),
+                            ),
+                            child: Row(children: [
+                              Icon(Icons.email_outlined, color: subtextColor, size: 20),
+                              const SizedBox(width: 12),
+                              Expanded(child: Text(_userData!['email'] as String,
+                                style: TextStyle(color: subtextColor, fontSize: 14))),
                               const Icon(Icons.verified_outlined, color: GardenColors.success, size: 16),
-                          ]),
-                        ),
+                            ]),
+                          )
+                        else
+                          TextField(
+                            controller: _emailCtrl,
+                            style: TextStyle(color: textColor),
+                            keyboardType: TextInputType.emailAddress,
+                            decoration: fieldDeco('Correo electrónico', Icons.email_outlined).copyWith(
+                              suffixIcon: const Tooltip(
+                                message: 'Correo no verificado',
+                                child: Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 18),
+                              ),
+                            ),
+                          ),
                         const SizedBox(height: 20),
                       ],
 

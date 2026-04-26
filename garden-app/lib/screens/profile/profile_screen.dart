@@ -106,13 +106,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _sendVerificationEmail() async {
     try {
       final response = await http.post(
-        Uri.parse('$_baseUrl/caregiver/send-verify-email'),
+        Uri.parse('$_baseUrl/auth/send-verification-email'),
         headers: {'Authorization': 'Bearer $_token'},
       );
       final data = jsonDecode(response.body);
       if (!mounted) return;
       if (data['success'] == true) {
-        // Mostrar dialog para ingresar el código
         _showVerifyCodeDialog(_token, _baseUrl);
       } else {
         throw Exception(data['error']?['message'] ?? 'Error al enviar correo');
@@ -203,7 +202,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       setDialogState(() => isVerifying = true);
                       try {
                         final response = await http.post(
-                          Uri.parse('$baseUrl/caregiver/verify-email'),
+                          Uri.parse('$baseUrl/auth/verify-email'),
                           headers: {
                             'Authorization': 'Bearer $token',
                             'Content-Type': 'application/json',
