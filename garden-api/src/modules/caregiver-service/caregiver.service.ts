@@ -80,9 +80,6 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
     suspended: false,
     status: CaregiverStatus.APPROVED,
     verified: true,
-    // Doble seguridad: solo cuidadores con email verificado e identidad confirmada
-    emailVerified: true,
-    identityVerificationStatus: 'VERIFIED',
   } as Prisma.CaregiverProfileWhereInput;
 
   if (zonesFilter?.length) {
