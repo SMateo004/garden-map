@@ -8,7 +8,8 @@ import '../../theme/garden_theme.dart';
 
 class PaymentScreen extends StatefulWidget {
   final String bookingId;
-  const PaymentScreen({super.key, required this.bookingId});
+  final Map<String, dynamic>? mgData;
+  const PaymentScreen({super.key, required this.bookingId, this.mgData});
 
   @override
   State<PaymentScreen> createState() => _PaymentScreenState();
@@ -118,6 +119,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
         if (status == 'WAITING_CAREGIVER_APPROVAL' || status == 'CONFIRMED') {
           _stopPolling();
+          if (widget.mgData != null) {
+            await _proposeMeetAndGreet();
+          }
           setState(() {
             _booking = bookingData;
             _paymentConfirmed = true;
@@ -132,6 +136,25 @@ class _PaymentScreenState extends State<PaymentScreen> {
         }
       }
     } catch (_) {}
+  }
+
+  Future<void> _proposeMeetAndGreet() async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/meet-and-greet/${widget.bookingId}/propose'),
+        headers: {
+          'Authorization': 'Bearer $_clientToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(widget.mgData),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] != true) {
+        debugPrint('[MG] propose failed: ${data['message']}');
+      }
+    } catch (e) {
+      debugPrint('[MG] propose error: $e');
+    }
   }
 
   @override

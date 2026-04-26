@@ -20,6 +20,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   bool _isLoading = true;
   String _clientToken = '';
   String _selectedFilter = 'todas'; // 'todas', 'activas', 'completadas', 'canceladas'
+  final Set<String> _shownMGDecisionIds = {};
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
@@ -53,12 +54,136 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         setState(() => _bookings = (data['data'] as List).cast<Map<String, dynamic>>());
+        _checkMGDecisionNeeded();
       }
     } catch (e) {
       debugPrint('MY_BOOKINGS ERROR: $e');
       // silencioso
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _checkMGDecisionNeeded() {
+    final now = DateTime.now();
+    for (final booking in _bookings) {
+      final status = booking['status'] as String?;
+      final mg = booking['meetAndGreet'] as Map<String, dynamic>?;
+      final mgStatus = mg?['status'] as String?;
+      final confirmedDateStr = mg?['confirmedDate'] as String?;
+      final bookingId = booking['id'] as String?;
+      if (bookingId == null) continue;
+      if (status == 'CONFIRMED' && mgStatus == 'ACCEPTED' && confirmedDateStr != null && !_shownMGDecisionIds.contains(bookingId)) {
+        try {
+          final confirmedDate = DateTime.parse(confirmedDateStr).toLocal();
+          if (now.isAfter(confirmedDate)) {
+            _shownMGDecisionIds.add(bookingId);
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _showMGDecisionSheet(bookingId);
+            });
+            break; // show one at a time
+          }
+        } catch (_) {}
+      }
+    }
+  }
+
+  void _showMGDecisionSheet(String bookingId) {
+    final isDark = themeNotifier.isDark;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: false,
+      enableDrag: false,
+      builder: (ctx) {
+        final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+        final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+        final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+        return Container(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('🤝', style: TextStyle(fontSize: 40)),
+              const SizedBox(height: 12),
+              Text('¿Cómo fue el Meet & Greet?', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+              const SizedBox(height: 8),
+              Text(
+                'El Meet & Greet ya pasó. ¿Deseas continuar con la reserva o cancelarla sin costo?',
+                style: TextStyle(color: subtextColor, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: GardenColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Continuar con la reserva', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red.shade600,
+                    side: BorderSide(color: Colors.red.shade400),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _cancelBookingPostMG(bookingId);
+                  },
+                  child: const Text('Cancelar sin costo', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _cancelBookingPostMG(String bookingId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/bookings/$bookingId/cancel'),
+        headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'reason': 'Cancelado por dueño tras Meet & Greet'}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadBookings();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Reserva cancelada sin costo'), backgroundColor: Colors.orange),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(data['error']?['message'] ?? 'Error al cancelar'), backgroundColor: Colors.red.shade700),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red.shade700),
+        );
+      }
     }
   }
 
@@ -712,6 +837,8 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                               otherPersonName: 'Cuidador',
                               token: _clientToken,
                               meetAndGreetNote: note,
+                              role: 'CLIENT',
+                              bookingStatus: booking['status'] as String?,
                             ),
                           )),
                           icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),

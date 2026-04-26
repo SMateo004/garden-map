@@ -29,6 +29,12 @@ class _BookingScreenState extends State<BookingScreen> {
   int _selectedDuration = 60; // solo paseo: 60 minutos (walk30 deshabilitado)
   bool _isSubmitting = false;
 
+  // Meet & Greet opcional
+  bool _includeMG = false;
+  DateTime? _mgDate;
+  final _mgTimeCtrl = TextEditingController();
+  final _mgPlaceCtrl = TextEditingController();
+
   List<Map<String, dynamic>> _availableSlots = [];
   List<Map<String, dynamic>> _bookedPaseos = []; // reservas activas del cuidador
   bool _loadingSlots = false;
@@ -38,6 +44,13 @@ class _BookingScreenState extends State<BookingScreen> {
   void initState() {
     super.initState();
     _initData();
+  }
+
+  @override
+  void dispose() {
+    _mgTimeCtrl.dispose();
+    _mgPlaceCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _initData() async {
@@ -231,7 +244,20 @@ class _BookingScreenState extends State<BookingScreen> {
       if (response.statusCode == 201 && data['success'] == true) {
         final bookingId = data['data']['id'];
         if (!mounted) return;
-        context.push('/payment/$bookingId');
+        debugPrint('[MG] Booking created: $bookingId, includeMG=$_includeMG');
+        // Construir mgData si el cliente quiere M&G
+        Map<String, dynamic>? mgData;
+        if (_includeMG && _mgDate != null && _mgPlaceCtrl.text.trim().isNotEmpty) {
+          final timeStr = _mgTimeCtrl.text.trim().isNotEmpty ? _mgTimeCtrl.text.trim() : '10:00';
+          final dateStr = _mgDate!.toIso8601String().split('T')[0];
+          mgData = {
+            'modalidad': 'IN_PERSON',
+            'proposedDate': '${dateStr}T$timeStr:00',
+            'meetingPoint': _mgPlaceCtrl.text.trim(),
+          };
+          debugPrint('[MG] mgData built: $mgData');
+        }
+        context.push('/payment/$bookingId', extra: mgData != null ? {'mgData': mgData} : null);
       } else {
         if (data['errors'] != null) {
           final errors = (data['errors'] as List)
@@ -805,8 +831,15 @@ class _BookingScreenState extends State<BookingScreen> {
                   ],
                 ],
 
-                const SizedBox(height: 32),
-                
+                const SizedBox(height: 24),
+                Divider(color: borderColor),
+                const SizedBox(height: 20),
+
+                // ── Meet & Greet opcional ───────────────────────────────
+                _buildMeetAndGreetSection(surface, textColor, subtextColor, borderColor),
+
+                const SizedBox(height: 24),
+
                 // Resumen Final
                 if (calculatedPrice != null && _selectedPetId != null)
                   _buildSummary(calculatedPrice),
@@ -956,6 +989,129 @@ class _BookingScreenState extends State<BookingScreen> {
             fontSize: 20,
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildMeetAndGreetSection(Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('🐾', style: TextStyle(fontSize: 20)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Meet & Greet', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 15)),
+                    Text('Conoce al cuidador antes del servicio', style: TextStyle(color: subtextColor, fontSize: 12)),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _includeMG,
+                onChanged: (v) => setState(() => _includeMG = v),
+                activeColor: GardenColors.primary,
+              ),
+            ],
+          ),
+          if (_includeMG) ...[
+            const SizedBox(height: 16),
+            // Date picker
+            GestureDetector(
+              onTap: () async {
+                final now = DateTime.now();
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _mgDate ?? now.add(const Duration(days: 1)),
+                  firstDate: now,
+                  lastDate: now.add(const Duration(days: 60)),
+                  builder: (ctx, child) => Theme(
+                    data: Theme.of(ctx).copyWith(
+                      colorScheme: const ColorScheme.dark(primary: GardenColors.primary),
+                    ),
+                    child: child!,
+                  ),
+                );
+                if (picked != null) setState(() => _mgDate = picked);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: borderColor),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.calendar_today, size: 16, color: GardenColors.primary),
+                    const SizedBox(width: 10),
+                    Text(
+                      _mgDate != null
+                          ? '${_mgDate!.day}/${_mgDate!.month}/${_mgDate!.year}'
+                          : 'Seleccionar fecha',
+                      style: TextStyle(color: _mgDate != null ? textColor : subtextColor, fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            // Time field
+            TextField(
+              controller: _mgTimeCtrl,
+              style: TextStyle(color: textColor, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Hora (ej: 15:00)',
+                hintStyle: TextStyle(color: subtextColor, fontSize: 13),
+                prefixIcon: Icon(Icons.access_time, color: GardenColors.primary, size: 18),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: borderColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: GardenColors.primary),
+                ),
+              ),
+              keyboardType: TextInputType.datetime,
+            ),
+            const SizedBox(height: 10),
+            // Meeting point field
+            TextField(
+              controller: _mgPlaceCtrl,
+              style: TextStyle(color: textColor, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Punto de encuentro',
+                hintStyle: TextStyle(color: subtextColor, fontSize: 13),
+                prefixIcon: Icon(Icons.location_on, color: GardenColors.primary, size: 18),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: borderColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: GardenColors.primary),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'El cuidador recibirá esta propuesta automáticamente tras confirmar el pago.',
+              style: TextStyle(color: subtextColor, fontSize: 11),
+            ),
+          ],
+        ],
       ),
     );
   }

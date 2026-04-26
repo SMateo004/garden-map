@@ -233,9 +233,13 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/payment/:bookingId',
       name: 'payment',
-      builder: (context, state) => PaymentScreen(
-        bookingId: state.pathParameters['bookingId']!,
-      ),
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return PaymentScreen(
+          bookingId: state.pathParameters['bookingId']!,
+          mgData: extra?['mgData'] as Map<String, dynamic>?,
+        );
+      },
     ),
     GoRoute(
       path: '/booking-confirmed/:bookingId',

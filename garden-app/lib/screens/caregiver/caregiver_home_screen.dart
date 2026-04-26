@@ -1112,6 +1112,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           bookingId: bookingId,
           otherPersonName: clientName.isNotEmpty ? clientName : 'Cliente',
           token: _caregiverToken,
+          role: 'CAREGIVER',
+          bookingStatus: booking['status'] as String?,
         ),
       ),
     );
@@ -3095,6 +3097,8 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                           bookingId: booking['id'] as String,
                           otherPersonName: booking['clientName'] as String? ?? 'Cliente',
                           token: widget.token,
+                          role: 'CAREGIVER',
+                          bookingStatus: booking['status'] as String?,
                         ),
                       ),
                     ),
