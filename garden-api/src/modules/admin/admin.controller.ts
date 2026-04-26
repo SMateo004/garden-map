@@ -86,6 +86,12 @@ export const toggleVerify = asyncHandler(async (req: Request, res: Response) => 
   res.json({ success: true, data: { caregiver: result } });
 });
 
+/** PATCH /api/admin/caregivers/:id/unlock-verification — reset identity verification lockout. */
+export const unlockVerification = asyncHandler(async (req: Request, res: Response) => {
+  const result = await adminService.unlockVerification(req.params.id!, req.user!.userId);
+  res.json({ success: true, data: result });
+});
+
 /** GET /api/admin/payments-pending?page=1&limit=50 — reservas en PAYMENT_PENDING_APPROVAL. */
 export const getPaymentsPending = asyncHandler(async (req: Request, res: Response) => {
   const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);

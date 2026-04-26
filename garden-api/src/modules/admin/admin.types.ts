@@ -187,6 +187,10 @@ export interface AdminCaregiverDetailDto {
   caregiverProfileComplete: boolean;
   availabilityComplete: boolean;
 
+  // --- Bloqueo verificación identidad ---
+  verificationAttempts: number;
+  verificationLockUntil: string | null;
+
   // --- Disponibilidad (calendario) ---
   defaultAvailabilitySchedule: Record<string, unknown> | null;
   availability: Array<{ date: string; isAvailable: boolean; timeBlocks: unknown }>;

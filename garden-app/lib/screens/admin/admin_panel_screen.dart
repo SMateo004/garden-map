@@ -2976,6 +2976,20 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
     }
   }
 
+  Future<void> _unlockVerification() async {
+    try {
+      final response = await http.patch(
+        Uri.parse('${widget.baseUrl}/admin/caregivers/${widget.caregiverId}/unlock-verification'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _load();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Bloqueo de verificación eliminado'), backgroundColor: GardenColors.success));
+      }
+    } catch (e) { debugPrint(e.toString()); }
+  }
+
   void _showContactDialog(BuildContext context, Map<String, dynamic> detail) {
     final isDark = widget.isDark;
     final phone = detail['user']?['phone'] as String?;
@@ -3194,6 +3208,26 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                       onPressed: () { Navigator.pop(context); widget.onReview(widget.caregiverId, 'reject'); },
                     )),
                 ]),
+              ),
+            if (() {
+              final lockStr = detail?['verificationLockUntil'] as String?;
+              if (lockStr == null) return false;
+              try { return DateTime.parse(lockStr).isAfter(DateTime.now()); } catch (_) { return false; }
+            }())
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.lock_open_rounded, size: 16, color: GardenColors.warning),
+                    label: const Text('Desbloquear verificación', style: TextStyle(color: GardenColors.warning)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: GardenColors.warning),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: _unlockVerification,
+                  ),
+                ),
               ),
             const Expanded(child: SizedBox()),
           ] else ...[

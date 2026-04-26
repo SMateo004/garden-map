@@ -34,6 +34,9 @@ router.patch('/caregivers/:id/verify-email', adminController.verifyEmail);
 /** Legacy: toggle verify badge (mantener compatibilidad). */
 router.patch('/caregivers/:id/verify', adminController.toggleVerify);
 
+/** Reset identity verification lockout. */
+router.patch('/caregivers/:id/unlock-verification', adminController.unlockVerification);
+
 /** GET /api/admin/payments-pending — reservas pendientes de aprobación de pago manual. */
 router.get('/payments-pending', adminController.getPaymentsPending);
 

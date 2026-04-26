@@ -138,11 +138,20 @@ export async function getCaregiverDetailForAdmin(profileId: string): Promise<Adm
       timeBlocks: a.timeBlocks,
     })) ?? [],
     ciNumber: profile.ciNumber,
-    emailVerified: (profile as any).emailVerified,
+    emailVerified: u.emailVerified,
     reviewChecklist: Array.isArray((profile as any).reviewChecklist) ? (profile as any).reviewChecklist : null,
-    personalInfoComplete: (profile as any).personalInfoComplete ?? false,
-    caregiverProfileComplete: (profile as any).caregiverProfileComplete ?? false,
-    availabilityComplete: (profile as any).availabilityComplete ?? false,
+    // Compute completeness from actual profile data (not stale stored flags)
+    personalInfoComplete: Boolean(u.firstName?.trim() && u.lastName?.trim() && u.phone?.trim()),
+    caregiverProfileComplete: Boolean(
+      (profile.servicesOffered as string[])?.length > 0 && profile.zone
+    ),
+    availabilityComplete: Boolean(
+      profile.serviceAvailability || (profile as any).defaultAvailabilitySchedule
+    ),
+    verificationAttempts: (profile as any).verificationAttempts ?? 0,
+    verificationLockUntil: (profile as any).verificationLockUntil
+      ? new Date((profile as any).verificationLockUntil).toISOString()
+      : null,
   };
   return dto;
 }
@@ -1458,6 +1467,31 @@ export async function deleteCaregiver(
   await getCache().del(`caregivers:detail:${profileId}`);
   await delByPrefix('caregivers:list:');
 
+  return { success: true };
+}
+
+export async function unlockVerification(profileId: string, adminId: string) {
+  const profile = await prisma.caregiverProfile.findUnique({
+    where: { id: profileId },
+    select: { id: true },
+  });
+  if (!profile) throw new CaregiverNotFoundError(profileId);
+
+  await (prisma.caregiverProfile as any).update({
+    where: { id: profileId },
+    data: { verificationAttempts: 0, verificationLockUntil: null },
+  });
+
+  await prisma.adminAction.create({
+    data: {
+      adminId,
+      actionType: 'UNLOCK_VERIFICATION',
+      targetId: profileId,
+      notes: 'Bloqueo de verificación de identidad eliminado por admin',
+    },
+  });
+
+  await getCache().del(`caregivers:detail:${profileId}`);
   return { success: true };
 }
 
