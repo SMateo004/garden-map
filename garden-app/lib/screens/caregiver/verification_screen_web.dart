@@ -187,7 +187,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             textAlign: TextAlign.center),
           const SizedBox(height: 12),
 
-          // Preview de cámara
+          // Preview de cámara con overlay guía
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16),
             height: 320,
@@ -197,7 +197,36 @@ class _VerificationScreenState extends State<VerificationScreen> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(14),
-              child: HtmlElementView(viewType: viewId),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  HtmlElementView(viewType: viewId),
+                  // Overlay oscuro en bordes
+                  CustomPaint(
+                    painter: _CameraOverlayPainter(isSelfie: type == 'selfie'),
+                  ),
+                  // Etiqueta del marco
+                  Positioned(
+                    bottom: 12,
+                    left: 0, right: 0,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          type == 'selfie'
+                              ? 'Centra tu rostro dentro del óvalo'
+                              : 'Coloca el documento dentro del rectángulo',
+                          style: const TextStyle(color: Colors.white, fontSize: 11),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 20),
@@ -665,4 +694,97 @@ class _VerificationScreenState extends State<VerificationScreen> {
       default: return _buildIntro();
     }
   }
+}
+
+class _CameraOverlayPainter extends CustomPainter {
+  final bool isSelfie;
+  const _CameraOverlayPainter({required this.isSelfie});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final dimPaint = Paint()..color = Colors.black.withOpacity(0.55);
+    final borderPaint = Paint()
+      ..color = const Color(0xFF778C43)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+    final cornerPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+
+    if (isSelfie) {
+      // Marco oval para cara
+      final cx = size.width / 2;
+      final cy = size.height / 2 - 10;
+      final rx = size.width * 0.34;
+      final ry = size.height * 0.40;
+      final ovalRect = Rect.fromCenter(center: Offset(cx, cy), width: rx * 2, height: ry * 2);
+
+      // Sombra alrededor del óvalo
+      final fullRect = Rect.fromLTWH(0, 0, size.width, size.height);
+      final path = Path()
+        ..addRect(fullRect)
+        ..addOval(ovalRect)
+        ..fillType = PathFillType.evenOdd;
+      canvas.drawPath(path, dimPaint);
+
+      // Borde del óvalo
+      canvas.drawOval(ovalRect, borderPaint);
+
+      // Esquinas superiores (arcos)
+      _drawCornerArcs(canvas, ovalRect, cornerPaint);
+    } else {
+      // Marco rectangular para CI
+      final margin = size.width * 0.08;
+      final top = size.height * 0.18;
+      final bottom = size.height * 0.82;
+      final rect = Rect.fromLTRB(margin, top, size.width - margin, bottom);
+
+      // Sombra alrededor del rectángulo
+      final fullRect = Rect.fromLTWH(0, 0, size.width, size.height);
+      final path = Path()
+        ..addRect(fullRect)
+        ..addRRect(RRect.fromRectAndRadius(rect, const Radius.circular(8)))
+        ..fillType = PathFillType.evenOdd;
+      canvas.drawPath(path, dimPaint);
+
+      // Borde del rectángulo
+      canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(8)), borderPaint);
+
+      // Esquinas destacadas
+      _drawCornerLines(canvas, rect, cornerPaint);
+    }
+  }
+
+  void _drawCornerArcs(Canvas canvas, Rect r, Paint p) {
+    const len = 20.0;
+    // top-left
+    canvas.drawLine(Offset(r.left, r.top + len), Offset(r.left, r.top + len * 2), p);
+    // top-right
+    canvas.drawLine(Offset(r.right, r.top + len), Offset(r.right, r.top + len * 2), p);
+    // bottom-left
+    canvas.drawLine(Offset(r.left, r.bottom - len), Offset(r.left, r.bottom - len * 2), p);
+    // bottom-right
+    canvas.drawLine(Offset(r.right, r.bottom - len), Offset(r.right, r.bottom - len * 2), p);
+  }
+
+  void _drawCornerLines(Canvas canvas, Rect r, Paint p) {
+    const len = 22.0;
+    // top-left
+    canvas.drawLine(r.topLeft, Offset(r.left + len, r.top), p);
+    canvas.drawLine(r.topLeft, Offset(r.left, r.top + len), p);
+    // top-right
+    canvas.drawLine(r.topRight, Offset(r.right - len, r.top), p);
+    canvas.drawLine(r.topRight, Offset(r.right, r.top + len), p);
+    // bottom-left
+    canvas.drawLine(r.bottomLeft, Offset(r.left + len, r.bottom), p);
+    canvas.drawLine(r.bottomLeft, Offset(r.left, r.bottom - len), p);
+    // bottom-right
+    canvas.drawLine(r.bottomRight, Offset(r.right - len, r.bottom), p);
+    canvas.drawLine(r.bottomRight, Offset(r.right, r.bottom - len), p);
+  }
+
+  @override
+  bool shouldRepaint(_CameraOverlayPainter old) => old.isSelfie != isSelfie;
 }

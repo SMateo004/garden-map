@@ -712,7 +712,7 @@ model SugerenciaPrecio {
   expiresAt        DateTime
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
-  caregiver        CaregiverProfile @relation(fields: [caregiverId], references: [id])
+  caregiver        CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
 }
 
 /// Notificaciones broadcast enviadas por el admin a segmentos de usuarios.

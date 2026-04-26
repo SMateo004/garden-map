@@ -1430,6 +1430,9 @@ export async function deleteCaregiver(
     },
   });
 
+  // Delete records without cascade (SugerenciaPrecio references CaregiverProfile without cascade)
+  await prisma.sugerenciaPrecio.deleteMany({ where: { caregiverId: profileId } });
+
   // Prisma cascade deletes the profile if we delete the user
   await prisma.user.delete({ where: { id: profile.userId } });
 
