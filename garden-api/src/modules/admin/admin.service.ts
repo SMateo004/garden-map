@@ -615,7 +615,12 @@ export async function getPaymentsPending(
   limit = 50
 ): Promise<PendingPaymentsResult & { pagination: { page: number; limit: number; total: number; pages: number } }> {
   const where = {
-    status: { in: [BookingStatus.PAYMENT_PENDING_APPROVAL, BookingStatus.PENDING_PAYMENT] },
+    OR: [
+      { status: BookingStatus.PAYMENT_PENDING_APPROVAL },
+      // PENDING_PAYMENT solo si tiene qrId activo (QR generado pero no aprobado aún)
+      // Si qrId es null, el pago fue rechazado y el cliente debe reiniciar el flujo
+      { status: BookingStatus.PENDING_PAYMENT, qrId: { not: null } },
+    ],
   };
   const skip = (page - 1) * limit;
 
@@ -661,7 +666,7 @@ export async function getPaymentsPending(
   };
 }
 
-/** POST /api/admin/bookings/:id/reject-payment — rechazar pago manual; vuelve a PENDING_PAYMENT. */
+/** POST /api/admin/bookings/:id/reject-payment — rechazar pago; vuelve a PENDING_PAYMENT y limpia QR. */
 export async function rejectPayment(bookingId: string, adminId: string): Promise<{ id: string; status: string }> {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
@@ -669,16 +674,35 @@ export async function rejectPayment(bookingId: string, adminId: string): Promise
   if (!booking) throw new NotFoundError('Reserva no encontrada');
   if (booking.status !== BookingStatus.PAYMENT_PENDING_APPROVAL && booking.status !== BookingStatus.PENDING_PAYMENT) {
     throw new BadRequestError(
-      'Solo se puede rechazar una reserva en espera de aprobación de pago manual.'
+      'Solo se puede rechazar una reserva en espera de aprobación de pago.'
     );
   }
 
   const updated = await prisma.booking.update({
     where: { id: bookingId },
-    data: { status: BookingStatus.PENDING_PAYMENT },
+    data: {
+      status: BookingStatus.PENDING_PAYMENT,
+      // Limpiar QR para que el cliente sepa que fue rechazado y deba reiniciar el pago
+      qrId: null,
+      qrImageUrl: null,
+      qrExpiresAt: null,
+    },
   });
 
-  logger.info('Admin: pago manual rechazado', { bookingId, adminId });
+  // Notificar al cliente (fire-and-forget)
+  prisma.notification.create({
+    data: {
+      userId: booking.clientId,
+      title: 'Pago rechazado',
+      message:
+        'Tu pago fue rechazado. Verifica que hayas realizado el pago correctamente e intenta de nuevo, o solicita una revisión manual desde la app.',
+      type: 'PAYMENT',
+    },
+  }).catch((err) => {
+    logger.warn('Failed to notify client of payment rejection', { bookingId, err });
+  });
+
+  logger.info('Admin: pago rechazado; QR limpiado; cliente notificado', { bookingId, adminId });
   return { id: updated.id, status: updated.status };
 }
 

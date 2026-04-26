@@ -1894,10 +1894,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   height: 40,
                   color: GardenColors.error,
                   outline: true,
-                  onPressed: () async {
-                    await _rejectPayment(p['id'] as String);
-                    await _loadPayments();
-                  },
+                  onPressed: () => _rejectPayment(p['id'] as String),
                 )),
               ]),
             ]),
@@ -2472,6 +2469,28 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   }
 
   Future<void> _rejectPayment(String bookingId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => GardenGlassDialog(
+        title: const Text('¿Rechazar pago?'),
+        content: const Text(
+          'El dueño será notificado y tendrá la opción de volver a realizar el pago. Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sí, rechazar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/admin/bookings/$bookingId/reject-payment'),
@@ -2479,15 +2498,29 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
-        setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pago rechazado'), backgroundColor: GardenColors.error),
-        );
+        await _loadPayments();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Pago rechazado. El dueño fue notificado y puede reintentar.'),
+              backgroundColor: GardenColors.error,
+            ),
+          );
+        }
+      } else {
+        final msg = data['error']?['message'] ?? 'Error al rechazar el pago';
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), backgroundColor: GardenColors.error),
+          );
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
+        );
+      }
     }
   }
 
