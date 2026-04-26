@@ -3660,6 +3660,21 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                   ]),
                   const SizedBox(height: 8),
                 ],
+                if (() {
+                  final lockStr = detail?['verificationLockUntil'] as String?;
+                  if (lockStr == null) return false;
+                  try { return DateTime.parse(lockStr).isAfter(DateTime.now()); } catch (_) { return false; }
+                }()) ...[
+                  GardenButton(
+                    label: 'Desbloquear verificación',
+                    icon: Icons.lock_open_rounded,
+                    height: 42,
+                    color: GardenColors.warning,
+                    outline: true,
+                    onPressed: _unlockVerification,
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 if (isApproved || isSuspended) ...[
                   GardenButton(
                     label: isSuspended ? 'Reactivar cuidador' : 'Suspender cuidador',
