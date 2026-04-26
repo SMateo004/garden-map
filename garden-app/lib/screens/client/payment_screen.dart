@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -19,10 +20,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
   String _clientToken = '';
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
-  String? _selectedMethod; // 'qr' o 'manual'
   Map<String, dynamic>? _qrResponse;
   bool _isSubmitting = false;
-  bool _paymentInitiated = false;
+
+  // Payment confirmation state
+  bool _waitingConfirmation = false;
+  bool _paymentConfirmed = false;
+  bool _paymentRejected = false;
+  Timer? _pollTimer;
 
   @override
   void initState() {
@@ -30,10 +35,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
     _loadData();
   }
 
+  @override
+  void dispose() {
+    _stopPolling();
+    super.dispose();
+  }
+
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
     _clientToken = prefs.getString('access_token') ?? '';
-    // Fallback if empty for dev
     if (_clientToken.isEmpty) {
       _clientToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJiMWEyMWYzMS01MzRmLTQxMjktODdiNi02MWY1MDA4NDc0ZDIiLCJyb2xlIjoiQ0xJRU5UIiwiaWQiOiJiMWEyMWYzMS01MzRmLTQxMjktODdiNi02MWY1MDA4NDc0ZDIiLCJpYXQiOjE3NzM2NzM5MTgsImV4cCI6MTc3NjI2NTkxOH0.z3UlAvEptacachixvfUTMpgR19RZ536dm-44rLInGmM';
     }
@@ -55,8 +65,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Future<void> _initPayment() async {
-    if (_selectedMethod == null) return;
-
     setState(() => _isSubmitting = true);
     try {
       final response = await http.post(
@@ -65,32 +73,58 @@ class _PaymentScreenState extends State<PaymentScreen> {
           'Authorization': 'Bearer $_clientToken',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({'method': _selectedMethod}),
+        body: jsonEncode({'method': 'qr'}),
       );
 
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
-        if (_selectedMethod == 'qr') {
-          setState(() => _qrResponse = data['data']);
-        } else {
-          // Pago manual iniciado — navegar a pantalla de confirmación dedicada
-          if (mounted) {
-            context.go(
-              '/booking-confirmed/${widget.bookingId}',
-              extra: _booking,
-            );
-          }
-        }
+        setState(() => _qrResponse = data['data']);
       } else {
         throw Exception(data['message'] ?? 'Error al iniciar pago');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
+  }
+
+  void _startPolling() {
+    _checkPaymentStatus();
+    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) => _checkPaymentStatus());
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  Future<void> _checkPaymentStatus() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}'),
+        headers: {'Authorization': 'Bearer $_clientToken'},
+      );
+      final data = jsonDecode(response.body);
+      if (!mounted) return;
+      if (data['success'] == true) {
+        final status = data['data']['status'] as String?;
+        if (status == 'WAITING_CAREGIVER_APPROVAL' || status == 'CONFIRMED') {
+          _stopPolling();
+          setState(() {
+            _booking = data['data'];
+            _paymentConfirmed = true;
+          });
+        } else if (status == 'CANCELLED') {
+          _stopPolling();
+          setState(() => _paymentRejected = true);
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -109,9 +143,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
             body: const Center(child: CircularProgressIndicator(color: GardenColors.primary)),
           );
         }
-        if (_paymentInitiated) {
-          return _buildConfirmationScreen();
-        }
+
+        if (_paymentConfirmed) return _buildSuccessScreen();
+        if (_paymentRejected) return _buildRejectionScreen();
+        if (_waitingConfirmation) return _buildWaitingScreen();
+
         return Scaffold(
           backgroundColor: bg,
           appBar: AppBar(
@@ -132,7 +168,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Widget _buildPaymentBody() {
     if (_booking == null) {
       return Center(
-        child: Text('Reserva no encontrada', 
+        child: Text('Reserva no encontrada',
           style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary)),
       );
     }
@@ -149,7 +185,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           padding: const EdgeInsets.all(32),
           child: Column(
             children: [
-              Text('Escanea para pagar', 
+              Text('Escanea para pagar',
                 style: TextStyle(color: textColor, fontWeight: FontWeight.w900, fontSize: 24, letterSpacing: -0.5)),
               const SizedBox(height: 32),
               Container(
@@ -174,15 +210,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
               GardenButton(
                 label: 'Ya realicé el pago',
                 onPressed: () {
-                  setState(() {
-                    _paymentInitiated = true;
-                  });
+                  setState(() => _waitingConfirmation = true);
+                  _startPolling();
                 },
               ),
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => setState(() => _qrResponse = null),
-                child: Text('Cambiar método de pago', style: TextStyle(color: subtextColor)),
+                child: Text('Volver', style: TextStyle(color: subtextColor)),
               ),
             ],
           ),
@@ -195,7 +230,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Resumen de la reserva
           Text('Resumen', style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800)),
           const SizedBox(height: 16),
           Container(
@@ -232,40 +266,53 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ),
           const SizedBox(height: 28),
 
-          // Selector de método de pago
           Text('Método de pago', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
-
-          // QR Bancario
-          _paymentMethodCard(
-            'qr',
-            Icons.qr_code_2_outlined,
-            'QR Bancario',
-            'Paga con cualquier banco o Tigo Money',
-            surface, textColor, subtextColor, borderColor,
-          ),
-          const SizedBox(height: 10),
-
-          // Transferencia manual
-          _paymentMethodCard(
-            'manual',
-            Icons.receipt_long_outlined,
-            'Transferencia manual',
-            'Sube comprobante para verificación del equipo',
-            surface, textColor, subtextColor, borderColor,
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: GardenColors.primary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: GardenColors.primary, width: 2),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48, height: 48,
+                  decoration: BoxDecoration(
+                    color: GardenColors.primary.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.qr_code_2_outlined, color: GardenColors.primary, size: 24),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('QR Bancario', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                      Text('Paga con cualquier banco o Tigo Money', style: TextStyle(color: subtextColor, fontSize: 13)),
+                    ],
+                  ),
+                ),
+                Container(
+                  width: 22, height: 22,
+                  decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
+                  child: const Icon(Icons.check, color: Colors.white, size: 14),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 28),
 
-          // Botón confirmar
           GardenButton(
-            label: _isSubmitting ? 'Procesando...' : 'Confirmar pago',
+            label: _isSubmitting ? 'Procesando...' : 'Generar QR de pago',
             loading: _isSubmitting,
-            icon: Icons.lock_outlined,
-            onPressed: _selectedMethod != null ? _initPayment : null,
+            icon: Icons.qr_code_2_outlined,
+            onPressed: _isSubmitting ? null : _initPayment,
           ),
           const SizedBox(height: 16),
 
-          // Nota de seguridad
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -280,75 +327,60 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  Widget _paymentMethodCard(String method, IconData icon, String title, String subtitle,
-      Color surface, Color textColor, Color subtextColor, Color borderColor) {
-    final selected = _selectedMethod == method;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedMethod = method),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: selected ? GardenColors.primary.withOpacity(0.08) : surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: selected ? GardenColors.primary : borderColor,
-            width: selected ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48, height: 48,
-              decoration: BoxDecoration(
-                color: selected ? GardenColors.primary.withOpacity(0.15) : (themeNotifier.isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: selected ? GardenColors.primary : subtextColor, size: 24),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
-                  Text(subtitle, style: TextStyle(color: subtextColor, fontSize: 13)),
-                ],
-              ),
-            ),
-            if (selected)
-              Container(
-                width: 22, height: 22,
-                decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
-                child: const Icon(Icons.check, color: Colors.white, size: 14),
-              )
-            else
-              Container(
-                width: 22, height: 22,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: borderColor, width: 2),
+  Widget _buildWaitingScreen() {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+    return Scaffold(
+      backgroundColor: bg,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 80,
+                  height: 80,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 5,
+                    color: GardenColors.primary,
+                    backgroundColor: GardenColors.primary.withOpacity(0.15),
+                  ),
                 ),
-              ),
-          ],
+                const SizedBox(height: 40),
+                Text('Verificando pago...',
+                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: textColor, letterSpacing: -0.5),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Text('Estamos confirmando tu pago con el banco.\nEsto puede tardar unos segundos.',
+                  style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 48),
+                TextButton(
+                  onPressed: () {
+                    _stopPolling();
+                    setState(() {
+                      _waitingConfirmation = false;
+                      _qrResponse = null;
+                    });
+                  },
+                  child: Text('Cancelar', style: TextStyle(color: subtextColor, fontSize: 14)),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _summaryRow(IconData icon, String label, String value, Color textColor, Color subtextColor) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: subtextColor),
-        const SizedBox(width: 10),
-        Text(label, style: TextStyle(color: subtextColor, fontSize: 14)),
-        const Spacer(),
-        Text(value, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
-      ],
-    );
-  }
-
-  Widget _buildConfirmationScreen() {
+  Widget _buildSuccessScreen() {
     final isDark = themeNotifier.isDark;
     final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
@@ -384,7 +416,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 },
               ),
               const SizedBox(height: 32),
-              Text('¡Reserva creada!',
+              Text('¡Pago confirmado!',
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: textColor, letterSpacing: -0.5),
                 textAlign: TextAlign.center,
               ),
@@ -392,17 +424,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: GardenColors.warning.withOpacity(0.1),
+                  color: Colors.green.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: GardenColors.warning.withOpacity(0.3)),
+                  border: Border.all(color: Colors.green.withOpacity(0.3)),
                 ),
-                child: const Text('Pago en revisión',
-                  style: TextStyle(color: GardenColors.warning, fontWeight: FontWeight.w700, fontSize: 13),
+                child: const Text('Pago aprobado',
+                  style: TextStyle(color: Colors.green, fontWeight: FontWeight.w700, fontSize: 13),
                 ),
               ),
               const SizedBox(height: 24),
               Text(
-                'Tu pago está siendo verificado por el equipo de GARDEN. Recibirás una confirmación cuando sea aprobado y el cuidador acepte la reserva.',
+                'Tu pago fue verificado exitosamente. Ahora el cuidador debe aceptar tu reserva.',
                 style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6),
                 textAlign: TextAlign.center,
               ),
@@ -411,7 +443,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: surface, 
+                    color: surface,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: borderColor),
                     boxShadow: [
@@ -420,16 +452,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   ),
                   child: Column(
                     children: [
-                      // Cuidador
                       Row(
                         children: [
                           CircleAvatar(
                             radius: 20,
-                            backgroundImage: _booking!['caregiverPhoto'] != null 
-                              ? NetworkImage(_booking!['caregiverPhoto']) 
+                            backgroundImage: _booking!['caregiverPhoto'] != null
+                              ? NetworkImage(_booking!['caregiverPhoto'])
                               : null,
                             backgroundColor: GardenColors.primary.withOpacity(0.2),
-                            child: _booking!['caregiverPhoto'] == null 
+                            child: _booking!['caregiverPhoto'] == null
                               ? const Icon(Icons.person, color: GardenColors.primary)
                               : null,
                           ),
@@ -448,7 +479,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       const SizedBox(height: 16),
                       Divider(color: borderColor, height: 1),
                       const SizedBox(height: 16),
-                      // Datos de Mascota y Fecha
                       _detailRow('Mascota', _booking!['petName'] ?? '—', textColor, subtextColor),
                       const SizedBox(height: 12),
                       _detailRow('Fecha', _booking!['walkDate'] ?? _booking!['startDate'] ?? '—', textColor, subtextColor),
@@ -457,10 +487,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       const SizedBox(height: 16),
                       Divider(color: borderColor, height: 1),
                       const SizedBox(height: 16),
-                      // Precio y Estado
                       _detailRow('Total Pagado', 'Bs ${_booking!['totalPrice'] ?? _booking!['totalAmount'] ?? ''}', GardenColors.primary, subtextColor, isBoldValue: true),
                       const SizedBox(height: 12),
-                      _detailRow('Estado', 'Validando Comprobante', GardenColors.warning, subtextColor),
+                      _detailRow('Estado', 'Esperando al cuidador', Colors.green, subtextColor),
                     ],
                   ),
                 ),
@@ -477,7 +506,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   children: [
                     Text('Próximos pasos:', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
                     const SizedBox(height: 16),
-                    _stepRow('1', 'GARDEN verifica tu pago', GardenColors.warning, textColor),
+                    _stepRow('1', 'Pago verificado ✓', Colors.green, textColor),
                     const SizedBox(height: 12),
                     _stepRow('2', 'El cuidador acepta la reserva', GardenColors.primary, textColor),
                     const SizedBox(height: 12),
@@ -495,6 +524,78 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildRejectionScreen() {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+    return Scaffold(
+      backgroundColor: bg,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.red.withOpacity(0.4), width: 4),
+                  ),
+                  child: const Icon(Icons.close_rounded, color: Colors.red, size: 50),
+                ),
+                const SizedBox(height: 32),
+                Text('Pago rechazado',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: textColor, letterSpacing: -0.5),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No pudimos verificar tu pago. Por favor intenta de nuevo o contacta a soporte.',
+                  style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 48),
+                GardenButton(
+                  label: 'Intentar de nuevo',
+                  onPressed: () {
+                    setState(() {
+                      _waitingConfirmation = false;
+                      _paymentRejected = false;
+                      _qrResponse = null;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () => context.go('/marketplace'),
+                  child: Text('Volver al inicio', style: TextStyle(color: subtextColor)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _summaryRow(IconData icon, String label, String value, Color textColor, Color subtextColor) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: subtextColor),
+        const SizedBox(width: 10),
+        Text(label, style: TextStyle(color: subtextColor, fontSize: 14)),
+        const Spacer(),
+        Text(value, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
+      ],
     );
   }
 
