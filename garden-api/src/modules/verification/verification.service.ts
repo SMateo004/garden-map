@@ -388,26 +388,19 @@ export async function submitVerification(
             similarity: faceSimilarityValue,
             similarityScore: faceSimilarityValue,
             livenessScore,
-            // @ts-ignore
             livenessStatus,
             faceScore: scoringResult.faceScore,
             ocrScore: scoringResult.ocrScore,
             docScore: scoringResult.docScore,
             qualityScore: scoringResult.qualityScore,
-            // @ts-ignore
             behaviorScore: scoringResult.behaviorScore,
             trustScore: scoringResult.trustScore,
             documentConfidence: crossValResult.documentConfidence,
             identityScore: trustScore,
-            // @ts-ignore
-            ipAddress: ipAddress,
-            // @ts-ignore
+            ipAddress,
             userAgent: deviceInfo?.userAgent,
-            // @ts-ignore
             deviceFingerprint: fingerprint,
-            // @ts-ignore
             deviceDetails: deviceInfo as any,
-            // @ts-ignore
             locationData: geo as any,
             ocrData: crossValResult.ocrData as any,
             fraudFlags: finalFraudFlags as any,
@@ -419,10 +412,6 @@ export async function submitVerification(
             completedAt: new Date(),
           },
         }),
-        prisma.user.update({
-          where: { id: session.userId },
-          data: { identityVerified: finalStatus === 'VERIFIED' } as any,
-        }),
         prisma.caregiverProfile.update({
           where: { userId: session.userId },
           data: {
@@ -431,40 +420,54 @@ export async function submitVerification(
             identityVerificationSubmittedAt: new Date(),
             ciAnversoUrl: ciFrontUrl,
             ciReversoUrl: ciBackUrl,
-            ciNumber: crossValResult.ocrData.documentNumber ?? undefined,
-            // @ts-ignore
+            ...(crossValResult.ocrData.documentNumber ? { ciNumber: crossValResult.ocrData.documentNumber } : {}),
             verificationAttempts: { increment: 1 },
-          },
+          } as any,
         }),
-        // @ts-ignore
-        prisma.verificationAudit.create({
-          data: {
-            userId: session.userId,
-            sessionId,
-            action: 'SUBMIT',
-            status: finalStatus,
-            ipAddress: ipAddress,
-            deviceFingerprint: fingerprint,
-            trustScore,
-            behaviorScore: behaviorScoreValue,
-            fraudFlags: finalFraudFlags as any,
-            notes: `CI: ${crossValResult.ocrData.documentNumber || 'N/A'} | OCR: ${scoringResult.ocrScore} | Face: ${scoringResult.faceScore}`
-          }
-        })
       ]);
+
+      // Update identityVerified on user (non-blocking)
+      prisma.user.update({
+        where: { id: session.userId },
+        data: { identityVerified: finalStatus === 'VERIFIED' } as any,
+      }).catch((err: any) => logger.warn('User identityVerified update failed (non-fatal)', { userId: session.userId, error: err.message }));
 
       // Sincronizar estado de verificación en Blockchain (asíncrono)
       if (finalStatus === 'VERIFIED') {
         blockchainService.updateVerificationOnChain(session.userId, true)
           .catch(err => logger.error('Blockchain verification sync failed', { userId: session.userId, err }));
       }
+
+      // Audit log — non-blocking, does not affect result
+      prisma.verificationAudit.create({
+        data: {
+          userId: session.userId,
+          sessionId,
+          action: 'SUBMIT',
+          status: finalStatus,
+          ipAddress,
+          deviceFingerprint: fingerprint,
+          trustScore,
+          behaviorScore: behaviorScoreValue,
+          fraudFlags: finalFraudFlags as any,
+          notes: `CI: ${crossValResult.ocrData.documentNumber || 'N/A'} | OCR: ${scoringResult.ocrScore} | Face: ${scoringResult.faceScore}`
+        }
+      } as any).catch((auditErr: any) => logger.warn('Audit log write failed (non-fatal)', { sessionId, error: auditErr.message }));
+
     } catch (error: any) {
       if (error.code === 'P2002') {
-        logger.error('Duplicate CI detected during transaction', { sessionId, userId: session.userId });
-        throw new BadRequestError('Este número de documento ya está siendo utilizado por otro usuario.');
+        logger.error('Duplicate CI detected during transaction', { sessionId, userId: session.userId, meta: error.meta });
+        if (error.meta?.target?.includes('ciNumber')) {
+          throw new BadRequestError('Este número de documento ya está siendo utilizado por otro usuario.');
+        }
+        throw new BadRequestError(`Conflicto de datos únicos (${JSON.stringify(error.meta?.target ?? 'desconocido')}). Intenta de nuevo.`);
       }
-      logger.error('Prisma transaction failed during verification', { sessionId, error: error.message, code: error.code });
-      throw new BadRequestError('Error al guardar los resultados de verificación. Por favor intenta de nuevo.');
+      if (error.code === 'P2025') {
+        logger.error('Record not found during verification transaction', { sessionId, userId: session.userId, meta: error.meta });
+        throw new BadRequestError('Perfil de cuidador no encontrado. Asegúrate de haber completado los pasos anteriores del formulario.');
+      }
+      logger.error('Prisma transaction failed during verification', { sessionId, error: error.message, code: error.code, meta: error.meta, stack: error.stack });
+      throw new BadRequestError(`Error al guardar los resultados (${error.code ?? 'DB_ERROR'}): ${error.message ?? 'intenta de nuevo'}`);
     }
 
     // 7. Verification finalized
