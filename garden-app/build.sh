@@ -22,7 +22,7 @@ else
   echo "✓ Flutter already cached at $FLUTTER_DIR"
 fi
 
-export PATH="$FLUTTER_BIN/../:$PATH"
+export PATH="$FLUTTER_DIR/bin:$PATH"
 export PATH="$FLUTTER_DIR/bin/cache/dart-sdk/bin:$PATH"
 
 # ── 2. Verify ────────────────────────────────────────────────────────────────
