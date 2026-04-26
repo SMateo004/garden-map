@@ -1449,6 +1449,8 @@ export async function deleteCaregiver(
   await prisma.chatMessage.deleteMany({ where: { senderId: userId } });
   // SugerenciaPrecio references CaregiverProfile without cascade
   await prisma.sugerenciaPrecio.deleteMany({ where: { caregiverId: profileId } });
+  // WalletTransaction references User without cascade
+  await prisma.walletTransaction.deleteMany({ where: { userId } });
 
   // Delete user — Prisma cascades: User → CaregiverProfile → Availability, Booking, Review
   await prisma.user.delete({ where: { id: userId } });

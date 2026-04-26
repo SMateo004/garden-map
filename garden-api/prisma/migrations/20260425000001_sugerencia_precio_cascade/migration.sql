@@ -24,3 +24,8 @@ ALTER TABLE "MeetAndGreet" ADD CONSTRAINT "MeetAndGreet_bookingId_fkey"
 ALTER TABLE "Dispute" DROP CONSTRAINT IF EXISTS "Dispute_bookingId_fkey";
 ALTER TABLE "Dispute" ADD CONSTRAINT "Dispute_bookingId_fkey"
   FOREIGN KEY ("bookingId") REFERENCES "bookings"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- WalletTransaction → User
+ALTER TABLE "WalletTransaction" DROP CONSTRAINT IF EXISTS "WalletTransaction_userId_fkey";
+ALTER TABLE "WalletTransaction" ADD CONSTRAINT "WalletTransaction_userId_fkey"
+  FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
