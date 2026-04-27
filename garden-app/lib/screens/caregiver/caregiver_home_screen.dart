@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -2448,48 +2449,144 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     );
   }
 
+  // Items de navegación del cuidador
+  static const _navItems = [
+    (icon: Icons.home_outlined,           activeIcon: Icons.home_rounded,           label: 'Inicio'),
+    (icon: Icons.calendar_month_outlined, activeIcon: Icons.calendar_month_rounded, label: 'Disponibilidad'),
+    (icon: Icons.list_alt_outlined,       activeIcon: Icons.list_alt_rounded,       label: 'Reservas'),
+    (icon: Icons.person_outline_rounded,  activeIcon: Icons.person_rounded,         label: 'Mi Perfil'),
+  ];
+
+  void _onTabTap(int i) {
+    debugPrint('[CaregiverHome] Tab tapped: $i (${_navItems[i].label}) kIsWeb=$kIsWeb');
+    if (i == 3) {
+      context.push('/profile');
+    } else {
+      setState(() => _selectedTab = i);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: themeNotifier,
       builder: (context, _) {
         final isDark = themeNotifier.isDark;
-        return Scaffold(
-          backgroundColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
-          appBar: AppBar(
-            backgroundColor: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+        final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+        final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+        final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+        // ── AppBar: en web incluye los tabs como botones en el header ──
+        Widget appBarTitle = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GestureDetector(
+              onTap: () => context.go('/caregiver/home'),
+              child: const Text('GARDEN', style: TextStyle(color: GardenColors.primary, fontSize: 20, fontWeight: FontWeight.w900)),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: GardenColors.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: GardenColors.primary.withOpacity(0.3)),
+              ),
+              child: const Text('Cuidador', style: TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        );
+
+        PreferredSizeWidget appBar;
+        if (kIsWeb && !_setupPending) {
+          // Web: nav tabs en el header
+          appBar = PreferredSize(
+            preferredSize: const Size.fromHeight(60),
+            child: Container(
+              decoration: BoxDecoration(
+                color: surface,
+                border: Border(bottom: BorderSide(color: borderColor, width: 1)),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.3 : 0.06), blurRadius: 8, offset: const Offset(0, 2))],
+              ),
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    children: [
+                      appBarTitle,
+                      const Spacer(),
+                      // Tabs de navegación en el header
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(_navItems.length, (i) {
+                          final tab = _navItems[i];
+                          final isActive = _selectedTab == i;
+                          final activeColor = GardenColors.primary;
+                          final inactiveColor = subtextColor;
+                          return Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: GestureDetector(
+                              onTap: () => _onTabTap(i),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isActive ? GardenColors.primary.withOpacity(0.10) : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: isActive ? Border.all(color: GardenColors.primary.withOpacity(0.25)) : null,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(isActive ? tab.activeIcon : tab.icon, size: 18, color: isActive ? activeColor : inactiveColor),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      tab.label,
+                                      style: TextStyle(
+                                        color: isActive ? activeColor : inactiveColor,
+                                        fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                      const SizedBox(width: 12),
+                      NotificationBell(token: _caregiverToken, baseUrl: _baseUrl),
+                      IconButton(
+                        icon: Icon(Icons.logout_outlined, color: subtextColor),
+                        onPressed: _logout,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        } else {
+          // Móvil: AppBar normal
+          appBar = AppBar(
+            backgroundColor: surface,
             elevation: 0,
             automaticallyImplyLeading: false,
-            title: Row(
-              children: [
-                GestureDetector(
-                  onTap: () => context.go('/caregiver/home'),
-                  child: const Text('GARDEN', style: TextStyle(color: GardenColors.primary, fontSize: 20, fontWeight: FontWeight.w900)),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: GardenColors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: GardenColors.primary.withOpacity(0.3)),
-                  ),
-                  child: const Text('Cuidador', style: TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w600)),
-                ),
-              ],
-            ),
+            title: appBarTitle,
             actions: [
-              NotificationBell(
-                token: _caregiverToken,
-                baseUrl: _baseUrl,
-              ),
+              NotificationBell(token: _caregiverToken, baseUrl: _baseUrl),
               IconButton(
-                icon: Icon(Icons.logout_outlined,
-                  color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+                icon: Icon(Icons.logout_outlined, color: subtextColor),
                 onPressed: _logout,
               ),
             ],
-          ),
+          );
+        }
+
+        return Scaffold(
+          backgroundColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
+          appBar: appBar,
           body: _isLoading
             ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
             : _setupPending
@@ -2499,15 +2596,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 _buildAvailability(),
                 _buildBookings(),
               ][_selectedTab],
-          bottomNavigationBar: _setupPending ? null : LiquidGlassNavBar(
+          // En web: sin barra inferior. En móvil: LiquidGlassNavBar
+          bottomNavigationBar: (kIsWeb || _setupPending) ? null : LiquidGlassNavBar(
             selectedIndex: _selectedTab,
-            onTap: (i) {
-              if (i == 3) {
-                context.push('/profile');
-              } else {
-                setState(() => _selectedTab = i);
-              }
-            },
+            onTap: _onTabTap,
             items: const [
               GardenNavItem(Icons.home_outlined,            Icons.home_rounded,            'Inicio'),
               GardenNavItem(Icons.calendar_month_outlined,  Icons.calendar_month_rounded,  'Disponibilidad'),
