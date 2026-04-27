@@ -35,6 +35,7 @@ import 'screens/onboarding/mobile_splash_screen.dart';
 import 'screens/onboarding/mobile_onboarding_screen.dart';
 import 'screens/onboarding/mobile_service_selector_screen.dart';
 import 'screens/onboarding/maintenance_screen.dart';
+import 'screens/caregiver/mobile_verify_screen.dart';
 import 'screens/legal/legal_screen.dart';
 import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -331,6 +332,16 @@ final GoRouter _router = GoRouter(
           role: extra['role'] as String? ?? 'CLIENT',
           clientReasons: (extra['clientReasons'] as List?)?.cast<String>(),
         );
+      },
+    ),
+    // Ruta pública para verificación de identidad desde móvil (escaneando QR de web)
+    GoRoute(
+      path: '/mobile-verify',
+      name: 'mobileVerify',
+      builder: (context, state) {
+        final token = state.uri.queryParameters['token'] ?? '';
+        debugPrint('[Router] /mobile-verify — token: ${token.length > 20 ? token.substring(0, 20) : token}...');
+        return MobileVerifyScreen(token: token);
       },
     ),
     GoRoute(

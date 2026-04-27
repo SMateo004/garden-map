@@ -1,16 +1,22 @@
-import 'dart:convert' show base64Decode, jsonDecode;
+// ignore_for_file: avoid_web_libraries_in_flutter
+import 'dart:async';
+import 'dart:convert';
 import 'dart:html' as html;
-import 'dart:typed_data';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../main.dart';
 import '../../theme/garden_theme.dart';
 
+/// Implementación WEB de la pantalla de verificación de identidad.
+/// Muestra un QR que el cuidador escanea con su teléfono.
+/// El teléfono abre /mobile-verify?token=... y realiza la verificación con fotos.
+/// Esta pantalla hace polling cada 4 segundos a /api/caregiver/my-profile:
+///   - Si identityVerificationStatus == VERIFIED → avanza al siguiente paso.
+///   - Si identityVerificationStatus == REJECTED → muestra estado "rechazado, intenta de nuevo"
+///     (genera un nuevo QR con un token fresco).
+///   - Si REVIEW → sigue esperando (el admin puede aprobar → VERIFIED).
 class VerificationScreen extends StatefulWidget {
   final VoidCallback? onComplete;
   final bool showAppBar;
@@ -26,26 +32,25 @@ class VerificationScreen extends StatefulWidget {
 }
 
 class _VerificationScreenState extends State<VerificationScreen> {
+  // 0=intro  1=qr+polling  2=rejected(retry)  3=review(polling)
+  int _step = 0;
+
   String _caregiverToken = '';
-  String _verificationToken = '';
+  String _qrUrl = '';
+
   bool _generatingToken = false;
 
-  // Fotos capturadas
-  Uint8List? _selfiePreview;
-  Uint8List? _ciFrontPreview;
-  Uint8List? _ciBackPreview;
+  Timer? _pollTimer;
+  int _pollCount = 0;
 
-  // Variables de cámara
-  html.MediaStream? _mediaStream;
-  html.VideoElement? _videoElement;
+  String get _baseUrl => const String.fromEnvironment(
+      'API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
-  // Estado del proceso
-  int _currentStep = 0; // 0: intro, 1: selfie, 2: CI frontal, 3: CI trasero, 4: enviando, 5: resultado
-  String _resultStatus = ''; // 'approved', 'review', 'rejected'
-  String _resultMessage = '';
-
-  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
-
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+  Color get _bg => _isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+  Color get _surface => _isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+  Color get _text => _isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+  Color get _subtext => _isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
   @override
   void initState() {
     super.initState();
@@ -54,739 +59,357 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
   @override
   void dispose() {
-    _stopCamera();
+    _stopPolling();
     super.dispose();
-  }
-
-  void _stopCamera() {
-    _mediaStream?.getTracks().forEach((t) => t.stop());
-    _mediaStream = null;
-    _videoElement = null;
   }
 
   Future<void> _loadToken() async {
     final prefs = await SharedPreferences.getInstance();
     String token = prefs.getString('access_token') ?? '';
-    if (token.isEmpty) {
-      token = const String.fromEnvironment('TEST_JWT', defaultValue: '');
-    }
+    if (token.isEmpty) token = const String.fromEnvironment('TEST_JWT', defaultValue: '');
     setState(() => _caregiverToken = token);
+    debugPrint('[VerifyWeb] caregiverToken cargado: ${token.length > 20 ? token.substring(0, 20) : token}...');
   }
 
-  Future<void> _generateVerificationToken() async {
+  Future<void> _generateQR() async {
+    if (_generatingToken) return;
     setState(() => _generatingToken = true);
+    _stopPolling();
     try {
-      final response = await http.post(
+      debugPrint('[VerifyWeb] Generando token de verificación...');
+      final res = await http.post(
         Uri.parse('$_baseUrl/verification/generate-link'),
         headers: {'Authorization': 'Bearer $_caregiverToken'},
       );
-      final data = jsonDecode(response.body);
+      final data = jsonDecode(res.body);
+      debugPrint('[VerifyWeb] generate-link response: ${res.statusCode} $data');
+
       if (data['success'] == true) {
+        final token = data['data']['token'] as String;
+        // Usar el origin del navegador para que funcione en dev y producción
+        final origin = html.window.location.origin;
+        final url = '$origin/mobile-verify?token=${Uri.encodeComponent(token)}';
+        debugPrint('[VerifyWeb] QR URL generada: $url');
         setState(() {
-          _verificationToken = data['data']['token'];
-          _currentStep = 1;
+          _qrUrl = url;
+          _step = 1;
+          _pollCount = 0;
         });
+        _startPolling();
       } else {
-        throw Exception(data['error']?['message'] ?? 'Error al generar token');
+        throw Exception(data['error']?['message'] ?? 'Error al generar QR');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
-      );
+      debugPrint('[VerifyWeb] ERROR generando token: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: Colors.red.shade700,
+        ));
+      }
     } finally {
       if (mounted) setState(() => _generatingToken = false);
     }
   }
 
-  Future<void> _openCamera(String type) async {
-
-    try {
-      // Solicitar stream de cámara
-      final stream = await html.window.navigator.mediaDevices!.getUserMedia({
-        'video': {
-          'facingMode': type == 'selfie' ? 'user' : 'environment',
-          'width': {'ideal': 1280},
-          'height': {'ideal': 720},
-        },
-        'audio': false,
-      });
-
-      _mediaStream = stream;
-      _videoElement = html.VideoElement()
-        ..srcObject = stream
-        ..autoplay = true
-        ..muted = true
-        ..setAttribute('playsinline', 'true')
-        ..style.width = '100%'
-        ..style.height = '100%'
-        ..style.objectFit = 'cover';
-
-      if (type == 'selfie') {
-        _videoElement!.style.transform = 'scaleX(-1)';
-      }
-
-      // Registrar el view factory con timestamp único para evitar conflictos
-      final viewId = 'garden-camera-${DateTime.now().millisecondsSinceEpoch}';
-      // ignore: undefined_prefixed_name
-      ui_web.platformViewRegistry.registerViewFactory(
-        viewId,
-        (int id) => _videoElement!,
-      );
-
-      if (mounted) {
-        await showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.black,
-          isDismissible: false,
-          builder: (ctx) => _buildCameraSheet(type, viewId, ctx),
-        );
-      }
-
-    } catch (e) {
-      _stopCamera();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('No se pudo acceder a la cámara. Verifica los permisos del navegador.'),
-            backgroundColor: Colors.red.shade700,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-    }
+  void _startPolling() {
+    _pollTimer?.cancel();
+    debugPrint('[VerifyWeb] Iniciando polling cada 4s...');
+    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) => _pollStatus());
   }
 
-  Widget _buildCameraSheet(String type, String viewId, BuildContext sheetContext) {
-    final title = type == 'selfie' ? 'Toma tu selfie'
-      : type == 'ciFront' ? 'CI - Frente'
-      : 'CI - Reverso';
-
-    final instruction = type == 'selfie'
-      ? 'Centra tu rostro en el encuadre y asegúrate de tener buena iluminación'
-      : 'Asegúrate de que el documento esté bien iluminado y legible';
-
-    return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle
-          Container(
-            width: 40, height: 4,
-            margin: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white30,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Text(title,
-            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text(instruction,
-            style: const TextStyle(color: Colors.white60, fontSize: 13),
-            textAlign: TextAlign.center),
-          const SizedBox(height: 12),
-
-          // Preview de cámara con overlay guía
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            height: 320,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: kPrimaryColor, width: 2),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  HtmlElementView(viewType: viewId),
-                  // Overlay oscuro en bordes
-                  CustomPaint(
-                    painter: _CameraOverlayPainter(isSelfie: type == 'selfie'),
-                  ),
-                  // Etiqueta del marco
-                  Positioned(
-                    bottom: 12,
-                    left: 0, right: 0,
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          type == 'selfie'
-                              ? 'Centra tu rostro dentro del óvalo'
-                              : 'Coloca el documento dentro del rectángulo',
-                          style: const TextStyle(color: Colors.white, fontSize: 11),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Botones
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Colors.white30),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    onPressed: () {
-                      _stopCamera();
-                      Navigator.pop(sheetContext);
-                    },
-                    child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: kPrimaryColor,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    icon: const Icon(Icons.camera_alt, color: Colors.white),
-                    label: const Text('Capturar foto',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    onPressed: () => _captureAndClose(type, sheetContext),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
-      ),
-    );
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    debugPrint('[VerifyWeb] Polling detenido (pollCount=$_pollCount)');
   }
 
-  Future<void> _captureAndClose(String type, BuildContext sheetContext) async {
-    if (_videoElement == null) return;
-
+  Future<void> _pollStatus() async {
+    if (!mounted) { _stopPolling(); return; }
+    _pollCount++;
     try {
-      // Capturar frame actual del video
-      final canvas = html.CanvasElement(
-        width: _videoElement!.videoWidth > 0 ? _videoElement!.videoWidth : 1280,
-        height: _videoElement!.videoHeight > 0 ? _videoElement!.videoHeight : 720,
-      );
-
-      // Aplicar mirror para selfie
-      if (type == 'selfie') {
-        canvas.context2D
-          ..translate(canvas.width!.toDouble(), 0)
-          ..scale(-1, 1);
-      }
-
-      canvas.context2D.drawImage(_videoElement!, 0, 0);
-      final dataUrl = canvas.toDataUrl('image/jpeg', 0.9);
-      final base64Str = dataUrl.split(',')[1];
-      final bytes = base64Decode(base64Str);
-
-      _stopCamera();
-
-      setState(() {
-        if (type == 'selfie') {
-          _selfiePreview = bytes;
-        } else if (type == 'ciFront') _ciFrontPreview = bytes;
-        else if (type == 'ciBack') _ciBackPreview = bytes;
-      });
-
-      if (mounted) {
-        Navigator.pop(sheetContext);
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Foto capturada correctamente'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al capturar: $e'), backgroundColor: Colors.red.shade700),
-        );
-      }
-    }
-  }
-
-  Future<void> _submitVerification() async {
-    if (_selfiePreview == null || _ciFrontPreview == null || _ciBackPreview == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Captura las 3 fotos antes de continuar')),
-      );
-      return;
-    }
-    setState(() { _currentStep = 4; });
-    try {
-      final uri = Uri.parse('$_baseUrl/verification/submit');
-      final request = http.MultipartRequest('POST', uri);
-
-      // Agregar token como campo de texto
-      request.fields['token'] = _verificationToken;
-
-      // Agregar las 3 imágenes
-      final imageData = [
-        ('selfie', _selfiePreview),
-        ('ciFront', _ciFrontPreview),
-        ('ciBack', _ciBackPreview),
-      ];
-
-      for (final entry in imageData) {
-        if (entry.$2 == null) continue;
-        request.files.add(http.MultipartFile.fromBytes(
-          entry.$1,
-          entry.$2!,
-          filename: '${entry.$1}_${DateTime.now().millisecondsSinceEpoch}.jpg',
-          contentType: MediaType.parse('image/jpeg'),
-        ));
-      }
-
-      final streamed = await request.send();
-      final response = await http.Response.fromStream(streamed);
-      debugPrint('VERIFICATION RESPONSE: ${response.statusCode} ${response.body}');
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 200 && data['success'] == true) {
-        setState(() {
-          _currentStep = 5;
-          _resultStatus = (data['data']['status'] ?? 'review').toString().toLowerCase();
-          _resultMessage = data['data']['message'] ?? 'Tu verificación está siendo procesada';
-        });
-      } else {
-        throw Exception(data['error']?['message'] ?? data['message'] ?? 'Error en verificación');
-      }
-    } catch (e) {
-      setState(() => _currentStep = 3);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
-      );
-    }
-  }
-
-  Future<bool> _checkBlockchainBadge() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('access_token') ?? _caregiverToken;
-      final response = await http.get(
+      final res = await http.get(
         Uri.parse('$_baseUrl/caregiver/my-profile'),
-        headers: {'Authorization': 'Bearer $token'},
+        headers: {'Authorization': 'Bearer $_caregiverToken'},
       );
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        return data['data']?['isVerified'] == true || 
-               data['data']?['verificationStatus'] == 'APPROVED' ||
-               data['data']?['verificationStatus'] == 'VERIFIED';
+      final data = jsonDecode(res.body);
+      // El campo puede venir como identityVerificationStatus o verificationStatus
+      final status = (
+        data['data']?['identityVerificationStatus'] ??
+        data['data']?['verificationStatus'] ??
+        'PENDING'
+      ).toString().toUpperCase();
+
+      debugPrint('[VerifyWeb] poll #$_pollCount → identityStatus=$status');
+
+      if (!mounted) return;
+
+      if (status == 'VERIFIED') {
+        _stopPolling();
+        debugPrint('[VerifyWeb] ✅ VERIFIED — avanzando wizard');
+        if (widget.onComplete != null) {
+          widget.onComplete!();
+        } else {
+          context.go('/caregiver/home');
+        }
+      } else if (status == 'REJECTED') {
+        _stopPolling();
+        debugPrint('[VerifyWeb] ❌ REJECTED — mostrando pantalla de reintento');
+        setState(() { _step = 2; });
       }
-      return false;
+      // REVIEW y PENDING → seguir esperando
     } catch (e) {
-      return false;
+      debugPrint('[VerifyWeb] poll error (no crítico): $e');
     }
   }
 
-  Widget _buildIntro() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          const Icon(Icons.verified_user, color: kPrimaryColor, size: 80),
-          const SizedBox(height: 24),
-          const Text(
-            'Verifica tu identidad',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Para garantizar la seguridad de nuestra comunidad, necesitamos verificar tu identidad usando IA. Ten tus documentos a mano.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: kTextSecondary, height: 1.5),
-          ),
-          const SizedBox(height: 32),
-          _buildRequirementItem('Toma una selfie nítida de tu rostro.'),
-          _buildRequirementItem('Foto del anverso (frente) de tu CI.'),
-          _buildRequirementItem('Foto del reverso (atrás) de tu CI.'),
-          const SizedBox(height: 48),
-          _generatingToken
-              ? const CircularProgressIndicator(color: kPrimaryColor)
-              : ElevatedButton(
-                  onPressed: _generateVerificationToken,
-                  child: const Text('Comenzar verificación'),
-                ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRequirementItem(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          const Icon(Icons.check_circle, color: Colors.green, size: 20),
-          const SizedBox(width: 12),
-          Expanded(child: Text(text, style: const TextStyle(color: Colors.white))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCaptureStep(String type, String title, String instruction, Uint8List? preview, VoidCallback onBack, VoidCallback onNext) {
-    return Column(
-      children: [
-        LinearProgressIndicator(value: _currentStep / 3, backgroundColor: kSurfaceColor, color: kPrimaryColor),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              children: [
-                Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
-                const SizedBox(height: 8),
-                Text(instruction, textAlign: TextAlign.center, style: const TextStyle(color: kTextSecondary)),
-                const SizedBox(height: 48),
-                GestureDetector(
-                  onTap: () => _openCamera(type),
-                  child: Container(
-                    width: 280,
-                    height: 280,
-                    decoration: BoxDecoration(
-                      color: kSurfaceColor,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: preview != null ? Colors.green : kPrimaryColor.withOpacity(0.3), width: 2),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: Stack(
-                      children: [
-                        if (preview != null)
-                          Positioned.fill(child: Image.memory(preview, fit: BoxFit.cover))
-                        else
-                          const Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.camera_alt, size: 64, color: kPrimaryColor),
-                                SizedBox(height: 12),
-                                Text('Toca para capturar', style: TextStyle(color: kTextSecondary)),
-                              ],
-                            ),
-                          ),
-                        if (preview != null)
-                          const Positioned(
-                            top: 12,
-                            right: 12,
-                            child: Icon(Icons.check_circle, color: Colors.green, size: 32),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 64),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: onBack,
-                        child: const Text('Atrás'),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: preview != null ? onNext : null,
-                        child: const Text('Continuar'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSubmitting() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircularProgressIndicator(color: kPrimaryColor),
-          SizedBox(height: 24),
-          Text('Analizando tus documentos con IA...', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          SizedBox(height: 8),
-          Text('Esto puede tomar unos segundos', style: TextStyle(color: kTextSecondary, fontSize: 13)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildResult() {
-    bool isApproved = _resultStatus == 'approved' || _resultStatus == 'verified';
-    bool isReview = _resultStatus == 'review' || _resultStatus == 'pending_review' || _resultStatus == 'review';
-    bool isRejected = _resultStatus == 'rejected';
-
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (isApproved)
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.0, end: 1.0),
-              duration: const Duration(milliseconds: 600),
-              builder: (context, value, child) => Transform.scale(
-                scale: value,
-                child: const Icon(Icons.check_circle, color: Colors.green, size: 100),
-              ),
-            )
-          else if (isReview)
-            const Icon(Icons.schedule, color: Colors.orange, size: 100)
-          else
-            const Icon(Icons.cancel, color: Colors.red, size: 100),
-          
-          const SizedBox(height: 32),
-          Text(
-            isApproved ? '¡Verificación exitosa!' : isReview ? 'En revisión' : 'Verificación fallida',
-            style: TextStyle(
-              fontSize: 24, 
-              fontWeight: FontWeight.bold, 
-              color: isApproved ? Colors.green : isReview ? Colors.orange : Colors.red
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            _resultMessage,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: kTextSecondary, fontSize: 16, height: 1.5),
-          ),
-
-          if (isApproved)
-            FutureBuilder<bool>(
-              future: _checkBlockchainBadge(),
-              builder: (context, snapshot) {
-                if (snapshot.data == true) {
-                  return Container(
-                    margin: const EdgeInsets.only(top: 16),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: GardenColors.navy,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: GardenColors.polygon.withOpacity(0.5)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 32, height: 32,
-                          decoration: BoxDecoration(
-                            color: GardenColors.polygon.withOpacity(0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Center(
-                            child: Text('⬡', style: TextStyle(color: GardenColors.polygon, fontSize: 16)),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Badge registrado en Polygon',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                              Text('Tu verificación quedó registrada de forma inmutable en la blockchain',
-                                style: TextStyle(color: GardenColors.polygon, fontSize: 11)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-                return const SizedBox();
-              },
-            ),
-          const SizedBox(height: 48),
-          if (isRejected)
-            ElevatedButton(
-              onPressed: () => setState(() {
-                _currentStep = 0;
-                _verificationToken = '';
-                _selfiePreview = null;
-                _ciFrontPreview = null;
-                _ciBackPreview = null;
-              }),
-              child: const Text('Intentar de nuevo'),
-            )
-          else
-            ElevatedButton(
-              onPressed: () {
-                if (widget.onComplete != null) {
-                  widget.onComplete!();
-                } else {
-                  context.go('/caregiver/home');
-                }
-              },
-              child: Text(widget.onComplete != null ? 'Continuar' : 'Ir a mi panel'),
-            ),
-        ],
-      ),
-    );
-  }
+  // ── BUILDS ────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBackgroundColor,
+      backgroundColor: _bg,
       appBar: widget.showAppBar
           ? AppBar(
-              title: const Text('Verificación de identidad'),
-              leading: _currentStep > 0 && _currentStep < 5 ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => setState(() => _currentStep--),
-              ) : null,
+              backgroundColor: _surface,
+              elevation: 0,
+              title: Text('Verificación de identidad', style: TextStyle(color: _text)),
+              leading: _step == 2
+                  ? IconButton(
+                      icon: Icon(Icons.arrow_back, color: _text),
+                      onPressed: () => setState(() { _step = 0; _stopPolling(); }),
+                    )
+                  : null,
             )
           : null,
-      body: _buildBody(),
+      body: SafeArea(child: _buildBody()),
     );
   }
 
   Widget _buildBody() {
-    switch (_currentStep) {
+    switch (_step) {
       case 0: return _buildIntro();
-      case 1: return _buildCaptureStep(
-        'selfie', 
-        'Toma tu selfie', 
-        'Asegúrate de que tu rostro esté bien iluminado y sea claramente visible.', 
-        _selfiePreview, 
-        () => setState(() => _currentStep = 0), 
-        () => setState(() => _currentStep = 2)
-      );
-      case 2: return _buildCaptureStep(
-        'ciFront', 
-        'Foto del CI - Frente', 
-        'Sube una foto nítida del anverso de tu documento de identidad.', 
-        _ciFrontPreview, 
-        () => setState(() => _currentStep = 1), 
-        () => setState(() => _currentStep = 3)
-      );
-      case 3: return _buildCaptureStep(
-        'ciBack', 
-        'Foto del CI - Reverso', 
-        'Sube una foto nítida del reverso de tu documento de identidad.', 
-        _ciBackPreview, 
-        () => setState(() => _currentStep = 2), 
-        _submitVerification
-      );
-      case 4: return _buildSubmitting();
-      case 5: return _buildResult();
+      case 1: return _buildQrScreen();
+      case 2: return _buildRejected();
       default: return _buildIntro();
     }
   }
-}
 
-class _CameraOverlayPainter extends CustomPainter {
-  final bool isSelfie;
-  const _CameraOverlayPainter({required this.isSelfie});
+  // ── INTRO ────────────────────────────────────────────────────────────────
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final dimPaint = Paint()..color = Colors.black.withOpacity(0.55);
-    final borderPaint = Paint()
-      ..color = const Color(0xFF778C43)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5;
-    final cornerPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round;
-
-    if (isSelfie) {
-      // Marco oval para cara — más estrecho y alto (proporción real de rostro)
-      final cx = size.width / 2;
-      final cy = size.height / 2 - 10;
-      final rx = size.width * 0.25; // más angosto
-      final ry = size.height * 0.42; // más alto
-      final ovalRect = Rect.fromCenter(center: Offset(cx, cy), width: rx * 2, height: ry * 2);
-
-      // Sombra alrededor del óvalo
-      final fullRect = Rect.fromLTWH(0, 0, size.width, size.height);
-      final path = Path()
-        ..addRect(fullRect)
-        ..addOval(ovalRect)
-        ..fillType = PathFillType.evenOdd;
-      canvas.drawPath(path, dimPaint);
-
-      // Borde del óvalo
-      canvas.drawOval(ovalRect, borderPaint);
-
-      // Esquinas superiores (arcos)
-      _drawCornerArcs(canvas, ovalRect, cornerPaint);
-    } else {
-      // Marco CI — proporción carnet boliviano 85.6×54mm ≈ 1.585:1
-      final cardW = size.width * 0.80;
-      final cardH = cardW / 1.585;
-      final margin = (size.width - cardW) / 2;
-      final top = (size.height - cardH) / 2;
-      final bottom = top + cardH;
-      final rect = Rect.fromLTRB(margin, top, size.width - margin, bottom);
-
-      // Sombra alrededor del rectángulo
-      final fullRect = Rect.fromLTWH(0, 0, size.width, size.height);
-      final path = Path()
-        ..addRect(fullRect)
-        ..addRRect(RRect.fromRectAndRadius(rect, const Radius.circular(8)))
-        ..fillType = PathFillType.evenOdd;
-      canvas.drawPath(path, dimPaint);
-
-      // Borde del rectángulo
-      canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(8)), borderPaint);
-
-      // Esquinas destacadas
-      _drawCornerLines(canvas, rect, cornerPaint);
-    }
+  Widget _buildIntro() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        children: [
+          const SizedBox(height: 16),
+          Container(
+            width: 90, height: 90,
+            decoration: BoxDecoration(
+              color: GardenColors.primary.withOpacity(0.10),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.qr_code_scanner_rounded, color: GardenColors.primary, size: 48),
+          ),
+          const SizedBox(height: 24),
+          Text('Verifica tu identidad con tu teléfono',
+              style: TextStyle(color: _text, fontSize: 22, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          Text(
+            'Como estás registrándote desde una computadora, usaremos tu teléfono para tomar las fotos. '
+            'Al presionar "Generar QR" aparecerá un código que deberás escanear.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _subtext, height: 1.6),
+          ),
+          const SizedBox(height: 28),
+          _step0Item('1', 'Presiona "Generar QR" abajo'),
+          _step0Item('2', 'Escanea el QR con la cámara de tu teléfono'),
+          _step0Item('3', 'Toma la selfie y las fotos de tu CI en el teléfono'),
+          _step0Item('4', 'Esta pantalla avanzará automáticamente al verificarse'),
+          const SizedBox(height: 36),
+          SizedBox(
+            width: double.infinity,
+            child: _generatingToken
+                ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+                : ElevatedButton.icon(
+                    icon: const Icon(Icons.qr_code_2_rounded),
+                    label: const Text('Generar QR',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GardenColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: _generateQR,
+                  ),
+          ),
+        ],
+      ),
+    );
   }
 
-  void _drawCornerArcs(Canvas canvas, Rect r, Paint p) {
-    const len = 20.0;
-    // top-left
-    canvas.drawLine(Offset(r.left, r.top + len), Offset(r.left, r.top + len * 2), p);
-    // top-right
-    canvas.drawLine(Offset(r.right, r.top + len), Offset(r.right, r.top + len * 2), p);
-    // bottom-left
-    canvas.drawLine(Offset(r.left, r.bottom - len), Offset(r.left, r.bottom - len * 2), p);
-    // bottom-right
-    canvas.drawLine(Offset(r.right, r.bottom - len), Offset(r.right, r.bottom - len * 2), p);
+  Widget _step0Item(String num, String label) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 28, height: 28,
+            decoration: const BoxDecoration(
+              color: GardenColors.primary,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(num,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(child: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(label, style: TextStyle(color: _text, fontSize: 14, height: 1.4)),
+          )),
+        ],
+      ),
+    );
   }
 
-  void _drawCornerLines(Canvas canvas, Rect r, Paint p) {
-    const len = 22.0;
-    // top-left
-    canvas.drawLine(r.topLeft, Offset(r.left + len, r.top), p);
-    canvas.drawLine(r.topLeft, Offset(r.left, r.top + len), p);
-    // top-right
-    canvas.drawLine(r.topRight, Offset(r.right - len, r.top), p);
-    canvas.drawLine(r.topRight, Offset(r.right, r.top + len), p);
-    // bottom-left
-    canvas.drawLine(r.bottomLeft, Offset(r.left + len, r.bottom), p);
-    canvas.drawLine(r.bottomLeft, Offset(r.left, r.bottom - len), p);
-    // bottom-right
-    canvas.drawLine(r.bottomRight, Offset(r.right - len, r.bottom), p);
-    canvas.drawLine(r.bottomRight, Offset(r.right, r.bottom - len), p);
+  // ── QR + POLLING ─────────────────────────────────────────────────────────
+
+  Widget _buildQrScreen() {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('Escanea el QR con tu teléfono',
+                style: TextStyle(color: _text, fontSize: 20, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            Text(
+              'Abre la cámara o la app de lectura de QR de tu teléfono y apunta al código.',
+              style: TextStyle(color: _subtext, fontSize: 13, height: 1.5),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 28),
+
+            // QR Code
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 24, offset: const Offset(0, 8)),
+                ],
+              ),
+              child: QrImageView(
+                data: _qrUrl,
+                version: QrVersions.auto,
+                size: 220,
+                backgroundColor: Colors.white,
+                eyeStyle: const QrEyeStyle(
+                  eyeShape: QrEyeShape.square,
+                  color: Color(0xFF3D6B1A),
+                ),
+                dataModuleStyle: const QrDataModuleStyle(
+                  dataModuleShape: QrDataModuleShape.square,
+                  color: Color(0xFF3D6B1A),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Estado de espera
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                color: GardenColors.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: GardenColors.primary.withOpacity(0.2)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(color: GardenColors.primary, strokeWidth: 2.5),
+                  ),
+                  const SizedBox(width: 12),
+                  Text('Esperando verificación desde tu teléfono...',
+                      style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 13)),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
+            Text(
+              'Esta pantalla avanzará automáticamente cuando tu identidad sea verificada.',
+              style: TextStyle(color: _subtext, fontSize: 12, height: 1.4),
+              textAlign: TextAlign.center,
+            ),
+
+            const SizedBox(height: 24),
+
+            // Botón regenerar QR (por si expira)
+            TextButton.icon(
+              onPressed: _generatingToken ? null : _generateQR,
+              icon: const Icon(Icons.refresh_rounded, size: 18, color: GardenColors.primary),
+              label: const Text('Generar nuevo QR',
+                  style: TextStyle(color: GardenColors.primary, fontSize: 13)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
-  @override
-  bool shouldRepaint(_CameraOverlayPainter old) => old.isSelfie != isSelfie;
+  // ── REJECTED ─────────────────────────────────────────────────────────────
+
+  Widget _buildRejected() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(36),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.cancel_rounded, color: Colors.red, size: 90),
+            const SizedBox(height: 24),
+            Text('Verificación rechazada',
+                style: TextStyle(color: _text, fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 14),
+            Text(
+              'La verificación no pasó el análisis de IA. Debes intentarlo de nuevo para continuar el registro.\n\n'
+              'Consejos:\n• Buena iluminación, sin sombras en el rostro\n'
+              '• CI sin reflejos, completamente legible\n'
+              '• Selfie sin gafas y de frente',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: _subtext, height: 1.65, fontSize: 14),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.qr_code_2_rounded),
+                label: const Text('Generar nuevo QR e intentar de nuevo',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: GardenColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: _generatingToken ? null : _generateQR,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
