@@ -20,7 +20,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   bool _isLoading = true;
   String _clientToken = '';
   String _selectedFilter = 'todas'; // 'todas', 'activas', 'completadas', 'canceladas'
+  // IDs donde ya se mostró la decisión M&G (se persiste en SharedPreferences)
   final Set<String> _shownMGDecisionIds = {};
+  SharedPreferences? _prefs;
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
@@ -32,12 +34,17 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
 
   Future<void> _initData() async {
     final prefs = await SharedPreferences.getInstance();
+    _prefs = prefs;
     String token = prefs.getString('access_token') ?? '';
     debugPrint('MY_BOOKINGS: Loaded access_token: ${token.length > 20 ? token.substring(0, 20) : token}...');
     if (token.isEmpty) {
       token = const String.fromEnvironment('TEST_JWT', defaultValue: '');
       debugPrint('MY_BOOKINGS: Using TEST_JWT: ${token.length > 20 ? token.substring(0, 20) : token}...');
     }
+    // Cargar IDs donde ya se mostró la decisión M&G (persiste entre sesiones)
+    final saved = prefs.getStringList('mg_decision_shown_ids') ?? [];
+    _shownMGDecisionIds.addAll(saved);
+    debugPrint('MY_BOOKINGS: mg_decision_shown_ids cargados: $saved');
     setState(() => _clientToken = token);
     _loadBookings();
   }
@@ -64,7 +71,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     }
   }
 
-  void _checkMGDecisionNeeded() {
+  Future<void> _checkMGDecisionNeeded() async {
     final now = DateTime.now();
     for (final booking in _bookings) {
       final status = booking['status'] as String?;
@@ -78,6 +85,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
           final confirmedDate = DateTime.parse(confirmedDateStr).toLocal();
           if (now.isAfter(confirmedDate)) {
             _shownMGDecisionIds.add(bookingId);
+            // Persistir en SharedPreferences para no volver a preguntar nunca más
+            await _prefs?.setStringList('mg_decision_shown_ids', _shownMGDecisionIds.toList());
+            debugPrint('MY_BOOKINGS: mg_decision persisted for bookingId=$bookingId');
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) _showMGDecisionSheet(bookingId);
             });
@@ -832,17 +842,17 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                     ),
                   ],
                   // Meet & Greet para HOSPEDAJE CONFIRMED
+                  // Solo mostrar botón M&G si NO está aceptado; si está ACCEPTED,
+                  // el botón "Abrir chat" de arriba ya es suficiente.
                   if (status == 'CONFIRMED' && !isPaseo) ...[
-                    const SizedBox(height: 10),
                     Builder(builder: (_) {
                       final mg = booking['meetAndGreet'] as Map<String, dynamic>?;
                       final mgStatus = mg?['status'] as String?;
-                      final isAccepted = mgStatus == 'ACCEPTED';
 
-                      if (isAccepted) {
-                        // M&G confirmado → ir directo al chat con banner de fecha
+                      // ACCEPTED: mostrar solo la info de fecha (sin botón extra)
+                      if (mgStatus == 'ACCEPTED') {
                         final confirmedDate = mg?['confirmedDate'] as String?;
-                        String note = 'Meet & Greet confirmado';
+                        String dateLabel = 'Meet & Greet confirmado';
                         if (confirmedDate != null) {
                           try {
                             final d = DateTime.parse(confirmedDate).toLocal();
@@ -850,51 +860,62 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                             const days = ['lun','mar','mié','jue','vie','sáb','dom'];
                             final h = d.hour.toString().padLeft(2,'0');
                             final m = d.minute.toString().padLeft(2,'0');
-                            note = 'Meet & Greet · ${days[d.weekday-1]} ${d.day} ${months[d.month-1]} · $h:$m';
+                            dateLabel = '${days[d.weekday-1]} ${d.day} ${months[d.month-1]} · $h:$m';
                           } catch (_) {}
                         }
-                        return OutlinedButton.icon(
-                          onPressed: () => Navigator.push(context, MaterialPageRoute(
-                            builder: (_) => ChatScreen(
-                              bookingId: booking['id'] as String,
-                              otherPersonName: 'Cuidador',
-                              token: _clientToken,
-                              meetAndGreetNote: note,
-                              role: 'CLIENT',
-                              bookingStatus: booking['status'] as String?,
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: GardenColors.success.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: GardenColors.success.withOpacity(0.3)),
                             ),
-                          )),
-                          icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
-                          label: const Text('Chat · Meet & Greet', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: GardenColors.success,
-                            side: const BorderSide(color: GardenColors.success),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            minimumSize: const Size(double.infinity, 42),
+                            child: Row(
+                              children: [
+                                const Text('🤝', style: TextStyle(fontSize: 16)),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Meet & Greet confirmado',
+                                          style: TextStyle(color: GardenColors.success, fontSize: 12, fontWeight: FontWeight.w700)),
+                                      Text(dateLabel,
+                                          style: TextStyle(color: subtextColor, fontSize: 11)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         );
                       }
 
-                      // M&G no aceptado aún → ir a pantalla Meet & Greet
-                      return OutlinedButton.icon(
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(
-                          builder: (_) => MeetAndGreetScreen(
-                            bookingId: booking['id'] as String,
-                            role: 'CLIENT',
+                      // No aceptado → botón para coordinar
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: OutlinedButton.icon(
+                          onPressed: () => Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => MeetAndGreetScreen(
+                              bookingId: booking['id'] as String,
+                              role: 'CLIENT',
+                            ),
+                          )),
+                          icon: const Text('🤝', style: TextStyle(fontSize: 14)),
+                          label: Text(
+                            mgStatus == 'PROPOSED' ? 'Meet & Greet · Propuesta pendiente'
+                              : mgStatus == 'COMPLETED' ? 'Meet & Greet finalizado'
+                              : 'Coordinar Meet & Greet',
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                           ),
-                        )),
-                        icon: const Text('🤝', style: TextStyle(fontSize: 14)),
-                        label: Text(
-                          mgStatus == 'PROPOSED' ? '🤝 Meet & Greet · Propuesta pendiente'
-                            : mgStatus == 'COMPLETED' ? '🤝 Meet & Greet finalizado'
-                            : '🤝 Coordinar Meet & Greet',
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: GardenColors.primary,
-                          side: const BorderSide(color: GardenColors.primary),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          minimumSize: const Size(double.infinity, 42),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: GardenColors.primary,
+                            side: const BorderSide(color: GardenColors.primary),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            minimumSize: const Size(double.infinity, 42),
+                          ),
                         ),
                       );
                     }),

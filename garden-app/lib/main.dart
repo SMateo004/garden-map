@@ -6,7 +6,6 @@ import 'screens/client/client_welcome_screen.dart';
 import 'screens/client/landing_screen.dart';
 import 'screens/caregiver/onboarding_wizard_screen.dart';
 import 'screens/test_agentes_screen.dart';
-import 'screens/client/marketplace_screen.dart';
 import 'screens/admin/admin_panel_screen.dart';
 import 'screens/admin/admin_identity_review_screen.dart';
 import 'screens/admin/admin_reservation_detail_screen.dart';
@@ -31,6 +30,7 @@ import 'screens/service/gps_tracking_screen.dart';
 import 'screens/dispute/dispute_screen.dart';
 import 'screens/client/favorites_screen.dart';
 import 'screens/client/client_shell_screen.dart';
+import 'screens/client/web_shell_screen.dart';
 import 'screens/onboarding/mobile_splash_screen.dart';
 import 'screens/onboarding/mobile_onboarding_screen.dart';
 import 'screens/onboarding/mobile_service_selector_screen.dart';
@@ -165,7 +165,9 @@ final GoRouter _router = GoRouter(
             initialService: q['service'],
           );
         }
-        return MarketplaceScreen(
+        // Web: usar WebShellScreen con nav en el header
+        return WebShellScreen(
+          initialTab: 0,
           initialService: q['service'],
           initialZone: q['zone'],
           initialSize: q['size'],
@@ -176,13 +178,13 @@ final GoRouter _router = GoRouter(
       path: '/my-bookings-tab',
       name: 'myBookingsTab',
       builder: (context, state) =>
-          kIsWeb ? const MyBookingsScreen() : const ClientShellScreen(initialTab: 1),
+          kIsWeb ? const WebShellScreen(initialTab: 1) : const ClientShellScreen(initialTab: 1),
     ),
     GoRoute(
       path: '/my-pets-tab',
       name: 'myPetsTab',
       builder: (context, state) =>
-          kIsWeb ? const MyPetsScreen() : const ClientShellScreen(initialTab: 2),
+          kIsWeb ? const WebShellScreen(initialTab: 2) : const ClientShellScreen(initialTab: 2),
     ),
     GoRoute(
       path: '/admin',
@@ -267,7 +269,8 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/profile',
       name: 'profile',
-      builder: (context, state) => const ProfileScreen(),
+      builder: (context, state) =>
+          kIsWeb ? const WebShellScreen(initialTab: 3) : const ProfileScreen(),
     ),
     GoRoute(
       path: '/chat/:bookingId',
