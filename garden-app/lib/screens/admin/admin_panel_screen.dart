@@ -2469,25 +2469,58 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   }
 
   Future<void> _rejectPayment(String bookingId) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      builder: (ctx) => GardenGlassDialog(
-        title: const Text('¿Rechazar pago?'),
-        content: const Text(
-          'El dueño será notificado y tendrá la opción de volver a realizar el pago. Esta acción no se puede deshacer.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = themeNotifier.isDark;
+        return Container(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+          decoration: BoxDecoration(
+            color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Sí, rechazar', style: TextStyle(color: Colors.white)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(child: Container(width: 36, height: 4,
+                decoration: BoxDecoration(color: GardenColors.darkBorder, borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 16),
+              const Icon(Icons.warning_amber_rounded, color: GardenColors.error, size: 40),
+              const SizedBox(height: 12),
+              Text('¿Rechazar pago?', style: TextStyle(
+                color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
+                fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text('El dueño será notificado y podrá volver a realizar el pago.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary, fontSize: 14)),
+              const SizedBox(height: 24),
+              SizedBox(width: double.infinity, child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: GardenColors.error, foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Sí, rechazar pago', style: TextStyle(fontWeight: FontWeight.bold)),
+              )),
+              const SizedBox(height: 10),
+              SizedBox(width: double.infinity, child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text('Cancelar', style: TextStyle(
+                  color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
+                  fontWeight: FontWeight.bold)),
+              )),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
     if (confirmed != true) return;
 

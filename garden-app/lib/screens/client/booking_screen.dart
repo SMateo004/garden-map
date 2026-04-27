@@ -32,8 +32,11 @@ class _BookingScreenState extends State<BookingScreen> {
   // Meet & Greet opcional
   bool _includeMG = false;
   DateTime? _mgDate;
-  final _mgTimeCtrl = TextEditingController();
+  TimeOfDay? _mgTime;
   final _mgPlaceCtrl = TextEditingController();
+  List<Map<String, dynamic>> _mgLocationSuggestions = [];
+  double? _mgSelectedLat;
+  double? _mgSelectedLng;
 
   List<Map<String, dynamic>> _availableSlots = [];
   List<Map<String, dynamic>> _bookedPaseos = []; // reservas activas del cuidador
@@ -48,7 +51,6 @@ class _BookingScreenState extends State<BookingScreen> {
 
   @override
   void dispose() {
-    _mgTimeCtrl.dispose();
     _mgPlaceCtrl.dispose();
     super.dispose();
   }
@@ -180,6 +182,22 @@ class _BookingScreenState extends State<BookingScreen> {
     }
   }
 
+  Future<void> _searchMGLocations(String query) async {
+    if (query.trim().length < 3) { setState(() => _mgLocationSuggestions = []); return; }
+    try {
+      final uri = Uri.parse('https://nominatim.openstreetmap.org/search').replace(queryParameters: {
+        'q': query,
+        'format': 'json',
+        'limit': '5',
+        'countrycodes': 'bo',
+        'accept-language': 'es',
+      });
+      final res = await http.get(uri, headers: {'User-Agent': 'GardenApp/1.0'});
+      final list = jsonDecode(res.body) as List;
+      if (mounted) setState(() => _mgLocationSuggestions = list.cast<Map<String, dynamic>>());
+    } catch (_) {}
+  }
+
   Future<void> _createBooking() async {
     if (_selectedPetId == null) {
       _showError('Selecciona una mascota');
@@ -248,12 +266,18 @@ class _BookingScreenState extends State<BookingScreen> {
         // Construir mgData si el cliente quiere M&G
         Map<String, dynamic>? mgData;
         if (_includeMG && _mgDate != null && _mgPlaceCtrl.text.trim().isNotEmpty) {
-          final timeStr = _mgTimeCtrl.text.trim().isNotEmpty ? _mgTimeCtrl.text.trim() : '10:00';
+          final timeStr = _mgTime != null
+              ? '${_mgTime!.hour.toString().padLeft(2, '0')}:${_mgTime!.minute.toString().padLeft(2, '0')}'
+              : '10:00';
           final dateStr = _mgDate!.toIso8601String().split('T')[0];
           mgData = {
             'modalidad': 'IN_PERSON',
             'proposedDate': '${dateStr}T$timeStr:00',
             'meetingPoint': _mgPlaceCtrl.text.trim(),
+            if (_mgSelectedLat != null && _mgSelectedLng != null) ...{
+              'meetingPointLat': _mgSelectedLat,
+              'meetingPointLng': _mgSelectedLng,
+            },
           };
           debugPrint('[MG] mgData built: $mgData');
         }
@@ -1065,31 +1089,47 @@ class _BookingScreenState extends State<BookingScreen> {
               ),
             ),
             const SizedBox(height: 10),
-            // Time field
-            TextField(
-              controller: _mgTimeCtrl,
-              style: TextStyle(color: textColor, fontSize: 14),
-              decoration: InputDecoration(
-                hintText: 'Hora (ej: 15:00)',
-                hintStyle: TextStyle(color: subtextColor, fontSize: 13),
-                prefixIcon: Icon(Icons.access_time, color: GardenColors.primary, size: 18),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                enabledBorder: OutlineInputBorder(
+            // Time picker
+            GestureDetector(
+              onTap: () async {
+                final picked = await showTimePicker(
+                  context: context,
+                  initialTime: _mgTime ?? const TimeOfDay(hour: 10, minute: 0),
+                  builder: (ctx, child) => Theme(
+                    data: Theme.of(ctx).copyWith(
+                      colorScheme: const ColorScheme.dark(primary: GardenColors.primary),
+                    ),
+                    child: child!,
+                  ),
+                );
+                if (picked != null) setState(() => _mgTime = picked);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: borderColor),
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: borderColor),
                 ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: GardenColors.primary),
+                child: Row(
+                  children: [
+                    Icon(Icons.access_time, size: 16, color: GardenColors.primary),
+                    const SizedBox(width: 10),
+                    Text(
+                      _mgTime != null
+                          ? '${_mgTime!.hour.toString().padLeft(2, '0')}:${_mgTime!.minute.toString().padLeft(2, '0')}'
+                          : 'Seleccionar hora',
+                      style: TextStyle(color: _mgTime != null ? textColor : subtextColor, fontSize: 14),
+                    ),
+                  ],
                 ),
               ),
-              keyboardType: TextInputType.datetime,
             ),
             const SizedBox(height: 10),
-            // Meeting point field
+            // Meeting point with autocomplete
             TextField(
               controller: _mgPlaceCtrl,
               style: TextStyle(color: textColor, fontSize: 14),
+              onChanged: _searchMGLocations,
               decoration: InputDecoration(
                 hintText: 'Punto de encuentro',
                 hintStyle: TextStyle(color: subtextColor, fontSize: 13),
@@ -1105,6 +1145,35 @@ class _BookingScreenState extends State<BookingScreen> {
                 ),
               ),
             ),
+            if (_mgLocationSuggestions.isNotEmpty)
+              Container(
+                constraints: const BoxConstraints(maxHeight: 180),
+                margin: const EdgeInsets.only(top: 4),
+                decoration: BoxDecoration(
+                  border: Border.all(color: borderColor),
+                  borderRadius: BorderRadius.circular(12),
+                  color: surface,
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _mgLocationSuggestions.length,
+                  itemBuilder: (_, i) {
+                    final s = _mgLocationSuggestions[i];
+                    return ListTile(
+                      dense: true,
+                      title: Text(s['display_name'] ?? '', style: TextStyle(color: textColor, fontSize: 12)),
+                      onTap: () {
+                        setState(() {
+                          _mgPlaceCtrl.text = s['display_name'] ?? '';
+                          _mgSelectedLat = double.tryParse(s['lat']?.toString() ?? '');
+                          _mgSelectedLng = double.tryParse(s['lon']?.toString() ?? '');
+                          _mgLocationSuggestions = [];
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
             const SizedBox(height: 8),
             Text(
               'El cuidador recibirá esta propuesta automáticamente tras confirmar el pago.',

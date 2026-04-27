@@ -128,19 +128,18 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _proposeMG({Map<String, dynamic>? prefill}) async {
     final isDark = themeNotifier.isDark;
     DateTime? selectedDate = prefill != null ? DateTime.tryParse(prefill['proposedDate'] ?? '') : null;
-    final timeCtrl = TextEditingController(
-      text: prefill != null && prefill['proposedDate'] != null
-          ? (prefill['proposedDate'] as String).split('T').elementAtOrNull(1)?.substring(0, 5) ?? ''
-          : '',
-    );
     final placeCtrl = TextEditingController(text: prefill?['meetingPoint'] ?? '');
     String modalidad = prefill?['modalidad'] ?? 'IN_PERSON';
+    List<Map<String, dynamic>> locationSuggestions = [];
+    double? selLat;
+    double? selLng;
 
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
+        TimeOfDay? selectedTime;
         return StatefulBuilder(builder: (ctx, setSheet) {
           final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
           final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
@@ -203,22 +202,57 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  TextField(
-                    controller: timeCtrl,
-                    style: TextStyle(color: textColor, fontSize: 14),
-                    decoration: InputDecoration(
-                      hintText: 'Hora (ej: 15:00)',
-                      hintStyle: TextStyle(color: subtextColor, fontSize: 13),
-                      prefixIcon: Icon(Icons.access_time, color: GardenColors.primary, size: 18),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary)),
+                  // Time picker row
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showTimePicker(
+                        context: ctx,
+                        initialTime: selectedTime ?? const TimeOfDay(hour: 10, minute: 0),
+                        builder: (c, child) => Theme(
+                          data: Theme.of(c).copyWith(colorScheme: const ColorScheme.dark(primary: GardenColors.primary)),
+                          child: child!,
+                        ),
+                      );
+                      if (picked != null) setSheet(() => selectedTime = picked);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(12)),
+                      child: Row(children: [
+                        Icon(Icons.access_time, size: 16, color: GardenColors.primary),
+                        const SizedBox(width: 10),
+                        Text(
+                          selectedTime != null
+                              ? '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}'
+                              : 'Seleccionar hora',
+                          style: TextStyle(color: selectedTime != null ? textColor : subtextColor, fontSize: 14),
+                        ),
+                      ]),
                     ),
                   ),
                   const SizedBox(height: 10),
+                  // Place with autocomplete
                   TextField(
                     controller: placeCtrl,
                     style: TextStyle(color: textColor, fontSize: 14),
+                    onChanged: (query) async {
+                      if (query.trim().length < 3) {
+                        setSheet(() => locationSuggestions = []);
+                        return;
+                      }
+                      try {
+                        final uri = Uri.parse('https://nominatim.openstreetmap.org/search').replace(queryParameters: {
+                          'q': query,
+                          'format': 'json',
+                          'limit': '5',
+                          'countrycodes': 'bo',
+                          'accept-language': 'es',
+                        });
+                        final res = await http.get(uri, headers: {'User-Agent': 'GardenApp/1.0'});
+                        final list = jsonDecode(res.body) as List;
+                        setSheet(() => locationSuggestions = list.cast<Map<String, dynamic>>());
+                      } catch (_) {}
+                    },
                     decoration: InputDecoration(
                       hintText: 'Punto de encuentro',
                       hintStyle: TextStyle(color: subtextColor, fontSize: 13),
@@ -228,6 +262,35 @@ class _ChatScreenState extends State<ChatScreen> {
                       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary)),
                     ),
                   ),
+                  if (locationSuggestions.isNotEmpty)
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 180),
+                      margin: const EdgeInsets.only(top: 4),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: borderColor),
+                        borderRadius: BorderRadius.circular(12),
+                        color: bg,
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: locationSuggestions.length,
+                        itemBuilder: (_, i) {
+                          final s = locationSuggestions[i];
+                          return ListTile(
+                            dense: true,
+                            title: Text(s['display_name'] ?? '', style: TextStyle(color: textColor, fontSize: 12)),
+                            onTap: () {
+                              setSheet(() {
+                                placeCtrl.text = s['display_name'] ?? '';
+                                selLat = double.tryParse(s['lat']?.toString() ?? '');
+                                selLng = double.tryParse(s['lon']?.toString() ?? '');
+                                locationSuggestions = [];
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    ),
                   const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
@@ -245,23 +308,37 @@ class _ChatScreenState extends State<ChatScreen> {
                           );
                           return;
                         }
-                        final timeStr = timeCtrl.text.trim().isNotEmpty ? timeCtrl.text.trim() : '10:00';
+                        final timeStr = selectedTime != null
+                            ? '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}'
+                            : '10:00';
                         final dateStr = selectedDate!.toIso8601String().split('T')[0];
+                        final capturedLat = selLat;
+                        final capturedLng = selLng;
+                        final capturedPlace = placeCtrl.text.trim();
                         Navigator.pop(ctx);
                         setState(() => _mgLoading = true);
                         try {
+                          final body = <String, dynamic>{
+                            'modalidad': modalidad,
+                            'proposedDate': '${dateStr}T$timeStr:00',
+                            'meetingPoint': capturedPlace,
+                            if (capturedLat != null && capturedLng != null) ...{
+                              'meetingPointLat': capturedLat,
+                              'meetingPointLng': capturedLng,
+                            },
+                          };
                           final res = await http.post(
                             Uri.parse('$_baseUrl/meet-and-greet/${widget.bookingId}/propose'),
                             headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
-                            body: jsonEncode({
-                              'modalidad': modalidad,
-                              'proposedDate': '${dateStr}T$timeStr:00',
-                              'meetingPoint': placeCtrl.text.trim(),
-                            }),
+                            body: jsonEncode(body),
                           );
                           final d = jsonDecode(res.body);
                           if (mounted) {
                             if (d['success'] == true) {
+                              if (capturedLat != null && capturedLng != null) {
+                                final mapsUrl = 'https://www.google.com/maps?q=$capturedLat,$capturedLng';
+                                _chatService?.sendMessage(widget.bookingId, '📍 Ubicación del Meet & Greet: $mapsUrl');
+                              }
                               await _loadMG();
                               await _chatService!.loadHistory(widget.bookingId);
                             } else {
@@ -291,7 +368,6 @@ class _ChatScreenState extends State<ChatScreen> {
       },
     );
 
-    timeCtrl.dispose();
     placeCtrl.dispose();
   }
 

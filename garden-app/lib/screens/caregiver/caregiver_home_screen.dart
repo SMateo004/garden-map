@@ -990,33 +990,78 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             ),
           ),
           // Botones
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: GardenButton(
-                    label: 'Aceptar',
-                    icon: Icons.check_rounded,
-                    height: 46,
-                    color: GardenColors.success,
-                    onPressed: () => _respondBooking(bookingId, 'accept'),
-                  ),
+          Builder(builder: (_) {
+            final hasMG = booking['meetAndGreet'] != null;
+            if (hasMG) {
+              return Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: GardenColors.success),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        '🤝 Meet & Greet incluido — coordina antes de aceptar',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: GardenColors.success, fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.chat_bubble_outline_rounded),
+                      label: const Text('Abrir chat'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ChatScreen(
+                            bookingId: bookingId,
+                            otherPersonName: clientName,
+                            token: _caregiverToken,
+                            role: 'CAREGIVER',
+                            bookingStatus: 'WAITING_CAREGIVER_APPROVAL',
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: GardenButton(
-                    label: 'Rechazar',
-                    icon: Icons.close_rounded,
-                    height: 46,
-                    color: GardenColors.error,
-                    outline: true,
-                    onPressed: () => _respondBooking(bookingId, 'reject'),
+              );
+            }
+            return Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GardenButton(
+                      label: 'Aceptar',
+                      icon: Icons.check_rounded,
+                      height: 46,
+                      color: GardenColors.success,
+                      onPressed: () => _respondBooking(bookingId, 'accept'),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: GardenButton(
+                      label: 'Rechazar',
+                      icon: Icons.close_rounded,
+                      height: 46,
+                      color: GardenColors.error,
+                      outline: true,
+                      onPressed: () => _respondBooking(bookingId, 'reject'),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );
