@@ -182,32 +182,22 @@ class _WebNavButton extends StatelessWidget {
     final activeColor = GardenColors.primary;
     final inactiveColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive ? GardenColors.primary.withOpacity(0.10) : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          border: isActive
-              ? Border.all(color: GardenColors.primary.withOpacity(0.25), width: 1)
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 18, color: isActive ? activeColor : inactiveColor),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: isActive ? activeColor : inactiveColor,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                fontSize: 13,
-              ),
-            ),
-          ],
+    return Tooltip(
+      message: label,
+      preferBelow: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: isActive ? GardenColors.primary.withOpacity(0.10) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: isActive
+                ? Border.all(color: GardenColors.primary.withOpacity(0.25), width: 1)
+                : null,
+          ),
+          child: Icon(icon, size: 22, color: isActive ? activeColor : inactiveColor),
         ),
       ),
     );

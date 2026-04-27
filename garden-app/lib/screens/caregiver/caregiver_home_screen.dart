@@ -2515,40 +2515,32 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     children: [
                       appBarTitle,
                       const Spacer(),
-                      // Tabs de navegación en el header
+                      // Tabs de navegación en el header — solo ícono, nombre aparece en tooltip al hacer hover
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: List.generate(_navItems.length, (i) {
                           final tab = _navItems[i];
                           final isActive = _selectedTab == i;
-                          final activeColor = GardenColors.primary;
-                          final inactiveColor = subtextColor;
                           return Padding(
                             padding: const EdgeInsets.only(left: 4),
-                            child: GestureDetector(
-                              onTap: () => _onTabTap(i),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 180),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: isActive ? GardenColors.primary.withOpacity(0.10) : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: isActive ? Border.all(color: GardenColors.primary.withOpacity(0.25)) : null,
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(isActive ? tab.activeIcon : tab.icon, size: 18, color: isActive ? activeColor : inactiveColor),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      tab.label,
-                                      style: TextStyle(
-                                        color: isActive ? activeColor : inactiveColor,
-                                        fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ],
+                            child: Tooltip(
+                              message: tab.label,
+                              preferBelow: true,
+                              child: GestureDetector(
+                                onTap: () => _onTabTap(i),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 180),
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: isActive ? GardenColors.primary.withOpacity(0.10) : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: isActive ? Border.all(color: GardenColors.primary.withOpacity(0.25)) : null,
+                                  ),
+                                  child: Icon(
+                                    isActive ? tab.activeIcon : tab.icon,
+                                    size: 22,
+                                    color: isActive ? GardenColors.primary : subtextColor,
+                                  ),
                                 ),
                               ),
                             ),
