@@ -1,10 +1,11 @@
 import prisma from '../../config/database.js';
 import { AppError } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
+import { getIO } from '../../services/socket.service.js';
 
 async function sendSystemChatMessage(bookingId: string, senderId: string, message: string) {
   try {
-    await prisma.chatMessage.create({
+    const saved = await prisma.chatMessage.create({
       data: {
         bookingId,
         senderId,
@@ -13,7 +14,27 @@ async function sendSystemChatMessage(bookingId: string, senderId: string, messag
         isSystem: true,
       },
     });
-    logger.info('[MG] System chat message sent', { bookingId, preview: message.slice(0, 60) });
+    logger.info('[MG] System chat message saved', { bookingId, msgId: saved.id, preview: message.slice(0, 60) });
+
+    // Emit via Socket.IO so connected clients see the message in real-time
+    try {
+      const io = getIO();
+      if (!io) { logger.warn('[MG] Socket not ready, skipping emit', { bookingId }); return; }
+      io.to(`booking:${bookingId}`).emit('new_message', {
+        id: saved.id,
+        bookingId: saved.bookingId,
+        senderId: saved.senderId,
+        senderName: 'Sistema',
+        senderRole: 'SYSTEM',
+        message: saved.message,
+        isSystem: true,
+        read: saved.read,
+        createdAt: saved.createdAt.toISOString(),
+      });
+      logger.info('[MG] Socket emit new_message OK', { bookingId, room: `booking:${bookingId}` });
+    } catch (socketErr) {
+      logger.warn('[MG] Socket emit failed (non-fatal)', { bookingId, error: socketErr });
+    }
   } catch (e) {
     logger.warn('[MG] System chat message FAILED', { bookingId, error: e });
   }

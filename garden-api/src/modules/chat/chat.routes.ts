@@ -52,9 +52,12 @@ router.get('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Requ
             id: m.id,
             bookingId: m.bookingId,
             senderId: m.senderId,
-            senderName: `${(m as any).sender.firstName} ${(m as any).sender.lastName}`,
+            senderName: m.isSystem
+                ? 'Sistema'
+                : `${(m as any).sender?.firstName ?? ''} ${(m as any).sender?.lastName ?? ''}`.trim(),
             senderRole: m.senderRole,
             message: m.message,
+            isSystem: m.isSystem,
             read: m.read,
             createdAt: m.createdAt.toISOString(),
         })),

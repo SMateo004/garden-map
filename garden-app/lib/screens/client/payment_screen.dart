@@ -139,21 +139,40 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Future<void> _proposeMeetAndGreet() async {
+    debugPrint('[MG] _proposeMeetAndGreet() called, bookingId=${widget.bookingId}');
+    debugPrint('[MG] mgData=${widget.mgData}');
+    debugPrint('[MG] token present: ${_clientToken.isNotEmpty}');
     try {
+      final url = '$_baseUrl/meet-and-greet/${widget.bookingId}/propose';
+      debugPrint('[MG] POST $url');
       final response = await http.post(
-        Uri.parse('$_baseUrl/meet-and-greet/${widget.bookingId}/propose'),
+        Uri.parse(url),
         headers: {
           'Authorization': 'Bearer $_clientToken',
           'Content-Type': 'application/json',
         },
         body: jsonEncode(widget.mgData),
       );
+      debugPrint('[MG] Response status: ${response.statusCode}');
+      debugPrint('[MG] Response body: ${response.body}');
       final data = jsonDecode(response.body);
-      if (data['success'] != true) {
-        debugPrint('[MG] propose failed: ${data['message']}');
+      if (data['success'] == true) {
+        debugPrint('[MG] Propose SUCCESS — M&G created');
+      } else {
+        final errMsg = data['error']?['message'] ?? data['message'] ?? 'Error desconocido';
+        debugPrint('[MG] propose FAILED: $errMsg');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Meet & Greet: $errMsg'),
+              backgroundColor: Colors.orange.shade700,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
       }
     } catch (e) {
-      debugPrint('[MG] propose error: $e');
+      debugPrint('[MG] propose exception: $e');
     }
   }
 

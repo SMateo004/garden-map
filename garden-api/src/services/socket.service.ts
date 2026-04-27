@@ -112,6 +112,7 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
                     senderName: `${savedMessage.sender.firstName} ${savedMessage.sender.lastName}`,
                     senderRole: savedMessage.senderRole,
                     message: savedMessage.message,
+                    isSystem: savedMessage.isSystem,
                     read: savedMessage.read,
                     createdAt: savedMessage.createdAt.toISOString(),
                 });
