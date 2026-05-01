@@ -14,6 +14,29 @@ import { track, identify } from '../../shared/analytics.js';
 import { blockchainService } from '../../services/blockchain.service.js';
 import { getBoolSetting, getStringSetting } from '../../utils/settings-cache.js';
 
+async function syncAndPersist(
+  userId: string,
+  name: string,
+  role: 'CLIENT' | 'CAREGIVER',
+  context: string,
+): Promise<void> {
+  try {
+    const txHash = await blockchainService.syncProfileOnChain(userId, name, role, false);
+    if (txHash) {
+      await prisma.user.update({ where: { id: userId }, data: { blockchainTxHash: txHash } });
+      logger.info(`[Blockchain] Profile synced and persisted (${context})`, { userId, txHash });
+    } else {
+      logger.warn(`[Blockchain] Sync returned null — MOCK MODE or config missing (${context})`, { userId });
+    }
+  } catch (err: any) {
+    logger.error(`[Blockchain] SYNC FAILED — profile NOT on-chain (${context})`, {
+      userId,
+      error: err?.reason ?? err?.message ?? String(err),
+      action: 'Run backfill-profiles.ts after recharging wallet',
+    });
+  }
+}
+
 const SALT_ROUNDS = 12;
 
 export interface AuthTokens {
@@ -274,13 +297,8 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
     return { user, profile };
   });
 
-  // Sincronizar Caregiver en Blockchain (asíncrono)
-  blockchainService.syncProfileOnChain(
-    result.user.id,
-    `${result.user.firstName} ${result.user.lastName}`,
-    'CAREGIVER',
-    false // Empieza no verificado hasta que admin/proceso apruebe
-  ).catch(err => logger.error('Blockchain sync failed (caregiver register)', { userId: result.user.id, err }));
+  // Sincronizar Caregiver en Blockchain (asíncrono — no bloquea el registro)
+  void syncAndPersist(result.user.id, `${result.user.firstName} ${result.user.lastName}`, 'CAREGIVER', 'caregiver register');
 
   const savedPhotos = ensureAbsoluteUrls(profileInput.photos ?? []);
   if (savedPhotos.length > 0) {
@@ -477,13 +495,8 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
     throw error;
   }
 
-  // Sincronizar Cliente en Blockchain (asíncrono)
-  blockchainService.syncProfileOnChain(
-    user.id,
-    `${user.firstName} ${user.lastName}`,
-    'CLIENT',
-    false
-  ).catch(err => logger.error('Blockchain sync failed (client register)', { userId: user.id, err }));
+  // Sincronizar Cliente en Blockchain (asíncrono — no bloquea el registro)
+  void syncAndPersist(user.id, `${user.firstName} ${user.lastName}`, 'CLIENT', 'client register');
 
   try {
     const payload: JwtPayload = { userId: user.id, role: user.role };

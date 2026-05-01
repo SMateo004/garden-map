@@ -30,6 +30,7 @@ model User {
   emailVerificationCode        String?                       @db.VarChar(6)
   emailVerificationExpires     DateTime?
   identityVerified             Boolean                       @default(false)
+  blockchainTxHash             String?                       @map("blockchain_tx_hash")
   clientBookings               Booking[]                     @relation("ClientBookings")
   caregiverProfile             CaregiverProfile?
   clientProfile                ClientProfile?
