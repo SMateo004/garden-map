@@ -434,8 +434,18 @@ export async function submitVerification(
 
       // Sincronizar estado de verificación en Blockchain (asíncrono)
       if (finalStatus === 'VERIFIED') {
-        blockchainService.updateVerificationOnChain(session.userId, true)
-          .catch(err => logger.error('Blockchain verification sync failed', { userId: session.userId, err }));
+        void (async () => {
+          try {
+            await blockchainService.updateVerificationOnChain(session.userId, true);
+            logger.info('[Blockchain] Verification status synced on-chain', { userId: session.userId });
+          } catch (err: any) {
+            logger.error('[Blockchain] SYNC FAILED — verification NOT on-chain', {
+              userId: session.userId,
+              error: err?.reason ?? err?.message ?? String(err),
+              action: 'Run backfill-profiles.ts after recharging wallet',
+            });
+          }
+        })();
       }
 
       // Audit log — non-blocking, does not affect result

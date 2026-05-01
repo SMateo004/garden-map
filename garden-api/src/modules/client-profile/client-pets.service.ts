@@ -119,12 +119,19 @@ export async function createPet(userId: string, body: CreatePetBody): Promise<Pe
   });
   await recalcProfileIsComplete(prisma, profile.id, allPets);
 
-  // Sync pet to Blockchain (Creative touch)
-  blockchainService.addPetOnChain(
-    userId,
-    pet.name,
-    pet.breed || 'Mestizo'
-  ).catch(err => logger.error('Blockchain pet sync failed', { userId, petName: pet.name, err }));
+  // Sync pet to Blockchain (asíncrono — no bloquea la respuesta)
+  void (async () => {
+    try {
+      await blockchainService.addPetOnChain(userId, pet.name, pet.breed || 'Mestizo');
+      logger.info('[Blockchain] Pet synced on-chain', { userId, petName: pet.name });
+    } catch (err: any) {
+      logger.error('[Blockchain] SYNC FAILED — pet NOT on-chain', {
+        userId,
+        petName: pet.name,
+        error: err?.reason ?? err?.message ?? String(err),
+      });
+    }
+  })();
 
   if (photoUrl) {
     logger.info('Foto subida y guardada', { url: photoUrl, field: 'petPhoto', userId });

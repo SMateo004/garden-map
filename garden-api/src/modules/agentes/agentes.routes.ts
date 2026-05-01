@@ -3,6 +3,7 @@ import { analizarCalificacion, analizarDisputa } from '../../agents/reputacion.a
 import { sugerirPrecioOnboarding, calcularAjusteDinamico, explicarBadgeTemporadaAlta } from '../../agents/precios.agent.js';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
 import { runPricingJob } from '../../jobs/ajuste-precios.job.js';
+import logger from '../../shared/logger.js';
 
 const router = Router();
 
@@ -12,7 +13,7 @@ router.post('/precio/onboarding', async (req, res) => {
         const resultado = await sugerirPrecioOnboarding(req.body);
         res.json(resultado);
     } catch (error: any) {
-        console.error('Error en agente precio onboarding:', error);
+        logger.error('Error en agente precio onboarding', { error: error?.message ?? error });
         res.status(500).json({ error: 'Error al sugerir precio', details: error.message });
     }
 });
@@ -26,7 +27,7 @@ router.post('/calificacion/analizar', async (req, res) => {
         const resultado = await analizarCalificacion(req.body);
         res.json(resultado);
     } catch (error: any) {
-        console.error('Error en agente calificación:', error);
+        logger.error('Error en agente calificación', { error: error?.message ?? error });
         res.status(500).json({ error: 'Error al analizar calificación', details: error.message });
     }
 });
@@ -36,7 +37,7 @@ router.post('/disputa/analizar', async (req, res) => {
         const resultado = await analizarDisputa(req.body);
         res.json(resultado);
     } catch (error: any) {
-        console.error('Error en agente disputa:', error);
+        logger.error('Error en agente disputa', { error: error?.message ?? error });
         res.status(500).json({ error: 'Error al analizar disputa', details: error.message });
     }
 });
@@ -47,7 +48,7 @@ router.post('/precio/ajuste-dinamico', async (req, res) => {
         const resultado = await calcularAjusteDinamico(req.body);
         res.json(resultado);
     } catch (error: any) {
-        console.error('Error en agente ajuste dinamico:', error);
+        logger.error('Error en agente ajuste dinamico', { error: error?.message ?? error });
         res.status(500).json({ error: 'Error al calcular ajuste', details: error.message });
     }
 });
@@ -57,7 +58,7 @@ router.post('/precio/explicar-badge', async (req, res) => {
         const resultado = await explicarBadgeTemporadaAlta(req.body);
         res.json(resultado);
     } catch (error: any) {
-        console.error('Error en agente explicar badge:', error);
+        logger.error('Error en agente explicar badge', { error: error?.message ?? error });
         res.status(500).json({ error: 'Error al generar explicación', details: error.message });
     }
 });
@@ -146,7 +147,7 @@ router.post('/precio/suggestion/:id/reject', requireRole('CAREGIVER'), async (re
 // POST: forzar generación (solo para admin/testing)
 router.post('/precio/generate-suggestions', async (req, res) => {
     try {
-        runPricingJob().catch(err => console.error('[PRICING] Background job error:', err));
+        runPricingJob().catch(err => logger.error('[PRICING] Background job error', { error: err?.message ?? err }));
         res.json({ success: true, message: 'Job iniciado en background' });
     } catch (err: any) {
         res.status(500).json({ success: false, error: { message: err.message } });

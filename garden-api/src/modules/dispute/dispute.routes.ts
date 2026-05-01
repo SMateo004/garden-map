@@ -1,14 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
 import { asyncHandler } from '../../shared/async-handler.js';
-import { PrismaClient } from '@prisma/client';
 import Anthropic from '@anthropic-ai/sdk';
 import { blockchainService } from '../../services/blockchain.service.js';
 import logger from '../../shared/logger.js';
 import { track } from '../../shared/analytics.js';
+import prisma from '../../config/database.js';
 
 const router = Router();
-const prisma = new PrismaClient();
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // POST /api/disputes/:bookingId/client-report — cliente reporta razones

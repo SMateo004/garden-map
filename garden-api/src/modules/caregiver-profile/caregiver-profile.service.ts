@@ -421,13 +421,27 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
     });
   });
 
-  // Sincronizar con Blockchain como verificado
-  blockchainService.syncProfileOnChain(
-    userId,
-    `${profile.user.firstName} ${profile.user.lastName}`,
-    'CAREGIVER',
-    true
-  ).catch(err => logger.error('Blockchain sync failed (caregiver)', { userId, err }));
+  // Sincronizar con Blockchain como verificado y persistir txHash
+  void (async () => {
+    try {
+      const txHash = await blockchainService.syncProfileOnChain(
+        userId,
+        `${profile.user.firstName} ${profile.user.lastName}`,
+        'CAREGIVER',
+        true
+      );
+      if (txHash) {
+        await prisma.user.update({ where: { id: userId }, data: { blockchainTxHash: txHash } });
+        logger.info('[Blockchain] Profile synced and persisted (caregiver approval)', { userId, txHash });
+      }
+    } catch (err: any) {
+      logger.error('[Blockchain] SYNC FAILED — profile NOT on-chain (caregiver approval)', {
+        userId,
+        error: err?.reason ?? err?.message ?? String(err),
+        action: 'Run backfill-profiles.ts after recharging wallet',
+      });
+    }
+  })();
 
   logger.info('CaregiverProfile: aprobado al completar los 10 pasos', {
     profileId: profile.id,
