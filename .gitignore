@@ -44,3 +44,4 @@ test_images/
  typechain/
  typechain-types/
 .vercel
+garden-api/uploads/
