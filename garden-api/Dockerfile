@@ -3,7 +3,7 @@ FROM node:22-alpine
 WORKDIR /app
 
 # Install OpenSSL for Prisma
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl bash
 
 # Install dependencies
 COPY package*.json ./
@@ -18,5 +18,8 @@ RUN npx prisma generate
 # Build TypeScript with relaxed config (production build)
 RUN npx tsc -p tsconfig.build.json || true
 
-# Start: run migrations then start server
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/server.js"]
+COPY docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh
+
+# Start: resolve legacy migrations, deploy pending ones, then start server
+CMD ["./docker-entrypoint.sh"]
