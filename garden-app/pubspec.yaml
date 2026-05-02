@@ -123,13 +123,9 @@ flutter_launcher_icons:
 # ── flutter_native_splash ─────────────────────────────────────────────────────
 # Ejecuta: flutter pub run flutter_native_splash:create
 flutter_native_splash:
-  color: "#3D6B1A"
-  color_dark: "#1E3A0C"
-  image: "assets/icon/icon.png"
-  image_dark: "assets/icon/icon.png"
+  color: "#3B5E1A"
+  color_dark: "#3B5E1A"
   android: true
   ios: true
   web: false
   fullscreen: true
-  android_gravity: center
-  ios_content_mode: center
