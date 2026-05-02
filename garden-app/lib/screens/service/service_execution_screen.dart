@@ -38,8 +38,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   int _surveyRating = 0;
   final TextEditingController _surveyCommentController = TextEditingController();
 
-  // Walk extension state
+  // Extension state (PASEO + HOSPEDAJE)
   int _allowedExtensionMinutes = 0;
+  int _allowedExtensionDays = 0;
+  double _hospedajePricePerDay = 0;
   bool _loadingExtension = false;
 
   // Photo upload state
@@ -116,9 +118,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           if (widget.role == 'CLIENT' && _photoRefreshTimer == null) {
             _photoRefreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _loadBooking());
           }
-          // Load extension availability for CLIENT on PASEO
           if (widget.role == 'CLIENT' && _booking?['serviceType'] == 'PASEO') {
             _loadExtensionAvailability();
+          }
+          if (widget.role == 'CLIENT' && _booking?['serviceType'] == 'HOSPEDAJE') {
+            _loadHospedajeExtensionAvailability();
           }
         } else {
           _serviceTimer?.cancel();
@@ -852,6 +856,202 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     } catch (_) {}
   }
 
+  Future<void> _loadHospedajeExtensionAvailability() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/hospedaje-extension-availability'),
+        headers: {'Authorization': 'Bearer $_token'},
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && mounted) {
+          setState(() {
+            _allowedExtensionDays = (data['data']['availableDays'] as num?)?.toInt() ?? 0;
+            _hospedajePricePerDay = (data['data']['pricePerDay'] as num?)?.toDouble() ?? 0;
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _requestHospedajeExtensionPayment(int days, String method) async {
+    setState(() => _loadingExtension = true);
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/request-hospedaje-extension-payment'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({'additionalDays': days, 'method': method}),
+      );
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (_) {
+        throw Exception('Error del servidor (${response.statusCode}). Intenta de nuevo en un momento.');
+      }
+
+      if (data['success'] == true) {
+        final payData = data['data'] as Map<String, dynamic>;
+        if (!mounted) return;
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _WalkExtensionPaymentScreen(
+              bookingId: widget.bookingId,
+              token: _token,
+              baseUrl: _baseUrl,
+              extensionId: payData['extensionId'] as String,
+              additionalMinutes: days,
+              additionalLabel: '$days noche${days == 1 ? '' : 's'}',
+              confirmPath: 'confirm-hospedaje-extension-qr',
+              extraAmount: (payData['extraAmount'] as num).toDouble(),
+              qrImageUrl: payData['qrImageUrl'] as String?,
+              qrExpiresAt: payData['qrExpiresAt'] as String?,
+              method: method,
+              onConfirmed: () async {
+                await _loadBooking();
+                await _loadHospedajeExtensionAvailability();
+              },
+            ),
+          ),
+        );
+      } else {
+        throw Exception(data['error']?['message'] ?? data['message'] ?? 'Error al iniciar pago');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: Colors.red.shade700),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingExtension = false);
+    }
+  }
+
+  void _showExtendHospedajeSheet() {
+    int selectedDays = 1;
+    String selectedMethod = 'qr';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final isDark = themeNotifier.isDark;
+          final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+          final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+          final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+          Widget dayChip(int days) {
+            final isSelected = selectedDays == days;
+            final cost = (_hospedajePricePerDay * days).ceil();
+            final label = days == 1 ? '1 noche' : '$days noches';
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => setSheetState(() => selectedDays = days),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: isSelected ? GardenColors.primary : (isDark ? GardenColors.darkBackground : GardenColors.lightBackground),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: isSelected ? GardenColors.primary : (isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('+$label', style: TextStyle(color: isSelected ? Colors.white : textColor, fontWeight: FontWeight.w800, fontSize: 14)),
+                      const SizedBox(height: 2),
+                      Text('Bs $cost', style: TextStyle(color: isSelected ? Colors.white70 : subtextColor, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+
+          Widget methodChip(String method, String label, IconData icon) {
+            final isSelected = selectedMethod == method;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => setSheetState(() => selectedMethod = method),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isSelected ? GardenColors.primary.withValues(alpha: 0.12) : (isDark ? GardenColors.darkBackground : GardenColors.lightBackground),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: isSelected ? GardenColors.primary : (isDark ? GardenColors.darkBorder : GardenColors.lightBorder), width: isSelected ? 1.5 : 1),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(icon, size: 16, color: isSelected ? GardenColors.primary : subtextColor),
+                      const SizedBox(width: 6),
+                      Text(label, style: TextStyle(color: isSelected ? GardenColors.primary : subtextColor, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, fontSize: 13)),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+
+          return Container(
+            padding: EdgeInsets.only(left: 20, right: 20, top: 24, bottom: MediaQuery.of(ctx).viewInsets.bottom + 28),
+            decoration: BoxDecoration(color: surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder, borderRadius: BorderRadius.circular(2)))),
+                const SizedBox(height: 20),
+                Text('Ampliar hospedaje', style: GardenText.h4.copyWith(color: textColor)),
+                const SizedBox(height: 4),
+                Text('Selecciona cuántas noches adicionales necesitas.', style: GardenText.metadata.copyWith(color: subtextColor)),
+                const SizedBox(height: 20),
+                Row(children: [dayChip(1), dayChip(2), dayChip(3)]),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12), border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2))),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Costo adicional', style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
+                      Text('Bs ${(_hospedajePricePerDay * selectedDays).ceil()}', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w900, fontSize: 18)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text('Método de pago', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+                const SizedBox(height: 8),
+                Row(children: [
+                  methodChip('qr', 'QR', Icons.qr_code_rounded),
+                  methodChip('manual', 'Transferencia', Icons.account_balance_rounded),
+                ]),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: GardenButton(
+                    label: 'Ir a pagar',
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _requestHospedajeExtensionPayment(selectedDays, selectedMethod);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _requestExtensionPayment(int minutes, String method) async {
     setState(() => _loadingExtension = true);
     try {
@@ -1378,6 +1578,24 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             : 'Ampliar tiempo (hasta $_allowedExtensionMinutes min)',
                         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                       ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: GardenColors.primary,
+                        side: const BorderSide(color: GardenColors.primary),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.md)),
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // ── Extensión de hospedaje ───────────────────────────────────
+                  if (_booking?['serviceType'] == 'HOSPEDAJE') ...[
+                    OutlinedButton.icon(
+                      onPressed: _loadingExtension ? null : _showExtendHospedajeSheet,
+                      icon: _loadingExtension
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))
+                          : const Icon(Icons.nightlight_round, size: 18),
+                      label: const Text('Agregar noches al hospedaje', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: GardenColors.primary,
                         side: const BorderSide(color: GardenColors.primary),
@@ -1954,41 +2172,49 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     );
                   }),
 
-                  // ── Extensiones confirmadas (solo PASEO) ─────────────────
+                  // ── Extensiones confirmadas (PASEO y HOSPEDAJE) ──────────
                   Builder(builder: (_) {
-                    if (_booking?['serviceType'] != 'PASEO') return const SizedBox();
                     final exts = (_booking?['serviceEvents'] as List<dynamic>? ?? [])
                         .where((e) => e['type'] == 'EXTENSION_CONFIRMED')
                         .toList();
                     if (exts.isEmpty) return const SizedBox();
-                    final totalMins = exts.fold<int>(0, (s, e) =>
+                    final isHospedaje = _booking?['serviceType'] == 'HOSPEDAJE';
+                    final totalMins = isHospedaje ? 0 : exts.fold<int>(0, (s, e) =>
                         s + ((e['additionalMinutes'] as num?)?.toInt() ?? 0));
+                    final totalDays = isHospedaje ? exts.fold<int>(0, (s, e) =>
+                        s + ((e['additionalDays'] as num?)?.toInt() ?? 0)) : 0;
+                    final summaryLabel = isHospedaje
+                        ? '+$totalDays noche${totalDays == 1 ? '' : 's'} total'
+                        : '+$totalMins min total';
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const SizedBox(height: 20),
                         Row(
                           children: [
-                            Text('Tiempo ampliado',
+                            Text(isHospedaje ? 'Noches añadidas' : 'Tiempo ampliado',
                               style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
                             const Spacer(),
-                            if (totalMins > 0)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: GardenColors.primary.withValues(alpha: 0.10),
-                                  borderRadius: BorderRadius.circular(GardenRadius.full),
-                                ),
-                                child: Text('+$totalMins min total',
-                                  style: const TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w700)),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: GardenColors.primary.withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(GardenRadius.full),
                               ),
+                              child: Text(summaryLabel,
+                                style: const TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w700)),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 8),
                         ...exts.map((ext) {
                           final mins = (ext['additionalMinutes'] as num?)?.toInt();
+                          final days = (ext['additionalDays'] as num?)?.toInt();
                           final amount = (ext['extraAmount'] as num?)?.toDouble();
                           final time = _formatEventTime(ext['timestamp'] as String? ?? '');
+                          final extLabel = days != null
+                              ? '+$days noche${days == 1 ? '' : 's'}'
+                              : (mins != null ? '+$mins min' : 'Extensión');
                           return Container(
                             margin: const EdgeInsets.only(bottom: 6),
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
@@ -1999,12 +2225,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.add_alarm_rounded, size: 14, color: GardenColors.primary),
+                                Icon(isHospedaje ? Icons.nightlight_round : Icons.add_alarm_rounded,
+                                  size: 14, color: GardenColors.primary),
                                 const SizedBox(width: 8),
-                                Text(
-                                  mins != null ? '+$mins min' : 'Extensión',
-                                  style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600),
-                                ),
+                                Text(extLabel, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
                                 if (amount != null) ...[
                                   const SizedBox(width: 6),
                                   Text('· Bs ${amount.toStringAsFixed(0)}',
@@ -3323,12 +3547,14 @@ class _WalkExtensionPaymentScreen extends StatefulWidget {
   final String bookingId;
   final String token;
   final String baseUrl;
-  final String extensionId; // ID único de esta extensión — el polling lo valida
+  final String extensionId;
   final int additionalMinutes;
+  final String? additionalLabel; // override display (e.g. '2 noches')
+  final String confirmPath;      // endpoint suffix for QR confirmation
   final double extraAmount;
   final String? qrImageUrl;
   final String? qrExpiresAt;
-  final String method; // 'qr' | 'manual'
+  final String method;
   final Future<void> Function() onConfirmed;
 
   const _WalkExtensionPaymentScreen({
@@ -3340,6 +3566,8 @@ class _WalkExtensionPaymentScreen extends StatefulWidget {
     required this.extraAmount,
     required this.method,
     required this.onConfirmed,
+    this.additionalLabel,
+    this.confirmPath = 'confirm-extension-qr',
     this.qrImageUrl,
     this.qrExpiresAt,
   });
@@ -3479,8 +3707,8 @@ class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen
             child: Column(
               children: [
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  Text('Tiempo adicional', style: TextStyle(color: subtextColor, fontSize: 14)),
-                  Text('+${widget.additionalMinutes} min', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+                  Text('Adicional', style: TextStyle(color: subtextColor, fontSize: 14)),
+                  Text(widget.additionalLabel ?? '+${widget.additionalMinutes} min', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
                 ]),
                 const SizedBox(height: 10),
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -3612,8 +3840,8 @@ class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen
               child: Column(
                 children: [
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    Text('Tiempo adicional', style: TextStyle(color: subtextColor, fontSize: 14)),
-                    Text('+${widget.additionalMinutes} min', style: TextStyle(color: textColor, fontWeight: FontWeight.w700)),
+                    Text('Adicional', style: TextStyle(color: subtextColor, fontSize: 14)),
+                    Text(widget.additionalLabel ?? '+${widget.additionalMinutes} min', style: TextStyle(color: textColor, fontWeight: FontWeight.w700)),
                   ]),
                   const SizedBox(height: 10),
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [

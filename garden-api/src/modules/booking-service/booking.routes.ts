@@ -101,6 +101,29 @@ router.get(
   bookingController.extensionAvailability
 );
 
+/** GET /api/bookings/:id/hospedaje-extension-availability — noches disponibles para extender hospedaje. */
+router.get(
+  '/:id/hospedaje-extension-availability',
+  authMiddleware,
+  requireRole('CLIENT'),
+  bookingController.hospedajeExtensionAvailability
+);
+
+/** POST /api/bookings/:id/request-hospedaje-extension-payment — iniciar pago extensión hospedaje. */
+router.post(
+  '/:id/request-hospedaje-extension-payment',
+  authMiddleware,
+  requireRole('CLIENT'),
+  bookingController.requestHospedajeExtensionPayment
+);
+
+/** POST /api/bookings/:id/confirm-hospedaje-extension-qr — confirmar pago QR de extensión de hospedaje. */
+router.post(
+  '/:id/confirm-hospedaje-extension-qr',
+  authMiddleware,
+  bookingController.confirmHospedajeExtensionQr
+);
+
 /** POST /api/bookings/:id/extend-paseo — cliente extiende paseo en curso (15/30/60 min). */
 router.post(
   '/:id/extend-paseo',

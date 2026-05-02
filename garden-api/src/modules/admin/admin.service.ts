@@ -761,7 +761,7 @@ export async function getExtensionPaymentsPending(): Promise<{ items: any[] }> {
   return { items };
 }
 
-/** POST /api/admin/bookings/:id/approve-extension-payment — aprueba extensión; aplica minutos y monto. */
+/** POST /api/admin/bookings/:id/approve-extension-payment — aprueba extensión de paseo o hospedaje. */
 export async function approveExtensionPayment(
   bookingId: string,
   extensionId: string,
@@ -778,72 +778,80 @@ export async function approveExtensionPayment(
   if (idx === -1) throw new BadRequestError('Extensión no encontrada o ya procesada');
 
   const evt = events[idx];
-  const { additionalMinutes, extraAmount } = evt;
+  const { extraAmount } = evt;
   const commissionPct = await (await import('../../utils/settings-cache.js')).getNumericSetting('commissionPct', 10);
   const COMMISSION_RATE = commissionPct / 100;
-
   const pricePerUnitClient = Number(booking.pricePerUnit);
   const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + COMMISSION_RATE));
-  const extraCommission = extraAmount - Math.round((pricePerUnitCaregiver / 60) * additionalMinutes);
-  const newDuration = (booking.duration ?? 60) + additionalMinutes;
   const newTotal = Number(booking.totalAmount) + extraAmount;
-  const newCommission = Number(booking.commissionAmount) + extraCommission;
+  const newCommission = Number(booking.commissionAmount);
 
-  events[idx] = {
-    type: 'EXTENSION_CONFIRMED',
-    extensionId,
-    additionalMinutes,
-    extraAmount,
-    method: 'manual',
-    approvedBy: adminId,
-    paidAt: new Date().toISOString(),
-    timestamp: new Date().toISOString(),
-  };
+  const isHospedaje = booking.serviceType === 'HOSPEDAJE';
+  let bookingUpdate: Record<string, any>;
+  let clientMsg: string;
+  let caregiverMsg: string;
+
+  if (isHospedaje) {
+    const { additionalDays } = evt;
+    const extraCommission = extraAmount - pricePerUnitCaregiver * additionalDays;
+    const newEndDate = new Date(booking.endDate!);
+    newEndDate.setDate(newEndDate.getDate() + additionalDays);
+    bookingUpdate = {
+      endDate: newEndDate,
+      totalDays: (booking.totalDays ?? 1) + additionalDays,
+      totalAmount: new Prisma.Decimal(newTotal),
+      commissionAmount: new Prisma.Decimal(newCommission + extraCommission),
+    };
+    const n = additionalDays === 1 ? 'noche' : 'noches';
+    clientMsg = `Se aprobó tu extensión de +${additionalDays} ${n} de hospedaje.`;
+    caregiverMsg = `El pago de la extensión (+${additionalDays} ${n} · Bs ${extraAmount}) fue aprobado.`;
+    events[idx] = {
+      type: 'EXTENSION_CONFIRMED', extensionId, additionalDays, extraAmount,
+      method: 'manual', approvedBy: adminId,
+      paidAt: new Date().toISOString(), timestamp: new Date().toISOString(),
+    };
+  } else {
+    const { additionalMinutes } = evt;
+    const extraCommission = extraAmount - Math.round((pricePerUnitCaregiver / 60) * additionalMinutes);
+    bookingUpdate = {
+      duration: (booking.duration ?? 60) + additionalMinutes,
+      totalAmount: new Prisma.Decimal(newTotal),
+      commissionAmount: new Prisma.Decimal(newCommission + extraCommission),
+    };
+    clientMsg = `Se aprobó tu extensión de +${additionalMinutes} min. Ya fueron agregados al paseo.`;
+    caregiverMsg = `El pago de la extensión (+${additionalMinutes} min · Bs ${extraAmount}) fue aprobado.`;
+    events[idx] = {
+      type: 'EXTENSION_CONFIRMED', extensionId, additionalMinutes, extraAmount,
+      method: 'manual', approvedBy: adminId,
+      paidAt: new Date().toISOString(), timestamp: new Date().toISOString(),
+    };
+  }
+
+  bookingUpdate.serviceEvents = events;
 
   await prisma.$transaction(async (tx) => {
-    await tx.booking.update({
-      where: { id: bookingId },
-      data: {
-        duration: newDuration,
-        totalAmount: new Prisma.Decimal(newTotal),
-        commissionAmount: new Prisma.Decimal(newCommission),
-        serviceEvents: events,
-      },
-    });
-    // Marcar notificación como leída
+    await tx.booking.update({ where: { id: bookingId }, data: bookingUpdate });
     await tx.adminNotification.updateMany({
       where: { type: 'EXTENSION_PAYMENT_APPROVAL', bookingId, readAt: null },
       data: { readAt: new Date() },
     });
-    // Notificar al cliente
     await tx.notification.create({
-      data: {
-        userId: booking.clientId,
-        title: '⏱️ Extensión aprobada',
-        message: `Se aprobó tu extensión de +${additionalMinutes} min. Ya fueron agregados al paseo.`,
-        type: 'SERVICE_EXTENSION',
-      },
+      data: { userId: booking.clientId, title: isHospedaje ? '🏠 Extensión aprobada' : '⏱️ Extensión aprobada', message: clientMsg, type: 'SERVICE_EXTENSION' },
     });
-    // Notificar al cuidador
     if (booking.caregiver?.userId) {
       await tx.notification.create({
-        data: {
-          userId: booking.caregiver.userId,
-          title: '⏱️ Extensión de paseo aprobada',
-          message: `El pago de la extensión (+${additionalMinutes} min · Bs ${extraAmount}) fue aprobado.`,
-          type: 'SERVICE_EXTENSION',
-        },
+        data: { userId: booking.caregiver.userId, title: isHospedaje ? '🏠 Hospedaje extendido' : '⏱️ Extensión de paseo aprobada', message: caregiverMsg, type: 'SERVICE_EXTENSION' },
       });
     }
   });
 
   const { sendPushToUser } = await import('../../services/firebase.service.js');
-  sendPushToUser(booking.clientId, '⏱️ Extensión aprobada', `+${additionalMinutes} minutos agregados al paseo`).catch(() => {});
+  sendPushToUser(booking.clientId, isHospedaje ? '🏠 Extensión aprobada' : '⏱️ Extensión aprobada', clientMsg).catch(() => {});
   if (booking.caregiver?.userId) {
-    sendPushToUser(booking.caregiver.userId, '⏱️ Extensión aprobada', `+${additionalMinutes} min · Bs ${extraAmount} adicionales`).catch(() => {});
+    sendPushToUser(booking.caregiver.userId, isHospedaje ? '🏠 Hospedaje extendido' : '⏱️ Extensión aprobada', caregiverMsg).catch(() => {});
   }
 
-  logger.info('Admin: extensión de paseo aprobada', { bookingId, extensionId, adminId, additionalMinutes });
+  logger.info('Admin: extensión aprobada', { bookingId, extensionId, adminId, isHospedaje });
   return { success: true };
 }
 
@@ -863,11 +871,14 @@ export async function rejectExtensionPayment(
   const idx = events.findIndex((e: any) => e.type === 'EXTENSION_PENDING_PAYMENT' && e.extensionId === extensionId);
   if (idx === -1) throw new BadRequestError('Extensión no encontrada o ya procesada');
 
-  const { additionalMinutes } = events[idx];
+  const evt = events[idx];
+  const label = evt.additionalDays != null
+    ? `+${evt.additionalDays} noche${evt.additionalDays === 1 ? '' : 's'}`
+    : `+${evt.additionalMinutes} min`;
   events[idx] = {
     type: 'EXTENSION_REJECTED',
     extensionId,
-    additionalMinutes,
+    ...(evt.additionalDays != null ? { additionalDays: evt.additionalDays } : { additionalMinutes: evt.additionalMinutes }),
     rejectedBy: adminId,
     timestamp: new Date().toISOString(),
   };
@@ -882,7 +893,7 @@ export async function rejectExtensionPayment(
       data: {
         userId: booking.clientId,
         title: '❌ Extensión rechazada',
-        message: `Tu solicitud de extensión (+${additionalMinutes} min) no pudo ser aprobada.`,
+        message: `Tu solicitud de extensión (${label}) no pudo ser aprobada.`,
         type: 'SERVICE_EXTENSION',
       },
     });

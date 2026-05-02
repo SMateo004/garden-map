@@ -13,6 +13,8 @@ import {
   extendPaseoBodySchema,
   requestExtensionPaymentBodySchema,
   confirmExtensionQrBodySchema,
+  requestHospedajeExtensionPaymentBodySchema,
+  confirmHospedajeExtensionQrBodySchema,
 } from './booking.validation.js';
 import * as bookingService from './booking.service.js';
 
@@ -244,6 +246,31 @@ export const extensionAvailability = asyncHandler(async (req: Request, res: Resp
   const bookingId = req.params.id!;
   const clientId = req.user!.userId;
   const result = await bookingService.checkExtensionAvailability(bookingId, clientId);
+  res.json({ success: true, data: result });
+});
+
+/** GET /api/bookings/:id/hospedaje-extension-availability */
+export const hospedajeExtensionAvailability = asyncHandler(async (req: Request, res: Response) => {
+  const bookingId = req.params.id!;
+  const clientId = req.user!.userId;
+  const result = await bookingService.checkHospedajeExtensionAvailability(bookingId, clientId);
+  res.json({ success: true, data: result });
+});
+
+/** POST /api/bookings/:id/request-hospedaje-extension-payment */
+export const requestHospedajeExtensionPayment = asyncHandler(async (req: Request, res: Response) => {
+  const bookingId = req.params.id!;
+  const clientId = req.user!.userId;
+  const body = requestHospedajeExtensionPaymentBodySchema.parse(req.body);
+  const result = await bookingService.requestHospedajeExtensionPayment(bookingId, clientId, body.additionalDays, body.method);
+  res.json({ success: true, data: result });
+});
+
+/** POST /api/bookings/:id/confirm-hospedaje-extension-qr */
+export const confirmHospedajeExtensionQr = asyncHandler(async (req: Request, res: Response) => {
+  const bookingId = req.params.id!;
+  const body = confirmHospedajeExtensionQrBodySchema.parse(req.body);
+  const result = await bookingService.confirmHospedajeExtensionQr(bookingId, body.qrId);
   res.json({ success: true, data: result });
 });
 

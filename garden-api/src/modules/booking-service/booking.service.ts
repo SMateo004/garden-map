@@ -1452,6 +1452,189 @@ export async function confirmWalkExtensionQr(
   return result;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HOSPEDAJE EXTENSIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function checkHospedajeExtensionAvailability(
+  bookingId: string,
+  clientId: string
+): Promise<{ availableDays: number; pricePerDay: number }> {
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, clientId },
+    select: { id: true, serviceType: true, status: true, pricePerUnit: true },
+  });
+
+  if (!booking) return { availableDays: 0, pricePerDay: 0 };
+  if (booking.serviceType !== ServiceType.HOSPEDAJE) return { availableDays: 0, pricePerDay: 0 };
+  if (booking.status !== BookingStatus.IN_PROGRESS) return { availableDays: 0, pricePerDay: 0 };
+
+  return { availableDays: 30, pricePerDay: Number(booking.pricePerUnit) };
+}
+
+export async function requestHospedajeExtensionPayment(
+  bookingId: string,
+  clientId: string,
+  additionalDays: number,
+  method: 'qr' | 'manual'
+): Promise<{ extensionId: string; extraAmount: number; qrId?: string; qrImageUrl?: string; qrExpiresAt?: string; status: string }> {
+  const cfg = await getBookingSettings();
+
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, clientId },
+    select: { id: true, serviceType: true, status: true, pricePerUnit: true, caregiverId: true, serviceEvents: true },
+  });
+
+  if (!booking) throw new BookingNotFoundError(bookingId);
+  if (booking.serviceType !== ServiceType.HOSPEDAJE) throw new BookingValidationError('Solo se puede extender un hospedaje');
+  if (booking.status !== BookingStatus.IN_PROGRESS) throw new BookingValidationError('Solo se puede extender un hospedaje en curso');
+
+  const pricePerUnitClient = Number(booking.pricePerUnit);
+  const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
+  const extraBase = pricePerUnitCaregiver * additionalDays;
+  const extraTotal = Math.round(extraBase * (1 + cfg.COMMISSION_RATE));
+
+  const extensionId = crypto.randomUUID();
+  const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
+
+  if (method === 'qr') {
+    const { qrId, qrImageUrl, qrExpiresAt } = generateQR(bookingId, 15);
+    events.push({
+      type: 'EXTENSION_PENDING_PAYMENT',
+      extensionId,
+      additionalDays,
+      extraAmount: extraTotal,
+      method: 'qr',
+      qrId,
+      qrImageUrl,
+      qrExpiresAt: qrExpiresAt.toISOString(),
+      timestamp: new Date().toISOString(),
+    });
+
+    await prisma.booking.update({ where: { id: bookingId }, data: { serviceEvents: events } });
+    logger.info('Hospedaje extension QR payment initiated', { bookingId, extensionId, additionalDays, extraTotal });
+    return { extensionId, extraAmount: extraTotal, qrId, qrImageUrl, qrExpiresAt: qrExpiresAt.toISOString(), status: 'PENDING_QR' };
+  }
+
+  const manualPaymentId = `EXT-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+  events.push({
+    type: 'EXTENSION_PENDING_PAYMENT',
+    extensionId,
+    additionalDays,
+    extraAmount: extraTotal,
+    method: 'manual',
+    paymentId: manualPaymentId,
+    timestamp: new Date().toISOString(),
+  });
+
+  const caregiver = await prisma.caregiverProfile.findFirst({
+    where: { id: booking.caregiverId },
+    select: { id: true },
+  });
+
+  await prisma.$transaction([
+    prisma.booking.update({ where: { id: bookingId }, data: { serviceEvents: events } }),
+    ...(caregiver ? [prisma.adminNotification.create({
+      data: { type: 'EXTENSION_PAYMENT_APPROVAL', caregiverId: caregiver.id, bookingId },
+    })] : []),
+  ]);
+
+  logger.info('Hospedaje extension manual payment requested', { bookingId, extensionId, manualPaymentId, extraTotal });
+  return { extensionId, extraAmount: extraTotal, status: 'PENDING_MANUAL', qrId: manualPaymentId };
+}
+
+export async function confirmHospedajeExtensionQr(
+  bookingId: string,
+  qrId: string
+): Promise<BookingCreateResult> {
+  const cfg = await getBookingSettings();
+
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId },
+    select: {
+      id: true, clientId: true, caregiverId: true, serviceType: true, status: true,
+      endDate: true, totalDays: true, totalAmount: true, commissionAmount: true,
+      pricePerUnit: true, petName: true, serviceEvents: true,
+    },
+  });
+
+  if (!booking) throw new BookingNotFoundError(bookingId);
+  if (booking.status !== BookingStatus.IN_PROGRESS) throw new BookingValidationError('El hospedaje ya no está en curso');
+
+  const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
+  const pendingIdx = events.findIndex(
+    e => e.type === 'EXTENSION_PENDING_PAYMENT' && e.method === 'qr' && e.qrId === qrId
+  );
+
+  if (pendingIdx === -1) throw new BookingValidationError('QR de extensión no válido o ya procesado');
+
+  const pending = events[pendingIdx];
+  const qrExpiry = new Date(pending.qrExpiresAt);
+  if (qrExpiry < new Date()) throw new BookingValidationError('El QR de extensión ha expirado. Genera uno nuevo.');
+
+  const { additionalDays, extraAmount, extensionId } = pending;
+
+  const pricePerUnitClient = Number(booking.pricePerUnit);
+  const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
+  const extraCommission = extraAmount - pricePerUnitCaregiver * additionalDays;
+
+  const newEndDate = new Date(booking.endDate!);
+  newEndDate.setDate(newEndDate.getDate() + additionalDays);
+  const newTotalDays = (booking.totalDays ?? 1) + additionalDays;
+  const newTotal = Number(booking.totalAmount) + extraAmount;
+  const newCommission = Number(booking.commissionAmount) + extraCommission;
+
+  events[pendingIdx] = {
+    type: 'EXTENSION_CONFIRMED',
+    extensionId,
+    additionalDays,
+    extraAmount,
+    method: 'qr',
+    paidAt: new Date().toISOString(),
+    timestamp: new Date().toISOString(),
+  };
+
+  let caregiverUserId: string | null = null;
+
+  const result = await prisma.$transaction(async (tx) => {
+    const updated = await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        endDate: newEndDate,
+        totalDays: newTotalDays,
+        totalAmount: new Prisma.Decimal(newTotal),
+        commissionAmount: new Prisma.Decimal(newCommission),
+        serviceEvents: events,
+      },
+    });
+
+    const caregiver = await tx.caregiverProfile.findFirst({
+      where: { id: booking.caregiverId },
+      select: { userId: true },
+    });
+    if (caregiver) {
+      caregiverUserId = caregiver.userId;
+      await tx.notification.create({
+        data: {
+          userId: caregiver.userId,
+          title: '🏠 Hospedaje extendido',
+          message: `El cliente agregó ${additionalDays} noche${additionalDays > 1 ? 's' : ''} al hospedaje de ${booking.petName ?? 'la mascota'}. Bs ${extraAmount} adicionales.`,
+          type: 'SERVICE_EXTENSION',
+        },
+      });
+    }
+
+    logger.info('Hospedaje extension QR confirmed', { bookingId, extensionId, additionalDays, newTotalDays, newTotal });
+    return bookingToResponse(updated);
+  });
+
+  if (caregiverUserId) {
+    sendPushToUser(caregiverUserId, '🏠 Hospedaje extendido', `+${additionalDays} noche${additionalDays > 1 ? 's' : ''} · Bs ${extraAmount} adicionales`).catch(() => {});
+  }
+
+  return result;
+}
+
 /**
  * Extiende un paseo en curso (IN_PROGRESS) sumando 15, 30 o 60 minutos adicionales.
  * Recalcula el monto total prorrateando el precio por minuto del cuidador (precio de 60 min).

@@ -759,13 +759,26 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                     ),
                   ),
                 Builder(builder: (_) {
-                  if (!isPaseo) return const SizedBox();
                   final exts = (booking['serviceEvents'] as List<dynamic>? ?? [])
                       .where((e) => e['type'] == 'EXTENSION_CONFIRMED')
                       .toList();
                   if (exts.isEmpty) return const SizedBox();
-                  final totalMins = exts.fold<int>(0,
-                      (s, e) => s + ((e['additionalMinutes'] as num?)?.toInt() ?? 0));
+                  final String summaryText;
+                  final IconData summaryIcon;
+                  final String sectionLabel;
+                  if (isPaseo) {
+                    final totalMins = exts.fold<int>(0,
+                        (s, e) => s + ((e['additionalMinutes'] as num?)?.toInt() ?? 0));
+                    summaryText = '+$totalMins min · ${exts.length} ${exts.length == 1 ? "extensión" : "extensiones"}';
+                    summaryIcon = Icons.add_alarm_rounded;
+                    sectionLabel = 'Tiempo ampliado';
+                  } else {
+                    final totalDays = exts.fold<int>(0,
+                        (s, e) => s + ((e['additionalDays'] as num?)?.toInt() ?? 0));
+                    summaryText = '+$totalDays noche${totalDays == 1 ? '' : 's'} · ${exts.length} ${exts.length == 1 ? "extensión" : "extensiones"}';
+                    summaryIcon = Icons.nightlight_round;
+                    sectionLabel = 'Noches añadidas';
+                  }
                   return Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Container(
@@ -778,17 +791,16 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.add_alarm_rounded,
-                              size: 13, color: subtextColor),
+                          Icon(summaryIcon, size: 13, color: subtextColor),
                           const SizedBox(width: 7),
-                          Text('Tiempo ampliado',
+                          Text(sectionLabel,
                               style: TextStyle(
                                   color: subtextColor,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500)),
                           const Spacer(),
                           Text(
-                            '+$totalMins min · ${exts.length} ${exts.length == 1 ? "extensión" : "extensiones"}',
+                            summaryText,
                             style: TextStyle(
                                 color: textColor,
                                 fontSize: 12,

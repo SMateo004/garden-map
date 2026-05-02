@@ -120,6 +120,17 @@ export const confirmExtensionQrBodySchema = z.object({
   qrId: z.string().min(1, 'qrId requerido'),
 });
 
+/** POST /api/bookings/:id/request-hospedaje-extension-payment — inicia pago de noches adicionales. */
+export const requestHospedajeExtensionPaymentBodySchema = z.object({
+  additionalDays: z.number().int().min(1).max(30),
+  method: z.enum(['qr', 'manual'], { required_error: 'method es requerido (qr | manual)' }),
+});
+
+/** POST /api/bookings/:id/confirm-hospedaje-extension-qr — confirma pago QR de extensión de hospedaje. */
+export const confirmHospedajeExtensionQrBodySchema = z.object({
+  qrId: z.string().min(1, 'qrId requerido'),
+});
+
 /** POST /api/bookings/:id/extend-paseo — cliente solicita extensión de paseo en curso. */
 export const extendPaseoBodySchema = z.object({
   additionalMinutes: z.number().int().refine((n) => [15, 30, 60].includes(n), {
