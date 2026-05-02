@@ -1953,6 +1953,72 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       ],
                     );
                   }),
+
+                  // ── Extensiones confirmadas (solo PASEO) ─────────────────
+                  Builder(builder: (_) {
+                    if (_booking?['serviceType'] != 'PASEO') return const SizedBox();
+                    final exts = (_booking?['serviceEvents'] as List<dynamic>? ?? [])
+                        .where((e) => e['type'] == 'EXTENSION_CONFIRMED')
+                        .toList();
+                    if (exts.isEmpty) return const SizedBox();
+                    final totalMins = exts.fold<int>(0, (s, e) =>
+                        s + ((e['additionalMinutes'] as num?)?.toInt() ?? 0));
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            Text('Tiempo ampliado',
+                              style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+                            const Spacer(),
+                            if (totalMins > 0)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: GardenColors.primary.withValues(alpha: 0.10),
+                                  borderRadius: BorderRadius.circular(GardenRadius.full),
+                                ),
+                                child: Text('+$totalMins min total',
+                                  style: const TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w700)),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ...exts.map((ext) {
+                          final mins = (ext['additionalMinutes'] as num?)?.toInt();
+                          final amount = (ext['extraAmount'] as num?)?.toDouble();
+                          final time = _formatEventTime(ext['timestamp'] as String? ?? '');
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                            decoration: BoxDecoration(
+                              color: GardenColors.primary.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(GardenRadius.md),
+                              border: Border.all(color: GardenColors.primary.withValues(alpha: 0.15)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.add_alarm_rounded, size: 14, color: GardenColors.primary),
+                                const SizedBox(width: 8),
+                                Text(
+                                  mins != null ? '+$mins min' : 'Extensión',
+                                  style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600),
+                                ),
+                                if (amount != null) ...[
+                                  const SizedBox(width: 6),
+                                  Text('· Bs ${amount.toStringAsFixed(0)}',
+                                    style: TextStyle(color: subtextColor, fontSize: 12)),
+                                ],
+                                const Spacer(),
+                                Text(time, style: TextStyle(color: subtextColor, fontSize: 11)),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    );
+                  }),
                 ],
               ),
             ),

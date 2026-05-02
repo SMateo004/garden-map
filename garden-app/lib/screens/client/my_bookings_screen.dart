@@ -758,6 +758,47 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                       ],
                     ),
                   ),
+                Builder(builder: (_) {
+                  if (!isPaseo) return const SizedBox();
+                  final exts = (booking['serviceEvents'] as List<dynamic>? ?? [])
+                      .where((e) => e['type'] == 'EXTENSION_CONFIRMED')
+                      .toList();
+                  if (exts.isEmpty) return const SizedBox();
+                  final totalMins = exts.fold<int>(0,
+                      (s, e) => s + ((e['additionalMinutes'] as num?)?.toInt() ?? 0));
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: GardenColors.primary.withValues(alpha: 0.04),
+                        borderRadius: BorderRadius.circular(GardenRadius.md),
+                        border: Border.all(
+                            color: GardenColors.primary.withValues(alpha: 0.12)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.add_alarm_rounded,
+                              size: 13, color: subtextColor),
+                          const SizedBox(width: 7),
+                          Text('Tiempo ampliado',
+                              style: TextStyle(
+                                  color: subtextColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500)),
+                          const Spacer(),
+                          Text(
+                            '+$totalMins min · ${exts.length} ${exts.length == 1 ? "extensión" : "extensiones"}',
+                            style: TextStyle(
+                                color: textColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
                 if (status == 'WAITING_CAREGIVER_APPROVAL' || status == 'CONFIRMED' || status == 'COMPLETED' || status == 'IN_PROGRESS') ...[
                   const SizedBox(height: 16),
                   Row(
