@@ -2,12 +2,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-// ── Versión de la splash (para confirmar qué build corre) ─────────────────────
-const _kSplashVersion = 'v2.0-nuevo-logo';
+const _kSplashVersion = 'v3.0-logo-imagen';
 
 class MobileSplashScreen extends StatefulWidget {
   const MobileSplashScreen({super.key});
@@ -20,10 +18,6 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _fadeAnim;
-  late final Animation<double> _scaleAnim;
-
-  static const _bg = Color(0xFF3B5E1A);
-  static const _logoColor = Color(0xFFCDEBA0);
 
   static const _baseUrl = String.fromEnvironment(
     'API_URL',
@@ -33,33 +27,23 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
   @override
   void initState() {
     super.initState();
-    debugPrint('[SPLASH $_kSplashVersion] initState → arrancando');
-
+    debugPrint('[SPLASH $_kSplashVersion] initState');
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 600),
     );
     _fadeAnim = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _ctrl, curve: Curves.easeIn),
-    );
-    _scaleAnim = Tween<double>(begin: 0.88, end: 1.0).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack),
     );
     _run();
   }
 
   Future<void> _run() async {
-    await Future.delayed(const Duration(milliseconds: 150));
+    await Future.delayed(const Duration(milliseconds: 100));
     if (!mounted) return;
     _ctrl.forward();
-    debugPrint('[SPLASH $_kSplashVersion] animación iniciada');
-
-    await Future.delayed(const Duration(milliseconds: 2800));
-    if (!mounted) {
-      debugPrint('[SPLASH $_kSplashVersion] widget desmontado antes de navegar');
-      return;
-    }
-    debugPrint('[SPLASH $_kSplashVersion] iniciando navegación...');
+    await Future.delayed(const Duration(milliseconds: 2500));
+    if (!mounted) return;
     await _navigate();
   }
 
@@ -80,7 +64,6 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
       debugPrint('[SPLASH] user_role=$role');
 
       if (role != 'ADMIN') {
-        debugPrint('[SPLASH] verificando modo mantenimiento...');
         final inMaintenance = await _checkMaintenance();
         if (!mounted) return;
         if (inMaintenance) {
@@ -93,11 +76,8 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
       if (!mounted) return;
       await _goToHome(prefs);
     } catch (e, st) {
-      debugPrint('[SPLASH] ERROR en navigate: $e\n$st');
-      if (mounted) {
-        debugPrint('[SPLASH] fallback → /login');
-        context.go('/login');
-      }
+      debugPrint('[SPLASH] ERROR: $e\n$st');
+      if (mounted) context.go('/login');
     }
   }
 
@@ -107,11 +87,9 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
           .get(Uri.parse('$_baseUrl/settings'))
           .timeout(const Duration(seconds: 6));
       final data = jsonDecode(res.body);
-      final result = data['data']?['maintenanceMode'] == true;
-      debugPrint('[SPLASH] maintenanceMode=$result');
-      return result;
+      return data['data']?['maintenanceMode'] == true;
     } catch (e) {
-      debugPrint('[SPLASH] _checkMaintenance error: $e → asumiendo false');
+      debugPrint('[SPLASH] _checkMaintenance error: $e');
       return false;
     }
   }
@@ -124,7 +102,7 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
     debugPrint('[SPLASH] token=${token.isEmpty ? "VACÍO" : "presente"} role=$role');
 
     if (token.isEmpty) {
-      debugPrint('[SPLASH] → /login (sin token)');
+      debugPrint('[SPLASH] → /login');
       if (mounted) context.go('/login');
       return;
     }
@@ -139,37 +117,32 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
       return;
     }
 
-    // CLIENT: buscar reserva activa
     debugPrint('[SPLASH] buscando reserva IN_PROGRESS...');
     try {
       final response = await http.get(
         Uri.parse('$_baseUrl/bookings/my?limit=5&page=1'),
         headers: {'Authorization': 'Bearer $token'},
       ).timeout(const Duration(seconds: 6));
-
       debugPrint('[SPLASH] bookings status=${response.statusCode}');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
           final bookings =
               (data['data'] as List).cast<Map<String, dynamic>>();
-          final active = bookings
-              .where((b) => b['status'] == 'IN_PROGRESS')
-              .firstOrNull;
-          if (active != null) {
-            debugPrint('[SPLASH] → /service/${active['id']} (reserva activa)');
-            if (mounted) {
-              context.go(
-                '/service/${active['id']}',
-                extra: {'role': 'CLIENT', 'token': token},
-              );
-            }
+          final active =
+              bookings.where((b) => b['status'] == 'IN_PROGRESS').firstOrNull;
+          if (active != null && mounted) {
+            debugPrint('[SPLASH] → /service/${active['id']}');
+            context.go(
+              '/service/${active['id']}',
+              extra: {'role': 'CLIENT', 'token': token},
+            );
             return;
           }
         }
       }
     } catch (e) {
-      debugPrint('[SPLASH] error al consultar bookings: $e → continúa a service-selector');
+      debugPrint('[SPLASH] error bookings: $e');
     }
 
     debugPrint('[SPLASH] → /service-selector');
@@ -178,7 +151,6 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
 
   @override
   void dispose() {
-    debugPrint('[SPLASH $_kSplashVersion] dispose');
     _ctrl.dispose();
     super.dispose();
   }
@@ -186,141 +158,16 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: const Color(0xFF3B5E1A),
       body: FadeTransition(
         opacity: _fadeAnim,
-        child: ScaleTransition(
-          scale: _scaleAnim,
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 190,
-                  height: 190,
-                  child: CustomPaint(
-                    painter: _GardenLogoPainter(color: _logoColor),
-                  ),
-                ),
-                const SizedBox(height: 28),
-                Text(
-                  'garden',
-                  style: GoogleFonts.nunito(
-                    color: _logoColor,
-                    fontSize: 44,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                if (kDebugMode)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Text(
-                      _kSplashVersion,
-                      style: TextStyle(
-                        color: _logoColor.withValues(alpha: 0.4),
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+        child: SizedBox.expand(
+          child: Image.asset(
+            'assets/images/garden_logo.png',
+            fit: BoxFit.cover,
           ),
         ),
       ),
     );
   }
-}
-
-// ── Logo painter: pata + árbol/hoja ──────────────────────────────────────────
-
-class _GardenLogoPainter extends CustomPainter {
-  final Color color;
-  const _GardenLogoPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final fill = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    // ── Dedos (beans) ─────────────────────────────────────────────────────────
-    // Centro-izquierda (más grande, circular)
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(w * 0.385, h * 0.175),
-        width: w * 0.285,
-        height: h * 0.285,
-      ),
-      fill,
-    );
-    // Centro-derecha (más grande, circular)
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(w * 0.615, h * 0.175),
-        width: w * 0.285,
-        height: h * 0.285,
-      ),
-      fill,
-    );
-    // Exterior izquierda (más pequeño, ligeramente oval)
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(w * 0.155, h * 0.345),
-        width: w * 0.230,
-        height: h * 0.255,
-      ),
-      fill,
-    );
-    // Exterior derecha (más pequeño, ligeramente oval)
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(w * 0.845, h * 0.345),
-        width: w * 0.230,
-        height: h * 0.255,
-      ),
-      fill,
-    );
-
-    // ── Pad principal (grande y redondeado) ───────────────────────────────────
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(w * 0.5, h * 0.685),
-        width: w * 0.800,
-        height: h * 0.570,
-      ),
-      fill,
-    );
-
-    // ── Árbol / hoja dentro del pad ───────────────────────────────────────────
-    final leafPaint = Paint()
-      ..color = const Color(0xFF5DB840)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = w * 0.052
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final cx = w * 0.5;
-
-    // Tronco vertical
-    canvas.drawLine(
-      Offset(cx, h * 0.940),
-      Offset(cx, h * 0.460),
-      leafPaint,
-    );
-    // Ramas superiores
-    canvas.drawLine(Offset(cx, h * 0.555), Offset(cx - w * 0.145, h * 0.480), leafPaint);
-    canvas.drawLine(Offset(cx, h * 0.555), Offset(cx + w * 0.145, h * 0.480), leafPaint);
-    // Ramas medias
-    canvas.drawLine(Offset(cx, h * 0.665), Offset(cx - w * 0.130, h * 0.595), leafPaint);
-    canvas.drawLine(Offset(cx, h * 0.665), Offset(cx + w * 0.130, h * 0.595), leafPaint);
-    // Ramas bajas
-    canvas.drawLine(Offset(cx, h * 0.775), Offset(cx - w * 0.105, h * 0.715), leafPaint);
-    canvas.drawLine(Offset(cx, h * 0.775), Offset(cx + w * 0.105, h * 0.715), leafPaint);
-  }
-
-  @override
-  bool shouldRepaint(_GardenLogoPainter old) => old.color != color;
 }
