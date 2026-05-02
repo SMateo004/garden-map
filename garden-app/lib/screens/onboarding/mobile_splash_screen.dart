@@ -246,53 +246,50 @@ class _GardenLogoPainter extends CustomPainter {
       ..color = color
       ..style = PaintingStyle.fill;
 
-    // ── Beans (dedos) ─────────────────────────────────────────────────────────
-    // Centro-izquierda
+    // ── Dedos (beans) ─────────────────────────────────────────────────────────
+    // Centro-izquierda (más grande, circular)
     canvas.drawOval(
       Rect.fromCenter(
-        center: Offset(w * 0.365, h * 0.225),
-        width: w * 0.255,
-        height: h * 0.305,
+        center: Offset(w * 0.385, h * 0.175),
+        width: w * 0.285,
+        height: h * 0.285,
       ),
       fill,
     );
-    // Centro-derecha
+    // Centro-derecha (más grande, circular)
     canvas.drawOval(
       Rect.fromCenter(
-        center: Offset(w * 0.635, h * 0.225),
-        width: w * 0.255,
-        height: h * 0.305,
+        center: Offset(w * 0.615, h * 0.175),
+        width: w * 0.285,
+        height: h * 0.285,
       ),
       fill,
     );
-    // Exterior izquierda
+    // Exterior izquierda (más pequeño, ligeramente oval)
     canvas.drawOval(
       Rect.fromCenter(
-        center: Offset(w * 0.158, h * 0.385),
-        width: w * 0.235,
-        height: h * 0.278,
+        center: Offset(w * 0.155, h * 0.345),
+        width: w * 0.230,
+        height: h * 0.255,
       ),
       fill,
     );
-    // Exterior derecha
+    // Exterior derecha (más pequeño, ligeramente oval)
     canvas.drawOval(
       Rect.fromCenter(
-        center: Offset(w * 0.842, h * 0.385),
-        width: w * 0.235,
-        height: h * 0.278,
+        center: Offset(w * 0.845, h * 0.345),
+        width: w * 0.230,
+        height: h * 0.255,
       ),
       fill,
     );
 
-    // ── Pad principal ─────────────────────────────────────────────────────────
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromCenter(
-          center: Offset(w * 0.5, h * 0.715),
-          width: w * 0.76,
-          height: h * 0.505,
-        ),
-        Radius.circular(w * 0.28),
+    // ── Pad principal (grande y redondeado) ───────────────────────────────────
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(w * 0.5, h * 0.685),
+        width: w * 0.800,
+        height: h * 0.570,
       ),
       fill,
     );
@@ -301,27 +298,27 @@ class _GardenLogoPainter extends CustomPainter {
     final leafPaint = Paint()
       ..color = const Color(0xFF5DB840)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = w * 0.048
+      ..strokeWidth = w * 0.052
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
     final cx = w * 0.5;
 
-    // Tronco
+    // Tronco vertical
     canvas.drawLine(
-      Offset(cx, h * 0.935),
-      Offset(cx, h * 0.495),
+      Offset(cx, h * 0.940),
+      Offset(cx, h * 0.460),
       leafPaint,
     );
     // Ramas superiores
-    canvas.drawLine(Offset(cx, h * 0.580), Offset(cx - w * 0.155, h * 0.510), leafPaint);
-    canvas.drawLine(Offset(cx, h * 0.580), Offset(cx + w * 0.155, h * 0.510), leafPaint);
+    canvas.drawLine(Offset(cx, h * 0.555), Offset(cx - w * 0.145, h * 0.480), leafPaint);
+    canvas.drawLine(Offset(cx, h * 0.555), Offset(cx + w * 0.145, h * 0.480), leafPaint);
     // Ramas medias
-    canvas.drawLine(Offset(cx, h * 0.680), Offset(cx - w * 0.130, h * 0.615), leafPaint);
-    canvas.drawLine(Offset(cx, h * 0.680), Offset(cx + w * 0.130, h * 0.615), leafPaint);
+    canvas.drawLine(Offset(cx, h * 0.665), Offset(cx - w * 0.130, h * 0.595), leafPaint);
+    canvas.drawLine(Offset(cx, h * 0.665), Offset(cx + w * 0.130, h * 0.595), leafPaint);
     // Ramas bajas
-    canvas.drawLine(Offset(cx, h * 0.785), Offset(cx - w * 0.100, h * 0.728), leafPaint);
-    canvas.drawLine(Offset(cx, h * 0.785), Offset(cx + w * 0.100, h * 0.728), leafPaint);
+    canvas.drawLine(Offset(cx, h * 0.775), Offset(cx - w * 0.105, h * 0.715), leafPaint);
+    canvas.drawLine(Offset(cx, h * 0.775), Offset(cx + w * 0.105, h * 0.715), leafPaint);
   }
 
   @override
