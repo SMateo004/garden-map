@@ -1,9 +1,13 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../theme/garden_theme.dart';
+
+// ── Versión de la splash (para confirmar qué build corre) ─────────────────────
+const _kSplashVersion = 'v2.0-nuevo-logo';
 
 class MobileSplashScreen extends StatefulWidget {
   const MobileSplashScreen({super.key});
@@ -13,128 +17,88 @@ class MobileSplashScreen extends StatefulWidget {
 }
 
 class _MobileSplashScreenState extends State<MobileSplashScreen>
-    with TickerProviderStateMixin {
-  // ── Controladores ──
-  late final AnimationController _bgCtrl;
-  late final AnimationController _iconCtrl;
-  late final AnimationController _textCtrl;
-  late final AnimationController _taglineCtrl;
-  late final AnimationController _exitCtrl;
-  late final AnimationController _pulseCtrl;
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _fadeAnim;
+  late final Animation<double> _scaleAnim;
 
-  // ── Animaciones ──
-  late final Animation<double> _bgOpacity;
-  late final Animation<double> _iconScale;
-  late final Animation<double> _iconOpacity;
-  late final Animation<Offset> _textSlide;
-  late final Animation<double> _textOpacity;
-  late final Animation<double> _taglineOpacity;
-  late final Animation<double> _exitOpacity;
-  late final Animation<double> _pulse;
+  static const _bg = Color(0xFF3B5E1A);
+  static const _logoColor = Color(0xFFCDEBA0);
+
+  static const _baseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'https://garden-api-1ldd.onrender.com/api',
+  );
 
   @override
   void initState() {
     super.initState();
+    debugPrint('[SPLASH $_kSplashVersion] initState → arrancando');
 
-    _bgCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
-    _iconCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
-    _textCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
-    _taglineCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
-    _exitCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
-    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
-      ..repeat(reverse: true);
-
-    _bgOpacity = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _bgCtrl, curve: Curves.easeIn),
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
     );
-
-    _iconScale = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.15), weight: 60),
-      TweenSequenceItem(tween: Tween(begin: 1.15, end: 0.9), weight: 20),
-      TweenSequenceItem(tween: Tween(begin: 0.9, end: 1.0), weight: 20),
-    ]).animate(CurvedAnimation(parent: _iconCtrl, curve: Curves.easeOut));
-
-    _iconOpacity = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _iconCtrl, curve: const Interval(0, 0.3, curve: Curves.easeIn)),
+    _fadeAnim = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeIn),
     );
-
-    _textSlide = Tween<Offset>(begin: const Offset(0, 0.4), end: Offset.zero).animate(
-      CurvedAnimation(parent: _textCtrl, curve: Curves.easeOutCubic),
+    _scaleAnim = Tween<double>(begin: 0.88, end: 1.0).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack),
     );
-
-    _textOpacity = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _textCtrl, curve: Curves.easeIn),
-    );
-
-    _taglineOpacity = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _taglineCtrl, curve: Curves.easeIn),
-    );
-
-    _exitOpacity = Tween<double>(begin: 1, end: 0).animate(
-      CurvedAnimation(parent: _exitCtrl, curve: Curves.easeInOut),
-    );
-
-    _pulse = Tween<double>(begin: 1.0, end: 1.06).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
-    );
-
-    _runSequence();
+    _run();
   }
 
-  Future<void> _runSequence() async {
-    // Fondo aparece
-    await Future.delayed(const Duration(milliseconds: 100));
-    _bgCtrl.forward();
-
-    // Icono rebota
-    await Future.delayed(const Duration(milliseconds: 300));
-    _iconCtrl.forward();
-
-    // Texto "GARDEN" sube
-    await Future.delayed(const Duration(milliseconds: 800));
-    _textCtrl.forward();
-
-    // Tagline aparece
-    await Future.delayed(const Duration(milliseconds: 600));
-    _taglineCtrl.forward();
-
-    // Espera (total ~4s desde inicio)
-    await Future.delayed(const Duration(milliseconds: 1600));
-
-    // Salida
-    _pulseCtrl.stop();
-    await _exitCtrl.forward();
-
+  Future<void> _run() async {
+    await Future.delayed(const Duration(milliseconds: 150));
     if (!mounted) return;
+    _ctrl.forward();
+    debugPrint('[SPLASH $_kSplashVersion] animación iniciada');
+
+    await Future.delayed(const Duration(milliseconds: 2800));
+    if (!mounted) {
+      debugPrint('[SPLASH $_kSplashVersion] widget desmontado antes de navegar');
+      return;
+    }
+    debugPrint('[SPLASH $_kSplashVersion] iniciando navegación...');
     await _navigate();
   }
 
-  static const _baseUrl = String.fromEnvironment('API_URL',
-      defaultValue: 'https://garden-api-1ldd.onrender.com/api');
-
   Future<void> _navigate() async {
-    final prefs = await SharedPreferences.getInstance();
-    final seen = prefs.getBool('mobile_onboarding_seen') ?? false;
-    if (!mounted) return;
-    if (!seen) {
-      context.go('/onboarding');
-      return;
-    }
-
-    final role = prefs.getString('user_role') ?? '';
-
-    // Los admins siempre pasan, nunca ven pantalla de mantenimiento
-    if (role != 'ADMIN') {
-      final inMaintenance = await _checkMaintenance();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final seen = prefs.getBool('mobile_onboarding_seen') ?? false;
+      debugPrint('[SPLASH] onboarding_seen=$seen');
       if (!mounted) return;
-      if (inMaintenance) {
-        context.go('/maintenance');
+
+      if (!seen) {
+        debugPrint('[SPLASH] → /onboarding');
+        context.go('/onboarding');
         return;
       }
-    }
 
-    if (!mounted) return;
-    _goToHome(prefs);
+      final role = prefs.getString('user_role') ?? '';
+      debugPrint('[SPLASH] user_role=$role');
+
+      if (role != 'ADMIN') {
+        debugPrint('[SPLASH] verificando modo mantenimiento...');
+        final inMaintenance = await _checkMaintenance();
+        if (!mounted) return;
+        if (inMaintenance) {
+          debugPrint('[SPLASH] → /maintenance');
+          context.go('/maintenance');
+          return;
+        }
+      }
+
+      if (!mounted) return;
+      await _goToHome(prefs);
+    } catch (e, st) {
+      debugPrint('[SPLASH] ERROR en navigate: $e\n$st');
+      if (mounted) {
+        debugPrint('[SPLASH] fallback → /login');
+        context.go('/login');
+      }
+    }
   }
 
   Future<bool> _checkMaintenance() async {
@@ -143,237 +107,223 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
           .get(Uri.parse('$_baseUrl/settings'))
           .timeout(const Duration(seconds: 6));
       final data = jsonDecode(res.body);
-      return data['data']?['maintenanceMode'] == true;
-    } catch (_) {
-      return false; // Si falla la petición, no bloquear al usuario
+      final result = data['data']?['maintenanceMode'] == true;
+      debugPrint('[SPLASH] maintenanceMode=$result');
+      return result;
+    } catch (e) {
+      debugPrint('[SPLASH] _checkMaintenance error: $e → asumiendo false');
+      return false;
     }
   }
 
   Future<void> _goToHome(SharedPreferences prefs) async {
     final token = prefs.getString('access_token') ?? '';
     final permanentRole = prefs.getString('user_role') ?? '';
-    // activeRole puede diferir del rol permanente durante un cambio de rol
     final activeRole = prefs.getString('active_role') ?? '';
     final role = activeRole.isNotEmpty ? activeRole : permanentRole;
+    debugPrint('[SPLASH] token=${token.isEmpty ? "VACÍO" : "presente"} role=$role');
+
     if (token.isEmpty) {
-      context.go('/login');
+      debugPrint('[SPLASH] → /login (sin token)');
+      if (mounted) context.go('/login');
       return;
     }
     if (role == 'ADMIN') {
-      context.go('/admin');
+      debugPrint('[SPLASH] → /admin');
+      if (mounted) context.go('/admin');
       return;
     }
     if (role == 'CAREGIVER') {
-      context.go('/caregiver/home');
+      debugPrint('[SPLASH] → /caregiver/home');
+      if (mounted) context.go('/caregiver/home');
       return;
     }
 
-    // CLIENT: verificar si tiene un paseo/hospedaje IN_PROGRESS → ir directo al servicio
+    // CLIENT: buscar reserva activa
+    debugPrint('[SPLASH] buscando reserva IN_PROGRESS...');
     try {
       final response = await http.get(
         Uri.parse('$_baseUrl/bookings/my?limit=5&page=1'),
         headers: {'Authorization': 'Bearer $token'},
       ).timeout(const Duration(seconds: 6));
+
+      debugPrint('[SPLASH] bookings status=${response.statusCode}');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
-          final bookings = (data['data'] as List).cast<Map<String, dynamic>>();
-          final active = bookings.where((b) => b['status'] == 'IN_PROGRESS').firstOrNull;
-          if (active != null && mounted) {
-            context.go(
-              '/service/${active['id']}',
-              extra: {'role': 'CLIENT', 'token': token},
-            );
+          final bookings =
+              (data['data'] as List).cast<Map<String, dynamic>>();
+          final active = bookings
+              .where((b) => b['status'] == 'IN_PROGRESS')
+              .firstOrNull;
+          if (active != null) {
+            debugPrint('[SPLASH] → /service/${active['id']} (reserva activa)');
+            if (mounted) {
+              context.go(
+                '/service/${active['id']}',
+                extra: {'role': 'CLIENT', 'token': token},
+              );
+            }
             return;
           }
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[SPLASH] error al consultar bookings: $e → continúa a service-selector');
+    }
 
+    debugPrint('[SPLASH] → /service-selector');
     if (mounted) context.go('/service-selector');
   }
 
   @override
   void dispose() {
-    _bgCtrl.dispose();
-    _iconCtrl.dispose();
-    _textCtrl.dispose();
-    _taglineCtrl.dispose();
-    _exitCtrl.dispose();
-    _pulseCtrl.dispose();
+    debugPrint('[SPLASH $_kSplashVersion] dispose');
+    _ctrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: Listenable.merge([
-        _bgCtrl, _iconCtrl, _textCtrl, _taglineCtrl, _exitCtrl, _pulseCtrl,
-      ]),
-      builder: (context, _) {
-        return FadeTransition(
-          opacity: _exitOpacity,
-          child: Scaffold(
-            body: Stack(
-              fit: StackFit.expand,
+    return Scaffold(
+      backgroundColor: _bg,
+      body: FadeTransition(
+        opacity: _fadeAnim,
+        child: ScaleTransition(
+          scale: _scaleAnim,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // ── Fondo degradado ──
-                FadeTransition(
-                  opacity: _bgOpacity,
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF4A6B28), GardenColors.primary, Color(0xFF2D5016)],
+                SizedBox(
+                  width: 190,
+                  height: 190,
+                  child: CustomPaint(
+                    painter: _GardenLogoPainter(color: _logoColor),
+                  ),
+                ),
+                const SizedBox(height: 28),
+                Text(
+                  'garden',
+                  style: GoogleFonts.nunito(
+                    color: _logoColor,
+                    fontSize: 44,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                if (kDebugMode)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(
+                      _kSplashVersion,
+                      style: TextStyle(
+                        color: _logoColor.withValues(alpha: 0.4),
+                        fontSize: 11,
                       ),
                     ),
                   ),
-                ),
-
-                // ── Círculos decorativos de fondo ──
-                FadeTransition(
-                  opacity: _bgOpacity,
-                  child: Stack(
-                    children: [
-                      Positioned(
-                        top: -80, right: -60,
-                        child: Container(
-                          width: 260, height: 260,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.06),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: -100, left: -80,
-                        child: Container(
-                          width: 320, height: 320,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.05),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 120, right: 30,
-                        child: Container(
-                          width: 80, height: 80,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.08),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // ── Contenido central ──
-                Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Logo icono con bounce
-                      ScaleTransition(
-                        scale: _pulse,
-                        child: ScaleTransition(
-                          scale: _iconScale,
-                          child: FadeTransition(
-                            opacity: _iconOpacity,
-                            child: Container(
-                              width: 100,
-                              height: 100,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(26),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.25),
-                                    blurRadius: 32,
-                                    offset: const Offset(0, 12),
-                                  ),
-                                ],
-                              ),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.pets_rounded,
-                                  color: GardenColors.primary,
-                                  size: 52,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 28),
-
-                      // Texto "GARDEN"
-                      SlideTransition(
-                        position: _textSlide,
-                        child: FadeTransition(
-                          opacity: _textOpacity,
-                          child: Text(
-                            'GARDEN',
-                            style: GardenText.h2.copyWith(
-                              color: Colors.white,
-                              fontSize: 48,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 10,
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 10),
-
-                      // Tagline
-                      FadeTransition(
-                        opacity: _taglineOpacity,
-                        child: Text(
-                          'Cuidado de mascotas en Santa Cruz',
-                          style: GardenText.body.copyWith(
-                            color: Colors.white.withValues(alpha: 0.80),
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // ── Puntos animados en la parte inferior ──
-                Positioned(
-                  bottom: 60,
-                  left: 0, right: 0,
-                  child: FadeTransition(
-                    opacity: _taglineOpacity,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(3, (i) {
-                        final delay = i * 0.33;
-                        final progress = (_pulseCtrl.value - delay).clamp(0.0, 1.0);
-                        final size = 6.0 + progress * 4.0;
-                        return Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          width: size,
-                          height: size,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.4 + progress * 0.6),
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
+}
+
+// ── Logo painter: pata + árbol/hoja ──────────────────────────────────────────
+
+class _GardenLogoPainter extends CustomPainter {
+  final Color color;
+  const _GardenLogoPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final fill = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    // ── Beans (dedos) ─────────────────────────────────────────────────────────
+    // Centro-izquierda
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(w * 0.365, h * 0.225),
+        width: w * 0.255,
+        height: h * 0.305,
+      ),
+      fill,
+    );
+    // Centro-derecha
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(w * 0.635, h * 0.225),
+        width: w * 0.255,
+        height: h * 0.305,
+      ),
+      fill,
+    );
+    // Exterior izquierda
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(w * 0.158, h * 0.385),
+        width: w * 0.235,
+        height: h * 0.278,
+      ),
+      fill,
+    );
+    // Exterior derecha
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(w * 0.842, h * 0.385),
+        width: w * 0.235,
+        height: h * 0.278,
+      ),
+      fill,
+    );
+
+    // ── Pad principal ─────────────────────────────────────────────────────────
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(w * 0.5, h * 0.715),
+          width: w * 0.76,
+          height: h * 0.505,
+        ),
+        Radius.circular(w * 0.28),
+      ),
+      fill,
+    );
+
+    // ── Árbol / hoja dentro del pad ───────────────────────────────────────────
+    final leafPaint = Paint()
+      ..color = const Color(0xFF5DB840)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 0.048
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final cx = w * 0.5;
+
+    // Tronco
+    canvas.drawLine(
+      Offset(cx, h * 0.935),
+      Offset(cx, h * 0.495),
+      leafPaint,
+    );
+    // Ramas superiores
+    canvas.drawLine(Offset(cx, h * 0.580), Offset(cx - w * 0.155, h * 0.510), leafPaint);
+    canvas.drawLine(Offset(cx, h * 0.580), Offset(cx + w * 0.155, h * 0.510), leafPaint);
+    // Ramas medias
+    canvas.drawLine(Offset(cx, h * 0.680), Offset(cx - w * 0.130, h * 0.615), leafPaint);
+    canvas.drawLine(Offset(cx, h * 0.680), Offset(cx + w * 0.130, h * 0.615), leafPaint);
+    // Ramas bajas
+    canvas.drawLine(Offset(cx, h * 0.785), Offset(cx - w * 0.100, h * 0.728), leafPaint);
+    canvas.drawLine(Offset(cx, h * 0.785), Offset(cx + w * 0.100, h * 0.728), leafPaint);
+  }
+
+  @override
+  bool shouldRepaint(_GardenLogoPainter old) => old.color != color;
 }
