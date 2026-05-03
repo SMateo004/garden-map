@@ -8,45 +8,21 @@ on:
       - 'vercel.json'
   workflow_dispatch:
 
-env:
-  NODE_VERSION: '20'
-
 jobs:
-  build-and-deploy:
-    name: Build & Deploy React Web
+  deploy:
+    name: Trigger Vercel Production Deploy
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: garden-web
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: garden-web/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Type-check + build
-        run: npm run build
-        env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
-
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
       - name: Deploy → Production
-        if: github.ref == 'refs/heads/main'
         run: |
-          vercel deploy \
-            --prod \
-            --yes \
+          vercel deploy --prod --yes \
             --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
