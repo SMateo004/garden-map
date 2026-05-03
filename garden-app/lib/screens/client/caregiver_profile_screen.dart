@@ -141,11 +141,17 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     final zone = _caregiver!['zone'] as String? ?? '';
     final bio = _caregiver!['bio'] as String? ?? '';
     final verified = _caregiver!['verified'] == true;
-    final pricePerWalk60 = _caregiver!['pricePerWalk60'];
-    final pricePerDay = _caregiver!['pricePerDay'];
-    final priceDisplay = pricePerWalk60 != null
+    final pricePerWalk60Raw = _caregiver!['pricePerWalk60'];
+    final pricePerDayRaw = _caregiver!['pricePerDay'];
+    final pricePerWalk60 = (pricePerWalk60Raw != null && (pricePerWalk60Raw as num) > 0) ? pricePerWalk60Raw : null;
+    final pricePerDay = (pricePerDayRaw != null && (pricePerDayRaw as num) > 0) ? pricePerDayRaw : null;
+    // Determine which services the caregiver actually offers (price > 0)
+    final bool offersHospedaje = pricePerDay != null;
+    final bool offersPaseo = pricePerWalk60 != null;
+    final bool offersBoth = offersHospedaje && offersPaseo;
+    final priceDisplay = offersPaseo
         ? 'Bs $pricePerWalk60/hora'
-        : pricePerDay != null
+        : offersHospedaje
             ? 'Bs $pricePerDay/noche'
             : 'Consultar';
 
@@ -683,7 +689,57 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           }
                         } catch (_) {}
                         if (!context.mounted) return;
-                        context.push('/booking/${widget.caregiverId}');
+                        // If caregiver offers both services, show selector first
+                        if (offersBoth) {
+                          await showModalBottomSheet(
+                            context: context,
+                            backgroundColor: Colors.transparent,
+                            builder: (sheetCtx) => Container(
+                              decoration: BoxDecoration(
+                                color: surface,
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                              ),
+                              padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 40, height: 4,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade300,
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Text('¿Qué servicio necesitas?',
+                                    style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+                                  const SizedBox(height: 20),
+                                  _ServiceOption(
+                                    icon: Icons.home_outlined,
+                                    label: 'Hospedaje',
+                                    sublabel: 'Bs $pricePerDay/noche',
+                                    onTap: () {
+                                      Navigator.pop(sheetCtx);
+                                      context.push('/booking/${widget.caregiverId}?service=HOSPEDAJE');
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _ServiceOption(
+                                    icon: Icons.directions_walk,
+                                    label: 'Paseo',
+                                    sublabel: 'Bs $pricePerWalk60/hora',
+                                    onTap: () {
+                                      Navigator.pop(sheetCtx);
+                                      context.push('/booking/${widget.caregiverId}?service=PASEO');
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        } else {
+                          context.push('/booking/${widget.caregiverId}');
+                        }
                       },
                     ),
                   ),
@@ -1132,5 +1188,63 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
       'LOCAL': '🏪 Local',
     };
     return labels[type] ?? type;
+  }
+}
+
+// ── Helper widget for service selector bottom sheet ──────────────────────────
+class _ServiceOption extends StatelessWidget {
+  const _ServiceOption({
+    required this.icon,
+    required this.label,
+    required this.sublabel,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String sublabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAF8),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: GardenColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: GardenColors.primary, size: 22),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: TextStyle(
+                    color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                    fontSize: 16, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text(sublabel, style: const TextStyle(
+                    color: GardenColors.primary, fontSize: 14, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios, size: 16, color: GardenColors.primary.withValues(alpha: 0.7)),
+          ],
+        ),
+      ),
+    );
   }
 }

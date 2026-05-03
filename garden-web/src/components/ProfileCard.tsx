@@ -62,11 +62,19 @@ export function ProfileCard({ caregiver }: ProfileCardProps) {
           )}
         </div>
         <div className="mt-2 flex gap-2 text-sm text-gray-600">
-          {caregiver.pricePerDay != null && (
-            <span>{formatPrice(caregiver.pricePerDay)}/día</span>
+          {caregiver.pricePerDay != null && caregiver.pricePerDay > 0 && (
+            <span>{formatPrice(caregiver.pricePerDay)}/noche</span>
           )}
-          {(caregiver.pricePerWalk30 != null || caregiver.pricePerWalk60 != null) && (
-            <span>Paseo {formatPrice(caregiver.pricePerWalk30 ?? caregiver.pricePerWalk60)}</span>
+          {((caregiver.pricePerWalk60 != null && caregiver.pricePerWalk60 > 0) ||
+            (caregiver.pricePerWalk30 != null && caregiver.pricePerWalk30 > 0)) && (
+            <span>
+              Paseo{' '}
+              {formatPrice(
+                (caregiver.pricePerWalk60 ?? 0) > 0
+                  ? caregiver.pricePerWalk60
+                  : caregiver.pricePerWalk30,
+              )}
+            </span>
           )}
         </div>
       </div>

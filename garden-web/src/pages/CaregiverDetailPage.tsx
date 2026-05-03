@@ -7,6 +7,7 @@ import { AuthPrompt } from '@/components/AuthPrompt';
 import { useAuth } from '@/contexts/AuthContext';
 import { useClientMyProfile } from '@/hooks/useClientMyProfile';
 import toast from 'react-hot-toast';
+import { ServiceSelectorModal } from '@/components/ServiceSelectorModal';
 
 /**
  * Página de detalle público de cuidador (vista cliente). Sin login requerido.
@@ -21,6 +22,7 @@ export function CaregiverDetailPage() {
     enabled: isAuthenticated && user?.role === 'CLIENT',
   });
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showServiceModal, setShowServiceModal] = useState(false);
 
   const isProfileComplete = myProfile?.isComplete === true;
 
@@ -41,7 +43,21 @@ export function CaregiverDetailPage() {
       }
     }
 
-    navigate(`/reservar/${id}`);
+    // Determine which services the caregiver actually offers (price > 0)
+    const offersHospedaje = caregiver != null && (caregiver.pricePerDay ?? 0) > 0;
+    const offersPaseo = caregiver != null && ((caregiver.pricePerWalk60 ?? 0) > 0 || (caregiver.pricePerWalk30 ?? 0) > 0);
+
+    if (offersHospedaje && offersPaseo) {
+      // Show service selector first
+      setShowServiceModal(true);
+    } else {
+      navigate(`/reservar/${id}`);
+    }
+  };
+
+  const handleServiceSelect = (service: 'HOSPEDAJE' | 'PASEO') => {
+    setShowServiceModal(false);
+    navigate(`/reservar/${id}`, { state: { service } });
   };
 
 
@@ -119,6 +135,17 @@ export function CaregiverDetailPage() {
         }}
         returnTo={`/reservar/${id}`}
       />
+
+      {caregiver && (
+        <ServiceSelectorModal
+          isOpen={showServiceModal}
+          onClose={() => setShowServiceModal(false)}
+          onSelect={handleServiceSelect}
+          pricePerDay={caregiver.pricePerDay}
+          pricePerWalk60={caregiver.pricePerWalk60}
+          pricePerWalk30={caregiver.pricePerWalk30}
+        />
+      )}
     </div>
   );
 }

@@ -1644,24 +1644,32 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final services = (caregiver['services'] as List? ?? []).take(2).toList();
 
     // Prices to display — list of (label, unit) pairs
+    // Only show prices > 0 (0 means the caregiver doesn't offer that service)
     final List<(String, String)> prices = [];
+    final priceDay = caregiver['pricePerDay'];
+    final priceWalk60 = caregiver['pricePerWalk60'];
+    final priceWalk30 = caregiver['pricePerWalk30'];
+    final bool hasDayPrice = priceDay != null && (priceDay as num) > 0;
+    final bool hasWalk60Price = priceWalk60 != null && (priceWalk60 as num) > 0;
+    final bool hasWalk30Price = priceWalk30 != null && (priceWalk30 as num) > 0;
+
     if (_selectedService == 'hospedaje') {
-      if (caregiver['pricePerDay'] != null) prices.add(('Bs ${caregiver['pricePerDay']}', '/noche'));
+      if (hasDayPrice) prices.add(('Bs $priceDay', '/noche'));
     } else if (_selectedService == 'paseo') {
-      if (caregiver['pricePerWalk60'] != null) {
-        prices.add(('Bs ${caregiver['pricePerWalk60']}', '1 hora'));
-      } else if (caregiver['pricePerWalk30'] != null) {
-        prices.add(('Bs ${caregiver['pricePerWalk30']}', '30 min'));
+      if (hasWalk60Price) {
+        prices.add(('Bs $priceWalk60', '1 hora'));
+      } else if (hasWalk30Price) {
+        prices.add(('Bs $priceWalk30', '30 min'));
       }
     } else {
       // 'todos' — show only prices for services the caregiver actually offers
-      if (caregiver['pricePerWalk60'] != null) {
-        prices.add(('Bs ${caregiver['pricePerWalk60']}', '1 hora 🦮'));
-      } else if (caregiver['pricePerWalk30'] != null) {
-        prices.add(('Bs ${caregiver['pricePerWalk30']}', '30 min 🦮'));
+      if (hasWalk60Price) {
+        prices.add(('Bs $priceWalk60', '1 hora 🦮'));
+      } else if (hasWalk30Price) {
+        prices.add(('Bs $priceWalk30', '30 min 🦮'));
       }
-      if (caregiver['pricePerDay'] != null) {
-        prices.add(('Bs ${caregiver['pricePerDay']}', '/noche 🏠'));
+      if (hasDayPrice) {
+        prices.add(('Bs $priceDay', '/noche 🏠'));
       }
     }
 

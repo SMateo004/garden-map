@@ -451,22 +451,22 @@ export function ProfileDetail({ caregiver }: ProfileDetailProps) {
             </h3>
 
             <div className="space-y-4">
-              {caregiver.pricePerDay != null && (
+              {caregiver.pricePerDay != null && caregiver.pricePerDay > 0 && (
                 <div className="flex justify-between items-center p-4 rounded-2xl bg-slate-50 dark:bg-gray-900 border border-slate-100 dark:border-gray-800">
                   <span className="font-bold text-gray-700 dark:text-gray-300">Hospedaje</span>
                   <div className="text-right">
                     <span className="text-xl font-black text-green-600">Bs {caregiver.pricePerDay}</span>
-                    <span className="block text-[10px] text-gray-400 uppercase font-black">por día</span>
+                    <span className="block text-[10px] text-gray-400 uppercase font-black">por noche</span>
                   </div>
                 </div>
               )}
-              {caregiver.pricePerWalk30 != null && (
+              {caregiver.pricePerWalk30 != null && caregiver.pricePerWalk30 > 0 && (
                 <div className="flex justify-between items-center p-4 rounded-2xl bg-slate-50 dark:bg-gray-900 border border-slate-100 dark:border-gray-800">
                   <span className="font-bold text-gray-700 dark:text-gray-300">Paseo 30 min</span>
                   <span className="text-xl font-black text-green-600">Bs {caregiver.pricePerWalk30}</span>
                 </div>
               )}
-              {caregiver.pricePerWalk60 != null && (
+              {caregiver.pricePerWalk60 != null && caregiver.pricePerWalk60 > 0 && (
                 <div className="flex justify-between items-center p-4 rounded-2xl bg-slate-50 dark:bg-gray-900 border border-slate-100 dark:border-gray-800">
                   <span className="font-bold text-gray-700 dark:text-gray-300">Paseo 60 min</span>
                   <span className="text-xl font-black text-green-600">Bs {caregiver.pricePerWalk60}</span>
