@@ -20,20 +20,61 @@ export const hospedajeSchema = z.object({
   totalDays: z.coerce.number().int().min(1).max(90),
 });
 
-/** Schema completo para paseo. duration se coerce para aceptar "30" / "60" etc. del form. */
-export const paseoSchema = z.object({
-  serviceType: z.literal('PASEO'),
-  caregiverId: z.string().uuid('caregiverId inválido'),
-  petId: z.string().uuid('petId inválido'),
-  walkDate: z.string().regex(dateOnlyRegex, 'walkDate: formato YYYY-MM-DD'),
+/** Schema para un día individual dentro de una reserva multi-día de paseo. */
+const walkDaySchema = z.object({
+  date: z.string().regex(dateOnlyRegex, 'date: formato YYYY-MM-DD'),
   timeSlot: z.enum(['MANANA', 'TARDE', 'NOCHE'], {
     errorMap: () => ({ message: 'timeSlot debe ser MANANA, TARDE o NOCHE' }),
   }),
   startTime: z.string().regex(/^\d{2}:\d{2}$/, 'startTime formato HH:mm').optional(),
-  duration: z.coerce.number().int().min(30).max(240).refine(n => n % 30 === 0, {
-    message: 'La duración debe ser múltiplo de 30 minutos',
-  }),
 });
+
+export type WalkDay = z.infer<typeof walkDaySchema>;
+
+/**
+ * Schema completo para paseo. Acepta dos modos:
+ * - Single day: walkDate + timeSlot (comportamiento original)
+ * - Multi-day: walkDays (array de días con sus slots)
+ */
+export const paseoSchema = z
+  .object({
+    serviceType: z.literal('PASEO'),
+    caregiverId: z.string().uuid('caregiverId inválido'),
+    petId: z.string().uuid('petId inválido'),
+    // Single-day fields (opcionales cuando se usa walkDays)
+    walkDate: z.string().regex(dateOnlyRegex, 'walkDate: formato YYYY-MM-DD').optional(),
+    timeSlot: z
+      .enum(['MANANA', 'TARDE', 'NOCHE'], {
+        errorMap: () => ({ message: 'timeSlot debe ser MANANA, TARDE o NOCHE' }),
+      })
+      .optional(),
+    startTime: z.string().regex(/^\d{2}:\d{2}$/, 'startTime formato HH:mm').optional(),
+    duration: z.coerce
+      .number()
+      .int()
+      .min(30)
+      .max(240)
+      .refine((n) => n % 30 === 0, { message: 'La duración debe ser múltiplo de 30 minutos' }),
+    // Multi-day field
+    walkDays: z
+      .array(walkDaySchema)
+      .min(1, 'walkDays debe tener al menos 1 día')
+      .max(30, 'Máximo 30 días por reserva')
+      .optional(),
+  })
+  .refine(
+    (data) => {
+      // Debe tener walkDate+timeSlot (single) O walkDays (multi), no puede ser ambos ausentes
+      const hasSingle = !!data.walkDate && !!data.timeSlot;
+      const hasMulti = !!data.walkDays && data.walkDays.length > 0;
+      return hasSingle || hasMulti;
+    },
+    {
+      message:
+        'Debes proporcionar walkDate+timeSlot para reserva de un día, o walkDays para múltiples días',
+      path: ['walkDate'],
+    }
+  );
 
 export type CreateBookingBody = z.infer<typeof hospedajeSchema> | z.infer<typeof paseoSchema>;
 

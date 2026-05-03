@@ -219,6 +219,7 @@ model Booking {
   timeSlot                  TimeSlot?
   startTime                 String?          @db.VarChar(5)
   duration                  Int?
+  walkDays                  Json?            @db.JsonB  // multi-day paseo: [{ date, timeSlot, startTime? }]
   petId                     String?
   petName                   String           @db.VarChar(200)
   petBreed                  String?          @db.VarChar(100)

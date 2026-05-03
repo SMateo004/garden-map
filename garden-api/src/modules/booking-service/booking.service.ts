@@ -193,14 +193,29 @@ export async function createBooking(
     // Normalizamos a la fecha local (Bolivia -04:00 suele ser la referencia del user)
     // Usamos toLocaleDateString con el locale apropiado para obtener YYYY-MM-DD
     const todayStr = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0] || '';
-    const requestedDate = body.serviceType === ServiceType.HOSPEDAJE ? body.startDate : body.walkDate;
-
-    if (requestedDate && requestedDate <= todayStr) {
-      throw new BookingValidationError(
-        'Las reservas deben realizarse con al menos un día de anticipación. Por favor, selecciona una fecha a partir de mañana.',
-        'BOOKING_VALIDATION',
-        body.serviceType === ServiceType.HOSPEDAJE ? 'startDate' : 'walkDate'
-      );
+    // Para multi-día de paseo, verificamos todas las fechas; para single-day o hospedaje, la fecha principal
+    if (body.serviceType === ServiceType.HOSPEDAJE) {
+      const requestedDate = body.startDate;
+      if (requestedDate && requestedDate <= todayStr) {
+        throw new BookingValidationError(
+          'Las reservas deben realizarse con al menos un día de anticipación. Por favor, selecciona una fecha a partir de mañana.',
+          'BOOKING_VALIDATION',
+          'startDate'
+        );
+      }
+    } else {
+      const walkDays = (body as any).walkDays as Array<{ date: string; timeSlot: string; startTime?: string }> | undefined;
+      const singleDate = (body as any).walkDate as string | undefined;
+      const datesToCheck = walkDays ? walkDays.map((d) => d.date) : singleDate ? [singleDate] : [];
+      for (const d of datesToCheck) {
+        if (d <= todayStr) {
+          throw new BookingValidationError(
+            'Las reservas deben realizarse con al menos un día de anticipación. Por favor, selecciona fechas a partir de mañana.',
+            'BOOKING_VALIDATION',
+            'walkDate'
+          );
+        }
+      }
     }
 
     const hasService =
@@ -218,14 +233,29 @@ export async function createBooking(
     if (body.serviceType === ServiceType.HOSPEDAJE) {
       await assertHospedajeAvailability(tx, body.caregiverId, body.startDate, body.endDate);
     } else {
-      await assertPaseoAvailability(
-        tx,
-        body.caregiverId,
-        body.walkDate,
-        body.timeSlot,
-        body.startTime,
-        body.duration
-      );
+      const walkDays = (body as any).walkDays as Array<{ date: string; timeSlot: string; startTime?: string }> | undefined;
+      if (walkDays && walkDays.length > 0) {
+        // Multi-day: validate each day individually
+        for (const day of walkDays) {
+          await assertPaseoAvailability(
+            tx,
+            body.caregiverId,
+            day.date,
+            day.timeSlot as any,
+            day.startTime,
+            (body as any).duration
+          );
+        }
+      } else {
+        await assertPaseoAvailability(
+          tx,
+          body.caregiverId,
+          (body as any).walkDate,
+          (body as any).timeSlot,
+          (body as any).startTime,
+          (body as any).duration
+        );
+      }
     }
 
     let pricePerUnit: number;
@@ -247,6 +277,7 @@ export async function createBooking(
     } else {
       const duration = (body as any).duration;
       const p60 = caregiver.pricePerWalk60 ?? 0;
+      const walkDays = (body as any).walkDays as Array<{ date: string; timeSlot: string; startTime?: string }> | undefined;
 
       if (p60 <= 0) {
         throw new BookingValidationError('El cuidador no tiene precio de paseo configurado', 'BOOKING_VALIDATION', 'caregiverId');
@@ -254,7 +285,9 @@ export async function createBooking(
 
       // 30 min = mitad del precio de 60 min (sin campo separado en BD)
       pricePerUnit = duration === 30 ? Math.round(p60 / 2) : p60;
-      totalAmount = pricePerUnit;
+      // Multi-day: multiply by number of days
+      const numDays = walkDays && walkDays.length > 0 ? walkDays.length : 1;
+      totalAmount = pricePerUnit * numDays;
     }
 
     const subtotal = totalAmount;
@@ -283,12 +316,21 @@ export async function createBooking(
           endDate: new Date(body.endDate),
           totalDays,
         }
-        : {
-          walkDate: new Date((body as any).walkDate),
-          timeSlot: (body as any).timeSlot,
-          startTime: (body as any).startTime,
-          duration: (body as any).duration,
-        }),
+        : (() => {
+          const walkDays = (body as any).walkDays as Array<{ date: string; timeSlot: string; startTime?: string }> | undefined;
+          const isMultiDay = walkDays && walkDays.length > 0;
+          // walkDate = first day (for backward compat / display)
+          const firstDate = isMultiDay ? walkDays![0]!.date : (body as any).walkDate;
+          const firstSlot = isMultiDay ? walkDays![0]!.timeSlot : (body as any).timeSlot;
+          const firstStart = isMultiDay ? walkDays![0]!.startTime : (body as any).startTime;
+          return {
+            walkDate: new Date(firstDate),
+            timeSlot: firstSlot,
+            startTime: firstStart,
+            duration: (body as any).duration,
+            ...(isMultiDay ? { walkDays: walkDays as any } : {}),
+          };
+        })()),
     };
 
     const booking = await tx.booking.create({
