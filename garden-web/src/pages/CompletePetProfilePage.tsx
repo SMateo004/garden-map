@@ -77,7 +77,7 @@ export function CompletePetProfilePage() {
       setValue('petName', firstPet.name);
       setValue('petBreed', firstPet.breed ?? '');
       setValue('petAge', firstPet.age ?? null);
-      setValue('petSize', firstPet.size ?? undefined);
+      if (firstPet.size) setValue('petSize', firstPet.size);
       setValue('petPhoto', firstPet.photoUrl ?? '');
       setValue('specialNeeds', firstPet.specialNeeds ?? '');
       setValue('notes', firstPet.notes ?? '');

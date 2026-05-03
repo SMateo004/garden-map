@@ -7,14 +7,33 @@ import request from 'supertest';
 import prisma from '../../src/config/database';
 
 jest.mock('../../src/config/database', () => {
-  const user = { findUnique: jest.fn(), create: jest.fn() };
-  const caregiverProfile = { create: jest.fn() };
-  const tx = { user: { findUnique: jest.fn(), create: jest.fn() }, caregiverProfile: { create: jest.fn() } };
+  const fakeUser = {
+    id: 'user-1', email: 'cuidador@test.com', role: 'CAREGIVER',
+    password: 'hashed_password123', firstName: 'Juan', lastName: 'Pérez',
+    isEmailVerified: true, suspended: false,
+  };
+  const user = {
+    findUnique: jest.fn().mockResolvedValue(fakeUser),
+    create: jest.fn().mockResolvedValue(fakeUser),
+    update: jest.fn().mockResolvedValue(fakeUser),
+  };
+  const caregiverProfile = { create: jest.fn().mockResolvedValue({ id: 'cp-1' }) };
+  const refreshToken = {
+    create: jest.fn().mockResolvedValue({ id: 'rt-1', token: 'refresh-token' }),
+    findUnique: jest.fn().mockResolvedValue(null),
+    updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+  };
+  const appSettings = { findUnique: jest.fn().mockResolvedValue(null) };
+  const tx = { user, caregiverProfile, refreshToken, appSettings };
   return {
     __esModule: true,
     default: {
       user,
       caregiverProfile,
+      refreshToken,
+      appSettings,
+      $queryRaw: jest.fn().mockResolvedValue([]),
       $transaction: jest.fn((fn: (t: typeof tx) => Promise<unknown>) => fn(tx)),
     },
   };
@@ -23,6 +42,21 @@ jest.mock('../../src/config/database', () => {
 jest.mock('bcrypt', () => ({
   hash: jest.fn((pw: string) => Promise.resolve(`hashed_${pw}`)),
   compare: jest.fn((pw: string, hash: string) => Promise.resolve(hash === `hashed_${pw}`)),
+}));
+
+// Bypass rate limiting and maintenance mode in tests
+jest.mock('express-rate-limit', () => () => (_req: unknown, _res: unknown, next: () => void) => next());
+jest.mock('../../src/utils/settings-cache', () => ({
+  // maintenanceMode → false; all other booleans (newRegistrationsEnabled, etc.) → true
+  getBoolSetting: jest.fn().mockImplementation((key: string, defaultValue: boolean) =>
+    Promise.resolve(key === 'maintenanceMode' ? false : defaultValue !== false ? true : false)
+  ),
+  getNumericSetting: jest.fn().mockResolvedValue(0),
+  getStringSetting: jest.fn().mockResolvedValue(''),
+  invalidateSetting: jest.fn(),
+}));
+jest.mock('../../src/middleware/maintenance.middleware', () => ({
+  maintenanceMiddleware: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
 import app from '../../src/app';
@@ -38,6 +72,7 @@ const validRegisterBody = {
     phone: '+59171234567',
     country: 'Bolivia',
     city: 'Santa Cruz',
+    dateOfBirth: '1995-06-15',
     isOver18: true,
   },
   profile: {

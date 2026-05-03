@@ -94,7 +94,7 @@ class _WalletScreenState extends State<WalletScreen> {
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: [GardenColors.navy, GardenColors.primary.withOpacity(0.8)],
+                            colors: [GardenColors.navy, GardenColors.primary.withValues(alpha: 0.8)],
                           ),
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: GardenShadows.elevated,
@@ -144,9 +144,9 @@ class _WalletScreenState extends State<WalletScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           decoration: BoxDecoration(
-                            color: GardenColors.star.withOpacity(0.08),
+                            color: GardenColors.star.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: GardenColors.star.withOpacity(0.2)),
+                            border: Border.all(color: GardenColors.star.withValues(alpha: 0.2)),
                           ),
                           child: const Row(
                             children: [
@@ -178,7 +178,7 @@ class _WalletScreenState extends State<WalletScreen> {
                               Container(
                                 width: 44, height: 44,
                                 decoration: BoxDecoration(
-                                  color: GardenColors.secondary.withOpacity(0.1),
+                                  color: GardenColors.secondary.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: const Text(
@@ -232,7 +232,7 @@ class _WalletScreenState extends State<WalletScreen> {
                           child: Column(
                             children: [
                               const SizedBox(height: 40),
-                              Icon(Icons.receipt_long_outlined, size: 48, color: subtextColor.withOpacity(0.5)),
+                              Icon(Icons.receipt_long_outlined, size: 48, color: subtextColor.withValues(alpha: 0.5)),
                               const SizedBox(height: 12),
                               Text('Sin transacciones aún', style: TextStyle(color: subtextColor, fontSize: 14)),
                             ],
@@ -241,9 +241,11 @@ class _WalletScreenState extends State<WalletScreen> {
                       else
                         ...(_walletData!['transactions'] as List)
                           .where((t) {
+                            // Mostrar todos — incluyendo retiros PENDING para que el
+                            // usuario vea el estado de sus solicitudes.
+                            // Solo se ocultan reembolsos internos de tipo SYSTEM.
                             final tx = t as Map;
-                            // Solo mostrar retiros COMPLETADOS en el historial; los PENDING/PROCESSING se ocultan
-                            if (tx['type'] == 'WITHDRAWAL' && tx['status'] != 'COMPLETED') return false;
+                            if (tx['type'] == 'SYSTEM') return false;
                             return true;
                           })
                           .map((t) => _buildTransactionTile(t as Map<String, dynamic>, surface, textColor, subtextColor, borderColor)),
@@ -305,7 +307,7 @@ class _WalletScreenState extends State<WalletScreen> {
                       prefixText: 'Bs ',
                       prefixStyle: const TextStyle(color: GardenColors.primary, fontSize: 24, fontWeight: FontWeight.w700),
                       hintText: '0.00',
-                      hintStyle: TextStyle(color: subtextColor.withOpacity(0.5)),
+                      hintStyle: TextStyle(color: subtextColor.withValues(alpha: 0.5)),
                       filled: true, fillColor: surfaceEl,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
@@ -324,9 +326,38 @@ class _WalletScreenState extends State<WalletScreen> {
                         return;
                       }
                       if (amount > (_walletData?['balance'] ?? 0)) {
-                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fondos insuficientes')));
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fondos insuficientes'), backgroundColor: GardenColors.error));
                         return;
                       }
+
+                      // ── Diálogo de confirmación antes de enviar ──────────
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (dCtx) => GardenGlassDialog(
+                          title: const Text('¿Confirmar retiro?'),
+                          content: Text(
+                            'Se solicitará el retiro de Bs ${amount.toStringAsFixed(2)} '
+                            'a la cuenta ${_walletData!['caregiverBankInfo']!['bankName']} '
+                            '(${_walletData!['caregiverBankInfo']!['bankAccount']}). '
+                            'El proceso puede tardar 1-3 días hábiles.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(dCtx, false),
+                              child: const Text('Cancelar'),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(backgroundColor: GardenColors.primary, foregroundColor: Colors.white),
+                              onPressed: () => Navigator.pop(dCtx, true),
+                              child: const Text('Confirmar'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed != true) return;
+                      // Guardar refs antes de gaps async
+                      if (!context.mounted) return;
+                      final scaffoldMsg = ScaffoldMessenger.of(context);
 
                       setSheet(() => isSubmitting = true);
                       try {
@@ -339,32 +370,33 @@ class _WalletScreenState extends State<WalletScreen> {
                         if (data['success'] == true) {
                           if (ctx.mounted) Navigator.pop(ctx);
                           await _loadWallet();
-                          if (mounted) {
-                            ScaffoldMessenger.of(this.context).showSnackBar(
-                              SnackBar(
-                                content: const Row(
-                                  children: [
-                                    Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-                                    SizedBox(width: 10),
-                                    Expanded(child: Text('¡Solicitud enviada! Revisa tus notificaciones para más detalles.')),
-                                  ],
-                                ),
-                                backgroundColor: GardenColors.success,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                duration: const Duration(seconds: 4),
+                          scaffoldMsg.showSnackBar(
+                            SnackBar(
+                              content: const Row(
+                                children: [
+                                  Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                                  SizedBox(width: 10),
+                                  Expanded(child: Text('¡Solicitud enviada! Revisa tus notificaciones para más detalles.')),
+                                ],
                               ),
-                            );
-                          }
+                              backgroundColor: GardenColors.success,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              duration: const Duration(seconds: 4),
+                            ),
+                          );
                         } else {
                           setSheet(() => isSubmitting = false);
-                          if (ctx.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(data['error']?['message'] ?? 'Error'), backgroundColor: GardenColors.error),
-                            );
-                          }
+                          scaffoldMsg.showSnackBar(
+                            SnackBar(content: Text(data['error']?['message'] ?? 'Error al procesar el retiro'), backgroundColor: GardenColors.error),
+                          );
                         }
-                      } catch (e) { setSheet(() => isSubmitting = false); }
+                      } catch (e) {
+                        setSheet(() => isSubmitting = false);
+                        scaffoldMsg.showSnackBar(
+                          const SnackBar(content: Text('Error de conexión. Intenta de nuevo.'), backgroundColor: GardenColors.error),
+                        );
+                      }
                     },
                   ),
                   const SizedBox(height: 8),
@@ -677,7 +709,7 @@ class _WalletScreenState extends State<WalletScreen> {
         labelText: label,
         labelStyle: TextStyle(color: subtextColor, fontSize: 13),
         hintText: hint,
-        hintStyle: TextStyle(color: subtextColor.withOpacity(0.5), fontSize: 13),
+        hintStyle: TextStyle(color: subtextColor.withValues(alpha: 0.5), fontSize: 13),
         filled: true, fillColor: surfaceEl,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
@@ -737,7 +769,7 @@ class _WalletScreenState extends State<WalletScreen> {
           Container(
             width: 42, height: 42,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: color, size: 20),
@@ -758,7 +790,7 @@ class _WalletScreenState extends State<WalletScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: GardenColors.warning.withOpacity(0.15),
+                          color: GardenColors.warning.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: const Text('Pendiente', style: TextStyle(color: GardenColors.warning, fontSize: 10, fontWeight: FontWeight.w600)),
@@ -829,7 +861,7 @@ class _WalletScreenState extends State<WalletScreen> {
                   ),
                   decoration: InputDecoration(
                     hintText: 'CÓDIGO',
-                    hintStyle: TextStyle(color: subtextColor.withOpacity(0.3), letterSpacing: 4, fontSize: 16),
+                    hintStyle: TextStyle(color: subtextColor.withValues(alpha: 0.3), letterSpacing: 4, fontSize: 16),
                     filled: true,
                     fillColor: surfaceEl,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
@@ -849,6 +881,8 @@ class _WalletScreenState extends State<WalletScreen> {
                     final code = codeController.text.trim();
                     if (code.isEmpty) return;
                     setDialog(() => isRedeeming = true);
+                    final nav = Navigator.of(ctx);
+                    final scaffoldMsg = ScaffoldMessenger.of(context);
                     try {
                       final response = await http.post(
                         Uri.parse('$_baseUrl/wallet/redeem'),
@@ -860,9 +894,10 @@ class _WalletScreenState extends State<WalletScreen> {
                       );
                       final data = jsonDecode(response.body);
                       if (data['success'] == true) {
-                        Navigator.pop(ctx);
+                        nav.pop();
                         await _loadWallet();
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        if (!mounted) return;
+                        scaffoldMsg.showSnackBar(
                           SnackBar(
                             content: Row(
                               children: [
@@ -878,7 +913,7 @@ class _WalletScreenState extends State<WalletScreen> {
                         );
                       } else {
                         setDialog(() => isRedeeming = false);
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        scaffoldMsg.showSnackBar(
                           SnackBar(
                             content: Text(data['error']?['message'] ?? 'Código inválido'),
                             backgroundColor: GardenColors.error,

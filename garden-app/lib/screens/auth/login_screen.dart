@@ -184,7 +184,7 @@ class _LoginScreenState extends State<LoginScreen> {
         Container(
           width: 4, height: 32,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.6),
+            color: Colors.white.withValues(alpha: 0.6),
             borderRadius: BorderRadius.circular(2),
           ),
         ),

@@ -77,6 +77,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
       }
     } catch (e) {
       setState(() { _step = 0; });
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
       );
@@ -103,6 +104,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
       }
     } catch (e) {
       setState(() { _step = 0; });
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
       );
@@ -157,7 +159,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
         // Banner de advertencia
         Container(
           padding: const EdgeInsets.all(16),
-          color: GardenColors.warning.withOpacity(0.08),
+          color: GardenColors.warning.withValues(alpha: 0.08),
           child: Row(
             children: [
               const Text('⚠️', style: TextStyle(fontSize: 20)),
@@ -202,7 +204,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                       margin: const EdgeInsets.only(bottom: 10),
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: selected ? GardenColors.error.withOpacity(0.08) : surface,
+                        color: selected ? GardenColors.error.withValues(alpha: 0.08) : surface,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: selected ? GardenColors.error : borderColor,
@@ -235,9 +237,9 @@ class _DisputeScreenState extends State<DisputeScreen> {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: GardenColors.polygon.withOpacity(0.06),
+                    color: GardenColors.polygon.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: GardenColors.polygon.withOpacity(0.2)),
+                    border: Border.all(color: GardenColors.polygon.withValues(alpha: 0.2)),
                   ),
                   child: const Row(
                     children: [
@@ -300,9 +302,9 @@ class _DisputeScreenState extends State<DisputeScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: GardenColors.error.withOpacity(0.06),
+                    color: GardenColors.error.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: GardenColors.error.withOpacity(0.2)),
+                    border: Border.all(color: GardenColors.error.withValues(alpha: 0.2)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -338,7 +340,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                       margin: const EdgeInsets.only(bottom: 10),
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: selected ? GardenColors.primary.withOpacity(0.08) : surface,
+                        color: selected ? GardenColors.primary.withValues(alpha: 0.08) : surface,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: selected ? GardenColors.primary : borderColor,
@@ -417,7 +419,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: GardenColors.polygon.withOpacity(0.08),
+                  color: GardenColors.polygon.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Text('⬡ Consultando smart contract en Polygon...',
@@ -515,7 +517,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                     Container(
                       width: 32, height: 32,
                       decoration: BoxDecoration(
-                        color: GardenColors.primary.withOpacity(0.1),
+                        color: GardenColors.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(Icons.auto_awesome, color: GardenColors.primary, size: 16),
@@ -536,9 +538,9 @@ class _DisputeScreenState extends State<DisputeScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: GardenColors.secondary.withOpacity(0.06),
+                color: GardenColors.secondary.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: GardenColors.secondary.withOpacity(0.2)),
+                border: Border.all(color: GardenColors.secondary.withValues(alpha: 0.2)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -559,7 +561,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                         Container(
                           width: 22, height: 22,
                           decoration: BoxDecoration(
-                            color: GardenColors.secondary.withOpacity(0.15),
+                            color: GardenColors.secondary.withValues(alpha: 0.15),
                             shape: BoxShape.circle,
                           ),
                           child: Center(child: Text('${e.key + 1}', style: const TextStyle(color: GardenColors.secondary, fontSize: 11, fontWeight: FontWeight.w700))),
@@ -579,9 +581,9 @@ class _DisputeScreenState extends State<DisputeScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
-              color: GardenColors.polygon.withOpacity(0.08),
+              color: GardenColors.polygon.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: GardenColors.polygon.withOpacity(0.3)),
+              border: Border.all(color: GardenColors.polygon.withValues(alpha: 0.3)),
             ),
             child: const Row(
               mainAxisSize: MainAxisSize.min,

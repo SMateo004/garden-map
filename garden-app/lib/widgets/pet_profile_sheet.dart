@@ -104,7 +104,7 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: subtextColor.withOpacity(0.3),
+                  color: subtextColor.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -201,7 +201,7 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
                 errorBuilder: (_, __, ___) => Container(
                   height: 200,
                   decoration: BoxDecoration(
-                    color: GardenColors.primary.withOpacity(0.08),
+                    color: GardenColors.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: const Center(child: Icon(Icons.pets, color: GardenColors.primary, size: 48)),
@@ -215,7 +215,7 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
               height: 120,
               width: 120,
               decoration: BoxDecoration(
-                color: GardenColors.primary.withOpacity(0.08),
+                color: GardenColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(60),
               ),
               child: const Center(child: Icon(Icons.pets, color: GardenColors.primary, size: 48)),
@@ -274,9 +274,9 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: GardenColors.warning.withOpacity(0.08),
+              color: GardenColors.warning.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: GardenColors.warning.withOpacity(0.3)),
+              border: Border.all(color: GardenColors.warning.withValues(alpha: 0.3)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -302,9 +302,9 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: GardenColors.primary.withOpacity(0.06),
+              color: GardenColors.primary.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: GardenColors.primary.withOpacity(0.15)),
+              border: Border.all(color: GardenColors.primary.withValues(alpha: 0.15)),
             ),
             child: Text(
               pet['notes'] as String,
@@ -334,7 +334,7 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
                   errorBuilder: (_, __, ___) => Container(
                     width: 100,
                     height: 100,
-                    color: GardenColors.primary.withOpacity(0.08),
+                    color: GardenColors.primary.withValues(alpha: 0.08),
                     child: const Icon(Icons.broken_image_outlined, color: GardenColors.primary),
                   ),
                 ),
@@ -366,7 +366,7 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
                       errorBuilder: (_, __, ___) => Container(
                         width: 110,
                         height: 110,
-                        color: GardenColors.success.withOpacity(0.08),
+                        color: GardenColors.success.withValues(alpha: 0.08),
                         child: const Icon(Icons.vaccines, color: GardenColors.success),
                       ),
                     ),
@@ -376,7 +376,7 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
                       child: Container(
                         padding: const EdgeInsets.all(3),
                         decoration: BoxDecoration(
-                          color: GardenColors.success.withOpacity(0.9),
+                          color: GardenColors.success.withValues(alpha: 0.9),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: const Icon(Icons.vaccines, color: Colors.white, size: 12),

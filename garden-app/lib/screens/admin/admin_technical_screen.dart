@@ -475,8 +475,8 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                       horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: _liveMode
-                        ? Colors.red.withOpacity(0.15)
-                        : GardenColors.primary.withOpacity(0.1),
+                        ? Colors.red.withValues(alpha: 0.15)
+                        : GardenColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                         color: _liveMode
@@ -492,7 +492,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                           height: 8,
                           decoration: BoxDecoration(
                             color: Colors.red
-                                .withOpacity(_pulseAnim.value),
+                                .withValues(alpha: _pulseAnim.value),
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -572,9 +572,9 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                                 horizontal: 5, vertical: 1),
                             decoration: BoxDecoration(
                               color: sel
-                                  ? Colors.white.withOpacity(0.3)
+                                  ? Colors.white.withValues(alpha: 0.3)
                                   : GardenColors.primary
-                                      .withOpacity(0.15),
+                                      .withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text('$count',
@@ -603,7 +603,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                       horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: Colors.green
-                        .withOpacity(_pulseAnim.value * 0.3),
+                        .withValues(alpha: _pulseAnim.value * 0.3),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Row(
@@ -665,9 +665,9 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
               padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.08),
+                color: Colors.blue.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
               ),
               child: Row(children: [
                 const Icon(Icons.info_outline_rounded,
@@ -752,7 +752,6 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
     final byStatus =
         (_agentStats['byStatus'] as Map?)?.cast<String, dynamic>() ?? {};
     final errors = byStatus['ERROR'] as int? ?? 0;
-    final pending = byStatus['PENDING'] as int? ?? 0;
     final success = byStatus['SUCCESS'] as int? ?? 0;
 
     return Row(children: [
@@ -773,7 +772,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
       decoration: BoxDecoration(
         color: surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(children: [
         Icon(icon, color: color, size: 20),
@@ -831,7 +830,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: enabled ? iconColor.withOpacity(0.12) : Colors.grey.withOpacity(0.1),
+          color: enabled ? iconColor.withValues(alpha: 0.12) : Colors.grey.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(icon, color: enabled ? iconColor : Colors.grey.shade500, size: 18),
@@ -848,7 +847,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: Colors.grey.withOpacity(0.15),
+              color: Colors.grey.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(4),
             ),
             child: const Text('No disponible',
@@ -889,7 +888,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: iconColor.withOpacity(0.12),
+          color: iconColor.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(icon, color: iconColor, size: 18),
@@ -902,17 +901,17 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: iconColor.withOpacity(0.1),
+            color: iconColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: iconColor.withOpacity(0.3)),
+            border: Border.all(color: iconColor.withValues(alpha: 0.3)),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Text('$value',
                 style: TextStyle(color: iconColor, fontSize: 15, fontWeight: FontWeight.w800)),
             const SizedBox(width: 3),
-            Text(unit, style: TextStyle(color: iconColor.withOpacity(0.7), fontSize: 11)),
+            Text(unit, style: TextStyle(color: iconColor.withValues(alpha: 0.7), fontSize: 11)),
             const SizedBox(width: 4),
-            Icon(Icons.edit_rounded, color: iconColor.withOpacity(0.6), size: 13),
+            Icon(Icons.edit_rounded, color: iconColor.withValues(alpha: 0.6), size: 13),
           ]),
         ),
       ),
@@ -953,7 +952,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
               focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
                   borderSide: const BorderSide(color: GardenColors.primary, width: 2)),
               filled: true,
-              fillColor: GardenColors.primary.withOpacity(0.05),
+              fillColor: GardenColors.primary.withValues(alpha: 0.05),
             ),
           ),
         ]),
@@ -985,10 +984,10 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
       String label, Color color, VoidCallback onPressed) {
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
-        backgroundColor: color.withOpacity(0.15),
+        backgroundColor: color.withValues(alpha: 0.15),
         foregroundColor: color,
         elevation: 0,
-        side: BorderSide(color: color.withOpacity(0.5)),
+        side: BorderSide(color: color.withValues(alpha: 0.5)),
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         padding:
@@ -1062,8 +1061,8 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: isExpanded
-              ? statusColor.withOpacity(0.1)
-              : statusColor.withOpacity(0.04),
+              ? statusColor.withValues(alpha: 0.1)
+              : statusColor.withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(6),
           border: Border(
               left: BorderSide(color: statusColor, width: 2)),
@@ -1078,7 +1077,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                 padding: const EdgeInsets.symmetric(
                     horizontal: 5, vertical: 1),
                 decoration: BoxDecoration(
-                  color: agentColor.withOpacity(0.2),
+                  color: agentColor.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(agentType,

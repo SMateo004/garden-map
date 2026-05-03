@@ -93,12 +93,12 @@ class _LandingScreenState extends State<LandingScreen> {
                   width: double.infinity,
                   constraints: const BoxConstraints(minHeight: 550),
                   decoration: BoxDecoration(
-                    color: isDark ? GardenColors.darkSurfaceElevated : GardenColors.primary.withOpacity(0.05),
+                    color: isDark ? GardenColors.darkSurfaceElevated : GardenColors.primary.withValues(alpha: 0.05),
                     image: DecorationImage(
                       image: const NetworkImage('https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&q=80'),
                       fit: BoxFit.cover,
                       colorFilter: ColorFilter.mode(
-                        Colors.black.withOpacity(isDark ? 0.7 : 0.4),
+                        Colors.black.withValues(alpha: isDark ? 0.7 : 0.4),
                         BlendMode.darken,
                       ),
                     ),
@@ -125,7 +125,7 @@ class _LandingScreenState extends State<LandingScreen> {
                             'Paseadores y anfitriones verificados por IA y respaldados con Escrow Blockchain.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.9),
+                              color: Colors.white.withValues(alpha: 0.9),
                               fontSize: 18,
                               fontWeight: FontWeight.w500,
                             ),
@@ -140,7 +140,7 @@ class _LandingScreenState extends State<LandingScreen> {
                               borderRadius: BorderRadius.circular(20),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.18),
+                                  color: Colors.black.withValues(alpha: 0.18),
                                   blurRadius: 32,
                                   offset: const Offset(0, 12),
                                 ),
@@ -328,7 +328,7 @@ class _LandingScreenState extends State<LandingScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
-                  color: _selectedService == 'paseo' ? GardenColors.primary.withOpacity(0.1) : Colors.transparent,
+                  color: _selectedService == 'paseo' ? GardenColors.primary.withValues(alpha: 0.1) : Colors.transparent,
                   borderRadius: BorderRadius.circular(11),
                 ),
                 child: Center(
@@ -350,7 +350,7 @@ class _LandingScreenState extends State<LandingScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
-                  color: _selectedService == 'hospedaje' ? GardenColors.primary.withOpacity(0.1) : Colors.transparent,
+                  color: _selectedService == 'hospedaje' ? GardenColors.primary.withValues(alpha: 0.1) : Colors.transparent,
                   borderRadius: BorderRadius.circular(11),
                 ),
                 child: Center(
@@ -387,7 +387,7 @@ class _LandingScreenState extends State<LandingScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 40),

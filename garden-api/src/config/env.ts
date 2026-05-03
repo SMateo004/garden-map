@@ -46,7 +46,13 @@ const envSchema = z.object({
   BLOCKCHAIN_CONTRACT_ADDRESS: z.string().optional(),
   BLOCKCHAIN_PROFILES_ADDRESS: z.string().optional(),
   BLOCKCHAIN_ENABLED: z.string().transform(v => v === 'true').default('false'),
-});
+  // AI Agent (Anthropic — required when BLOCKCHAIN_ENABLED or dispute resolution is active)
+  ANTHROPIC_API_KEY: z.string().optional(),
+})
+.refine(
+  data => data.NODE_ENV !== 'production' || !!data.ANTHROPIC_API_KEY,
+  { message: 'ANTHROPIC_API_KEY is required in production', path: ['ANTHROPIC_API_KEY'] }
+);
 
 const parsed = envSchema.safeParse(process.env);
 if (!parsed.success) {

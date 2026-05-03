@@ -93,7 +93,7 @@ class _TemporadaAltaBadgeState extends State<TemporadaAltaBadge> with SingleTick
                         height: 4,
                         margin: const EdgeInsets.only(bottom: 24),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.3),
+                          color: Colors.white.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -101,7 +101,7 @@ class _TemporadaAltaBadgeState extends State<TemporadaAltaBadge> with SingleTick
                         AnimatedBuilder(
                           animation: _pulseAnimation,
                           builder: (context, child) {
-                            final shimmerColor = Colors.white.withOpacity(_pulseAnimation.value);
+                            final shimmerColor = Colors.white.withValues(alpha: _pulseAnimation.value);
                             return Column(
                               children: [
                                 Container(
@@ -156,7 +156,7 @@ class _TemporadaAltaBadgeState extends State<TemporadaAltaBadge> with SingleTick
                           snapshot.data!['explicacion'] ?? "",
                           style: TextStyle(
                             fontSize: 14,
-                            color: Colors.white.withOpacity(0.85),
+                            color: Colors.white.withValues(alpha: 0.85),
                             height: 1.5,
                           ),
                           textAlign: TextAlign.justify,

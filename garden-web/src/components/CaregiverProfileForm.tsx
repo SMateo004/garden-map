@@ -29,7 +29,7 @@ export function CaregiverProfileForm() {
     defaultValues: {
       bio: '',
       zone: undefined,
-      spaceType: [] as string[],
+      spaceType: [] as ('Casa con patio' | 'Casa sin patio' | 'Departamento pequeño' | 'Departamento amplio')[],
       servicesOffered: [],
       pricePerDay: undefined,
       pricePerWalk30: undefined,
@@ -103,7 +103,7 @@ export function CaregiverProfileForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit(onSubmit as Parameters<typeof handleSubmit>[0])} className="space-y-6">
       <div>
         <label className="block text-sm font-medium text-gray-700">Descripción (bio) *</label>
         <textarea
@@ -144,15 +144,17 @@ export function CaregiverProfileForm() {
         <label className="block text-sm font-medium text-gray-700">Tipo de espacio (opcional)</label>
         <p className="mt-1 text-xs text-gray-500">Selecciona los que apliquen.</p>
         {['Casa con patio', 'Casa sin patio', 'Departamento pequeño', 'Departamento amplio'].map((option) => {
-          const selected = Array.isArray(watch('spaceType')) && watch('spaceType').includes(option);
+          const selected = Array.isArray(watch('spaceType')) && (watch('spaceType') ?? []).includes(option as 'Casa con patio' | 'Casa sin patio' | 'Departamento pequeño' | 'Departamento amplio');
           return (
             <label key={option} className="mt-2 flex cursor-pointer items-center gap-2">
               <input
                 type="checkbox"
                 checked={selected}
                 onChange={() => {
-                  const current = watch('spaceType') ?? [];
-                  const next = selected ? current.filter((s) => s !== option) : [...current, option];
+                  type SpType = 'Casa con patio' | 'Casa sin patio' | 'Departamento pequeño' | 'Departamento amplio';
+                  const current = (watch('spaceType') ?? []) as SpType[];
+                  const opt = option as SpType;
+                  const next = selected ? current.filter((s) => s !== opt) : [...current, opt];
                   setValue('spaceType', next, { shouldValidate: true });
                 }}
                 className="rounded border-gray-300 text-green-600 focus:ring-green-500"

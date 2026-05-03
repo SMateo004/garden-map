@@ -84,7 +84,7 @@ class _WebShellScreenState extends State<WebShellScreen> {
                 border: Border(bottom: BorderSide(color: borderColor, width: 1)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -103,7 +103,7 @@ class _WebShellScreenState extends State<WebShellScreen> {
                             width: 32,
                             height: 32,
                             decoration: BoxDecoration(
-                              color: GardenColors.primary.withOpacity(0.12),
+                              color: GardenColors.primary.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Icon(Icons.eco_rounded, color: GardenColors.primary, size: 20),
@@ -191,10 +191,10 @@ class _WebNavButton extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: isActive ? GardenColors.primary.withOpacity(0.10) : Colors.transparent,
+            color: isActive ? GardenColors.primary.withValues(alpha: 0.10) : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
             border: isActive
-                ? Border.all(color: GardenColors.primary.withOpacity(0.25), width: 1)
+                ? Border.all(color: GardenColors.primary.withValues(alpha: 0.25), width: 1)
                 : null,
           ),
           child: Icon(icon, size: 22, color: isActive ? activeColor : inactiveColor),

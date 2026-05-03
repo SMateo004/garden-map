@@ -149,7 +149,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Container(
                     width: 56, height: 56,
                     decoration: BoxDecoration(
-                      color: GardenColors.primary.withOpacity(0.1),
+                      color: GardenColors.primary.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.mark_email_read_outlined, color: GardenColors.primary, size: 28),
@@ -200,6 +200,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       final code = codeController.text.trim();
                       if (code.length < 4) return;
                       setDialogState(() => isVerifying = true);
+                      final nav = Navigator.of(ctx);
+                      final scaffoldMsg = ScaffoldMessenger.of(context);
                       try {
                         final response = await http.post(
                           Uri.parse('$baseUrl/auth/verify-email'),
@@ -212,8 +214,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         final data = jsonDecode(response.body);
                         if (!mounted) return;
                         if (data['success'] == true) {
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          nav.pop();
+                          scaffoldMsg.showSnackBar(
                             const SnackBar(
                               content: Text('✅ Correo verificado correctamente'),
                               backgroundColor: GardenColors.success,
@@ -223,7 +225,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           _loadProfile();
                         } else {
                           setDialogState(() => isVerifying = false);
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          scaffoldMsg.showSnackBar(
                             SnackBar(
                               content: Text(data['error']?['message'] ?? 'Código incorrecto'),
                               backgroundColor: GardenColors.error,
@@ -335,7 +337,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 Container(
                   width: 56, height: 56,
-                  decoration: BoxDecoration(color: GardenColors.error.withOpacity(0.1), shape: BoxShape.circle),
+                  decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.1), shape: BoxShape.circle),
                   child: const Icon(Icons.delete_forever_outlined, color: GardenColors.error, size: 28),
                 ),
                 const SizedBox(height: 16),
@@ -1091,7 +1093,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ── Conversión CLIENT→CAREGIVER en progreso ─────────────────────────────────
 
   Widget _buildConversionBanner(Color textColor, Color subtextColor) {
-    final isDark = themeNotifier.isDark;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(

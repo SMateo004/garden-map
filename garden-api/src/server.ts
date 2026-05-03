@@ -82,6 +82,42 @@ async function shutdown(signal: string): Promise<void> {
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT',  () => shutdown('SIGINT'));
 
+/**
+ * Verifies that the database schema is in sync with the Prisma migrations table.
+ * On Render (and any CI/CD pipeline) `npx prisma migrate deploy` should run
+ * before the server starts — this check surfaces a clear error if it was skipped.
+ */
+async function assertMigrationsApplied(): Promise<void> {
+  try {
+    // Query the Prisma migrations table; if it doesn't exist, migrations have
+    // never been applied (fresh DB without `migrate deploy`).
+    const rows = await prisma.$queryRaw<{ migration_name: string; finished_at: Date | null }[]>`
+      SELECT migration_name, finished_at
+      FROM "_prisma_migrations"
+      WHERE finished_at IS NULL
+      ORDER BY started_at DESC
+      LIMIT 1
+    `;
+    if (rows.length > 0) {
+      const pending = rows[0]?.migration_name ?? 'unknown';
+      logger.error(`[Startup] Pending migration detected: "${pending}". Run \`npx prisma migrate deploy\` before starting the server.`);
+      if (process.env.NODE_ENV === 'production') {
+        process.exit(1);
+      }
+    } else {
+      logger.info('[Startup] All Prisma migrations applied ✓');
+    }
+  } catch (err: any) {
+    // Table might not exist on a brand-new DB — that's also a migration issue
+    if (err?.message?.includes('_prisma_migrations')) {
+      logger.error('[Startup] Prisma migrations table not found — run `npx prisma migrate deploy`');
+      if (process.env.NODE_ENV === 'production') process.exit(1);
+    }
+    // Other errors (permissions etc.) — warn but don't block startup
+    logger.warn('[Startup] Could not verify migrations state', { error: err?.message });
+  }
+}
+
 async function start() {
   httpServer.listen(PORT, '0.0.0.0', async () => {
     logger.info(`🚀 GARDEN API RUNNING ON http://localhost:${PORT}`);
@@ -99,6 +135,7 @@ async function start() {
   try {
     await prisma.$connect();
     logger.info('Database connected successfully');
+    await assertMigrationsApplied();
   } catch (e) {
     logger.error('Database connection failed', e);
     if (process.env.NODE_ENV !== 'production') process.exit(1);

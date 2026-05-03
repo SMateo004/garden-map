@@ -130,6 +130,10 @@ export interface CreateCaregiverProfileBody {
 export const ZONES = ['EQUIPETROL', 'URBARI', 'NORTE', 'LAS_PALMAS', 'CENTRO_SAN_MARTIN', 'OTROS'] as const;
 export type Zone = (typeof ZONES)[number];
 
+/** Space type options for caregiver profile */
+export const SPACE_TYPES = ['Casa con patio', 'Casa sin patio', 'Departamento pequeño', 'Departamento amplio'] as const;
+export type SpaceType = (typeof SPACE_TYPES)[number];
+
 export const ZONE_LABELS: Record<Zone, string> = {
   EQUIPETROL: 'Equipetrol',
   URBARI: 'Urbarí',

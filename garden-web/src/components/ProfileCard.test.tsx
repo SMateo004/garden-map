@@ -21,7 +21,7 @@ const baseCaregiver: CaregiverListItem = {
   pricePerWalk30: 30,
   pricePerWalk60: 50,
   verified: false,
-  spaceType: 'casa_patio',
+  spaceType: ['casa_patio'],
 };
 
 describe('ProfileCard', () => {

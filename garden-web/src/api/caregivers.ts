@@ -3,8 +3,6 @@ import type {
   PaginatedCaregivers,
   CaregiverDetail,
   ListCaregiversParams,
-  CreateCaregiverProfileBody,
-  PaseoSlot,
   CaregiverAvailabilityResponse,
 } from '@/types/caregiver';
 

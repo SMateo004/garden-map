@@ -39,7 +39,10 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
   StreamSubscription<Map<String, double>>? _gpsSub;
   IO.Socket? _socket;
   bool _isSharing = true;
+  bool _isSendingTrack = false; // evita requests paralelos (race condition fix)
   bool _gpsBlocked = false;
+  bool _socketConnected = false;
+  Timer? _socketWatchdog; // alerta si socket no conecta en 10s
   DateTime? _lastSent;
   double _distanceMeters = 0;
 
@@ -61,6 +64,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
   @override
   void dispose() {
     _gpsSub?.cancel();
+    _socketWatchdog?.cancel();
     _socket?.disconnect();
     _socket?.dispose();
     super.dispose();
@@ -127,6 +131,13 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
 
   Future<void> _onLocation(double lat, double lng, double accuracy) async {
     if (!_isSharing || !mounted) return;
+
+    // Validar precisión — descartar si accuracy > 50m (GPS bloqueado o de mala calidad)
+    if (accuracy > 50) {
+      debugPrint('GPS: precisión baja ($accuracy m), ignorando punto');
+      return;
+    }
+
     final pt = LatLng(lat, lng);
     setState(() {
       _track.add(pt);
@@ -137,7 +148,10 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
 
     final now = DateTime.now();
     if (_lastSent == null || now.difference(_lastSent!).inSeconds >= 10) {
+      // Guard: evitar requests paralelos si el anterior no terminó (race condition)
+      if (_isSendingTrack) return;
       _lastSent = now;
+      _isSendingTrack = true;
       try {
         await http.post(
           Uri.parse('$_baseUrl/bookings/${widget.bookingId}/track'),
@@ -149,6 +163,8 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
         );
       } catch (e) {
         debugPrint('GPS: envío error: $e');
+      } finally {
+        _isSendingTrack = false;
       }
     }
   }
@@ -162,7 +178,31 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
         'autoConnect': false,
         'auth': {'token': widget.token},
       });
-      _socket!.onConnect((_) => _socket!.emit('join_booking', widget.bookingId));
+
+      // Watchdog: si en 10s no conecta, notificar al usuario
+      _socketWatchdog = Timer(const Duration(seconds: 10), () {
+        if (!_socketConnected && mounted) {
+          debugPrint('GPS: Socket.io no conectó en 10s');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⚠️ Sin conexión en tiempo real. Reintentando...'),
+              duration: Duration(seconds: 4),
+            ),
+          );
+          _socket?.connect(); // reintento
+        }
+      });
+
+      _socket!.onConnect((_) {
+        _socketConnected = true;
+        _socketWatchdog?.cancel();
+        debugPrint('GPS: Socket conectado');
+        _socket!.emit('join_booking', widget.bookingId);
+      });
+      _socket!.onDisconnect((_) {
+        _socketConnected = false;
+        debugPrint('GPS: Socket desconectado');
+      });
       _socket!.on('gps_update', (raw) {
         if (!mounted) return;
         try {

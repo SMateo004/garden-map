@@ -524,13 +524,22 @@ export const refreshToken = asyncHandler(async (req: Request, res: Response) => 
 
 /**
  * POST /api/auth/logout
- * Revoca todos los refresh tokens activos del usuario.
- * El access token actual expirará naturalmente (7 días).
+ * 1. Revoca todos los refresh tokens activos del usuario.
+ * 2. Añade el access token actual a la blacklist hasta que expire.
+ *    Esto garantiza que el token no pueda usarse después del logout
+ *    incluso dentro de su ventana de validez (7 días sin blacklist).
  */
 export const logout = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  await authService.revokeAllRefreshTokens(userId);
-  logger.info('User logged out — all refresh tokens revoked', { userId });
+  const rawToken = (req.headers.authorization ?? '').slice(7); // strip "Bearer "
+
+  const { blacklistToken } = await import('../../services/token-blacklist.service.js');
+  await Promise.all([
+    authService.revokeAllRefreshTokens(userId),
+    blacklistToken(rawToken),
+  ]);
+
+  logger.info('User logged out — refresh tokens revoked + access token blacklisted', { userId });
   res.json({ success: true, data: { message: 'Sesión cerrada correctamente.' } });
 });
 

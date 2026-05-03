@@ -9,7 +9,7 @@ export const caregiverProfileFormSchema = z.object({
     .min(1, 'La descripción es obligatoria')
     .max(MAX_BIO, `Máximo ${MAX_BIO} caracteres`),
   zone: z
-    .union([z.enum(ZONES as [string, ...string[]]), z.literal('')])
+    .union([z.enum(ZONES as unknown as [string, ...string[]]), z.literal('')])
     .refine((v) => v !== '', { message: 'Elige una zona' }),
   spaceType: z
     .array(z.enum(['Casa con patio', 'Casa sin patio', 'Departamento pequeño', 'Departamento amplio']))

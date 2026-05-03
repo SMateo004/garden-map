@@ -169,12 +169,12 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                               fixImageUrl(photos[_selectedPhotoIndex]),
                               fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) => Container(
-                                color: GardenColors.primary.withOpacity(0.1),
+                                color: GardenColors.primary.withValues(alpha: 0.1),
                                 child: const Icon(Icons.pets, size: 80, color: GardenColors.primary),
                               ),
                             )
                           : Container(
-                              color: GardenColors.primary.withOpacity(0.1),
+                              color: GardenColors.primary.withValues(alpha: 0.1),
                               child: const Icon(Icons.pets, size: 80, color: GardenColors.primary),
                             ),
                     ),
@@ -187,7 +187,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [Colors.transparent, bg.withOpacity(0.95)],
+                            colors: [Colors.transparent, bg.withValues(alpha: 0.95)],
                           ),
                         ),
                       ),
@@ -200,7 +200,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         child: Container(
                           width: 40, height: 40,
                           decoration: BoxDecoration(
-                            color: surface.withOpacity(0.9),
+                            color: surface.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
                             boxShadow: GardenShadows.card,
                           ),
@@ -216,7 +216,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         child: Container(
                           width: 40, height: 40,
                           decoration: BoxDecoration(
-                            color: surface.withOpacity(0.9),
+                            color: surface.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
                             boxShadow: GardenShadows.card,
                           ),
@@ -249,7 +249,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(
-                                    color: selected ? GardenColors.primary : Colors.white.withOpacity(0.5),
+                                    color: selected ? GardenColors.primary : Colors.white.withValues(alpha: 0.5),
                                     width: selected ? 2 : 1,
                                   ),
                                 ),
@@ -339,9 +339,9 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: GardenColors.success.withOpacity(0.1),
+                                color: GardenColors.success.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: GardenColors.success.withOpacity(0.4)),
+                                border: Border.all(color: GardenColors.success.withValues(alpha: 0.4)),
                               ),
                               child: const Row(mainAxisSize: MainAxisSize.min, children: [
                                 Icon(Icons.verified, color: GardenColors.success, size: 14),
@@ -352,9 +352,9 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: GardenColors.polygon.withOpacity(0.1),
+                              color: GardenColors.polygon.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: GardenColors.polygon.withOpacity(0.4)),
+                              border: Border.all(color: GardenColors.polygon.withValues(alpha: 0.4)),
                             ),
                             child: const Row(mainAxisSize: MainAxisSize.min, children: [
                               Text('⬡', style: TextStyle(color: GardenColors.polygon, fontSize: 12)),
@@ -438,9 +438,9 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                               decoration: BoxDecoration(
-                                color: GardenColors.primary.withOpacity(0.1),
+                                color: GardenColors.primary.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: GardenColors.primary.withOpacity(0.3)),
+                                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
                               ),
                               child: Row(
                                 children: [
@@ -494,9 +494,9 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                             .map((e) => Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: GardenColors.success.withOpacity(0.1),
+                                color: GardenColors.success.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: GardenColors.success.withOpacity(0.3)),
+                                border: Border.all(color: GardenColors.success.withValues(alpha: 0.3)),
                               ),
                               child: Text(e.value, style: const TextStyle(color: GardenColors.success, fontSize: 12, fontWeight: FontWeight.w500)),
                             )).toList(),
@@ -604,7 +604,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                 border: Border(top: BorderSide(color: borderColor, width: 1)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
                     blurRadius: 20,
                     offset: const Offset(0, -4),
                   ),
@@ -632,8 +632,8 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                       onPressed: () async {
                         final prefs = await SharedPreferences.getInstance();
                         final token = prefs.getString('access_token') ?? '';
+                        if (!context.mounted) return;
                         if (token.isEmpty) {
-                          if (!mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Inicia sesión para hacer una reserva'),
@@ -642,7 +642,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                             ),
                           );
                           await Future.delayed(const Duration(seconds: 1));
-                          if (!mounted) return;
+                          if (!context.mounted) return;
                           context.push('/login');
                           return;
                         }
@@ -654,7 +654,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           );
                           final data = jsonDecode(res.body);
                           final pets = data['success'] == true ? (data['data'] as List? ?? []) : [];
-                          if (!mounted) return;
+                          if (!context.mounted) return;
                           if (pets.isEmpty) {
                             showDialog(
                               context: context,
@@ -682,7 +682,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                             return;
                           }
                         } catch (_) {}
-                        if (!mounted) return;
+                        if (!context.mounted) return;
                         context.push('/booking/${widget.caregiverId}');
                       },
                     ),
@@ -1050,9 +1050,9 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
+        color: color.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1078,10 +1078,10 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: accepted ? GardenColors.success.withOpacity(0.1) : GardenColors.error.withOpacity(0.08),
+        color: accepted ? GardenColors.success.withValues(alpha: 0.1) : GardenColors.error.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: accepted ? GardenColors.success.withOpacity(0.3) : GardenColors.error.withOpacity(0.2),
+          color: accepted ? GardenColors.success.withValues(alpha: 0.3) : GardenColors.error.withValues(alpha: 0.2),
         ),
       ),
       child: Row(

@@ -273,9 +273,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
           Container(
             width: 72, height: 72,
             decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.1),
+              color: Colors.red.withValues(alpha: 0.1),
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.red.withOpacity(0.3), width: 2),
+              border: Border.all(color: Colors.red.withValues(alpha: 0.3), width: 2),
             ),
             child: const Icon(Icons.cancel_outlined, color: Colors.red, size: 40),
           ),
@@ -343,7 +343,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: GardenColors.primary.withOpacity(0.1),
+                color: GardenColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -491,9 +491,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: GardenColors.primary.withOpacity(0.08),
+                    color: GardenColors.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: GardenColors.primary.withOpacity(0.2)),
+                    border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -921,9 +921,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                             decoration: BoxDecoration(
-                              color: GardenColors.success.withOpacity(0.08),
+                              color: GardenColors.success.withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: GardenColors.success.withOpacity(0.3)),
+                              border: Border.all(color: GardenColors.success.withValues(alpha: 0.3)),
                             ),
                             child: Row(
                               children: [
@@ -1184,7 +1184,7 @@ class _RatingSheetState extends State<_RatingSheet> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: subtextColor.withOpacity(0.3), borderRadius: BorderRadius.circular(2))),
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: subtextColor.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2))),
               const SizedBox(height: 24),
               Text(
                 'Califica tu experiencia',
@@ -1207,7 +1207,7 @@ class _RatingSheetState extends State<_RatingSheet> {
                       padding: const EdgeInsets.symmetric(horizontal: 6),
                       child: Icon(
                         starIndex <= _rating ? Icons.star_rounded : Icons.star_outline_rounded,
-                        color: starIndex <= _rating ? GardenColors.star : subtextColor.withOpacity(0.2),
+                        color: starIndex <= _rating ? GardenColors.star : subtextColor.withValues(alpha: 0.2),
                         size: 48,
                       ),
                     ),

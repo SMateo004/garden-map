@@ -93,7 +93,7 @@ class _PrecioOnboardingCardState extends State<PrecioOnboardingCard> {
       decoration: BoxDecoration(
         color: GardenColors.darkSurface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.12)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -167,7 +167,7 @@ class _PrecioOnboardingCardState extends State<PrecioOnboardingCard> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.07),
+              color: Colors.white.withValues(alpha: 0.07),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(

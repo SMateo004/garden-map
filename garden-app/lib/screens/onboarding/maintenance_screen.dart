@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../theme/garden_theme.dart';
 
 class MaintenanceScreen extends StatefulWidget {
   const MaintenanceScreen({super.key});
@@ -112,13 +111,13 @@ class _MaintenanceScreenState extends State<MaintenanceScreen>
                       width: 110,
                       height: 110,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
+                        color: Colors.white.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(28),
                         border: Border.all(
-                            color: Colors.white.withOpacity(0.2), width: 2),
+                            color: Colors.white.withValues(alpha: 0.2), width: 2),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF4A90D9).withOpacity(0.3),
+                            color: const Color(0xFF4A90D9).withValues(alpha: 0.3),
                             blurRadius: 40,
                             spreadRadius: 10,
                           ),
@@ -153,7 +152,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen>
                 Text(
                   'Estamos mejorando GARDEN para ti.\nVolvemos muy pronto 🚀',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
+                    color: Colors.white.withValues(alpha: 0.7),
                     fontSize: 15,
                     height: 1.5,
                   ),
@@ -167,10 +166,10 @@ class _MaintenanceScreenState extends State<MaintenanceScreen>
                   padding: const EdgeInsets.symmetric(
                       horizontal: 20, vertical: 14),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
+                    color: Colors.white.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                        color: Colors.white.withOpacity(0.1)),
+                        color: Colors.white.withValues(alpha: 0.1)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -180,14 +179,14 @@ class _MaintenanceScreenState extends State<MaintenanceScreen>
                         height: 16,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white.withOpacity(0.6),
+                          color: Colors.white.withValues(alpha: 0.6),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Text(
                         'Verificando cada 30 segundos...',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.6),
+                          color: Colors.white.withValues(alpha: 0.6),
                           fontSize: 13,
                         ),
                       ),
@@ -211,7 +210,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen>
                   label: Text(
                     _checking ? 'Verificando...' : 'Verificar ahora',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.5),
+                      color: Colors.white.withValues(alpha: 0.5),
                       fontSize: 13,
                     ),
                   ),

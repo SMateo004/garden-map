@@ -139,7 +139,7 @@ class _DisputaPanelCardState extends State<DisputaPanelCard>
     return AnimatedBuilder(
       animation: _pulseAnimation,
       builder: (context, child) {
-        final shimmerColor = Colors.white.withOpacity(_pulseAnimation.value);
+        final shimmerColor = Colors.white.withValues(alpha: _pulseAnimation.value);
         return Column(
           children: [
             Container(
@@ -172,7 +172,7 @@ class _DisputaPanelCardState extends State<DisputaPanelCard>
             Text(
               "GARDEN IA analizando disputa...",
               style: TextStyle(
-                color: Colors.white.withOpacity(0.5),
+                color: Colors.white.withValues(alpha: 0.5),
                 fontSize: 12,
               ),
             )
@@ -273,7 +273,7 @@ class _DisputaPanelCardState extends State<DisputaPanelCard>
           borderRadius: BorderRadius.circular(8),
           child: LinearProgressIndicator(
             value: val / 100.0,
-            backgroundColor: Colors.white.withOpacity(0.1),
+            backgroundColor: Colors.white.withValues(alpha: 0.1),
             valueColor: AlwaysStoppedAnimation<Color>(barColor),
             minHeight: 8,
           ),
@@ -311,7 +311,7 @@ class _DisputaPanelCardState extends State<DisputaPanelCard>
           maxLines: 4,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.85),
+            color: Colors.white.withValues(alpha: 0.85),
             fontSize: 14,
             height: 1.4,
           ),
@@ -329,10 +329,10 @@ class _DisputaPanelCardState extends State<DisputaPanelCard>
           width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: GardenColors.info.withOpacity(0.15),
+            color: GardenColors.info.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: GardenColors.info.withOpacity(0.3),
+              color: GardenColors.info.withValues(alpha: 0.3),
             ),
           ),
           child: Text(
@@ -351,7 +351,7 @@ class _DisputaPanelCardState extends State<DisputaPanelCard>
         Text(
           _fundamento ?? "",
           style: TextStyle(
-            color: Colors.white.withOpacity(0.7),
+            color: Colors.white.withValues(alpha: 0.7),
             fontSize: 13,
             fontStyle: FontStyle.italic,
           ),
@@ -413,9 +413,9 @@ class _DisputaPanelCardState extends State<DisputaPanelCard>
       width: double.infinity,
       padding: const EdgeInsets.all(24.0),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(useBlur ? 0.1 : 0.15),
+        color: Colors.white.withValues(alpha: useBlur ? 0.1 : 0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
       ),
       child: _state == _PanelState.cargando
           ? _buildSkeletonLoader()

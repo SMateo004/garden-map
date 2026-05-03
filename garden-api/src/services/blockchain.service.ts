@@ -1,7 +1,8 @@
 import { ethers } from 'ethers';
 import logger from '../shared/logger.js';
 
-// ABI para GardenEscrow.sol
+// ABI — GardenEscrow v2
+// Synced with hardhat-garden/contracts/GardenEscrow.sol
 const GARDEN_ESCROW_ABI = [
     "function createBooking(string _bookingId, string _clientId, string _caregiverId, uint256 _amountBs, uint256 _startTime, uint256 _endTime, string _petName, string _serviceType) external",
     "function finalizeBooking(string _bookingId, uint8 _rating) external",
@@ -9,22 +10,26 @@ const GARDEN_ESCROW_ABI = [
     "function resolveDisputeCaregiverWins(string _bookingId, uint256 _caregiverAmountBs) external",
     "function resolveDisputeClientWins(string _bookingId, uint256 _refundAmountBs) external",
     "function resolvePartial(string _bookingId, uint256 _caregiverAmountBs, uint256 _clientDiscountBs) external",
+    "function extendWalk(string _bookingId, uint256 _additionalMinutes, uint256 _newAmountBs) external",
+    "function getReputation(string _caregiverId) external view returns (uint256 totalRating, uint256 ratingCount)",
     "function getBooking(string _bookingId) external view returns (tuple(string bookingId, string clientId, string caregiverId, uint256 amountBs, uint256 startTime, uint256 endTime, bool isActive, bool isCompleted, uint8 rating, string petName, string serviceType))",
     "function totalBookings() external view returns (uint256)",
     "event BookingCreated(string indexed bookingId, string petName, uint256 amountBs)",
     "event PaymentConfirmed(string indexed bookingId, uint256 timestamp)",
     "event ServiceFinalized(string indexed bookingId, uint8 rating, uint256 timestamp)",
     "event ServiceCancelled(string indexed bookingId, string reason, uint256 timestamp)",
-    "event DisputeResolved(string indexed bookingId, string verdict, uint256 caregiverAmountBs, uint256 clientDiscountBs, uint256 timestamp)"
+    "event DisputeResolved(string indexed bookingId, string verdict, uint256 caregiverAmountBs, uint256 clientDiscountBs, uint256 timestamp)",
+    "event WalkExtended(string indexed bookingId, uint256 additionalMinutes, uint256 newAmountBs, uint256 timestamp)"
 ];
 
-// ABI para GardenProfiles.sol
+// ABI — GardenProfiles (unchanged)
 const GARDEN_PROFILES_ABI = [
     "function syncProfile(string _userId, string _name, uint8 _role, bool _isVerified, string _metadataHash) external",
     "function updateVerificationStatus(string _userId, bool _status) external",
     "function addPetToOwner(string _ownerId, string _petName, string _breed) external",
     "function isUserVerified(string _userId) external view returns (bool)",
-    "function profiles(string _userId) external view returns (tuple(string userId, string name, uint8 role, bool isVerified, uint256 joinedAt, string metadataHash, bool exists))"
+    "function profiles(string _userId) external view returns (tuple(string userId, string name, uint8 role, bool isVerified, uint256 joinedAt, string metadataHash, bool exists))",
+    "function getOwnerPetsCount(string _ownerId) external view returns (uint256)"
 ];
 
 class BlockchainService {
@@ -43,7 +48,6 @@ class BlockchainService {
 
         this.initialized = true;
 
-        // Read directly from process.env to avoid import-order issues with env.ts
         const enabled = process.env.BLOCKCHAIN_ENABLED === 'true';
         const rpcUrl = process.env.BLOCKCHAIN_RPC_URL;
         const privateKey = process.env.BLOCKCHAIN_PRIVATE_KEY;
@@ -83,7 +87,7 @@ class BlockchainService {
         }
     }
 
-    // --- LOGICA DE RESERVAS (GardenEscrow) ---
+    // ─── RESERVAS (GardenEscrow) ──────────────────────────────────────────────
 
     async createBookingOnChain(
         bookingId: string,
@@ -107,14 +111,14 @@ class BlockchainService {
             logger.info('[Blockchain] Sending createBooking tx...', { bookingId, amountBs, petName, serviceType });
 
             const tx = await (this.escrowContract as any).createBooking(
-                bookingId, clientId, caregiverId, Math.floor(amountBs), startTimestamp, endTimestamp, petName, serviceType
+                bookingId, clientId, caregiverId, Math.floor(amountBs),
+                startTimestamp, endTimestamp, petName, serviceType
             );
 
             const receipt = await tx.wait();
             logger.info('[Blockchain] Escrow created on-chain', { txHash: receipt.hash, bookingId, blockNumber: receipt.blockNumber });
             return receipt.hash;
         } catch (err: any) {
-            // Check if the booking already exists on-chain (duplicate call)
             if (err?.reason?.includes('ya existe') || err?.message?.includes('ya existe')) {
                 logger.warn('[Blockchain] Booking already exists on-chain (duplicate call ignored)', { bookingId });
                 return null;
@@ -156,9 +160,51 @@ class BlockchainService {
         }
     }
 
-    // --- LOGICA DE PERFILES (GardenProfiles) ---
+    // ─── PASEOS: extensión de tiempo ──────────────────────────────────────────
 
-    async syncProfileOnChain(userId: string, name: string, role: 'CLIENT' | 'CAREGIVER', isVerified: boolean, metadata: string = '') {
+    /**
+     * Registra la extensión de un paseo en GardenEscrow v2.
+     * Llama a extendWalk(bookingId, additionalMinutes, newAmountBs).
+     */
+    async recordWalkExtensionOnChain(
+        bookingId: string,
+        additionalMinutes: number,
+        newTotalAmountBs: number
+    ): Promise<string | null> {
+        if (!this.ensureInitialized() || !this.escrowContract) {
+            logger.info('[Blockchain] Mock: recordWalkExtension (no contract)', { bookingId, additionalMinutes, newTotalAmountBs });
+            return null;
+        }
+
+        try {
+            logger.info('[Blockchain] Sending extendWalk tx...', { bookingId, additionalMinutes, newTotalAmountBs });
+            const tx = await (this.escrowContract as any).extendWalk(
+                bookingId,
+                Math.floor(additionalMinutes),
+                Math.floor(newTotalAmountBs)
+            );
+            const receipt = await tx.wait();
+            logger.info('[Blockchain] Walk extended on-chain', { txHash: receipt.hash, bookingId, additionalMinutes });
+            return receipt.hash;
+        } catch (err: any) {
+            logger.error('[Blockchain] Error extending walk on-chain', {
+                bookingId,
+                additionalMinutes,
+                error: err?.reason || err?.message,
+            });
+            return null;
+        }
+    }
+
+    // ─── PERFILES (GardenProfiles) ────────────────────────────────────────────
+
+    async syncProfileOnChain(
+        userId: string,
+        name: string,
+        role: 'CLIENT' | 'CAREGIVER',
+        isVerified: boolean,
+        metadata: string = ''
+    ): Promise<string | null> {
         if (!this.ensureInitialized() || !this.profileContract) {
             logger.info('[Blockchain] Mock: syncProfile', { userId, name, role, isVerified });
             return null;
@@ -176,11 +222,12 @@ class BlockchainService {
         }
     }
 
-    async updateVerificationOnChain(userId: string, status: boolean) {
+    async updateVerificationOnChain(userId: string, status: boolean): Promise<string | null> {
         if (!this.ensureInitialized() || !this.profileContract) return null;
         try {
             const tx = await (this.profileContract as any).updateVerificationStatus(userId, status);
             const receipt = await tx.wait();
+            logger.info('[Blockchain] Verification updated on-chain', { userId, status, txHash: receipt.hash });
             return receipt.hash;
         } catch (err: any) {
             logger.error('[Blockchain] Error updating verification', { userId, error: err?.reason || err?.message });
@@ -188,11 +235,12 @@ class BlockchainService {
         }
     }
 
-    async addPetOnChain(ownerId: string, petName: string, breed: string) {
+    async addPetOnChain(ownerId: string, petName: string, breed: string): Promise<string | null> {
         if (!this.ensureInitialized() || !this.profileContract) return null;
         try {
             const tx = await (this.profileContract as any).addPetToOwner(ownerId, petName, breed);
             const receipt = await tx.wait();
+            logger.info('[Blockchain] Pet added on-chain', { ownerId, petName, txHash: receipt.hash });
             return receipt.hash;
         } catch (err: any) {
             logger.error('[Blockchain] Error adding pet on-chain', { ownerId, petName, error: err?.reason || err?.message });
@@ -200,7 +248,9 @@ class BlockchainService {
         }
     }
 
-    async resolveDisputeCaregiverWinsOnChain(bookingId: string, caregiverAmountBs: number) {
+    // ─── DISPUTAS (GardenEscrow) ──────────────────────────────────────────────
+
+    async resolveDisputeCaregiverWinsOnChain(bookingId: string, caregiverAmountBs: number): Promise<string | null> {
         if (!this.ensureInitialized() || !this.escrowContract) {
             logger.info('[Blockchain] Mock: resolveDisputeCaregiverWins', { bookingId, caregiverAmountBs });
             return null;
@@ -218,7 +268,7 @@ class BlockchainService {
         }
     }
 
-    async resolveDisputeClientWinsOnChain(bookingId: string, refundAmountBs: number) {
+    async resolveDisputeClientWinsOnChain(bookingId: string, refundAmountBs: number): Promise<string | null> {
         if (!this.ensureInitialized() || !this.escrowContract) {
             logger.info('[Blockchain] Mock: resolveDisputeClientWins', { bookingId, refundAmountBs });
             return null;
@@ -236,7 +286,11 @@ class BlockchainService {
         }
     }
 
-    async resolvePartialOnChain(bookingId: string, caregiverAmountBs: number, clientDiscountBs: number) {
+    async resolvePartialOnChain(
+        bookingId: string,
+        caregiverAmountBs: number,
+        clientDiscountBs: number
+    ): Promise<string | null> {
         if (!this.ensureInitialized() || !this.escrowContract) {
             logger.info('[Blockchain] Mock: resolvePartial', { bookingId, caregiverAmountBs, clientDiscountBs });
             return null;
@@ -256,34 +310,37 @@ class BlockchainService {
         }
     }
 
-    /**
-     * Registra la extensión de un paseo en la blockchain.
-     * El contrato GardenEscrow no tiene todavía un método extendWalk;
-     * por ahora se registra como log informativo (mock) y se actualiza el
-     * monto total mediante cancelBooking + createBooking si es necesario.
-     * Para el MVP se deja en mock mode: registra en los logs del servidor
-     * y retorna null hasta que se despliegue la versión del contrato con extendWalk.
-     */
-    async recordWalkExtensionOnChain(
-        bookingId: string,
-        additionalMinutes: number,
-        newTotalAmountBs: number
-    ): Promise<string | null> {
-        // MOCK MODE: el contrato actual no tiene extendWalk.
-        // Cuando se despliegue GardenEscrow v2 con `extendWalk(string _bookingId, uint256 _additionalMinutes, uint256 _newAmountBs)`
-        // se podrá usar escrowContract.extendWalk(...) aquí.
-        logger.info('[Blockchain] Mock: recordWalkExtension', {
-            bookingId,
-            additionalMinutes,
-            newTotalAmountBs,
-            note: 'Pending GardenEscrow v2 deployment with extendWalk()',
-        });
-        return null;
-    }
+    // ─── REPUTACIÓN ───────────────────────────────────────────────────────────
 
-    async getCaregiverReputation(id: string) {
-        if (!this.ensureInitialized()) return null;
-        return { average: 5.0, count: 0 };
+    /**
+     * Lee la reputación real del cuidador desde la blockchain.
+     * Usa getReputation() view function de GardenEscrow v2.
+     * @returns { average, count } o null si no hay datos o la blockchain no está disponible.
+     */
+    async getCaregiverReputation(
+        caregiverId: string
+    ): Promise<{ average: number; count: number } | null> {
+        if (!this.ensureInitialized() || !this.escrowContract) {
+            logger.info('[Blockchain] Mock: getCaregiverReputation (no contract)', { caregiverId });
+            return null;
+        }
+
+        try {
+            const [totalRating, ratingCount]: [bigint, bigint] =
+                await (this.escrowContract as any).getReputation(caregiverId);
+
+            const count = Number(ratingCount);
+            const average = count > 0 ? Number(totalRating) / count : 0;
+
+            logger.info('[Blockchain] Caregiver reputation read', { caregiverId, average, count });
+            return { average: Math.round(average * 10) / 10, count };
+        } catch (err: any) {
+            logger.error('[Blockchain] Error reading caregiver reputation', {
+                caregiverId,
+                error: err?.reason || err?.message,
+            });
+            return null;
+        }
     }
 }
 

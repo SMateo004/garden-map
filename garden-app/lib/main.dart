@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'screens/auth/login_screen.dart';
@@ -117,11 +118,12 @@ final GoRouter _router = GoRouter(
       name: 'serviceSelector',
       builder: (context, state) => const MobileServiceSelectorScreen(),
     ),
-    GoRoute(
-      path: '/test',
-      name: 'test',
-      builder: (context, state) => const TestAgentesScreen(),
-    ),
+    if (kDebugMode)
+      GoRoute(
+        path: '/test',
+        name: 'test',
+        builder: (context, state) => const TestAgentesScreen(),
+      ),
     GoRoute(
       path: '/login',
       name: 'login',

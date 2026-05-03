@@ -288,6 +288,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       if (data['success'] == true) {
         await _loadAvailability();
         _computeDayStatuses();
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Horario ${enabled ? 'activado' : 'desactivado'}'),
@@ -298,6 +299,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         throw Exception(data['error']?['message'] ?? 'Error');
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
       );
@@ -322,6 +324,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       if (data['success'] == true) {
         await _loadAvailability();
         _computeDayStatuses();
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(block ? 'Día bloqueado' : 'Día desbloqueado'),
@@ -330,6 +333,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
       );
@@ -408,9 +412,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         final currentDay = _selectedDay;
         setState(() => _selectedDay = null);
         await Future.delayed(const Duration(milliseconds: 100));
-        if (mounted) {
-          setState(() => _selectedDay = currentDay);
-        }
+        if (!mounted) return;
+        setState(() => _selectedDay = currentDay);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${blockKey == 'morning' ? 'Mañana' : blockKey == 'afternoon' ? 'Tarde' : 'Noche'} ${enabled ? 'activado' : 'desactivado'} para este día'),
@@ -422,6 +425,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         throw Exception(data['error']?['message'] ?? 'Error');
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
       );
@@ -441,6 +445,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       if (data['success'] == true) {
         await _loadBookings();
         _computeDayStatuses();
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(action == 'accept' ? 'Reserva aceptada' : 'Reserva rechazada'),
@@ -451,6 +456,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         throw Exception(data['error']?['message'] ?? 'Error');
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
       );
@@ -2105,7 +2111,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                       decoration: BoxDecoration(
                         color: kBackgroundColor,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: kPrimaryColor.withOpacity(0.4)),
+                        border: Border.all(color: kPrimaryColor.withValues(alpha: 0.4)),
                       ),
                       child: Row(children: [
                         const Icon(Icons.access_time, color: kPrimaryColor, size: 16),
@@ -2137,7 +2143,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                       decoration: BoxDecoration(
                         color: kBackgroundColor,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: kPrimaryColor.withOpacity(0.4)),
+                        border: Border.all(color: kPrimaryColor.withValues(alpha: 0.4)),
                       ),
                       child: Row(children: [
                         const Icon(Icons.access_time, color: kPrimaryColor, size: 16),
@@ -2253,7 +2259,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           child: Container(
             margin: const EdgeInsets.all(2),
             decoration: BoxDecoration(
-              color: bgColor.withOpacity(isPast ? 0.3 : 0.8),
+              color: bgColor.withValues(alpha: isPast ? 0.3 : 0.8),
               borderRadius: BorderRadius.circular(8),
               border: isToday
                 ? Border.all(color: Colors.white, width: 2)
@@ -2488,9 +2494,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: GardenColors.primary.withOpacity(0.1),
+                color: GardenColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: GardenColors.primary.withOpacity(0.3)),
+                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
               ),
               child: const Text('Cuidador', style: TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w600)),
             ),
@@ -2506,7 +2512,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               decoration: BoxDecoration(
                 color: surface,
                 border: Border(bottom: BorderSide(color: borderColor, width: 1)),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.3 : 0.06), blurRadius: 8, offset: const Offset(0, 2))],
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06), blurRadius: 8, offset: const Offset(0, 2))],
               ),
               child: SafeArea(
                 child: Padding(
@@ -2532,9 +2538,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                                   duration: const Duration(milliseconds: 180),
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: isActive ? GardenColors.primary.withOpacity(0.10) : Colors.transparent,
+                                    color: isActive ? GardenColors.primary.withValues(alpha: 0.10) : Colors.transparent,
                                     borderRadius: BorderRadius.circular(10),
-                                    border: isActive ? Border.all(color: GardenColors.primary.withOpacity(0.25)) : null,
+                                    border: isActive ? Border.all(color: GardenColors.primary.withValues(alpha: 0.25)) : null,
                                   ),
                                   child: Icon(
                                     isActive ? tab.activeIcon : tab.icon,
@@ -2708,7 +2714,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: GardenColors.primary.withOpacity(0.35),
+                        color: GardenColors.primary.withValues(alpha: 0.35),
                         blurRadius: 28,
                         spreadRadius: 4,
                       ),
@@ -2748,14 +2754,14 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                       elevation: 0,
                     ),
                     onPressed: () async {
+                      final router = GoRouter.of(context);
                       final prefs = await SharedPreferences.getInstance();
                       await prefs.setBool('caregiver_setup_complete', false);
-                      if (context.mounted) {
-                        if (_conversionInProgress) {
-                          context.go('/caregiver/onboarding', extra: {'clientConversionMode': true});
-                        } else {
-                          context.go('/caregiver/onboarding', extra: {'resumeMode': true});
-                        }
+                      if (!context.mounted) return;
+                      if (_conversionInProgress) {
+                        router.go('/caregiver/onboarding', extra: {'clientConversionMode': true});
+                      } else {
+                        router.go('/caregiver/onboarding', extra: {'resumeMode': true});
                       }
                     },
                     child: const Row(
@@ -2904,11 +2910,11 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
           color: widget.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: _expanded ? GardenColors.primary.withOpacity(0.4) : widget.borderColor,
+            color: _expanded ? GardenColors.primary.withValues(alpha: 0.4) : widget.borderColor,
             width: _expanded ? 1.5 : 1,
           ),
           boxShadow: [BoxShadow(
-            color: Colors.black.withOpacity(widget.isDark ? 0.2 : 0.05),
+            color: Colors.black.withValues(alpha: widget.isDark ? 0.2 : 0.05),
             blurRadius: _expanded ? 12 : 6,
             offset: const Offset(0, 2),
           )],
@@ -2924,7 +2930,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                   Container(
                     width: 42, height: 42,
                     decoration: BoxDecoration(
-                      color: GardenColors.primary.withOpacity(0.1),
+                      color: GardenColors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
@@ -3017,7 +3023,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                       Container(
                         width: 36, height: 36,
                         decoration: BoxDecoration(
-                          color: GardenColors.primary.withOpacity(0.08),
+                          color: GardenColors.primary.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Icon(Icons.pets, color: GardenColors.primary, size: 18),
@@ -3052,7 +3058,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: GardenColors.warning.withOpacity(0.1),
+                            color: GardenColors.warning.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Text('⚠️ Especial', style: TextStyle(color: GardenColors.warning, fontSize: 11)),
@@ -3068,9 +3074,9 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                   child: Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: GardenColors.warning.withOpacity(0.06),
+                      color: GardenColors.warning.withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: GardenColors.warning.withOpacity(0.2)),
+                      border: Border.all(color: GardenColors.warning.withValues(alpha: 0.2)),
                     ),
                     child: Row(
                       children: [

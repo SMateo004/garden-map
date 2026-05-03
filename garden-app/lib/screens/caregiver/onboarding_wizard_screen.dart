@@ -580,6 +580,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         }
       }
       if (_photoUrls.length < minFotos) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Necesitas al menos $minFotos fotos')),
         );
@@ -1382,8 +1383,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   Widget _buildStep5() {
     final isDark = themeNotifier.isDark;
     final textColor    = isDark ? GardenColors.darkTextPrimary   : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final bg           = isDark ? GardenColors.darkBackground    : GardenColors.lightBackground;
 
     const double sliderMin = 50.0;
     const double sliderMax = 290.0;

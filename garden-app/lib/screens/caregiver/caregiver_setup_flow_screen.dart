@@ -238,7 +238,7 @@ class _CaregiverSetupFlowScreenState extends State<CaregiverSetupFlowScreen> {
                           child: Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
+                              color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Icon(
@@ -254,7 +254,7 @@ class _CaregiverSetupFlowScreenState extends State<CaregiverSetupFlowScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: GardenColors.primary.withOpacity(0.12),
+                          color: GardenColors.primary.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
@@ -283,7 +283,7 @@ class _CaregiverSetupFlowScreenState extends State<CaregiverSetupFlowScreen> {
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
                       value: (_currentStep + 1) / _totalSteps,
-                      backgroundColor: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06),
+                      backgroundColor: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
                       color: GardenColors.primary,
                       minHeight: 6,
                     ),
@@ -310,9 +310,9 @@ class _CaregiverSetupFlowScreenState extends State<CaregiverSetupFlowScreen> {
                                     ? GardenColors.success
                                     : isActive
                                         ? GardenColors.primary
-                                        : (isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.06)),
+                                        : (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.06)),
                                 border: isActive
-                                    ? Border.all(color: GardenColors.primary.withOpacity(0.3), width: 2)
+                                    ? Border.all(color: GardenColors.primary.withValues(alpha: 0.3), width: 2)
                                     : null,
                               ),
                               child: Icon(
@@ -327,7 +327,7 @@ class _CaregiverSetupFlowScreenState extends State<CaregiverSetupFlowScreen> {
                                 height: 2,
                                 color: i < _currentStep
                                     ? GardenColors.success
-                                    : (isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.08)),
+                                    : (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.08)),
                               ),
                             ],
                           ],

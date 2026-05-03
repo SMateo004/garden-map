@@ -172,10 +172,22 @@ export async function compareFaces(
 ): Promise<number> {
   const client = getRekognitionClient();
   if (!client) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('AWS Rekognition is not configured. Set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and AWS_S3_BUCKET to enable face verification.');
+    }
     const mock = 96 + Math.random() * 3;
-    logger.info('Rekognition: AWS not configured, mock similarity', { mock: Math.round(mock * 10) / 10 });
+    logger.warn('Rekognition: AWS not configured — returning mock similarity (DEV only)', { mock: Math.round(mock * 10) / 10 });
     return mock;
   }
+
+  /**
+   * Single Rekognition call with exponential-backoff retry.
+   * Retries up to MAX_RETRIES times on transient errors (throttling, network).
+   * Throws immediately on permanent errors (InvalidImageFormatException etc.).
+   */
+  const MAX_RETRIES = 3;
+  const RETRY_BASE_MS = 500;
+  const PERMANENT_ERRORS = new Set(['InvalidImageFormatException', 'InvalidParameterException', 'ImageTooLargeException']);
 
   const tryCompare = async (source: Buffer, target: Buffer): Promise<number> => {
     const command = new CompareFacesCommand({
@@ -183,20 +195,36 @@ export async function compareFaces(
       TargetImage: { Bytes: target },
       SimilarityThreshold: 0,
     });
-    const response = await client.send(command);
-    const matches = response.FaceMatches ?? [];
-    if (matches.length === 0) return 0;
-    return matches.reduce((max, m) => {
-      const sim = m.Similarity ?? 0;
-      return sim > max ? sim : max;
-    }, 0);
+
+    let lastErr: any;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const response = await client.send(command);
+        const matches = response.FaceMatches ?? [];
+        if (matches.length === 0) return 0;
+        return matches.reduce((max, m) => {
+          const sim = m.Similarity ?? 0;
+          return sim > max ? sim : max;
+        }, 0);
+      } catch (err: any) {
+        lastErr = err;
+        const code: string = err?.name ?? err?.code ?? '';
+        if (PERMANENT_ERRORS.has(code)) throw err; // don't retry permanent failures
+        if (attempt < MAX_RETRIES) {
+          const delay = RETRY_BASE_MS * 2 ** (attempt - 1); // 500ms, 1s, 2s
+          logger.warn(`CompareFaces attempt ${attempt} failed — retrying in ${delay}ms`, { error: err.message, code });
+          await new Promise(r => setTimeout(r, delay));
+        }
+      }
+    }
+    throw lastErr;
   };
 
   // First attempt: cropped faces (faster + more precise)
   try {
     return await tryCompare(sourceCropped, targetCropped);
   } catch (err: any) {
-    logger.warn('CompareFaces with cropped images failed, trying full images', { error: err.message, code: err.code });
+    logger.warn('CompareFaces with cropped images failed after retries, trying full images', { error: err.message, code: err.code });
   }
 
   // Second attempt: full original images (wider context, Rekognition finds faces itself)
@@ -204,7 +232,7 @@ export async function compareFaces(
     try {
       return await tryCompare(sourceOriginal, targetOriginal);
     } catch (err: any) {
-      logger.error('CompareFaces with full images also failed', { error: err.message, code: err.code });
+      logger.error('CompareFaces with full images also failed after retries', { error: err.message, code: err.code });
       throw new Error(`Error al comparar rostros con AWS Rekognition: ${err.message}`);
     }
   }

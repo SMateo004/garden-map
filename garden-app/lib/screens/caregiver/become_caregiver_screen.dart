@@ -28,6 +28,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('access_token') ?? '';
       if (token.isEmpty) {
+        if (!mounted) return;
         context.go('/login');
         return;
       }

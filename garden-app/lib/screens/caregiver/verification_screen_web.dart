@@ -207,7 +207,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
           Container(
             width: 90, height: 90,
             decoration: BoxDecoration(
-              color: GardenColors.primary.withOpacity(0.10),
+              color: GardenColors.primary.withValues(alpha: 0.10),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.qr_code_scanner_rounded, color: GardenColors.primary, size: 48),
@@ -305,7 +305,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 24, offset: const Offset(0, 8)),
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 24, offset: const Offset(0, 8)),
                 ],
               ),
               child: QrImageView(
@@ -330,9 +330,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               decoration: BoxDecoration(
-                color: GardenColors.primary.withOpacity(0.08),
+                color: GardenColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: GardenColors.primary.withOpacity(0.2)),
+                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,

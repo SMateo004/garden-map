@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { getGiftCodes, createGiftCode, toggleGiftCode, type GiftCodeItem } from '@/api/admin';
+import { getGiftCodes, createGiftCode, toggleGiftCode } from '@/api/admin';
 
 export function AdminGiftCodesPage() {
   const queryClient = useQueryClient();

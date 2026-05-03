@@ -45,7 +45,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export function CaregiverProfileEditForm({
   profile,
-  user,
+  user: _user,
   onPatch,
   onCancel,
 }: {

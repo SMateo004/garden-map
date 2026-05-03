@@ -106,7 +106,7 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
               children: [
                 Container(
                   width: 60, height: 60,
-                  decoration: BoxDecoration(color: GardenColors.error.withOpacity(0.1), shape: BoxShape.circle),
+                  decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.1), shape: BoxShape.circle),
                   child: const Icon(Icons.delete_forever_rounded, color: GardenColors.error, size: 32),
                 ),
                 const SizedBox(height: 16),
@@ -155,6 +155,9 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                         final pw = passwordCtrl.text.trim();
                         if (pw.isEmpty) { setS(() => errorMsg = 'Ingresa tu contrasena'); return; }
                         setS(() { loading = true; errorMsg = null; });
+                        final nav = Navigator.of(ctx);
+                        final scaffoldMsg = ScaffoldMessenger.of(context);
+                        final router = GoRouter.of(context);
                         try {
                           final res = await http.delete(
                             Uri.parse('$_baseUrl/auth/account'),
@@ -163,15 +166,14 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                           );
                           final data = jsonDecode(res.body);
                           if (data['success'] == true) {
-                            Navigator.pop(ctx);
+                            nav.pop();
                             final prefs = await SharedPreferences.getInstance();
                             await prefs.clear();
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Cuenta eliminada. Hasta pronto.'), backgroundColor: GardenColors.success),
-                              );
-                              context.go('/login');
-                            }
+                            if (!mounted) return;
+                            scaffoldMsg.showSnackBar(
+                              const SnackBar(content: Text('Cuenta eliminada. Hasta pronto.'), backgroundColor: GardenColors.success),
+                            );
+                            router.go('/login');
                           } else {
                             final msg = data['error']?['message'] ?? 'Error al eliminar cuenta';
                             setS(() { loading = false; errorMsg = msg; });
@@ -288,9 +290,9 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                 // Danger Zone
                 Container(
                   decoration: BoxDecoration(
-                    color: GardenColors.error.withOpacity(0.05),
+                    color: GardenColors.error.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: GardenColors.error.withOpacity(0.3)),
+                    border: Border.all(color: GardenColors.error.withValues(alpha: 0.3)),
                   ),
                   padding: const EdgeInsets.all(16),
                   child: Column(

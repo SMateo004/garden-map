@@ -172,7 +172,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   Container(
                     width: 72, height: 72,
                     decoration: BoxDecoration(
-                      color: GardenColors.primary.withOpacity(0.2),
+                      color: GardenColors.primary.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: const Icon(Icons.pets, color: GardenColors.primary, size: 40),
@@ -182,7 +182,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     style: TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.w900, letterSpacing: -1, height: 1.1)),
                   const SizedBox(height: 16),
                   Text('La plataforma de cuidado\nde mascotas más segura\nde Santa Cruz',
-                    style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 16, height: 1.6)),
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 16, height: 1.6)),
                   const SizedBox(height: 48),
                   _featureRow(Icons.verified_user_outlined, 'Verificación IA + Blockchain'),
                   const SizedBox(height: 16),
@@ -204,7 +204,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         Container(
           width: 36, height: 36,
           decoration: BoxDecoration(
-            color: GardenColors.primary.withOpacity(0.15),
+            color: GardenColors.primary.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, color: GardenColors.primary, size: 18),
@@ -266,9 +266,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: GardenColors.primary.withOpacity(0.08),
+                color: GardenColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: GardenColors.primary.withOpacity(0.25)),
+                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.25)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,7 +278,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       Container(
                         width: 40, height: 40,
                         decoration: BoxDecoration(
-                          color: GardenColors.primary.withOpacity(0.15),
+                          color: GardenColors.primary.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(Icons.home_outlined, color: GardenColors.primary, size: 22),
@@ -511,7 +511,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         decoration: BoxDecoration(
           color: selected ? GardenColors.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
-          boxShadow: selected ? [BoxShadow(color: GardenColors.primary.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))] : null,
+          boxShadow: selected ? [BoxShadow(color: GardenColors.primary.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 2))] : null,
         ),
         child: Center(
           child: Text(label, style: TextStyle(

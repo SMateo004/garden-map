@@ -313,7 +313,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
           height: 88,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: GardenColors.primary.withOpacity(0.12),
+            color: GardenColors.primary.withValues(alpha: 0.12),
           ),
           child: const Icon(
             Icons.email_outlined,
@@ -383,7 +383,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
             style: ElevatedButton.styleFrom(
               backgroundColor: GardenColors.primary,
               foregroundColor: Colors.white,
-              disabledBackgroundColor: GardenColors.primary.withOpacity(0.4),
+              disabledBackgroundColor: GardenColors.primary.withValues(alpha: 0.4),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
@@ -425,7 +425,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                   style: TextStyle(
                     fontSize: 14,
                     color: _resendCooldown > 0
-                        ? textSecondary.withOpacity(0.5)
+                        ? textSecondary.withValues(alpha: 0.5)
                         : GardenColors.primary,
                     fontWeight: FontWeight.w500,
                   ),

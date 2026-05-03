@@ -252,7 +252,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
           Container(
             width: 90, height: 90,
             decoration: BoxDecoration(
-              color: GardenColors.primary.withOpacity(0.10),
+              color: GardenColors.primary.withValues(alpha: 0.10),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.verified_user_rounded, color: GardenColors.primary, size: 48),
@@ -327,7 +327,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   decoration: BoxDecoration(
-                    color: GardenColors.primary.withOpacity(0.12),
+                    color: GardenColors.primary.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text('Paso $stepNum de 3',
@@ -347,7 +347,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
                       color: _surface,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: preview != null ? Colors.green : GardenColors.primary.withOpacity(0.3),
+                        color: preview != null ? Colors.green : GardenColors.primary.withValues(alpha: 0.3),
                         width: 2,
                       ),
                     ),
@@ -410,7 +410,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: GardenColors.primary,
                           foregroundColor: Colors.white,
-                          disabledBackgroundColor: GardenColors.primary.withOpacity(0.3),
+                          disabledBackgroundColor: GardenColors.primary.withValues(alpha: 0.3),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
@@ -459,9 +459,9 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: GardenColors.primary.withOpacity(0.08),
+                color: GardenColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: GardenColors.primary.withOpacity(0.2)),
+                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
               ),
               child: Row(
                 children: [

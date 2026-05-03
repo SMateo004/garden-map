@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 
@@ -28,7 +29,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _waitingConfirmation = false;
   bool _paymentConfirmed = false;
   bool _paymentRejected = false;
+  bool _qrExpired = false;
   Timer? _pollTimer;
+  Timer? _expiryTimer;
+  static const _qrTtl = Duration(minutes: 15); // QR expira en 15 min
 
   @override
   void initState() {
@@ -46,7 +50,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final prefs = await SharedPreferences.getInstance();
     _clientToken = prefs.getString('access_token') ?? '';
     if (_clientToken.isEmpty) {
-      _clientToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJiMWEyMWYzMS01MzRmLTQxMjktODdiNi02MWY1MDA4NDc0ZDIiLCJyb2xlIjoiQ0xJRU5UIiwiaWQiOiJiMWEyMWYzMS01MzRmLTQxMjktODdiNi02MWY1MDA4NDc0ZDIiLCJpYXQiOjE3NzM2NzM5MTgsImV4cCI6MTc3NjI2NTkxOH0.z3UlAvEptacachixvfUTMpgR19RZ536dm-44rLInGmM';
+      // Sin sesión — redirigir a login (nunca hardcodear tokens en código)
+      if (mounted) context.go('/login');
+      return;
     }
 
     try {
@@ -97,11 +103,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
   void _startPolling() {
     _checkPaymentStatus();
     _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => _checkPaymentStatus());
+    // QR expira a los 15 min — detener polling y mostrar aviso
+    _expiryTimer = Timer(_qrTtl, () {
+      if (!mounted || _paymentConfirmed) return;
+      _stopPolling();
+      setState(() => _qrExpired = true);
+    });
   }
 
   void _stopPolling() {
     _pollTimer?.cancel();
     _pollTimer = null;
+    _expiryTimer?.cancel();
+    _expiryTimer = null;
   }
 
   Future<void> _checkPaymentStatus() async {
@@ -195,6 +209,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
         if (_paymentConfirmed) return _buildSuccessScreen();
         if (_paymentRejected) return _buildRejectionScreen();
+        if (_qrExpired) return _buildExpiredScreen();
         if (_waitingConfirmation) return _buildWaitingScreen();
 
         return Scaffold(
@@ -243,13 +258,22 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10)),
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, 10)),
                   ],
                 ),
-                child: Image.network(
-                  _qrResponse!['qrImageUrl'] ?? 'https://via.placeholder.com/250',
-                  width: 250,
-                  height: 250,
+                child: QrImageView(
+                  data: (_qrResponse!['qrId'] as String? ?? widget.bookingId),
+                  version: QrVersions.auto,
+                  size: 250,
+                  eyeStyle: const QrEyeStyle(
+                    eyeShape: QrEyeShape.square,
+                    color: Color(0xFF1A1A1A),
+                  ),
+                  dataModuleStyle: const QrDataModuleStyle(
+                    dataModuleShape: QrDataModuleShape.square,
+                    color: Color(0xFF1A1A1A),
+                  ),
+                  errorCorrectionLevel: QrErrorCorrectLevel.M,
                 ),
               ),
               const SizedBox(height: 32),
@@ -320,7 +344,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: GardenColors.primary.withOpacity(0.08),
+              color: GardenColors.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: GardenColors.primary, width: 2),
             ),
@@ -329,7 +353,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 Container(
                   width: 48, height: 48,
                   decoration: BoxDecoration(
-                    color: GardenColors.primary.withOpacity(0.15),
+                    color: GardenColors.primary.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(Icons.qr_code_2_outlined, color: GardenColors.primary, size: 24),
@@ -397,7 +421,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   child: CircularProgressIndicator(
                     strokeWidth: 5,
                     color: GardenColors.primary,
-                    backgroundColor: GardenColors.primary.withOpacity(0.15),
+                    backgroundColor: GardenColors.primary.withValues(alpha: 0.15),
                   ),
                 ),
                 const SizedBox(height: 40),
@@ -455,9 +479,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       width: 100,
                       height: 100,
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
+                        color: Colors.green.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.green.withOpacity(0.5), width: 4),
+                        border: Border.all(color: Colors.green.withValues(alpha: 0.5), width: 4),
                       ),
                       child: const Icon(Icons.check_rounded, color: Colors.green, size: 50),
                     ),
@@ -473,9 +497,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
+                  color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.green.withOpacity(0.3)),
+                  border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
                 ),
                 child: const Text('Pago aprobado',
                   style: TextStyle(color: Colors.green, fontWeight: FontWeight.w700, fontSize: 13),
@@ -496,7 +520,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: borderColor),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(isDark ? 0.3 : 0.05), blurRadius: 10, offset: const Offset(0, 4)),
+                      BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05), blurRadius: 10, offset: const Offset(0, 4)),
                     ],
                   ),
                   child: Column(
@@ -508,7 +532,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                             backgroundImage: _booking!['caregiverPhoto'] != null
                               ? NetworkImage(_booking!['caregiverPhoto'])
                               : null,
-                            backgroundColor: GardenColors.primary.withOpacity(0.2),
+                            backgroundColor: GardenColors.primary.withValues(alpha: 0.2),
                             child: _booking!['caregiverPhoto'] == null
                               ? const Icon(Icons.person, color: GardenColors.primary)
                               : null,
@@ -546,9 +570,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: GardenColors.primary.withOpacity(0.05),
+                  color: GardenColors.primary.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: GardenColors.primary.withOpacity(0.2)),
+                  border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -650,7 +674,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Widget _buildRejectionScreen() {
     final isDark = themeNotifier.isDark;
     final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
@@ -665,9 +688,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
               Container(
                 width: 100, height: 100,
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
+                  color: Colors.red.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.red.withOpacity(0.4), width: 4),
+                  border: Border.all(color: Colors.red.withValues(alpha: 0.4), width: 4),
                 ),
                 child: const Icon(Icons.close_rounded, color: Colors.red, size: 50),
               ),
@@ -686,9 +709,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.08),
+                  color: Colors.orange.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -771,12 +794,68 @@ class _PaymentScreenState extends State<PaymentScreen> {
       children: [
         Container(
           width: 28, height: 28,
-          decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle),
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
           child: Center(child: Text(number, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w800))),
         ),
         const SizedBox(width: 16),
         Expanded(child: Text(text, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w500))),
       ],
+    );
+  }
+
+  // ── QR EXPIRADO ───────────────────────────────────────────────────────────
+  Widget _buildExpiredScreen() {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+    return Scaffold(
+      backgroundColor: bg,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 90, height: 90,
+                  decoration: BoxDecoration(
+                    color: GardenColors.warning.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4), width: 2),
+                  ),
+                  child: const Icon(Icons.timer_off_outlined, color: GardenColors.warning, size: 46),
+                ),
+                const SizedBox(height: 28),
+                Text('QR vencido', style: TextStyle(color: textColor, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                const SizedBox(height: 12),
+                Text(
+                  'El código QR expiró a los 15 minutos. Si realizaste el pago antes de que venciera, espera unos segundos y vuelve a verificar. Si no pagaste, genera un nuevo QR.',
+                  style: TextStyle(color: subtextColor, fontSize: 14, height: 1.6),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 36),
+                GardenButton(
+                  label: 'Generar nuevo QR',
+                  icon: Icons.qr_code_2_outlined,
+                  onPressed: () => setState(() {
+                    _qrExpired = false;
+                    _qrResponse = null;
+                    _waitingConfirmation = false;
+                  }),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () => context.go('/my-bookings'),
+                  child: Text('Ir a mis reservas', style: TextStyle(color: subtextColor)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

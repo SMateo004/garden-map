@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../theme/garden_theme.dart';
 
@@ -31,6 +32,8 @@ class BookingConfirmedScreen extends StatelessWidget {
         final startTime = bookingData?['startTime'] as String?;
         final serviceType = bookingData?['serviceType'] as String? ?? '';
         final totalAmount = bookingData?['totalPrice'] ?? bookingData?['totalAmount'] ?? '—';
+        // txHash guardado on-chain en Polygon Amoy
+        final blockchainTxHash = bookingData?['blockchainTxHash'] as String?;
 
         return Scaffold(
           backgroundColor: bg,
@@ -198,6 +201,55 @@ class BookingConfirmedScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
+
+                  // ── BLOCKCHAIN TX HASH (si existe) ────────────────────
+                  if (blockchainTxHash != null && blockchainTxHash.isNotEmpty) ...[
+                    GestureDetector(
+                      onTap: () {
+                        Clipboard.setData(ClipboardData(text: blockchainTxHash));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('Hash copiado al portapapeles'),
+                            backgroundColor: GardenColors.polygon,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: GardenColors.polygon.withValues(alpha: 0.06),
+                          borderRadius: GardenRadius.md_,
+                          border: Border.all(color: GardenColors.polygon.withValues(alpha: 0.25)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Text('⬡', style: TextStyle(color: GardenColors.polygon, fontSize: 16)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Registrada en Polygon Amoy',
+                                    style: TextStyle(color: GardenColors.polygon, fontSize: 11, fontWeight: FontWeight.w700)),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${blockchainTxHash.substring(0, 10)}...${blockchainTxHash.substring(blockchainTxHash.length - 8)}',
+                                    style: TextStyle(color: subtextColor, fontSize: 11, fontFamily: 'monospace'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(Icons.copy_rounded, size: 14, color: GardenColors.polygon.withValues(alpha: 0.6)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
 
                   // ── PRÓXIMOS PASOS ────────────────────────────────────
                   Container(

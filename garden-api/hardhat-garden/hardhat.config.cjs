@@ -18,6 +18,7 @@ module.exports = {
             url: process.env.BLOCKCHAIN_RPC_URL || "https://rpc-amoy.polygon.technology",
             accounts: process.env.BLOCKCHAIN_PRIVATE_KEY ? [process.env.BLOCKCHAIN_PRIVATE_KEY] : [],
             chainId: 80002,
+            gasPrice: 35000000000, // 35 Gwei — explicit cap to avoid fee spikes on public RPC
         },
     },
 };

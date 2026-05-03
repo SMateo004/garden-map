@@ -212,7 +212,7 @@ export const getAvailability = asyncHandler(async (req: Request, res: Response) 
 export const getById = asyncHandler(async (req: Request, res: Response) => {
   const id = req.params.id!;
   const caregiver = await caregiverService.getCaregiverById(id);
-  if (!caregiver) throw new NotFoundError('Cuidador no disponible');
+  if (!caregiver) throw new CaregiverNotFoundError(id);
   res.json({ success: true, data: caregiver });
 });
 

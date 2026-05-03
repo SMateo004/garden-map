@@ -108,41 +108,64 @@ class GardenGradients {
 
 // ── TIPOGRAFÍA ─────────────────────────────────────────────────────────────
 // Fuentes: Nunito (400–900) para UI · JetBrains Mono (600) para metadata/monoespaciado
-// Escala: H1 72/900 · H2 48/800 · H3 28/800 · H4 20/700 · Body 16/500 · Meta 13/600
+//
+// Mapa de pesos:
+//   fontRegular    400  — body text, descriptions, hints
+//   fontMedium     500  — secondary labels, metadata
+//   fontSemiBold   600  — nav labels, chips, secondary buttons
+//   fontBold       700  — card titles, section headers
+//   fontExtraBold  800  — screen titles, primary actions
+//   fontBlack      900  — display, hero text, brand wordmark
+//
+// Letter-spacing:
+//   Display  (900)      : -0.04em → -0.035em
+//   Titles   (800)      : -0.025em → -0.02em
+//   Headings (700)      : -0.02em → -0.01em
+//   Body     (400–500)  : 0
+//   Labels/caps ≤12px   : +0.06em → +0.12em (ALL CAPS only)
+//
+// Line-height:
+//   Display  : 0.95 – 1.05
+//   Titles   : 1.10 – 1.20
+//   Headings : 1.20 – 1.35
+//   Body     : 1.55 – 1.65
+//   UI labels: 1.20 – 1.30
 class GardenText {
   // ── Escala principal ─────────────────────────────────────────────────────
 
-  /// 72sp · Nunito Black 900 · ls -0.04em — pantallas hero, splash
+  /// 72sp · Black 900 · ls -0.04em · height 1.0 — splash, hero display
   static TextStyle get h1 => GoogleFonts.nunito(
     fontSize: 72, fontWeight: FontWeight.w900,
     letterSpacing: -2.88,   // -0.04em × 72
-    height: 1.10,
+    height: 1.00,
   );
 
-  /// 48sp · Nunito ExtraBold 800 · ls -0.03em — títulos principales de sección
+  /// 48sp · ExtraBold 800 · ls -0.025em · height 1.15 — títulos principales
   static TextStyle get h2 => GoogleFonts.nunito(
     fontSize: 48, fontWeight: FontWeight.w800,
-    letterSpacing: -1.44,   // -0.03em × 48
+    letterSpacing: -1.20,   // -0.025em × 48
     height: 1.15,
   );
 
-  /// 28sp · Nunito ExtraBold 800 · ls -0.02em — subtítulos de pantalla
+  /// 28sp · ExtraBold 800 · ls -0.022em · height 1.20 — subtítulos de pantalla
   static TextStyle get h3 => GoogleFonts.nunito(
     fontSize: 28, fontWeight: FontWeight.w800,
-    letterSpacing: -0.56,   // -0.02em × 28
+    letterSpacing: -0.62,   // -0.022em × 28
     height: 1.20,
   );
 
-  /// 20sp · Nunito Bold 700 — encabezados de tarjeta
+  /// 20sp · Bold 700 · ls -0.015em · height 1.25 — encabezados de tarjeta
   static TextStyle get h4 => GoogleFonts.nunito(
     fontSize: 20, fontWeight: FontWeight.w700,
-    height: 1.30,
+    letterSpacing: -0.30,   // -0.015em × 20
+    height: 1.25,
   );
 
-  /// 16sp · Nunito Medium 500 · height 1.5 — cuerpo de texto estándar
+  /// 16sp · Medium 500 · ls 0 · height 1.60 — cuerpo de texto estándar
   static TextStyle get body => GoogleFonts.nunito(
     fontSize: 16, fontWeight: FontWeight.w500,
-    height: 1.50,
+    letterSpacing: 0,
+    height: 1.60,
   );
 
   /// 13sp · JetBrains Mono SemiBold 600 — precios, métricas, timestamps
@@ -153,25 +176,88 @@ class GardenText {
 
   // ── Aliases para compatibilidad con código existente ─────────────────────
 
-  static TextStyle get displayLarge  => GoogleFonts.nunito(fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.5, height: 1.2);
+  /// 32sp · ExtraBold 800 · ls -0.025em · height 1.10 — section display titles
+  static TextStyle get displayLarge  => GoogleFonts.nunito(
+    fontSize: 32, fontWeight: FontWeight.w800,
+    letterSpacing: -0.80,   // -0.025em × 32
+    height: 1.10,
+  );
   static TextStyle get displayMedium => h3;
-  static TextStyle get displaySmall  => GoogleFonts.nunito(fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.2, height: 1.3);
+  /// 24sp · Bold 700 · ls -0.018em · height 1.20
+  static TextStyle get displaySmall  => GoogleFonts.nunito(
+    fontSize: 24, fontWeight: FontWeight.w700,
+    letterSpacing: -0.43,   // -0.018em × 24
+    height: 1.20,
+  );
 
   static TextStyle get headingLarge  => h4;
-  static TextStyle get headingMedium => GoogleFonts.nunito(fontSize: 18, fontWeight: FontWeight.w600, height: 1.4);
-  static TextStyle get headingSmall  => GoogleFonts.nunito(fontSize: 16, fontWeight: FontWeight.w600, height: 1.4);
+  /// 18sp · SemiBold 600 · ls -0.01em · height 1.30
+  static TextStyle get headingMedium => GoogleFonts.nunito(
+    fontSize: 18, fontWeight: FontWeight.w600,
+    letterSpacing: -0.18,   // -0.01em × 18
+    height: 1.30,
+  );
+  /// 16sp · SemiBold 600 · ls -0.01em · height 1.35
+  static TextStyle get headingSmall  => GoogleFonts.nunito(
+    fontSize: 16, fontWeight: FontWeight.w600,
+    letterSpacing: -0.16,   // -0.01em × 16
+    height: 1.35,
+  );
 
-  static TextStyle get bodyLarge  => GoogleFonts.nunito(fontSize: 15, fontWeight: FontWeight.w400, height: 1.6);
-  static TextStyle get bodyMedium => GoogleFonts.nunito(fontSize: 14, fontWeight: FontWeight.w400, height: 1.5);
-  static TextStyle get bodySmall  => GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w400, height: 1.5);
+  /// 16sp · Medium 500 · ls 0 · height 1.60
+  static TextStyle get bodyLarge  => GoogleFonts.nunito(
+    fontSize: 16, fontWeight: FontWeight.w500,
+    letterSpacing: 0,
+    height: 1.60,
+  );
+  /// 14sp · Medium 500 · ls 0 · height 1.55
+  static TextStyle get bodyMedium => GoogleFonts.nunito(
+    fontSize: 14, fontWeight: FontWeight.w500,
+    letterSpacing: 0,
+    height: 1.55,
+  );
+  /// 12sp · Regular 400 · ls 0 · height 1.50
+  static TextStyle get bodySmall  => GoogleFonts.nunito(
+    fontSize: 12, fontWeight: FontWeight.w400,
+    letterSpacing: 0,
+    height: 1.50,
+  );
 
-  static TextStyle get labelLarge  => GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.3);
-  static TextStyle get labelMedium => GoogleFonts.nunito(fontSize: 12, fontWeight: FontWeight.w500, letterSpacing: 0.2);
-  static TextStyle get labelSmall  => GoogleFonts.nunito(fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 0.3);
+  /// 14sp · ExtraBold 800 · ls +0.10 · height 1.20 — CTA labels, primary buttons
+  static TextStyle get labelLarge  => GoogleFonts.nunito(
+    fontSize: 14, fontWeight: FontWeight.w800,
+    letterSpacing: 0.10,
+    height: 1.20,
+  );
+  /// 12sp · Bold 700 · ls +0.08 · height 1.25
+  static TextStyle get labelMedium => GoogleFonts.nunito(
+    fontSize: 12, fontWeight: FontWeight.w700,
+    letterSpacing: 0.08,
+    height: 1.25,
+  );
+  /// 10sp · Bold 700 · ls +1.20 · height 1.20 — eyebrow / ALL CAPS
+  static TextStyle get labelSmall  => GoogleFonts.nunito(
+    fontSize: 10, fontWeight: FontWeight.w700,
+    letterSpacing: 1.20,
+    height: 1.20,
+  );
 
-  static TextStyle get caption    => GoogleFonts.nunito(fontSize: 11, fontWeight: FontWeight.w400, height: 1.4);
-  static TextStyle get price      => GoogleFonts.jetBrainsMono(fontSize: 18, fontWeight: FontWeight.w800, color: GardenColors.primary, letterSpacing: -0.3);
-  static TextStyle get priceSmall => GoogleFonts.jetBrainsMono(fontSize: 14, fontWeight: FontWeight.w700, color: GardenColors.primary);
+  /// 11sp · Regular 400 · height 1.40 — captions, fine print
+  static TextStyle get caption    => GoogleFonts.nunito(
+    fontSize: 11, fontWeight: FontWeight.w400,
+    letterSpacing: 0,
+    height: 1.40,
+  );
+
+  // ── Monospace (JetBrains Mono — no tocar) ───────────────────────────────
+  static TextStyle get price      => GoogleFonts.jetBrainsMono(
+    fontSize: 18, fontWeight: FontWeight.w800,
+    color: GardenColors.primary, letterSpacing: -0.30,
+  );
+  static TextStyle get priceSmall => GoogleFonts.jetBrainsMono(
+    fontSize: 14, fontWeight: FontWeight.w700,
+    color: GardenColors.primary,
+  );
 
   GardenText._();
 }
@@ -389,11 +475,13 @@ class LiquidGlassNavBar extends StatelessWidget {
                       const SizedBox(height: 3),
                       AnimatedDefaultTextStyle(
                         duration: const Duration(milliseconds: 240),
+                        // Nav labels — SemiBold 600 inactive / Bold 700 active (nav labels spec)
                         style: GoogleFonts.nunito(
                           color: labelColor,
                           fontSize: 10,
-                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                          letterSpacing: selected ? 0.1 : 0,
+                          fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                          letterSpacing: selected ? 0.10 : 0.06,
+                          height: 1.20,
                         ),
                         child: Text(item.label),
                       ),
@@ -454,10 +542,13 @@ class GardenGlassDialog extends StatelessWidget {
           children: [
             if (title != null)
               DefaultTextStyle(
+                // Dialog title — ExtraBold 800 (screen titles / primary actions spec)
                 style: GoogleFonts.nunito(
                   color: textColor,
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
+                  letterSpacing: -0.18,   // -0.01em × 18
+                  height: 1.30,
                   decoration: TextDecoration.none,
                 ),
                 child: title!,
@@ -465,11 +556,13 @@ class GardenGlassDialog extends StatelessWidget {
             if (title != null && content != null) const SizedBox(height: 12),
             if (content != null)
               DefaultTextStyle(
+                // Dialog body — Regular 400 (body text spec), height 1.55
                 style: GoogleFonts.nunito(
                   color: subtextColor,
                   fontSize: 14,
                   fontWeight: FontWeight.w400,
-                  height: 1.5,
+                  letterSpacing: 0,
+                  height: 1.55,
                   decoration: TextDecoration.none,
                 ),
                 child: content!,
@@ -873,17 +966,18 @@ class GardenButton extends StatelessWidget {
         child: CircularProgressIndicator(color: textColor, strokeWidth: 2),
       );
     }
+    // GardenButton text — ExtraBold 800 (primary actions per spec)
     if (icon != null) {
       return Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(icon, color: textColor, size: 18),
           const SizedBox(width: 8),
-          Text(label, style: GoogleFonts.nunito(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+          Text(label, style: GoogleFonts.nunito(color: textColor, fontWeight: FontWeight.w800, fontSize: 15, letterSpacing: 0.10)),
         ],
       );
     }
-    return Text(label, style: GoogleFonts.nunito(color: textColor, fontWeight: FontWeight.w700, fontSize: 15));
+    return Text(label, style: GoogleFonts.nunito(color: textColor, fontWeight: FontWeight.w800, fontSize: 15, letterSpacing: 0.10));
   }
 }
 
@@ -1018,12 +1112,30 @@ ThemeData gardenTheme({bool dark = false}) {
 
   final textH    = dark ? GardenColors.darkTextHint        : GardenColors.lightTextHint;
 
-  // Base text theme con Nunito. Todos los widgets de Material que usan el
-  // textTheme del theme (AppBar, ListTile, etc.) heredan Nunito automáticamente.
-  final baseTextTheme = ThemeData(brightness: dark ? Brightness.dark : Brightness.light).textTheme;
-  final nunitoTextTheme = GoogleFonts.nunitoTextTheme(baseTextTheme).apply(
-    bodyColor: textP,
-    displayColor: textP,
+  // TextTheme explícito — Nunito con pesos, letter-spacing y line-heights
+  // según el spec de la tabla de tokens de tipografía.
+  // Todos los widgets de Material heredan estos valores automáticamente.
+  final nunitoTextTheme = TextTheme(
+    // ── Display — Black 900, ls -0.038em, height 0.95–1.05 ──────────────
+    displayLarge:  GoogleFonts.nunito(color: textP, fontSize: 57, fontWeight: FontWeight.w900, letterSpacing: -2.17, height: 1.00),
+    displayMedium: GoogleFonts.nunito(color: textP, fontSize: 45, fontWeight: FontWeight.w900, letterSpacing: -1.71, height: 1.00),
+    displaySmall:  GoogleFonts.nunito(color: textP, fontSize: 36, fontWeight: FontWeight.w800, letterSpacing: -0.90, height: 1.05),
+    // ── Headline — ExtraBold 800, ls -0.025em, height 1.10–1.20 ─────────
+    headlineLarge:  GoogleFonts.nunito(color: textP, fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.80, height: 1.10),
+    headlineMedium: GoogleFonts.nunito(color: textP, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.62, height: 1.15),
+    headlineSmall:  GoogleFonts.nunito(color: textP, fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.43, height: 1.20),
+    // ── Title — Bold 700, ls -0.015em, height 1.20–1.35 ─────────────────
+    titleLarge:  GoogleFonts.nunito(color: textP, fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: -0.30, height: 1.25),
+    titleMedium: GoogleFonts.nunito(color: textP, fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: -0.16, height: 1.30),
+    titleSmall:  GoogleFonts.nunito(color: textP, fontSize: 14, fontWeight: FontWeight.w700, letterSpacing:  0.00, height: 1.30),
+    // ── Body — Medium 500 / Regular 400, ls 0, height 1.55–1.65 ─────────
+    bodyLarge:  GoogleFonts.nunito(color: textP, fontSize: 16, fontWeight: FontWeight.w500, letterSpacing: 0, height: 1.60),
+    bodyMedium: GoogleFonts.nunito(color: textP, fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0, height: 1.55),
+    bodySmall:  GoogleFonts.nunito(color: textP, fontSize: 12, fontWeight: FontWeight.w400, letterSpacing: 0, height: 1.50),
+    // ── Label — Bold/ExtraBold, ls +0.06–1.20, height 1.20–1.30 ─────────
+    labelLarge:  GoogleFonts.nunito(color: textP, fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.10, height: 1.20),
+    labelMedium: GoogleFonts.nunito(color: textP, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.08, height: 1.25),
+    labelSmall:  GoogleFonts.nunito(color: textP, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.20, height: 1.20),
   );
 
   return ThemeData(
@@ -1059,9 +1171,12 @@ ThemeData gardenTheme({bool dark = false}) {
       scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,
       centerTitle: false,
+      // AppBar title — Bold 700, ls -0.01em (heading range), height 1.30
       titleTextStyle: GoogleFonts.nunito(
         fontSize: 18,
         fontWeight: FontWeight.w700,
+        letterSpacing: -0.18,
+        height: 1.30,
         color: textP,
       ),
       shadowColor: Colors.transparent,
@@ -1072,7 +1187,8 @@ ThemeData gardenTheme({bool dark = false}) {
         foregroundColor: Colors.white,
         minimumSize: const Size(double.infinity, 52),
         shape: RoundedRectangleBorder(borderRadius: GardenRadius.md_),
-        textStyle: GoogleFonts.nunito(fontWeight: FontWeight.w700, fontSize: 15),
+        // Botones primarios — ExtraBold 800 (primary actions)
+        textStyle: GoogleFonts.nunito(fontWeight: FontWeight.w800, fontSize: 15, letterSpacing: 0.10),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -1113,7 +1229,8 @@ ThemeData gardenTheme({bool dark = false}) {
           : Colors.white.withValues(alpha: 0.55),
       selectedColor: GardenColors.primary.withValues(alpha: 0.18),
       checkmarkColor: GardenColors.primary,
-      labelStyle: GoogleFonts.nunito(color: textP, fontSize: 13, fontWeight: FontWeight.w500),
+      // Chips — SemiBold 600 (nav labels, chips, secondary buttons)
+      labelStyle: GoogleFonts.nunito(color: textP, fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.06),
       side: BorderSide(color: border),
       shape: RoundedRectangleBorder(borderRadius: GardenRadius.md_),
       elevation: 0,

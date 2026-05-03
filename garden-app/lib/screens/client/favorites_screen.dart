@@ -158,7 +158,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.45),
+                          color: Colors.black.withValues(alpha: 0.45),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(Icons.favorite, color: Colors.red, size: 18),
@@ -173,7 +173,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: GardenColors.success.withOpacity(0.9),
+                          color: GardenColors.success.withValues(alpha: 0.9),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Row(
@@ -279,7 +279,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   Widget _photoPlaceholder() {
     return Container(
-      color: GardenColors.primary.withOpacity(0.1),
+      color: GardenColors.primary.withValues(alpha: 0.1),
       child: const Center(child: Icon(Icons.pets, size: 40, color: GardenColors.primary)),
     );
   }
@@ -295,7 +295,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               width: 100,
               height: 100,
               decoration: BoxDecoration(
-                color: GardenColors.primary.withOpacity(0.08),
+                color: GardenColors.primary.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.favorite_border, size: 48, color: GardenColors.primary),

@@ -371,6 +371,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         await _loadCaregivers();
       } else if (data['error']?['code'] == 'PROFILE_INCOMPLETE' && !force) {
         // Preguntar si quiere forzar la aprobación
+        if (!mounted) return;
         final shouldForce = await showDialog<bool>(
           context: context,
           builder: (ctx) => GardenGlassDialog(
@@ -583,7 +584,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
+        color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(4),
       ),
       child: RichText(
@@ -625,9 +626,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withOpacity(0.5), width: 0.5),
+        border: Border.all(color: color.withValues(alpha: 0.5), width: 0.5),
       ),
       child: Text(label, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold)),
     );
@@ -661,9 +662,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: GardenColors.error.withOpacity(0.1),
+                    color: GardenColors.error.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: GardenColors.error.withOpacity(0.3)),
+                    border: Border.all(color: GardenColors.error.withValues(alpha: 0.3)),
                   ),
                   child: const Text('Admin', style: TextStyle(color: GardenColors.error, fontSize: 11, fontWeight: FontWeight.w600)),
                 ),
@@ -907,7 +908,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           const SizedBox(height: 8),
           ...logs.map((log) => Padding(
             padding: const EdgeInsets.only(bottom: 4),
-            child: Text('• $log', style: TextStyle(color: subtextColor.withOpacity(0.8), fontSize: 10)),
+            child: Text('• $log', style: TextStyle(color: subtextColor.withValues(alpha: 0.8), fontSize: 10)),
           )),
         ],
       ),
@@ -942,7 +943,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: selected ? GardenColors.primary.withOpacity(0.1) : Colors.transparent,
+                color: selected ? GardenColors.primary.withValues(alpha: 0.1) : Colors.transparent,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: selected ? GardenColors.primary : borderColor),
               ),
@@ -1132,7 +1133,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   margin: const EdgeInsets.only(right: 8),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    color: selected ? GardenColors.primary.withOpacity(0.1) : Colors.transparent,
+                    color: selected ? GardenColors.primary.withValues(alpha: 0.1) : Colors.transparent,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: selected ? GardenColors.primary : borderColor),
                   ),
@@ -1262,9 +1263,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   Widget _scoreBadge(String label, num score, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     decoration: BoxDecoration(
-      color: color.withOpacity(0.12),
+      color: color.withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: color.withOpacity(0.4)),
+      border: Border.all(color: color.withValues(alpha: 0.4)),
     ),
     child: Text('$label: ${score.toStringAsFixed(0)}%',
       style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
@@ -1302,7 +1303,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   margin: const EdgeInsets.only(right: 8),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    color: selected ? GardenColors.primary.withOpacity(0.1) : Colors.transparent,
+                    color: selected ? GardenColors.primary.withValues(alpha: 0.1) : Colors.transparent,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: selected ? GardenColors.primary : borderColor),
                   ),
@@ -1421,14 +1422,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         decoration: BoxDecoration(
           color: surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: status == 'RESOLVED' ? statusColor.withOpacity(0.25) : borderColor),
+          border: Border.all(color: status == 'RESOLVED' ? statusColor.withValues(alpha: 0.25) : borderColor),
         ),
         child: Row(children: [
           // Status icon circle
           Container(
             width: 40, height: 40,
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.10),
+              color: statusColor.withValues(alpha: 0.10),
               shape: BoxShape.circle,
             ),
             child: Icon(statusIcon, size: 18, color: statusColor),
@@ -1460,7 +1461,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.10),
+                  color: statusColor.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -1474,7 +1475,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                   decoration: BoxDecoration(
-                    color: verdictColor!.withOpacity(0.10),
+                    color: verdictColor!.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(verdictLabel, style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: verdictColor)),
@@ -1557,7 +1558,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               Row(children: [
                 Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: verdictColor.withOpacity(0.12), shape: BoxShape.circle),
+                  decoration: BoxDecoration(color: verdictColor.withValues(alpha: 0.12), shape: BoxShape.circle),
                   child: Icon(verdictIcon, size: 20, color: verdictColor),
                 ),
                 const SizedBox(width: 12),
@@ -1577,9 +1578,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: verdictColor.withOpacity(0.08),
+                    color: verdictColor.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: verdictColor.withOpacity(0.3)),
+                    border: Border.all(color: verdictColor.withValues(alpha: 0.3)),
                   ),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
@@ -1625,9 +1626,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: GardenColors.warning.withOpacity(0.08),
+                    color: GardenColors.warning.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: GardenColors.warning.withOpacity(0.35)),
+                    border: Border.all(color: GardenColors.warning.withValues(alpha: 0.35)),
                   ),
                   child: Row(children: [
                     const Icon(Icons.confirmation_number_rounded, size: 16, color: GardenColors.warning),
@@ -1732,7 +1733,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     Container(
                       width: 18, height: 18,
                       margin: const EdgeInsets.only(right: 8),
-                      decoration: BoxDecoration(color: GardenColors.primary.withOpacity(0.12), shape: BoxShape.circle),
+                      decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.12), shape: BoxShape.circle),
                       child: Center(child: Text('${e.key + 1}',
                         style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: GardenColors.primary))),
                     ),
@@ -1826,14 +1827,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         decoration: BoxDecoration(
           color: surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: GardenColors.warning.withOpacity(0.4)),
+          border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           // Header stripe
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              color: GardenColors.warning.withOpacity(0.08),
+              color: GardenColors.warning.withValues(alpha: 0.08),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
             ),
             child: Row(children: [
@@ -1935,7 +1936,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: GardenColors.success.withOpacity(0.06),
+                color: GardenColors.success.withValues(alpha: 0.06),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
               ),
               child: Row(children: [
@@ -1948,7 +1949,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                   decoration: BoxDecoration(
-                    color: GardenColors.success.withOpacity(0.12),
+                    color: GardenColors.success.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -2057,7 +2058,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: GardenColors.success.withOpacity(0.3)),
+                border: Border.all(color: GardenColors.success.withValues(alpha: 0.3)),
               ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
@@ -2069,7 +2070,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: GardenColors.success.withOpacity(0.12),
+                      color: GardenColors.success.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text('Últimos ${_paymentsHistory.length} pagos',
@@ -2153,13 +2154,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 decoration: BoxDecoration(
                   color: surface,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.deepOrange.withOpacity(0.4)),
+                  border: Border.all(color: Colors.deepOrange.withValues(alpha: 0.4)),
                 ),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.deepOrange.withOpacity(0.08),
+                      color: Colors.deepOrange.withValues(alpha: 0.08),
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
                     ),
                     child: Row(children: [
@@ -2169,13 +2170,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                       const Spacer(),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(color: Colors.blue.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                        decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
                         child: Text(method == 'qr' ? 'QR' : 'Transferencia', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blue)),
                       ),
                       const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(color: GardenColors.warning.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                        decoration: BoxDecoration(color: GardenColors.warning.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
                         child: const Text('Pendiente', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: GardenColors.warning)),
                       ),
                     ]),
@@ -2316,7 +2317,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                     decoration: BoxDecoration(
                       color: _paymentsHistoryFilter == f.$2
-                        ? GardenColors.primary.withOpacity(0.1)
+                        ? GardenColors.primary.withValues(alpha: 0.1)
                         : Colors.transparent,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
@@ -2379,12 +2380,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.25)),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
       child: Row(children: [
         Container(
           padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(color: color.withOpacity(0.12), shape: BoxShape.circle),
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
           child: Icon(icon, size: 14, color: color),
         ),
         const SizedBox(width: 8),
@@ -2456,12 +2457,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
+        if (!mounted) return;
         setState(() {}); // Recargar el FutureBuilder
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Pago aprobado'), backgroundColor: GardenColors.success),
         );
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
       );
@@ -2586,7 +2589,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   margin: const EdgeInsets.only(right: 8),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: selected ? GardenColors.primary.withOpacity(0.1) : Colors.transparent,
+                    color: selected ? GardenColors.primary.withValues(alpha: 0.1) : Colors.transparent,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: selected ? GardenColors.primary : borderColor),
                   ),
@@ -3160,9 +3163,9 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
         margin: const EdgeInsets.only(right: 6, bottom: 6),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: value ? GardenColors.success.withOpacity(0.12) : GardenColors.error.withOpacity(0.1),
+          color: value ? GardenColors.success.withValues(alpha: 0.12) : GardenColors.error.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: value ? GardenColors.success.withOpacity(0.35) : GardenColors.error.withOpacity(0.3)),
+          border: Border.all(color: value ? GardenColors.success.withValues(alpha: 0.35) : GardenColors.error.withValues(alpha: 0.3)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(value ? Icons.check : Icons.close, size: 11, color: value ? GardenColors.success : GardenColors.error),
@@ -3176,9 +3179,9 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
       margin: const EdgeInsets.only(right: 6, bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: (color ?? GardenColors.primary).withOpacity(0.1),
+        color: (color ?? GardenColors.primary).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: (color ?? GardenColors.primary).withOpacity(0.3)),
+        border: Border.all(color: (color ?? GardenColors.primary).withValues(alpha: 0.3)),
       ),
       child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color ?? GardenColors.primary)),
     );
@@ -3216,9 +3219,9 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
               margin: const EdgeInsets.fromLTRB(20, 8, 20, 8),
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: GardenColors.warning.withOpacity(0.1),
+                color: GardenColors.warning.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: GardenColors.warning.withOpacity(0.4)),
+                border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4)),
               ),
               child: Row(children: [
                 const Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 16),
@@ -3336,9 +3339,9 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
-                            color: GardenColors.success.withOpacity(0.1),
+                            color: GardenColors.success.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: GardenColors.success.withOpacity(0.4)),
+                            border: Border.all(color: GardenColors.success.withValues(alpha: 0.4)),
                           ),
                           child: Row(mainAxisSize: MainAxisSize.min, children: const [
                             Icon(Icons.verified_rounded, size: 11, color: GardenColors.success),
@@ -3614,9 +3617,9 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
-                                color: GardenColors.primary.withOpacity(0.08),
+                                color: GardenColors.primary.withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: GardenColors.primary.withOpacity(0.25)),
+                                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.25)),
                               ),
                               child: const Row(mainAxisSize: MainAxisSize.min, children: [
                                 Icon(Icons.open_in_new_rounded, size: 14, color: GardenColors.primary),
@@ -3778,7 +3781,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
   Widget _statChip(IconData icon, String text, Color iconColor, Color textColor) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
     decoration: BoxDecoration(
-      color: iconColor.withOpacity(0.08),
+      color: iconColor.withValues(alpha: 0.08),
       borderRadius: BorderRadius.circular(20),
     ),
     child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -3792,9 +3795,9 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
     child: Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: GardenColors.primary.withOpacity(0.06),
+        color: GardenColors.primary.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: GardenColors.primary.withOpacity(0.2)),
+        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
       ),
       child: Column(children: [
         Icon(icon, size: 16, color: GardenColors.primary),
@@ -3808,9 +3811,9 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
   Widget _completionChip(String label, bool done, Color borderColor) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     decoration: BoxDecoration(
-      color: done ? GardenColors.success.withOpacity(0.1) : GardenColors.error.withOpacity(0.07),
+      color: done ? GardenColors.success.withValues(alpha: 0.1) : GardenColors.error.withValues(alpha: 0.07),
       borderRadius: BorderRadius.circular(6),
-      border: Border.all(color: done ? GardenColors.success.withOpacity(0.3) : GardenColors.error.withOpacity(0.2)),
+      border: Border.all(color: done ? GardenColors.success.withValues(alpha: 0.3) : GardenColors.error.withValues(alpha: 0.2)),
     ),
     child: Row(mainAxisSize: MainAxisSize.min, children: [
       Icon(done ? Icons.check_circle_rounded : Icons.radio_button_unchecked, size: 11,
@@ -3836,9 +3839,9 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
     );
@@ -3847,9 +3850,9 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
   Widget _docChip(String label, IconData icon, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     decoration: BoxDecoration(
-      color: color.withOpacity(0.08),
+      color: color.withValues(alpha: 0.08),
       borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: color.withOpacity(0.3)),
+      border: Border.all(color: color.withValues(alpha: 0.3)),
     ),
     child: Row(mainAxisSize: MainAxisSize.min, children: [
       Icon(icon, size: 14, color: color),
@@ -3861,7 +3864,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
   Widget _miniIdBadge(String label, String value, Color subtextColor, Color borderColor) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
     decoration: BoxDecoration(
-      color: subtextColor.withOpacity(0.06),
+      color: subtextColor.withValues(alpha: 0.06),
       borderRadius: BorderRadius.circular(6),
       border: Border.all(color: borderColor),
     ),

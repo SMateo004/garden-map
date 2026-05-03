@@ -238,7 +238,9 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/api/test', testRoutes);
+if (env.NODE_ENV !== 'production') {
+  app.use('/api/test', testRoutes);
+}
 app.use('/api/agentes', agentesRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/wallet', walletRoutes);

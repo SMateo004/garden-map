@@ -1031,8 +1031,14 @@ export async function cancelBooking(
       .catch((err) => logger.error('Notification onRefundProcessed failed', { bookingId, err }));
   }
 
-  // Registro en Blockchain (asíncrono)
-  blockchainService.cancelBookingOnChain(bookingId, cancellationReason || 'Cancelado por usuario').catch(err => {
+  // Registro en Blockchain (asíncrono) — guarda txHash si la tx tiene éxito
+  blockchainService.cancelBookingOnChain(bookingId, cancellationReason || 'Cancelado por usuario').then(async (txHash) => {
+    if (txHash) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (prisma.booking as any).update({ where: { id: bookingId }, data: { blockchainCancelledTxHash: txHash } });
+      logger.info('[Blockchain] cancel txHash saved', { bookingId, txHash });
+    }
+  }).catch(err => {
     logger.error('Blockchain cancellation failed', { bookingId, err });
   });
 

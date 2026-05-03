@@ -457,10 +457,10 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(
-                        color: GardenColors.primary.withOpacity(0.08),
+                        color: GardenColors.primary.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                            color: GardenColors.primary.withOpacity(0.4)),
+                            color: GardenColors.primary.withValues(alpha: 0.4)),
                       ),
                       child: Row(
                         children: [
@@ -546,9 +546,9 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: GardenColors.primary.withOpacity(0.08),
+          color: GardenColors.primary.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: GardenColors.primary.withOpacity(0.3)),
+          border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
         ),
         child: Text(label,
             style: const TextStyle(
@@ -629,7 +629,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
               margin: EdgeInsets.only(right: t.$1 != 'NEWS' ? 6 : 0),
               padding: const EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
-                color: selected ? t.$3.withOpacity(0.15) : surface,
+                color: selected ? t.$3.withValues(alpha: 0.15) : surface,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                     color: selected ? t.$3 : borderColor),
@@ -754,7 +754,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
               Center(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Icon(Icons.schedule_rounded,
-                      size: 48, color: subtextColor.withOpacity(0.5)),
+                      size: 48, color: subtextColor.withValues(alpha: 0.5)),
                   const SizedBox(height: 12),
                   Text('Sin notificaciones programadas',
                       style: TextStyle(color: subtextColor, fontSize: 14)),
@@ -792,7 +792,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
       decoration: BoxDecoration(
         color: surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.withOpacity(0.4)),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -810,9 +810,9 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: GardenColors.error.withOpacity(0.1),
+                  color: GardenColors.error.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: GardenColors.error.withOpacity(0.4)),
+                  border: Border.all(color: GardenColors.error.withValues(alpha: 0.4)),
                 ),
                 child: const Row(mainAxisSize: MainAxisSize.min, children: [
                   Icon(Icons.cancel_outlined, color: GardenColors.error, size: 14),
@@ -858,7 +858,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
               Center(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Icon(Icons.history_rounded,
-                      size: 48, color: subtextColor.withOpacity(0.5)),
+                      size: 48, color: subtextColor.withValues(alpha: 0.5)),
                   const SizedBox(height: 12),
                   Text('Sin historial todavía',
                       style: TextStyle(color: subtextColor, fontSize: 14)),
@@ -960,9 +960,9 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
         padding:
             const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
+          color: color.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Text(label,
             style: TextStyle(

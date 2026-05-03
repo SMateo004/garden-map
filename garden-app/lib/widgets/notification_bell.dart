@@ -270,7 +270,7 @@ class _NotificationsSheetState extends State<_NotificationsSheet> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
-            color: GardenColors.primary.withOpacity(0.08),
+            color: GardenColors.primary.withValues(alpha: 0.08),
             blurRadius: 24,
             offset: const Offset(0, -4),
           ),
@@ -297,7 +297,7 @@ class _NotificationsSheetState extends State<_NotificationsSheet> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: GardenColors.primary.withOpacity(0.10),
+                    color: GardenColors.primary.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.inbox_outlined, color: GardenColors.primary, size: 20),
@@ -383,12 +383,12 @@ class _NotificationRow extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: isUnread
-              ? GardenColors.primary.withOpacity(0.06)
+              ? GardenColors.primary.withValues(alpha: 0.06)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isUnread
-                ? GardenColors.primary.withOpacity(0.22)
+                ? GardenColors.primary.withValues(alpha: 0.22)
                 : borderColor,
           ),
         ),
@@ -400,7 +400,7 @@ class _NotificationRow extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: _typeColor(notif.type).withOpacity(0.12),
+                color: _typeColor(notif.type).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
@@ -449,7 +449,7 @@ class _NotificationRow extends StatelessWidget {
                   Text(
                     _relativeTime(notif.createdAt),
                     style: TextStyle(
-                      color: subtextColor.withOpacity(0.65),
+                      color: subtextColor.withValues(alpha: 0.65),
                       fontSize: 11,
                     ),
                   ),
@@ -460,7 +460,7 @@ class _NotificationRow extends StatelessWidget {
             Icon(
               Icons.chevron_right_rounded,
               size: 18,
-              color: subtextColor.withOpacity(0.4),
+              color: subtextColor.withValues(alpha: 0.4),
             ),
           ],
         ),
@@ -555,7 +555,7 @@ class _NotificationDetailDialog extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.08),
+                color: iconColor.withValues(alpha: 0.08),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Row(
@@ -564,7 +564,7 @@ class _NotificationDetailDialog extends StatelessWidget {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: iconColor.withOpacity(0.15),
+                      color: iconColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Icon(iconData, color: iconColor, size: 26),
@@ -604,7 +604,7 @@ class _NotificationDetailDialog extends StatelessWidget {
                 child: Text(
                   _formatFull(notif.createdAt),
                   style: TextStyle(
-                    color: subtextColor.withOpacity(0.7),
+                    color: subtextColor.withValues(alpha: 0.7),
                     fontSize: 12,
                   ),
                 ),
@@ -673,7 +673,7 @@ class _EmptyNotifications extends StatelessWidget {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: GardenColors.primary.withOpacity(0.08),
+                color: GardenColors.primary.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: const Icon(

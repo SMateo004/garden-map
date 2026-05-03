@@ -6,9 +6,6 @@ import { useVerifyPayment } from '@/hooks/useVerifyPayment';
 import { getImageUrl } from '@/utils/images';
 import toast from 'react-hot-toast';
 
-/** Minutos de validez del QR en página de pago (debe coincidir con backend QR_VALIDITY_MINUTES_PAYMENT). */
-const QR_VALIDITY_MINUTES = 15;
-
 function formatRemaining(ms: number): string {
   if (ms <= 0) return '0:00';
   const totalSeconds = Math.floor(ms / 1000);

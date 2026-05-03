@@ -2600,6 +2600,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         await _loadBooking();
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('¡Servicio iniciado! El escrow blockchain está activo.'), backgroundColor: GardenColors.success),
         );
@@ -2607,6 +2608,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         throw Exception(data['error']?['message'] ?? 'Error');
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error));
     } finally {
       if (mounted) setState(() => _isProcessing = false);
@@ -2879,6 +2881,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         throw Exception(data['error']?['message'] ?? 'Error');
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error));
     } finally {
       if (mounted) setState(() => _isProcessing = false);

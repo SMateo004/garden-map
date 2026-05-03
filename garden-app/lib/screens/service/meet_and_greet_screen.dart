@@ -70,8 +70,12 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
       final data = jsonDecode(res.body);
       if (data['success'] == true) {
         if (mounted) setState(() => _mg = data['data'] as Map<String, dynamic>?);
+      } else {
+        debugPrint('[MG] _loadMg error: ${data['error']?['message'] ?? 'unknown'}');
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[MG] _loadMg exception: $e');
+    }
   }
 
   Future<void> _propose() async {
@@ -87,6 +91,11 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
       _proposedDate!.year, _proposedDate!.month, _proposedDate!.day,
       _proposedTime!.hour, _proposedTime!.minute,
     );
+    // Validar que la fecha sea en el futuro (mínimo 30 minutos adelante)
+    if (dt.isBefore(DateTime.now().add(const Duration(minutes: 30)))) {
+      _snack('La fecha y hora deben ser al menos 30 minutos en el futuro', isError: true);
+      return;
+    }
     if (mounted) setState(() => _submitting = true);
     try {
       final res = await http.post(

@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { UnauthorizedError, ForbiddenError } from '../shared/errors.js';
 import logger from '../shared/logger.js';
+import { isTokenBlacklisted } from '../services/token-blacklist.service.js';
 
 export interface JwtPayload {
   userId: string;
@@ -30,7 +31,16 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
   try {
     const payload = jwt.verify(token, env.JWT_SECRET) as JwtPayload;
     req.user = payload;
-    next();
+    // Async blacklist check — run after basic JWT validation to avoid
+    // hitting Redis on every invalid token
+    isTokenBlacklisted(token).then(revoked => {
+      if (revoked) {
+        logger.warn('Auth: 401 — token revocado', { path: req.path, userId: payload.userId });
+        next(new UnauthorizedError('Sesión cerrada. Vuelve a iniciar sesión.'));
+      } else {
+        next();
+      }
+    }).catch(() => next()); // fail-open: never block on blacklist errors
   } catch {
     logger.warn('Auth: 401 — token inválido o expirado', { path: req.path, method: req.method });
     next(new UnauthorizedError('Token inválido o expirado'));

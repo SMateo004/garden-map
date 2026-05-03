@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import prisma from '../../config/database.js';
@@ -6,6 +7,15 @@ import { getIO } from '../../services/socket.service.js';
 import { sendPushToUser } from '../../services/firebase.service.js';
 
 const router = Router();
+
+// 60 messages per minute per IP — prevents chat spam / flooding
+const chatMessageLimiter = rateLimit({
+  windowMs: 60 * 1_000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: { code: 'RATE_LIMITED', message: 'Demasiados mensajes. Espera un momento.' } },
+});
 
 // GET /api/chat/:bookingId/messages - Obtener historial de mensajes
 router.get('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
@@ -65,13 +75,16 @@ router.get('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Requ
 }));
 
 // POST /api/chat/:bookingId/messages - Enviar un mensaje
-router.post('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
+router.post('/:bookingId/messages', authMiddleware, chatMessageLimiter, asyncHandler(async (req: Request, res: Response) => {
     const { bookingId } = req.params;
     const userId = (req as any).user.userId;
     const { message } = req.body;
 
     if (!message || typeof message !== 'string' || !message.trim()) {
         return res.status(400).json({ success: false, error: { message: 'El mensaje no puede estar vacío' } });
+    }
+    if (message.length > 2000) {
+        return res.status(400).json({ success: false, error: { message: 'El mensaje no puede superar los 2000 caracteres' } });
     }
 
     // Verificar acceso al booking y obtener roles

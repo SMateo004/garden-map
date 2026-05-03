@@ -5,7 +5,7 @@ import { useClientMyProfile } from '@/hooks/useClientMyProfile';
 import { useInitPayment } from '@/hooks/useInitPayment';
 import { ZONE_LABELS } from '@/types/caregiver';
 import { getImageUrl } from '@/utils/images';
-import toast from 'react-hot-toast';
+
 
 const TIME_SLOT_LABELS: Record<string, string> = {
   MANANA: 'Mañana',

@@ -482,7 +482,6 @@ class _BookingScreenState extends State<BookingScreen> {
         );
       }
 
-    final services = (_caregiver!['services'] as List?)?.cast<String>() ?? [];
     double? calculatedPrice = _calculatePrice();
 
     return Scaffold(
@@ -879,7 +878,7 @@ class _BookingScreenState extends State<BookingScreen> {
               decoration: BoxDecoration(
                 color: bg,
                 border: Border(top: BorderSide(color: borderColor)),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, -4))],
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, -4))],
               ),
               child: GardenButton(
                 label: _isSubmitting ? 'Creando reserva...' : 'Confirmar reserva',
@@ -1196,9 +1195,9 @@ class _BookingScreenState extends State<BookingScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: GardenColors.primary.withOpacity(0.05),
+        color: GardenColors.primary.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: GardenColors.primary.withOpacity(0.3)),
+        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1233,63 +1232,6 @@ class _BookingScreenState extends State<BookingScreen> {
           Text('$label: ', style: const TextStyle(color: GardenColors.darkTextSecondary, fontSize: 13)),
           Text(value, style: TextStyle(color: themeNotifier.isDark ? Colors.white : Colors.black87, fontSize: 13, fontWeight: FontWeight.w600)),
         ],
-      ),
-    );
-  }
-}
-
-class _ServiceCard extends StatelessWidget {
-  final String title;
-  final String emoji;
-  final String price;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _ServiceCard({
-    required this.title,
-    required this.emoji,
-    required this.price,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = themeNotifier.isDark;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: isSelected
-            ? BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    GardenColors.primary.withValues(alpha: 0.18),
-                    GardenColors.primary.withValues(alpha: 0.08),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.35), width: 1.0),
-              )
-            : BoxDecoration(
-                color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white.withValues(alpha: 0.40),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: borderColor, width: 1.0),
-              ),
-        child: Column(
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 32)),
-            const SizedBox(height: 12),
-            Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text(price, style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.bold, fontSize: 12)),
-          ],
-        ),
       ),
     );
   }

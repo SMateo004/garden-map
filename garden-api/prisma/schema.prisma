@@ -255,6 +255,7 @@ model Booking {
   caregiverComment          String?          @db.Text
   blockchainTxHash          String?
   blockchainFinalizedTxHash String?
+  blockchainCancelledTxHash String?
   payoutStatus              String           @default("PENDING")
   updatedAt                 DateTime         @updatedAt
   caregiver                 CaregiverProfile @relation("CaregiverBookings", fields: [caregiverId], references: [id], onDelete: Cascade)

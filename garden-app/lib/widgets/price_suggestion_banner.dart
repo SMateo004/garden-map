@@ -131,7 +131,7 @@ class _PriceSuggestionBannerState extends State<PriceSuggestionBanner> {
       decoration: BoxDecoration(
         color: surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: accentColor.withOpacity(0.35)),
+        border: Border.all(color: accentColor.withValues(alpha: 0.35)),
         boxShadow: GardenShadows.card,
       ),
       child: Column(
@@ -141,7 +141,7 @@ class _PriceSuggestionBannerState extends State<PriceSuggestionBanner> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.08),
+              color: accentColor.withValues(alpha: 0.08),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
             ),
             child: Row(
@@ -149,7 +149,7 @@ class _PriceSuggestionBannerState extends State<PriceSuggestionBanner> {
                 Container(
                   padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
-                    color: accentColor.withOpacity(0.15),
+                    color: accentColor.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(Icons.auto_graph_rounded, color: accentColor, size: 18),
@@ -170,7 +170,7 @@ class _PriceSuggestionBannerState extends State<PriceSuggestionBanner> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: confianzaColor.withOpacity(0.12),
+                    color: confianzaColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(confianza, style: TextStyle(color: confianzaColor, fontSize: 10, fontWeight: FontWeight.w700)),
@@ -215,7 +215,7 @@ class _PriceSuggestionBannerState extends State<PriceSuggestionBanner> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: accentColor.withOpacity(0.12),
+                                  color: accentColor.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
@@ -237,7 +237,7 @@ class _PriceSuggestionBannerState extends State<PriceSuggestionBanner> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.03),
+                    color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.black.withValues(alpha: 0.03),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(
@@ -257,7 +257,7 @@ class _PriceSuggestionBannerState extends State<PriceSuggestionBanner> {
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text('Modelo: $modeloUsado',
-                    style: TextStyle(color: subtextColor.withOpacity(0.6), fontSize: 10)),
+                    style: TextStyle(color: subtextColor.withValues(alpha: 0.6), fontSize: 10)),
                 ),
 
                 const SizedBox(height: 14),

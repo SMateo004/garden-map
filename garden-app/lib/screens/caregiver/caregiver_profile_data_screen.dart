@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -430,9 +429,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         _computeCompletion();
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al subir: $e')));
     } finally {
-      setState(() => _isSaving = false);
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -717,7 +717,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                   style: ElevatedButton.styleFrom(
                     backgroundColor: GardenColors.primary,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: GardenColors.primary.withOpacity(0.3),
+                    disabledBackgroundColor: GardenColors.primary.withValues(alpha: 0.3),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     elevation: 0,
                   ),
@@ -843,7 +843,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: _completionPercentage / 100,
-              backgroundColor: Colors.white.withOpacity(0.3),
+              backgroundColor: Colors.white.withValues(alpha: 0.3),
               valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
               minHeight: 6,
             ),
@@ -882,7 +882,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
           list.remove(value);
         } });
       },
-      selectedColor: GardenColors.primary.withOpacity(0.2),
+      selectedColor: GardenColors.primary.withValues(alpha: 0.2),
       checkmarkColor: GardenColors.primary,
       backgroundColor: Colors.transparent,
       shape: RoundedRectangleBorder(
@@ -899,7 +899,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: value ? GardenColors.primary.withOpacity(0.1) : Colors.transparent,
+            color: value ? GardenColors.primary.withValues(alpha: 0.1) : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: value ? GardenColors.primary : border),
           ),
