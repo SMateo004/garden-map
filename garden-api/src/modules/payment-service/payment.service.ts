@@ -195,9 +195,10 @@ export async function handleCheckoutCompleted(
  * Verifica pago por QR (placeholder integración bancaria) y confirma la reserva.
  * Busca por qrId; si la reserva está PENDING_PAYMENT y el QR no expiró, marca CONFIRMED y paidAt.
  */
-export async function verifyPaymentByQr(qrId: string): Promise<{ bookingId: string; status: string }> {
+export async function verifyPaymentByQr(qrId: string, clientId: string): Promise<{ bookingId: string; status: string }> {
+  // Ownership check: only the booking's own client can confirm their QR payment
   const booking = await prisma.booking.findFirst({
-    where: { qrId },
+    where: { qrId, clientId },
   });
 
   if (!booking) {

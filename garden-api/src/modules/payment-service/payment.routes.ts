@@ -43,7 +43,8 @@ router.post(
       res.json({ success: true, data: result });
       return;
     }
-    const result = await paymentService.verifyPaymentByQr(body.qrId!);
+    // Pass the authenticated userId so verifyPaymentByQr can enforce ownership
+    const result = await paymentService.verifyPaymentByQr(body.qrId!, req.user!.userId);
     res.json({ success: true, data: result });
   })
 );

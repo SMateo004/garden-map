@@ -272,8 +272,17 @@ export async function createBooking(
         );
       }
       pricePerUnit = perDay;
-      totalDays = body.totalDays;
-      totalAmount = (totalDays ?? 0) * pricePerUnit;
+      // Always compute totalDays server-side from dates — NEVER trust the client value.
+      // This prevents a client from paying for 1 night while reserving 10.
+      const computedDays = Math.ceil(
+        (new Date(body.endDate).getTime() - new Date(body.startDate).getTime()) /
+          (24 * 60 * 60 * 1000)
+      );
+      if (computedDays < 1) {
+        throw new BookingValidationError('Las fechas no son válidas', 'BOOKING_VALIDATION', 'endDate');
+      }
+      totalDays = computedDays;
+      totalAmount = totalDays * pricePerUnit;
     } else {
       const duration = (body as any).duration;
       const p60 = caregiver.pricePerWalk60 ?? 0;
@@ -843,12 +852,16 @@ export async function requestCancellationByCaregiver(
     }
 
     const now = new Date();
+    // Full refund when the caregiver cancels — client is not at fault.
+    // Set refundStatus=PENDING_APPROVAL so admin can process the actual transfer.
     const updated = await tx.booking.update({
       where: { id: bookingId },
       data: {
         status: BookingStatus.CANCELLED,
         cancelledAt: now,
         cancellationReason: reason,
+        refundAmount: booking.totalAmount,          // full refund
+        refundStatus: RefundStatus.PENDING_APPROVAL, // admin must process
       },
     });
 
@@ -870,6 +883,15 @@ export async function requestCancellationByCaregiver(
         message: `Has cancelado la reserva ${bookingId}. El cliente ha sido notificado y se gestionará el reembolso administrativo correspondiente.`,
         type: 'BOOKING_CANCELLED',
       }
+    });
+
+    // Admin notification so the refund is visible in the admin queue
+    await tx.adminNotification.create({
+      data: {
+        type: 'CAREGIVER_CANCELLED_REFUND_NEEDED',
+        caregiverId: profile.id,
+        bookingId: booking.id,
+      },
     });
 
     logger.info('Reserva cancelada automáticamente por el cuidador', {
@@ -1009,9 +1031,11 @@ export async function cancelBooking(
       refundAmount = 0;
       refundStatus = RefundStatus.REJECTED;
     } else {
-      // Refund policy: return the service price only — Garden keeps its commission
-      refundAmount = Math.max(0, Number(booking.totalAmount) - Number(booking.commissionAmount));
-      refundStatus = refundAmount > 0 ? RefundStatus.APPROVED : RefundStatus.REJECTED;
+      // Apply tiered cancellation policy (hospedaje: 100%/>48h, 50%/24-48h, 0%/<24h;
+      // paseo: 100%/>12h, 50%/6-12h, 0%/<6h) — configured via admin settings.
+      const refundCalc = await calculateRefund(booking, now);
+      refundAmount = refundCalc.refundAmount;
+      refundStatus = refundCalc.refundStatus;
     }
 
     const updated = await tx.booking.update({
@@ -1546,6 +1570,14 @@ export async function requestHospedajeExtensionPayment(
   const extensionId = crypto.randomUUID();
   const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
 
+  // Prevent stacking of multiple unpaid extensions — only one at a time
+  const hasPendingExtension = events.some(
+    (e: any) => e.type === 'EXTENSION_PENDING_PAYMENT' && (!e.qrExpiresAt || new Date(e.qrExpiresAt) > new Date())
+  );
+  if (hasPendingExtension) {
+    throw new BookingValidationError('Ya tienes una solicitud de extensión pendiente de pago. Confirma o espera a que expire antes de solicitar otra.');
+  }
+
   if (method === 'qr') {
     const { qrId, qrImageUrl, qrExpiresAt } = generateQR(bookingId, 15);
     events.push({
@@ -1957,105 +1989,115 @@ export async function getBookingsByCaregiverUserId(
  * Cuidador acepta una reserva pagada.
  */
 export async function acceptBooking(bookingId: string, caregiverUserId: string): Promise<BookingCreateResult> {
-  const profile = await prisma.caregiverProfile.findFirst({
-    where: { userId: caregiverUserId },
-    select: { id: true }
-  });
-  if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
+  return prisma.$transaction(async (tx) => {
+    const profile = await tx.caregiverProfile.findFirst({
+      where: { userId: caregiverUserId },
+      select: { id: true },
+    });
+    if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
 
-  const booking = await prisma.booking.findFirst({
-    where: { id: bookingId, caregiverId: profile.id }
-  });
-
-  if (!booking) throw new BookingNotFoundError(bookingId);
-  if (booking.status !== BookingStatus.WAITING_CAREGIVER_APPROVAL) {
-    throw new BadRequestError('Esta reserva no está esperando aprobación del cuidador');
-  }
-
-  const updated = await prisma.booking.update({
-    where: { id: bookingId },
-    data: { status: BookingStatus.CONFIRMED },
-    include: {
-      caregiver: { include: { user: { select: { id: true, firstName: true, lastName: true, email: true, profilePicture: true } } } },
-      client: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, profilePicture: true } }
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, caregiverId: profile.id },
+    });
+    if (!booking) throw new BookingNotFoundError(bookingId);
+    if (booking.status !== BookingStatus.WAITING_CAREGIVER_APPROVAL) {
+      throw new BadRequestError('Esta reserva no está esperando aprobación del cuidador');
     }
+
+    // Atomic transition — prevents double-accept race conditions
+    const result = await tx.booking.updateMany({
+      where: { id: bookingId, caregiverId: profile.id, status: BookingStatus.WAITING_CAREGIVER_APPROVAL },
+      data: { status: BookingStatus.CONFIRMED },
+    });
+    if (result.count === 0) {
+      throw new BadRequestError('Esta reserva ya fue procesada por otra acción simultánea');
+    }
+
+    const updated = await tx.booking.findFirst({
+      where: { id: bookingId },
+      include: {
+        caregiver: { include: { user: { select: { id: true, firstName: true, lastName: true, email: true, profilePicture: true } } } },
+        client: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, profilePicture: true } },
+      },
+    });
+
+    await tx.notification.create({
+      data: {
+        userId: booking.clientId,
+        title: '¡Tu reserva fue aceptada! 🐾',
+        message: `El cuidador aceptó tu reserva para ${booking.petName}. Ya está confirmada. Puedes ver los detalles en "Mis reservas".`,
+        type: 'BOOKING_ACCEPTED',
+      },
+    });
+    sendPushToUser(booking.clientId, '¡Tu reserva fue aceptada! 🐾', `El cuidador confirmó la reserva para ${booking.petName}.`).catch(() => {});
+
+    notificationService.onBookingAccepted(bookingId).catch(err => {
+      logger.error('Error sending onBookingAccepted notification', { bookingId, err });
+    });
+
+    return bookingToResponse(updated!);
   });
-
-  // Notificación in-app al cliente
-  await prisma.notification.create({
-    data: {
-      userId: updated.clientId,
-      title: '¡Tu reserva fue aceptada! 🐾',
-      message: `El cuidador aceptó tu reserva para ${updated.petName}. Ya está confirmada. Puedes ver los detalles en "Mis reservas".`,
-      type: 'BOOKING_ACCEPTED',
-    },
-  });
-  sendPushToUser(updated.clientId, '¡Tu reserva fue aceptada! 🐾', `El cuidador confirmó la reserva para ${updated.petName}.`).catch(() => {});
-
-  notificationService.onBookingAccepted(bookingId).catch(err => {
-    logger.error('Error sending onBookingAccepted notification', { bookingId, err });
-  });
-
-  // Escrow ya se crea on-chain cuando el pago se confirma (payment.service.ts).
-  // No duplicar la llamada aquí — el contrato rechaza bookings que ya existen.
-
-  return bookingToResponse(updated);
 }
 
 /**
  * Cuidador rechaza una reserva pagada.
  */
 export async function rejectBooking(bookingId: string, caregiverUserId: string, reason: string): Promise<BookingCreateResult> {
-  const profile = await prisma.caregiverProfile.findFirst({
-    where: { userId: caregiverUserId },
-    select: { id: true }
-  });
-  if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
+  return prisma.$transaction(async (tx) => {
+    const profile = await tx.caregiverProfile.findFirst({
+      where: { userId: caregiverUserId },
+      select: { id: true },
+    });
+    if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
 
-  const booking = await prisma.booking.findFirst({
-    where: { id: bookingId, caregiverId: profile.id }
-  });
-
-  if (!booking) throw new BookingNotFoundError(bookingId);
-  if (booking.status !== BookingStatus.WAITING_CAREGIVER_APPROVAL) {
-    throw new BadRequestError('Esta reserva no está esperando aprobación del cuidador');
-  }
-
-  const updated = await prisma.booking.update({
-    where: { id: bookingId },
-    data: {
-      status: BookingStatus.REJECTED_BY_CAREGIVER,
-      cancellationReason: reason,
-      refundStatus: RefundStatus.PENDING_APPROVAL,
-      refundAmount: booking.totalAmount
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, caregiverId: profile.id },
+    });
+    if (!booking) throw new BookingNotFoundError(bookingId);
+    if (booking.status !== BookingStatus.WAITING_CAREGIVER_APPROVAL) {
+      throw new BadRequestError('Esta reserva no está esperando aprobación del cuidador');
     }
-  });
 
-  // Notificación in-app al cliente
-  await prisma.notification.create({
-    data: {
-      userId: booking.clientId,
-      title: 'Reserva rechazada por el cuidador',
-      message: `El cuidador no pudo aceptar tu reserva para ${booking.petName}. Motivo: ${reason}. El equipo de GARDEN gestionará tu reembolso en 1 día hábil.`,
-      type: 'BOOKING_REJECTED',
-    },
-  });
-  sendPushToUser(booking.clientId, 'Reserva rechazada ❌', `El cuidador no pudo aceptar la reserva de ${booking.petName}.`).catch(() => {});
-
-  notificationService.onBookingRejected(bookingId, reason).catch(err => {
-    logger.error('Error sending onBookingRejected notification', { bookingId, err });
-  });
-
-  // Notificación Admin para devolución en 1 día hábil
-  await prisma.adminNotification.create({
-    data: {
-      type: 'BOOKING_REJECTED_REFUND_NEEDED',
-      caregiverId: profile.id,
-      bookingId: booking.id
+    // Atomic transition — prevents double-reject / race with client cancel
+    const result = await tx.booking.updateMany({
+      where: { id: bookingId, caregiverId: profile.id, status: BookingStatus.WAITING_CAREGIVER_APPROVAL },
+      data: {
+        status: BookingStatus.REJECTED_BY_CAREGIVER,
+        cancellationReason: reason,
+        refundStatus: RefundStatus.PENDING_APPROVAL,
+        refundAmount: booking.totalAmount,
+      },
+    });
+    if (result.count === 0) {
+      throw new BadRequestError('Esta reserva ya fue procesada por otra acción simultánea');
     }
-  });
 
-  return bookingToResponse(updated);
+    const updated = await tx.booking.findFirst({ where: { id: bookingId } });
+
+    await tx.notification.create({
+      data: {
+        userId: booking.clientId,
+        title: 'Reserva rechazada por el cuidador',
+        message: `El cuidador no pudo aceptar tu reserva para ${booking.petName}. Motivo: ${reason}. El equipo de GARDEN gestionará tu reembolso en 1 día hábil.`,
+        type: 'BOOKING_REJECTED',
+      },
+    });
+    sendPushToUser(booking.clientId, 'Reserva rechazada ❌', `El cuidador no pudo aceptar la reserva de ${booking.petName}.`).catch(() => {});
+
+    await tx.adminNotification.create({
+      data: {
+        type: 'BOOKING_REJECTED_REFUND_NEEDED',
+        caregiverId: profile.id,
+        bookingId: booking.id,
+      },
+    });
+
+    notificationService.onBookingRejected(bookingId, reason).catch(err => {
+      logger.error('Error sending onBookingRejected notification', { bookingId, err });
+    });
+
+    return bookingToResponse(updated!);
+  });
 }
 export async function startService(bookingId: string, caregiverUserId: string, photoUrl: string): Promise<BookingCreateResult> {
   return prisma.$transaction(async (tx) => {
@@ -2271,6 +2313,12 @@ export async function confirmReceiptByClient(
     if (booking.status !== BookingStatus.COMPLETED) {
       throw new BadRequestError('El servicio debe estar marcado como completado por el cuidador');
     }
+    if (booking.ownerRated) {
+      throw new BadRequestError('Ya calificaste este servicio');
+    }
+    if (booking.payoutStatus === 'ON_HOLD') {
+      throw new BadRequestError('Hay una disputa activa para esta reserva. No se puede calificar nuevamente.');
+    }
     if (booking.payoutStatus === 'PAID') {
       throw new BadRequestError('El pago ya fue procesado');
     }
@@ -2367,5 +2415,75 @@ export async function confirmReceiptByClient(
     });
 
     return bookingToResponse(updated);
+  });
+}
+
+/**
+ * Libera el pago al cuidador automáticamente tras el vencimiento del período de reseña.
+ * A diferencia de confirmReceiptByClient, NO crea una Review ni actualiza el rating del cuidador,
+ * ya que el cliente nunca eligió calificar — el sistema solo libera los fondos.
+ * Se llama desde el cron de auto-release en server.ts.
+ */
+export async function autoReleasePayment(
+  bookingId: string,
+  horasVencimiento: number
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const booking = await tx.booking.findFirst({
+      where: {
+        id: bookingId,
+        status: BookingStatus.COMPLETED,
+        ownerRated: false,
+        payoutStatus: 'PENDING',
+      },
+      include: { caregiver: true },
+    });
+    if (!booking) return; // ya procesado o estado cambió (race-safe)
+
+    const amount = Number(booking.totalAmount) - Number(booking.commissionAmount);
+
+    const profileBefore = await tx.caregiverProfile.findUnique({
+      where: { id: booking.caregiverId },
+      select: { balance: true, userId: true },
+    });
+    const balanceBefore = Number(profileBefore?.balance ?? 0);
+
+    await tx.caregiverProfile.update({
+      where: { id: booking.caregiverId },
+      data: { balance: { increment: amount } },
+    });
+
+    await tx.walletTransaction.create({
+      data: {
+        userId: profileBefore!.userId,
+        type: 'EARNING',
+        amount,
+        balance: balanceBefore + amount,
+        description: `Auto-liberación tras ${horasVencimiento}h — ${booking.petName} (sin reseña del cliente)`,
+        bookingId: booking.id,
+        status: 'COMPLETED',
+      },
+    });
+
+    await tx.booking.update({
+      where: { id: bookingId },
+      data: { payoutStatus: 'PAID' },
+    });
+
+    sendPushToUser(
+      profileBefore!.userId,
+      '💸 Pago liberado automáticamente',
+      `El pago de Bs ${amount.toFixed(2)} por el servicio de ${booking.petName} fue liberado (el cliente no dejó reseña).`
+    ).catch(() => {});
+  });
+
+  // Blockchain: rating 5 = símbolo de auto-aprobación sin disputa (no infla rating del perfil)
+  blockchainService.finalizeBookingOnChain(bookingId, 5).then(async (txHash) => {
+    if (txHash) {
+      await prisma.booking.update({ where: { id: bookingId }, data: { blockchainFinalizedTxHash: txHash } });
+      logger.info('[Blockchain] auto-release finalize txHash saved', { bookingId, txHash });
+    }
+  }).catch(err => {
+    logger.error('[AutoRelease] Blockchain finalize failed', { bookingId, err });
   });
 }

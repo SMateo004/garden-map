@@ -11,14 +11,30 @@ const serviceTypeSchema = z.object({
 });
 
 /** Schema completo para hospedaje. */
-export const hospedajeSchema = z.object({
-  serviceType: z.literal('HOSPEDAJE'),
-  caregiverId: z.string().uuid('caregiverId inválido'),
-  petId: z.string().uuid('petId inválido'),
-  startDate: z.string().regex(dateOnlyRegex, 'startDate: formato YYYY-MM-DD'),
-  endDate: z.string().regex(dateOnlyRegex, 'endDate: formato YYYY-MM-DD'),
-  totalDays: z.coerce.number().int().min(1).max(90),
-});
+export const hospedajeSchema = z
+  .object({
+    serviceType: z.literal('HOSPEDAJE'),
+    caregiverId: z.string().uuid('caregiverId inválido'),
+    petId: z.string().uuid('petId inválido'),
+    startDate: z.string().regex(dateOnlyRegex, 'startDate: formato YYYY-MM-DD'),
+    endDate: z.string().regex(dateOnlyRegex, 'endDate: formato YYYY-MM-DD'),
+    // totalDays is accepted from the client for UX purposes but ALWAYS recomputed
+    // server-side in booking.service.ts — never trusted for pricing.
+    totalDays: z.coerce.number().int().min(1).max(90).optional(),
+  })
+  .refine(
+    (data) => {
+      const start = new Date(data.startDate);
+      const end = new Date(data.endDate);
+      const diffMs = end.getTime() - start.getTime();
+      // Minimum 2 full days (48h) between check-in and check-out
+      return diffMs >= 2 * 24 * 60 * 60 * 1000;
+    },
+    {
+      message: 'La fecha de salida debe ser al menos 2 días después del check-in (mínimo 48 horas)',
+      path: ['endDate'],
+    }
+  );
 
 /** Schema para un día individual dentro de una reserva multi-día de paseo. */
 const walkDaySchema = z.object({

@@ -1,14 +1,15 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
 import { asyncHandler } from '../../shared/async-handler.js';
-import { PrismaClient } from '@prisma/client';
 import Anthropic from '@anthropic-ai/sdk';
 import { blockchainService } from '../../services/blockchain.service.js';
 import logger from '../../shared/logger.js';
 import { track } from '../../shared/analytics.js';
 
+// Use the shared Prisma singleton — avoids a separate connection pool per module
+import prisma from '../../config/database.js';
+
 const router = Router();
-const prisma = new PrismaClient();
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // POST /api/disputes/:bookingId/client-report — cliente reporta razones
@@ -36,6 +37,23 @@ router.post('/:bookingId/client-report', authMiddleware, requireRole('CLIENT'),
       include: { caregiver: { include: { user: true } } },
     });
     if (!booking) return res.status(404).json({ success: false, error: { message: 'Reserva no encontrada' } });
+
+    // Only allow disputes on COMPLETED bookings whose payment is ON_HOLD (i.e. client rated <3)
+    if (booking.status !== 'COMPLETED' || booking.payoutStatus !== 'ON_HOLD') {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Solo puedes disputar servicios completados con pago retenido. Califica el servicio primero.' },
+      });
+    }
+
+    // Prevent re-opening an already-resolved dispute
+    const existingDispute = await (prisma as any).dispute.findUnique({ where: { bookingId } });
+    if (existingDispute?.status === 'RESOLVED') {
+      return res.status(409).json({
+        success: false,
+        error: { message: 'Esta disputa ya fue resuelta y no puede reabrirse.' },
+      });
+    }
 
     const dispute = await (prisma as any).dispute.upsert({
       where: { bookingId },
@@ -162,10 +180,27 @@ router.post('/:bookingId/caregiver-response', authMiddleware, requireRole('CAREG
   })
 );
 
-// GET /api/disputes/:bookingId — obtener estado de disputa
+// GET /api/disputes/:bookingId — obtener estado de disputa (solo las partes o admin)
 router.get('/:bookingId', authMiddleware,
   asyncHandler(async (req: Request, res: Response) => {
     const { bookingId } = req.params;
+    const userId = (req as any).user.userId;
+    const role = (req as any).user.role;
+
+    // Authorization: only the booking's client, its caregiver, or an admin can read the dispute
+    if (role !== 'ADMIN') {
+      const booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: { caregiver: { select: { userId: true } } },
+      });
+      if (!booking) return res.status(404).json({ success: false, error: { message: 'Reserva no encontrada' } });
+      const isClient = booking.clientId === userId;
+      const isCaregiver = booking.caregiver?.userId === userId;
+      if (!isClient && !isCaregiver) {
+        return res.status(403).json({ success: false, error: { message: 'Sin acceso a esta disputa' } });
+      }
+    }
+
     const dispute = await (prisma as any).dispute.findUnique({ where: { bookingId } });
     if (!dispute) return res.status(404).json({ success: false, error: { message: 'No hay disputa' } });
     res.json({ success: true, data: dispute });
@@ -310,6 +345,13 @@ async function applyResolution(bookingId: string, resolution: any, booking: any)
 
     if (resolution.verdict === 'CAREGIVER_WINS') {
       // ── Pago completo al cuidador (90% del total) ──────────────────────────
+      // Snapshot balance BEFORE increment so WalletTransaction.balance is correct
+      const caregiverBefore = await tx.caregiverProfile.findUnique({
+        where: { userId: caregiverUserId },
+        select: { balance: true },
+      });
+      const caregiverBalanceBefore = Number(caregiverBefore?.balance ?? 0);
+
       await tx.caregiverProfile.update({
         where: { userId: caregiverUserId },
         data: { balance: { increment: netAmount } },
@@ -319,7 +361,7 @@ async function applyResolution(bookingId: string, resolution: any, booking: any)
           userId: caregiverUserId,
           type: 'EARNING',
           amount: netAmount,
-          balance: 0,
+          balance: caregiverBalanceBefore + netAmount,
           description: `Disputa resuelta a tu favor — Reserva #${bookingId.slice(0, 8).toUpperCase()}`,
           status: 'COMPLETED',
         },
@@ -357,6 +399,12 @@ async function applyResolution(bookingId: string, resolution: any, booking: any)
 
     } else if (resolution.verdict === 'CLIENT_WINS') {
       // ── Reembolso completo al cliente (incluyendo comisión) ────────────────
+      const clientBefore = await tx.clientProfile.findUnique({
+        where: { userId: clientId },
+        select: { balance: true },
+      });
+      const clientBalanceBefore = Number(clientBefore?.balance ?? 0);
+
       await tx.clientProfile.update({
         where: { userId: clientId },
         data: { balance: { increment: totalAmount } },
@@ -366,7 +414,7 @@ async function applyResolution(bookingId: string, resolution: any, booking: any)
           userId: clientId,
           type: 'REFUND',
           amount: totalAmount,
-          balance: 0,
+          balance: clientBalanceBefore + totalAmount,
           description: `Reembolso por disputa — Reserva #${bookingId.slice(0, 8).toUpperCase()}`,
           status: 'COMPLETED',
         },
@@ -421,6 +469,12 @@ async function applyResolution(bookingId: string, resolution: any, booking: any)
         },
       });
 
+      const caregiverBeforePartial = await tx.caregiverProfile.findUnique({
+        where: { userId: caregiverUserId },
+        select: { balance: true },
+      });
+      const caregiverBalanceBeforePartial = Number(caregiverBeforePartial?.balance ?? 0);
+
       await tx.caregiverProfile.update({
         where: { userId: caregiverUserId },
         data: { balance: { increment: caregiverPayout } },
@@ -430,7 +484,7 @@ async function applyResolution(bookingId: string, resolution: any, booking: any)
           userId: caregiverUserId,
           type: 'EARNING',
           amount: caregiverPayout,
-          balance: 0,
+          balance: caregiverBalanceBeforePartial + caregiverPayout,
           description: `Disputa resuelta (parcial 80%) — Reserva #${bookingId.slice(0, 8).toUpperCase()}`,
           status: 'COMPLETED',
         },

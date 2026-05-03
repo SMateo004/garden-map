@@ -201,7 +201,7 @@ async function start() {
   // Runs every hour, processes any bookings past the window
   setInterval(async () => {
     try {
-      const { confirmReceiptByClient } = await import('./modules/booking-service/booking.service.js');
+      const { autoReleasePayment } = await import('./modules/booking-service/booking.service.js');
       const { getNumericSetting } = await import('./utils/settings-cache.js');
       const autoReleaseHoras = await getNumericSetting('autoReleasePaymentHoras', 24);
       const cutoff = new Date(Date.now() - autoReleaseHoras * 60 * 60 * 1000);
@@ -212,14 +212,13 @@ async function start() {
           payoutStatus: 'PENDING', // excluye ON_HOLD (disputas) y PAID (ya liberados)
           serviceEndedAt: { lte: cutoff },
         },
-        select: { id: true, clientId: true, serviceType: true },
+        select: { id: true, serviceType: true },
       });
       for (const booking of overdueBookings) {
         try {
-          // Auto-release con rating 5 (sin disputa): el cliente no calificó en el tiempo límite
-          // rating 5 no implica una valoración real — es solo para liberar sin disputar.
-          // Si el cliente ya hubiera disputado (rating<3), payoutStatus sería ON_HOLD y no aparece aquí.
-          await confirmReceiptByClient(booking.id, booking.clientId, 5, `Auto-liberación tras ${autoReleaseHoras}h sin reseña del cliente`);
+          // Use autoReleasePayment — does NOT create a fake review or inflate caregiver rating.
+          // The client simply didn't rate; the system only releases the funds.
+          await autoReleasePayment(booking.id, autoReleaseHoras);
           logger.info(`[AutoRelease] Booking auto-released after ${autoReleaseHoras}h`, { bookingId: booking.id, serviceType: booking.serviceType });
         } catch (err: any) {
           logger.error('[AutoRelease] Failed to auto-release booking', { bookingId: booking.id, error: err.message });
