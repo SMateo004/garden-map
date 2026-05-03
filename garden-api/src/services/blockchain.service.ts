@@ -11,6 +11,7 @@ const GARDEN_ESCROW_ABI = [
     "function resolveDisputeClientWins(string _bookingId, uint256 _refundAmountBs) external",
     "function resolvePartial(string _bookingId, uint256 _caregiverAmountBs, uint256 _clientDiscountBs) external",
     "function extendWalk(string _bookingId, uint256 _additionalMinutes, uint256 _newAmountBs) external",
+    "function extendHospedaje(string _bookingId, uint256 _additionalDays, uint256 _newAmountBs) external",
     "function getReputation(string _caregiverId) external view returns (uint256 totalRating, uint256 ratingCount)",
     "function getBooking(string _bookingId) external view returns (tuple(string bookingId, string clientId, string caregiverId, uint256 amountBs, uint256 startTime, uint256 endTime, bool isActive, bool isCompleted, uint8 rating, string petName, string serviceType))",
     "function totalBookings() external view returns (uint256)",
@@ -19,7 +20,8 @@ const GARDEN_ESCROW_ABI = [
     "event ServiceFinalized(string indexed bookingId, uint8 rating, uint256 timestamp)",
     "event ServiceCancelled(string indexed bookingId, string reason, uint256 timestamp)",
     "event DisputeResolved(string indexed bookingId, string verdict, uint256 caregiverAmountBs, uint256 clientDiscountBs, uint256 timestamp)",
-    "event WalkExtended(string indexed bookingId, uint256 additionalMinutes, uint256 newAmountBs, uint256 timestamp)"
+    "event WalkExtended(string indexed bookingId, uint256 additionalMinutes, uint256 newAmountBs, uint256 timestamp)",
+    "event HospedajeExtended(string indexed bookingId, uint256 additionalDays, uint256 newAmountBs, uint256 timestamp)"
 ];
 
 // ABI — GardenProfiles (unchanged)
@@ -190,6 +192,40 @@ class BlockchainService {
             logger.error('[Blockchain] Error extending walk on-chain', {
                 bookingId,
                 additionalMinutes,
+                error: err?.reason || err?.message,
+            });
+            return null;
+        }
+    }
+
+    /**
+     * Registra la extensión de un hospedaje en GardenEscrow v2.
+     * Llama a extendHospedaje(bookingId, additionalDays, newAmountBs).
+     */
+    async recordHospedajeExtensionOnChain(
+        bookingId: string,
+        additionalDays: number,
+        newTotalAmountBs: number
+    ): Promise<string | null> {
+        if (!this.ensureInitialized() || !this.escrowContract) {
+            logger.info('[Blockchain] Mock: recordHospedajeExtension (no contract)', { bookingId, additionalDays, newTotalAmountBs });
+            return null;
+        }
+
+        try {
+            logger.info('[Blockchain] Sending extendHospedaje tx...', { bookingId, additionalDays, newTotalAmountBs });
+            const tx = await (this.escrowContract as any).extendHospedaje(
+                bookingId,
+                Math.floor(additionalDays),
+                Math.floor(newTotalAmountBs)
+            );
+            const receipt = await tx.wait();
+            logger.info('[Blockchain] Hospedaje extended on-chain', { txHash: receipt.hash, bookingId, additionalDays });
+            return receipt.hash;
+        } catch (err: any) {
+            logger.error('[Blockchain] Error extending hospedaje on-chain', {
+                bookingId,
+                additionalDays,
                 error: err?.reason || err?.message,
             });
             return null;

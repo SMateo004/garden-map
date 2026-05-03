@@ -2,8 +2,8 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "/Users/saimateovargas/Documents/GARDEN/garden-mvp/garden-api/hardhat-garden/contracts/GardenEscrow.sol": {
-      "lastModificationDate": 1777664537872,
-      "contentHash": "baced922b5fd04f4fd05a9a5ab2f66ca",
+      "lastModificationDate": 1777843055972,
+      "contentHash": "da724bb7602936c5a3262e9bfd2af69c",
       "sourceName": "contracts/GardenEscrow.sol",
       "solcConfig": {
         "version": "0.8.20",

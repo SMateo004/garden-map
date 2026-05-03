@@ -12,6 +12,27 @@ import { blockchainService } from '../../services/blockchain.service.js';
 /** Amount in DB is in Bolivianos (Bs). Stripe BOB uses centavos (1 Bs = 100 centavos). */
 const BOB_TO_CENTAVOS = 100;
 
+/**
+ * Derives the correct end date for a booking to pass to the blockchain.
+ * For multi-day walks (walkDays JSON array), uses the last day in the array.
+ * For hospedaje, uses endDate. Falls back to startDate / walkDate / now.
+ */
+function resolveBookingEndDate(booking: {
+  startDate: Date | null;
+  endDate: Date | null;
+  walkDate: Date | null;
+  walkDays?: unknown;
+}): Date {
+  // Multi-day PASEO: pick the last date from the walkDays array
+  if (booking.walkDays && Array.isArray(booking.walkDays) && (booking.walkDays as any[]).length > 0) {
+    const days = booking.walkDays as Array<{ date: string }>;
+    const lastDay = days[days.length - 1];
+    if (lastDay?.date) return new Date(lastDay.date);
+  }
+  // HOSPEDAJE or single-day PASEO
+  return booking.endDate ?? booking.startDate ?? booking.walkDate ?? new Date();
+}
+
 export async function createCheckoutSession(
   bookingId: string,
   successUrl: string,
@@ -156,8 +177,8 @@ export async function handleCheckoutCompleted(
     booking.clientId,
     booking.caregiverId,
     Number(booking.totalAmount),
-    booking.startDate || booking.walkDate || new Date(),
-    booking.endDate || booking.walkDate || new Date(),
+    booking.startDate ?? booking.walkDate ?? new Date(),
+    resolveBookingEndDate(booking),      // ← multi-day walk: last walkDay date
     booking.petName,
     booking.serviceType
   ).then(async (txHash) => {
@@ -223,8 +244,8 @@ export async function verifyPaymentByQr(qrId: string): Promise<{ bookingId: stri
     booking.clientId,
     booking.caregiverId,
     Number(booking.totalAmount),
-    booking.startDate || booking.walkDate || new Date(),
-    booking.endDate || booking.walkDate || new Date(),
+    booking.startDate ?? booking.walkDate ?? new Date(),
+    resolveBookingEndDate(booking),      // ← multi-day walk: last walkDay date
     booking.petName,
     booking.serviceType
   ).then(async (txHash) => {
@@ -289,8 +310,8 @@ export async function verifyPaymentManual(
     booking.clientId,
     booking.caregiverId,
     Number(booking.totalAmount),
-    booking.startDate || booking.walkDate || new Date(),
-    booking.endDate || booking.walkDate || new Date(),
+    booking.startDate ?? booking.walkDate ?? new Date(),
+    resolveBookingEndDate(booking),      // ← multi-day walk: last walkDay date
     booking.petName,
     booking.serviceType
   ).then(async (txHash) => {

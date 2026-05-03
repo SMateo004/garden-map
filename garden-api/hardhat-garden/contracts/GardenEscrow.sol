@@ -48,6 +48,13 @@ contract GardenEscrow {
         uint256 timestamp
     );
 
+    event HospedajeExtended(
+        string indexed bookingId,
+        uint256 additionalDays,
+        uint256 newAmountBs,
+        uint256 timestamp
+    );
+
     modifier onlyOwner() {
         require(
             msg.sender == owner,
@@ -214,6 +221,24 @@ contract GardenEscrow {
         b.endTime = b.endTime + (_additionalMinutes * 60);
 
         emit WalkExtended(_bookingId, _additionalMinutes, _newAmountBs, block.timestamp);
+    }
+
+    /**
+     * @dev Registra la extensión de un hospedaje (noches adicionales).
+     * Actualiza el monto total y extiende el tiempo de fin en días completos.
+     */
+    function extendHospedaje(
+        string calldata _bookingId,
+        uint256 _additionalDays,
+        uint256 _newAmountBs
+    ) external onlyOwner {
+        Booking storage b = bookings[_bookingId];
+        require(b.isActive, "Reserva no activa - no se puede extender el hospedaje");
+
+        b.amountBs = _newAmountBs;
+        b.endTime = b.endTime + (_additionalDays * 86400); // 86 400 seconds per day
+
+        emit HospedajeExtended(_bookingId, _additionalDays, _newAmountBs, block.timestamp);
     }
 
     /**

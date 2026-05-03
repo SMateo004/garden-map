@@ -1682,6 +1682,11 @@ export async function confirmHospedajeExtensionQr(
     sendPushToUser(caregiverUserId, '🏠 Hospedaje extendido', `+${additionalDays} noche${additionalDays > 1 ? 's' : ''} · Bs ${extraAmount} adicionales`).catch(() => {});
   }
 
+  // Registro en blockchain (asíncrono — mock si no está configurado)
+  blockchainService.recordHospedajeExtensionOnChain(bookingId, additionalDays, newTotal).catch((err) => {
+    logger.error('Blockchain hospedaje extension failed', { bookingId, err });
+  });
+
   return result;
 }
 
