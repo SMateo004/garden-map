@@ -27,7 +27,8 @@ const MARKUP_RATE = 0.10;
  * El cliente ve el precio final, pero al cuidador se le paga su base.
  */
 function applyMarkup(price: number | null | undefined): number | null {
-  if (price === null || price === undefined) return null;
+  // price === 0 means "service not offered" — return null so UIs don't render "Bs 0"
+  if (price === null || price === undefined || price === 0) return null;
   const val = typeof price === 'number' ? price : Number(price);
   return Math.round(val * (1 + MARKUP_RATE));
 }
