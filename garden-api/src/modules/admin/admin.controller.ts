@@ -506,7 +506,7 @@ export const getSettings = asyncHandler(async (req: Request, res: Response) => {
   }
   // Defaults for keys not yet in DB
   const defaults: Record<string, unknown> = {
-    walk30Enabled: false,
+    walk30Enabled: true,
     maintenanceMode: false,
     newRegistrationsEnabled: true,
     marketplaceEnabled: true,

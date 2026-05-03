@@ -61,6 +61,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   String _selectedZone = 'EQUIPETROL';
   List<String> _selectedServices = [];
   List<String> _selectedHomeTypes = [];
+  bool _offersWalk30 = false; // ¿Ofrece paseos de 30 min? (precio = mitad de 60 min)
   bool _hasYard = false;
   bool _allowsLargePets = false;
   bool _allowsMultiplePets = false;
@@ -150,6 +151,9 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     _selectedZone = profile['zone'] ?? 'EQUIPETROL';
     _selectedServices = List<String>.from(profile['servicesOffered'] ?? []);
     _selectedHomeTypes = List<String>.from(profile['spaceType'] ?? []);
+    // offersWalk30: true si pricePerWalk30 > 0, o si la API lo devuelve explícitamente
+    _offersWalk30 = (profile['offersWalk30'] as bool?) ??
+        ((profile['pricePerWalk30'] as num?)?.toDouble() ?? 0) > 0;
     _hasYard = profile['hasYard'] ?? false;
     _allowsLargePets = details['allowsLargePets'] ?? false;
     _allowsMultiplePets = details['allowsMultiplePets'] ?? false;
@@ -327,6 +331,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         'servicesOffered': _selectedServices,
         'pricePerDay': (double.tryParse(_pricePerDayController.text) ?? 0).round(),
         'pricePerWalk60': (double.tryParse(_pricePerWalk60Controller.text) ?? 0).round(),
+        'offersWalk30': _offersWalk30,
+        // pricePerWalk30 se calcula automáticamente: mitad del precio de 60 min
+        'pricePerWalk30': _offersWalk30
+            ? ((double.tryParse(_pricePerWalk60Controller.text) ?? 0) / 2).round()
+            : 0,
         'homeType': hType,
         'spaceType': _selectedHomeTypes,
         'hasYard': _hasYard,
@@ -561,6 +570,48 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                 const SizedBox(height: 6),
                 GardenInput(hint: 'Ej: 60 (Bs)', controller: _pricePerWalk60Controller, keyboardType: TextInputType.number),
               ]),
+              const SizedBox(height: 16),
+              // Toggle paseos de 30 minutos
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: _offersWalk30
+                      ? GardenColors.primary.withValues(alpha: 0.07)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _offersWalk30
+                        ? GardenColors.primary.withValues(alpha: 0.35)
+                        : borderColor,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.timer_outlined, color: GardenColors.primary, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Ofrecer paseos de 30 min',
+                              style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
+                          Text(
+                            _offersWalk30
+                                ? 'Precio: Bs ${((double.tryParse(_pricePerWalk60Controller.text) ?? 0) / 2).round()} (mitad de 1 hora)'
+                                : 'El precio se calcula automáticamente como la mitad del paseo de 1 hora',
+                            style: TextStyle(color: subtextColor, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _offersWalk30,
+                      onChanged: (v) => setState(() => _offersWalk30 = v),
+                      activeColor: GardenColors.primary,
+                    ),
+                  ],
+                ),
+              ),
             ],
 
             if (_selectedServices.contains('HOSPEDAJE')) ...[

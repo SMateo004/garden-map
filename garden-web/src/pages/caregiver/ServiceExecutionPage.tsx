@@ -6,6 +6,12 @@ import { CaregiverBookingItem } from '@/api/caregiverProfile';
 import { PhotoUploader } from '@/components/PhotoUploader';
 import toast from 'react-hot-toast';
 
+/** Devuelve true si el navegador es un dispositivo móvil real (no escritorio). */
+function isMobileDevice(): boolean {
+    const ua = navigator.userAgent;
+    return /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i.test(ua);
+}
+
 export function ServiceExecutionPage() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -13,6 +19,7 @@ export function ServiceExecutionPage() {
     const [booking, setBooking] = useState<CaregiverBookingItem | null>(null);
     const [loading, setLoading] = useState(true);
     const [startTime, setStartTime] = useState<number | null>(null);
+    const isOnMobile = isMobileDevice();
     const [elapsed, setElapsed] = useState(0);
     const [tracking, setTracking] = useState(false);
     const [showReportModal, setShowReportModal] = useState(false);
@@ -164,17 +171,39 @@ export function ServiceExecutionPage() {
                 {!isStarted && !isCompleted && (
                     <div className="space-y-4 bg-white dark:bg-gray-900 p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm">
                         <h2 className="text-lg font-bold">1. Iniciar Servicio</h2>
-                        <p className="text-sm text-gray-500">Tómale una foto a {booking.petName} al recibirlo para comenzar.</p>
-                        <PhotoUploader
-                            value={startPhotoFile ? [startPhotoFile] : []}
-                            onChange={(files) => setStartPhotoFile(files[0] || null)}
-                        />
-                        <button
-                            onClick={handleStart}
-                            className="w-full py-4 bg-green-600 text-white font-black rounded-2xl shadow-xl shadow-green-100 dark:shadow-none active:scale-95 transition-all"
-                        >
-                            INICIAR AHORA
-                        </button>
+
+                        {/* Bloqueo desktop para PASEO */}
+                        {booking.serviceType === 'PASEO' && !isOnMobile ? (
+                            <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 dark:bg-amber-900/20 p-5 text-center space-y-3">
+                                <span className="text-5xl block">📱</span>
+                                <p className="font-black text-amber-800 dark:text-amber-300 text-base">
+                                    Usa tu teléfono para iniciar el paseo
+                                </p>
+                                <p className="text-sm text-amber-700 dark:text-amber-400 leading-relaxed">
+                                    Por seguridad y para activar el GPS de seguimiento, los paseos solo pueden iniciarse
+                                    desde la <strong>app móvil de GARDEN</strong> en tu teléfono.
+                                </p>
+                                <div className="mt-2 inline-flex items-center gap-2 bg-amber-100 dark:bg-amber-900/40 px-4 py-2 rounded-full">
+                                    <span className="text-xs font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wide">
+                                        Abre la app en tu celular → Mis Reservas → Iniciar paseo
+                                    </span>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <p className="text-sm text-gray-500">Tómale una foto a {booking.petName} al recibirlo para comenzar.</p>
+                                <PhotoUploader
+                                    value={startPhotoFile ? [startPhotoFile] : []}
+                                    onChange={(files) => setStartPhotoFile(files[0] || null)}
+                                />
+                                <button
+                                    onClick={handleStart}
+                                    className="w-full py-4 bg-green-600 text-white font-black rounded-2xl shadow-xl shadow-green-100 dark:shadow-none active:scale-95 transition-all"
+                                >
+                                    INICIAR AHORA
+                                </button>
+                            </>
+                        )}
                     </div>
                 )}
 

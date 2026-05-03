@@ -23,7 +23,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
     'paymentsEnabled':         true,
     'newRegistrationsEnabled': true,
     'maintenanceMode':         false,
-    'walk30Enabled':           false,
+    'walk30Enabled':           true,
     'hospedajeEnabled':        true,
     'paseoEnabled':            true,
     'retirosEnabled':          true,
@@ -340,8 +340,8 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                     settingKey: 'meetGreetEnabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
                   _buildBoolTile(icon: Icons.directions_walk_rounded, iconColor: Colors.blue,
-                    title: 'Paseos de 30 min', subtitle: 'Deshabilitado por política actual',
-                    settingKey: 'walk30Enabled', enabled: false, surface: surface, textColor: textColor,
+                    title: 'Paseos de 30 min', subtitle: 'Precio = mitad del paseo de 1 hora (sin campo separado)',
+                    settingKey: 'walk30Enabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
                   _buildBoolTile(icon: Icons.trending_up_rounded, iconColor: Colors.deepOrange,
                     title: 'Precios dinámicos', subtitle: 'Ajuste automático por demanda/temporada',
@@ -531,7 +531,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  'ALL', 'PRECIO', 'CALIFICACION', 'DISPUTA', 'CUSTOM'
+                  'ALL', 'MONITOR', 'PRECIO', 'CALIFICACION', 'DISPUTA', 'CUSTOM'
                 ].map((type) {
                   final sel = _selectedAgentType == type;
                   final count = type == 'ALL'
@@ -1040,6 +1040,9 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
         break;
       case 'CUSTOM':
         agentColor = Colors.teal;
+        break;
+      case 'MONITOR':
+        agentColor = Colors.green;
         break;
       default:
         agentColor = Colors.grey;
