@@ -233,8 +233,9 @@ export const requestExtensionPayment = asyncHandler(async (req: Request, res: Re
  */
 export const confirmExtensionQr = asyncHandler(async (req: Request, res: Response) => {
   const bookingId = req.params.id!;
+  const clientId = req.user!.userId; // ownership enforced in service
   const body = confirmExtensionQrBodySchema.parse(req.body);
-  const result = await bookingService.confirmWalkExtensionQr(bookingId, body.qrId);
+  const result = await bookingService.confirmWalkExtensionQr(bookingId, clientId, body.qrId);
   res.json({ success: true, data: result });
 });
 
@@ -269,8 +270,9 @@ export const requestHospedajeExtensionPayment = asyncHandler(async (req: Request
 /** POST /api/bookings/:id/confirm-hospedaje-extension-qr */
 export const confirmHospedajeExtensionQr = asyncHandler(async (req: Request, res: Response) => {
   const bookingId = req.params.id!;
+  const clientId = req.user!.userId; // ownership enforced in service
   const body = confirmHospedajeExtensionQrBodySchema.parse(req.body);
-  const result = await bookingService.confirmHospedajeExtensionQr(bookingId, body.qrId);
+  const result = await bookingService.confirmHospedajeExtensionQr(bookingId, clientId, body.qrId);
   res.json({ success: true, data: result });
 });
 

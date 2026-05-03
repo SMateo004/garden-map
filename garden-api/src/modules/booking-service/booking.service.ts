@@ -1408,12 +1408,13 @@ export async function requestWalkExtensionPayment(
  */
 export async function confirmWalkExtensionQr(
   bookingId: string,
+  clientId: string,
   qrId: string
 ): Promise<BookingCreateResult> {
   const cfg = await getBookingSettings();
 
   const booking = await prisma.booking.findFirst({
-    where: { id: bookingId },
+    where: { id: bookingId, clientId }, // ← ownership check: only the booking's client can confirm
     select: {
       id: true, clientId: true, caregiverId: true, serviceType: true, status: true,
       duration: true, totalAmount: true, commissionAmount: true, pricePerUnit: true,
@@ -1421,7 +1422,7 @@ export async function confirmWalkExtensionQr(
     },
   });
 
-  if (!booking) throw new BookingNotFoundError(bookingId);
+  if (!booking) throw new BookingNotFoundError(bookingId); // covers both not-found AND unauthorized
   if (booking.status !== BookingStatus.IN_PROGRESS) throw new BookingValidationError('El paseo ya no está en curso');
 
   const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
@@ -1593,12 +1594,13 @@ export async function requestHospedajeExtensionPayment(
 
 export async function confirmHospedajeExtensionQr(
   bookingId: string,
+  clientId: string,
   qrId: string
 ): Promise<BookingCreateResult> {
   const cfg = await getBookingSettings();
 
   const booking = await prisma.booking.findFirst({
-    where: { id: bookingId },
+    where: { id: bookingId, clientId }, // ← ownership check
     select: {
       id: true, clientId: true, caregiverId: true, serviceType: true, status: true,
       endDate: true, totalDays: true, totalAmount: true, commissionAmount: true,
@@ -1606,7 +1608,7 @@ export async function confirmHospedajeExtensionQr(
     },
   });
 
-  if (!booking) throw new BookingNotFoundError(bookingId);
+  if (!booking) throw new BookingNotFoundError(bookingId); // covers not-found AND unauthorized
   if (booking.status !== BookingStatus.IN_PROGRESS) throw new BookingValidationError('El hospedaje ya no está en curso');
 
   const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
@@ -2285,19 +2287,25 @@ export async function confirmReceiptByClient(
     // Calcular el monto a transferir (Total - Comisión)
     const amount = Number(booking.totalAmount) - Number(booking.commissionAmount);
 
-    // Actualizar balance del cuidador
-    const updatedProfile = await tx.caregiverProfile.update({
+    // Leer balance ANTES del incremento (snapshot correcto para el registro de transacción)
+    const profileBefore = await tx.caregiverProfile.findUnique({
+      where: { id: booking.caregiverId },
+      select: { balance: true, userId: true },
+    });
+    const balanceBefore = Number(profileBefore?.balance ?? 0);
+
+    // Actualizar balance del cuidador (atómico)
+    await tx.caregiverProfile.update({
       where: { id: booking.caregiverId },
       data: { balance: { increment: amount } },
-      select: { balance: true, userId: true }
     });
 
     await tx.walletTransaction.create({
       data: {
-        userId: updatedProfile.userId,
+        userId: profileBefore!.userId,
         type: 'EARNING',
         amount: amount,
-        balance: Number(updatedProfile.balance),
+        balance: balanceBefore + amount, // nuevo saldo = anterior + ganancia
         description: `Ganancia por ${booking.serviceType === 'PASEO' ? 'paseo' : 'hospedaje'} - ${booking.petName}`,
         bookingId: booking.id,
         status: 'COMPLETED',
@@ -2314,7 +2322,7 @@ export async function confirmReceiptByClient(
       }
     });
 
-    sendPushToUser(updatedProfile.userId, '¡Pago liberado! 💸', `Recibiste el pago por el servicio de ${booking.petName}. Revisa tu billetera.`).catch(() => {});
+    sendPushToUser(profileBefore!.userId, '¡Pago liberado! 💸', `Recibiste el pago por el servicio de ${booking.petName}. Revisa tu billetera.`).catch(() => {});
 
     // Create Review natively
     await tx.review.create({

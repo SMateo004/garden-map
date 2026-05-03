@@ -193,13 +193,19 @@ export async function verifyPaymentByQr(qrId: string): Promise<{ bookingId: stri
     throw new BadRequestError('El código QR ha expirado. Genera uno nuevo desde la reserva.');
   }
 
-  await prisma.booking.update({
-    where: { id: booking.id },
+  // Atomic status transition: only updates if still PENDING_PAYMENT (prevents race condition double-confirm)
+  const updateResult = await prisma.booking.updateMany({
+    where: { id: booking.id, status: BookingStatus.PENDING_PAYMENT },
     data: {
       status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
       paidAt: new Date(),
     },
   });
+
+  if (updateResult.count === 0) {
+    // Another concurrent request already processed this QR
+    throw new BadRequestError('Esta reserva ya fue pagada o el estado cambió. Actualiza la app.');
+  }
 
   logger.info('Booking waiting for caregiver approval via QR verify', { bookingId: booking.id, qrId });
   track(booking.clientId, 'payment_completed', {

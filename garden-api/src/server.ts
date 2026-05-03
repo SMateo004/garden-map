@@ -209,15 +209,18 @@ async function start() {
         where: {
           status: 'COMPLETED',
           ownerRated: false,
-          payoutStatus: 'PENDING',
+          payoutStatus: 'PENDING', // excluye ON_HOLD (disputas) y PAID (ya liberados)
           serviceEndedAt: { lte: cutoff },
         },
-        select: { id: true, clientId: true },
+        select: { id: true, clientId: true, serviceType: true },
       });
       for (const booking of overdueBookings) {
         try {
-          await confirmReceiptByClient(booking.id, booking.clientId, 3, `Auto-liberación tras ${autoReleaseHoras}h sin reseña`);
-          logger.info(`[AutoRelease] Booking auto-released after ${autoReleaseHoras}h`, { bookingId: booking.id });
+          // Auto-release con rating 5 (sin disputa): el cliente no calificó en el tiempo límite
+          // rating 5 no implica una valoración real — es solo para liberar sin disputar.
+          // Si el cliente ya hubiera disputado (rating<3), payoutStatus sería ON_HOLD y no aparece aquí.
+          await confirmReceiptByClient(booking.id, booking.clientId, 5, `Auto-liberación tras ${autoReleaseHoras}h sin reseña del cliente`);
+          logger.info(`[AutoRelease] Booking auto-released after ${autoReleaseHoras}h`, { bookingId: booking.id, serviceType: booking.serviceType });
         } catch (err: any) {
           logger.error('[AutoRelease] Failed to auto-release booking', { bookingId: booking.id, error: err.message });
         }

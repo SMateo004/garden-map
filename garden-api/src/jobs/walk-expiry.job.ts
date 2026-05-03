@@ -33,6 +33,7 @@ export async function procesarVencimientoPaseos() {
                 id: true,
                 clientId: true,
                 petName: true,
+                walkDate: true,
                 startTime: true,
                 duration: true,
                 serviceEvents: true,
@@ -46,14 +47,17 @@ export async function procesarVencimientoPaseos() {
                 let endTime: Date;
                 if (booking.serviceStartedAt) {
                     endTime = new Date(booking.serviceStartedAt.getTime() + (booking.duration! * 60 * 1000));
-                } else {
-                    // Fallback: calcular desde startTime del día actual
+                } else if (booking.walkDate && booking.startTime) {
+                    // Fallback: usar la fecha real del paseo (walkDate) + startTime, no la fecha de hoy
                     const parts = (booking.startTime ?? '00:00').split(':');
                     const startMins = parseInt(parts[0] ?? '0') * 60 + parseInt(parts[1] ?? '0');
                     const endMins = startMins + booking.duration!;
-                    const endDate = new Date(now);
-                    endDate.setHours(Math.floor(endMins / 60), endMins % 60, 0, 0);
-                    endTime = endDate;
+                    const walkDateBase = new Date(booking.walkDate);
+                    walkDateBase.setHours(Math.floor(endMins / 60), endMins % 60, 0, 0);
+                    endTime = walkDateBase;
+                } else {
+                    // Sin información suficiente: asumir que el paseo vence en 24h desde ahora (no notificar)
+                    endTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
                 }
 
                 const msToEnd = endTime.getTime() - now.getTime();
