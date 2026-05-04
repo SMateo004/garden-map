@@ -89,7 +89,7 @@ const dateOfBirthSchema = z
 // --- Register caregiver (full submit) ---
 export const registerCaregiverUserSchema = z.object({
   email: z.string().email('Email inválido'),
-  password: z.string().min(8, 'Mínimo 8 caracteres'),
+  password: z.string().min(8, 'Mínimo 8 caracteres').max(128, 'Máximo 128 caracteres'),
   firstName: z.string().min(1, 'Nombre requerido').max(100),
   lastName: z.string().min(1, 'Apellido requerido').max(100),
   phone: phoneCaregiverSchema,
@@ -246,7 +246,7 @@ export const registerClientSchema = z.object({
   firstName: z.string().min(1, 'Nombre requerido').max(100).transform((v) => v.trim()),
   lastName: z.string().min(1, 'Apellido requerido').max(100).transform((v) => v.trim()),
   email: z.string().email('Email inválido'),
-  password: z.string().min(8, 'Mínimo 8 caracteres'),
+  password: z.string().min(8, 'Mínimo 8 caracteres').max(128, 'Máximo 128 caracteres'),
   phone: phoneClientSchema,
   address: z.string().max(500, 'Máximo 500 caracteres').optional().transform((v) => (v && v.trim() ? v.trim() : undefined)),
   dateOfBirth: z

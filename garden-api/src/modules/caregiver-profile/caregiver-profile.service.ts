@@ -256,7 +256,9 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.ciAnversoUrl !== undefined) updateData.ciAnversoUrl = ensureAbsoluteUrl(body.ciAnversoUrl) ?? null;
   if (body.ciReversoUrl !== undefined) updateData.ciReversoUrl = ensureAbsoluteUrl(body.ciReversoUrl) ?? null;
   if (body.ciNumber !== undefined) updateData.ciNumber = body.ciNumber;
-  if (body.onboardingStatus !== undefined) updateData.onboardingStatus = body.onboardingStatus as object;
+  // onboardingStatus is intentionally NOT settable by the client.
+  // It is computed server-side by checkAndAutoSubmitProfile based on actual field values.
+  // Allowing clients to set it would let them fake completion progress.
   if (body.serviceDetails !== undefined) {
     updateData.serviceDetails = body.serviceDetails as object;
     // Sync serviceDetails.availability → defaultAvailabilitySchedule
@@ -360,6 +362,14 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
     };
   }
 
+  // Bloquear re-envío si ya está en revisión
+  if (profile.status === CaregiverStatus.PENDING_REVIEW) {
+    return {
+      success: true,
+      message: 'Tu perfil ya fue enviado y está siendo revisado por nuestro equipo. Te notificaremos cuando sea aprobado.',
+    };
+  }
+
   const missing = getMissingRequiredFieldsForSubmit(profile);
 
   if (missing.length > 0) {
@@ -391,11 +401,9 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
     await tx.caregiverProfile.update({
       where: { id: (profile as any).id },
       data: {
-        status: CaregiverStatus.APPROVED,
-        profileStatus: 'APPROVED',
-        verified: true,
-        verifiedAt: new Date(),
-        approvedAt: new Date(),
+        // PENDING_REVIEW: el admin debe aprobar manualmente antes de ser visible en marketplace
+        status: CaregiverStatus.PENDING_REVIEW,
+        profileStatus: 'SUBMITTED',
         termsAcceptedAt: new Date(),
         termsAccepted: true,
         privacyAccepted: true,
@@ -403,16 +411,17 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
       } as any,
     });
 
-    // Notificación de bienvenida al cuidador
+    // Notificación al cuidador: perfil enviado, esperando revisión
     await tx.notification.create({
       data: {
         userId,
-        title: '¡Bienvenido a GARDEN! Tu perfil está activo',
-        message: 'Felicidades, completaste tu registro exitosamente. Tu perfil ya es visible para los dueños de mascotas. ¡Esperamos que tengas una excelente experiencia!',
-        type: 'PROFILE_APPROVED',
+        title: '¡Perfil enviado! Estamos revisando tu solicitud',
+        message: 'Recibimos tu perfil completo. Nuestro equipo lo revisará y recibirás una notificación cuando sea aprobado (generalmente en menos de 24 horas).',
+        type: 'PROFILE_SUBMITTED',
       },
     });
 
+    // Notificación al admin para revisión manual
     await tx.adminNotification.create({
       data: {
         type: ADMIN_NOTIFICATION_TYPE_SUBMIT,
@@ -421,22 +430,22 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
     });
   });
 
-  // Sincronizar con Blockchain como verificado
+  // Blockchain: sync como no-verificado aún (admin aprobará después)
   blockchainService.syncProfileOnChain(
     userId,
     `${profile.user.firstName} ${profile.user.lastName}`,
     'CAREGIVER',
-    true
-  ).catch(err => logger.error('Blockchain sync failed (caregiver)', { userId, err }));
+    false // verified=false hasta que admin apruebe
+  ).catch(err => logger.error('Blockchain sync failed (caregiver submit)', { userId, err }));
 
-  logger.info('CaregiverProfile: aprobado al completar los 10 pasos', {
+  logger.info('CaregiverProfile: enviado a revisión (PENDING_REVIEW)', {
     profileId: profile.id,
     userId,
   });
 
   return {
     success: true,
-    message: '¡Felicidades! Tu registro está completo y tu perfil ya es visible en Garden.',
+    message: '¡Perfil enviado! Nuestro equipo revisará tu solicitud y te notificará cuando esté aprobado.',
   };
 }
 

@@ -409,25 +409,42 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
     isOver18: true,
     ...(bodyExt.dateOfBirth ? { dateOfBirth: bodyExt.dateOfBirth } : {}),
   };
-  logger.info('Creando User con role CLIENT', { email: userData.email, phone: userData.phone });
+  logger.info('Creando User+ClientProfile en transacción', { email: userData.email, phone: userData.phone });
 
   let user: { id: string; email: string; role: string; firstName: string; lastName: string; profilePicture?: string | null };
+  let profile: { id: string };
+
   try {
-    const created = await prisma.user.create({
-      data: userData,
+    const result = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({ data: userData });
+      logger.info('User creado (tx)', { id: created.id, email: created.email });
+      const prof = await tx.clientProfile.create({
+        data: {
+          userId: created.id,
+          address: body.address != null && typeof body.address === 'string' && body.address.trim() !== ''
+            ? body.address.trim()
+            : null,
+          phone: body.phone.trim(),
+          isComplete: false,
+          ...(bodyExt.bio ? { bio: bodyExt.bio } : {}),
+        },
+      });
+      logger.info('ClientProfile creado (tx)', { id: prof.id });
+      return { user: created, profile: prof };
     });
+
     user = {
-      id: created.id,
-      email: created.email,
-      role: created.role,
-      firstName: created.firstName,
-      lastName: created.lastName,
-      profilePicture: created.profilePicture,
+      id: result.user.id,
+      email: result.user.email,
+      role: result.user.role,
+      firstName: result.user.firstName,
+      lastName: result.user.lastName,
+      profilePicture: result.user.profilePicture,
     };
-    logger.info('User creado', { id: created.id, email: created.email });
+    profile = { id: result.profile.id };
   } catch (error: unknown) {
     const err = error as { code?: string; meta?: { target?: unknown }; message?: string; stack?: string };
-    logger.error('Fallo al crear User', {
+    logger.error('Fallo al crear User+ClientProfile (transacción revocada automáticamente)', {
       code: err.code,
       meta: err.meta,
       message: err.message,
@@ -447,36 +464,6 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
     throw error;
   }
 
-  const profileData = {
-    userId: user.id,
-    address: body.address != null && typeof body.address === 'string' && body.address.trim() !== '' ? body.address.trim() : null,
-    phone: body.phone.trim(),
-    isComplete: false,
-    ...(bodyExt.bio ? { bio: bodyExt.bio } : {}),
-  };
-  logger.info('Creando ClientProfile vacío', { userId: user.id });
-
-  let profile: { id: string };
-  try {
-    profile = await prisma.clientProfile.create({
-      data: profileData,
-    });
-    logger.info('ClientProfile creado', { id: profile.id });
-  } catch (error: unknown) {
-    const err = error as { code?: string; meta?: unknown; message?: string; stack?: string };
-    logger.error('Fallo al crear ClientProfile', {
-      code: err.code,
-      meta: err.meta,
-      message: err.message,
-      stack: err.stack,
-      userId: user.id,
-    });
-    await prisma.user.delete({ where: { id: user.id } }).catch((delErr) => {
-      logger.error('Rollback: error al borrar User tras fallo ClientProfile', { userId: user.id, error: delErr });
-    });
-    throw error;
-  }
-
   // Sincronizar Cliente en Blockchain (asíncrono)
   blockchainService.syncProfileOnChain(
     user.id,
@@ -485,31 +472,20 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
     false
   ).catch(err => logger.error('Blockchain sync failed (client register)', { userId: user.id, err }));
 
-  try {
-    const payload: JwtPayload = { userId: user.id, role: user.role };
-    const { token, expiresIn } = signAccessToken(payload);
-    const refreshToken = await createRefreshToken(user.id);
-    logger.info('Cliente registrado exitosamente', { userId: user.id, email: user.email });
-    // Analytics: client registered
-    track(user.id, 'user_registered', { role: 'CLIENT', email: user.email });
-    identify(user.id, { role: 'CLIENT', email: user.email, firstName: user.firstName, lastName: user.lastName });
-    return {
-      user,
-      profileId: profile.id,
-      accessToken: token,
-      refreshToken,
-      expiresIn,
-    };
-  } catch (error: unknown) {
-    logger.error('Error al generar JWT tras crear User+Profile', {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      userId: user.id,
-    });
-    await prisma.clientProfile.delete({ where: { id: profile.id } }).catch(() => { });
-    await prisma.user.delete({ where: { id: user.id } }).catch(() => { });
-    throw error;
-  }
+  const payload: JwtPayload = { userId: user.id, role: user.role };
+  const { token, expiresIn } = signAccessToken(payload);
+  const refreshToken = await createRefreshToken(user.id);
+  logger.info('Cliente registrado exitosamente', { userId: user.id, email: user.email });
+  // Analytics: client registered
+  track(user.id, 'user_registered', { role: 'CLIENT', email: user.email });
+  identify(user.id, { role: 'CLIENT', email: user.email, firstName: user.firstName, lastName: user.lastName });
+  return {
+    user,
+    profileId: profile.id,
+    accessToken: token,
+    refreshToken,
+    expiresIn,
+  };
 }
 
 /**
@@ -527,8 +503,9 @@ export async function login(
     where: { email },
   });
 
-  if (!user) {
-    logger.warn('Login: user not found', { email });
+  // Check isDeleted BEFORE leaking "user not found" vs "account deleted" distinction
+  if (!user || user.isDeleted) {
+    logger.warn('Login: user not found or deleted', { email });
     throw new UnauthorizedError('Credenciales inválidas');
   }
 
@@ -668,17 +645,24 @@ export async function switchRole(userId: string, targetRole: UserRole): Promise<
   // Si el targetRole coincide con el rol permanente, limpiar activeRole
   const isRestoringOwnRole = targetRole === user.role;
 
+  // Un ADMIN no puede cambiar de rol
+  if (user.role === UserRole.ADMIN) {
+    throw new ForbiddenError('Los administradores no pueden cambiar de rol.', 'ADMIN_ROLE_SWITCH_FORBIDDEN');
+  }
+
+  // Solo se permite cambiar a CLIENT o CAREGIVER — nunca a ADMIN
+  // (previene escalada de privilegios: un CAREGIVER/CLIENT podría setear activeRole=ADMIN)
+  const allowedTargetRoles: UserRole[] = [UserRole.CLIENT, UserRole.CAREGIVER];
+  if (!isRestoringOwnRole && !allowedTargetRoles.includes(targetRole)) {
+    throw new ForbiddenError('Rol de destino no válido.', 'INVALID_TARGET_ROLE');
+  }
+
   // Un CLIENT no puede activar rol CAREGIVER sin onboarding
   if (!isRestoringOwnRole && user.role === UserRole.CLIENT && targetRole === UserRole.CAREGIVER) {
     throw new ForbiddenError(
       'Debes completar el proceso de registro como cuidador primero.',
       'CAREGIVER_ONBOARDING_REQUIRED'
     );
-  }
-
-  // Un ADMIN no puede cambiar de rol
-  if (user.role === UserRole.ADMIN) {
-    throw new ForbiddenError('Los administradores no pueden cambiar de rol.', 'ADMIN_ROLE_SWITCH_FORBIDDEN');
   }
 
   const newActiveRole = isRestoringOwnRole ? null : targetRole;

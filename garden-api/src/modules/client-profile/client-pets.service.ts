@@ -81,6 +81,8 @@ export async function getPetsByUserId(userId: string): Promise<PetListItem[]> {
 /**
  * Crea una mascota para el cliente. Actualiza isComplete del perfil si la mascota tiene name, size, photoUrl.
  */
+const MAX_PETS_PER_CLIENT = 10;
+
 export async function createPet(userId: string, body: CreatePetBody): Promise<PetListItem> {
   const profile = await prisma.clientProfile.findUnique({
     where: { userId },
@@ -88,6 +90,15 @@ export async function createPet(userId: string, body: CreatePetBody): Promise<Pe
   });
   if (!profile) {
     throw new NotFoundError('No tienes perfil de cliente');
+  }
+
+  // Limit: max 10 mascotas por perfil — evita abuso de almacenamiento
+  const petCount = await prisma.pet.count({ where: { clientProfileId: profile.id } });
+  if (petCount >= MAX_PETS_PER_CLIENT) {
+    throw new BadRequestError(
+      `No puedes registrar más de ${MAX_PETS_PER_CLIENT} mascotas`,
+      'PET_LIMIT_REACHED'
+    );
   }
 
   const photoUrl = ensureAbsoluteUrl(body.photoUrl) ?? null;
@@ -242,7 +253,7 @@ export async function updatePet(
 export async function deletePet(userId: string, petId: string): Promise<void> {
   const profile = await prisma.clientProfile.findUnique({
     where: { userId },
-    select: { id: true },
+    select: { id: true, userId: true },
   });
   if (!profile) throw new NotFoundError('No tienes perfil de cliente');
 
@@ -250,6 +261,25 @@ export async function deletePet(userId: string, petId: string): Promise<void> {
     where: { id: petId, clientProfileId: profile.id },
   });
   if (!pet) throw new BadRequestError('Mascota no pertenece al usuario', 'PET_NOT_OWNED');
+
+  // Bloquear eliminación si la mascota tiene reservas activas
+  // (Bookings referencian por petName; buscamos coincidencia nombre + cliente)
+  const activeBooking = await prisma.booking.findFirst({
+    where: {
+      clientId: profile.userId,
+      petName: pet.name,
+      status: {
+        in: ['PENDING_PAYMENT', 'WAITING_CAREGIVER_APPROVAL', 'CONFIRMED', 'IN_PROGRESS'],
+      },
+    },
+    select: { id: true },
+  });
+  if (activeBooking) {
+    throw new BadRequestError(
+      'No puedes eliminar una mascota que tiene reservas activas. Cancela o finaliza la reserva primero.',
+      'PET_HAS_ACTIVE_BOOKINGS'
+    );
+  }
 
   await prisma.pet.delete({ where: { id: petId } });
 

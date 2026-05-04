@@ -41,12 +41,30 @@ const refreshLimiter = rateLimit({
   message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiadas renovaciones de sesión.' } },
 });
 
+// 20 consultas por hora — previene enumeración de emails
+const checkEmailLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiadas consultas. Espera 1 hora.' } },
+});
+
+// 20 cambios de rol por hora — evita abuso del endpoint switch-role
+const switchRoleLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados cambios de rol. Espera 1 hora.' } },
+});
+
 // ── Rutas ────────────────────────────────────────────────────────────────────
 const router = Router();
 
 router.get('/me', authMiddleware, authController.me);
 router.patch('/me', authMiddleware, authController.patchMe);
-router.get('/check-email', authController.checkEmail);
+router.get('/check-email', checkEmailLimiter, authController.checkEmail);
 
 router.post('/caregiver/register', registerLimiter, authController.registerCaregiver);
 router.post('/client/register',    registerLimiter, authController.registerClient);
@@ -71,7 +89,7 @@ router.delete('/account', authMiddleware, authController.deleteAccount);
 router.put('/fcm-token', authMiddleware, authController.updateFcmToken);
 
 /** POST /api/auth/switch-role — body: { targetRole }. Cambia el rol activo en sesión sin alterar el rol permanente. */
-router.post('/switch-role', authMiddleware, authController.switchRole);
+router.post('/switch-role', authMiddleware, switchRoleLimiter, authController.switchRole);
 
 /** POST /api/auth/init-caregiver-profile — convierte CLIENT en CAREGIVER creando CaregiverProfile vacío. */
 router.post('/init-caregiver-profile', authMiddleware, authController.initCaregiverProfile);
