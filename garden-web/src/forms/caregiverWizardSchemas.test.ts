@@ -13,7 +13,7 @@ import {
 describe('caregiverWizardSchemas', () => {
   describe('step1Schema', () => {
     it('accepts valid name and phone', () => {
-      expect(step1Schema.parse({ firstName: 'Juan', lastName: 'Pérez', phone: '+59171234567' })).toBeDefined();
+      expect(step1Schema.parse({ firstName: 'Juan', lastName: 'Pérez', phone: '+59171234567', dateOfBirth: '1990-05-15' })).toBeDefined();
     });
     it('rejects invalid phone', () => {
       expect(() => step1Schema.parse({ firstName: 'J', lastName: 'P', phone: '+5491112345678' })).toThrow();

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
@@ -12,7 +12,13 @@ vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ login: vi.fn(), isCaregiver: false }),
 }));
 
+// Mock checkEmailExists: returns false by default (new user)
+vi.mock('@/api/auth', () => ({
+  checkEmailExists: vi.fn().mockResolvedValue(false),
+}));
+
 import { CaregiverAuthPage } from './CaregiverAuthPage';
+import * as authApi from '@/api/auth';
 
 function renderAuth() {
   return render(
@@ -25,33 +31,41 @@ function renderAuth() {
 describe('CaregiverAuthPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (authApi.checkEmailExists as ReturnType<typeof vi.fn>).mockResolvedValue(false);
   });
 
-  it('shows login and register tabs', () => {
-    renderAuth();
-    const tabs = screen.getAllByRole('button', { name: /Iniciar sesión|Registrarme/i });
-    expect(tabs.some((b) => b.textContent === 'Iniciar sesión')).toBe(true);
-    expect(tabs.some((b) => b.textContent === 'Registrarme')).toBe(true);
-  });
-
-  it('shows login form by default', () => {
+  it('shows email input and Continuar button by default', () => {
     renderAuth();
     expect(screen.getByPlaceholderText(/tucorreo@email\.com/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Email/)).toBeInTheDocument();
-    const loginButtons = screen.getAllByRole('button', { name: /Iniciar sesión/i });
-    expect(loginButtons.some((b) => b.getAttribute('type') === 'submit')).toBe(true);
+    expect(screen.getByRole('button', { name: /Continuar/i })).toBeInTheDocument();
   });
 
-  it('switches to register tab and shows Comenzar registro', () => {
+  it('navigates to /caregiver/register when email does not exist', async () => {
+    (authApi.checkEmailExists as ReturnType<typeof vi.fn>).mockResolvedValue(false);
     renderAuth();
-    fireEvent.click(screen.getByRole('button', { name: /Registrarme/i }));
-    expect(screen.getByRole('button', { name: /Comenzar registro/i })).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/tucorreo@email\.com/), {
+      target: { value: 'nuevo@test.com' },
+    });
+    fireEvent.submit(screen.getByRole('button', { name: /Continuar/i }).closest('form')!);
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/caregiver/register', expect.anything());
+    });
   });
 
-  it('navigates to /caregiver/register when Comenzar registro is clicked', () => {
+  it('shows password field when email exists', async () => {
+    (authApi.checkEmailExists as ReturnType<typeof vi.fn>).mockResolvedValue(true);
     renderAuth();
-    fireEvent.click(screen.getByRole('button', { name: /Registrarme/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Comenzar registro/i }));
-    expect(mockNavigate).toHaveBeenCalledWith('/caregiver/register');
+    fireEvent.change(screen.getByPlaceholderText(/tucorreo@email\.com/), {
+      target: { value: 'existente@test.com' },
+    });
+    fireEvent.submit(screen.getByRole('button', { name: /Continuar/i }).closest('form')!);
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/••••••••/)).toBeInTheDocument();
+    });
+  });
+
+  it('shows GARDEN header', () => {
+    renderAuth();
+    expect(screen.getByText('GARDEN')).toBeInTheDocument();
   });
 });
