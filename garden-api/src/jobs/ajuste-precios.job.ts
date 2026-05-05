@@ -87,8 +87,10 @@ async function generarSugerenciasPorCuidador() {
         const zona = cg.zone || 'Centro';
 
         // Generar sugerencia para PASEO
-        if (cg.pricePerWalk30 != null) {
-            await generarSugerenciaCuidador(cg.id, zona, 'PASEO', cg.pricePerWalk30);
+        // Convention: pricePerWalk60 es el precio canónico; walk30 = walk60 / 2
+        const paseoPrecio = cg.pricePerWalk60 ?? (cg.pricePerWalk30 != null ? cg.pricePerWalk30 * 2 : null);
+        if (paseoPrecio != null) {
+            await generarSugerenciaCuidador(cg.id, zona, 'PASEO', paseoPrecio);
         }
 
         // Generar sugerencia para HOSPEDAJE
@@ -243,7 +245,8 @@ async function generarSugerenciaCuidador(
 }
 
 async function obtenerPreciosZona(zona: string, serviceType: 'PASEO' | 'HOSPEDAJE') {
-    const field = serviceType === 'PASEO' ? 'pricePerWalk30' : 'pricePerDay';
+    // pricePerWalk60 es el precio canónico para PASEO (walk30 = walk60 / 2)
+    const field = serviceType === 'PASEO' ? 'pricePerWalk60' : 'pricePerDay';
     const caregivers = await prisma.caregiverProfile.findMany({
         where: { zone: zona as any, status: 'APPROVED', [field]: { not: null } },
         select: { [field]: true },
@@ -268,9 +271,17 @@ async function obtenerDatosZona(zona: string, servicio: string) {
 
     const serviceType = servicio === 'paseo' ? 'PASEO' : 'HOSPEDAJE';
 
+    // Obtener IDs de cuidadores en la zona para filtrar reservas correctamente
+    const caregiversEnZona = await prisma.caregiverProfile.findMany({
+        where: { zone: zona as any, status: 'APPROVED' },
+        select: { id: true },
+    });
+    const caregiverIds = caregiversEnZona.map(c => c.id);
+
     const [reservas7, reservas7ant] = await Promise.all([
         prisma.booking.count({
             where: {
+                caregiverId: { in: caregiverIds },
                 serviceType,
                 status: { in: ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'] },
                 createdAt: { gte: hace7Dias },
@@ -278,6 +289,7 @@ async function obtenerDatosZona(zona: string, servicio: string) {
         }),
         prisma.booking.count({
             where: {
+                caregiverId: { in: caregiverIds },
                 serviceType,
                 status: { in: ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'] },
                 createdAt: { gte: hace37Dias, lt: hace7Dias },
@@ -285,9 +297,7 @@ async function obtenerDatosZona(zona: string, servicio: string) {
         }),
     ]);
 
-    const totalCaregivers = await prisma.caregiverProfile.count({
-        where: { zone: zona as any, status: 'APPROVED' },
-    });
+    const totalCaregivers = caregiverIds.length; // Ya tenemos el listado de arriba
 
     const ocupacion = totalCaregivers > 0
         ? Math.min(1, reservas7 / Math.max(1, totalCaregivers * 7 * 0.3))

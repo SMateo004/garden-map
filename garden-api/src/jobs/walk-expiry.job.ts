@@ -99,12 +99,12 @@ export async function procesarVencimientoPaseos() {
 
                 // Notificación al vencer
                 if (minsToEnd <= 0 && !alreadyNotifiedEnd) {
+                    // Append-only: simply add the END event to existing events (don't filter/re-add 5MIN)
                     await prisma.booking.update({
                         where: { id: booking.id },
                         data: {
                             serviceEvents: [
-                                ...events.filter(e => e.type !== 'EXPIRY_WARNING_5MIN'),
-                                { type: 'EXPIRY_WARNING_5MIN', timestamp: events.find(e => e.type === 'EXPIRY_WARNING_5MIN')?.timestamp ?? new Date().toISOString() },
+                                ...events,
                                 { type: 'EXPIRY_WARNING_END', timestamp: new Date().toISOString() },
                             ],
                         },
