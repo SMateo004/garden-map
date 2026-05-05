@@ -124,7 +124,7 @@ export const rejectPayment = asyncHandler(async (req: Request, res: Response) =>
 
 /** POST /api/admin/bookings/:id/approve-payment — aprobar pago manual */
 export const approvePayment = asyncHandler(async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = req.params.id!;
   const adminId = req.user!.userId;
 
   const booking = await prisma.booking.findUnique({ where: { id } });
