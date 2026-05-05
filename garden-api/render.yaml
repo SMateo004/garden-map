@@ -5,8 +5,10 @@ services:
     region: oregon
     plan: free
     rootDir: garden-api
-    buildCommand: npm ci && npm run build
-    startCommand: npx prisma migrate deploy && node dist/server.js
+    # npm ci with --prefer-offline if cache hit; NODE_OPTIONS caps tsc memory to avoid OOM on 512MB free tier
+    buildCommand: npm ci && NODE_OPTIONS=--max-old-space-size=400 npm run build
+    # Use local prisma binary (already in node_modules from build step — faster than npx download)
+    startCommand: ./node_modules/.bin/prisma migrate deploy && node dist/server.js
     healthCheckPath: /health
     autoDeploy: true
     envVars:
