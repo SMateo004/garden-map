@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
 import * as caregiverProfileController from './caregiver-profile.controller.js';
 import { asyncHandler } from '../../shared/async-handler.js';
@@ -6,6 +7,13 @@ import { prisma } from '../../config/database.js';
 import multer from 'multer';
 import { uploadImage } from '../../services/storage.service.js';
 import logger from '../../shared/logger.js';
+
+const bankInfoSchema = z.object({
+  bankName: z.string().min(2, 'Nombre del banco requerido').max(100),
+  bankAccount: z.string().min(4, 'Número de cuenta requerido').max(50).regex(/^[a-zA-Z0-9\-]+$/, 'Cuenta inválida'),
+  bankHolder: z.string().min(2, 'Nombre del titular requerido').max(100),
+  bankType: z.string().min(1, 'Tipo de cuenta requerido').max(50),
+});
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
@@ -29,14 +37,21 @@ router.patch('/notifications/:id/read', caregiverProfileController.markNotificat
 
 router.patch('/bank-info', authMiddleware, requireRole('CAREGIVER'),
   asyncHandler(async (req, res) => {
+    const parsed = bankInfoSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Datos inválidos' },
+      });
+    }
     const userId = (req as any).user.userId;
-    const { bankName, bankAccount, bankHolder, bankType } = req.body;
-    
+    const { bankName, bankAccount, bankHolder, bankType } = parsed.data;
+
     await prisma.caregiverProfile.update({
       where: { userId },
       data: { bankName, bankAccount, bankHolder, bankType },
     });
-    
+
     res.json({ success: true, data: { message: 'Datos bancarios actualizados' } });
   })
 );

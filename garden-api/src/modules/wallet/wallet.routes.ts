@@ -60,7 +60,7 @@ router.get('/', authMiddleware, asyncHandler(async (req: Request, res: Response)
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
   const pendingWithdrawals = transactions
-    .filter(t => t.type === 'WITHDRAWAL' && t.status === 'PENDING')
+    .filter(t => t.type === 'WITHDRAWAL' && (t.status === 'PENDING' || t.status === 'PROCESSING'))
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
   res.json({
@@ -133,9 +133,9 @@ router.post('/withdraw', authMiddleware, asyncHandler(async (req: Request, res: 
     return res.status(400).json({ success: false, error: { message: 'Saldo insuficiente' } });
   }
 
-  // Verificar que no haya retiro pendiente
+  // Verificar que no haya retiro pendiente o en proceso
   const pendingWithdrawal = await prisma.walletTransaction.findFirst({
-    where: { userId, type: 'WITHDRAWAL', status: 'PENDING' },
+    where: { userId, type: 'WITHDRAWAL', status: { in: ['PENDING', 'PROCESSING'] } },
   });
 
   if (pendingWithdrawal) {
@@ -218,30 +218,31 @@ router.post('/redeem', authMiddleware, asyncHandler(async (req: Request, res: Re
 
   const amount = Number(giftCode.amount);
 
-  // Agregar saldo según el rol
+  // Atomic: increment balance + mark code used + record transaction
   let newBalance = 0;
-  if (role === 'CAREGIVER') {
-    const updated = await prisma.caregiverProfile.update({
-      where: { userId },
-      data: { balance: { increment: amount } },
-      select: { balance: true },
-    });
-    newBalance = Number(updated.balance);
-  } else if (role === 'CLIENT') {
-    const updated = await prisma.clientProfile.update({
-      where: { userId },
-      data: { balance: { increment: amount } },
-      select: { balance: true },
-    });
-    newBalance = Number(updated.balance);
-  }
+  await prisma.$transaction(async (tx) => {
+    if (role === 'CAREGIVER') {
+      const updated = await tx.caregiverProfile.update({
+        where: { userId },
+        data: { balance: { increment: amount } },
+        select: { balance: true },
+      });
+      newBalance = Number(updated.balance);
+    } else if (role === 'CLIENT') {
+      const updated = await tx.clientProfile.update({
+        where: { userId },
+        data: { balance: { increment: amount } },
+        select: { balance: true },
+      });
+      newBalance = Number(updated.balance);
+    }
 
-  await Promise.all([
-    prisma.giftCode.update({
+    await tx.giftCode.update({
       where: { id: giftCode.id },
       data: { usedBy: { push: userId } },
-    }),
-    prisma.walletTransaction.create({
+    });
+
+    await tx.walletTransaction.create({
       data: {
         userId,
         type: 'REFUND',
@@ -250,8 +251,8 @@ router.post('/redeem', authMiddleware, asyncHandler(async (req: Request, res: Re
         description: `Código de regalo: ${giftCode.code}`,
         status: 'COMPLETED',
       },
-    }),
-  ]);
+    });
+  });
 
   res.json({
     success: true,
@@ -262,46 +263,5 @@ router.post('/redeem', authMiddleware, asyncHandler(async (req: Request, res: Re
     }
   });
 }));
-
-async function getWalletStatsAndTransactions(userId: string) {
-  const transactions = await prisma.walletTransaction.findMany({
-    where: { userId },
-    orderBy: { createdAt: 'desc' },
-    take: 50,
-  });
-
-  const totalEarned = transactions
-    .filter(t => t.type === 'EARNING' && t.status === 'COMPLETED')
-    .reduce((sum, t) => sum + Number(t.amount), 0);
-  
-  const totalPaid = transactions
-    .filter(t => t.type === 'PAYMENT' && t.status === 'COMPLETED')
-    .reduce((sum, t) => sum + Number(t.amount), 0);
-
-  const totalWithdrawn = transactions
-    .filter(t => t.type === 'WITHDRAWAL' && t.status === 'COMPLETED')
-    .reduce((sum, t) => sum + Number(t.amount), 0);
-
-  const pendingWithdrawals = transactions
-    .filter(t => t.type === 'WITHDRAWAL' && (t.status === 'PENDING' || t.status === 'PROCESSING'))
-    .reduce((sum, t) => sum + Number(t.amount), 0);
-
-  return {
-    totalEarned,
-    totalPaid,
-    totalWithdrawn,
-    pendingWithdrawals,
-    transactions: transactions.map(t => ({
-      id: t.id,
-      type: t.type,
-      amount: Number(t.amount),
-      balance: Number(t.balance),
-      description: t.description,
-      bookingId: t.bookingId,
-      status: t.status,
-      createdAt: t.createdAt.toISOString(),
-    })),
-  };
-}
 
 export default router;
