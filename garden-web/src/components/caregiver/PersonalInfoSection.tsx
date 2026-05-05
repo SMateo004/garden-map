@@ -36,12 +36,18 @@ export function PersonalInfoSection({
 
   const handleSendVerifyCode = async () => {
     try {
-      const res = await sendVerifyEmail();
-      if (res.success) {
-        setShowVerifyModal(true);
-      }
+      await sendVerifyEmail();
+      setShowVerifyModal(true);
     } catch (err: any) {
-      toast.error('Error al enviar el código de verificación');
+      const code = err?.response?.data?.error?.code;
+      const msg = err?.response?.data?.error?.message;
+      // RESEND_TOO_SOON: a code was already sent recently — open modal so user can enter it
+      if (code === 'RESEND_TOO_SOON') {
+        setShowVerifyModal(true);
+        toast(msg ?? 'Ya se envió un código recientemente. Ingrésalo abajo.', { icon: 'ℹ️' });
+        return;
+      }
+      toast.error(msg ?? 'Error al enviar el código de verificación');
     }
   };
 
@@ -327,6 +333,7 @@ export function PersonalInfoSection({
           email={user.email}
           onSuccess={onUpdate}
           onClose={() => setShowVerifyModal(false)}
+          codeSent
         />
       )}
 

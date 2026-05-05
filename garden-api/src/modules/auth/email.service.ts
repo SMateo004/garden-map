@@ -11,6 +11,7 @@ import logger from '../../shared/logger.js';
 
 const CODE_EXPIRY_MINUTES = 10;
 const MAX_VERIFY_ATTEMPTS = 5;
+const RESEND_COOLDOWN_SECONDS = 60;
 
 function generateCode(): string {
   return randomInt(100000, 999999).toString();
@@ -20,19 +21,20 @@ function hashCode(code: string): string {
   return createHash('sha256').update(code).digest('hex');
 }
 
-export async function sendVerificationEmail(email: string, code: string): Promise<void> {
+export async function sendVerificationEmail(email: string, code: string, htmlBody?: string): Promise<void> {
   const isDev = env.NODE_ENV !== 'production';
 
   logger.info(`📩 Verification code for ${email}: [ ${code} ]`);
   logger.info(`📩 Attempting to send email to: ${email}`);
+  const body = htmlBody ?? `Your verification code is: <b>${code}</b>`;
   try {
     const { Resend } = await import('resend');
     const resend = new Resend(env.RESEND_API_KEY);
     const { error } = await resend.emails.send({
       from: env.EMAIL_FROM,
       to: [email],
-      subject: 'Your verification code',
-      html: `Your verification code is: <b>${code}</b>`,
+      subject: 'GARDEN – Tu código de verificación',
+      html: body,
     });
 
     if (error) {
@@ -72,6 +74,26 @@ export async function generateAndSendVerificationCode(userId: string): Promise<{
   });
   if (!user?.email) throw new BadRequestError('Usuario sin email.', 'NO_EMAIL');
 
+  // Rate limit: don't allow re-sending within cooldown window
+  const recent = await prisma.emailVerification.findFirst({
+    where: { userId, verified: false },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (recent) {
+    const secondsSinceLast = (Date.now() - recent.createdAt.getTime()) / 1000;
+    if (secondsSinceLast < RESEND_COOLDOWN_SECONDS) {
+      const wait = Math.ceil(RESEND_COOLDOWN_SECONDS - secondsSinceLast);
+      throw new BadRequestError(
+        `Espera ${wait} segundo${wait !== 1 ? 's' : ''} antes de solicitar un nuevo código.`,
+        'RESEND_TOO_SOON'
+      );
+    }
+    // Clean up old unverified records for this user before creating a new one
+    await prisma.emailVerification.deleteMany({
+      where: { userId, verified: false },
+    });
+  }
+
   const code = generateCode();
   const codeHash = hashCode(code);
   const expiresAt = new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000);
@@ -86,15 +108,23 @@ export async function generateAndSendVerificationCode(userId: string): Promise<{
   });
 
   const html = `
-    <div style="font-family:sans-serif;max-width:400px;margin:0 auto;">
-      <h2>GARDEN – Verificación de correo</h2>
-      <p>Tu código de verificación es:</p>
-      <p style="font-size:28px;font-weight:bold;letter-spacing:4px;">${code}</p>
-      <p style="color:#666;">Válido por ${CODE_EXPIRY_MINUTES} minutos. No lo compartas con nadie.</p>
+    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
+      <div style="background:#16a34a;padding:28px 32px;text-align:center;">
+        <h1 style="color:#fff;margin:0;font-size:24px;font-weight:900;letter-spacing:1px;">🌿 GARDEN</h1>
+        <p style="color:#bbf7d0;margin:6px 0 0;font-size:13px;">Cuidadores de confianza</p>
+      </div>
+      <div style="padding:32px;">
+        <h2 style="margin:0 0 8px;font-size:18px;color:#111;">Verifica tu correo electrónico</h2>
+        <p style="color:#555;font-size:14px;margin:0 0 24px;">Usa el código de abajo para verificar tu cuenta. Es válido por <strong>${CODE_EXPIRY_MINUTES} minutos</strong>.</p>
+        <div style="background:#f0fdf4;border:2px solid #bbf7d0;border-radius:12px;padding:24px;text-align:center;margin:0 0 24px;">
+          <p style="font-size:40px;font-weight:900;letter-spacing:12px;color:#15803d;margin:0;font-family:monospace;">${code}</p>
+        </div>
+        <p style="color:#999;font-size:12px;margin:0;">Si no solicitaste este código, ignora este mensaje. Nunca compartas tu código con nadie.</p>
+      </div>
     </div>
   `;
 
-  await sendVerificationEmail(user.email, code);
+  await sendVerificationEmail(user.email, code, html);
 
   return { success: true, message: 'Código enviado a tu correo. Revisa la bandeja de entrada.' };
 }

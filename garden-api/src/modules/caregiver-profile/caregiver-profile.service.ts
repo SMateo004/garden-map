@@ -62,12 +62,13 @@ export async function patchUserInfo(
   const emailChanged = newEmail && newEmail !== currentUser?.email?.toLowerCase();
   if (emailChanged) {
     userUpdateData.email = newEmail;
-    // Reset email verification — user must re-verify
+    // Reset BOTH user.emailVerified and caregiverProfile.emailVerified — user must re-verify new address
+    userUpdateData.emailVerified = false;
     await prisma.caregiverProfile.update({
       where: { id: profile.id },
       data: { emailVerified: false, personalInfoComplete: false } as any,
     });
-    logger.info('Email changed — emailVerified reset', { userId, newEmail });
+    logger.info('Email changed — emailVerified reset on user + profile', { userId, newEmail });
   }
 
   if (Object.keys(userUpdateData).length === 0) {

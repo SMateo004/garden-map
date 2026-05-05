@@ -37,6 +37,7 @@ export interface MyProfileResponse {
   privacyAccepted: boolean | null;
   verificationAccepted: boolean | null;
   ciNumber: string | null;
+  emailVerified: boolean;
   identityVerificationStatus: 'PENDING' | 'REVIEW' | 'VERIFIED' | 'REJECTED' | null;
   profileStatus: 'INCOMPLETE' | 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | null;
   approvedAt: string | null;
@@ -49,7 +50,7 @@ export interface MyProfileResponse {
   identityVerificationSubmittedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  user: MyProfileUser;
+  user: MyProfileUser & { emailVerified?: boolean };
 }
 
 export interface OnboardingStatus {
