@@ -75,7 +75,11 @@ function handleAgentError(res: any, context: string, error: any) {
 // Still rate-limited because it calls Claude (API cost)
 router.post('/precio/onboarding', claudePublicLimiter, async (req, res) => {
   try {
-    const body = onboardingPrecioSchema.parse(req.body);
+    const body = onboardingPrecioSchema.parse(req.body) as {
+      zona: string; servicio: string; experienciaMeses: number;
+      trustScore: number; precioPromedioZona: number;
+      precioMinZona: number; precioMaxZona: number;
+    };
     const resultado = await sugerirPrecioOnboarding(body);
     res.json({ success: true, data: resultado });
   } catch (error: any) {
@@ -92,7 +96,11 @@ router.use(authMiddleware);
 // ── Agente 1: Reputación — analizar calificación ──────────────────────────────
 router.post('/calificacion/analizar', claudeAuthLimiter, async (req, res) => {
   try {
-    const body = calificacionSchema.parse(req.body);
+    const body = calificacionSchema.parse(req.body) as {
+      calificacionNueva: number; cuidadorId: string;
+      historialCalificaciones: number[]; calificacionPromedio: number;
+      totalResenas: number; tiempoEnPlataforma: string; duenoHistorial: number[];
+    };
     const resultado = await analizarCalificacion(body);
     res.json({ success: true, data: resultado });
   } catch (error: any) {
@@ -106,7 +114,10 @@ router.post('/calificacion/analizar', claudeAuthLimiter, async (req, res) => {
 // ── Agente 1: Reputación — analizar disputa ───────────────────────────────────
 router.post('/disputa/analizar', claudeAuthLimiter, async (req, res) => {
   try {
-    const body = disputaSchema.parse(req.body);
+    const body = disputaSchema.parse(req.body) as {
+      reserva: object; cuidador: object; dueno: object; mascota: object;
+      motivoDisputa: string; mensajesRelevantes?: string[];
+    };
     const resultado = await analizarDisputa(body);
     res.json({ success: true, data: resultado });
   } catch (error: any) {
