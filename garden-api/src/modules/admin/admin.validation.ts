@@ -54,3 +54,60 @@ export const deleteCaregiverSchema = z.object({
 });
 
 export type DeleteCaregiverBody = z.infer<typeof deleteCaregiverSchema>;
+
+// ── Gift codes ────────────────────────────────────────────────────────────────
+export const createGiftCodeSchema = z.object({
+  code: z.string().min(3, 'El código debe tener al menos 3 caracteres').max(32).regex(/^[A-Z0-9_-]+$/i, 'El código solo puede contener letras, números, guiones y guiones bajos'),
+  amount: z.number().int().min(1, 'El monto debe ser al menos 1').max(10000, 'El monto no puede exceder 10,000'),
+  maxUses: z.number().int().min(1).max(10000).optional(),
+  expiresAt: z.string().datetime({ offset: true }).optional().nullable(),
+});
+
+export type CreateGiftCodeBody = z.infer<typeof createGiftCodeSchema>;
+
+// ── Withdrawals ───────────────────────────────────────────────────────────────
+export const rejectWithdrawalSchema = z.object({
+  reason: z.string().max(500).optional(),
+});
+
+export type RejectWithdrawalBody = z.infer<typeof rejectWithdrawalSchema>;
+
+// ── Settings — only allow explicitly named keys ───────────────────────────────
+export const ALLOWED_SETTING_KEYS = [
+  'walk30Enabled',
+  'maintenanceMode',
+  'newRegistrationsEnabled',
+  'marketplaceEnabled',
+  'paymentsEnabled',
+  'commissionPct',
+  'preciosDinamicosEnabled',
+  'blockedZones',
+] as const;
+
+export type AllowedSettingKey = typeof ALLOWED_SETTING_KEYS[number];
+
+// ── Admin notifications ───────────────────────────────────────────────────────
+export const sendAdminNotificationSchema = z.object({
+  title: z.string().min(1).max(100),
+  message: z.string().min(1).max(1000),
+  target: z.enum(['TODOS', 'CUIDADORES', 'DUENOS']),
+  type: z.string().max(50).optional().default('SYSTEM'),
+});
+
+export const scheduleAdminNotificationSchema = sendAdminNotificationSchema.extend({
+  scheduledAt: z.string().datetime({ offset: true }),
+});
+
+export type SendAdminNotificationBody = z.infer<typeof sendAdminNotificationSchema>;
+export type ScheduleAdminNotificationBody = z.infer<typeof scheduleAdminNotificationSchema>;
+
+// ── Agent instruction ─────────────────────────────────────────────────────────
+export const postAgentInstructionSchema = z.object({
+  agentType: z.enum(['REPUTACION', 'PRECIOS', 'MONITOR', 'CUSTOM']).default('CUSTOM'),
+  action: z.string().min(1).max(100).optional(),
+  // input is freeform JSON (object or null); validated at runtime by Prisma
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  input: z.any().optional().nullable(),
+});
+
+export type PostAgentInstructionBody = z.infer<typeof postAgentInstructionSchema>;

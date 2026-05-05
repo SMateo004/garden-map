@@ -15,6 +15,12 @@ import {
   suspendCaregiverSchema,
   activateCaregiverSchema,
   deleteCaregiverSchema,
+  createGiftCodeSchema,
+  rejectWithdrawalSchema,
+  ALLOWED_SETTING_KEYS,
+  sendAdminNotificationSchema,
+  scheduleAdminNotificationSchema,
+  postAgentInstructionSchema,
 } from './admin.validation.js';
 
 /** GET /api/admin/caregivers — listado de todos los cuidadores (paginado, filtro status opcional). */
@@ -119,39 +125,63 @@ export const rejectPayment = asyncHandler(async (req: Request, res: Response) =>
 /** POST /api/admin/bookings/:id/approve-payment — aprobar pago manual */
 export const approvePayment = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  
+  const adminId = req.user!.userId;
+
   const booking = await prisma.booking.findUnique({ where: { id } });
   if (!booking) return res.status(404).json({ success: false, error: { message: 'Reserva no encontrada' } });
-  
+
   if (booking.status !== 'PAYMENT_PENDING_APPROVAL' && booking.status !== 'PENDING_PAYMENT') {
     return res.status(400).json({ success: false, error: { message: 'La reserva no está en un estado válido para aprobación de pago' } });
   }
-  
-  await prisma.booking.update({
-    where: { id },
-    data: { 
-      status: 'WAITING_CAREGIVER_APPROVAL',
-      paidAt: new Date(),
-    },
-  });
 
-  // Notificar al cuidador
+  // Fetch caregiver userId before transaction for notification
   const caregiverProfile = await prisma.caregiverProfile.findUnique({
     where: { id: booking.caregiverId },
     select: { userId: true },
   });
-  
-  if (caregiverProfile) {
-    await prisma.notification.create({
+
+  // Atomic: update booking + create audit log + create DB notification
+  await prisma.$transaction(async (tx) => {
+    await tx.booking.update({
+      where: { id },
       data: {
-        userId: caregiverProfile.userId,
-        title: 'Nueva reserva confirmada',
-        message: 'El pago fue verificado. Tienes una nueva reserva esperando tu aceptación.',
-        type: 'NEW_BOOKING',
+        status: 'WAITING_CAREGIVER_APPROVAL',
+        paidAt: new Date(),
       },
     });
+
+    // Audit trail — every admin payment action must be logged
+    await tx.adminAction.create({
+      data: {
+        adminId,
+        actionType: 'APPROVE_PAYMENT',
+        targetId: id,
+        notes: `Pago aprobado manualmente. Booking ${id} → WAITING_CAREGIVER_APPROVAL`,
+      },
+    });
+
+    if (caregiverProfile) {
+      await tx.notification.create({
+        data: {
+          userId: caregiverProfile.userId,
+          title: 'Nueva reserva confirmada',
+          message: 'El pago fue verificado. Tienes una nueva reserva esperando tu aceptación.',
+          type: 'NEW_BOOKING',
+        },
+      });
+    }
+  });
+
+  // Push notification (best-effort, outside transaction)
+  if (caregiverProfile) {
+    const { sendPushToUser } = await import('../../services/firebase.service.js');
+    sendPushToUser(
+      caregiverProfile.userId,
+      'Nueva reserva confirmada',
+      'El pago fue verificado. Tienes una nueva reserva esperando tu aceptación.'
+    ).catch(() => {});
   }
-  
+
   res.json({ success: true, data: { status: 'WAITING_CAREGIVER_APPROVAL' } });
 });
 
@@ -276,13 +306,31 @@ export const processWithdrawal = asyncHandler(async (req: Request, res: Response
 
 export const completeWithdrawal = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  
+
   const tx = await prisma.walletTransaction.findUnique({ where: { id } });
   if (!tx || tx.type !== 'WITHDRAWAL' || !['PENDING', 'PROCESSING'].includes(tx.status)) {
     return res.status(400).json({ success: false, error: { message: 'Solicitud no válida' } });
   }
 
-  // Descontar saldo Y marcar como completado en una transacción
+  // Guard: verify caregiver has sufficient balance before decrement
+  const profile = await prisma.caregiverProfile.findUnique({
+    where: { userId: tx.userId },
+    select: { balance: true },
+  });
+  if (!profile) {
+    return res.status(404).json({ success: false, error: { message: 'Perfil de cuidador no encontrado' } });
+  }
+  if (Number(profile.balance) < Number(tx.amount)) {
+    return res.status(409).json({
+      success: false,
+      error: {
+        message: `Saldo insuficiente. El cuidador tiene Bs ${profile.balance} pero solicita retirar Bs ${tx.amount}`,
+        code: 'INSUFFICIENT_BALANCE',
+      },
+    });
+  }
+
+  // Atomic: decrement balance + mark COMPLETED + notify
   await prisma.$transaction(async (prismaTx) => {
     await prismaTx.caregiverProfile.update({
       where: { userId: tx.userId },
@@ -296,7 +344,7 @@ export const completeWithdrawal = asyncHandler(async (req: Request, res: Respons
 
     await prismaTx.walletTransaction.update({
       where: { id },
-      data: { 
+      data: {
         status: 'COMPLETED',
         balance: Number(updatedProfile?.balance ?? 0),
       },
@@ -317,25 +365,42 @@ export const completeWithdrawal = asyncHandler(async (req: Request, res: Respons
 
 export const rejectWithdrawal = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { reason } = req.body;
-  
+  const parsed = rejectWithdrawalSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.errors } });
+  }
+  const { reason } = parsed.data;
+
   const tx = await prisma.walletTransaction.findUnique({ where: { id } });
   if (!tx || tx.type !== 'WITHDRAWAL') {
-    return res.status(400).json({ success: false, error: { message: 'Solicitud no encontrada' } });
+    return res.status(404).json({ success: false, error: { message: 'Solicitud no encontrada' } });
   }
 
-  await prisma.walletTransaction.update({
-    where: { id },
-    data: { status: 'REJECTED' },
-  });
+  // Guard: only allow rejecting PENDING or PROCESSING withdrawals
+  if (!['PENDING', 'PROCESSING'].includes(tx.status)) {
+    return res.status(409).json({
+      success: false,
+      error: {
+        message: `No se puede rechazar una solicitud en estado ${tx.status}. Solo PENDING o PROCESSING son válidos.`,
+        code: 'INVALID_STATUS_TRANSITION',
+      },
+    });
+  }
 
-  await prisma.notification.create({
-    data: {
-      userId: tx.userId,
-      title: '❌ Retiro rechazado',
-      message: `Tu retiro de Bs ${tx.amount} fue rechazado. ${reason ?? 'Contacta al soporte para más información.'}`,
-      type: 'SYSTEM',
-    },
+  await prisma.$transaction(async (prismaTx) => {
+    await prismaTx.walletTransaction.update({
+      where: { id },
+      data: { status: 'REJECTED' },
+    });
+
+    await prismaTx.notification.create({
+      data: {
+        userId: tx.userId,
+        title: '❌ Retiro rechazado',
+        message: `Tu retiro de Bs ${tx.amount} fue rechazado. ${reason ?? 'Contacta al soporte para más información.'}`,
+        type: 'SYSTEM',
+      },
+    });
   });
 
   res.json({ success: true, data: { status: 'REJECTED' } });
@@ -378,15 +443,23 @@ export const listGiftCodes = asyncHandler(async (_req: Request, res: Response) =
 
 /** POST /api/admin/gift-codes — crear nuevo código de regalo */
 export const createGiftCode = asyncHandler(async (req: Request, res: Response) => {
-  const { code, amount, maxUses, expiresAt } = req.body;
-  if (!code || !amount) {
-    return res.status(400).json({ success: false, error: { message: 'code y amount son requeridos' } });
+  const parsed = createGiftCodeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.errors } });
   }
+  const { code, amount, maxUses, expiresAt } = parsed.data;
+
+  // Check for duplicate code (give friendly error before DB unique constraint fires)
+  const existing = await prisma.giftCode.findFirst({ where: { code: code.toUpperCase().trim() } });
+  if (existing) {
+    return res.status(409).json({ success: false, error: { code: 'DUPLICATE_CODE', message: 'Ya existe un código con ese nombre' } });
+  }
+
   const created = await prisma.giftCode.create({
     data: {
-      code: String(code).toUpperCase().trim(),
-      amount: Number(amount),
-      maxUses: maxUses ? Number(maxUses) : 1,
+      code: code.toUpperCase().trim(),
+      amount,
+      maxUses: maxUses ?? 1,
       expiresAt: expiresAt ? new Date(expiresAt) : undefined,
     },
   });
@@ -518,8 +591,24 @@ export const getSettings = asyncHandler(async (req: Request, res: Response) => {
 /** PATCH /api/admin/settings/:key */
 export const updateSetting = asyncHandler(async (req: Request, res: Response) => {
   const key = req.params.key as string;
-  const { value } = req.body;
   const adminId = req.user?.userId ?? (req.user as { id?: string })?.id;
+
+  // Allowlist: only known setting keys may be modified to prevent arbitrary data injection
+  if (!(ALLOWED_SETTING_KEYS as readonly string[]).includes(key)) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: 'INVALID_SETTING_KEY',
+        message: `Clave de configuración desconocida: "${key}". Claves válidas: ${ALLOWED_SETTING_KEYS.join(', ')}`,
+      },
+    });
+  }
+
+  const { value } = req.body;
+  if (value === undefined) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_VALUE', message: 'El campo value es requerido' } });
+  }
+
   const stored = await prisma.appSettings.upsert({
     where: { key },
     update: { value: JSON.stringify(value), updatedBy: adminId },
@@ -564,11 +653,15 @@ export const getAgentStats = asyncHandler(async (_req: Request, res: Response) =
 
 /** POST /api/admin/agent-logs — post a custom instruction/event */
 export const postAgentInstruction = asyncHandler(async (req: Request, res: Response) => {
-  const { agentType, action, input } = req.body;
+  const parsed = postAgentInstructionSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.errors } });
+  }
+  const { agentType, action, input } = parsed.data;
   const adminId = req.user?.userId ?? (req.user as { id?: string })?.id;
   const log = await prisma.agentLog.create({
     data: {
-      agentType: agentType ?? 'CUSTOM',
+      agentType,
       action: action ?? 'ADMIN_INSTRUCTION',
       input: input ?? null,
       status: 'PENDING',
@@ -586,39 +679,37 @@ import { sendPush } from '../../services/firebase.service.js';
 
 /** POST /api/admin/notifications/send — broadcast inmediato */
 export const sendAdminNotification = asyncHandler(async (req: Request, res: Response) => {
-  const { title, message, target, type = 'SYSTEM' } = req.body as {
-    title: string; message: string; target: string; type?: string;
-  };
-  if (!title || !message || !target) {
-    return res.status(400).json({ success: false, error: { message: 'title, message y target son requeridos' } });
+  const parsed = sendAdminNotificationSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.errors } });
   }
-
+  const { title, message, target, type } = parsed.data;
   const adminId = req.user?.userId;
 
   // Determinar qué usuarios reciben la notificación
+  // NOTE: unknown target explicitly rejected by Zod schema above (enum: TODOS | CUIDADORES | DUENOS)
   let whereRole: object = {};
   if (target === 'CUIDADORES') whereRole = { role: 'CAREGIVER' };
   else if (target === 'DUENOS') whereRole = { role: 'CLIENT' };
+  // target === 'TODOS' → whereRole stays {} → all non-deleted users
 
   const users = await prisma.user.findMany({
     where: { ...whereRole, isDeleted: false },
     select: { id: true, fcmToken: true },
   });
 
-  // Crear notificaciones en DB y enviar push en paralelo
+  // Crear notificaciones en DB
   const notifData = users.map(u => ({
     userId: u.id, title, message, type, read: false,
   }));
-
-  let sentCount = 0;
   await prisma.notification.createMany({ data: notifData });
 
   // Push FCM (best-effort, no bloquea)
   const pushPromises = users
     .filter(u => !!u.fcmToken)
-    .map(u => sendPush(u.fcmToken!, title, message).then(() => { sentCount++; }));
+    .map(u => sendPush(u.fcmToken!, title, message));
   await Promise.allSettled(pushPromises);
-  sentCount = users.length; // contamos todos (DB entregado)
+  const sentCount = users.length;
 
   // Guardar historial
   const record = await prisma.adminBroadcastNotification.create({
@@ -636,16 +727,17 @@ export const sendAdminNotification = asyncHandler(async (req: Request, res: Resp
 
 /** POST /api/admin/notifications/schedule — programar para fecha futura */
 export const scheduleAdminNotification = asyncHandler(async (req: Request, res: Response) => {
-  const { title, message, target, type = 'SYSTEM', scheduledAt } = req.body as {
-    title: string; message: string; target: string; type?: string; scheduledAt: string;
-  };
-  if (!title || !message || !target || !scheduledAt) {
-    return res.status(400).json({ success: false, error: { message: 'title, message, target y scheduledAt son requeridos' } });
+  const parsed = scheduleAdminNotificationSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.errors } });
   }
+  const { title, message, target, type, scheduledAt } = parsed.data;
+
   const scheduledDate = new Date(scheduledAt);
-  if (isNaN(scheduledDate.getTime()) || scheduledDate <= new Date()) {
+  if (scheduledDate <= new Date()) {
     return res.status(400).json({ success: false, error: { message: 'scheduledAt debe ser una fecha futura válida' } });
   }
+
   const adminId = req.user?.userId;
   const record = await prisma.adminBroadcastNotification.create({
     data: {
