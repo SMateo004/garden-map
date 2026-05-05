@@ -2134,6 +2134,9 @@ export async function startService(bookingId: string, caregiverUserId: string, p
   });
 }
 
+/** Allowed event types from caregiver during a service. */
+const ALLOWED_EVENT_TYPES = ['INCIDENT', 'ACCIDENT', 'ILLNESS', 'COMPLICATION', 'NOTE', 'PHOTO', 'WALK_UPDATE'] as const;
+
 export async function addServiceEvent(
   bookingId: string,
   caregiverUserId: string,
@@ -2141,6 +2144,18 @@ export async function addServiceEvent(
   description: string,
   photoUrl?: string
 ): Promise<BookingCreateResult> {
+  // Validate event type to prevent arbitrary string injection
+  if (!ALLOWED_EVENT_TYPES.includes(type as any)) {
+    throw new BadRequestError(`Tipo de evento inválido: ${type}. Tipos permitidos: ${ALLOWED_EVENT_TYPES.join(', ')}`);
+  }
+  // Validate description length
+  if (!description || description.trim().length === 0) {
+    throw new BadRequestError('La descripción del evento es obligatoria');
+  }
+  if (description.length > 1000) {
+    throw new BadRequestError('La descripción no puede superar 1000 caracteres');
+  }
+
   const profile = await prisma.caregiverProfile.findFirst({
     where: { userId: caregiverUserId },
   });
@@ -2150,6 +2165,11 @@ export async function addServiceEvent(
     where: { id: bookingId, caregiverId: profile.id },
   });
   if (!booking) throw new BookingNotFoundError(bookingId);
+
+  // Only allow events while service is in progress (completed bookings are read-only)
+  if (booking.status !== BookingStatus.IN_PROGRESS) {
+    throw new BadRequestError('Solo se pueden agregar eventos a servicios en curso');
+  }
 
   const events = (booking.serviceEvents as any[]) || [];
   events.push({
@@ -2207,6 +2227,9 @@ function calcGpsDistance(points: { lat: number; lng: number }[]): number {
   return total;
 }
 
+/** Maximum GPS points stored per walk (prevents unbounded JSON growth). */
+const GPS_MAX_POINTS = 2000;
+
 export async function trackServiceLocation(
   bookingId: string,
   caregiverUserId: string,
@@ -2214,6 +2237,14 @@ export async function trackServiceLocation(
   lng: number,
   accuracy?: number
 ): Promise<void> {
+  // Validate coordinate bounds before any DB operation
+  if (typeof lat !== 'number' || isNaN(lat) || lat < -90 || lat > 90) {
+    throw new BadRequestError('lat inválido: debe ser un número entre -90 y 90', 'INVALID_COORDS');
+  }
+  if (typeof lng !== 'number' || isNaN(lng) || lng < -180 || lng > 180) {
+    throw new BadRequestError('lng inválido: debe ser un número entre -180 y 180', 'INVALID_COORDS');
+  }
+
   const profile = await prisma.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
   if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
 
@@ -2221,8 +2252,19 @@ export async function trackServiceLocation(
   if (!booking) throw new BookingNotFoundError(bookingId);
   if (booking.serviceType !== ServiceType.PASEO) throw new BadRequestError('GPS solo disponible para paseos');
 
-  const punto = { lat, lng, timestamp: new Date(), accuracy: accuracy ?? 0 };
-  const tracking = (booking.serviceTrackingData as any[]) || [];
+  // Guard: only track while the walk is actually in progress
+  if (booking.status !== BookingStatus.IN_PROGRESS) {
+    throw new BadRequestError('Solo se puede enviar GPS cuando el paseo está en curso');
+  }
+
+  const punto = { lat, lng, timestamp: new Date().toISOString(), accuracy: accuracy ?? 0 };
+  let tracking: any[] = (booking.serviceTrackingData as any[]) || [];
+
+  // Prevent unbounded growth: if we're at the cap, subsample older half and keep recent half
+  if (tracking.length >= GPS_MAX_POINTS) {
+    // Keep last 1000 points (recent history) to avoid losing the full route
+    tracking = tracking.slice(-1000);
+  }
   tracking.push(punto);
 
   await prisma.booking.update({
@@ -2230,10 +2272,10 @@ export async function trackServiceLocation(
     data: { serviceTrackingData: tracking },
   });
 
-  // Emit real-time GPS update via Socket.io
+  // Emit real-time GPS update via Socket.io (owner's live map receives this)
   const io = getIO();
   if (io) {
-    io.to(`booking:${bookingId}`).emit('gps_update', { ...punto, timestamp: punto.timestamp.toISOString() });
+    io.to(`booking:${bookingId}`).emit('gps_update', punto);
   }
 }
 
@@ -2299,11 +2341,20 @@ export async function concludeService(
 }
 
 export async function confirmReceiptByClient(
-  bookingId: string, 
+  bookingId: string,
   clientId: string,
   rating: number,
   comment?: string
 ): Promise<BookingCreateResult> {
+  // Validate rating before any DB operation
+  const ratingNum = Number(rating);
+  if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+    throw new BadRequestError('La calificación debe ser un número entero entre 1 y 5', 'INVALID_RATING');
+  }
+  if (comment && comment.length > 1000) {
+    throw new BadRequestError('El comentario no puede superar 1000 caracteres');
+  }
+
   return prisma.$transaction(async (tx) => {
     const booking = await tx.booking.findFirst({
       where: { id: bookingId, clientId },

@@ -63,6 +63,15 @@ export interface BookingResult {
   clientName?: string;
   clientEmail?: string;
   clientPhone?: string | null;
+  /** Filled once client confirms receipt */
+  clientRating?: number | null;
+  clientComment?: string | null;
+  receiptConfirmedAt?: string | null;
+  serviceStartedAt?: string | null;
+  serviceEndedAt?: string | null;
+  serviceStartPhoto?: string | null;
+  serviceEndPhoto?: string | null;
+  gpsDistance?: number | null;
 }
 
 export interface InitPaymentBody {
@@ -160,4 +169,12 @@ export function rejectBooking(
   body: CancellationRequestBody
 ): Promise<ApiResponse<BookingResult>> {
   return api.post(`/api/bookings/${bookingId}/reject`, body).then((r) => r.data);
+}
+
+/** POST /api/bookings/:id/confirm-receipt — cliente confirma recepción y califica al cuidador. */
+export function confirmReceipt(
+  bookingId: string,
+  body: { rating: number; comment?: string }
+): Promise<ApiResponse<BookingResult>> {
+  return api.post(`/api/bookings/${bookingId}/confirm-receipt`, body).then((r) => r.data);
 }

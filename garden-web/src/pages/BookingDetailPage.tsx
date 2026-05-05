@@ -6,6 +6,10 @@ import { useExtendBooking } from '@/hooks/useExtendBooking';
 import { useChangeDatesBooking } from '@/hooks/useChangeDatesBooking';
 import { useVerifyPayment } from '@/hooks/useVerifyPayment';
 import { CancellationRulesTable } from '@/components/CancellationRulesTable';
+import { WalkTrackingMap } from '@/components/WalkTrackingMap';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { confirmReceipt } from '@/api/bookings';
+import toast from 'react-hot-toast';
 
 function getStatusBadge(status: string) {
   const statusMap: Record<string, { label: string; className: string }> = {
@@ -32,6 +36,7 @@ export function BookingDetailPage() {
   const changeDatesMutation = useChangeDatesBooking();
   const verifyPaymentMutation = useVerifyPayment();
 
+  const queryClient = useQueryClient();
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showExtendModal, setShowExtendModal] = useState(false);
   const [showChangeDatesModal, setShowChangeDatesModal] = useState(false);
@@ -39,6 +44,18 @@ export function BookingDetailPage() {
   const [newEndDate, setNewEndDate] = useState('');
   const [newStartDate, setNewStartDate] = useState('');
   const [newEndDateChange, setNewEndDateChange] = useState('');
+  const [receiptRating, setReceiptRating] = useState(5);
+  const [receiptComment, setReceiptComment] = useState('');
+
+  const confirmReceiptMutation = useMutation({
+    mutationFn: ({ rating, comment }: { rating: number; comment?: string }) =>
+      confirmReceipt(id!, { rating, comment }),
+    onSuccess: () => {
+      toast.success('¡Recepción confirmada! Gracias por tu calificación.');
+      queryClient.invalidateQueries({ queryKey: ['bookings', id] });
+    },
+    onError: () => toast.error('Error al confirmar la recepción'),
+  });
 
   if (isLoading) {
     return (
@@ -65,6 +82,8 @@ export function BookingDetailPage() {
   const canExtend = booking.status === 'CONFIRMED' && booking.serviceType === 'HOSPEDAJE';
   const canChangeDates = booking.status === 'CONFIRMED' && booking.serviceType === 'HOSPEDAJE';
   const canVerifyPayment = booking.status === 'PENDING_PAYMENT' && booking.qrId;
+  // Client can confirm receipt once service is COMPLETED and they haven't rated yet
+  const canConfirmReceipt = booking.status === 'COMPLETED' && !booking.receiptConfirmedAt && !booking.clientRating;
 
   const handleCancel = () => {
     if (!id) return;
@@ -219,6 +238,21 @@ export function BookingDetailPage() {
           </div>
         </div>
 
+        {/* Mapa GPS — solo para PASEO en curso o completado */}
+        {booking.serviceType === 'PASEO' &&
+          (booking.status === 'IN_PROGRESS' || booking.status === 'COMPLETED') && (
+            <div className="rounded-lg border border-gray-200 bg-white p-6">
+              <h2 className="mb-4 text-lg font-semibold text-gray-900">
+                {booking.status === 'IN_PROGRESS' ? '📍 Ubicación en vivo' : '🗺️ Ruta del paseo'}
+              </h2>
+              <WalkTrackingMap
+                bookingId={booking.id}
+                status={booking.status}
+                height="320px"
+              />
+            </div>
+          )}
+
         {/* Acciones */}
         {canCancel && (
           <div className="rounded-lg border border-gray-200 bg-white p-6">
@@ -258,6 +292,72 @@ export function BookingDetailPage() {
                 </button>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Confirmar recepción + calificación */}
+        {canConfirmReceipt && (
+          <div className="rounded-lg border border-green-200 bg-green-50 p-6">
+            <h2 className="mb-2 text-lg font-semibold text-green-900">⭐ Confirmar recepción y calificar</h2>
+            <p className="mb-4 text-sm text-green-800">
+              El servicio ha finalizado. Confirma que recibiste a tu mascota y deja una calificación al cuidador.
+              Esto también liberará el pago al cuidador.
+            </p>
+            <div className="mb-4">
+              <label className="mb-2 block text-sm font-medium text-gray-700">Calificación (1–5 estrellas)</label>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setReceiptRating(s)}
+                    className={`flex-1 rounded-xl py-3 font-black text-lg transition-all ${
+                      receiptRating >= s
+                        ? 'bg-yellow-400 text-yellow-900 scale-105'
+                        : 'bg-gray-100 text-gray-300'
+                    }`}
+                  >
+                    ★
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-gray-500 text-center">{receiptRating} de 5 estrellas</p>
+            </div>
+            <textarea
+              value={receiptComment}
+              onChange={(e) => setReceiptComment(e.target.value)}
+              placeholder="Comentario opcional (¿Cómo fue el servicio?)"
+              className="mb-4 w-full rounded-lg border border-gray-300 p-2 text-sm"
+              rows={2}
+              maxLength={1000}
+            />
+            <button
+              onClick={() =>
+                confirmReceiptMutation.mutate({
+                  rating: receiptRating,
+                  comment: receiptComment.trim() || undefined,
+                })
+              }
+              disabled={confirmReceiptMutation.isPending}
+              className="w-full rounded-lg bg-green-600 px-4 py-3 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              {confirmReceiptMutation.isPending ? 'Confirmando...' : 'Confirmar recepción y calificar'}
+            </button>
+          </div>
+        )}
+
+        {/* Rating already submitted */}
+        {booking.status === 'COMPLETED' && booking.clientRating && (
+          <div className="rounded-lg border border-gray-200 bg-white p-6">
+            <h2 className="mb-2 text-lg font-semibold text-gray-900">Tu calificación</h2>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-black text-yellow-500">
+                {'★'.repeat(booking.clientRating)}{'☆'.repeat(5 - booking.clientRating)}
+              </span>
+              <span className="text-sm text-gray-600">{booking.clientRating}/5</span>
+            </div>
+            {booking.clientComment && (
+              <p className="mt-2 text-sm text-gray-600 italic">"{booking.clientComment}"</p>
+            )}
           </div>
         )}
 

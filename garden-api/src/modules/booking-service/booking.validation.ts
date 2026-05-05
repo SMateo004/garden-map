@@ -196,3 +196,69 @@ export const extendPaseoBodySchema = z.object({
 });
 
 export type ExtendPaseoBody = z.infer<typeof extendPaseoBodySchema>;
+
+// ── Service execution ─────────────────────────────────────────────────────────
+
+/** POST /api/bookings/:id/start — cuidador inicia el servicio (foto obligatoria). */
+export const startServiceBodySchema = z.object({
+  photo: z.string().url('photo debe ser una URL válida').min(1, 'photo es obligatoria'),
+});
+export type StartServiceBody = z.infer<typeof startServiceBodySchema>;
+
+/** POST /api/bookings/:id/track — cuidador envía coordenada GPS. */
+export const trackLocationBodySchema = z.object({
+  lat: z
+    .number({ invalid_type_error: 'lat debe ser un número' })
+    .min(-90, 'lat debe estar entre -90 y 90')
+    .max(90, 'lat debe estar entre -90 y 90'),
+  lng: z
+    .number({ invalid_type_error: 'lng debe ser un número' })
+    .min(-180, 'lng debe estar entre -180 y 180')
+    .max(180, 'lng debe estar entre -180 y 180'),
+  accuracy: z
+    .number({ invalid_type_error: 'accuracy debe ser un número' })
+    .min(0, 'accuracy no puede ser negativa')
+    .optional(),
+});
+export type TrackLocationBody = z.infer<typeof trackLocationBodySchema>;
+
+/** POST /api/bookings/:id/conclude — cuidador finaliza el servicio. */
+export const concludeServiceBodySchema = z.object({
+  photo: z.string().url('photo debe ser una URL válida').min(1, 'photo es obligatoria'),
+  lat: z
+    .number({ invalid_type_error: 'lat debe ser un número' })
+    .min(-90, 'lat debe estar entre -90 y 90')
+    .max(90, 'lat debe estar entre -90 y 90')
+    .optional(),
+  lng: z
+    .number({ invalid_type_error: 'lng debe ser un número' })
+    .min(-180, 'lng debe estar entre -180 y 180')
+    .max(180, 'lng debe estar entre -180 y 180')
+    .optional(),
+});
+export type ConcludeServiceBody = z.infer<typeof concludeServiceBodySchema>;
+
+/** POST /api/bookings/:id/confirm-receipt — cliente confirma y califica el servicio. */
+export const confirmReceiptBodySchema = z.object({
+  rating: z
+    .number({ invalid_type_error: 'rating debe ser un número' })
+    .int('rating debe ser un entero')
+    .min(1, 'rating mínimo es 1')
+    .max(5, 'rating máximo es 5'),
+  comment: z.string().max(1000, 'El comentario no puede superar 1000 caracteres').optional(),
+});
+export type ConfirmReceiptBody = z.infer<typeof confirmReceiptBodySchema>;
+
+/** POST /api/bookings/:id/event — cuidador registra evento durante el servicio. */
+export const addEventBodySchema = z.object({
+  type: z.enum(
+    ['INCIDENT', 'ACCIDENT', 'ILLNESS', 'COMPLICATION', 'NOTE', 'PHOTO', 'WALK_UPDATE'],
+    { errorMap: () => ({ message: 'Tipo de evento inválido' }) }
+  ),
+  description: z
+    .string()
+    .min(1, 'La descripción es obligatoria')
+    .max(1000, 'La descripción no puede superar 1000 caracteres'),
+  photoUrl: z.string().url('photoUrl debe ser una URL válida').optional(),
+});
+export type AddEventBody = z.infer<typeof addEventBodySchema>;

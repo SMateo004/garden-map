@@ -19,7 +19,6 @@ export function iniciarJobWalkExpiry() {
 export async function procesarVencimientoPaseos() {
     try {
         const now = new Date();
-        const nowMins = now.getHours() * 60 + now.getMinutes();
 
         // Solo paseos IN_PROGRESS con hora de inicio conocida
         const activos = await prisma.booking.findMany({

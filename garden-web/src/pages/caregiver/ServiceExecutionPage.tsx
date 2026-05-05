@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/api/client';
 import { CaregiverBookingItem } from '@/api/caregiverProfile';
 import { PhotoUploader } from '@/components/PhotoUploader';
+import { WalkTrackingMap } from '@/components/WalkTrackingMap';
 import toast from 'react-hot-toast';
 
 /** Devuelve true si el navegador es un dispositivo móvil real (no escritorio). */
@@ -25,7 +26,6 @@ export function ServiceExecutionPage() {
     const [showReportModal, setShowReportModal] = useState(false);
     const [startPhotoFile, setStartPhotoFile] = useState<File | null>(null);
     const [endPhotoFile, setEndPhotoFile] = useState<File | null>(null);
-    const [rating, setRating] = useState(5);
     const watchId = useRef<number | null>(null);
 
     useEffect(() => {
@@ -60,21 +60,25 @@ export function ServiceExecutionPage() {
     }, [startTime]);
 
     useEffect(() => {
-        if (tracking && 'geolocation' in navigator) {
+        // Only track GPS for PASEO service type
+        if (tracking && booking?.serviceType === 'PASEO' && 'geolocation' in navigator) {
             watchId.current = navigator.geolocation.watchPosition(
                 (pos) => {
-                    const { latitude, longitude } = pos.coords;
-                    api.post(`/api/bookings/${id}/track`, { lat: latitude, lng: longitude })
+                    const { latitude, longitude, accuracy } = pos.coords;
+                    api.post(`/api/bookings/${id}/track`, { lat: latitude, lng: longitude, accuracy })
                         .catch(console.error);
                 },
-                (err) => console.error(err),
-                { enableHighAccuracy: true }
+                (err) => console.error('[GPS]', err),
+                { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
             );
         }
         return () => {
-            if (watchId.current) navigator.geolocation.clearWatch(watchId.current);
+            if (watchId.current !== null) {
+                navigator.geolocation.clearWatch(watchId.current);
+                watchId.current = null;
+            }
         };
-    }, [tracking, id]);
+    }, [tracking, id, booking?.serviceType]);
 
     const uploadFile = async (file: File) => {
         const formData = new FormData();
@@ -110,24 +114,37 @@ export function ServiceExecutionPage() {
 
     const handleConclude = async () => {
         if (!endPhotoFile) return toast.error('Debes subir la foto de entrega');
-        if (!navigator.geolocation) return toast.error('Se requiere GPS para finalizar');
 
-        navigator.geolocation.getCurrentPosition(async (pos) => {
+        // Stop GPS watch immediately
+        if (watchId.current !== null) {
+            navigator.geolocation.clearWatch(watchId.current);
+            watchId.current = null;
+        }
+        setTracking(false);
+
+        const doFinalize = async (lat?: number, lng?: number) => {
             try {
-                const { latitude, longitude } = pos.coords;
                 const photoUrl = await uploadFile(endPhotoFile);
                 await api.post(`/api/bookings/${id}/conclude`, {
                     photo: photoUrl,
-                    rating,
-                    lat: latitude,
-                    lng: longitude
+                    ...(lat !== undefined && lng !== undefined ? { lat, lng } : {}),
                 });
                 toast.success('Servicio culminado con éxito');
                 navigate('/caregiver/dashboard');
             } catch (err) {
                 toast.error('Error al finalizar el servicio');
             }
-        }, () => toast.error('No se pudo obtener la ubicación final'));
+        };
+
+        if ('geolocation' in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => doFinalize(pos.coords.latitude, pos.coords.longitude),
+                () => doFinalize(), // GPS failed — proceed without coords
+                { timeout: 8000 }
+            );
+        } else {
+            doFinalize();
+        }
     };
 
     if (loading) return <div className="p-10 text-center text-gray-500">Cargando ejecución...</div>;
@@ -207,6 +224,14 @@ export function ServiceExecutionPage() {
                     </div>
                 )}
 
+                {/* Live map — only for PASEO in progress */}
+                {isInProgress && booking.serviceType === 'PASEO' && (
+                    <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-tighter mb-2">Tu ruta</p>
+                        <WalkTrackingMap bookingId={id!} status="IN_PROGRESS" height="240px" />
+                    </div>
+                )}
+
                 {/* In Progress Actions */}
                 {isInProgress && (
                     <div className="space-y-6">
@@ -238,20 +263,6 @@ export function ServiceExecutionPage() {
                                 value={endPhotoFile ? [endPhotoFile] : []}
                                 onChange={(files) => setEndPhotoFile(files[0] || null)}
                             />
-                            <div className="space-y-2">
-                                <label className="text-sm font-bold">Califica al Dueño</label>
-                                <div className="flex gap-2">
-                                    {[1, 2, 3, 4, 5].map(s => (
-                                        <button
-                                            key={s}
-                                            onClick={() => setRating(s)}
-                                            className={`flex-1 h-12 rounded-xl font-black transition-all ${rating === s ? 'bg-green-600 text-white scale-110' : 'bg-gray-100 dark:bg-gray-800 text-gray-400'}`}
-                                        >
-                                            {s}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
                             <button
                                 onClick={handleConclude}
                                 className="w-full py-4 bg-black text-white font-black rounded-2xl shadow-xl active:scale-95 transition-all mt-4"
