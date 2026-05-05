@@ -41,6 +41,14 @@ jobs:
         if: failure()
         run: npm install
 
+      # ── Production build (catches tsc errors before Render does) ────────────
+      # Uses tsconfig.build.json exactly as Render does — must pass with exit 0.
+      # DATABASE_URL is a dummy for prisma generate (no actual DB connection needed).
+      - name: Production build (prisma generate + tsc)
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
+
       - name: Run unit tests
         run: npm run test:unit
 
