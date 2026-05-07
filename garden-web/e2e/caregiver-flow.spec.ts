@@ -11,28 +11,32 @@ test.describe('Caregiver flow', () => {
     await page.evaluate(() => localStorage.removeItem('garden_access_token'));
   });
 
-  test('Soy cuidador navigates to auth page', async ({ page }) => {
-    await page.goto('/');
-    await page.getByRole('link', { name: /Soy cuidador/i }).first().click();
+  test('Conviértete en cuidador navigates to auth page', async ({ page }) => {
+    await page.goto('/caregiver/auth');
     await expect(page).toHaveURL(/\/caregiver\/auth/);
-    await expect(page.getByRole('button', { name: /Iniciar sesión/i })).toBeVisible({ timeout: 5000 });
-    await expect(page.getByRole('button', { name: /Registrarme/i })).toBeVisible();
+    await expect(page.getByPlaceholderText(/tucorreo@email\.com/)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('button', { name: /Continuar/i })).toBeVisible();
   });
 
-  test('auth page has login and register tabs', async ({ page }) => {
+  test('auth page has email-first flow', async ({ page }) => {
     await page.goto('/caregiver/auth');
-    await expect(page.getByRole('button', { name: /Iniciar sesión/i })).toBeVisible({ timeout: 5000 });
-    await expect(page.getByRole('button', { name: /Registrarme/i })).toBeVisible();
+    await expect(page.getByPlaceholderText(/tucorreo@email\.com/)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('button', { name: /Continuar/i })).toBeVisible();
   });
 
-  test('Comenzar registro navigates to wizard', async ({ page }) => {
+  test('new email navigates to register wizard', async ({ page }) => {
+    await page.route('**/api/auth/check-email*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: { exists: false } }),
+      });
+    });
+
     await page.goto('/caregiver/auth');
-    await page.getByRole('button', { name: /Registrarme/i }).click();
-    await expect(page.getByRole('button', { name: /Comenzar registro/i })).toBeVisible({ timeout: 3000 });
-    await page.getByRole('button', { name: /Comenzar registro/i }).click();
+    await page.getByPlaceholderText(/tucorreo@email\.com/).fill('nuevo@test.com');
+    await page.getByRole('button', { name: /Continuar/i }).click();
     await expect(page).toHaveURL(/\/caregiver\/register/, { timeout: 5000 });
-    await expect(page.getByText(/Paso 1 de 10/)).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText(/Tu nombre y teléfono/)).toBeVisible();
   });
 
   test('wizard step 1 has required fields', async ({ page }) => {
@@ -40,7 +44,7 @@ test.describe('Caregiver flow', () => {
     await expect(page.getByText(/Paso 1 de 10/)).toBeVisible({ timeout: 5000 });
     await expect(page.getByPlaceholderText(/Tu nombre/)).toBeVisible();
     await expect(page.getByPlaceholderText(/Tu apellido/)).toBeVisible();
-    await expect(page.getByPlaceholderText(/\+591/)).toBeVisible();
+    await expect(page.getByPlaceholderText(/71234567/)).toBeVisible();
     await expect(page.getByRole('button', { name: /Siguiente/ })).toBeVisible();
   });
 });

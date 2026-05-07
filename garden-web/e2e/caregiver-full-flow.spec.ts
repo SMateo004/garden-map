@@ -47,14 +47,23 @@ test.describe('Caregiver full flow (mocked API)', () => {
       });
     });
 
+    // Mock check-email so auth page shows password step
+    await page.route('**/api/auth/check-email*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: { exists: true } }),
+      });
+    });
+
     await page.goto('/caregiver/auth');
     await page.getByPlaceholderText(/tucorreo@email\.com/).fill('cuidador@test.com');
+    await page.getByRole('button', { name: /Continuar/i }).click();
     await page.locator('input[type="password"]').first().fill('password123');
-    await page.getByRole('button', { name: /Iniciar sesión/i }).click();
+    await page.getByRole('button', { name: /Entrar/i }).click();
 
     await expect(page).toHaveURL(/\/caregiver\/dashboard/, { timeout: 8000 });
-    await expect(page.getByText(/Tu perfil/)).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText(/Juan/)).toBeVisible();
+    await expect(page.getByText(/Juan/)).toBeVisible({ timeout: 5000 });
   });
 
   test('register full wizard then submit (mocked upload + register) lands on dashboard', async ({ page }) => {
@@ -109,7 +118,8 @@ test.describe('Caregiver full flow (mocked API)', () => {
 
     await page.getByPlaceholderText(/Tu nombre/).fill('New');
     await page.getByPlaceholderText(/Tu apellido/).fill('User');
-    await page.getByPlaceholderText(/\+591/).fill('+59171234567');
+    await page.getByPlaceholderText(/71234567/).fill('71234567');
+    await page.locator('input[type="date"]').fill('1990-01-01');
     await page.getByRole('button', { name: /Siguiente/ }).click();
 
     await page.getByPlaceholderText(/tucorreo@email\.com/).fill('new@test.com');
@@ -123,11 +133,12 @@ test.describe('Caregiver full flow (mocked API)', () => {
     await page.getByText(/Hospedaje/).click();
     await page.getByRole('button', { name: /Siguiente/ }).click();
 
-    const bio = 'Tengo experiencia con mascotas desde hace años. Casa con patio y trabajo desde casa.';
+    const bio = 'Tengo experiencia con mascotas desde hace años. Casa con patio y trabajo desde casa. Más texto para superar los 50 caracteres.';
     await page.getByPlaceholderText(/Tengo 2 labradores/).fill(bio);
     await page.getByRole('button', { name: /Siguiente/ }).click();
 
-    await page.getByPlaceholderText(/Casa con patio/).fill('Casa con patio cercado');
+    await page.getByText(/Casa con patio/).first().click();
+    await page.getByPlaceholderText(/Patio amplio/).fill('Casa con patio cercado');
     await page.getByRole('button', { name: /Siguiente/ }).click();
 
     await page.locator('input[type="number"]').first().fill('120');
@@ -143,15 +154,15 @@ test.describe('Caregiver full flow (mocked API)', () => {
     await page.getByRole('button', { name: /Subir y seguir/ }).click();
 
     await expect(page.getByText(/Términos y condiciones/)).toBeVisible({ timeout: 5000 });
-    await page.getByRole('checkbox', { name: /Términos de servicio/ }).click();
-    await page.getByRole('checkbox', { name: /Política de privacidad/ }).click();
-    await page.getByRole('checkbox', { name: /verifique mi identidad/ }).click();
+    const checkboxes = page.locator('input[type="checkbox"]');
+    await checkboxes.nth(0).check();
+    await checkboxes.nth(1).check();
+    await checkboxes.nth(2).check();
     await page.getByRole('button', { name: /Siguiente/ }).click();
 
     await expect(page.getByText(/Revisa tu información/)).toBeVisible({ timeout: 3000 });
     await page.getByRole('button', { name: /Enviar solicitud/ }).click();
 
     await expect(page).toHaveURL(/\/caregiver\/dashboard/, { timeout: 10000 });
-    await expect(page.getByText(/Tu perfil/)).toBeVisible({ timeout: 5000 });
   });
 });

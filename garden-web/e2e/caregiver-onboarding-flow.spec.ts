@@ -18,8 +18,8 @@ test.describe('Caregiver Onboarding Flow & Step Enforcement', () => {
 
         // Step 2: Auth
         await page.fill('input[type="email"]', email);
-        await page.fill('input[placeholder="Contraseña"]', password);
-        await page.fill('input[placeholder="Confirmar contraseña"]', password);
+        await page.fill('input[placeholder="Mínimo 8 caracteres"]', password);
+        await page.fill('input[placeholder="Repite tu contraseña"]', password);
         await page.click('button:has-text("Siguiente")');
 
         // Step 3: Zone
@@ -27,7 +27,7 @@ test.describe('Caregiver Onboarding Flow & Step Enforcement', () => {
         await page.click('button:has-text("Siguiente")');
 
         // Step 4: Services
-        await page.click('label:has-text("Paseo")');
+        await page.getByRole('button', { name: /Paseos/i }).click();
         await page.click('button:has-text("Siguiente")');
 
         // Step 5: Bio
@@ -46,20 +46,21 @@ test.describe('Caregiver Onboarding Flow & Step Enforcement', () => {
             await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { urls: ['url1', 'url2'] } }) });
         });
         const fileChooserPromise = page.waitForEvent('filechooser');
-        await page.locator('label:has-text("Haz clic para subir fotos")').click();
+        await page.getByText(/Haz clic para subir fotos/).click();
         const fileChooser = await fileChooserPromise;
         await fileChooser.setFiles([{ name: 'p1.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('t') }, { name: 'p2.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('t') }]);
-        await page.click('button:has-text("Siguiente")');
+        await page.getByRole('button', { name: /Subir y seguir|Siguiente/i }).click();
 
         // Step 9: Terms
-        await page.click('label:has-text("Acepto los Términos y Condiciones")');
-        await page.click('label:has-text("Acepto la Política de Privacidad")');
-        await page.click('label:has-text("Acepto la Verificación de mi identidad")');
+        const termsCheckboxes = page.locator('input[type="checkbox"]');
+        await termsCheckboxes.nth(0).check();
+        await termsCheckboxes.nth(1).check();
+        await termsCheckboxes.nth(2).check();
         await page.click('button:has-text("Siguiente")');
 
         // Step 10: Final
-        await page.route('**/api/auth/register-caregiver', async route => {
-            await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { user: { id: 'u1', email }, token: 'mock-token' } }) });
+        await page.route('**/api/auth/caregiver/register', async route => {
+            await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ success: true, data: { user: { id: 'u1', email, role: 'CAREGIVER', firstName: 'Onboarding', lastName: 'Tester' }, accessToken: 'mock-token', expiresIn: '7d' } }) });
         });
         // Also mock getMyProfile
         await page.route('**/api/caregiver/my-profile', async route => {
@@ -81,7 +82,7 @@ test.describe('Caregiver Onboarding Flow & Step Enforcement', () => {
             });
         });
 
-        await page.click('button:has-text("Finalizar registro")');
+        await page.getByRole('button', { name: /Enviar solicitud/i }).click();
 
         // 2. EXPECT REDIRECT TO DASHBOARD -> ONBOARDING
         // The dashboard has a check: if (needsOnboarding) navigate('/caregiver/onboarding')

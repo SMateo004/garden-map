@@ -42,7 +42,7 @@ test.describe('Caregiver Onboarding Validation', () => {
         await page.getByRole('button', { name: /Siguiente/ }).click();
 
         // Step 8: Photos - Check title
-        await expect(page.locator('h2')).toContainText('Fotos de tu espacio');
+        await expect(page.locator('h2')).toContainText(/Fotos de tu perfil/i);
 
         // Mock the upload API
         await page.route('**/api/upload/registration-photos', async route => {
@@ -68,9 +68,10 @@ test.describe('Caregiver Onboarding Validation', () => {
         await page.getByRole('button', { name: /Subir y seguir/ }).click();
 
         // Step 9: Terms
-        await page.getByText('Acepto los Términos de servicio').click();
-        await page.getByText('Acepto la Política de privacidad').click();
-        await page.getByText('Acepto que GARDEN verifique mi identidad').click();
+        const termsCheckboxes = page.locator('input[type="checkbox"]');
+        await termsCheckboxes.nth(0).check();
+        await termsCheckboxes.nth(1).check();
+        await termsCheckboxes.nth(2).check();
         await page.getByRole('button', { name: /Siguiente/ }).click();
 
         // Step 10: Review

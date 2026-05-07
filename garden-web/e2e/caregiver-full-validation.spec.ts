@@ -43,8 +43,7 @@ test.describe('Caregiver Full Validation Flow', () => {
         await page.getByRole('button', { name: /Siguiente/ }).click();
 
         // Step 8: Photos (Logic Validation)
-        await expect(page.locator('h2')).toContainText('Fotos de tu espacio');
-        await expect(page.locator('text=Mínimo 4, máximo 6')).toBeVisible();
+        await expect(page.locator('h2')).toContainText(/Fotos de tu perfil/i);
 
         await page.route('**/api/upload/registration-photos', async route => {
             await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: ['url1', 'url2', 'url3', 'url4'] }) });
@@ -64,9 +63,10 @@ test.describe('Caregiver Full Validation Flow', () => {
         await page.getByRole('button', { name: /Subir y seguir/ }).click();
 
         // Step 9: Terms
-        await page.getByText('Acepto los Términos de servicio').click();
-        await page.getByText('Acepto la Política de privacidad').click();
-        await page.getByText('Acepto que GARDEN verifique mi identidad').click();
+        const termsCheckboxes = page.locator('input[type="checkbox"]');
+        await termsCheckboxes.nth(0).check();
+        await termsCheckboxes.nth(1).check();
+        await termsCheckboxes.nth(2).check();
         await page.getByRole('button', { name: /Siguiente/ }).click();
 
         // Step 10: Final

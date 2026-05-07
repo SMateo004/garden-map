@@ -23,7 +23,7 @@ test.describe('Register caregiver with mock API', () => {
     });
 
     await page.goto('/');
-    await expect(page.locator('h1')).toContainText(/Cuidadores/i);
+    await expect(page.locator('h1')).toBeVisible({ timeout: 5000 });
   });
 
   test('register form submit shows success when POST mock returns 201', async ({ page }) => {

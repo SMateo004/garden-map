@@ -32,8 +32,8 @@ test.describe('Caregiver Validation - Detailed Logic', () => {
         await page.getByPlaceholder('50').fill('70');
         await page.getByRole('button', { name: /Siguiente/ }).click();
 
-        // Step 8: Photos - Should say "personales" and min 2
-        await expect(page.locator('h2')).toContainText('Fotos personales');
+        // Step 8: Photos - Should say "perfil y trabajo" for Paseo-only
+        await expect(page.locator('h2')).toContainText(/Fotos de tu perfil/i);
 
         await page.route('**/api/upload/registration-photos', async route => {
             await route.fulfill({ status: 200, json: { success: true, data: { urls: ['u1', 'u2'] } } });
@@ -50,10 +50,11 @@ test.describe('Caregiver Validation - Detailed Logic', () => {
 
         await page.getByRole('button', { name: /Subir y seguir/ }).click();
 
-        // Step 9: Terms - Use getByText with exact false and click since labels might be tricky
-        await page.getByText('Acepto los Términos de servicio', { exact: false }).click();
-        await page.getByText('Acepto la Política de privacidad', { exact: false }).click();
-        await page.getByText('Acepto que GARDEN verifique mi identidad', { exact: false }).click();
+        // Step 9: Terms
+        const termsCheckboxes = page.locator('input[type="checkbox"]');
+        await termsCheckboxes.nth(0).check();
+        await termsCheckboxes.nth(1).check();
+        await termsCheckboxes.nth(2).check();
         await page.getByRole('button', { name: /Siguiente/ }).click();
 
         // Step 10: Review
