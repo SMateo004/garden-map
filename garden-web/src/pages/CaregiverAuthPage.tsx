@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import * as authApi from '@/api/auth';
@@ -132,6 +132,14 @@ export function CaregiverAuthPage() {
                 >
                   {isSubmitting ? 'Iniciando sesión...' : 'Entrar'}
                 </button>
+                <div className="text-center">
+                  <Link
+                    to="/forgot-password"
+                    className="text-sm text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400 transition-colors"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </Link>
+                </div>
               </form>
             )}
           </div>

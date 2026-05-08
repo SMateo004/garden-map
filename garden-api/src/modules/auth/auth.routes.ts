@@ -59,6 +59,16 @@ const switchRoleLimiter = rateLimit({
   message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados cambios de rol. Espera 1 hora.' } },
 });
 
+// 3 solicitudes por 15 min — previene abuso del reset de contraseña
+const passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados intentos de recuperación. Espera 15 minutos.' } },
+});
+
 // ── Rutas ────────────────────────────────────────────────────────────────────
 const router = Router();
 
@@ -96,5 +106,15 @@ router.post('/init-caregiver-profile', authMiddleware, authController.initCaregi
 
 /** POST /api/auth/abandon-caregiver-profile — revierte conversión CLIENT→CAREGIVER (solo perfil en DRAFT). */
 router.post('/abandon-caregiver-profile', authMiddleware, authController.abandonCaregiverProfile);
+
+// ── Password Reset ────────────────────────────────────────────────────────────
+/** POST /api/auth/forgot-password — body: { email }. Sends reset link. Always 200. */
+router.post('/forgot-password', passwordResetLimiter, authController.forgotPassword);
+
+/** GET /api/auth/validate-reset-token?token=<raw> — validates token before showing reset form. */
+router.get('/validate-reset-token', authController.validateResetToken);
+
+/** POST /api/auth/reset-password — body: { token, password, confirmPassword }. */
+router.post('/reset-password', passwordResetLimiter, authController.resetPassword);
 
 export default router;

@@ -45,6 +45,8 @@ import { ClientReservationsPage } from '@/pages/ClientReservationsPage';
 import { BecomeCaregiverPage } from '@/pages/BecomeCaregiverPage';
 import { CompletePetProfilePage } from '@/pages/CompletePetProfilePage';
 import { EditPetPage } from '@/pages/EditPetPage';
+import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage';
+import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
 
 function CaregiverRoute({ children }: { children: React.ReactNode }) {
   const { token, isCaregiver, isLoading } = useAuth();
@@ -152,6 +154,8 @@ export default function App() {
             <Route path="/caregiver/auth" element={<CaregiverAuthPage />} />
             <Route path="/become-caregiver" element={<BecomeCaregiverPage />} />
             <Route path="/admin/auth" element={<AdminAuthPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route
               path="/profile/edit-pet/:petId"
               element={

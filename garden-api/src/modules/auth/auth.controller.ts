@@ -607,3 +607,53 @@ export const abandonCaregiverProfile = asyncHandler(async (req: Request, res: Re
     },
   });
 });
+
+// ── Password Reset ────────────────────────────────────────────────────────────
+import * as passwordResetService from './password-reset.service.js';
+
+/**
+ * POST /api/auth/forgot-password
+ * Body: { email }
+ * Always returns 200 to prevent user enumeration.
+ */
+export const forgotPassword = asyncHandler(async (req: Request, res: Response) => {
+  const email = req.body?.email;
+  if (!email || typeof email !== 'string') {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_EMAIL', message: 'El correo es requerido.' } });
+  }
+  // Service intentionally swallows "user not found" — same response always
+  await passwordResetService.requestPasswordReset(email);
+  res.json({ success: true, message: 'Si el correo existe en nuestro sistema, recibirás un enlace de recuperación en los próximos minutos.' });
+});
+
+/**
+ * GET /api/auth/validate-reset-token?token=<raw>
+ * Validates a password reset token before showing the form.
+ */
+export const validateResetToken = asyncHandler(async (req: Request, res: Response) => {
+  const token = req.query.token as string;
+  if (!token) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_TOKEN', message: 'Token requerido.' } });
+  }
+  const data = await passwordResetService.validateResetToken(token);
+  res.json({ success: true, data: { email: data.email } });
+});
+
+/**
+ * POST /api/auth/reset-password
+ * Body: { token, password, confirmPassword }
+ */
+export const resetPassword = asyncHandler(async (req: Request, res: Response) => {
+  const { token, password, confirmPassword } = req.body ?? {};
+  if (!token) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_TOKEN', message: 'Token requerido.' } });
+  }
+  if (!password) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_PASSWORD', message: 'La contraseña es requerida.' } });
+  }
+  if (password !== confirmPassword) {
+    return res.status(400).json({ success: false, error: { code: 'PASSWORD_MISMATCH', message: 'Las contraseñas no coinciden.' } });
+  }
+  await passwordResetService.resetPassword(token, password);
+  res.json({ success: true, message: '¡Contraseña restablecida! Ahora puedes iniciar sesión.' });
+});

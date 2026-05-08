@@ -218,3 +218,23 @@ export interface RegisterClientPayload {
   phone: string;
   address?: string;
 }
+
+// ── Password Reset ────────────────────────────────────────────────────────────
+
+/** POST /api/auth/forgot-password — requests a reset email. Always returns 200. */
+export async function forgotPassword(email: string): Promise<void> {
+  await api.post('/api/auth/forgot-password', { email });
+}
+
+/** GET /api/auth/validate-reset-token?token=<raw> — validates token before form. */
+export async function validateResetToken(token: string): Promise<{ email: string }> {
+  const res = await api.get<{ success: boolean; data: { email: string } }>(
+    `/api/auth/validate-reset-token?token=${encodeURIComponent(token)}`
+  );
+  return res.data.data;
+}
+
+/** POST /api/auth/reset-password — updates password using a valid reset token. */
+export async function resetPassword(token: string, password: string, confirmPassword: string): Promise<void> {
+  await api.post('/api/auth/reset-password', { token, password, confirmPassword });
+}
