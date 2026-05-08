@@ -9,6 +9,7 @@ import sharp from 'sharp';
 import { v2 as cloudinary } from 'cloudinary';
 import { env } from '../../config/env.js';
 import { isCloudinaryConfigured } from '../../config/cloudinary.js';
+import { BadRequestError } from '../../shared/errors.js';
 import {
   isS3Configured,
   uploadToS3,
@@ -19,10 +20,18 @@ const VERIFICATION_FOLDER = 'garden/verification';
 
 /** Result: S3 key (verification/...) or full URL. */
 export async function uploadVerificationImage(buffer: Buffer, prefix: string, userId: string): Promise<string> {
-  const processed = await sharp(buffer)
-    .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 85, progressive: true })
-    .toBuffer();
+  if (!buffer || buffer.length === 0) {
+    throw new BadRequestError('La imagen está vacía', 'INVALID_IMAGE');
+  }
+  let processed: Buffer;
+  try {
+    processed = await sharp(buffer)
+      .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 85, progressive: true })
+      .toBuffer();
+  } catch {
+    throw new BadRequestError('El archivo no es una imagen válida o está corrupto', 'INVALID_IMAGE');
+  }
 
   if (isS3Configured()) {
     const key = `${userId}/${prefix}-${Date.now()}.jpg`;
