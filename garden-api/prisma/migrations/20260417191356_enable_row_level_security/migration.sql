@@ -37,11 +37,7 @@ ALTER TABLE "bookings" FORCE ROW LEVEL SECURITY;
 CREATE POLICY "service_role_all" ON "bookings"
   FOR ALL TO garden_db_w5cg_user USING (true) WITH CHECK (true);
 
--- ── wallet_transactions ──────────────────────────────────────
-ALTER TABLE "wallet_transactions" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "wallet_transactions" FORCE ROW LEVEL SECURITY;
-CREATE POLICY "service_role_all" ON "wallet_transactions"
-  FOR ALL TO garden_db_w5cg_user USING (true) WITH CHECK (true);
+-- ── wallet_transactions (skipped — table removed in schema cleanup) ──
 
 -- ── reviews ──────────────────────────────────────────────────
 ALTER TABLE "reviews" ENABLE ROW LEVEL SECURITY;
