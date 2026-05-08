@@ -49,7 +49,10 @@ export const uploadProfilePhotoHandler = [
 
     const url = await uploadImage(file.buffer, { folder: 'caregivers', name: `profile-${userId}-${Date.now()}` });
 
-    await prisma.caregiverProfile.update({ where: { userId }, data: { profilePhoto: url } });
+    await prisma.$transaction([
+      prisma.caregiverProfile.update({ where: { userId }, data: { profilePhoto: url } }),
+      prisma.user.update({ where: { id: userId }, data: { profilePicture: url } }),
+    ]);
     await delByPrefix('caregivers:');
     logger.info('Foto perfil actualizada', { url, userId });
     res.json({ success: true, data: { profilePhoto: url } });

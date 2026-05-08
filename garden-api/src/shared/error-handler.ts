@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import * as Sentry from '@sentry/node';
+import multer from 'multer';
 import { AppError } from './errors.js';
 import logger from './logger.js';
 
@@ -26,6 +27,25 @@ export function errorHandler(
       payload.errors = [{ field: err.field ?? 'general', message: err.message }];
     }
     return res.status(err.statusCode).json(payload);
+  }
+
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({
+        success: false,
+        error: { code: 'FILE_TOO_LARGE', message: 'El archivo supera el tamaño máximo permitido (5MB)' },
+      });
+    }
+    if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'UNEXPECTED_FILE', message: `Campo de archivo inesperado: ${err.field}` },
+      });
+    }
+    return res.status(400).json({
+      success: false,
+      error: { code: 'UPLOAD_ERROR', message: `Error al subir el archivo: ${err.message}` },
+    });
   }
 
   if (err instanceof ZodError) {

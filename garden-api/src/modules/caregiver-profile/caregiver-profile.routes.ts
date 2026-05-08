@@ -62,23 +62,34 @@ router.post('/profile/service-photo', authMiddleware, requireRole('CAREGIVER'),
     const userId = (req as any).user.userId;
     const file = req.file;
     if (!file) return res.status(400).json({ success: false, error: { message: 'No se proporcionó foto' } });
+    if (!file.mimetype.startsWith('image/')) {
+      return res.status(400).json({ success: false, error: { message: 'Solo se permiten imágenes (JPG/PNG)' } });
+    }
+
+    // Pre-flight count check (fast reject before uploading)
+    const profile = await prisma.caregiverProfile.findFirst({ where: { userId }, select: { photos: true } });
+    if (!profile) return res.status(404).json({ success: false, error: { message: 'Perfil no encontrado' } });
+    if ((profile.photos?.length ?? 0) >= 6) {
+      return res.status(400).json({ success: false, error: { message: 'Máximo 6 fotos permitidas' } });
+    }
 
     const photoUrl = await uploadImage(file.buffer, {
       folder: 'caregivers',
       name: `service_${userId}_${Date.now()}`,
     });
 
-    // Obtener fotos actuales para no sobrescribir, sino agregar
-    const profile = await prisma.caregiverProfile.findFirst({ where: { userId } });
-    const currentPhotos = profile?.photos ?? [];
-    if (currentPhotos.length >= 6) {
+    // Atomic array_append with server-side count guard — prevents race conditions
+    // where concurrent uploads could exceed the limit or overwrite each other's writes.
+    const updated = await prisma.$executeRaw`
+      UPDATE caregiver_profiles
+      SET photos = array_append(photos, ${photoUrl}::text)
+      WHERE user_id = ${userId}
+        AND coalesce(array_length(photos, 1), 0) < 6
+    `;
+
+    if (updated === 0) {
       return res.status(400).json({ success: false, error: { message: 'Máximo 6 fotos permitidas' } });
     }
-
-    await prisma.caregiverProfile.update({
-      where: { userId },
-      data: { photos: [...currentPhotos, photoUrl] },
-    });
 
     res.json({ success: true, data: { photoUrl } });
   })

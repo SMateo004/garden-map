@@ -15,6 +15,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import { randomUUID } from 'crypto';
 import { env } from '../config/env.js';
 import logger from '../shared/logger.js';
+import { BadRequestError } from '../shared/errors.js';
 
 const SHARP_MAX = 1024;
 
@@ -109,10 +110,20 @@ async function uploadToLocal(buffer: Buffer, subfolder: string, filename: string
 // ── Procesamiento con Sharp ───────────────────────────────────────────────────
 
 async function processImage(buffer: Buffer): Promise<Buffer> {
-  return sharp(buffer)
-    .resize(SHARP_MAX, SHARP_MAX, { fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 85, progressive: true })
-    .toBuffer();
+  if (!buffer || buffer.length === 0) {
+    throw new BadRequestError('El archivo de imagen está vacío', 'INVALID_IMAGE');
+  }
+  try {
+    return await sharp(buffer)
+      .resize(SHARP_MAX, SHARP_MAX, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 85, progressive: true })
+      .toBuffer();
+  } catch (err: any) {
+    throw new BadRequestError(
+      'El archivo no es una imagen válida o está corrupto. Solo se permiten JPG y PNG.',
+      'INVALID_IMAGE'
+    );
+  }
 }
 
 // ── API pública ───────────────────────────────────────────────────────────────
@@ -141,9 +152,20 @@ export async function uploadImage(buffer: Buffer, opts: UploadOptions): Promise<
       const url = await uploadToS3Public(processed, `garden/${opts.folder}`, filename);
       logger.info('storage.service: imagen subida a S3', { url, folder: opts.folder });
       return url;
-    } catch (err) {
-      logger.error('storage.service: fallo S3, intentando Cloudinary', { error: err });
-      // En producción, si S3 falla y no hay Cloudinary, lanzar error
+    } catch (err: any) {
+      const isAclError =
+        err?.name === 'AccessControlListNotSupported' ||
+        err?.Code === 'AccessControlListNotSupported' ||
+        (err?.message ?? '').includes('ACL');
+      if (isAclError) {
+        logger.warn(
+          'storage.service: S3 rechazó ACL public-read (Object Ownership enforced). ' +
+          'Deshabilita "Block Public Access" y usa una bucket policy en lugar de ACLs. Fallback a Cloudinary.',
+          { bucket: env.AWS_S3_BUCKET }
+        );
+      } else {
+        logger.error('storage.service: fallo S3, intentando Cloudinary', { error: err?.message ?? err });
+      }
       // continuar al siguiente fallback
     }
   }
