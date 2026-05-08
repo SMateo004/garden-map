@@ -37,10 +37,16 @@ yarn-error.log*
 test_images/
 *.pdf
  *.ts.old
- 
+
  # Hardhat
  artifacts/
  cache/
  typechain/
  typechain-types/
 .vercel
+
+# Test artifacts (coverage reports, E2E results, Playwright traces)
+coverage/
+test-results/
+playwright-report/
+*.tsbuildinfo

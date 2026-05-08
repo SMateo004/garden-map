@@ -43,6 +43,13 @@ jest.mock('../../src/config/stripe', () => ({
   STRIPE_WEBHOOK_SECRET: '',
 }));
 
+// blockchainService makes real network calls — mock to avoid hanging the test
+jest.mock('../../src/services/blockchain.service', () => ({
+  blockchainService: {
+    getCaregiverReputation: jest.fn().mockResolvedValue(null),
+  },
+}));
+
 jest.mock('../../src/middleware/auth.middleware', () => ({
   authMiddleware: (req: { user?: { id: string; role: string } }, _res: unknown, next: () => void) => {
     req.user = { id: 'user-caregiver-1', role: 'CAREGIVER' } as { id: string; email: string; role: string };

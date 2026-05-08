@@ -34,12 +34,7 @@ jobs:
           cache-dependency-path: garden-api/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
-        continue-on-error: true
-
-      - name: Install dependencies (no lockfile)
-        if: failure()
-        run: npm install
+        run: npm ci || npm install
 
       # ── Production build (catches tsc errors before Render does) ────────────
       # Uses tsconfig.build.json exactly as Render does — must pass with exit 0.
@@ -76,12 +71,11 @@ jobs:
           cache-dependency-path: garden-web/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
-        continue-on-error: true
+        run: npm ci || npm install
 
-      - name: Install dependencies (no lockfile)
-        if: failure()
-        run: npm install
+      # TypeScript type-check — catches type errors before Vercel deploy
+      - name: TypeScript type-check
+        run: npx tsc -p tsconfig.json --noEmit
 
       - name: Run unit tests
         run: npm run test:run
@@ -106,14 +100,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies
-        run: npm ci
-        continue-on-error: true
-        env:
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
-
-      - name: Install dependencies (no lockfile)
-        if: failure()
-        run: npm install
+        run: npm ci || npm install
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 
@@ -123,7 +110,14 @@ jobs:
       - name: Start frontend (Vite) and run E2E
         run: |
           npm run dev &
-          for i in $(seq 1 30); do curl -s -o /dev/null -w "%{http_code}" http://localhost:5173 | grep -q 200 && break; sleep 2; done
+          DEV_PID=$!
+          echo "Waiting for Vite to start..."
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:5173 > /dev/null 2>&1 && echo "Server ready after ${i}×2s" && break
+            sleep 2
+          done
+          # Abort if server never came up
+          curl -sf http://localhost:5173 > /dev/null 2>&1 || { echo "ERROR: Vite failed to start"; kill $DEV_PID 2>/dev/null; exit 1; }
           CI=true ./node_modules/.bin/playwright test --config=playwright.config.ts
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:5173
