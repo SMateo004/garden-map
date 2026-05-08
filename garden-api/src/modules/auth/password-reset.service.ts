@@ -25,11 +25,21 @@ const TOKEN_EXPIRY_MINUTES = 60;
 const MIN_PASSWORD_LENGTH = 8;
 
 function generateToken(): string {
-  return randomBytes(32).toString('hex'); // 64-char hex
+  return randomBytes(32).toString('hex'); // 64-char hex = 256 bits entropy
 }
 
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
+}
+
+/** Escape HTML special characters to prevent XSS in email body. */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
 }
 
 /**
@@ -70,7 +80,7 @@ export async function requestPasswordReset(email: string): Promise<void> {
 
   logger.info(`Password reset email sent to ${normalizedEmail} [token REDACTED]`);
 
-  const html = buildResetEmail(user.firstName, resetUrl, TOKEN_EXPIRY_MINUTES);
+  const html = buildResetEmail(escapeHtml(user.firstName), resetUrl, TOKEN_EXPIRY_MINUTES);
   await sendTransactionalEmail(
     normalizedEmail,
     'GARDEN – Restablece tu contraseña',
@@ -128,22 +138,30 @@ export async function resetPassword(rawToken: string, newPassword: string): Prom
   }
 
   const passwordHash = await bcrypt.hash(newPassword, 12);
+  const now = new Date();
 
+  // Atomically claim the token (WHERE usedAt IS NULL) — prevents race-condition double-use.
+  // If another concurrent request already claimed it, affected rows = 0 → throw.
+  const claimed = await prisma.$executeRaw`
+    UPDATE "password_resets"
+    SET "usedAt" = ${now}
+    WHERE "id" = ${record.id} AND "usedAt" IS NULL
+  `;
+
+  if (claimed === 0) {
+    // Concurrent request beat us to it
+    throw new BadRequestError('Este enlace ya fue utilizado. Solicita uno nuevo.', 'TOKEN_ALREADY_USED');
+  }
+
+  // Token is now exclusively ours — update password and revoke all sessions.
   await prisma.$transaction([
-    // Mark token as used
-    prisma.passwordReset.update({
-      where: { id: record.id },
-      data: { usedAt: new Date() },
-    }),
-    // Update password
     prisma.user.update({
       where: { id: record.user.id },
       data: { passwordHash },
     }),
-    // Revoke ALL refresh tokens (force re-login everywhere)
     prisma.refreshToken.updateMany({
       where: { userId: record.user.id, revokedAt: null },
-      data: { revokedAt: new Date() },
+      data: { revokedAt: now },
     }),
   ]);
 
