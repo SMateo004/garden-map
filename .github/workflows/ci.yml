@@ -118,12 +118,12 @@ jobs:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: ./node_modules/.bin/playwright install --with-deps chromium
 
       - name: Start frontend (Vite) and run E2E
         run: |
           npm run dev &
           for i in $(seq 1 30); do curl -s -o /dev/null -w "%{http_code}" http://localhost:5173 | grep -q 200 && break; sleep 2; done
-          CI=true npx playwright test --config=playwright.config.ts
+          CI=true ./node_modules/.bin/playwright test --config=playwright.config.ts
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:5173
