@@ -16,7 +16,7 @@
 import { randomBytes, createHash } from 'crypto';
 import prisma from '../../config/database.js';
 import { env } from '../../config/env.js';
-import { BadRequestError, NotFoundError } from '../../shared/errors.js';
+import { BadRequestError } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
 import { sendTransactionalEmail } from './email.service.js';
 import bcrypt from 'bcrypt';
