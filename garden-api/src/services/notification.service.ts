@@ -1,64 +1,65 @@
 /**
- * Servicio de notificaciones: placeholders para Email y WhatsApp (Twilio).
- * Integración futura: sustituir sendEmailPlaceholder y sendWhatsAppPlaceholder
- * por llamadas a SendGrid/Resend (email) y Twilio (WhatsApp).
- *
- * Flujo trazable: todos los envíos se registran con logger y payload para auditoría.
+ * Notification service: real Resend emails for all booking events.
+ * WhatsApp remains a placeholder pending Twilio integration.
  */
 
 import prisma from '../config/database.js';
 import logger from '../shared/logger.js';
+import { sendTransactionalEmail } from '../modules/auth/email.service.js';
 
 // ---------------------------------------------------------------------------
-// Placeholders: sustituir por integración real
+// WhatsApp placeholder (Twilio integration TBD)
 // ---------------------------------------------------------------------------
 
-/**
- * Placeholder email. Integración futura: SendGrid, Resend, SES.
- * @see https://www.twilio.com/sendgrid/email-api
- */
-export function sendEmailPlaceholder(
-  to: string,
-  subject: string,
-  body: string,
-  meta: { event: string; bookingId?: string }
-): void {
-  logger.info('[NOTIFICATION] Email placeholder', {
-    event: meta.event,
-    bookingId: meta.bookingId,
-    to,
-    subject,
-    bodyLength: body.length,
-  });
-  logger.info('[EMAIL_PLACEHOLDER]', { to, subject, event: meta.event, bookingId: meta.bookingId });
-  // TODO: await sendgrid.send({ to, subject, html: body });
-}
-
-/**
- * Placeholder WhatsApp (Twilio). Integración futura: Twilio API.
- * @see https://www.twilio.com/docs/whatsapp
- */
 export function sendWhatsAppPlaceholder(
   toPhone: string,
   body: string,
   meta: { event: string; bookingId?: string }
 ): void {
-  logger.info('[NOTIFICATION] WhatsApp placeholder', {
-    event: meta.event,
-    bookingId: meta.bookingId,
-    to: toPhone,
-    bodyLength: body.length,
-  });
   logger.info('[WHATSAPP_PLACEHOLDER]', { to: toPhone, event: meta.event, bookingId: meta.bookingId, bodyPreview: body.slice(0, 80) });
-  // TODO: await twilioClient.messages.create({ from: WHATSAPP_FROM, to: `whatsapp:${toPhone}`, body });
 }
 
 // ---------------------------------------------------------------------------
-// Helpers: cargar reserva con contactos
+// Email template builder
+// ---------------------------------------------------------------------------
+
+function gardenEmail(title: string, bodyHtml: string): string {
+  return `
+    <div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
+      <div style="background:#16a34a;padding:28px 32px;text-align:center;">
+        <h1 style="color:#fff;margin:0;font-size:24px;font-weight:900;letter-spacing:1px;">🌿 GARDEN</h1>
+        <p style="color:#bbf7d0;margin:6px 0 0;font-size:13px;">Cuidadores de confianza</p>
+      </div>
+      <div style="padding:32px;">
+        <h2 style="margin:0 0 16px;font-size:20px;color:#111;">${title}</h2>
+        ${bodyHtml}
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
+        <p style="color:#9ca3af;font-size:12px;margin:0;text-align:center;">
+          Este mensaje fue generado automáticamente por GARDEN. No respondas a este correo.
+        </p>
+      </div>
+    </div>
+  `;
+}
+
+function infoRow(label: string, value: string): string {
+  return `<tr><td style="padding:6px 12px 6px 0;color:#6b7280;font-size:14px;white-space:nowrap;">${label}</td><td style="padding:6px 0;color:#111;font-size:14px;">${value}</td></tr>`;
+}
+
+function bookingTable(rows: Array<[string, string]>): string {
+  return `<table style="width:100%;border-collapse:collapse;background:#f9fafb;border-radius:10px;padding:12px;margin:0 0 20px;" cellpadding="0" cellspacing="0"><tbody>${rows.map(([l, v]) => infoRow(l, v)).join('')}</tbody></table>`;
+}
+
+function ctaButton(text: string, url: string): string {
+  return `<div style="text-align:center;margin:20px 0;"><a href="${url}" style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:14px 32px;border-radius:10px;">${text}</a></div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
 // ---------------------------------------------------------------------------
 
 async function getBookingWithContacts(bookingId: string) {
-  const booking = await prisma.booking.findUnique({
+  return prisma.booking.findUnique({
     where: { id: bookingId },
     include: {
       client: { select: { id: true, email: true, phone: true, firstName: true, lastName: true } },
@@ -70,15 +71,38 @@ async function getBookingWithContacts(bookingId: string) {
       },
     },
   });
-  return booking;
+}
+
+function name(first?: string | null, last?: string | null, fallback = 'Usuario') {
+  return [first, last].filter(Boolean).join(' ') || fallback;
+}
+
+function serviceLabel(type: string) {
+  return type === 'HOSPEDAJE' ? 'Hospedaje' : 'Paseo';
+}
+
+function dateRange(booking: { serviceType: string; startDate?: Date | null; endDate?: Date | null; walkDate?: Date | null; timeSlot?: string | null }): string {
+  if (booking.serviceType === 'HOSPEDAJE' && booking.startDate && booking.endDate) {
+    return `${booking.startDate.toISOString().slice(0, 10)} → ${booking.endDate.toISOString().slice(0, 10)}`;
+  }
+  if (booking.walkDate) {
+    return booking.walkDate.toISOString().slice(0, 10) + (booking.timeSlot ? ` ${booking.timeSlot}` : '');
+  }
+  return 'Por confirmar';
+}
+
+function fireEmail(to: string, subject: string, html: string, event: string, bookingId?: string): void {
+  sendTransactionalEmail(to, subject, html).catch((err: Error) => {
+    logger.error(`[NOTIFICATION] Email failed to send`, { event, bookingId, to, error: err.message });
+  });
 }
 
 // ---------------------------------------------------------------------------
-// Eventos del flujo de reserva
+// Booking events
 // ---------------------------------------------------------------------------
 
 /**
- * Pago confirmado → reserva CONFIRMED. Notifica a cliente y cuidador.
+ * Payment confirmed → booking CONFIRMED. Notifies client and caregiver.
  */
 export async function onBookingConfirmed(bookingId: string): Promise<void> {
   const booking = await getBookingWithContacts(bookingId);
@@ -87,95 +111,116 @@ export async function onBookingConfirmed(bookingId: string): Promise<void> {
     return;
   }
 
-  const clientName = [booking.client.firstName, booking.client.lastName].filter(Boolean).join(' ') || 'Cliente';
-  const caregiverName =
-    booking.caregiver?.user != null
-      ? [booking.caregiver.user.firstName, booking.caregiver.user.lastName].filter(Boolean).join(' ') || 'Cuidador'
-      : 'Cuidador';
-  const serviceLabel = booking.serviceType === 'HOSPEDAJE' ? 'Hospedaje' : 'Paseo';
-  const dates =
-    booking.serviceType === 'HOSPEDAJE' && booking.startDate && booking.endDate
-      ? `${booking.startDate.toISOString().slice(0, 10)} - ${booking.endDate.toISOString().slice(0, 10)}`
-      : booking.walkDate
-        ? booking.walkDate.toISOString().slice(0, 10) + (booking.timeSlot ? ` ${booking.timeSlot}` : '')
-        : '';
+  const clientName = name(booking.client.firstName, booking.client.lastName, 'Cliente');
+  const caregiverName = name(booking.caregiver?.user?.firstName, booking.caregiver?.user?.lastName, 'Cuidador');
+  const svc = serviceLabel(booking.serviceType);
+  const dates = dateRange(booking);
 
-  const clientEmailSubject = `Reserva confirmada - GARDEN`;
-  const clientEmailBody = `Hola ${clientName},\n\nTu reserva de ${serviceLabel} ha sido confirmada.\nReserva ID: ${bookingId}\nFechas: ${dates}\nMascota: ${booking.petName}\nMonto: Bs ${booking.totalAmount}.\n\nGracias por confiar en GARDEN.`;
-  const clientWhatsAppBody = `GARDEN: Tu reserva de ${serviceLabel} está confirmada. Fechas: ${dates}. Reserva ${bookingId}.`;
+  // Email to client
+  const clientHtml = gardenEmail(
+    `¡Tu reserva de ${svc} está confirmada! 🎉`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, ¡todo listo! Tu reserva ha sido confirmada exitosamente.</p>` +
+    bookingTable([
+      ['Servicio', svc],
+      ['Cuidador', caregiverName],
+      ['Mascota', booking.petName],
+      ['Fechas', dates],
+      ['Total pagado', `Bs ${booking.totalAmount}`],
+      ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
+    ]) +
+    `<p style="color:#555;font-size:14px;margin:0;">Si tienes alguna pregunta, puedes comunicarte directamente con tu cuidador a través del chat de la app. ¡Que disfruten el servicio! 🐾</p>`
+  );
+  fireEmail(booking.client.email, `Reserva confirmada – GARDEN`, clientHtml, 'BOOKING_CONFIRMED_CLIENT', bookingId);
 
-  sendEmailPlaceholder(
-    booking.client.email,
-    clientEmailSubject,
-    clientEmailBody,
+  // Email to caregiver
+  if (booking.caregiver?.user) {
+    const caregiverHtml = gardenEmail(
+      `Nueva reserva confirmada 🗓️`,
+      `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, tienes una nueva reserva confirmada.</p>` +
+      bookingTable([
+        ['Servicio', svc],
+        ['Cliente', clientName],
+        ['Mascota', booking.petName],
+        ['Fechas', dates],
+        ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
+      ]) +
+      `<p style="color:#555;font-size:14px;margin:0;">Recuerda estar disponible en las fechas acordadas. Puedes hablar con el cliente a través del chat de la app. ¡Mucho éxito! 🌿</p>`
+    );
+    fireEmail(booking.caregiver.user.email, `Nueva reserva confirmada – GARDEN`, caregiverHtml, 'BOOKING_CONFIRMED_CAREGIVER', bookingId);
+
+    sendWhatsAppPlaceholder(
+      booking.caregiver.user.phone,
+      `GARDEN: Nueva reserva confirmada. Cliente: ${clientName}. ${svc} - ${dates}. ID: ${bookingId}.`,
+      { event: 'BOOKING_CONFIRMED_CAREGIVER', bookingId }
+    );
+  }
+
+  sendWhatsAppPlaceholder(
+    booking.client.phone,
+    `GARDEN: Tu reserva de ${svc} está confirmada. Fechas: ${dates}. Reserva ${bookingId}.`,
     { event: 'BOOKING_CONFIRMED_CLIENT', bookingId }
   );
-  sendWhatsAppPlaceholder(booking.client.phone, clientWhatsAppBody, {
-    event: 'BOOKING_CONFIRMED_CLIENT',
-    bookingId,
-  });
-
-  if (booking.caregiver?.user) {
-    const caregiverSubject = `Nueva reserva confirmada - GARDEN`;
-    const caregiverBody = `Hola ${caregiverName},\n\nTienes una nueva reserva confirmada.\nReserva ID: ${bookingId}\nCliente: ${clientName}\nServicio: ${serviceLabel}\nFechas: ${dates}\nMascota: ${booking.petName}.`;
-    const caregiverWhatsAppBody = `GARDEN: Nueva reserva confirmada. Cliente: ${clientName}. ${serviceLabel} - ${dates}. ID: ${bookingId}.`;
-
-    sendEmailPlaceholder(booking.caregiver.user.email, caregiverSubject, caregiverBody, {
-      event: 'BOOKING_CONFIRMED_CAREGIVER',
-      bookingId,
-    });
-    sendWhatsAppPlaceholder(booking.caregiver.user.phone, caregiverWhatsAppBody, {
-      event: 'BOOKING_CONFIRMED_CAREGIVER',
-      bookingId,
-    });
-  }
 }
 
-
 /**
- * Cliente canceló la reserva. Notifica al cuidador.
+ * Client cancelled the booking. Notifies caregiver.
  */
 export async function onClientCancelled(bookingId: string): Promise<void> {
   const booking = await getBookingWithContacts(bookingId);
   if (!booking?.caregiver?.user) return;
 
-  const caregiverName = [booking.caregiver.user.firstName, booking.caregiver.user.lastName]
-    .filter(Boolean)
-    .join(' ') || 'Cuidador';
-  const clientName = [booking.client.firstName, booking.client.lastName].filter(Boolean).join(' ') || 'Cliente';
-  const subject = `Reserva cancelada por el cliente - GARDEN`;
-  const body = `Hola ${caregiverName},\n\nEl cliente ${clientName} ha cancelado la reserva ${bookingId}.`;
-  sendEmailPlaceholder(booking.caregiver.user.email, subject, body, {
-    event: 'CLIENT_CANCELLED_CAREGIVER',
-    bookingId,
-  });
-  sendWhatsAppPlaceholder(
-    booking.caregiver.user.phone,
-    `GARDEN: El cliente canceló la reserva ${bookingId}.`,
-    { event: 'CLIENT_CANCELLED_CAREGIVER', bookingId }
+  const caregiverName = name(booking.caregiver.user.firstName, booking.caregiver.user.lastName, 'Cuidador');
+  const clientName = name(booking.client.firstName, booking.client.lastName, 'Cliente');
+  const svc = serviceLabel(booking.serviceType);
+  const dates = dateRange(booking);
+
+  const html = gardenEmail(
+    `Reserva cancelada por el cliente`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, te informamos que el cliente ha cancelado la reserva.</p>` +
+    bookingTable([
+      ['Cliente', clientName],
+      ['Servicio', svc],
+      ['Mascota', booking.petName],
+      ['Fechas', dates],
+      ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
+    ]) +
+    `<p style="color:#555;font-size:14px;margin:0;">Las fechas han quedado liberadas en tu agenda. Si tienes preguntas, contacta a nuestro soporte.</p>`
   );
+
+  fireEmail(booking.caregiver.user.email, `Reserva cancelada por el cliente – GARDEN`, html, 'CLIENT_CANCELLED_CAREGIVER', bookingId);
+  sendWhatsAppPlaceholder(booking.caregiver.user.phone, `GARDEN: El cliente canceló la reserva ${bookingId}.`, { event: 'CLIENT_CANCELLED_CAREGIVER', bookingId });
 }
 
 /**
- * Cuidador canceló la reserva. Notifica al cliente (dueño).
+ * Caregiver cancelled the booking. Notifies client with refund policy.
  */
 export async function onCaregiverCancelled(bookingId: string, reason: string): Promise<void> {
   const booking = await getBookingWithContacts(bookingId);
   if (!booking) return;
 
-  const clientName = [booking.client.firstName, booking.client.lastName].filter(Boolean).join(' ') || 'Cliente';
-  const caregiverName = booking.caregiver?.user
-    ? [booking.caregiver.user.firstName, booking.caregiver.user.lastName].filter(Boolean).join(' ')
-    : 'El cuidador';
+  const clientName = name(booking.client.firstName, booking.client.lastName, 'Cliente');
+  const caregiverName = name(booking.caregiver?.user?.firstName, booking.caregiver?.user?.lastName, 'El cuidador');
+  const svc = serviceLabel(booking.serviceType);
+  const dates = dateRange(booking);
 
-  const subject = `Reserva cancelada por el cuidador - GARDEN`;
-  const body = `Hola ${clientName},\n\nLamentamos informarte que ${caregiverName} ha cancelado la reserva ${bookingId}.\n\nMotivo: ${reason}\n\nPOLÍTICA DE REEMBOLSO:\nNuestra empresa se pondrá en contacto contigo en un plazo de 1 día hábil para realizar la devolución correspondiente.\n\nSentimos los inconvenientes causados.`;
+  const html = gardenEmail(
+    `Tu reserva fue cancelada`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, lamentamos informarte que ${caregiverName} tuvo que cancelar tu reserva.</p>` +
+    bookingTable([
+      ['Servicio', svc],
+      ['Mascota', booking.petName],
+      ['Fechas', dates],
+      ['Motivo', reason || 'No especificado'],
+      ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
+    ]) +
+    `<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin:0 0 20px;">
+       <p style="color:#92400e;font-size:14px;font-weight:700;margin:0 0 6px;">💰 Política de reembolso</p>
+       <p style="color:#92400e;font-size:13px;margin:0;">Realizaremos la devolución total de tu dinero en un plazo máximo de 1 día hábil. Nuestro equipo de soporte se pondrá en contacto contigo a la brevedad.</p>
+     </div>
+     <p style="color:#555;font-size:14px;margin:0;">Sentimos los inconvenientes causados. Estamos aquí para ayudarte a encontrar un nuevo cuidador. 🌿</p>`
+  );
 
-  sendEmailPlaceholder(booking.client.email, subject, body, {
-    event: 'CAREGIVER_CANCELLED_CLIENT',
-    bookingId,
-  });
-
+  fireEmail(booking.client.email, `Tu reserva fue cancelada – GARDEN`, html, 'CAREGIVER_CANCELLED_CLIENT', bookingId);
   sendWhatsAppPlaceholder(
     booking.client.phone,
     `GARDEN: Tu reserva ${bookingId} fue cancelada por el cuidador. Motivo: ${reason}. Te contactaremos en 1 día hábil para tu devolución.`,
@@ -184,61 +229,115 @@ export async function onCaregiverCancelled(bookingId: string, reason: string): P
 }
 
 /**
- * Pago exitoso -> Reserva en WAITING_CAREGIVER_APPROVAL. Notifica al cuidador.
+ * Payment succeeded → booking WAITING_CAREGIVER_APPROVAL. Notifies caregiver.
  */
 export async function onBookingWaitingApproval(bookingId: string): Promise<void> {
   const booking = await getBookingWithContacts(bookingId);
   if (!booking?.caregiver?.user) return;
 
-  const caregiverName = [booking.caregiver.user.firstName, booking.caregiver.user.lastName].filter(Boolean).join(' ') || 'Cuidador';
-  const serviceLabel = booking.serviceType === 'HOSPEDAJE' ? 'Hospedaje' : 'Paseo';
+  const caregiverName = name(booking.caregiver.user.firstName, booking.caregiver.user.lastName, 'Cuidador');
+  const clientName = name(booking.client.firstName, booking.client.lastName, 'Cliente');
+  const svc = serviceLabel(booking.serviceType);
+  const dates = dateRange(booking);
 
-  const subject = `Nueva solicitud de reserva pagada - GARDEN`;
-  const body = `Hola ${caregiverName},\n\nTienes una nueva solicitud de ${serviceLabel} pagada y esperando tu aprobación.\nReserva ID: ${bookingId}\nMascota: ${booking.petName}.\n\nPor favor, ingresa al panel para Aceptar o Rechazar la solicitud.`;
-  const whatsappBody = `GARDEN: Nueva reserva de ${serviceLabel} pagada (${booking.petName}). ID: ${bookingId}. Por favor, ingresa al panel para Aceptar o Rechazar.`;
+  const html = gardenEmail(
+    `Nueva solicitud de reserva — ¡Acción requerida! ⏰`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, tienes una nueva solicitud de reserva pagada esperando tu aprobación.</p>` +
+    bookingTable([
+      ['Servicio', svc],
+      ['Cliente', clientName],
+      ['Mascota', booking.petName],
+      ['Fechas', dates],
+      ['Total', `Bs ${booking.totalAmount}`],
+      ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
+    ]) +
+    `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;margin:0 0 20px;">
+       <p style="color:#166534;font-size:13px;margin:0;">⚠️ Tienes <strong>24 horas</strong> para aceptar o rechazar esta solicitud. Si no respondes, la reserva será cancelada automáticamente y el cliente recibirá un reembolso.</p>
+     </div>
+     <p style="color:#555;font-size:14px;margin:0;">Ingresa a la app para <strong>Aceptar</strong> o <strong>Rechazar</strong> esta solicitud.</p>`
+  );
 
-  sendEmailPlaceholder(booking.caregiver.user.email, subject, body, { event: 'BOOKING_WAITING_APPROVAL', bookingId });
-  sendWhatsAppPlaceholder(booking.caregiver.user.phone, whatsappBody, { event: 'BOOKING_WAITING_APPROVAL', bookingId });
+  fireEmail(booking.caregiver.user.email, `Nueva solicitud de reserva pendiente – GARDEN`, html, 'BOOKING_WAITING_APPROVAL', bookingId);
+  sendWhatsAppPlaceholder(
+    booking.caregiver.user.phone,
+    `GARDEN: Nueva reserva de ${svc} pagada (${booking.petName}). ID: ${bookingId}. Por favor, ingresa al panel para Aceptar o Rechazar.`,
+    { event: 'BOOKING_WAITING_APPROVAL', bookingId }
+  );
 }
 
 /**
- * Cuidador aceptó -> Reserva CONFIRMED. Notifica al cliente.
+ * Caregiver accepted → booking CONFIRMED. Notifies client.
  */
 export async function onBookingAccepted(bookingId: string): Promise<void> {
   const booking = await getBookingWithContacts(bookingId);
   if (!booking) return;
 
-  const clientName = [booking.client.firstName, booking.client.lastName].filter(Boolean).join(' ') || 'Cliente';
-  const caregiverName = booking.caregiver?.user ? [booking.caregiver.user.firstName, booking.caregiver.user.lastName].filter(Boolean).join(' ') : 'El cuidador';
+  const clientName = name(booking.client.firstName, booking.client.lastName, 'Cliente');
+  const caregiverName = name(booking.caregiver?.user?.firstName, booking.caregiver?.user?.lastName, 'Tu cuidador');
+  const svc = serviceLabel(booking.serviceType);
+  const dates = dateRange(booking);
 
-  const subject = `¡Tu reserva ha sido aceptada! - GARDEN`;
-  const body = `Hola ${clientName},\n\n¡Buenas noticias! ${caregiverName} ha aceptado tu reserva ${bookingId}.\n\nTu reserva ahora está CONFIRMADA. ¡Disfruta del servicio!`;
-  const whatsappBody = `GARDEN: ¡Tu reserva ${bookingId} ha sido aceptada por ${caregiverName}! Ya está CONFIRMADA.`;
+  const html = gardenEmail(
+    `¡Tu reserva fue aceptada! 🎉`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, ¡buenas noticias! <strong>${caregiverName}</strong> ha aceptado tu reserva.</p>` +
+    bookingTable([
+      ['Servicio', svc],
+      ['Cuidador', caregiverName],
+      ['Mascota', booking.petName],
+      ['Fechas', dates],
+      ['Estado', 'CONFIRMADA ✅'],
+      ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
+    ]) +
+    `<p style="color:#555;font-size:14px;margin:0;">Puedes comunicarte con tu cuidador a través del chat de la app. ¡Que disfruten el servicio! 🐾</p>`
+  );
 
-  sendEmailPlaceholder(booking.client.email, subject, body, { event: 'BOOKING_ACCEPTED_CLIENT', bookingId });
-  sendWhatsAppPlaceholder(booking.client.phone, whatsappBody, { event: 'BOOKING_ACCEPTED_CLIENT', bookingId });
+  fireEmail(booking.client.email, `¡Tu reserva fue aceptada! – GARDEN`, html, 'BOOKING_ACCEPTED_CLIENT', bookingId);
+  sendWhatsAppPlaceholder(
+    booking.client.phone,
+    `GARDEN: ¡Tu reserva ${bookingId} ha sido aceptada por ${caregiverName}! Ya está CONFIRMADA.`,
+    { event: 'BOOKING_ACCEPTED_CLIENT', bookingId }
+  );
 }
 
 /**
- * Cuidador rechazó -> Reserva REJECTED_BY_CAREGIVER. Notifica al cliente sobre el reembolso.
+ * Caregiver rejected → booking REJECTED_BY_CAREGIVER. Notifies client with refund info.
  */
 export async function onBookingRejected(bookingId: string, reason: string): Promise<void> {
   const booking = await getBookingWithContacts(bookingId);
   if (!booking) return;
 
-  const clientName = [booking.client.firstName, booking.client.lastName].filter(Boolean).join(' ') || 'Cliente';
-  const caregiverName = booking.caregiver?.user ? [booking.caregiver.user.firstName, booking.caregiver.user.lastName].filter(Boolean).join(' ') : 'El cuidador';
+  const clientName = name(booking.client.firstName, booking.client.lastName, 'Cliente');
+  const caregiverName = name(booking.caregiver?.user?.firstName, booking.caregiver?.user?.lastName, 'El cuidador');
+  const svc = serviceLabel(booking.serviceType);
+  const dates = dateRange(booking);
 
-  const subject = `Actualización sobre tu reserva - GARDEN`;
-  const body = `Hola ${clientName},\n\nLamentamos informarte que ${caregiverName} no puede atender tu reserva ${bookingId} en esta ocasión.\n\nMotivo: ${reason}\n\nPOLÍTICA DE REEMBOLSO:\nSe realizará la devolución total de tu dinero en un plazo de 1 día hábil (24 horas). Nuestro equipo de soporte se contactará contigo a la brevedad.`;
-  const whatsappBody = `GARDEN: Tu reserva ${bookingId} no pudo ser aceptada por el cuidador. Motivo: ${reason}. Recibirás tu reembolso total en 24 horas hábiles.`;
+  const html = gardenEmail(
+    `Actualización sobre tu reserva`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, lamentamos informarte que ${caregiverName} no puede atender tu reserva en esta ocasión.</p>` +
+    bookingTable([
+      ['Servicio', svc],
+      ['Mascota', booking.petName],
+      ['Fechas', dates],
+      ['Motivo', reason || 'No especificado'],
+      ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
+    ]) +
+    `<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin:0 0 20px;">
+       <p style="color:#92400e;font-size:14px;font-weight:700;margin:0 0 6px;">💰 Reembolso automático</p>
+       <p style="color:#92400e;font-size:13px;margin:0;">Se realizará la <strong>devolución total</strong> de tu dinero en un plazo máximo de <strong>24 horas hábiles</strong>. Nuestro equipo de soporte se contactará contigo a la brevedad.</p>
+     </div>
+     <p style="color:#555;font-size:14px;margin:0;">Sentimos los inconvenientes. Puedes buscar otro cuidador disponible en la app. 🌿</p>`
+  );
 
-  sendEmailPlaceholder(booking.client.email, subject, body, { event: 'BOOKING_REJECTED_CLIENT', bookingId });
-  sendWhatsAppPlaceholder(booking.client.phone, whatsappBody, { event: 'BOOKING_REJECTED_CLIENT', bookingId });
+  fireEmail(booking.client.email, `Actualización sobre tu reserva – GARDEN`, html, 'BOOKING_REJECTED_CLIENT', bookingId);
+  sendWhatsAppPlaceholder(
+    booking.client.phone,
+    `GARDEN: Tu reserva ${bookingId} no pudo ser aceptada por el cuidador. Motivo: ${reason}. Recibirás tu reembolso total en 24 horas hábiles.`,
+    { event: 'BOOKING_REJECTED_CLIENT', bookingId }
+  );
 }
 
 /**
- * Reembolso procesado / información al cliente. Mensaje: "El soporte se pondrá en contacto".
+ * Refund processed / client info message.
  */
 export async function onRefundProcessed(bookingId: string, message: string): Promise<void> {
   const booking = await getBookingWithContacts(bookingId);
@@ -247,16 +346,27 @@ export async function onRefundProcessed(bookingId: string, message: string): Pro
     return;
   }
 
-  const clientName = [booking.client.firstName, booking.client.lastName].filter(Boolean).join(' ') || 'Cliente';
-  const subject = `Reembolso - GARDEN`;
-  const body = `Hola ${clientName},\n\nReserva ${bookingId} cancelada.\n\n${message}\n\nEl soporte se pondrá en contacto para completar el proceso si aplica.`;
-  sendEmailPlaceholder(booking.client.email, subject, body, {
-    event: 'REFUND_PROCESSED_CLIENT',
-    bookingId,
-  });
-  const whatsAppBody = `GARDEN: ${message} El soporte se pondrá en contacto.`;
-  sendWhatsAppPlaceholder(booking.client.phone, whatsAppBody, {
-    event: 'REFUND_PROCESSED_CLIENT',
-    bookingId,
-  });
+  const clientName = name(booking.client.firstName, booking.client.lastName, 'Cliente');
+  const svc = serviceLabel(booking.serviceType);
+
+  const html = gardenEmail(
+    `Información sobre tu reembolso 💰`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, aquí tienes una actualización sobre tu reembolso.</p>` +
+    bookingTable([
+      ['Servicio', svc],
+      ['Mascota', booking.petName],
+      ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
+    ]) +
+    `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;margin:0 0 20px;">
+       <p style="color:#166534;font-size:14px;margin:0;">${message}</p>
+     </div>
+     <p style="color:#555;font-size:14px;margin:0;">El soporte de GARDEN se pondrá en contacto contigo para completar el proceso si aplica. Gracias por tu paciencia. 🌿</p>`
+  );
+
+  fireEmail(booking.client.email, `Información sobre tu reembolso – GARDEN`, html, 'REFUND_PROCESSED_CLIENT', bookingId);
+  sendWhatsAppPlaceholder(
+    booking.client.phone,
+    `GARDEN: ${message} El soporte se pondrá en contacto.`,
+    { event: 'REFUND_PROCESSED_CLIENT', bookingId }
+  );
 }
