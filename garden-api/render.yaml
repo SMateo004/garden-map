@@ -7,14 +7,13 @@ services:
     rootDir: garden-api
     # npm ci with --prefer-offline if cache hit; NODE_OPTIONS caps tsc memory to avoid OOM on 512MB free tier
     buildCommand: npm ci && NODE_OPTIONS=--max-old-space-size=400 npm run build
-    # 1. Resolve any previously-failed migrations (idempotent — safe to re-run)
-    # 2. Deploy remaining pending migrations (all SQL is idempotent IF NOT EXISTS)
-    # 3. Always start the server — assertMigrationsApplied() in server.ts is now warn-only
+    # Run migrations in background so the server starts within Render's 60s wake timeout.
+    # All migration SQL is idempotent (IF NOT EXISTS / DO $$ blocks) — safe to re-run.
     startCommand: >-
-      ./node_modules/.bin/prisma migrate resolve --applied 20260417191356_enable_row_level_security 2>/dev/null ;
+      (./node_modules/.bin/prisma migrate resolve --applied 20260417191356_enable_row_level_security 2>/dev/null ;
       ./node_modules/.bin/prisma migrate resolve --applied 20260417231505_add_refresh_tokens_and_stripe_event_id 2>/dev/null ;
       ./node_modules/.bin/prisma migrate resolve --applied 20260425000001_sugerencia_precio_cascade 2>/dev/null ;
-      ./node_modules/.bin/prisma migrate deploy 2>&1 | tee /tmp/migrate.log || echo "[warn] migrate deploy finished with errors — see /tmp/migrate.log" ;
+      ./node_modules/.bin/prisma migrate deploy 2>&1 || echo "[warn] migrate deploy had issues") &
       node dist/server.js
     healthCheckPath: /health
     autoDeploy: true
