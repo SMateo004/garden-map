@@ -21,6 +21,44 @@ function hashCode(code: string): string {
   return createHash('sha256').update(code).digest('hex');
 }
 
+/**
+ * Low-level transactional email sender — use when you need a custom subject.
+ * Called by sendVerificationEmail and sendPasswordResetEmail.
+ */
+export async function sendTransactionalEmail(email: string, subject: string, html: string): Promise<void> {
+  const isDev = env.NODE_ENV !== 'production';
+  logger.info(`📩 Sending email to: ${email} | subject: "${subject}"`);
+  try {
+    const { Resend } = await import('resend');
+    const resend = new Resend(env.RESEND_API_KEY);
+    const { error } = await resend.emails.send({
+      from: env.EMAIL_FROM,
+      to: [email],
+      subject,
+      html,
+    });
+
+    if (error) {
+      const msg = `Resend error: ${error.message}`;
+      logger.error(`❌ ${msg}`);
+      if (isDev) {
+        logger.warn('⚠️ Development mode: Ignoring email send failure.');
+        return;
+      }
+      throw new BadRequestError(`No se pudo enviar el correo: ${error.message}`, 'EMAIL_SEND_FAILED');
+    }
+    logger.info(`✅ Email sent successfully via Resend to ${email}`);
+  } catch (err: any) {
+    logger.error(`❌ Email send exception: ${err.message}`);
+    if (isDev) {
+      logger.warn('⚠️ Development mode: Gracefully handling email exception.');
+      return;
+    }
+    if (err instanceof BadRequestError) throw err;
+    throw new BadRequestError(`Error inesperado enviando email: ${err.message}`, 'EMAIL_SEND_FAILED');
+  }
+}
+
 export async function sendVerificationEmail(email: string, code: string, htmlBody?: string): Promise<void> {
   const isDev = env.NODE_ENV !== 'production';
 

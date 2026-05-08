@@ -18,7 +18,7 @@ import prisma from '../../config/database.js';
 import { env } from '../../config/env.js';
 import { BadRequestError, NotFoundError } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
-import { sendVerificationEmail } from './email.service.js';
+import { sendTransactionalEmail } from './email.service.js';
 import bcrypt from 'bcrypt';
 
 const TOKEN_EXPIRY_MINUTES = 60;
@@ -68,10 +68,14 @@ export async function requestPasswordReset(email: string): Promise<void> {
   const baseUrl = env.FRONTEND_URL ?? 'https://garden-map.vercel.app';
   const resetUrl = `${baseUrl}/reset-password?token=${rawToken}`;
 
-  logger.info(`Password reset token for ${normalizedEmail}: [REDACTED — check email]`);
+  logger.info(`Password reset email sent to ${normalizedEmail} [token REDACTED]`);
 
   const html = buildResetEmail(user.firstName, resetUrl, TOKEN_EXPIRY_MINUTES);
-  await sendVerificationEmail(normalizedEmail, '(reset)', html);
+  await sendTransactionalEmail(
+    normalizedEmail,
+    'GARDEN – Restablece tu contraseña',
+    html
+  );
 }
 
 /**
