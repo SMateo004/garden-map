@@ -4,9 +4,20 @@ if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     environment: process.env.NODE_ENV ?? 'development',
-    tracesSampleRate: 0.2,          // 20% de transacciones — suficiente para MVP
-    profilesSampleRate: 0.1,        // 10% de profiling
-    integrations: [Sentry.prismaIntegration()],
+    release: process.env.npm_package_version,
+    tracesSampleRate: 0.2,      // 20% de transacciones — suficiente para MVP
+    attachStacktrace: true,     // stack trace even for non-Error captures (e.g. strings)
+    integrations: [
+      Sentry.prismaIntegration(),       // Prisma query spans
+      Sentry.expressIntegration(),      // Express route/middleware spans
+      Sentry.requestDataIntegration(),  // Attaches full HTTP request data to errors
+    ],
+    // Exclude noisy health-check pings (Render hits /health every few seconds)
+    tracesSampler: (ctx) => {
+      const name = ctx.name ?? '';
+      if (name.includes('/health')) return 0;
+      return 0.2;
+    },
   });
 }
 
@@ -71,6 +82,10 @@ async function shutdown(signal: string): Promise<void> {
     await shutdownAnalytics();
     await shutdownRedis();
     await prisma.$disconnect();
+    // Flush pending Sentry events before exit (2s timeout — don't block forever)
+    if (process.env.SENTRY_DSN) {
+      await Sentry.flush(2000).catch(() => {});
+    }
     logger.info('[Shutdown] All resources released — exiting cleanly');
     clearTimeout(hardKill);
     process.exit(0);

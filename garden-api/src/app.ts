@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
 import rateLimit from 'express-rate-limit';
+import * as Sentry from '@sentry/node';
 import { env } from './config/env.js';
 import { errorHandler } from './shared/error-handler.js';
 import prisma from './config/database.js';
@@ -214,6 +215,9 @@ app.get('/health', async (_req, res) => {
     checks.redis = 'error'; // Redis configured but unreachable
   }
 
+  // 3. Sentry — informational only, never blocks healthy status
+  checks.sentry = process.env.SENTRY_DSN ? 'ok' : 'disabled';
+
   const healthy = checks.db === 'ok'; // DB is the only required dependency
   res.status(healthy ? 200 : 503).json({
     success: healthy,
@@ -290,6 +294,18 @@ app.use(async (req, res, next) => {
   }
   next();
 });
+
+// Sentry error handler MUST come before our custom errorHandler.
+// Only captures 5xx errors (shouldHandleError) — ignores expected 4xx AppErrors.
+// This adds full HTTP context (IP, user agent, route, body) to every captured event.
+if (process.env.SENTRY_DSN) {
+  Sentry.setupExpressErrorHandler(app, {
+    shouldHandleError(error) {
+      const statusCode = (error as any).statusCode ?? 500;
+      return statusCode >= 500;
+    },
+  });
+}
 
 app.use(errorHandler);
 

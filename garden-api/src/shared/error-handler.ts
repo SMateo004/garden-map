@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import * as Sentry from '@sentry/node';
 import multer from 'multer';
 import { AppError } from './errors.js';
 import logger from './logger.js';
@@ -74,18 +73,9 @@ export function errorHandler(
     });
   }
 
-  // Capturar en Sentry (solo errores no manejados — los AppError son expected)
-  if (process.env.SENTRY_DSN) {
-    Sentry.withScope((scope) => {
-      scope.setTag('path', req.path);
-      scope.setTag('method', req.method);
-      scope.setExtra('query', req.query);
-      scope.setExtra('body', req.body);
-      const userId = (req as Request & { user?: { userId?: string } }).user?.userId;
-      if (userId) scope.setUser({ id: userId });
-      Sentry.captureException(err);
-    });
-  }
+  // NOTE: Sentry capture is handled upstream by setupExpressErrorHandler (app.ts)
+  // which already has full HTTP context. No manual captureException here to avoid
+  // double-reporting with missing context.
 
   // Logging agresivo para errores no manejados
   logger.error('Unhandled error in errorHandler - RETURNING 500', {
