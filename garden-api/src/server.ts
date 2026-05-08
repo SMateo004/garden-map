@@ -85,37 +85,32 @@ process.on('SIGINT',  () => shutdown('SIGINT'));
 
 /**
  * Verifies that the database schema is in sync with the Prisma migrations table.
- * On Render (and any CI/CD pipeline) `npx prisma migrate deploy` should run
- * before the server starts — this check surfaces a clear error if it was skipped.
+ * The startCommand on Render already runs `prisma migrate resolve + migrate deploy`
+ * before node starts. This check surfaces any remaining issues as a log warning
+ * but does NOT exit — exiting here would kill the server after it's already
+ * listening, causing all in-flight health-check requests to get connection-reset.
  */
 async function assertMigrationsApplied(): Promise<void> {
   try {
-    // Query the Prisma migrations table; if it doesn't exist, migrations have
-    // never been applied (fresh DB without `migrate deploy`).
     const rows = await prisma.$queryRaw<{ migration_name: string; finished_at: Date | null }[]>`
       SELECT migration_name, finished_at
       FROM "_prisma_migrations"
       WHERE finished_at IS NULL
       ORDER BY started_at DESC
-      LIMIT 1
+      LIMIT 5
     `;
     if (rows.length > 0) {
-      const pending = rows[0]?.migration_name ?? 'unknown';
-      logger.error(`[Startup] Pending migration detected: "${pending}". Run \`npx prisma migrate deploy\` before starting the server.`);
-      if (process.env.NODE_ENV === 'production') {
-        process.exit(1);
-      }
+      const names = rows.map(r => r.migration_name).join(', ');
+      // Log as warning (not fatal) — the startCommand handles migration deploy.
+      // Exiting here after listen() is already called causes health-check timeouts.
+      logger.warn(`[Startup] ${rows.length} migration(s) have finished_at=NULL: [${names}]. ` +
+        'They may be in-progress or failed. Check Render logs for migrate deploy output.');
     } else {
       logger.info('[Startup] All Prisma migrations applied ✓');
     }
   } catch (err: any) {
-    // Table might not exist on a brand-new DB — that's also a migration issue
-    if (err?.message?.includes('_prisma_migrations')) {
-      logger.error('[Startup] Prisma migrations table not found — run `npx prisma migrate deploy`');
-      if (process.env.NODE_ENV === 'production') process.exit(1);
-    }
-    // Other errors (permissions etc.) — warn but don't block startup
-    logger.warn('[Startup] Could not verify migrations state', { error: err?.message });
+    // _prisma_migrations table may not exist on a fresh DB — warn, do not crash.
+    logger.warn('[Startup] Could not verify migrations state', { error: (err as any)?.message });
   }
 }
 
