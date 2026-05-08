@@ -17,9 +17,14 @@ const chatMessageLimiter = rateLimit({
   message: { success: false, error: { code: 'RATE_LIMITED', message: 'Demasiados mensajes. Espera un momento.' } },
 });
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // GET /api/chat/:bookingId/messages - Obtener historial de mensajes
 router.get('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
     const { bookingId } = req.params;
+    if (!UUID_RE.test(bookingId ?? '')) {
+        return res.status(400).json({ success: false, error: { message: 'bookingId inválido' } });
+    }
     const userId = (req as any).user.userId;
 
     // Verificar acceso al booking
@@ -77,6 +82,9 @@ router.get('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Requ
 // POST /api/chat/:bookingId/messages - Enviar un mensaje
 router.post('/:bookingId/messages', authMiddleware, chatMessageLimiter, asyncHandler(async (req: Request, res: Response) => {
     const { bookingId } = req.params;
+    if (!UUID_RE.test(bookingId ?? '')) {
+        return res.status(400).json({ success: false, error: { message: 'bookingId inválido' } });
+    }
     const userId = (req as any).user.userId;
     const { message } = req.body;
 

@@ -28,8 +28,6 @@ export const submit = asyncHandler(async (req: Request, res: Response) => {
     token = req.headers.authorization.split(' ')[1];
   }
 
-  const userIdFromBody = req.body?.userId as string | undefined;
-
   // 1. Mandatory File Check
   const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
   const selfie = files?.selfie?.[0];
@@ -51,8 +49,11 @@ export const submit = asyncHandler(async (req: Request, res: Response) => {
     return;
   }
 
-  // 2. Token Check
-  const effectiveToken = token || (userIdFromBody ? `userId:${userIdFromBody}` : '');
+  // 2. Token Check — the userId: shortcut is intentionally removed. All verification
+  // submissions must carry a signed JWT (from /generate-link) or the static
+  // identityVerificationToken stored on the caregiverProfile. This prevents an
+  // unauthenticated attacker from triggering/sabotaging a verification for any userId.
+  const effectiveToken = token ?? '';
   if (!effectiveToken) {
     res.status(400).json({
       success: false,

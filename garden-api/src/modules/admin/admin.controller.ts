@@ -307,58 +307,78 @@ export const processWithdrawal = asyncHandler(async (req: Request, res: Response
 export const completeWithdrawal = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  const tx = await prisma.walletTransaction.findUnique({ where: { id } });
-  if (!tx || tx.type !== 'WITHDRAWAL' || !['PENDING', 'PROCESSING'].includes(tx.status)) {
+  // Fast pre-check outside the transaction (avoids a DB round-trip on completed items)
+  const txPre = await prisma.walletTransaction.findUnique({ where: { id } });
+  if (!txPre || txPre.type !== 'WITHDRAWAL' || !['PENDING', 'PROCESSING'].includes(txPre.status)) {
     return res.status(400).json({ success: false, error: { message: 'Solicitud no válida' } });
   }
 
-  // Guard: verify caregiver has sufficient balance before decrement
-  const profile = await prisma.caregiverProfile.findUnique({
-    where: { userId: tx.userId },
-    select: { balance: true },
-  });
-  if (!profile) {
-    return res.status(404).json({ success: false, error: { message: 'Perfil de cuidador no encontrado' } });
+  // All critical checks run INSIDE the transaction so two concurrent admin requests
+  // cannot both pass the status guard and double-deduct the balance.
+  let notifyUserId: string;
+  let notifyAmount: number;
+
+  try {
+    await prisma.$transaction(async (prismaTx) => {
+      // Re-read under transaction lock to catch concurrent completions
+      const tx = await prismaTx.walletTransaction.findUnique({ where: { id } });
+      if (!tx || tx.type !== 'WITHDRAWAL' || !['PENDING', 'PROCESSING'].includes(tx.status)) {
+        throw Object.assign(new Error('ALREADY_PROCESSED'), { code: 'ALREADY_PROCESSED' });
+      }
+
+      const profile = await prismaTx.caregiverProfile.findUnique({
+        where: { userId: tx.userId },
+        select: { balance: true },
+      });
+      if (!profile) {
+        throw Object.assign(new Error('NO_PROFILE'), { code: 'NO_PROFILE' });
+      }
+      if (Number(profile.balance) < Number(tx.amount)) {
+        throw Object.assign(
+          new Error(`Saldo insuficiente. Tiene Bs ${profile.balance}, solicita Bs ${tx.amount}`),
+          { code: 'INSUFFICIENT_BALANCE' }
+        );
+      }
+
+      await prismaTx.caregiverProfile.update({
+        where: { userId: tx.userId },
+        data: { balance: { decrement: Number(tx.amount) } },
+      });
+
+      const updatedProfile = await prismaTx.caregiverProfile.findUnique({
+        where: { userId: tx.userId },
+        select: { balance: true },
+      });
+
+      await prismaTx.walletTransaction.update({
+        where: { id },
+        data: { status: 'COMPLETED', balance: Number(updatedProfile?.balance ?? 0) },
+      });
+
+      await prismaTx.notification.create({
+        data: {
+          userId: tx.userId,
+          title: '✅ Retiro completado',
+          message: `Tu retiro de Bs ${tx.amount} fue procesado exitosamente. El dinero ya está en tu cuenta.`,
+          type: 'SYSTEM',
+        },
+      });
+
+      notifyUserId = tx.userId;
+      notifyAmount = Number(tx.amount);
+    });
+  } catch (err: any) {
+    if (err.code === 'ALREADY_PROCESSED') {
+      return res.status(409).json({ success: false, error: { message: 'Esta solicitud ya fue procesada' } });
+    }
+    if (err.code === 'NO_PROFILE') {
+      return res.status(404).json({ success: false, error: { message: 'Perfil de cuidador no encontrado' } });
+    }
+    if (err.code === 'INSUFFICIENT_BALANCE') {
+      return res.status(409).json({ success: false, error: { message: err.message, code: 'INSUFFICIENT_BALANCE' } });
+    }
+    throw err;
   }
-  if (Number(profile.balance) < Number(tx.amount)) {
-    return res.status(409).json({
-      success: false,
-      error: {
-        message: `Saldo insuficiente. El cuidador tiene Bs ${profile.balance} pero solicita retirar Bs ${tx.amount}`,
-        code: 'INSUFFICIENT_BALANCE',
-      },
-    });
-  }
-
-  // Atomic: decrement balance + mark COMPLETED + notify
-  await prisma.$transaction(async (prismaTx) => {
-    await prismaTx.caregiverProfile.update({
-      where: { userId: tx.userId },
-      data: { balance: { decrement: Number(tx.amount) } },
-    });
-
-    const updatedProfile = await prismaTx.caregiverProfile.findUnique({
-      where: { userId: tx.userId },
-      select: { balance: true },
-    });
-
-    await prismaTx.walletTransaction.update({
-      where: { id },
-      data: {
-        status: 'COMPLETED',
-        balance: Number(updatedProfile?.balance ?? 0),
-      },
-    });
-
-    await prismaTx.notification.create({
-      data: {
-        userId: tx.userId,
-        title: '✅ Retiro completado',
-        message: `Tu retiro de Bs ${tx.amount} fue procesado exitosamente. El dinero ya está en tu cuenta.`,
-        type: 'SYSTEM',
-      },
-    });
-  });
 
   res.json({ success: true, data: { status: 'COMPLETED' } });
 });

@@ -119,39 +119,15 @@ export async function submitVerification(
     let sessionId: string;
     let session: (IdentityVerificationSession & { user: User }) | null = null;
 
-    if (token.startsWith('userId:')) {
-      const userId = token.split(':')[1];
-      const user = await prisma.user.findUnique({ where: { id: userId } });
-      if (!user) throw new BadRequestError('Usuario no encontrado');
-
-      let existingSession = await prisma.identityVerificationSession.findFirst({
-        where: { userId, status: 'PENDING' },
-        include: { user: true },
-      });
-
-      if (!existingSession) {
-        existingSession = (await prisma.identityVerificationSession.create({
-          data: {
-            userId: userId as string,
-            status: 'PENDING',
-            expiresAt: new Date(Date.now() + 15 * 60000)
-          },
-          include: { user: true },
-        })) as any;
-      }
-      session = existingSession as (IdentityVerificationSession & { user: User });
-      sessionId = session.id;
-    } else {
-      const validation = await validateToken(token);
-      if (!validation.valid || !validation.userId || !validation.sessionId) {
-        throw new BadRequestError(validation.message ?? 'Token inválido');
-      }
-      sessionId = validation.sessionId;
-      session = await prisma.identityVerificationSession.findUnique({
-        where: { id: sessionId },
-        include: { user: true },
-      }) as (IdentityVerificationSession & { user: User });
+    const validation = await validateToken(token);
+    if (!validation.valid || !validation.userId || !validation.sessionId) {
+      throw new BadRequestError(validation.message ?? 'Token inválido');
     }
+    sessionId = validation.sessionId;
+    session = await prisma.identityVerificationSession.findUnique({
+      where: { id: sessionId },
+      include: { user: true },
+    }) as (IdentityVerificationSession & { user: User });
 
     if (!session) throw new NotFoundError('Sesión no encontrada');
     if (session.status !== 'PENDING') {
