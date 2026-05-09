@@ -53,7 +53,7 @@ class _LandingScreenState extends State<LandingScreen> {
                 backgroundColor: bg,
                 elevation: 0,
                 pinned: true,
-                title: Image.asset('assets/images/logo-horizontal.png', height: 45),
+                title: Image.asset('assets/images/logo-horizontal.png', height: 68),
                 actions: [
                   TextButton(
                     onPressed: () => context.go('/register'),
