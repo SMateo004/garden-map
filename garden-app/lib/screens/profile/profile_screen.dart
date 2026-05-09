@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
-import '../../services/language_service.dart';
 import '../../services/auth_service.dart';
 import '../client/my_data_screen.dart';
 import '../client/my_ratings_screen.dart';
@@ -252,59 +251,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
 
-  void _showLanguageSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => AnimatedBuilder(
-        animation: languageNotifier,
-        builder: (context, _) {
-          final isDark = themeNotifier.isDark;
-          final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-          final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-          final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-
-          return GlassBox(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(width: 40, height: 4,
-                    decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2))),
-                ),
-                const SizedBox(height: 20),
-                Text('Idioma', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 4),
-                Text('Solo cambia las etiquetas de la app', style: TextStyle(color: subtextColor, fontSize: 13)),
-                const SizedBox(height: 20),
-                for (final lang in AppLanguage.values)
-                  _langOption(lang, textColor, subtextColor, ctx),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _langOption(AppLanguage lang, Color textColor, Color subtextColor, BuildContext sheetCtx) {
-    final labels = {AppLanguage.es: ('🇧🇴', 'Español'), AppLanguage.en: ('🇺🇸', 'English'), AppLanguage.pt: ('🇧🇷', 'Português')};
-    final (flag, name) = labels[lang]!;
-    final selected = languageNotifier.language == lang;
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-      leading: Text(flag, style: const TextStyle(fontSize: 28)),
-      title: Text(name, style: TextStyle(color: textColor, fontWeight: selected ? FontWeight.w700 : FontWeight.w400)),
-      trailing: selected ? const Icon(Icons.check_circle_rounded, color: GardenColors.primary) : null,
-      onTap: () {
-        languageNotifier.setLanguage(lang);
-        Navigator.pop(sheetCtx);
-      },
-    );
-  }
 
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
@@ -799,50 +745,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _profileTile(icon: Icons.notifications_outlined, title: 'Notificaciones',
             onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Próximamente')))),
 
-        if (_effectiveRole == 'CLIENT')
-          AnimatedBuilder(
-            animation: languageNotifier,
-            builder: (context, _) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Material(
-                color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
-                borderRadius: BorderRadius.circular(GardenRadius.md),
-                child: InkWell(
-                  onTap: _showLanguageSheet,
-                  borderRadius: BorderRadius.circular(GardenRadius.md),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(GardenRadius.md),
-                      border: Border.all(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: GardenColors.primary.withValues(alpha: 0.09),
-                            borderRadius: BorderRadius.circular(GardenRadius.sm),
-                          ),
-                          child: const Icon(Icons.language_outlined, color: GardenColors.primary, size: 17),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Text('Idioma',
-                              style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
-                        ),
-                        Text(languageNotifier.displayName,
-                            style: TextStyle(color: subtextColor, fontSize: 13)),
-                        const SizedBox(width: 4),
-                        Icon(Icons.chevron_right_rounded,
-                            color: isDark ? GardenColors.darkTextHint : GardenColors.lightTextHint, size: 18),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
 
         const SizedBox(height: 24),
         _sectionLabel('Cuenta', textColor),

@@ -1,46 +1,33 @@
+import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 enum AppLanguage { es, en, pt }
 
-const _kLangKey = 'app_language';
+/// Detecta el idioma del dispositivo automáticamente.
+/// Soporta español, inglés y portugués; fallback a español.
+AppLanguage _detectDeviceLanguage() {
+  final locales = PlatformDispatcher.instance.locales;
+  for (final locale in locales) {
+    final code = locale.languageCode.toLowerCase();
+    if (code == 'es') return AppLanguage.es;
+    if (code == 'en') return AppLanguage.en;
+    if (code == 'pt') return AppLanguage.pt;
+  }
+  return AppLanguage.es;
+}
 
 final languageNotifier = LanguageNotifier();
 
 class LanguageNotifier extends ChangeNotifier {
-  AppLanguage _language = AppLanguage.es;
+  final AppLanguage _language = _detectDeviceLanguage();
 
   AppLanguage get language => _language;
 
-  String get languageCode => _language.name; // 'es' | 'en' | 'pt'
+  String get languageCode => _language.name;
 
   String get displayName => switch (_language) {
         AppLanguage.es => 'Español',
         AppLanguage.en => 'English',
         AppLanguage.pt => 'Português',
       };
-
-  LanguageNotifier() {
-    _load();
-  }
-
-  Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString(_kLangKey);
-    if (saved != null) {
-      _language = AppLanguage.values.firstWhere(
-        (l) => l.name == saved,
-        orElse: () => AppLanguage.es,
-      );
-      notifyListeners();
-    }
-  }
-
-  Future<void> setLanguage(AppLanguage lang) async {
-    if (_language == lang) return;
-    _language = lang;
-    notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kLangKey, lang.name);
-  }
 }
