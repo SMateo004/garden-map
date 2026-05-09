@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
 import '../../services/fcm_service.dart';
+import '../../services/social_auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -26,6 +27,41 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  void _navigateAfterLogin(String role) {
+    FcmService.registerAfterLogin();
+    if (role == 'ADMIN') {
+      context.go('/admin');
+    } else if (role == 'CLIENT') {
+      kIsWeb ? context.go('/marketplace') : context.go('/service-selector');
+    } else if (role == 'CAREGIVER') {
+      context.go('/caregiver/home');
+    } else {
+      context.go('/marketplace');
+    }
+  }
+
+  void _handleSocialResult(SocialLoginResult result) {
+    if (!result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result.error ?? 'Error al iniciar sesión'),
+        backgroundColor: GardenColors.error,
+      ));
+      return;
+    }
+    if (result.userExists) {
+      _navigateAfterLogin(result.role ?? 'CLIENT');
+    } else {
+      // Email no registrado → ir al registro pre-llenado
+      final d = result.userData;
+      context.push('/register', extra: {
+        'firstName': d?.firstName ?? '',
+        'lastName': d?.lastName ?? '',
+        'email': d?.email ?? '',
+        'fromSocial': true,
+      });
+    }
+  }
+
   void _handleLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -39,21 +75,10 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await _authService.login(email: email, password: password);
       if (!mounted) return;
-      // Register FCM token now that the user is authenticated
-      FcmService.registerAfterLogin();
       final prefs = await SharedPreferences.getInstance();
       final role = prefs.getString('user_role') ?? '';
       if (!mounted) return;
-      if (role == 'ADMIN') {
-        context.go('/admin');
-      } else if (role == 'CLIENT') {
-        if (kIsWeb) {
-          context.go('/marketplace');
-        } else {
-          context.go('/service-selector');
-        }
-      } else if (role == 'CAREGIVER') context.go('/caregiver/home');
-      else context.go('/test');
+      _navigateAfterLogin(role);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -275,10 +300,16 @@ class _LoginScreenState extends State<LoginScreen> {
               Expanded(child: Divider(color: borderColor)),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text('o', style: TextStyle(color: subtextColor, fontSize: 13)),
+                child: Text('o continúa con', style: TextStyle(color: subtextColor, fontSize: 13)),
               ),
               Expanded(child: Divider(color: borderColor)),
             ],
+          ),
+          const SizedBox(height: 16),
+
+          // Botones de login social
+          _SocialLoginButtons(
+            onResult: (result) => _handleSocialResult(result),
           ),
           const SizedBox(height: 20),
 
@@ -306,6 +337,153 @@ class _LoginScreenState extends State<LoginScreen> {
         ],
       ),
       ),
+      ),
+    );
+  }
+}
+
+// ── Botones de login social reutilizables ────────────────────────────────────
+class _SocialLoginButtons extends StatefulWidget {
+  final void Function(SocialLoginResult) onResult;
+  const _SocialLoginButtons({required this.onResult});
+
+  @override
+  State<_SocialLoginButtons> createState() => _SocialLoginButtonsState();
+}
+
+class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
+  SocialProvider? _loading;
+
+  Future<void> _handleProvider(SocialProvider provider) async {
+    setState(() => _loading = provider);
+    try {
+      SocialUserData? data;
+      if (provider == SocialProvider.google) {
+        data = await SocialAuthService.signInWithGoogle();
+      } else if (provider == SocialProvider.apple) {
+        data = await SocialAuthService.signInWithApple();
+      } else {
+        data = await SocialAuthService.signInWithFacebook();
+      }
+
+      if (data == null) return; // user cancelled
+
+      final result = await SocialAuthService.loginWithBackend(data);
+      if (mounted) widget.onResult(result);
+    } catch (e) {
+      if (mounted) {
+        widget.onResult(SocialLoginResult(
+          success: false,
+          userExists: false,
+          error: e.toString().replaceFirst('Exception: ', ''),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _SocialBtn(
+          label: 'Google',
+          iconLetter: 'G',
+          iconColor: const Color(0xFF4285F4),
+          loading: _loading == SocialProvider.google,
+          onTap: () => _handleProvider(SocialProvider.google),
+        ),
+        const SizedBox(width: 10),
+        _SocialBtn(
+          label: 'Apple',
+          iconLetter: '',
+          iconColor: const Color(0xFF000000),
+          loading: _loading == SocialProvider.apple,
+          onTap: () => _handleProvider(SocialProvider.apple),
+        ),
+        const SizedBox(width: 10),
+        _SocialBtn(
+          label: 'Facebook',
+          iconLetter: 'f',
+          iconColor: const Color(0xFF1877F2),
+          loading: _loading == SocialProvider.facebook,
+          onTap: () => _handleProvider(SocialProvider.facebook),
+        ),
+      ],
+    );
+  }
+}
+
+class _SocialBtn extends StatelessWidget {
+  final String label;
+  final String iconLetter;
+  final Color iconColor;
+  final bool loading;
+  final VoidCallback onTap;
+
+  const _SocialBtn({
+    required this.label,
+    required this.iconLetter,
+    required this.iconColor,
+    required this.loading,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: loading ? null : onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          height: 48,
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: border),
+          ),
+          child: loading
+              ? const Center(
+                  child: SizedBox(
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2, color: GardenColors.primary),
+                  ))
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 20, height: 20,
+                      decoration: BoxDecoration(
+                        color: iconColor,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        iconLetter,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(label,
+                        style: TextStyle(
+                            color: textColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ),
+        ),
       ),
     );
   }

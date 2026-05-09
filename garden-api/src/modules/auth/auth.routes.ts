@@ -2,6 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
 import * as authController from './auth.controller.js';
+import { socialLogin, socialRegisterClient } from './social-auth.controller.js';
 
 // ── Rate limiters ────────────────────────────────────────────────────────────
 // 5 intentos por 15 min — bloquea brute force; no cuenta logins exitosos
@@ -119,6 +120,15 @@ router.post('/init-caregiver-profile', authMiddleware, authController.initCaregi
 
 /** POST /api/auth/abandon-caregiver-profile — revierte conversión CLIENT→CAREGIVER (solo perfil en DRAFT). */
 router.post('/abandon-caregiver-profile', authMiddleware, authController.abandonCaregiverProfile);
+
+// ── Social Auth ───────────────────────────────────────────────────────────────
+/** POST /api/auth/social/login — verifica Firebase ID token, busca usuario por email y devuelve JWT.
+ *  Funciona para CLIENT y CAREGIVER. Si el email no existe devuelve 404 con los datos del proveedor. */
+router.post('/social/login', loginLimiter, socialLogin);
+
+/** POST /api/auth/social/register-client — crea cuenta CLIENT con datos del proveedor social.
+ *  Solo para dueños de mascotas. Los cuidadores deben registrarse con el formulario completo. */
+router.post('/social/register-client', registerLimiter, socialRegisterClient);
 
 // ── Password Reset ────────────────────────────────────────────────────────────
 /** POST /api/auth/forgot-password — body: { email }. Sends reset link. Always 200. */

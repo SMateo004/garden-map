@@ -38,8 +38,6 @@ import 'screens/onboarding/mobile_service_selector_screen.dart';
 import 'screens/onboarding/maintenance_screen.dart';
 import 'screens/caregiver/mobile_verify_screen.dart';
 import 'screens/legal/legal_screen.dart';
-import 'dart:ui' show PlatformDispatcher;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -132,7 +130,15 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/register',
       name: 'register',
-      builder: (context, state) => const RegisterScreen(),
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return RegisterScreen(
+          prefillFirstName: extra?['firstName'] as String?,
+          prefillLastName: extra?['lastName'] as String?,
+          prefillEmail: extra?['email'] as String?,
+          fromSocial: extra?['fromSocial'] as bool? ?? false,
+        );
+      },
     ),
     GoRoute(
       path: '/caregiver/onboarding',

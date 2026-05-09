@@ -3,10 +3,23 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:go_router/go_router.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
+import '../../services/social_auth_service.dart';
 import '../legal/legal_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+  final String? prefillFirstName;
+  final String? prefillLastName;
+  final String? prefillEmail;
+  final bool fromSocial;
+
+  const RegisterScreen({
+    super.key,
+    this.prefillFirstName,
+    this.prefillLastName,
+    this.prefillEmail,
+    this.fromSocial = false,
+  });
+
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
@@ -25,6 +38,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _acceptedTerms        = false;
   String _selectedRole       = 'owner'; // 'owner' o 'caregiver'
   DateTime? _dateOfBirth;
+
+  @override
+  @override
+  void initState() {
+    super.initState();
+    if (widget.prefillFirstName != null) _firstNameController.text = widget.prefillFirstName!;
+    if (widget.prefillLastName != null) _lastNameController.text = widget.prefillLastName!;
+    if (widget.prefillEmail != null) _emailController.text = widget.prefillEmail!;
+  }
 
   @override
   void dispose() {
@@ -482,6 +504,43 @@ class _RegisterScreenState extends State<RegisterScreen> {
             loading: _isLoading,
             onPressed: _handleRegister,
           ),
+          const SizedBox(height: 16),
+
+          // Botones sociales — solo para dueños de mascotas
+          if (_selectedRole == 'owner' && !widget.fromSocial) ...[
+            Row(
+              children: [
+                Expanded(child: Divider(color: borderColor)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text('o regístrate con', style: TextStyle(color: subtextColor, fontSize: 13)),
+                ),
+                Expanded(child: Divider(color: borderColor)),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _SocialRegisterButtons(
+              onSocialData: (data) {
+                // Pre-llenar el formulario con los datos del proveedor
+                if (data.firstName != null && data.firstName!.isNotEmpty) {
+                  _firstNameController.text = data.firstName!;
+                }
+                if (data.lastName != null && data.lastName!.isNotEmpty) {
+                  _lastNameController.text = data.lastName!;
+                }
+                if (data.email != null && data.email!.isNotEmpty) {
+                  _emailController.text = data.email!;
+                }
+                setState(() {});
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('Datos pre-llenados. Completa el teléfono y fecha de nacimiento.'),
+                  backgroundColor: GardenColors.primary,
+                  duration: Duration(seconds: 3),
+                ));
+              },
+            ),
+          ],
+
           const SizedBox(height: 24),
 
           Center(
@@ -566,5 +625,103 @@ class _RegisterScreenState extends State<RegisterScreen> {
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
     );
+  }
+}
+
+// ── Botones sociales para register (solo pre-llenado) ────────────────────────
+class _SocialRegisterButtons extends StatefulWidget {
+  final void Function(SocialUserData) onSocialData;
+  const _SocialRegisterButtons({required this.onSocialData});
+
+  @override
+  State<_SocialRegisterButtons> createState() => _SocialRegisterButtonsState();
+}
+
+class _SocialRegisterButtonsState extends State<_SocialRegisterButtons> {
+  SocialProvider? _loading;
+
+  Future<void> _handle(SocialProvider provider) async {
+    setState(() => _loading = provider);
+    try {
+      SocialUserData? data;
+      if (provider == SocialProvider.google) {
+        data = await SocialAuthService.signInWithGoogle();
+      } else if (provider == SocialProvider.apple) {
+        data = await SocialAuthService.signInWithApple();
+      } else {
+        data = await SocialAuthService.signInWithFacebook();
+      }
+      if (data != null && mounted) widget.onSocialData(data);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: GardenColors.error,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+
+    Widget btn(String label, String iconLetter, Color iconColor, SocialProvider p) => Expanded(
+          child: GestureDetector(
+            onTap: _loading != null ? null : () => _handle(p),
+            child: Container(
+              height: 48,
+              decoration: BoxDecoration(
+                  color: surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: border)),
+              child: _loading == p
+                  ? const Center(
+                      child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: GardenColors.primary)))
+                  : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Container(
+                        width: 20, height: 20,
+                        decoration: BoxDecoration(
+                          color: iconColor,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          iconLetter,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            height: 1,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(label,
+                          style: TextStyle(
+                              color: textColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600)),
+                    ]),
+            ),
+          ),
+        );
+
+    return Row(children: [
+      btn('Google', 'G', const Color(0xFF4285F4), SocialProvider.google),
+      const SizedBox(width: 10),
+      btn('Apple', '', const Color(0xFF000000), SocialProvider.apple),
+      const SizedBox(width: 10),
+      btn('Facebook', 'f', const Color(0xFF1877F2), SocialProvider.facebook),
+    ]);
   }
 }

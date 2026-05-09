@@ -1,0 +1,243 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+enum SocialProvider { google, apple, facebook }
+
+class SocialUserData {
+  final String? idToken;
+  final String? email;
+  final String? firstName;
+  final String? lastName;
+  final String? phone;
+  final String? photoUrl;
+  final SocialProvider provider;
+
+  const SocialUserData({
+    this.idToken,
+    required this.email,
+    required this.firstName,
+    required this.lastName,
+    this.phone,
+    this.photoUrl,
+    required this.provider,
+  });
+}
+
+class SocialLoginResult {
+  final bool success;
+  final bool userExists;
+  final String? error;
+  // Populated when userExists == true
+  final String? accessToken;
+  final String? refreshToken;
+  final String? role;
+  final String? userName;
+  // Populated when userExists == false (register flow)
+  final SocialUserData? userData;
+
+  const SocialLoginResult({
+    required this.success,
+    required this.userExists,
+    this.error,
+    this.accessToken,
+    this.refreshToken,
+    this.role,
+    this.userName,
+    this.userData,
+  });
+}
+
+class SocialAuthService {
+  static String get _baseUrl => const String.fromEnvironment(
+      'API_URL',
+      defaultValue: 'https://garden-api-1ldd.onrender.com/api');
+
+  // ── Google ──────────────────────────────────────────────────────────────
+
+  static Future<SocialUserData?> signInWithGoogle() async {
+    try {
+      final googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) return null;
+
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      final userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+      final idToken = await userCredential.user?.getIdToken();
+
+      final displayName = googleUser.displayName ?? '';
+      final parts = displayName.split(' ');
+      final firstName = parts.isNotEmpty ? parts.first : '';
+      final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+
+      return SocialUserData(
+        idToken: idToken,
+        email: googleUser.email,
+        firstName: firstName,
+        lastName: lastName,
+        photoUrl: googleUser.photoUrl,
+        provider: SocialProvider.google,
+      );
+    } catch (e) {
+      debugPrint('[SocialAuth] Google error: $e');
+      return null;
+    }
+  }
+
+  // ── Apple ───────────────────────────────────────────────────────────────
+
+  static Future<SocialUserData?> signInWithApple() async {
+    try {
+      final appleCredential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      final oauthCredential = OAuthProvider('apple.com').credential(
+        idToken: appleCredential.identityToken,
+        accessToken: appleCredential.authorizationCode,
+      );
+      final userCredential =
+          await FirebaseAuth.instance.signInWithCredential(oauthCredential);
+      final idToken = await userCredential.user?.getIdToken();
+
+      // Apple solo entrega nombre en el PRIMER login
+      final firstName = appleCredential.givenName ??
+          userCredential.user?.displayName?.split(' ').first ??
+          '';
+      final lastName = appleCredential.familyName ??
+          (userCredential.user?.displayName?.split(' ')
+                  .skip(1)
+                  .join(' ') ??
+              '');
+
+      return SocialUserData(
+        idToken: idToken,
+        email: appleCredential.email ?? userCredential.user?.email ?? '',
+        firstName: firstName,
+        lastName: lastName,
+        provider: SocialProvider.apple,
+      );
+    } catch (e) {
+      debugPrint('[SocialAuth] Apple error: $e');
+      return null;
+    }
+  }
+
+  // ── Facebook ─────────────────────────────────────────────────────────────
+
+  static Future<SocialUserData?> signInWithFacebook() async {
+    try {
+      final result = await FacebookAuth.instance.login(
+        permissions: ['email', 'public_profile'],
+      );
+      if (result.status != LoginStatus.success) return null;
+
+      final credential =
+          FacebookAuthProvider.credential(result.accessToken!.tokenString);
+      final userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+      final idToken = await userCredential.user?.getIdToken();
+
+      final fbData = await FacebookAuth.instance.getUserData(
+        fields: 'name,email,first_name,last_name',
+      );
+
+      return SocialUserData(
+        idToken: idToken,
+        email: fbData['email'] as String? ?? userCredential.user?.email ?? '',
+        firstName: fbData['first_name'] as String? ??
+            userCredential.user?.displayName?.split(' ').first ??
+            '',
+        lastName: fbData['last_name'] as String? ??
+            (userCredential.user?.displayName?.split(' ')
+                    .skip(1)
+                    .join(' ') ??
+                ''),
+        photoUrl: userCredential.user?.photoURL,
+        provider: SocialProvider.facebook,
+      );
+    } catch (e) {
+      debugPrint('[SocialAuth] Facebook error: $e');
+      return null;
+    }
+  }
+
+  // ── Backend login ─────────────────────────────────────────────────────────
+
+  /// Verifica el token contra el backend.
+  /// - Si el usuario existe → devuelve tokens y role
+  /// - Si no existe → devuelve userData para pre-llenar el register
+  static Future<SocialLoginResult> loginWithBackend(
+      SocialUserData data) async {
+    if (data.idToken == null) {
+      return const SocialLoginResult(
+          success: false, userExists: false, error: 'Token vacío');
+    }
+
+    try {
+      final providerName = data.provider.name; // 'google' | 'apple' | 'facebook'
+      final res = await http.post(
+        Uri.parse('$_baseUrl/auth/social/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'provider': providerName,
+          'idToken': data.idToken,
+        }),
+      );
+
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+
+      if (res.statusCode == 200 && body['success'] == true) {
+        final d = body['data'] as Map<String, dynamic>;
+        // Persist tokens locally
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('access_token', d['accessToken'] as String);
+        await prefs.setString('refresh_token', d['refreshToken'] as String);
+        await prefs.setString('user_role', d['user']['role'] as String);
+        await prefs.setString(
+            'user_name',
+            '${d['user']['firstName']} ${d['user']['lastName']}');
+
+        return SocialLoginResult(
+          success: true,
+          userExists: true,
+          accessToken: d['accessToken'] as String,
+          refreshToken: d['refreshToken'] as String,
+          role: d['user']['role'] as String,
+          userName:
+              '${d['user']['firstName']} ${d['user']['lastName']}',
+        );
+      }
+
+      if (res.statusCode == 404) {
+        // Email not found → send user to register with pre-filled data
+        return SocialLoginResult(
+          success: true,
+          userExists: false,
+          userData: data,
+        );
+      }
+
+      return SocialLoginResult(
+        success: false,
+        userExists: false,
+        error: body['error']?['message'] as String? ?? 'Error al iniciar sesión',
+      );
+    } catch (e) {
+      return const SocialLoginResult(
+          success: false, userExists: false, error: 'Error de conexión');
+    }
+  }
+}
