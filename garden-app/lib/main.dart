@@ -231,9 +231,15 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/booking/:caregiverId',
       name: 'booking',
-      builder: (context, state) => BookingScreen(
-        caregiverId: state.pathParameters['caregiverId']!,
-      ),
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return BookingScreen(
+          caregiverId: state.pathParameters['caregiverId']!,
+          preloadedCaregiver: extra?['caregiver'] as Map<String, dynamic>?,
+          preloadedPets: extra?['pets'] as List<dynamic>?,
+          preloadedToken: extra?['token'] as String?,
+        );
+      },
     ),
     GoRoute(
       path: '/payment/:bookingId',

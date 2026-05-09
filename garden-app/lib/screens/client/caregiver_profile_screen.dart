@@ -19,8 +19,8 @@ class CaregiverProfileScreen extends StatefulWidget {
 class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   Map<String, dynamic>? _caregiver;
   bool _isLoading = true;
-  bool _isReserving = false;
   List<dynamic> _clientPets = [];
+  String _authToken = '';
   int _selectedPhotoIndex = 0;
   bool _showAllReviews = false;
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
@@ -28,25 +28,33 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _loadCaregiver();
+    _loadAll();
   }
 
-  Future<void> _loadCaregiver() async {
+  Future<void> _loadAll() async {
+    // Get token once, then fire all requests in parallel
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token') ?? '';
+    if (mounted) setState(() => _authToken = token);
+
+    await Future.wait([
+      _fetchCaregiver(),
+      if (token.isNotEmpty) _fetchClientPets(token),
+      if (token.isNotEmpty) _fetchFavoriteStatus(token),
+    ]);
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _fetchCaregiver() async {
     try {
       final response = await http.get(Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}'));
       final data = jsonDecode(response.body);
-      if (data['success'] == true) setState(() => _caregiver = data['data']);
-      await Future.wait([_loadFavoriteStatus(), _loadClientPets()]);
-    } catch (_) {} finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+      if (data['success'] == true && mounted) setState(() => _caregiver = data['data']);
+    } catch (_) {}
   }
 
-  Future<void> _loadClientPets() async {
+  Future<void> _fetchClientPets(String token) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('access_token') ?? '';
-      if (token.isEmpty) return;
       final res = await http.get(
         Uri.parse('$_baseUrl/client/pets'),
         headers: {'Authorization': 'Bearer $token'},
@@ -58,48 +66,25 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     } catch (_) {}
   }
 
-  // Fallback: si las mascotas no cargaron aún al presionar Reservar
-  Future<List<dynamic>> _loadClientPetsOnce(String token) async {
-    try {
-      final res = await http.get(
-        Uri.parse('$_baseUrl/client/pets'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-      final data = jsonDecode(res.body);
-      return data['success'] == true ? (data['data'] as List? ?? []) : [];
-    } catch (_) {
-      return [];
-    }
-  }
-
   bool _isFavorite = false;
   bool _isTogglingFavorite = false;
 
-  Future<void> _loadFavoriteStatus() async {
+  Future<void> _fetchFavoriteStatus(String token) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('access_token') ?? '';
-      if (token.isEmpty) return;
-
       final response = await http.get(
         Uri.parse('$_baseUrl/client/my-profile'),
         headers: {'Authorization': 'Bearer $token'},
       );
       final data = jsonDecode(response.body);
-      if (data['success'] == true) {
+      if (data['success'] == true && mounted) {
         final favorites = (data['data']['favoriteCaregiverIds'] as List?)?.cast<String>() ?? [];
-        if (mounted) {
-          setState(() {
-            _isFavorite = favorites.contains(widget.caregiverId);
-          });
-        }
+        setState(() => _isFavorite = favorites.contains(widget.caregiverId));
       }
     } catch (_) {}
   }
 
   Future<void> _toggleFavorite() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token') ?? '';
+    final token = _authToken;
     if (token.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -665,12 +650,10 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                   // Botón reservar
                   Expanded(
                     child: GardenButton(
-                      label: _isReserving ? 'Cargando...' : 'Reservar ahora',
+                      label: 'Reservar ahora',
                       icon: Icons.calendar_today_outlined,
-                      onPressed: _isReserving ? null : () async {
-                        final prefs = await SharedPreferences.getInstance();
-                        final token = prefs.getString('access_token') ?? '';
-                        if (!context.mounted) return;
+                      onPressed: () {
+                        final token = _authToken;
                         if (token.isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -679,48 +662,45 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                               duration: Duration(seconds: 2),
                             ),
                           );
-                          await Future.delayed(const Duration(seconds: 1));
-                          if (!context.mounted) return;
-                          context.push('/login');
+                          Future.delayed(const Duration(seconds: 1), () {
+                            if (context.mounted) context.push('/login');
+                          });
                           return;
                         }
-                        setState(() => _isReserving = true);
-                        // Usar mascotas precargadas; si aún no llegaron, esperar brevemente
-                        final pets = _clientPets.isNotEmpty
-                            ? _clientPets
-                            : await _loadClientPetsOnce(token);
-                        if (!context.mounted) return;
-                        setState(() => _isReserving = false);
-                        if (pets.isEmpty) {
-                            showDialog(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: const Text('Primero agrega una mascota'),
-                                content: const Text(
-                                  'Necesitas registrar al menos una mascota para hacer una reserva.',
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx),
-                                    child: const Text('Cancelar'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () {
-                                      Navigator.pop(ctx);
-                                      context.push('/my-pets');
-                                    },
-                                    child: const Text('Agregar mascota',
-                                      style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700)),
-                                  ),
-                                ],
+                        if (_clientPets.isEmpty) {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('Primero agrega una mascota'),
+                              content: const Text(
+                                'Necesitas registrar al menos una mascota para hacer una reserva.',
                               ),
-                            );
-                            return;
-                          }
-                        if (!context.mounted) return;
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  child: const Text('Cancelar'),
+                                ),
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    context.push('/my-pets');
+                                  },
+                                  child: const Text('Agregar mascota',
+                                    style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700)),
+                                ),
+                              ],
+                            ),
+                          );
+                          return;
+                        }
+                        final bookingExtra = {
+                          'caregiver': _caregiver,
+                          'pets': _clientPets,
+                          'token': token,
+                        };
                         // If caregiver offers both services, show selector first
                         if (offersBoth) {
-                          await showModalBottomSheet(
+                          showModalBottomSheet(
                             context: context,
                             backgroundColor: Colors.transparent,
                             builder: (sheetCtx) => Container(
@@ -749,7 +729,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                                     sublabel: 'Bs $pricePerDay/noche',
                                     onTap: () {
                                       Navigator.pop(sheetCtx);
-                                      context.push('/booking/${widget.caregiverId}?service=HOSPEDAJE');
+                                      context.push('/booking/${widget.caregiverId}', extra: bookingExtra);
                                     },
                                   ),
                                   const SizedBox(height: 12),
@@ -759,7 +739,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                                     sublabel: 'Bs $pricePerWalk60/hora',
                                     onTap: () {
                                       Navigator.pop(sheetCtx);
-                                      context.push('/booking/${widget.caregiverId}?service=PASEO');
+                                      context.push('/booking/${widget.caregiverId}', extra: bookingExtra);
                                     },
                                   ),
                                 ],
@@ -767,7 +747,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                             ),
                           );
                         } else {
-                          context.push('/booking/${widget.caregiverId}');
+                          context.push('/booking/${widget.caregiverId}', extra: bookingExtra);
                         }
                       },
                     ),

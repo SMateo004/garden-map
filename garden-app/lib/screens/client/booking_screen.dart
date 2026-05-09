@@ -7,7 +7,17 @@ import '../../theme/garden_theme.dart';
 
 class BookingScreen extends StatefulWidget {
   final String caregiverId;
-  const BookingScreen({super.key, required this.caregiverId});
+  final Map<String, dynamic>? preloadedCaregiver;
+  final List<dynamic>? preloadedPets;
+  final String? preloadedToken;
+
+  const BookingScreen({
+    super.key,
+    required this.caregiverId,
+    this.preloadedCaregiver,
+    this.preloadedPets,
+    this.preloadedToken,
+  });
 
   @override
   State<BookingScreen> createState() => _BookingScreenState();
@@ -61,6 +71,26 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Future<void> _initData() async {
+    // Use pre-loaded data if available — renders instantly
+    if (widget.preloadedCaregiver != null && widget.preloadedPets != null && widget.preloadedToken != null) {
+      _clientToken = widget.preloadedToken!;
+      final services = (widget.preloadedCaregiver!['services'] as List?)?.cast<String>() ?? [];
+      final pets = widget.preloadedPets!.cast<Map<String, dynamic>>();
+      setState(() {
+        _caregiver = widget.preloadedCaregiver!;
+        _pets = pets;
+        _isLoading = false;
+        if (services.contains('PASEO')) {
+          _selectedService = 'PASEO';
+        } else if (services.isNotEmpty) {
+          _selectedService = services.first;
+        }
+        if (_pets.isNotEmpty) _selectedPetId = _pets.first['id'];
+      });
+      return;
+    }
+
+    // Fallback: fetch everything
     final prefs = await SharedPreferences.getInstance();
     _clientToken = prefs.getString('access_token') ?? '';
     if (_clientToken.isEmpty) {
