@@ -7,10 +7,10 @@ import 'package:google_fonts/google_fonts.dart';
 // Paleta: oliva #778C43 · vivid-green #58E262 · lima #D9EF9F · beige #DBD0C4
 class GardenColors {
   // ── LIGHT MODE ──────────────────────────────────────────────────────────
-  static const lightBackground      = Color(0xFFF5F2EC); // crema cálida (beige muy claro)
-  static const lightSurface         = Color(0xFFFFFFFF);
-  static const lightSurfaceElevated = Color(0xFFF8FBF3); // tinte lima casi imperceptible
-  static const lightBorder          = Color(0xFFDBD0C4); // beige exacto de la paleta
+  static const lightBackground      = Color(0xFFF2EDE4); // crema cálida profunda
+  static const lightSurface         = Color(0xFFFAF7F2); // crema clara — reemplaza blanco puro
+  static const lightSurfaceElevated = Color(0xFFF5F0E8); // crema beige — tarjetas elevadas
+  static const lightBorder          = Color(0xFFDDD5C8); // beige cálido (ligeramente más visible)
   static const lightTextPrimary     = Color(0xFF1E2D0F); // casi negro con matiz verde
   static const lightTextSecondary   = Color(0xFF5C7238); // oliva medio
   static const lightTextHint        = Color(0xFF99AC75); // lima apagada
@@ -362,7 +362,8 @@ class GlassBox extends StatelessWidget {
         defaultTargetPlatform == TargetPlatform.iOS ||
         defaultTargetPlatform == TargetPlatform.macOS;
 
-    final tintLight = Colors.white.withValues(alpha: useBlur ? 0.72 : 0.92);
+    const creamLight = Color(0xFFFAF7F2);
+    final tintLight = creamLight.withValues(alpha: useBlur ? 0.78 : 0.94);
     final tintDark  = const Color(0xFF162610).withValues(alpha: useBlur ? 0.82 : 0.95);
 
     final decoration = BoxDecoration(
@@ -373,12 +374,14 @@ class GlassBox extends StatelessWidget {
           isDark ? tintDark : tintLight,
           isDark
               ? const Color(0xFF0D1A07).withValues(alpha: useBlur ? 0.75 : 0.93)
-              : Colors.white.withValues(alpha: useBlur ? 0.55 : 0.88),
+              : creamLight.withValues(alpha: useBlur ? 0.60 : 0.90),
         ],
       ),
       borderRadius: radius,
       border: Border.all(
-        color: Colors.white.withValues(alpha: isDark ? 0.09 : 0.50),
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.09)
+            : const Color(0xFFDBD0C4).withValues(alpha: 0.55),
         width: 1.0,
       ),
       boxShadow: [
@@ -1226,7 +1229,7 @@ ThemeData gardenTheme({bool dark = false}) {
     chipTheme: ChipThemeData(
       backgroundColor: dark
           ? Colors.white.withValues(alpha: 0.06)
-          : Colors.white.withValues(alpha: 0.55),
+          : const Color(0xFFF5F0E8).withValues(alpha: 0.80),
       selectedColor: GardenColors.primary.withValues(alpha: 0.18),
       checkmarkColor: GardenColors.primary,
       // Chips — SemiBold 600 (nav labels, chips, secondary buttons)
