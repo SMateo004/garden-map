@@ -62,7 +62,9 @@ class SocialAuthService {
 
   static Future<SocialUserData?> signInWithGoogle() async {
     try {
-      final googleUser = await GoogleSignIn().signIn();
+      final googleUser = await GoogleSignIn(
+        clientId: '1067635397531-d9v8mtsm3to56m71krq6h5g01p1081vh.apps.googleusercontent.com',
+      ).signIn();
       if (googleUser == null) return null;
 
       final googleAuth = await googleUser.authentication;
