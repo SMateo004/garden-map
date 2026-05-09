@@ -53,15 +53,7 @@ class _LandingScreenState extends State<LandingScreen> {
                 backgroundColor: bg,
                 elevation: 0,
                 pinned: true,
-                title: const Text(
-                  'GARDEN',
-                  style: TextStyle(
-                    color: GardenColors.primary,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -1,
-                  ),
-                ),
+                title: Image.asset('assets/images/logo-horizontal.png', height: 30),
                 actions: [
                   TextButton(
                     onPressed: () => context.go('/register'),

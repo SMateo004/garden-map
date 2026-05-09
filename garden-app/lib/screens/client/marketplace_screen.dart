@@ -655,8 +655,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 children: [
                   GestureDetector(
                     onTap: () {},
-                    child: const Text('GARDEN',
-                        style: TextStyle(color: GardenColors.primary, fontSize: 20, fontWeight: FontWeight.w900)),
+                    child: Image.asset('assets/images/logo-horizontal.png', height: 28),
                   ),
                   const SizedBox(width: 6),
                   Text('·', style: TextStyle(color: subtextColor, fontSize: 18)),
@@ -954,8 +953,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   // Logo
                   GestureDetector(
                     onTap: () => context.go('/marketplace'),
-                    child: const Text('GARDEN',
-                        style: TextStyle(color: GardenColors.primary, fontSize: 20, fontWeight: FontWeight.w900)),
+                    child: Image.asset('assets/images/logo-horizontal.png', height: 28),
                   ),
                   const SizedBox(width: 6),
                   Text('·', style: TextStyle(color: subtextColor, fontSize: 18)),

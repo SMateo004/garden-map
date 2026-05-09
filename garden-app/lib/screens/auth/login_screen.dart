@@ -135,24 +135,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 72, height: 72,
-                    decoration: BoxDecoration(
-                      color: GardenColors.primary.withValues(alpha: 0.25),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4), width: 1.5),
-                    ),
-                    child: const Icon(Icons.pets, color: GardenColors.accent, size: 40),
-                  ),
+                  Image.asset('assets/images/logo-white.png', height: 48),
                   const SizedBox(height: 32),
-                  Text(
-                    'GARDEN',
-                    style: GardenText.h2.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -2,
-                    ),
-                  ),
                   const SizedBox(height: 12),
                   Text(
                     'Cuidado profesional\nverificado para\ntu mascota',
@@ -214,14 +198,7 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               GestureDetector(
                 onTap: () => context.go('/'),
-                child: Text(
-                  'GARDEN',
-                  style: GardenText.h3.copyWith(
-                    color: GardenColors.primary,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                child: Image.asset('assets/images/logo-horizontal.png', height: 32),
               ),
               TextButton.icon(
                 onPressed: () => context.go('/'),

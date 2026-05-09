@@ -99,30 +99,7 @@ class _ClientWelcomeScreenState extends State<ClientWelcomeScreen>
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       // Logo pequeño
-                      Row(
-                        children: [
-                          Container(
-                            width: 28, height: 28,
-                            decoration: BoxDecoration(
-                              color: GardenColors.primary,
-                              borderRadius: GardenRadius.sm_,
-                            ),
-                            child: const Center(
-                              child: Text('🌱', style: TextStyle(fontSize: 14)),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'GARDEN',
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1,
-                            ),
-                          ),
-                        ],
-                      ),
+                      Image.asset('assets/images/logo-horizontal.png', height: 24),
                       // Botón saltar
                       if (_currentPage < 2)
                         TextButton(

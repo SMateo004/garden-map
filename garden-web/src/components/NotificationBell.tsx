@@ -36,7 +36,7 @@ export function NotificationBell() {
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="relative flex flex-col items-center p-1 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none"
+                className="relative flex flex-col items-center p-1 rounded-lg text-white/80 hover:bg-white/10 transition-colors focus:outline-none"
             >
                 <div className="relative">
                     <svg
@@ -58,7 +58,7 @@ export function NotificationBell() {
                         </span>
                     )}
                 </div>
-                <span className="text-[10px] font-medium leading-none mt-0.5">Notificaciones</span>
+                <span className="text-[10px] font-medium leading-none mt-0.5 text-white/70">Notificaciones</span>
             </button>
 
             {isOpen && (

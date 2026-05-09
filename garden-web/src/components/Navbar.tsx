@@ -37,7 +37,7 @@ export function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-[40] border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+    <header className="sticky top-0 z-[40] bg-green-600 shadow-sm">
       <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
         <div className="relative flex items-center h-10">
           {/* Lado Izquierdo: Menú Hamburguesa */}
@@ -45,7 +45,7 @@ export function Navbar() {
             <button
               type="button"
               onClick={() => setMenuOpen(true)}
-              className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              className="p-2 rounded-lg text-white/80 hover:bg-white/10 transition-colors"
               aria-label="Menú principal"
             >
               <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -54,14 +54,13 @@ export function Navbar() {
             </button>
           </div>
 
-          {/* Centro: LOGO */}
+          {/* Centro: LOGO blanco */}
           <div className="absolute left-1/2 -translate-x-1/2">
             <Link
               to={isCaregiver ? "/caregiver/dashboard" : "/"}
               className="hover:opacity-80 transition-opacity"
             >
-              <img src="/logo-horizontal.png" alt="Garden" className="h-8 w-auto block dark:hidden" />
-              <img src="/logo-horizontal-dark.png" alt="Garden" className="h-8 w-auto hidden dark:block" />
+              <img src="/logo-white.png" alt="Garden" className="h-8 w-auto" />
             </Link>
           </div>
 
@@ -80,10 +79,9 @@ export function Navbar() {
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity" onClick={() => setMenuOpen(false)}></div>
 
           <div ref={sideMenuRef} className="relative w-80 max-w-[90%] bg-white dark:bg-gray-900 h-full shadow-2xl flex flex-col animate-in slide-in-from-left duration-300">
-            <div className="p-6 flex items-center justify-between border-b border-gray-100 dark:border-gray-800">
-              <img src="/logo-horizontal.png" alt="Garden" className="h-7 w-auto block dark:hidden" />
-              <img src="/logo-horizontal-dark.png" alt="Garden" className="h-7 w-auto hidden dark:block" />
-              <button onClick={() => setMenuOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+            <div className="p-6 flex items-center justify-between bg-green-600">
+              <img src="/logo-white.png" alt="Garden" className="h-7 w-auto" />
+              <button onClick={() => setMenuOpen(false)} className="p-2 text-white/80 hover:text-white">
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
