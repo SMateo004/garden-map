@@ -61,8 +61,8 @@ export function CaregiverAuthPage() {
       <div className="w-full max-w-md">
         <div className="rounded-3xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl overflow-hidden">
           <div className="p-8 text-center bg-green-600">
-            <h1 className="text-2xl font-bold text-white">GARDEN</h1>
-            <p className="text-green-100 mt-1">Cuidadores de confianza</p>
+            <img src="/logo-white.png" alt="Garden" className="h-10 w-auto mx-auto" />
+            <p className="text-green-100 mt-2">Cuidadores de confianza</p>
           </div>
 
           <div className="p-8">

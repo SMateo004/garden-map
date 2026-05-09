@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../widgets/notification_bell.dart';
 import 'marketplace_screen.dart';
 import 'my_bookings_screen.dart';
 import 'my_pets_screen.dart';
@@ -28,6 +31,9 @@ class WebShellScreen extends StatefulWidget {
 
 class _WebShellScreenState extends State<WebShellScreen> {
   late int _selectedTab;
+  String _authToken = '';
+  String? _userName;
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
   static const _tabs = [
     _NavTab(icon: Icons.search_outlined, activeIcon: Icons.search_rounded, label: 'Inicio'),
@@ -41,6 +47,18 @@ class _WebShellScreenState extends State<WebShellScreen> {
     super.initState();
     _selectedTab = widget.initialTab;
     debugPrint('[WebShell] init tab=${widget.initialTab}');
+    _loadAuth();
+  }
+
+  Future<void> _loadAuth() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token') ?? '';
+    if (mounted) {
+      setState(() {
+        _authToken = token;
+        _userName = prefs.getString('user_name');
+      });
+    }
   }
 
   Widget _buildBody() {
@@ -121,6 +139,30 @@ class _WebShellScreenState extends State<WebShellScreen> {
                         ],
                       ),
                       const Spacer(),
+                      // Notificaciones + usuario (cuando está logueado)
+                      if (_authToken.isNotEmpty) ...[
+                        NotificationBell(token: _authToken, baseUrl: _baseUrl),
+                        const SizedBox(width: 4),
+                        GestureDetector(
+                          onTap: () => context.push('/profile'),
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4)),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(children: [
+                              const Icon(Icons.account_circle_outlined, size: 18, color: GardenColors.primary),
+                              const SizedBox(width: 6),
+                              Text(
+                                _userName?.split(' ').first ?? 'Perfil',
+                                style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 13),
+                              ),
+                            ]),
+                          ),
+                        ),
+                      ],
                       // Nav tabs
                       Row(
                         mainAxisSize: MainAxisSize.min,

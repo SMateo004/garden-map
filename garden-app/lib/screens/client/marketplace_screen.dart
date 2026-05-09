@@ -586,7 +586,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       backgroundColor: bg,
       body: Column(
         children: [
-          _buildAppBar(theme, isDark, surface, border),
+          // _buildAppBar solo cuando el Marketplace corre standalone (sin WebShellScreen)
+          if (widget.isMobileShell) _buildAppBar(theme, isDark, surface, border),
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,

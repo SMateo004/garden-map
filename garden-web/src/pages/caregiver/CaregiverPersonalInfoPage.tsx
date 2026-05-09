@@ -70,7 +70,7 @@ export function CaregiverPersonalInfoPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <header className="sticky top-0 z-10 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3">
+      <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3">
         <div className="mx-auto max-w-2xl flex items-center gap-3">
           <button
             type="button"
@@ -83,7 +83,7 @@ export function CaregiverPersonalInfoPage() {
           </button>
           <h1 className="text-lg font-semibold text-gray-900 dark:text-white">Información personal</h1>
         </div>
-      </header>
+      </div>
 
       <main className="mx-auto max-w-2xl px-4 py-6 space-y-6">
         <section className="space-y-4">

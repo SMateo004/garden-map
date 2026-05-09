@@ -301,7 +301,7 @@ export function RegisterWizard() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <header className="sticky top-0 z-10 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3">
+      <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3">
         <div className="mx-auto max-w-2xl flex items-center justify-between">
           <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
             Paso {currentStep} de {TOTAL_STEPS}
@@ -317,7 +317,7 @@ export function RegisterWizard() {
         <div className="mt-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden" role="progressbar" aria-valuenow={currentStep} aria-valuemin={1} aria-valuemax={TOTAL_STEPS} aria-label={`Paso ${currentStep} de ${TOTAL_STEPS}`}>
           <div className="h-full bg-green-500 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
         </div>
-      </header>
+      </div>
 
       <main className="mx-auto max-w-2xl px-4 py-6 pb-24">
         {currentStep === 1 && <Step1 data={data} setData={setData} onNext={goNext} fieldError={fieldErrors.phone} onFieldErrorClear={() => setFieldErrors((prev) => ({ ...prev, phone: undefined }))} />}
