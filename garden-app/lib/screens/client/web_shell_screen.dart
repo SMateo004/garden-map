@@ -139,30 +139,10 @@ class _WebShellScreenState extends State<WebShellScreen> {
                         ],
                       ),
                       const Spacer(),
-                      // Notificaciones + usuario (cuando está logueado)
-                      if (_authToken.isNotEmpty) ...[
+                      // Notificaciones
+                      if (_authToken.isNotEmpty)
                         NotificationBell(token: _authToken, baseUrl: _baseUrl),
-                        const SizedBox(width: 4),
-                        GestureDetector(
-                          onTap: () => context.push('/profile'),
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4)),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(children: [
-                              const Icon(Icons.account_circle_outlined, size: 18, color: GardenColors.primary),
-                              const SizedBox(width: 6),
-                              Text(
-                                _userName?.split(' ').first ?? 'Perfil',
-                                style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 13),
-                              ),
-                            ]),
-                          ),
-                        ),
-                      ],
+                      const SizedBox(width: 4),
                       // Nav tabs
                       Row(
                         mainAxisSize: MainAxisSize.min,
@@ -184,6 +164,28 @@ class _WebShellScreenState extends State<WebShellScreen> {
                           );
                         }),
                       ),
+                      // Usuario al final (cuando está logueado)
+                      if (_authToken.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () => context.push('/profile'),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4)),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              Text(
+                                _userName?.split(' ').first ?? 'Perfil',
+                                style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 13),
+                              ),
+                              const SizedBox(width: 6),
+                              const Icon(Icons.account_circle_outlined, size: 18, color: GardenColors.primary),
+                            ]),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

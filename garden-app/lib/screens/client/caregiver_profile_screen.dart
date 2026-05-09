@@ -19,6 +19,8 @@ class CaregiverProfileScreen extends StatefulWidget {
 class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   Map<String, dynamic>? _caregiver;
   bool _isLoading = true;
+  bool _isReserving = false;
+  List<dynamic> _clientPets = [];
   int _selectedPhotoIndex = 0;
   bool _showAllReviews = false;
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
@@ -34,9 +36,39 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
       final response = await http.get(Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}'));
       final data = jsonDecode(response.body);
       if (data['success'] == true) setState(() => _caregiver = data['data']);
-      await _loadFavoriteStatus();
+      await Future.wait([_loadFavoriteStatus(), _loadClientPets()]);
     } catch (_) {} finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadClientPets() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token') ?? '';
+      if (token.isEmpty) return;
+      final res = await http.get(
+        Uri.parse('$_baseUrl/client/pets'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] == true && mounted) {
+        setState(() => _clientPets = data['data'] as List? ?? []);
+      }
+    } catch (_) {}
+  }
+
+  // Fallback: si las mascotas no cargaron aún al presionar Reservar
+  Future<List<dynamic>> _loadClientPetsOnce(String token) async {
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/client/pets'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      final data = jsonDecode(res.body);
+      return data['success'] == true ? (data['data'] as List? ?? []) : [];
+    } catch (_) {
+      return [];
     }
   }
 
@@ -633,9 +665,9 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                   // Botón reservar
                   Expanded(
                     child: GardenButton(
-                      label: 'Reservar ahora',
+                      label: _isReserving ? 'Cargando...' : 'Reservar ahora',
                       icon: Icons.calendar_today_outlined,
-                      onPressed: () async {
+                      onPressed: _isReserving ? null : () async {
                         final prefs = await SharedPreferences.getInstance();
                         final token = prefs.getString('access_token') ?? '';
                         if (!context.mounted) return;
@@ -652,16 +684,14 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           context.push('/login');
                           return;
                         }
-                        // Verificar que el cliente tenga mascotas registradas
-                        try {
-                          final res = await http.get(
-                            Uri.parse('$_baseUrl/client/pets'),
-                            headers: {'Authorization': 'Bearer $token'},
-                          );
-                          final data = jsonDecode(res.body);
-                          final pets = data['success'] == true ? (data['data'] as List? ?? []) : [];
-                          if (!context.mounted) return;
-                          if (pets.isEmpty) {
+                        setState(() => _isReserving = true);
+                        // Usar mascotas precargadas; si aún no llegaron, esperar brevemente
+                        final pets = _clientPets.isNotEmpty
+                            ? _clientPets
+                            : await _loadClientPetsOnce(token);
+                        if (!context.mounted) return;
+                        setState(() => _isReserving = false);
+                        if (pets.isEmpty) {
                             showDialog(
                               context: context,
                               builder: (ctx) => AlertDialog(
@@ -687,7 +717,6 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                             );
                             return;
                           }
-                        } catch (_) {}
                         if (!context.mounted) return;
                         // If caregiver offers both services, show selector first
                         if (offersBoth) {
