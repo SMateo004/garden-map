@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'firebase_options.dart';
 import 'package:go_router/go_router.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
@@ -400,9 +401,9 @@ final GoRouter _router = GoRouter(
 Future<void> _bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  if (!kIsWeb) {
-    await Firebase.initializeApp();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
+  if (!kIsWeb) {
     // Crashlytics: captura errores de Flutter y de la plataforma nativa
     FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
     PlatformDispatcher.instance.onError = (error, stack) {
