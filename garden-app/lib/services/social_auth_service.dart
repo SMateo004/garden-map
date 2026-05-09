@@ -62,40 +62,47 @@ class SocialAuthService {
 
   static Future<SocialUserData?> signInWithGoogle() async {
     try {
-      UserCredential userCredential;
-
       if (kIsWeb) {
-        // Web: Firebase signInWithPopup — no usa google_sign_in ni People API
         final provider = GoogleAuthProvider()
           ..addScope('email')
           ..addScope('profile');
-        userCredential = await FirebaseAuth.instance.signInWithPopup(provider);
-      } else {
-        // Mobile: flujo estándar con google_sign_in
-        final googleUser = await GoogleSignIn(
-          clientId: '1067635397531-d9v8mtsm3to56m71krq6h5g01p1081vh.apps.googleusercontent.com',
-        ).signIn();
-        if (googleUser == null) return null;
-
-        final googleAuth = await googleUser.authentication;
-        final credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
-          idToken: googleAuth.idToken,
+        final result = await FirebaseAuth.instance.signInWithPopup(provider);
+        final user = result.user;
+        if (user == null) return null;
+        final idToken = await user.getIdToken();
+        final parts = (user.displayName ?? '').split(' ');
+        return SocialUserData(
+          idToken: idToken,
+          email: user.email ?? '',
+          firstName: parts.isNotEmpty ? parts.first : '',
+          lastName: parts.length > 1 ? parts.sublist(1).join(' ') : '',
+          photoUrl: user.photoURL,
+          provider: SocialProvider.google,
         );
-        userCredential =
-            await FirebaseAuth.instance.signInWithCredential(credential);
       }
 
-      final idToken = await userCredential.user?.getIdToken();
-      final displayName = userCredential.user?.displayName ?? '';
-      final parts = displayName.split(' ');
+      // Mobile
+      final googleUser = await GoogleSignIn(
+        clientId: '1067635397531-d9v8mtsm3to56m71krq6h5g01p1081vh.apps.googleusercontent.com',
+      ).signIn();
+      if (googleUser == null) return null;
 
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      final result = await FirebaseAuth.instance.signInWithCredential(credential);
+      final user = result.user;
+      if (user == null) return null;
+      final idToken = await user.getIdToken();
+      final parts = (googleUser.displayName ?? '').split(' ');
       return SocialUserData(
         idToken: idToken,
-        email: userCredential.user?.email ?? '',
+        email: googleUser.email,
         firstName: parts.isNotEmpty ? parts.first : '',
         lastName: parts.length > 1 ? parts.sublist(1).join(' ') : '',
-        photoUrl: userCredential.user?.photoURL,
+        photoUrl: googleUser.photoUrl,
         provider: SocialProvider.google,
       );
     } catch (e) {
@@ -150,45 +157,48 @@ class SocialAuthService {
 
   static Future<SocialUserData?> signInWithFacebook() async {
     try {
-      UserCredential userCredential;
-      String? firstName;
-      String? lastName;
-
       if (kIsWeb) {
-        // Web: Firebase signInWithPopup — no usa flutter_facebook_auth
         final provider = FacebookAuthProvider()
           ..addScope('email')
           ..addScope('public_profile');
-        userCredential = await FirebaseAuth.instance.signInWithPopup(provider);
-      } else {
-        // Mobile: flujo estándar con flutter_facebook_auth
-        final result = await FacebookAuth.instance.login(
-          permissions: ['email', 'public_profile'],
+        final result = await FirebaseAuth.instance.signInWithPopup(provider);
+        final user = result.user;
+        if (user == null) return null;
+        final idToken = await user.getIdToken();
+        final parts = (user.displayName ?? '').split(' ');
+        return SocialUserData(
+          idToken: idToken,
+          email: user.email ?? '',
+          firstName: parts.isNotEmpty ? parts.first : '',
+          lastName: parts.length > 1 ? parts.sublist(1).join(' ') : '',
+          photoUrl: user.photoURL,
+          provider: SocialProvider.facebook,
         );
-        if (result.status != LoginStatus.success) return null;
-
-        final credential =
-            FacebookAuthProvider.credential(result.accessToken!.tokenString);
-        userCredential =
-            await FirebaseAuth.instance.signInWithCredential(credential);
-
-        final fbData = await FacebookAuth.instance.getUserData(
-          fields: 'name,email,first_name,last_name',
-        );
-        firstName = fbData['first_name'] as String?;
-        lastName = fbData['last_name'] as String?;
       }
 
-      final idToken = await userCredential.user?.getIdToken();
-      final displayName = userCredential.user?.displayName ?? '';
-      final parts = displayName.split(' ');
+      // Mobile
+      final loginResult = await FacebookAuth.instance.login(
+        permissions: ['email', 'public_profile'],
+      );
+      if (loginResult.status != LoginStatus.success) return null;
 
+      final credential =
+          FacebookAuthProvider.credential(loginResult.accessToken!.tokenString);
+      final result = await FirebaseAuth.instance.signInWithCredential(credential);
+      final user = result.user;
+      if (user == null) return null;
+      final idToken = await user.getIdToken();
+
+      final fbData = await FacebookAuth.instance.getUserData(
+        fields: 'name,email,first_name,last_name',
+      );
+      final parts = (user.displayName ?? '').split(' ');
       return SocialUserData(
         idToken: idToken,
-        email: userCredential.user?.email ?? '',
-        firstName: firstName ?? (parts.isNotEmpty ? parts.first : ''),
-        lastName: lastName ?? (parts.length > 1 ? parts.sublist(1).join(' ') : ''),
-        photoUrl: userCredential.user?.photoURL,
+        email: user.email ?? '',
+        firstName: fbData['first_name'] as String? ?? (parts.isNotEmpty ? parts.first : ''),
+        lastName: fbData['last_name'] as String? ?? (parts.length > 1 ? parts.sublist(1).join(' ') : ''),
+        photoUrl: user.photoURL,
         provider: SocialProvider.facebook,
       );
     } catch (e) {
