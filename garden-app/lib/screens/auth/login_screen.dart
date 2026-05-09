@@ -135,7 +135,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Image.asset('assets/images/logo-white.png', height: 243),
+                  Image.asset('assets/images/logo-white.png', height: 129),
                   const SizedBox(height: 32),
                   const SizedBox(height: 12),
                   Text(
@@ -198,7 +198,7 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               GestureDetector(
                 onTap: () => context.go('/'),
-                child: Image.asset('assets/images/logo-horizontal.png', height: 162),
+                child: Image.asset('assets/images/logo-horizontal.png', height: 89),
               ),
               TextButton.icon(
                 onPressed: () => context.go('/'),
