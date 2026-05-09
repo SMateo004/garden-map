@@ -99,7 +99,7 @@ class _ClientWelcomeScreenState extends State<ClientWelcomeScreen>
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       // Logo pequeño
-                      Image.asset('assets/images/logo-horizontal.png', height: 81),
+                      Image.asset('assets/images/logo-horizontal.png', height: 122),
                       // Botón saltar
                       if (_currentPage < 2)
                         TextButton(

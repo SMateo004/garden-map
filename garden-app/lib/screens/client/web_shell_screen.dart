@@ -115,7 +115,7 @@ class _WebShellScreenState extends State<WebShellScreen> {
                           isDark
                               ? 'assets/images/logo-horizontal-dark.png'
                               : 'assets/images/logo-horizontal.png',
-                          height: 108,
+                          height: 162,
                         ),
                       ),
                       const Spacer(),
