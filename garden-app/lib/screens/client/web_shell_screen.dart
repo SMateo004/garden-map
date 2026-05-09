@@ -6,7 +6,6 @@ import '../../widgets/notification_bell.dart';
 import 'marketplace_screen.dart';
 import 'my_bookings_screen.dart';
 import 'my_pets_screen.dart';
-import '../profile/profile_screen.dart';
 
 /// Shell de navegación para el cliente en WEB.
 /// Muestra las pestañas en el header (AppBar) en lugar de la barra inferior.
@@ -39,7 +38,6 @@ class _WebShellScreenState extends State<WebShellScreen> {
     _NavTab(icon: Icons.search_outlined, activeIcon: Icons.search_rounded, label: 'Inicio'),
     _NavTab(icon: Icons.list_alt_outlined, activeIcon: Icons.list_alt_rounded, label: 'Reservas'),
     _NavTab(icon: Icons.pets_outlined, activeIcon: Icons.pets, label: 'Mascotas'),
-    _NavTab(icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded, label: 'Mi Perfil'),
   ];
 
   @override
@@ -74,8 +72,6 @@ class _WebShellScreenState extends State<WebShellScreen> {
         return const MyBookingsScreen();
       case 2:
         return const MyPetsScreen();
-      case 3:
-        return const ProfileScreen();
       default:
         return MarketplaceScreen(isMobileShell: false);
     }
@@ -89,7 +85,6 @@ class _WebShellScreenState extends State<WebShellScreen> {
         final isDark = themeNotifier.isDark;
         final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
         final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-        final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
         final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
         return Scaffold(
@@ -113,30 +108,15 @@ class _WebShellScreenState extends State<WebShellScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Row(
                     children: [
-                      // Logo / Brand
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: GardenColors.primary.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(Icons.eco_rounded, color: GardenColors.primary, size: 20),
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            'Garden',
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                        ],
+                      // Logo real (claro/oscuro)
+                      GestureDetector(
+                        onTap: () => setState(() => _selectedTab = 0),
+                        child: Image.asset(
+                          isDark
+                              ? 'assets/images/logo-horizontal-dark.png'
+                              : 'assets/images/logo-horizontal.png',
+                          height: 32,
+                        ),
                       ),
                       const Spacer(),
                       // Notificaciones
