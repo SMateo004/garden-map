@@ -59,6 +59,16 @@ const switchRoleLimiter = rateLimit({
   message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados cambios de rol. Espera 1 hora.' } },
 });
 
+// 5 cambios por hora — limita brute-force contra contraseña actual
+const changePasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados intentos. Espera 1 hora.' } },
+});
+
 // 3 solicitudes por 15 min — previene abuso del reset de contraseña
 const passwordResetLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -74,6 +84,9 @@ const router = Router();
 
 router.get('/me', authMiddleware, authController.me);
 router.patch('/me', authMiddleware, authController.patchMe);
+
+/** PATCH /api/auth/change-password — authenticated password change. Body: { currentPassword, newPassword, confirmPassword? } */
+router.patch('/change-password', authMiddleware, changePasswordLimiter, authController.changePassword);
 router.get('/check-email', checkEmailLimiter, authController.checkEmail);
 
 router.post('/caregiver/register', registerLimiter, authController.registerCaregiver);

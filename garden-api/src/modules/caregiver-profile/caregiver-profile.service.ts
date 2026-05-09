@@ -405,10 +405,11 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
         // PENDING_REVIEW: el admin debe aprobar manualmente antes de ser visible en marketplace
         status: CaregiverStatus.PENDING_REVIEW,
         profileStatus: 'SUBMITTED',
+        // Consent was validated in the controller before calling this function.
         termsAcceptedAt: new Date(),
         termsAccepted: true,
         privacyAccepted: true,
-        verificationAccepted: true,
+        verificationAccepted: true, // All three validated at controller layer
       } as any,
     });
 

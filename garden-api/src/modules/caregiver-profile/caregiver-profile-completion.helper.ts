@@ -43,8 +43,8 @@ export async function checkAndAutoSubmitProfile(userId: string) {
     const photos = Array.isArray(profile.photos) ? profile.photos : [];
 
     // Validaciones detalladas para evitar fallos silenciosos
-    const hasBio = Boolean(profile.bio && profile.bio.trim().length >= 45); // Un poco más flexible (45 en vez de 50)
-    const hasBioDetail = Boolean(profile.bioDetail && profile.bioDetail.trim().length >= 3); // Más flexible (3 en vez de 5)
+    const hasBio = Boolean(profile.bio && profile.bio.trim().length >= 50); // Matches submitProfile minimum (50 chars)
+    const hasBioDetail = Boolean(profile.bioDetail && profile.bioDetail.trim().length >= 3);
     const hasExperience = Boolean(profile.experienceYears && profile.experienceDescription && profile.experienceDescription.trim().length >= 15);
     const hasRequiredQuestions = Boolean(
         profile.whyCaregiver && profile.whyCaregiver.trim().length >= 3 &&
@@ -64,8 +64,16 @@ export async function checkAndAutoSubmitProfile(userId: string) {
             : true
     );
 
-    // 3. Availability Complete (Por defecto true)
-    const availabilityComplete = true;
+    // 3. Availability Complete — caregiver must have at least a price set for each offered service
+    const hasPaseoPrice = Boolean(profile.pricePerWalk30 != null || profile.pricePerWalk60 != null);
+    const hasHospedajePrice = Boolean(profile.pricePerDay != null);
+    const offersHospedaje = services.includes(ServiceType.HOSPEDAJE);
+    const offersPaseo = services.includes(ServiceType.PASEO);
+    const availabilityComplete = Boolean(
+      services.length > 0 &&
+      (!offersHospedaje || hasHospedajePrice) &&
+      (!offersPaseo || hasPaseoPrice)
+    );
 
     logger.info('Verificando completitud de perfil para usuario:', {
         userId,
@@ -108,7 +116,7 @@ function calculatePercentage(profile: any, minPhotos: number): number {
         profile.user?.phone,
         profile.user?.emailVerified || profile.emailVerified,
         profile.identityVerificationStatus === 'VERIFIED',
-        profile.bio && profile.bio.length >= 45,
+        profile.bio && profile.bio.length >= 50,
         profile.bioDetail && profile.bioDetail.length >= 3,
         profile.zone,
         profile.servicesOffered?.length > 0,

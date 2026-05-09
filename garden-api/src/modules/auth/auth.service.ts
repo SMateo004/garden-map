@@ -767,10 +767,13 @@ export async function abandonCaregiverProfile(userId: string): Promise<SwitchRol
     // No profile — just revert role
     await prisma.user.update({ where: { id: userId }, data: { role: UserRole.CLIENT, activeRole: null } });
   } else {
-    if (profile.status !== CaregiverStatus.DRAFT) {
+    // Allow abandonment from DRAFT, REJECTED, or NEEDS_REVISION.
+    // PENDING_REVIEW, APPROVED, SUSPENDED require admin intervention.
+    const abandonableStatuses: CaregiverStatus[] = [CaregiverStatus.DRAFT, CaregiverStatus.REJECTED, CaregiverStatus.NEEDS_REVISION];
+    if (!abandonableStatuses.includes(profile.status)) {
       throw new ForbiddenError(
-        'No puedes abandonar el proceso una vez que el perfil ha sido enviado a revisión.',
-        'PROFILE_NOT_DRAFT'
+        'No puedes abandonar el proceso en el estado actual del perfil. Contacta al soporte si necesitas ayuda.',
+        'PROFILE_NOT_ABANDONABLE'
       );
     }
     await prisma.$transaction([

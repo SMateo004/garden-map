@@ -72,10 +72,15 @@ router.get('/', authMiddleware, asyncHandler(async (req: Request, res: Response)
   const totalWithdrawn = Number(withdrawnAgg._sum.amount ?? 0);
   const pendingWithdrawals = Number(pendingAgg._sum.amount ?? 0);
 
+  // availableBalance = what the caregiver can actually withdraw right now.
+  // Pending withdrawals are still held and must not be double-counted.
+  const availableBalance = Math.max(0, balance - pendingWithdrawals);
+
   res.json({
     success: true,
     data: {
       balance,
+      availableBalance,
       totalEarned,
       totalPaid,
       totalWithdrawn,

@@ -251,12 +251,27 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/disputes', disputeRoutes);
 app.use('/api/meet-and-greet', meetAndGreetRoutes);
 
-/** GET /api/settings — public endpoint, no auth required */
+// Keys exposed to all unauthenticated clients (feature flags only — no financial/operational data).
+const PUBLIC_SETTING_KEYS = new Set([
+  'walk30Enabled',
+  'maintenanceMode',
+  'newRegistrationsEnabled',
+  'marketplaceEnabled',
+  'paymentsEnabled',
+  'hospedajeEnabled',
+  'paseoEnabled',
+  'preciosDinamicosEnabled',
+  'meetGreetEnabled',
+  'betaInviteRequired',
+]);
+
+/** GET /api/settings — public endpoint, no auth required. Only exposes feature-flag keys. */
 app.get('/api/settings', async (_req, res) => {
   try {
     const settings = await prisma.appSettings.findMany();
     const map: Record<string, unknown> = {};
     for (const s of settings) {
+      if (!PUBLIC_SETTING_KEYS.has(s.key)) continue; // skip financial/operational keys
       try { map[s.key] = JSON.parse(s.value); } catch { map[s.key] = s.value; }
     }
     const defaults: Record<string, unknown> = {
@@ -267,33 +282,16 @@ app.get('/api/settings', async (_req, res) => {
       paymentsEnabled: true,
     };
     res.json({ success: true, data: { ...defaults, ...map } });
-  } catch (err) {
+  } catch {
     res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Error loading settings' } });
   }
 });
 
-// ── Middleware de mantenimiento ────────────────────────────────────────────
-import { getBoolSetting, invalidateSetting } from './utils/settings-cache.js';
+// ── Settings cache invalidation helper ───────────────────────────────────────
+import { invalidateSetting } from './utils/settings-cache.js';
 
-/** Exportado para compatibilidad con admin.controller (ahora usa invalidateSetting) */
+/** Exported for admin.controller to call after settings changes. */
 export function invalidateMaintenanceCache() { invalidateSetting('maintenanceMode'); }
-
-app.use(async (req, res, next) => {
-  // Rutas siempre accesibles: health, settings públicos, auth, admin
-  const bypass = ['/health', '/api/settings', '/api/auth', '/api/admin', '/uploads', '/api/payments/webhook'];
-  if (bypass.some(p => req.path.startsWith(p))) return next();
-
-  if (await getBoolSetting('maintenanceMode', false)) {
-    return res.status(503).json({
-      success: false,
-      error: {
-        code: 'MAINTENANCE_MODE',
-        message: 'El servicio está temporalmente en mantenimiento. Inténtalo en unos minutos.',
-      },
-    });
-  }
-  next();
-});
 
 // Sentry error handler MUST come before our custom errorHandler.
 // Only captures 5xx errors (shouldHandleError) — ignores expected 4xx AppErrors.

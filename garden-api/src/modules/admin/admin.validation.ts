@@ -74,13 +74,35 @@ export type RejectWithdrawalBody = z.infer<typeof rejectWithdrawalSchema>;
 
 // ── Settings — only allow explicitly named keys ───────────────────────────────
 export const ALLOWED_SETTING_KEYS = [
-  'walk30Enabled',
-  'maintenanceMode',
-  'newRegistrationsEnabled',
+  // Feature flags (boolean)
   'marketplaceEnabled',
   'paymentsEnabled',
-  'commissionPct',
+  'newRegistrationsEnabled',
+  'walk30Enabled',
+  'maintenanceMode',
+  'hospedajeEnabled',
+  'paseoEnabled',
+  'retirosEnabled',
+  'disputasEnabled',
   'preciosDinamicosEnabled',
+  'meetGreetEnabled',
+  // Beta access control
+  'betaInviteRequired',
+  'betaInviteCodes',
+  // Pagos y finanzas (numeric)
+  'platformCommissionPct',
+  'montoMinimoRetiro',
+  'qrValidityHours',
+  'qrValidityMinutes',
+  'autoReleasePaymentHoras',
+  // Política cancelación HOSPEDAJE (numeric)
+  'hospedajeRefundAdminFeeBS',
+  'hospedajeRefund100Horas',
+  'hospedajeRefund50Horas',
+  // Política cancelación PASEO (numeric)
+  'paseoRefund100Horas',
+  'paseoRefund50Horas',
+  // Zonas bloqueadas (JSON array)
   'blockedZones',
 ] as const;
 

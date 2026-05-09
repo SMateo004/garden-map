@@ -190,9 +190,10 @@ export async function createBooking(
 
     // VALIDACIÓN: Mínimo 1 día de anticipación (no se puede reservar hoy ni fechas pasadas)
     const now = new Date();
-    // Normalizamos a la fecha local (Bolivia -04:00 suele ser la referencia del user)
-    // Usamos toLocaleDateString con el locale apropiado para obtener YYYY-MM-DD
-    const todayStr = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0] || '';
+    // Bolivia is UTC-4 year-round (no DST). The server runs UTC, so subtract 4h to get the
+    // correct Bolivian calendar date before comparing against user-submitted YYYY-MM-DD strings.
+    const BOLIVIA_OFFSET_MS = 4 * 60 * 60 * 1000;
+    const todayStr = new Date(now.getTime() - BOLIVIA_OFFSET_MS).toISOString().split('T')[0] || '';
     // Para multi-día de paseo, verificamos todas las fechas; para single-day o hospedaje, la fecha principal
     if (body.serviceType === ServiceType.HOSPEDAJE) {
       const requestedDate = body.startDate;
@@ -2297,8 +2298,8 @@ export async function concludeService(
   bookingId: string,
   caregiverUserId: string,
   photoUrl: string,
-  lat: number,
-  lng: number
+  lat: number | null,
+  lng: number | null
 ): Promise<BookingCreateResult> {
   return prisma.$transaction(async (tx) => {
     const profile = await tx.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
@@ -2375,17 +2376,32 @@ export async function confirmReceiptByClient(
     }
 
     if (rating < 3) {
-      // Disputa (Rating bajo) -> No liberar fondos, poner en pausa.
-      const updated = await tx.booking.update({
-        where: { id: bookingId },
-        data: { 
+      // Atomic claim: only succeeds if ownerRated is still false at write time.
+      // Prevents double-submission race conditions.
+      const claimed = await tx.booking.updateMany({
+        where: { id: bookingId, clientId, ownerRated: false, payoutStatus: 'PENDING' },
+        data: {
           payoutStatus: 'ON_HOLD',
           ownerRated: true,
           ownerRating: rating,
           ownerComment: comment,
-        }
+        },
       });
-      return bookingToResponse(updated);
+      if (claimed.count === 0) {
+        throw new BadRequestError('Ya calificaste este servicio');
+      }
+
+      // Alert admin — low-rating bookings need manual review before payout is released.
+      await tx.adminNotification.create({
+        data: {
+          type: 'LOW_RATING',
+          caregiverId: booking.caregiverId,
+          bookingId,
+        },
+      }).catch(() => {}); // don't let notification failure roll back the transaction
+
+      const updated = await tx.booking.findUnique({ where: { id: bookingId } });
+      return bookingToResponse(updated!);
     }
 
     // Calcular el monto a transferir (Total - Comisión)
@@ -2416,15 +2432,20 @@ export async function confirmReceiptByClient(
       },
     });
 
-    const updated = await tx.booking.update({
-      where: { id: bookingId },
+    // Atomic claim for the payout path — ensures exactly one request wins the race.
+    const claimed = await tx.booking.updateMany({
+      where: { id: bookingId, clientId, ownerRated: false, payoutStatus: 'PENDING' },
       data: {
         payoutStatus: 'PAID',
         ownerRated: true,
         ownerRating: rating,
         ownerComment: comment,
-      }
+      },
     });
+    if (claimed.count === 0) {
+      throw new BadRequestError('Ya calificaste este servicio');
+    }
+    const updated = await tx.booking.findUnique({ where: { id: bookingId } });
 
     sendPushToUser(profileBefore!.userId, '¡Pago liberado! 💸', `Recibiste el pago por el servicio de ${booking.petName}. Revisa tu billetera.`).catch(() => {});
 
@@ -2465,7 +2486,7 @@ export async function confirmReceiptByClient(
       logger.error('Blockchain completion failed', { bookingId, err });
     });
 
-    return bookingToResponse(updated);
+    return bookingToResponse(updated!);
   });
 }
 

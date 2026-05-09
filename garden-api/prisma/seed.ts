@@ -9,9 +9,14 @@ import bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 const SALT_ROUNDS = 10;
-const SEED_PASSWORD = 'GardenSeed2024!';
+// Use ADMIN_SEED_PASSWORD env var in production to avoid a known default credential.
+// Falls back to the dev default only when the env var is absent (local / CI seeding).
+const SEED_PASSWORD = process.env.ADMIN_SEED_PASSWORD ?? 'GardenSeed2024!';
 
 async function main() {
+  if (!process.env.ADMIN_SEED_PASSWORD) {
+    console.warn('[seed] WARNING: ADMIN_SEED_PASSWORD not set — using default dev password. Set this env var in production.');
+  }
   const hash = await bcrypt.hash(SEED_PASSWORD, SALT_ROUNDS);
 
   // 1. Admin (update passwordHash para que re-ejecutar seed restablezca la contraseña)

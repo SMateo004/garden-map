@@ -61,7 +61,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
     cursor: cursor ?? '',
   })}`;
   const cached = await cache.get<PaginatedCaregivers>(cacheKey);
-  if (cached) return cached;
+  if (cached) return applyCoordJitter(cached);
 
   const zones: Zone[] | undefined = Array.isArray(zone)
     ? (zone as Zone[])
@@ -192,8 +192,10 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       acceptPuppies: c.acceptPuppies,
       acceptSeniors: c.acceptSeniors,
       sizesAccepted: c.sizesAccepted,
-      addressLatApprox: c.addressLat != null ? c.addressLat + (Math.random() - 0.5) * 0.008 : null,
-      addressLngApprox: c.addressLng != null ? c.addressLng + (Math.random() - 0.5) * 0.008 : null,
+      // Store raw coords in cache; jitter is applied AFTER retrieval so each response
+      // gets fresh noise and cached data doesn't leak a static jittered position.
+      _addressLat: c.addressLat ?? null,
+      _addressLng: c.addressLng ?? null,
     })),
     pagination: {
       total,
@@ -210,7 +212,21 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
   } catch (e) {
     logger.warn('Cache set failed for caregiver list', { cacheKey, error: (e as Error).message });
   }
-  return result;
+  return applyCoordJitter(result);
+}
+
+function applyCoordJitter(result: PaginatedCaregivers): PaginatedCaregivers {
+  return {
+    ...result,
+    caregivers: result.caregivers.map((c: any) => {
+      const { _addressLat, _addressLng, ...rest } = c;
+      return {
+        ...rest,
+        addressLatApprox: _addressLat != null ? _addressLat + (Math.random() - 0.5) * 0.008 : null,
+        addressLngApprox: _addressLng != null ? _addressLng + (Math.random() - 0.5) * 0.008 : null,
+      };
+    }),
+  };
 }
 
 /**

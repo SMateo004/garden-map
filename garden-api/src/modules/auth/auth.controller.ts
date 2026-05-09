@@ -12,8 +12,9 @@ import {
   type RegisterClientBody,
 } from './auth.validation.js';
 import { asyncHandler } from '../../shared/async-handler.js';
-import { ConflictError } from '../../shared/errors.js';
+import { ConflictError, BadRequestError, UnauthorizedError } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
+import bcrypt from 'bcrypt';
 
 /** GET /api/auth/me - Usuario actual (requiere Bearer). */
 export const me = asyncHandler(async (req: Request, res: Response) => {
@@ -606,6 +607,66 @@ export const abandonCaregiverProfile = asyncHandler(async (req: Request, res: Re
       expiresIn: result.expiresIn,
     },
   });
+});
+
+// ── Change Password (authenticated) ──────────────────────────────────────────
+
+/**
+ * PATCH /api/auth/change-password
+ * Body: { currentPassword, newPassword, confirmPassword? }
+ * Requires valid Bearer token. Revokes all other sessions on success.
+ */
+export const changePassword = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const { currentPassword, newPassword, confirmPassword } = req.body ?? {};
+
+  if (!currentPassword || typeof currentPassword !== 'string') {
+    throw new BadRequestError('La contraseña actual es requerida.', 'MISSING_CURRENT_PASSWORD');
+  }
+  if (!newPassword || typeof newPassword !== 'string') {
+    throw new BadRequestError('La nueva contraseña es requerida.', 'MISSING_NEW_PASSWORD');
+  }
+  if (newPassword.length < 8) {
+    throw new BadRequestError('La nueva contraseña debe tener al menos 8 caracteres.', 'PASSWORD_TOO_SHORT');
+  }
+  if (newPassword.length > 128) {
+    throw new BadRequestError('La contraseña no puede superar 128 caracteres.', 'PASSWORD_TOO_LONG');
+  }
+  if (confirmPassword !== undefined && newPassword !== confirmPassword) {
+    throw new BadRequestError('Las contraseñas no coinciden.', 'PASSWORD_MISMATCH');
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId, isDeleted: false },
+    select: { id: true, passwordHash: true },
+  });
+
+  if (!user) throw new UnauthorizedError('Usuario no encontrado.');
+
+  const currentMatches = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!currentMatches) {
+    throw new UnauthorizedError('La contraseña actual es incorrecta.');
+  }
+
+  const isSamePassword = await bcrypt.compare(newPassword, user.passwordHash);
+  if (isSamePassword) {
+    throw new BadRequestError('La nueva contraseña no puede ser igual a la actual.', 'SAME_PASSWORD');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  const now = new Date();
+
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: userId }, data: { passwordHash } }),
+    // Revoke all refresh tokens so all other sessions are logged out
+    prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: now },
+    }),
+  ]);
+
+  logger.info(`Password changed for userId=${userId}`);
+  res.json({ success: true, message: 'Contraseña actualizada correctamente. Tus otras sesiones han sido cerradas.' });
 });
 
 // ── Password Reset ────────────────────────────────────────────────────────────

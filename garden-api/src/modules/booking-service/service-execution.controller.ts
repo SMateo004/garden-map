@@ -97,8 +97,8 @@ export const conclude = asyncHandler(async (req: Request, res: Response) => {
         bookingId,
         caregiverUserId,
         parsed.data.photo,
-        parsed.data.lat ?? 0,
-        parsed.data.lng ?? 0
+        parsed.data.lat ?? null,
+        parsed.data.lng ?? null
     );
     res.json({ success: true, data: booking });
 });

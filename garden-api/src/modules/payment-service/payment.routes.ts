@@ -71,6 +71,32 @@ router.post(
       });
     }
     const { env } = await import('../../config/env.js');
+
+    // Validate caller-supplied URLs to prevent open-redirect to arbitrary domains.
+    // Only allow origins that are already trusted (same list as CORS).
+    if (successUrl || cancelUrl) {
+      const allowedOrigins = [
+        ...env.ALLOWED_ORIGINS.split(','),
+        ...env.VERCEL_DOMAINS.split(','),
+        env.FRONTEND_URL,
+      ].map(o => o.trim()).filter(Boolean);
+      const vercelPreview = /^https:\/\/garden-[\w-]+\.vercel\.app$/;
+      const isAllowed = (url: string) => {
+        try {
+          const { origin } = new URL(url);
+          return allowedOrigins.some(a => origin === a.replace(/\/$/, '')) || vercelPreview.test(origin);
+        } catch {
+          return false;
+        }
+      };
+      if (successUrl && !isAllowed(successUrl)) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_REDIRECT_URL', message: 'successUrl no permitida' } });
+      }
+      if (cancelUrl && !isAllowed(cancelUrl)) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_REDIRECT_URL', message: 'cancelUrl no permitida' } });
+      }
+    }
+
     const success = successUrl ?? `${env.FRONTEND_URL}/bookings/${bookingId}/success`;
     const cancel = cancelUrl ?? `${env.FRONTEND_URL}/bookings/${bookingId}`;
     const result = await paymentService.createCheckoutSession(
