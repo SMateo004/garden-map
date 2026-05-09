@@ -34,8 +34,8 @@ class _WebShellScreenState extends State<WebShellScreen> {
   String? _userName;
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
 
+  // Tab 0 (Inicio/Marketplace) se activa con el logo — no aparece en el nav
   static const _tabs = [
-    _NavTab(icon: Icons.search_outlined, activeIcon: Icons.search_rounded, label: 'Inicio'),
     _NavTab(icon: Icons.list_alt_outlined, activeIcon: Icons.list_alt_rounded, label: 'Reservas'),
     _NavTab(icon: Icons.pets_outlined, activeIcon: Icons.pets, label: 'Mascotas'),
   ];
@@ -128,7 +128,8 @@ class _WebShellScreenState extends State<WebShellScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: List.generate(_tabs.length, (i) {
                           final tab = _tabs[i];
-                          final isActive = _selectedTab == i;
+                          final tabIndex = i + 1; // 0 reservado para Inicio (logo)
+                          final isActive = _selectedTab == tabIndex;
                           return Padding(
                             padding: const EdgeInsets.only(left: 4),
                             child: _WebNavButton(
@@ -136,10 +137,7 @@ class _WebShellScreenState extends State<WebShellScreen> {
                               label: tab.label,
                               isActive: isActive,
                               isDark: isDark,
-                              onTap: () {
-                                debugPrint('[WebShell] Tab tapped: $i (${tab.label})');
-                                setState(() => _selectedTab = i);
-                              },
+                              onTap: () => setState(() => _selectedTab = tabIndex),
                             ),
                           );
                         }),
