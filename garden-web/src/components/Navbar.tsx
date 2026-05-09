@@ -58,9 +58,10 @@ export function Navbar() {
           <div className="absolute left-1/2 -translate-x-1/2">
             <Link
               to={isCaregiver ? "/caregiver/dashboard" : "/"}
-              className="text-2xl font-black tracking-tighter text-green-700 dark:text-green-400 hover:opacity-80 transition-opacity"
+              className="hover:opacity-80 transition-opacity"
             >
-              GARDEN
+              <img src="/logo-horizontal.png" alt="Garden" className="h-8 w-auto block dark:hidden" />
+              <img src="/logo-horizontal-dark.png" alt="Garden" className="h-8 w-auto hidden dark:block" />
             </Link>
           </div>
 
@@ -80,7 +81,8 @@ export function Navbar() {
 
           <div ref={sideMenuRef} className="relative w-80 max-w-[90%] bg-white dark:bg-gray-900 h-full shadow-2xl flex flex-col animate-in slide-in-from-left duration-300">
             <div className="p-6 flex items-center justify-between border-b border-gray-100 dark:border-gray-800">
-              <span className="text-xl font-black text-green-700 dark:text-green-400">GARDEN</span>
+              <img src="/logo-horizontal.png" alt="Garden" className="h-7 w-auto block dark:hidden" />
+              <img src="/logo-horizontal-dark.png" alt="Garden" className="h-7 w-auto hidden dark:block" />
               <button onClick={() => setMenuOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>

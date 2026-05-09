@@ -69,9 +69,8 @@ async function uploadToS3Public(buffer: Buffer, folder: string, filename: string
       Key: key,
       Body: buffer,
       ContentType: 'image/jpeg',
-      // Acceso público — el bucket debe tener Block Public Access desactivado
-      // y una bucket policy que permita s3:GetObject a *
-      ACL: 'public-read',
+      // Sin ACL — acceso público via bucket policy (s3:GetObject para *).
+      // Esto funciona con Object Ownership = "Bucket owner enforced" (default en buckets nuevos).
     })
   );
 
@@ -153,19 +152,7 @@ export async function uploadImage(buffer: Buffer, opts: UploadOptions): Promise<
       logger.info('storage.service: imagen subida a S3', { url, folder: opts.folder });
       return url;
     } catch (err: any) {
-      const isAclError =
-        err?.name === 'AccessControlListNotSupported' ||
-        err?.Code === 'AccessControlListNotSupported' ||
-        (err?.message ?? '').includes('ACL');
-      if (isAclError) {
-        logger.warn(
-          'storage.service: S3 rechazó ACL public-read (Object Ownership enforced). ' +
-          'Deshabilita "Block Public Access" y usa una bucket policy en lugar de ACLs. Fallback a Cloudinary.',
-          { bucket: env.AWS_S3_BUCKET }
-        );
-      } else {
-        logger.error('storage.service: fallo S3, intentando Cloudinary', { error: err?.message ?? err });
-      }
+      logger.error('storage.service: fallo S3, intentando Cloudinary', { error: err?.message ?? err });
       // continuar al siguiente fallback
     }
   }

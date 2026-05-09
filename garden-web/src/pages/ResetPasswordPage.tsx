@@ -120,7 +120,7 @@ export function ResetPasswordPage() {
         <div className="w-full max-w-md">
           <div className="rounded-3xl border border-red-100 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl overflow-hidden">
             <div className="p-8 text-center bg-red-600">
-              <h1 className="text-2xl font-bold text-white">GARDEN</h1>
+              <img src="/logo-white.png" alt="Garden" className="h-10 w-auto mx-auto" />
               <p className="text-red-100 mt-1">Recuperar contraseña</p>
             </div>
             <div className="p-8 text-center space-y-4">
@@ -155,7 +155,7 @@ export function ResetPasswordPage() {
         <div className="w-full max-w-md">
           <div className="rounded-3xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl overflow-hidden">
             <div className="p-8 text-center bg-green-600">
-              <h1 className="text-2xl font-bold text-white">GARDEN</h1>
+              <img src="/logo-white.png" alt="Garden" className="h-10 w-auto mx-auto" />
               <p className="text-green-100 mt-1">Contraseña restablecida</p>
             </div>
             <div className="p-8 text-center space-y-4">
