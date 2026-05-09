@@ -272,8 +272,7 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/profile',
       name: 'profile',
-      builder: (context, state) =>
-          kIsWeb ? const WebShellScreen(initialTab: 3) : const ProfileScreen(),
+      builder: (context, state) => const ProfileScreen(),
     ),
     GoRoute(
       path: '/chat/:bookingId',

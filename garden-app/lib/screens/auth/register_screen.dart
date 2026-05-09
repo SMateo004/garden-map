@@ -178,7 +178,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     child: const Icon(Icons.pets, color: GardenColors.primary, size: 40),
                   ),
                   const SizedBox(height: 32),
-                  Image.asset('assets/images/logo-white.png', height: 99),
+                  Image.asset('assets/images/logo-white.png', height: 149),
                   const SizedBox(height: 8),
                   const Text('Únete a',
                     style: TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.w900, letterSpacing: -1, height: 1.1)),
