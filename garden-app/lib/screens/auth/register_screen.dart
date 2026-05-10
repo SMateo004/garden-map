@@ -669,52 +669,44 @@ class _SocialRegisterButtonsState extends State<_SocialRegisterButtons> {
     final isDark = themeNotifier.isDark;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
 
-    Widget btn(String label, String iconLetter, Color iconColor, SocialProvider p) => Expanded(
+    Widget btn(String label, String iconLetter, Color iconColor, SocialProvider p) {
+      final effectiveIconColor = isDark && iconColor == const Color(0xFF000000)
+          ? const Color(0xFFE0E0E0)
+          : iconColor;
+      return Expanded(
+        child: Tooltip(
+          message: label,
           child: GestureDetector(
             onTap: _loading != null ? null : () => _handle(p),
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
               height: 48,
               decoration: BoxDecoration(
                   color: surface,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: border)),
+              alignment: Alignment.center,
               child: _loading == p
-                  ? const Center(
-                      child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: GardenColors.primary)))
-                  : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Container(
-                        width: 20, height: 20,
-                        decoration: BoxDecoration(
-                          color: iconColor,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          iconLetter,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            height: 1,
-                          ),
-                        ),
+                  ? const SizedBox(
+                      width: 18, height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 1.5, color: GardenColors.primary))
+                  : Text(
+                      iconLetter,
+                      style: TextStyle(
+                        color: effectiveIconColor,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        height: 1,
+                        letterSpacing: -0.5,
                       ),
-                      const SizedBox(width: 6),
-                      Text(label,
-                          style: TextStyle(
-                              color: textColor,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600)),
-                    ]),
+                    ),
             ),
           ),
-        );
+        ),
+      );
+    }
 
     return Row(children: [
       btn('Google', 'G', const Color(0xFF4285F4), SocialProvider.google),

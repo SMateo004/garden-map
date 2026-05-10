@@ -435,54 +435,41 @@ class _SocialBtn extends StatelessWidget {
     final isDark = themeNotifier.isDark;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final effectiveIconColor = isDark && iconColor == const Color(0xFF000000)
+        ? const Color(0xFFE0E0E0)
+        : iconColor;
 
     return Expanded(
-      child: GestureDetector(
-        onTap: loading ? null : onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          height: 48,
-          decoration: BoxDecoration(
-            color: surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: border),
-          ),
-          child: loading
-              ? const Center(
-                  child: SizedBox(
+      child: Tooltip(
+        message: label,
+        child: GestureDetector(
+          onTap: loading ? null : onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            height: 48,
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: border),
+            ),
+            alignment: Alignment.center,
+            child: loading
+                ? const SizedBox(
                     width: 18, height: 18,
                     child: CircularProgressIndicator(
-                      strokeWidth: 2, color: GardenColors.primary),
-                  ))
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 20, height: 20,
-                      decoration: BoxDecoration(
-                        color: iconColor,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        iconLetter,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          height: 1,
-                        ),
-                      ),
+                      strokeWidth: 1.5, color: GardenColors.primary),
+                  )
+                : Text(
+                    iconLetter,
+                    style: TextStyle(
+                      color: effectiveIconColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      height: 1,
+                      letterSpacing: -0.5,
                     ),
-                    const SizedBox(width: 6),
-                    Text(label,
-                        style: TextStyle(
-                            color: textColor,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600)),
-                  ],
-                ),
+                  ),
+          ),
         ),
       ),
     );
