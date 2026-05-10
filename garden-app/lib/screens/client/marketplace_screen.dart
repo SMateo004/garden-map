@@ -647,40 +647,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // ── AppBar móvil ───────────────────────────────────────────
-            Container(
-              height: 56,
-              color: surface,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () {},
-                    child: Image.asset('assets/images/logo-horizontal.png', height: 143),
-                  ),
-                  const SizedBox(width: 6),
-                  Text('·', style: TextStyle(color: subtextColor, fontSize: 18)),
-                  const SizedBox(width: 6),
-                  Text('Santa Cruz', style: TextStyle(color: subtextColor, fontSize: 13)),
-                  const Spacer(),
-                  if (_authToken.isNotEmpty)
-                    NotificationBell(token: _authToken, baseUrl: _baseUrl),
-                  IconButton(
-                    icon: Icon(
-                      isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-                      color: subtextColor, size: 20,
-                    ),
-                    onPressed: () => themeNotifier.toggle(),
-                  ),
-                ],
-              ),
-            ),
-            Container(height: 1, color: border),
-
-            // ── Saludo ────────────────────────────────────────────────
+            // ── Saludo + Notificaciones ───────────────────────────────
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+              padding: const EdgeInsets.fromLTRB(16, 16, 12, 4),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
                     child: Column(
@@ -703,6 +674,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       ],
                     ),
                   ),
+                  if (_authToken.isNotEmpty)
+                    NotificationBell(token: _authToken, baseUrl: _baseUrl),
                 ],
               ),
             ),
