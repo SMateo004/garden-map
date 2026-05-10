@@ -745,6 +745,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _profileTile(icon: Icons.notifications_outlined, title: 'Notificaciones',
             onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Próximamente')))),
 
+        const SizedBox(height: 24),
+        _sectionLabel('Legal', textColor),
+        const SizedBox(height: 10),
+        _profileTile(
+          icon: Icons.gavel_outlined,
+          title: 'Términos y Condiciones',
+          onTap: () => context.push('/terms'),
+        ),
+        const SizedBox(height: 8),
+        _profileTile(
+          icon: Icons.privacy_tip_outlined,
+          title: 'Política de Privacidad',
+          onTap: () => context.push('/privacy'),
+        ),
 
         const SizedBox(height: 24),
         _sectionLabel('Cuenta', textColor),

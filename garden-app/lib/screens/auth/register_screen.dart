@@ -60,9 +60,188 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
+  Future<bool> _showTermsDialog() async {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        backgroundColor: bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+              decoration: BoxDecoration(
+                color: GardenColors.primary.withValues(alpha: 0.08),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: GardenColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.gavel_rounded, color: GardenColors.primary, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Términos y Condiciones',
+                            style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w800)),
+                        Text('Léelos antes de continuar',
+                            style: TextStyle(color: subtextColor, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Cuerpo scrollable
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 340),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _termPoint(Icons.storefront_outlined, 'Intermediario tecnológico',
+                        'Garden conecta dueños y cuidadores. No somos empleadores ni prestadores directos del servicio.', textColor, subtextColor),
+                    _termDivider(borderColor),
+                    _termPoint(Icons.percent_rounded, 'Comisión del 15%',
+                        'Garden retiene el 15% del valor de cada reserva. El cuidador recibe el 85%.', textColor, subtextColor),
+                    _termDivider(borderColor),
+                    _termPoint(Icons.link_rounded, 'Smart contracts en Polygon',
+                        'Cada reserva queda registrada de forma inmutable en blockchain. Los términos acordados no pueden modificarse retroactivamente.', textColor, subtextColor),
+                    _termDivider(borderColor),
+                    _termPoint(Icons.pets_outlined, 'Si la mascota se lastima',
+                        'El cuidador cubre gastos veterinarios por negligencia (hasta Bs. 5.000). Condiciones preexistentes no informadas son responsabilidad del dueño.', textColor, subtextColor),
+                    _termDivider(borderColor),
+                    _termPoint(Icons.medical_services_outlined, 'Si el cuidador se lastima',
+                        'Si la mascota muerde al cuidador, el dueño es responsable civil (Art. 990 Cód. Civil). Garden mediará hasta Bs. 3.000 en gastos médicos.', textColor, subtextColor),
+                    _termDivider(borderColor),
+                    _termPoint(Icons.cancel_outlined, 'Conducta prohibida',
+                        'Pagos fuera de plataforma, información falsa, maltrato animal o acoso resultan en suspensión permanente y posible denuncia penal.', textColor, subtextColor),
+                    _termDivider(borderColor),
+                    _termPoint(Icons.balance_outlined, 'Ley aplicable',
+                        'Estos términos se rigen por las leyes bolivianas: Código Civil (D.L. 12760), Ley N° 453 del Consumidor y Ley N° 164 de TIC.', textColor, subtextColor),
+                    const SizedBox(height: 12),
+                    GestureDetector(
+                      onTap: () => Navigator.of(ctx).pop('open_terms'),
+                      child: Text(
+                        'Leer términos completos →',
+                        style: TextStyle(
+                          color: GardenColors.primary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          decoration: TextDecoration.underline,
+                          decorationColor: GardenColors.primary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            ),
+
+            // Botones
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              child: Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(ctx).pop('accept'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: GardenColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                      ),
+                      child: const Text('Acepto los Términos y Condiciones',
+                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(ctx).pop('reject'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: subtextColor,
+                        side: BorderSide(color: borderColor),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text('Rechazar — no puedo registrarme',
+                          style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    // Si quiere leer los términos completos, navegar y volver
+    if (result == 'open_terms') {
+      if (!mounted) return false;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const TermsOfServiceScreen()),
+      );
+      return false; // Deben aceptar explícitamente al volver
+    }
+    return result == 'accept';
+  }
+
+  Widget _termPoint(IconData icon, String title, String body, Color textColor, Color subtextColor) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: GardenColors.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text(body, style: TextStyle(color: subtextColor, fontSize: 12.5, height: 1.4)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _termDivider(Color color) =>
+      Divider(height: 1, thickness: 0.5, color: color.withValues(alpha: 0.5));
+
   void _handleRegister() async {
     if (_selectedRole == 'caregiver') {
-      context.go('/caregiver/onboarding', extra: {'email': '', 'password': ''});
+      final accepted = await _showTermsDialog();
+      if (!accepted || !mounted) return;
+      context.go('/caregiver/onboarding', extra: {'email': '', 'password': ''}); // ignore: use_build_context_synchronously
       return;
     }
 
@@ -98,6 +277,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
       return;
     }
+
+    final accepted = await _showTermsDialog();
+    if (!accepted) return;
 
     setState(() => _isLoading = true);
     try {
