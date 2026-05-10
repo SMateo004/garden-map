@@ -401,7 +401,13 @@ final GoRouter _router = GoRouter(
 Future<void> _bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Web: necesita options explícitas (no hay google-services.json en web)
+  // Mobile: Firebase se inicializa nativamente vía google-services.json — sin options
+  if (kIsWeb) {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  } else {
+    await Firebase.initializeApp();
+  }
 
   if (!kIsWeb) {
     // Crashlytics: captura errores de Flutter y de la plataforma nativa
