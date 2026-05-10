@@ -234,23 +234,28 @@ class SocialAuthService {
 
       if (res.statusCode == 200 && body['success'] == true) {
         final d = body['data'] as Map<String, dynamic>;
-        // Persist tokens locally
+        final user = d['user'] as Map<String, dynamic>;
+        final role = user['role'] as String;
+        final name = '${user['firstName']} ${user['lastName']}';
+
+        // Persist tokens — mismas claves que AuthService
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('access_token', d['accessToken'] as String);
+        await prefs.setString('access_token',  d['accessToken'] as String);
         await prefs.setString('refresh_token', d['refreshToken'] as String);
-        await prefs.setString('user_role', d['user']['role'] as String);
-        await prefs.setString(
-            'user_name',
-            '${d['user']['firstName']} ${d['user']['lastName']}');
+        await prefs.setString('user_role',     role);
+        await prefs.setString('user_id',       user['id'] as String? ?? '');
+        await prefs.setString('user_name',     name);
+        await prefs.setString('user_photo',    user['profilePicture'] as String? ?? '');
+        // active_role igual al role permanente al inicio de sesión
+        await prefs.setString('active_role',   role);
 
         return SocialLoginResult(
           success: true,
           userExists: true,
           accessToken: d['accessToken'] as String,
           refreshToken: d['refreshToken'] as String,
-          role: d['user']['role'] as String,
-          userName:
-              '${d['user']['firstName']} ${d['user']['lastName']}',
+          role: role,
+          userName: name,
         );
       }
 
