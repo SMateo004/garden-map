@@ -51,7 +51,7 @@ export async function comparePassword(password: string, hash: string): Promise<b
 }
 
 /** Generar JWT de acceso */
-function signAccessToken(payload: JwtPayload): { token: string; expiresIn: string } {
+export function signAccessToken(payload: JwtPayload): { token: string; expiresIn: string } {
   const expiresIn = env.JWT_EXPIRES_IN;
   // Omitir activeRole del token si coincide con el rol permanente (evita payload innecesario)
   const tokenPayload: JwtPayload = { ...payload };
