@@ -385,28 +385,22 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
       children: [
         _SocialBtn(
-          label: 'Google',
-          iconLetter: 'G',
-          iconColor: const Color(0xFF4285F4),
+          label: 'Continuar con Google',
           loading: _loading == SocialProvider.google,
           onTap: () => _handleProvider(SocialProvider.google),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(height: 10),
         _SocialBtn(
-          label: 'Apple',
-          iconLetter: '',
-          iconColor: const Color(0xFF000000),
+          label: 'Continuar con Apple',
           loading: _loading == SocialProvider.apple,
           onTap: () => _handleProvider(SocialProvider.apple),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(height: 10),
         _SocialBtn(
-          label: 'Facebook',
-          iconLetter: 'f',
-          iconColor: const Color(0xFF1877F2),
+          label: 'Continuar con Facebook',
           loading: _loading == SocialProvider.facebook,
           onTap: () => _handleProvider(SocialProvider.facebook),
         ),
@@ -417,15 +411,11 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
 
 class _SocialBtn extends StatelessWidget {
   final String label;
-  final String iconLetter;
-  final Color iconColor;
   final bool loading;
   final VoidCallback onTap;
 
   const _SocialBtn({
     required this.label,
-    required this.iconLetter,
-    required this.iconColor,
     required this.loading,
     required this.onTap,
   });
@@ -435,41 +425,36 @@ class _SocialBtn extends StatelessWidget {
     final isDark = themeNotifier.isDark;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-    final effectiveIconColor = isDark && iconColor == const Color(0xFF000000)
-        ? const Color(0xFFE0E0E0)
-        : iconColor;
+    final textColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
-    return Expanded(
-      child: Tooltip(
-        message: label,
-        child: GestureDetector(
-          onTap: loading ? null : onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            height: 48,
-            decoration: BoxDecoration(
-              color: surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: border),
-            ),
-            alignment: Alignment.center,
-            child: loading
-                ? const SizedBox(
-                    width: 18, height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 1.5, color: GardenColors.primary),
-                  )
-                : Text(
-                    iconLetter,
-                    style: TextStyle(
-                      color: effectiveIconColor,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      height: 1,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
+    return SizedBox(
+      width: double.infinity,
+      height: 46,
+      child: GestureDetector(
+        onTap: loading ? null : onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: border),
           ),
+          alignment: Alignment.center,
+          child: loading
+              ? const SizedBox(
+                  width: 18, height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5, color: GardenColors.primary),
+                )
+              : Text(
+                  label,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.1,
+                  ),
+                ),
         ),
       ),
     );

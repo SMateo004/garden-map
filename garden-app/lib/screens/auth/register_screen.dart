@@ -669,19 +669,15 @@ class _SocialRegisterButtonsState extends State<_SocialRegisterButtons> {
     final isDark = themeNotifier.isDark;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final textColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
-    Widget btn(String label, String iconLetter, Color iconColor, SocialProvider p) {
-      final effectiveIconColor = isDark && iconColor == const Color(0xFF000000)
-          ? const Color(0xFFE0E0E0)
-          : iconColor;
-      return Expanded(
-        child: Tooltip(
-          message: label,
+    Widget btn(String label, SocialProvider p) => SizedBox(
+          width: double.infinity,
+          height: 46,
           child: GestureDetector(
             onTap: _loading != null ? null : () => _handle(p),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
-              height: 48,
               decoration: BoxDecoration(
                   color: surface,
                   borderRadius: BorderRadius.circular(12),
@@ -693,27 +689,24 @@ class _SocialRegisterButtonsState extends State<_SocialRegisterButtons> {
                       child: CircularProgressIndicator(
                           strokeWidth: 1.5, color: GardenColors.primary))
                   : Text(
-                      iconLetter,
+                      label,
                       style: TextStyle(
-                        color: effectiveIconColor,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        height: 1,
-                        letterSpacing: -0.5,
+                        color: textColor,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.1,
                       ),
                     ),
             ),
           ),
-        ),
-      );
-    }
+        );
 
-    return Row(children: [
-      btn('Google', 'G', const Color(0xFF4285F4), SocialProvider.google),
-      const SizedBox(width: 10),
-      btn('Apple', '', const Color(0xFF000000), SocialProvider.apple),
-      const SizedBox(width: 10),
-      btn('Facebook', 'f', const Color(0xFF1877F2), SocialProvider.facebook),
+    return Column(children: [
+      btn('Continuar con Google', SocialProvider.google),
+      const SizedBox(height: 10),
+      btn('Continuar con Apple', SocialProvider.apple),
+      const SizedBox(height: 10),
+      btn('Continuar con Facebook', SocialProvider.facebook),
     ]);
   }
 }
