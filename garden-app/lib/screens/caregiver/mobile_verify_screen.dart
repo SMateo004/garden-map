@@ -31,7 +31,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
   final ImagePicker _picker = ImagePicker();
 
   String get _baseUrl => const String.fromEnvironment(
-      'API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
+      'API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
   Color get _bg => _isDark ? GardenColors.darkBackground : GardenColors.lightBackground;

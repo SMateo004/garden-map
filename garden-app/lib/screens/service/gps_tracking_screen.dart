@@ -47,7 +47,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
   double _distanceMeters = 0;
 
   String get _baseUrl =>
-      const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
+      const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
   bool get _isCaregiver => widget.role == 'CAREGIVER';
 
   @override

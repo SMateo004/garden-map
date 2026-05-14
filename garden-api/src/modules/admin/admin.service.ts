@@ -36,7 +36,7 @@ export async function getCaregiverDetailForAdmin(profileId: string): Promise<Adm
   const lastSession = await prisma.identityVerificationSession.findFirst({
     where: { userId: profile.userId },
     orderBy: { createdAt: 'desc' },
-    select: { id: true }
+    select: { id: true, selfieUrl: true }
   });
 
   const u = profile.user;
@@ -123,8 +123,8 @@ export async function getCaregiverDetailForAdmin(profileId: string): Promise<Adm
     oftenOut: profile.oftenOut,
     typicalDay: profile.typicalDay,
     profilePhoto: profile.profilePhoto ?? u.profilePicture,
-    idDocumentUrl: profile.idDocument,
-    selfieUrl: profile.selfie,
+    idDocumentUrl: profile.ciAnversoUrl,
+    selfieUrl: lastSession?.selfieUrl ?? null,
     ciAnversoUrl: profile.ciAnversoUrl,
     ciReversoUrl: profile.ciReversoUrl,
     identityVerificationStatus: profile.identityVerificationStatus ?? 'PENDING',

@@ -15,7 +15,7 @@ class MaintenanceScreen extends StatefulWidget {
 class _MaintenanceScreenState extends State<MaintenanceScreen>
     with TickerProviderStateMixin {
   static const _baseUrl = String.fromEnvironment('API_URL',
-      defaultValue: 'https://garden-api-1ldd.onrender.com/api');
+      defaultValue: 'https://api.gardenbo.com/api');
 
   late AnimationController _iconCtrl;
   late AnimationController _pulseCtrl;

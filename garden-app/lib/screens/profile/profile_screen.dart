@@ -30,7 +30,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// Rol efectivo: activeRole si está activo, si no el rol permanente.
   String get _effectiveRole => _activeRole.isNotEmpty ? _activeRole : _role;
 
-  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   @override
   void initState() {

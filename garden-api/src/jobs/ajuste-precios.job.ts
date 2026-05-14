@@ -1,5 +1,10 @@
 import cron from 'node-cron';
-import { calcularAjusteDinamico, calcularSugerenciaCuidador, PricingAnalysis } from '../agents/precios.agent.js';
+import {
+    calcularAjusteDinamico,
+    calcularSugerenciaCuidador,
+    sugerirPrecioParaCuidador,
+    PricingAnalysis,
+} from '../agents/precios.agent.js';
 import prisma from '../config/database.js';
 import logger from '../shared/logger.js';
 
@@ -107,119 +112,114 @@ async function generarSugerenciaCuidador(
     precioActual: number
 ) {
     try {
-        // No generar si ya hay una sugerencia PENDING reciente (< 48h)
         const existing = await prisma.sugerenciaPrecio.findFirst({
-            where: {
-                caregiverId,
-                serviceType,
-                status: 'PENDING',
-                expiresAt: { gt: new Date() },
-            },
+            where: { caregiverId, serviceType, status: 'PENDING', expiresAt: { gt: new Date() } },
         });
         if (existing) return;
 
-        const serviceFilter = serviceType === 'PASEO' ? 'PASEO' : 'HOSPEDAJE';
+        const now = Date.now();
+        const hace7  = new Date(now - 7  * 86400000);
+        const hace30 = new Date(now - 30 * 86400000);
+        const hace60 = new Date(now - 60 * 86400000);
+        const hace90 = new Date(now - 90 * 86400000);
 
-        // Obtener historial de reservas de este cuidador
         const bookings = await prisma.booking.findMany({
             where: {
-                caregiver: { id: caregiverId },
-                serviceType: serviceFilter,
+                caregiverId,
+                serviceType,
                 status: { in: ['COMPLETED', 'IN_PROGRESS', 'CONFIRMED'] },
-                createdAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
+                createdAt: { gte: hace90 },
             },
             select: { createdAt: true, totalAmount: true },
-            orderBy: { createdAt: 'asc' },
+            orderBy: { createdAt: 'desc' },
         });
 
-        // Agrupar por día para el microservicio
+        const reservas7d  = bookings.filter(b => b.createdAt >= hace7).length;
+        const reservas30d = bookings.filter(b => b.createdAt >= hace30).length;
+        const reservas90d = bookings.length;
+        const reservasMesAnterior = bookings.filter(b => b.createdAt >= hace60 && b.createdAt < hace30).length;
+        const variacionVsMesAnteriorPct = reservasMesAnterior === 0
+            ? (reservas30d > 0 ? 100 : 0)
+            : Math.round(((reservas30d - reservasMesAnterior) / reservasMesAnterior) * 100);
+        const diasSinReserva = bookings.length === 0
+            ? 90
+            : Math.floor((now - bookings[0]!.createdAt.getTime()) / 86400000);
+
+        const zonePrices = await obtenerPreciosZona(zona, serviceType);
+
+        // Construir historial diario para el microservicio Python
         const dailyMap: Record<string, { count: number; revenue: number }> = {};
         for (const b of bookings) {
             const day = b.createdAt.toISOString().split('T')[0]!;
             if (!dailyMap[day]) dailyMap[day] = { count: 0, revenue: 0 };
-            dailyMap[day].count++;
-            dailyMap[day].revenue += Number(b.totalAmount);
+            dailyMap[day]!.count++;
         }
         const history = Object.entries(dailyMap).map(([date, v]) => ({
-            date, count: v.count, revenue: v.revenue,
+            date, count: v.count, revenue: v.count * precioActual, price: precioActual,
         }));
 
-        // Estadísticas de zona para comparación (necesarias para el /analyze)
-        const zonePrices = await obtenerPreciosZona(zona, serviceType);
-
-        // Llamar al microservicio Python → análisis matemático completo
-        const fallbackAnalysis: PricingAnalysis = {
-            demanda_forecast_7d: 2.0,
-            demanda_forecast_30d: 2.0,
-            tendencia: 'stable',
-            fuerza_tendencia: 0.0,
-            precio_optimo_matematico: precioActual,
-            elasticidad_precio: serviceType === 'PASEO' ? -1.2 : -0.8,
-            ingreso_proyectado_actual: precioActual * 2,
-            ingreso_proyectado_optimo: precioActual * 2,
-            mejora_ingreso_pct: 0.0,
-            rango_precio_seguro: {
-                min: Math.max(zonePrices.min, Math.round(precioActual * 0.85)),
-                max: Math.min(zonePrices.max, Math.round(precioActual * 1.20)),
-            },
-            factor_estacional_actual: 1.0,
-            dias_peak_proximos_7: [],
-            dias_slow_proximos_7: [],
-            patron_semanal: { lunes: 0.70, martes: 0.70, miercoles: 0.75, jueves: 0.80, viernes: 1.10, sabado: 1.30, domingo: 1.20 },
-            reservas_7d: 0,
-            reservas_30d: 0,
-            reservas_90d: 0,
-            variacion_vs_mes_anterior_pct: 0,
-            dias_sin_reserva: 30,
-            ingreso_promedio_por_reserva: precioActual,
-            percentil_precio_zona: 50,
-            precio_vs_promedio_zona_pct: 0,
-            modelo_usado: 'reglas',
-            confianza: 'baja',
-            puntos_de_datos: 0,
-        };
-
-        let analysis: PricingAnalysis = fallbackAnalysis;
+        // Intentar análisis estadístico con el microservicio Python (garden-pricing)
+        let analysis: PricingAnalysis | null = null;
         try {
             const resp = await fetch(`${PRICING_SERVICE_URL}/analyze`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     service_type: serviceType,
-                    history: history.map(h => ({ ...h, price: precioActual })),
+                    history,
                     precio_actual: precioActual,
                     precio_promedio_zona: zonePrices.avg,
                     precio_min_zona: zonePrices.min,
                     precio_max_zona: zonePrices.max,
                     forecast_days: 7,
                 }),
-                signal: AbortSignal.timeout(30000),
+                signal: AbortSignal.timeout(30_000),
             });
             if (resp.ok) {
                 analysis = await resp.json() as PricingAnalysis;
-                logger.info(`[PRICING JOB] Python analysis OK for ${caregiverId} (${analysis.modelo_usado}, confianza: ${analysis.confianza})`);
+                logger.info(`[PRICING JOB] Python OK ${caregiverId} (${analysis.modelo_usado}, ${analysis.confianza})`);
             } else {
-                logger.warn(`[PRICING JOB] Python service returned ${resp.status} for ${caregiverId}, using fallback`);
+                logger.warn(`[PRICING JOB] Python devolvió ${resp.status} para ${caregiverId}`);
             }
-        } catch (err) {
-            logger.warn(`[PRICING JOB] Python service unavailable for ${caregiverId}, using fallback`);
+        } catch {
+            logger.warn(`[PRICING JOB] garden-pricing no disponible para ${caregiverId} — usando fallback Claude`);
         }
 
-        // Llamar a Claude para la decisión final (solo razonamiento, no cálculos)
-        const sugerencia = await calcularSugerenciaCuidador({
-            caregiverId,
-            zona,
-            serviceType,
-            precioActual,
-            precioPromedioZona: zonePrices.avg,
-            precioMinZona: zonePrices.min,
-            precioMaxZona: zonePrices.max,
-            analysis,
-        });
+        // Decisión final: Claude con análisis Python, o Claude solo como fallback
+        let sugerencia: { precioSugerido: number; porcentajeCambio: number; motivo: string; explicacion: string; debeActualizar: boolean; tendencia?: string };
+        let modeloUsado: string;
+        let confianza: string;
+        let tendencia: string;
+
+        if (analysis) {
+            sugerencia = await calcularSugerenciaCuidador({
+                caregiverId, zona, serviceType, precioActual,
+                precioPromedioZona: zonePrices.avg,
+                precioMinZona: zonePrices.min,
+                precioMaxZona: zonePrices.max,
+                analysis,
+            });
+            modeloUsado = analysis.modelo_usado;
+            confianza   = analysis.confianza;
+            tendencia   = analysis.tendencia;
+        } else {
+            const eventosProximos = obtenerFeriadosProximos();
+            const claudeResult = await sugerirPrecioParaCuidador({
+                caregiverId, zona, serviceType, precioActual,
+                precioPromedioZona: zonePrices.avg,
+                precioMinZona: zonePrices.min,
+                precioMaxZona: zonePrices.max,
+                reservas7d, reservas30d, reservas90d,
+                diasSinReserva, variacionVsMesAnteriorPct,
+                eventosProximos,
+            });
+            sugerencia  = claudeResult;
+            modeloUsado = 'claude';
+            confianza   = 'media';
+            tendencia   = claudeResult.tendencia;
+        }
 
         if (!sugerencia.debeActualizar) return;
-
-        const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
 
         await prisma.sugerenciaPrecio.create({
             data: {
@@ -230,11 +230,11 @@ async function generarSugerenciaCuidador(
                 porcentajeCambio: sugerencia.porcentajeCambio,
                 motivo: sugerencia.motivo,
                 explicacion: sugerencia.explicacion,
-                confianza: analysis.confianza,
-                modeloUsado: analysis.modelo_usado,
-                tendencia: analysis.tendencia,
+                confianza,
+                modeloUsado,
+                tendencia,
                 status: 'PENDING',
-                expiresAt,
+                expiresAt: new Date(now + 48 * 60 * 60 * 1000),
             },
         });
 

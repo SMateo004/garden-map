@@ -28,7 +28,7 @@ class CaregiverSetupFlowScreen extends StatefulWidget {
 class _CaregiverSetupFlowScreenState extends State<CaregiverSetupFlowScreen> {
   static const _baseUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'https://garden-api-1ldd.onrender.com/api',
+    defaultValue: 'https://api.gardenbo.com/api',
   );
 
   static const _totalSteps = 3;

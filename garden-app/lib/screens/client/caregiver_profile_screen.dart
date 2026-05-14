@@ -23,7 +23,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   String _authToken = '';
   int _selectedPhotoIndex = 0;
   bool _showAllReviews = false;
-  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   @override
   void initState() {

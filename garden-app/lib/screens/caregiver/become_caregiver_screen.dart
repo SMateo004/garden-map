@@ -18,7 +18,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
 
   static const _baseUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'https://garden-api-1ldd.onrender.com/api',
+    defaultValue: 'https://api.gardenbo.com/api',
   );
 
   Future<void> _initAndStart() async {

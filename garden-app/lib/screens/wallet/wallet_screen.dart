@@ -18,7 +18,7 @@ class _WalletScreenState extends State<WalletScreen> {
   bool _isLoading = true;
   String _token = '';
   String _role = '';
-  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   @override
   void initState() {

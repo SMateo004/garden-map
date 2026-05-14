@@ -26,7 +26,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     with SingleTickerProviderStateMixin {
   static const _baseUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'https://garden-api-1ldd.onrender.com/api',
+    defaultValue: 'https://api.gardenbo.com/api',
   );
 
   final List<TextEditingController> _controllers =

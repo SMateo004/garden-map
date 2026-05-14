@@ -14,7 +14,7 @@ class AdminNotificationsScreen extends StatefulWidget {
 class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
     with SingleTickerProviderStateMixin {
   static const _baseUrl = String.fromEnvironment('API_URL',
-      defaultValue: 'https://garden-api-1ldd.onrender.com/api');
+      defaultValue: 'https://api.gardenbo.com/api');
 
   late TabController _tabCtrl;
 

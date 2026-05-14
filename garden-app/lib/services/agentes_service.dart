@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 class AgentesService {
   final String baseUrl = const String.fromEnvironment(
     'API_URL',
-    defaultValue: 'https://garden-api-1ldd.onrender.com/api',
+    defaultValue: 'https://api.gardenbo.com/api',
   );
   final String authToken;
 

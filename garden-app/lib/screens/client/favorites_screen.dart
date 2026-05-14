@@ -16,7 +16,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   List<dynamic> _favorites = [];
   bool _isLoading = true;
   String _token = '';
-  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   @override
   void initState() {

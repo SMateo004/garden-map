@@ -41,7 +41,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _mgLoading = false;
 
   String get _baseUrl => const String.fromEnvironment(
-    'API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
+    'API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   @override
   void initState() {

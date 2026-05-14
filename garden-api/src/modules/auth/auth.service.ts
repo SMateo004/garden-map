@@ -254,8 +254,6 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
         maxPets: profileInput.maxPets ?? null,
         oftenOut: profileInput.oftenOut ?? null,
         typicalDay: profileInput.typicalDay ?? null,
-        idDocument: profileInput.idDocument ?? null,
-        selfie: profileInput.selfie ?? null,
         profilePhoto: ensureAbsoluteUrl(profileInput.profilePhoto) ?? null,
         ciAnversoUrl: ensureAbsoluteUrl(profileInput.ciAnversoUrl) ?? null,
         ciReversoUrl: ensureAbsoluteUrl(profileInput.ciReversoUrl) ?? null,
@@ -596,8 +594,6 @@ export async function updateCaregiverProfile(
   if (body.oftenOut !== undefined) updateData.oftenOut = body.oftenOut;
   if (body.typicalDay !== undefined) updateData.typicalDay = body.typicalDay;
   if (body.photos !== undefined) updateData.photos = ensureAbsoluteUrls(body.photos);
-  if (body.idDocument !== undefined) updateData.idDocument = body.idDocument;
-  if (body.selfie !== undefined) updateData.selfie = body.selfie;
   const b = body as Record<string, unknown>;
   if (b.ciAnversoUrl !== undefined) updateData.ciAnversoUrl = ensureAbsoluteUrl(String(b.ciAnversoUrl)) ?? null;
   if (b.ciReversoUrl !== undefined) updateData.ciReversoUrl = ensureAbsoluteUrl(String(b.ciReversoUrl)) ?? null;

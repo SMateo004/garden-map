@@ -32,7 +32,7 @@ class _WebShellScreenState extends State<WebShellScreen> {
   late int _selectedTab;
   String _authToken = '';
   String? _userName;
-  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   // Tab 0 (Inicio/Marketplace) se activa con el logo — no aparece en el nav
   static const _tabs = [
@@ -108,42 +108,76 @@ class _WebShellScreenState extends State<WebShellScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Row(
                     children: [
-                      // Logo real (claro/oscuro)
+                      // Logo (40% más pequeño que el original)
                       GestureDetector(
                         onTap: () => setState(() => _selectedTab = 0),
                         child: Image.asset(
                           isDark
                               ? 'assets/images/logo-horizontal-dark.png'
                               : 'assets/images/logo-horizontal.png',
-                          height: 209,
+                          height: 125,
                         ),
                       ),
                       const Spacer(),
-                      // Notificaciones
-                      if (_authToken.isNotEmpty)
-                        NotificationBell(token: _authToken, baseUrl: _baseUrl),
-                      const SizedBox(width: 4),
-                      // Nav tabs
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: List.generate(_tabs.length, (i) {
-                          final tab = _tabs[i];
-                          final tabIndex = i + 1; // 0 reservado para Inicio (logo)
-                          final isActive = _selectedTab == tabIndex;
-                          return Padding(
-                            padding: const EdgeInsets.only(left: 4),
-                            child: _WebNavButton(
-                              icon: isActive ? tab.activeIcon : tab.icon,
-                              label: tab.label,
-                              isActive: isActive,
-                              isDark: isDark,
-                              onTap: () => setState(() => _selectedTab = tabIndex),
+                      // Header público (sin sesión) — igual al home
+                      if (_authToken.isEmpty) ...[
+                        TextButton(
+                          onPressed: () => context.go('/become-caregiver'),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          ),
+                          child: const Text(
+                            'Convertirse en cuidador',
+                            style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
+                            maxLines: 1,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => context.go('/login'),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          ),
+                          child: Text(
+                            'Iniciar sesión',
+                            style: TextStyle(
+                              color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
                             ),
-                          );
-                        }),
-                      ),
-                      // Usuario al final (cuando está logueado)
-                      if (_authToken.isNotEmpty) ...[
+                            maxLines: 1,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8, left: 4),
+                          child: GardenButton(
+                            label: 'Registrarse',
+                            width: 120,
+                            height: 38,
+                            onPressed: () => context.go('/register'),
+                          ),
+                        ),
+                      ] else ...[
+                        // Header logueado — notificaciones + tabs + perfil
+                        NotificationBell(token: _authToken, baseUrl: _baseUrl),
+                        const SizedBox(width: 4),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: List.generate(_tabs.length, (i) {
+                            final tab = _tabs[i];
+                            final tabIndex = i + 1;
+                            final isActive = _selectedTab == tabIndex;
+                            return Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: _WebNavButton(
+                                icon: isActive ? tab.activeIcon : tab.icon,
+                                label: tab.label,
+                                isActive: isActive,
+                                isDark: isDark,
+                                onTap: () => setState(() => _selectedTab = tabIndex),
+                              ),
+                            );
+                          }),
+                        ),
                         const SizedBox(width: 8),
                         GestureDetector(
                           onTap: () => context.push('/profile'),

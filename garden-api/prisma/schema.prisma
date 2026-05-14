@@ -27,8 +27,6 @@ model User {
   updatedAt                    DateTime                      @updatedAt
   dateOfBirth                  DateTime?                     @db.Date
   emailVerified                Boolean                       @default(false)
-  emailVerificationCode        String?                       @db.VarChar(6)
-  emailVerificationExpires     DateTime?
   identityVerified             Boolean                       @default(false)
   clientBookings               Booking[]                     @relation("ClientBookings")
   caregiverProfile             CaregiverProfile?
@@ -52,17 +50,21 @@ model User {
 model CaregiverProfile {
   id                              String             @id @default(uuid())
   userId                          String             @unique
+  /// Campo canónico de estado del cuidador. Flujo: DRAFT→PENDING_REVIEW→(APPROVED|REJECTED|NEEDS_REVISION)→SUSPENDED.
   status                          CaregiverStatus    @default(DRAFT)
+  /// Legacy: redundante con status=APPROVED. Se mantiene por compatibilidad con queries existentes.
   verified                        Boolean            @default(false)
   verifiedAt                      DateTime?
   verifiedBy                      String?
   verificationNotes               String?
+  /// Legacy: redundante con status. Mantiene el detalle del sub-estado de revisión de identidad del admin.
   verificationStatus              VerificationStatus @default(PENDING_REVIEW)
   rejectionReason                 String?
   adminNotes                      String?
   approvedAt                      DateTime?
   approvedBy                      String?
   reviewedAt                      DateTime?
+  /// Legacy: redundante con status=SUSPENDED. Se mantiene por compatibilidad.
   suspended                       Boolean            @default(false)
   suspendedAt                     DateTime?
   suspensionReason                String?
@@ -124,8 +126,6 @@ model CaregiverProfile {
   maxPets                         Int?
   oftenOut                        Boolean?
   typicalDay                      String?
-  idDocument                      String?
-  selfie                          String?
   /// CI anverso (frontal): obligatorio para enviar solicitud y PENDING_REVIEW. Subida a Cloudinary (garden/ci).
   ciAnversoUrl                    String?
   /// CI reverso (trasero): obligatorio para enviar solicitud y PENDING_REVIEW. Subida a Cloudinary (garden/ci).
@@ -145,8 +145,10 @@ model CaregiverProfile {
   identityVerificationScore       Float?
   identityVerificationSubmittedAt DateTime?
   emailVerified                   Boolean            @default(false)
-  /// Onboarding Lifecycle: INCOMPLETE | SUBMITTED | UNDER_REVIEW | APPROVED
+  /// Lifecycle del onboarding visto desde el cuidador: INCOMPLETE | SUBMITTED | UNDER_REVIEW | APPROVED.
+  /// Complementa a status (que es la vista del admin). Se actualiza en checkAndAutoSubmitProfile.
   profileStatus                   String?            @default("INCOMPLETE") @db.VarChar(20)
+  /// Flags granulares de completitud calculados por el servidor. Usados para mostrar progreso en el wizard.
   availabilityComplete            Boolean            @default(false)
   caregiverProfileComplete        Boolean            @default(false)
   personalInfoComplete            Boolean            @default(false)
@@ -570,13 +572,6 @@ enum TimeSlot {
   NOCHE
 }
 
-enum ExperienceYears {
-  NEVER
-  LESS1
-  ONE_TO_FIVE
-  MORE5
-}
-
 enum AnimalType {
   DOGS
   CATS
@@ -634,12 +629,14 @@ enum CaregiverStatus {
   SUSPENDED
 }
 
+/// Ajuste de precios por zona y servicio generado por el agente de precios AI.
+/// Permite sobrescribir temporalmente el precio base de una zona (ej. durante temporada alta).
 model AjustePrecio {
   id                   String   @id @default(uuid())
   zona                 String
-  servicio             String
-  multiplicador        Float
-  porcentajeAjuste     Int
+  servicio             String   // PASEO | HOSPEDAJE
+  multiplicador        Float    // factor multiplicador del precio base
+  porcentajeAjuste     Int      // % de ajuste para mostrar al usuario
   aplicarDesde         DateTime
   aplicarHasta         DateTime
   motivo               String
@@ -649,13 +646,15 @@ model AjustePrecio {
   updatedAt            DateTime @updatedAt
 
   @@unique([zona, servicio])
+  @@map("ajuste_precios")
 }
 
+/// Mensajes del chat asociado a una reserva. isSystem=true para mensajes automáticos del sistema.
 model ChatMessage {
   id          String   @id @default(uuid())
   bookingId   String
   senderId    String
-  senderRole  String   // 'CLIENT' | 'CAREGIVER'
+  senderRole  String   // CLIENT | CAREGIVER
   message     String
   isSystem    Boolean  @default(false)
   read        Boolean  @default(false)
@@ -666,6 +665,7 @@ model ChatMessage {
 
   @@index([bookingId])
   @@index([senderId])
+  @@map("chat_messages")
 }
 
 
@@ -682,13 +682,15 @@ model GiftCode {
   @@map("gift_codes")
 }
 
+/// Reunión previa al servicio (conocerse). Flujo: PENDING_PROPOSAL → PROPOSED → CONFIRMED | CANCELLED.
+/// modalidad: PRESENCIAL | VIRTUAL. proposedBy: CLIENT | CAREGIVER.
 model MeetAndGreet {
   id             String    @id @default(uuid())
   bookingId      String    @unique
   booking        Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  status         String    @default("PENDING_PROPOSAL")
-  proposedBy     String
-  modalidad      String
+  status         String    @default("PENDING_PROPOSAL") // PENDING_PROPOSAL | PROPOSED | CONFIRMED | CANCELLED
+  proposedBy     String    // CLIENT | CAREGIVER
+  modalidad      String    // PRESENCIAL | VIRTUAL
   proposedDate   DateTime?
   confirmedDate  DateTime?
   meetingPoint   String?   @db.Text
@@ -697,25 +699,31 @@ model MeetAndGreet {
   approved       Boolean?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+
+  @@map("meet_and_greets")
 }
 
+/// Sugerencia de precio generada por el agente AI de precios para un cuidador específico.
+/// El cuidador puede aceptar (actualiza su precio) o rechazar. Expira automáticamente.
 model SugerenciaPrecio {
-  id               String   @id @default(uuid())
+  id               String           @id @default(uuid())
   caregiverId      String
-  serviceType      String   // PASEO | HOSPEDAJE
+  serviceType      String           // PASEO | HOSPEDAJE
   precioActual     Int
   precioSugerido   Int
   porcentajeCambio Int
   motivo           String
-  explicacion      String   @db.Text
-  confianza        String   // alta | media | baja
-  modeloUsado      String   // prophet+arima | arima | reglas | claude
-  tendencia        String   // rising | stable | falling
-  status           String   @default("PENDING") // PENDING | ACCEPTED | REJECTED
+  explicacion      String           @db.Text
+  confianza        String           // alta | media | baja
+  modeloUsado      String           // prophet+arima | arima | reglas | claude
+  tendencia        String           // rising | stable | falling
+  status           String           @default("PENDING") // PENDING | ACCEPTED | REJECTED
   expiresAt        DateTime
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
   caregiver        CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+
+  @@map("sugerencia_precios")
 }
 
 /// Notificaciones broadcast enviadas por el admin a segmentos de usuarios.

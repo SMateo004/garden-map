@@ -99,7 +99,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     try {
       final service = _servicesOffered.isNotEmpty ? _servicesOffered.first : 'PASEO';
       final zone = _selectedZone ?? 'EQUIPETROL';
-      final url = '${const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api')}/caregivers/price-stats?zone=$zone&service=$service';
+      final url = '${const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api')}/caregivers/price-stats?zone=$zone&service=$service';
       final res = await http.get(Uri.parse(url));
       final data = jsonDecode(res.body);
       if (data['success'] == true && mounted) {
@@ -136,7 +136,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
   static const _baseUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'https://garden-api-1ldd.onrender.com/api',
+    defaultValue: 'https://api.gardenbo.com/api',
   );
 
   /// Rellena los controladores del paso 0 con los datos del usuario ya registrado.
@@ -850,7 +850,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     setState(() => _uploadingPhotos = true);
     try {
       final uri = Uri.parse(
-        '${const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api')}/upload/registration-photos',
+        '${const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api')}/upload/registration-photos',
       );
       final request = http.MultipartRequest('POST', uri);
       for (final photo in _localPhotos) {

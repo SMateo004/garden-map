@@ -38,7 +38,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
 
 
   int _selectedTab = 0; // 0: Inicio, 1: Disponibilidad, 2: Reservas
-  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   // Calendario e interactividad
   DateTime _calendarMonth = DateTime.now();

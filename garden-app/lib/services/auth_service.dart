@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AuthService {
   final String baseUrl = const String.fromEnvironment(
     'API_URL',
-    defaultValue: 'https://garden-api-1ldd.onrender.com/api',
+    defaultValue: 'https://api.gardenbo.com/api',
   );
 
   Map<String, String> get _headers => {

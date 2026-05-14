@@ -137,43 +137,37 @@ Responde con este JSON exacto:
     return await callClaude(SYSTEM_PROMPT_PRECIOS, mensaje, 256);
 }
 
-// — Análisis matemático completo devuelto por garden-pricing —
+// ── Interfaz del análisis estadístico devuelto por garden-pricing ──────────
+// Refleja exactamente el schema PricingAnalysis del microservicio Python.
 export interface PricingAnalysis {
-    // Demanda
     demanda_forecast_7d: number;
     demanda_forecast_30d: number;
     tendencia: 'rising' | 'stable' | 'falling';
     fuerza_tendencia: number;
-    // Optimización de precio
     precio_optimo_matematico: number;
     elasticidad_precio: number;
     ingreso_proyectado_actual: number;
     ingreso_proyectado_optimo: number;
     mejora_ingreso_pct: number;
     rango_precio_seguro: { min: number; max: number };
-    // Estacionalidad
     factor_estacional_actual: number;
     dias_peak_proximos_7: string[];
     dias_slow_proximos_7: string[];
     patron_semanal: Record<string, number>;
-    // Historial
     reservas_7d: number;
     reservas_30d: number;
     reservas_90d: number;
     variacion_vs_mes_anterior_pct: number;
     dias_sin_reserva: number;
     ingreso_promedio_por_reserva: number;
-    // Mercado
     percentil_precio_zona: number;
     precio_vs_promedio_zona_pct: number;
-    // Metadata
     modelo_usado: string;
     confianza: string;
     puntos_de_datos: number;
 }
 
-// — Calcular sugerencia de precio para un cuidador específico —
-// precios.agent.ts SOLO RAZONA — garden-pricing hace todos los cálculos.
+// — Claude razona sobre el análisis estadístico y decide el precio final —
 export async function calcularSugerenciaCuidador(data: {
     caregiverId: string;
     zona: string;
@@ -191,78 +185,128 @@ export async function calcularSugerenciaCuidador(data: {
     debeActualizar: boolean;
 }> {
     const a = data.analysis;
-    const tendenciaEs = a.tendencia === 'rising' ? 'al alza 📈'
-        : a.tendencia === 'falling' ? 'a la baja 📉' : 'estable ➡️';
-
-    const peakStr = a.dias_peak_proximos_7.length > 0
-        ? a.dias_peak_proximos_7.join(', ')
-        : 'ninguno';
-    const slowStr = a.dias_slow_proximos_7.length > 0
-        ? a.dias_slow_proximos_7.join(', ')
-        : 'ninguno';
+    const tendenciaEs = a.tendencia === 'rising' ? 'al alza'
+        : a.tendencia === 'falling' ? 'a la baja' : 'estable';
+    const variacionStr = `${a.variacion_vs_mes_anterior_pct > 0 ? '+' : ''}${a.variacion_vs_mes_anterior_pct.toFixed(1)}%`;
 
     const mensaje = `
-Eres el agente de decisión de precios de GARDEN. El motor matemático ya hizo todos los cálculos.
-Tu única tarea es RAZONAR con esos números y decidir si el cuidador debe ajustar su precio.
+Analiza los siguientes datos estadísticos calculados por el motor de pronósticos
+(${a.modelo_usado}, confianza ${a.confianza}, ${a.puntos_de_datos} días de datos)
+y decide si este cuidador debe ajustar su precio.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CONTEXTO DEL CUIDADOR
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CUIDADOR
 Zona: ${data.zona}, Santa Cruz de la Sierra
 Servicio: ${data.serviceType === 'PASEO' ? 'Paseo de mascotas' : 'Hospedaje'}
 Precio actual: Bs ${data.precioActual}
-Precio promedio de la zona: Bs ${data.precioPromedioZona}
-Rango en la zona: Bs ${data.precioMinZona} – Bs ${data.precioMaxZona}
-Posición en la zona: percentil ${a.percentil_precio_zona.toFixed(0)} (${a.precio_vs_promedio_zona_pct > 0 ? '+' : ''}${a.precio_vs_promedio_zona_pct.toFixed(1)}% vs promedio)
+Precio promedio zona: Bs ${data.precioPromedioZona}
+Rango zona: Bs ${data.precioMinZona} – Bs ${data.precioMaxZona}
+Posición percentil: ${a.percentil_precio_zona.toFixed(0)} (${a.precio_vs_promedio_zona_pct > 0 ? '+' : ''}${a.precio_vs_promedio_zona_pct.toFixed(1)}% vs promedio)
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ANÁLISIS MATEMÁTICO (motor Python)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Modelo usado: ${a.modelo_usado} | Confianza: ${a.confianza} | Datos: ${a.puntos_de_datos} días
+PRONÓSTICO DE DEMANDA
+Tendencia: ${tendenciaEs} (fuerza: ${(a.fuerza_tendencia * 100).toFixed(0)}%)
+Pronóstico 7 días: ${a.demanda_forecast_7d.toFixed(1)} reservas/día
+Pronóstico 30 días: ${a.demanda_forecast_30d.toFixed(1)} reservas/día
+Factor estacional hoy: ${a.factor_estacional_actual.toFixed(2)}x
 
-DEMANDA
-  Pronóstico próximos 7 días:  ${a.demanda_forecast_7d.toFixed(1)} reservas/día
-  Pronóstico próximos 30 días: ${a.demanda_forecast_30d.toFixed(1)} reservas/día
-  Tendencia: ${tendenciaEs} (fuerza: ${(a.fuerza_tendencia * 100).toFixed(0)}%)
-  Factor estacional HOY: ${a.factor_estacional_actual.toFixed(2)}x (${a.factor_estacional_actual >= 1.1 ? '⚡ alta demanda' : a.factor_estacional_actual <= 0.85 ? '🔵 baja demanda' : '📊 normal'})
-  Días PEAK próximos 7 días: ${peakStr}
-  Días SLOW próximos 7 días: ${slowStr}
-
-HISTORIAL
-  Reservas últimos 7 días:  ${a.reservas_7d}
-  Reservas últimos 30 días: ${a.reservas_30d}
-  Reservas últimos 90 días: ${a.reservas_90d}
-  Variación vs mes anterior: ${a.variacion_vs_mes_anterior_pct > 0 ? '+' : ''}${a.variacion_vs_mes_anterior_pct.toFixed(1)}%
-  Días sin reserva: ${a.dias_sin_reserva}
-  Ingreso promedio por reserva: Bs ${a.ingreso_promedio_por_reserva.toFixed(0)}
+HISTORIAL REAL
+Reservas últimos 7 días: ${a.reservas_7d}
+Reservas últimos 30 días: ${a.reservas_30d}
+Reservas últimos 90 días: ${a.reservas_90d}
+Variación vs mes anterior: ${variacionStr}
+Días sin reserva: ${a.dias_sin_reserva}
+Ingreso promedio por reserva: Bs ${a.ingreso_promedio_por_reserva.toFixed(0)}
 
 OPTIMIZACIÓN MATEMÁTICA
-  Precio óptimo calculado: Bs ${a.precio_optimo_matematico}
-  Elasticidad precio-demanda: ${a.elasticidad_precio.toFixed(2)} (${a.elasticidad_precio < -1 ? 'elástica — bajar precio puede aumentar ingresos' : 'inelástica — subir precio aumenta ingresos'})
-  Ingreso proyectado (precio actual):  Bs ${a.ingreso_proyectado_actual.toFixed(0)}/semana
-  Ingreso proyectado (precio óptimo):  Bs ${a.ingreso_proyectado_optimo.toFixed(0)}/semana
-  Mejora potencial de ingresos: ${a.mejora_ingreso_pct > 0 ? '+' : ''}${a.mejora_ingreso_pct.toFixed(1)}%
-  Rango seguro de precio: Bs ${a.rango_precio_seguro.min} – Bs ${a.rango_precio_seguro.max}
+Precio óptimo calculado: Bs ${a.precio_optimo_matematico}
+Elasticidad precio-demanda: ${a.elasticidad_precio.toFixed(2)}
+Ingreso proyectado (precio actual):  Bs ${a.ingreso_proyectado_actual.toFixed(0)}/semana
+Ingreso proyectado (precio óptimo):  Bs ${a.ingreso_proyectado_optimo.toFixed(0)}/semana
+Mejora potencial de ingresos: ${a.mejora_ingreso_pct > 0 ? '+' : ''}${a.mejora_ingreso_pct.toFixed(1)}%
+Rango seguro: Bs ${a.rango_precio_seguro.min} – Bs ${a.rango_precio_seguro.max}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-REGLAS ESTRICTAS (no negociables)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. precioSugerido DEBE estar dentro de: Bs ${a.rango_precio_seguro.min} – Bs ${a.rango_precio_seguro.max}
-2. Si la mejora de ingresos proyectada < 5% → debeActualizar: false
-3. Si dias_sin_reserva > 14 → baja precio para atraer (prioridad alta)
-4. Si tendencia al alza + factor estacional > 1.1 → sube precio
-5. Si precio actual ya está en el precio óptimo (±5%) → debeActualizar: false
-6. La explicacion debe ser en boliviano natural, amigable, sin jerga técnica
+REGLAS (obligatorias)
+1. precioSugerido DEBE estar dentro de Bs ${a.rango_precio_seguro.min} – Bs ${a.rango_precio_seguro.max}
+2. Si días sin reserva > 14 → baja precio (prioridad alta)
+3. Si mejora potencial < 5% → debeActualizar: false
+4. Si precio actual ya está en el precio óptimo (±5%) → debeActualizar: false
+5. La explicacion debe ser en español boliviano natural, amigable, sin jerga técnica
 
 Responde con este JSON exacto:
 {
-  "precioSugerido": numero entero en Bs,
-  "porcentajeCambio": numero entero (positivo = sube, negativo = baja),
+  "precioSugerido": número entero en Bs,
+  "porcentajeCambio": número entero (positivo = sube, negativo = baja),
   "motivo": "máximo 4 palabras",
   "explicacion": "2 oraciones amigables al cuidador explicando el beneficio concreto",
   "debeActualizar": true | false
 }
     `;
 
-    return await callClaude(SYSTEM_PROMPT_PRECIOS, mensaje, 600);
+    return await callClaude(SYSTEM_PROMPT_PRECIOS, mensaje, 400);
+}
+
+// — Sugerir ajuste de precio para un cuidador específico (sin microservicio Python) —
+// Se usa como fallback cuando garden-pricing no está disponible.
+export async function sugerirPrecioParaCuidador(data: {
+    caregiverId: string;
+    zona: string;
+    serviceType: 'PASEO' | 'HOSPEDAJE';
+    precioActual: number;
+    precioPromedioZona: number;
+    precioMinZona: number;
+    precioMaxZona: number;
+    reservas7d: number;
+    reservas30d: number;
+    reservas90d: number;
+    diasSinReserva: number;
+    variacionVsMesAnteriorPct: number;
+    eventosProximos: string[];
+}): Promise<{
+    precioSugerido: number;
+    porcentajeCambio: number;
+    motivo: string;
+    explicacion: string;
+    tendencia: 'rising' | 'stable' | 'falling';
+    debeActualizar: boolean;
+}> {
+    const precioMin = Math.round(data.precioActual * 0.85);
+    const precioMax = Math.round(data.precioActual * 1.20);
+    const variacionStr = `${data.variacionVsMesAnteriorPct > 0 ? '+' : ''}${data.variacionVsMesAnteriorPct}%`;
+
+    const mensaje = `
+Analiza los datos reales de este cuidador y decide si debe ajustar su precio.
+
+CUIDADOR
+Zona: ${data.zona}, Santa Cruz de la Sierra
+Servicio: ${data.serviceType === 'PASEO' ? 'Paseo de mascotas' : 'Hospedaje'}
+Precio actual: Bs ${data.precioActual}
+Precio promedio zona: Bs ${data.precioPromedioZona} (rango: Bs ${data.precioMinZona} – Bs ${data.precioMaxZona})
+
+ACTIVIDAD (datos reales de los últimos 90 días)
+Reservas últimos 7 días:   ${data.reservas7d}
+Reservas últimos 30 días:  ${data.reservas30d}
+Reservas últimos 90 días:  ${data.reservas90d}
+Variación vs mes anterior: ${variacionStr}
+Días sin reserva:          ${data.diasSinReserva}
+Eventos próximos (15 días): ${data.eventosProximos.join(', ') || 'ninguno'}
+
+REGLAS (obligatorias)
+1. precioSugerido debe estar entre Bs ${precioMin} y Bs ${precioMax}
+2. Si variación vs mes anterior > +15% y reservas suben → considera subir precio
+3. Si días sin reserva > 14 → baja precio para atraer clientes (prioridad alta)
+4. Si el cambio resultante sería < 5% vs precio actual → debeActualizar: false
+5. Si precio actual está dentro del ±5% del promedio de la zona y la demanda es normal → debeActualizar: false
+6. La explicacion debe ser en español boliviano natural, amigable, sin jerga técnica
+
+Responde con este JSON exacto:
+{
+  "precioSugerido": número entero en Bs,
+  "porcentajeCambio": número entero (positivo = sube, negativo = baja),
+  "motivo": "máximo 4 palabras",
+  "explicacion": "2 oraciones amigables al cuidador explicando el beneficio concreto",
+  "tendencia": "rising" | "stable" | "falling",
+  "debeActualizar": true | false
+}
+    `;
+
+    return await callClaude(SYSTEM_PROMPT_PRECIOS, mensaje, 400);
 }

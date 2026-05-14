@@ -51,7 +51,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   StreamSubscription<ServiceStatus>? _gpsStatusSub;
   bool _gpsDialogShown = false;
 
-  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
   bool get _alreadyRated => _booking?['ownerRating'] != null;
 
   @override

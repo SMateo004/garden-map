@@ -265,12 +265,14 @@ class TermsOfServiceScreen extends StatelessWidget {
         // ── 5. COMISIONES Y PRECIOS ──────────────────────────────────────────
         _LegalSection(
           '5. Comisiones, precios y estructura de pagos',
-          'PRECIOS: Los Cuidadores establecen libremente sus tarifas dentro de los rangos permitidos por Garden. Los precios se muestran en Bolivianos (Bs.) e incluyen todos los impuestos aplicables.\n\n'
-          'COMISIÓN DE PLATAFORMA: Garden cobra una comisión del 15% sobre el valor bruto de cada Reserva. Esta comisión cubre el procesamiento seguro del pago, la garantía del servicio, el soporte al usuario y el mantenimiento de la infraestructura tecnológica.\n\n'
+          'PRECIOS: Los Cuidadores establecen libremente sus tarifas en Bolivianos (Bs.). El precio que publica el Cuidador es el monto íntegro que recibirá por el servicio.\n\n'
+          'COMISIÓN DE PLATAFORMA: Garden cobra una comisión del 20% que se AÑADE sobre el precio establecido por el Cuidador. Esta comisión es pagada por el Cliente y cubre: el procesamiento seguro del pago, el Fondo de Garantía Garden, el soporte al usuario, la verificación de identidad de Cuidadores y el mantenimiento de la infraestructura tecnológica.\n\n'
+          'EJEMPLO: Si el Cuidador cobra Bs. 100 por un servicio, el Cliente paga Bs. 120 (precio del Cuidador + 20% de comisión Garden). El Cuidador recibe íntegramente sus Bs. 100.\n\n'
           'DISTRIBUCIÓN DEL PAGO:\n'
-          '  → El Cliente paga el 100% al confirmar la Reserva.\n'
-          '  → El Cuidador recibe el 85% del valor acordado.\n'
-          '  → Garden retiene el 15% como comisión de plataforma.\n'
+          '  → El Cuidador fija su precio (ej.: Bs. 100).\n'
+          '  → El Cliente paga el precio del Cuidador + 20% de comisión Garden (ej.: Bs. 120).\n'
+          '  → El Cuidador recibe el 100% de su precio establecido (ej.: Bs. 100).\n'
+          '  → Garden retiene el 20% de comisión (ej.: Bs. 20).\n'
           '  → El pago al Cuidador se libera dentro de las 24 horas siguientes a la confirmación de finalización del servicio por ambas partes, o automáticamente a las 72 horas si el Cliente no confirma ni disputa.\n\n'
           'SMART CONTRACT: Cada Reserva genera un contrato inteligente en la red Polygon que registra: monto pagado, identidad de las partes (hash), fechas del servicio y condiciones acordadas. Este registro es permanente, público y no puede ser alterado por ninguna de las partes ni por Garden.\n\n'
           'IVA E IMPUESTOS: Los precios de los Cuidadores deben incluir el IVA (13%) según la normativa tributaria boliviana. Garden emite facturas electrónicas por su comisión al amparo de la Ley N° 812 (Factura Electrónica) y las disposiciones del Servicio de Impuestos Nacionales (SIN).\n\n'
@@ -297,7 +299,7 @@ class TermsOfServiceScreen extends StatelessWidget {
 
         // ── 7. QUÉ PUEDE HACER UN DUEÑO DE MASCOTA ──────────────────────────
         _LegalSection(
-          '7. Derechos y facultades del Dueño de mascota',
+          '7. Derechos y obligaciones del Dueño de mascota',
           'El Dueño de mascota PUEDE:\n\n'
           '✓ Buscar y comparar perfiles de cuidadores verificados con reseñas reales.\n'
           '✓ Solicitar un Meet & Greet gratuito antes de confirmar cualquier reserva de hospedaje.\n'
@@ -305,39 +307,43 @@ class TermsOfServiceScreen extends StatelessWidget {
           '✓ Recibir fotos y actualizaciones durante el servicio a través del chat integrado.\n'
           '✓ Calificar al Cuidador con estrellas y dejar una reseña escrita al finalizar el servicio.\n'
           '✓ Abrir una disputa dentro de las 72 horas siguientes a la finalización del servicio si considera que este no fue prestado correctamente.\n'
-          '✓ Indicar necesidades especiales de su mascota (medicamentos, alergias, traumas, comportamiento con otros animales) que el Cuidador deberá respetar.\n'
           '✓ Solicitar acceso a las imágenes y registros de GPS de su servicio por hasta 30 días después de su finalización.\n'
-          '✓ Cancelar su cuenta y solicitar la eliminación de sus datos personales en cualquier momento.',
+          '✓ Cancelar su cuenta y solicitar la eliminación de sus datos personales en cualquier momento.\n\n'
+          'OBLIGACIONES DEL DUEÑO (de cumplimiento obligatorio antes de cada servicio):\n\n'
+          '⚠ Declaración completa de la mascota: El Dueño ESTÁ OBLIGADO a informar, antes de cada Reserva, todos los aspectos relevantes de su mascota, incluyendo sin limitarse a: raza, edad, peso, temperamento, comportamiento con extraños y otros animales, alergias alimentarias y ambientales, enfermedades crónicas o preexistentes, medicamentos en curso (dosis y horarios), vacunas al día, historial de mordeduras o agresiones, y cualquier trauma o fobia conocida.\n\n'
+          'Esta declaración tiene carácter contractual. El incumplimiento total o parcial de esta obligación exime al Cuidador y a Garden de cualquier responsabilidad por incidentes derivados de información omitida o falsa, trasladando toda responsabilidad civil y económica al Dueño conforme al Art. 519 del Código Civil Boliviano (autonomía de la voluntad y buena fe contractual).',
         ),
 
         // ── 8. QUÉ NO PUEDE HACER UN DUEÑO DE MASCOTA ───────────────────────
         _LegalSection(
           '8. Prohibiciones para el Dueño de mascota',
           'El Dueño de mascota NO PUEDE:\n\n'
-          '✗ Acordar pagos directos con el Cuidador para evadir la Plataforma ni la comisión de Garden. Esto constituye incumplimiento grave y puede resultar en suspensión permanente de ambas cuentas.\n'
-          '✗ Proporcionar información falsa sobre el comportamiento, estado de salud o vacunación de su mascota. Los daños causados por ocultamiento de información son responsabilidad exclusiva del Dueño.\n'
-          '✗ Entregar una mascota diferente a la registrada en la Reserva sin notificación previa al Cuidador.\n'
-          '✗ Solicitar al Cuidador que realice actividades no acordadas en la Reserva (ej.: compras, mensajería, tareas domésticas).\n'
-          '✗ Acosar, amenazar, insultar o discriminar a los Cuidadores por ningún medio dentro o fuera de la Plataforma.\n'
-          '✗ Publicar reseñas falsas, difamatorias o malintencionadas.\n'
-          '✗ Registrar más de una cuenta personal.\n'
-          '✗ Ceder o compartir el acceso a su cuenta con terceros.\n'
-          '✗ Usar la Plataforma para fines comerciales (reventa de servicios, agencias de mascotas, etc.) sin acuerdo escrito previo con Garden.',
+          '✗ Acordar pagos directos con el Cuidador para evadir la Plataforma ni la comisión de Garden. Esto constituye incumplimiento grave y puede resultar en suspensión permanente de ambas cuentas.\n\n'
+          '✗ Proporcionar información falsa o incompleta sobre el comportamiento, estado de salud o vacunación de su mascota. Los daños causados por ocultamiento de información son responsabilidad exclusiva del Dueño.\n\n'
+          '✗ Entregar una mascota diferente a la registrada en la Reserva sin notificación previa al Cuidador.\n\n'
+          '✗ Solicitar al Cuidador que realice actividades no acordadas en la Reserva (ej.: compras, mensajería, tareas domésticas).\n\n'
+          '✗ Acosar, amenazar, insultar o discriminar a los Cuidadores por ningún medio dentro o fuera de la Plataforma.\n\n'
+          '✗ Publicar reseñas falsas, difamatorias o malintencionadas.\n\n'
+          '✗ Registrar más de una cuenta personal.\n\n'
+          '✗ Ceder o compartir el acceso a su cuenta con terceros.\n\n'
+          '✗ Usar la Plataforma para fines comerciales (reventa de servicios, agencias de mascotas, etc.) sin acuerdo escrito previo con Garden.\n\n'
+          '✗ OBLIGACIÓN DE ALIMENTACIÓN (Hospedaje y Guardería): Para servicios de Hospedaje y Guardería, el Dueño ESTÁ OBLIGADO a entregar al Cuidador la alimentación completa y pre-porcionada para toda la duración del servicio, junto con las instrucciones específicas de frecuencia y cantidad. El Cuidador NO puede proporcionar alimentos propios ni de otra fuente a la mascota, ya que esto puede causar trastornos digestivos, reacciones alérgicas o intoxicaciones. El incumplimiento de esta obligación (no traer alimento suficiente) exime al Cuidador de toda responsabilidad por afecciones gastrointestinales de la mascota durante el servicio.',
         ),
 
         // ── 9. QUÉ PUEDE HACER UN CUIDADOR ──────────────────────────────────
         _LegalSection(
           '9. Derechos y facultades del Cuidador',
           'El Cuidador PUEDE:\n\n'
-          '✓ Establecer sus propios precios, horarios y disponibilidad.\n'
+          '✓ Establecer sus propios precios, horarios y disponibilidad libremente.\n'
           '✓ Aceptar o rechazar cualquier solicitud de Reserva sin necesidad de justificación.\n'
           '✓ Cancelar una Reserva activa si detecta que la mascota representa un riesgo para su seguridad o la de otros animales a su cuidado, notificando inmediatamente a Garden.\n'
-          '✓ Recibir el 85% del valor acordado en cada Reserva.\n'
+          '✓ Recibir el 100% del precio que él mismo ha establecido por cada Reserva. La comisión de Garden (20%) es añadida sobre el precio del Cuidador y pagada por el Cliente — el Cuidador NUNCA pierde parte de su tarifa.\n'
           '✓ Construir un perfil público con fotos, descripción y reseñas de sus servicios.\n'
           '✓ Comunicarse con los Clientes a través del chat integrado para coordinación del servicio.\n'
           '✓ Solicitar información adicional sobre la mascota antes de confirmar la Reserva.\n'
           '✓ Establecer límites razonables (máx. número de mascotas simultáneas, razas que no acepta, peso máximo).\n'
-          '✓ Recibir un comprobante de transacción registrado en blockchain por cada servicio completado.',
+          '✓ Recibir un comprobante de transacción registrado en blockchain por cada servicio completado.\n'
+          '✓ Negarse a alimentar a una mascota si el Dueño no proveyó alimento suficiente, reportando la situación a Garden a través de la app.',
         ),
 
         // ── 10. QUÉ NO PUEDE HACER UN CUIDADOR ──────────────────────────────
@@ -360,25 +366,25 @@ class TermsOfServiceScreen extends StatelessWidget {
         _LegalSection(
           '11. ¿Qué pasa si la mascota se lastima, enferma o fallece?',
           'La seguridad y bienestar de la mascota es responsabilidad primaria del Cuidador durante todo el período en que la mascota esté bajo su custodia.\n\n'
-          'SITUACIONES CUBIERTAS POR EL CUIDADOR:\n'
-          'Si la mascota sufre lesiones, enferma o fallece por negligencia comprobable del Cuidador (descuido, violencia, falta de agua/alimentación, accidente por falta de supervisión), el Cuidador es civilmente responsable conforme al Art. 984 del Código Civil Boliviano (D.L. N° 12760) que establece la obligación de reparar el daño causado por culpa o negligencia.\n\n'
-          'En estos casos, el Cuidador deberá:\n'
-          '1. Notificar al Cliente de forma inmediata (dentro de los 30 minutos siguientes al incidente).\n'
-          '2. Trasladar a la mascota al veterinario más cercano o al indicado por el Cliente.\n'
-          '3. Cubrir el 100% de los gastos veterinarios de emergencia generados por su negligencia, hasta un monto de Bs. 5.000. Para montos superiores, Garden mediará la disputa.\n'
-          '4. En caso de fallecimiento por negligencia, el Cuidador pagará al Cliente una compensación de hasta Bs. 3.000 adicionales por daño moral, a determinar por mediación de Garden.\n\n'
-          'SITUACIONES NO CUBIERTAS POR EL CUIDADOR:\n'
-          '• Condición médica preexistente no informada por el Dueño al momento de la Reserva.\n'
+          'OBLIGACIÓN ÚNICA DEL CUIDADOR ANTE UNA EMERGENCIA:\n'
+          'Ante cualquier incidente (lesión, enfermedad, accidente), la única y primera obligación del Cuidador es llevar a la mascota al veterinario más cercano de forma INMEDIATA, sin demora. Esta acción oportuna es lo que se le exige y lo que determina si actuó de buena fe.\n\n'
+          'PROCEDIMIENTO DE EMERGENCIA (obligatorio):\n'
+          '1. El Cuidador lleva a la mascota al veterinario más cercano de inmediato.\n'
+          '2. El Cuidador notifica a Garden y al Cliente a través de la app dentro de los 30 minutos siguientes.\n'
+          '3. Se documentan todos los gastos con facturas y reportes veterinarios.\n'
+          '4. Garden investiga la causa del incidente en un plazo de 5 días hábiles.\n\n'
+          'FONDO DE GARANTÍA GARDEN (Bs. 2.000):\n'
+          'Garden mantiene un Fondo de Garantía de Bs. 2.000 por incidente, destinado a cubrir gastos veterinarios de emergencia en situaciones donde el incidente NO sea producto de negligencia del Cuidador (accidente fortuito, causa desconocida, condición preexistente no informada). Este fondo es una garantía voluntaria de Garden y no constituye reconocimiento de responsabilidad.\n\n'
+          'SI SE DETERMINA NEGLIGENCIA DEL CUIDADOR:\n'
+          'Si la investigación de Garden determina que el incidente fue causado por negligencia comprobable del Cuidador (descuido, abandono, falta de agua o alimentación, violencia), el Cuidador deberá cubrir el 100% de los gastos veterinarios documentados. En estos casos el Fondo de Garantía Garden no aplica — la responsabilidad económica recae íntegramente sobre el Cuidador. Garden retendrá los montos correspondientes de los próximos pagos del Cuidador hasta saldar la deuda. Para montos superiores a Bs. 5.000, Garden actuará como mediador ante instancias civiles.\n\n'
+          'Esta estructura (comisión del 20%) existe precisamente para sostener el Fondo de Garantía y proteger a los Clientes en casos donde el incidente no sea negligencia del Cuidador.\n\n'
+          'Fundamento legal: Art. 984 del Código Civil Boliviano (D.L. N° 12760) — responsabilidad por daño causado por culpa o negligencia.\n\n'
+          'SITUACIONES DONDE EL CUIDADOR NO ES RESPONSABLE:\n'
+          '• Condición médica preexistente no declarada por el Dueño en la Reserva.\n'
           '• Enfermedad por vacunas vencidas u omitidas (responsabilidad del Dueño).\n'
           '• Muerte natural por edad avanzada o enfermedad terminal conocida.\n'
-          '• Accidente causado directamente por el comportamiento agresivo de la propia mascota.\n\n'
-          'PROCEDIMIENTO DE EMERGENCIA VETERINARIA:\n'
-          '1. El Cuidador lleva a la mascota al veterinario inmediatamente.\n'
-          '2. El Cuidador notifica a Garden a través de la app (botón de emergencia).\n'
-          '3. Garden notifica al Cliente y coordina comunicación.\n'
-          '4. Los gastos se documentan con facturas. Garden determina quién los asume según la causa.\n'
-          '5. Si hay disputa, Garden actúa como mediador con un plazo de 5 días hábiles.\n\n'
-          'FONDO DE GARANTÍA GARDEN: Garden mantiene un Fondo de Garantía para casos excepcionales donde la responsabilidad no sea clara o el Cuidador sea insolvente. La cobertura máxima del Fondo es de Bs. 2.000 por incidente.',
+          '• Accidente causado directamente por el comportamiento agresivo de la propia mascota.\n'
+          '• Afecciones gastrointestinales por no seguir la dieta indicada cuando el Dueño no proveyó alimento.',
         ),
 
         // ── 12. RESPONSABILIDAD: CUIDADOR LASTIMADO ──────────────────────────
@@ -511,13 +517,21 @@ class TermsOfServiceScreen extends StatelessWidget {
 
         // ── 22. LIMITACIÓN DE RESPONSABILIDAD DE GARDEN ─────────────────────
         _LegalSection(
-          '22. Limitación de responsabilidad de Garden',
-          'Garden actúa como intermediario tecnológico y no es parte del contrato de servicio entre Cliente y Cuidador. En consecuencia:\n\n'
+          '22. Limitación de responsabilidad y exención de demandas',
+          'Garden actúa exclusivamente como intermediario tecnológico y NO es parte del contrato de servicio entre Cliente y Cuidador. Los Cuidadores son prestadores de servicios independientes, no empleados, agentes ni representantes de Garden.\n\n'
+          'EXENCIÓN EXPRESA DE RESPONSABILIDAD POR CONDUCTA DE CUIDADORES:\n'
+          'Al aceptar estos Términos, el Usuario reconoce y acepta expresamente que:\n\n'
+          '1. Garden NO puede ser demandada, denunciada ni declarada responsable civil o penalmente por actos, omisiones, negligencia, maltrato, abuso o cualquier otra conducta de los Cuidadores durante la prestación del servicio.\n\n'
+          '2. Si un Cuidador causa daño a una mascota, a un Cliente o a un tercero, la responsabilidad legal recae ÚNICAMENTE sobre el Cuidador de forma individual. El Usuario renuncia expresamente a cualquier acción judicial, administrativa o extrajudicial contra Garden por hechos imputables a Cuidadores.\n\n'
+          '3. Esta renuncia es válida y ejecutable conforme al Art. 519 del Código Civil Boliviano (principio de autonomía de la voluntad y libertad contractual) y el Art. 520 (fuerza vinculante de los contratos). Al aceptar estos Términos, el Usuario manifiesta su consentimiento libre, voluntario e informado.\n\n'
+          '4. Garden actúa como intermediario de buena fe, verificando la identidad de los Cuidadores, pero no garantiza ni puede garantizar el comportamiento futuro de ninguna persona natural. La verificación de identidad no implica aval de carácter o conducta.\n\n'
+          'LIMITACIÓN GENERAL DE RESPONSABILIDAD:\n'
           '• Garden NO garantiza la calidad, seguridad ni resultado de los servicios prestados por los Cuidadores.\n\n'
-          '• Garden NO asume responsabilidad por daños, lesiones, pérdidas o fallecimiento de mascotas durante el servicio, salvo los casos expresamente cubiertos por el Fondo de Garantía Garden (Sección 11).\n\n'
-          '• La responsabilidad máxima de Garden ante cualquier reclamación está limitada al monto total pagado en la Reserva en disputa.\n\n'
+          '• Garden NO asume responsabilidad por daños, lesiones, pérdidas o fallecimiento de mascotas, salvo los casos expresamente cubiertos por el Fondo de Garantía Garden (Sección 11).\n\n'
+          '• La responsabilidad máxima de Garden ante cualquier reclamación que le sea atribuible directamente está limitada al monto de comisión cobrado en la Reserva en disputa.\n\n'
           '• Garden no es responsable por interrupciones del servicio causadas por fuerza mayor, fallas de terceros proveedores (internet, energía eléctrica, blockchain) o ataques cibernéticos externos.\n\n'
-          '• Garden no es responsable por el uso que los Cuidadores o Clientes hagan de la información intercambiada fuera de la Plataforma.',
+          '• Garden no es responsable por el uso que los Cuidadores o Clientes hagan de la información intercambiada fuera de la Plataforma.\n\n'
+          'MEDIACIÓN VOLUNTARIA: El hecho de que Garden ofrezca un proceso de mediación y un Fondo de Garantía (Sección 11) es un acto voluntario de buena fe y no constituye, en ningún caso, reconocimiento de responsabilidad legal.',
         ),
 
         // ── 23. MODIFICACIONES ───────────────────────────────────────────────

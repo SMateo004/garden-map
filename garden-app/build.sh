@@ -35,7 +35,7 @@ flutter pub get
 # ── 4. Build ─────────────────────────────────────────────────────────────────
 flutter build web \
   --release \
-  --dart-define=API_URL="${API_URL:-https://garden-api-1ldd.onrender.com/api}" \
+  --dart-define=API_URL="${API_URL:-https://api.gardenbo.com/api}" \
   --pwa-strategy offline-first
 
 # ── 5. Patch flutter_bootstrap.js — force local CanvasKit ───────────────────

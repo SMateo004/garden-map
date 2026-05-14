@@ -29,7 +29,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
   late TextEditingController _bioCtrl;
   DateTime? _dateOfBirth;
 
-  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   @override
   void initState() {

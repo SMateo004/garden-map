@@ -40,7 +40,7 @@ class _PetProfileSheet extends StatefulWidget {
 
 class _PetProfileSheetState extends State<_PetProfileSheet> {
   static const String _baseUrl =
-      String.fromEnvironment('API_URL', defaultValue: 'https://garden-api-1ldd.onrender.com/api');
+      String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   Map<String, dynamic>? _pet;
   bool _loading = true;

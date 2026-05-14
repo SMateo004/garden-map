@@ -21,7 +21,7 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
 
   static const _baseUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'https://garden-api-1ldd.onrender.com/api',
+    defaultValue: 'https://api.gardenbo.com/api',
   );
 
   @override

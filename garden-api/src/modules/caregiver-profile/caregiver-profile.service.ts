@@ -252,8 +252,6 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.maxPets !== undefined) updateData.maxPets = body.maxPets;
   if (body.oftenOut !== undefined) updateData.oftenOut = body.oftenOut;
   if (body.typicalDay !== undefined) updateData.typicalDay = body.typicalDay;
-  if (body.idDocument !== undefined) updateData.idDocument = body.idDocument;
-  if (body.selfie !== undefined) updateData.selfie = body.selfie;
   if (body.ciAnversoUrl !== undefined) updateData.ciAnversoUrl = ensureAbsoluteUrl(body.ciAnversoUrl) ?? null;
   if (body.ciReversoUrl !== undefined) updateData.ciReversoUrl = ensureAbsoluteUrl(body.ciReversoUrl) ?? null;
   if (body.ciNumber !== undefined) updateData.ciNumber = body.ciNumber;

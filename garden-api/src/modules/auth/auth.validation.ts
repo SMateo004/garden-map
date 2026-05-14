@@ -160,8 +160,6 @@ export const registerCaregiverProfileSchema = z.object({
     .array(z.string().url('Cada foto debe ser una URL válida'))
     .max(6, 'Máximo 6 fotos')
     .optional(),
-  idDocument: z.string().url().optional(),
-  selfie: z.string().url().optional(),
   ciAnversoUrl: z.string().url().optional(),
   ciReversoUrl: z.string().url().optional(),
   ciNumber: z.string().max(50).optional(),
@@ -237,8 +235,6 @@ export const patchCaregiverProfileSchema = z.object({
   oftenOut: z.boolean().optional(),
   typicalDay: z.string().min(MIN_TEXT_DRAFT).optional(),
   photos: z.array(z.string().url()).optional(),
-  idDocument: z.string().url().optional(),
-  selfie: z.string().url().optional(),
 });
 
 // --- Register client (simplificado) ---

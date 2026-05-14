@@ -15,7 +15,7 @@ class AdminTechnicalScreen extends StatefulWidget {
 class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
     with TickerProviderStateMixin {
   static const _baseUrl = String.fromEnvironment('API_URL',
-      defaultValue: 'https://garden-api-1ldd.onrender.com/api');
+      defaultValue: 'https://api.gardenbo.com/api');
 
   // Valores por defecto para cada setting (se usan si la API no devuelve el valor)
   static const Map<String, bool> _boolDefaults = {

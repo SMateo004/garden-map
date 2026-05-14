@@ -76,8 +76,6 @@ export interface PatchCaregiverProfileBody {
   maxPets?: number;
   oftenOut?: boolean;
   typicalDay?: string;
-  idDocument?: string;
-  selfie?: string;
   ciAnversoUrl?: string;
   ciReversoUrl?: string;
   ciNumber?: string;
