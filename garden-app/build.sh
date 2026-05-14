@@ -10,6 +10,10 @@ echo "▶ Flutter build — GARDEN web"
 echo "  version : $FLUTTER_VERSION"
 echo "  API_URL : ${API_URL:-NOT SET}"
 
+# ── 0. Git safe.directory — necesario en Vercel (dubious ownership error) ───
+git config --global --add safe.directory "$FLUTTER_DIR" 2>/dev/null || true
+git config --global --add safe.directory "$(pwd)" 2>/dev/null || true
+
 # ── 1. Install Flutter if not cached ────────────────────────────────────────
 if [ ! -f "$FLUTTER_BIN" ]; then
   echo "▶ Downloading Flutter $FLUTTER_VERSION..."
@@ -24,13 +28,14 @@ fi
 
 export PATH="$FLUTTER_DIR/bin:$PATH"
 export PATH="$FLUTTER_DIR/bin/cache/dart-sdk/bin:$PATH"
+export GIT_CONFIG_NOSYSTEM=1
 
 # ── 2. Verify ────────────────────────────────────────────────────────────────
-flutter --version
+flutter --version --suppress-analytics
 
 # ── 3. Configure ─────────────────────────────────────────────────────────────
 flutter config --enable-web --no-analytics
-flutter pub get
+flutter pub get --no-example
 
 # ── 4. Build ─────────────────────────────────────────────────────────────────
 flutter build web \
