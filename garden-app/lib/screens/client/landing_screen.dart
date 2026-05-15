@@ -50,30 +50,46 @@ class _LandingScreenState extends State<LandingScreen> {
             slivers: [
               // HEADER COMERCIAL
               SliverAppBar(
-                backgroundColor: bg,
+                backgroundColor: surface,
                 elevation: 0,
+                scrolledUnderElevation: 0,
                 pinned: true,
-                title: Image.asset('assets/images/logo-horizontal.png', height: 153),
+                toolbarHeight: 60,
+                titleSpacing: 24,
+                bottom: PreferredSize(
+                  preferredSize: const Size.fromHeight(1),
+                  child: Container(
+                    height: 1,
+                    color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder,
+                  ),
+                ),
+                title: Image.asset(
+                  isDark
+                      ? 'assets/images/logo-horizontal-dark.png'
+                      : 'assets/images/logo-horizontal.png',
+                  height: 38,
+                ),
                 actions: [
                   TextButton(
-                    onPressed: () => context.go('/register'),
-                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10)),
-                    child: const Text('Convertirse en cuidador', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 14)),
+                    onPressed: () => context.go('/become-caregiver'),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10)),
+                    child: const Text('Convertirse en cuidador', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 13)),
                   ),
-                  const SizedBox(width: 4),
                   TextButton(
                     onPressed: () => context.go('/login'),
-                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10)),
-                    child: Text('Iniciar sesión', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10)),
+                    child: Text('Iniciar sesión', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
                   ),
-                  const SizedBox(width: 8),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 20.0, top: 8, bottom: 8),
-                    child: GardenButton(
-                      label: 'Registrarse',
-                      width: 130,
-                      height: 40,
-                      onPressed: () => context.go('/register'),
+                  const SizedBox(width: 4),
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 24.0),
+                      child: GardenButton(
+                        label: 'Registrarse',
+                        width: 120,
+                        height: 38,
+                        onPressed: () => context.go('/register'),
+                      ),
                     ),
                   ),
                 ],
