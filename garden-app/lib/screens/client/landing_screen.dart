@@ -67,7 +67,7 @@ class _LandingScreenState extends State<LandingScreen> {
                   isDark
                       ? 'assets/images/logo-horizontal-dark.png'
                       : 'assets/images/logo-horizontal.png',
-                  height: 38,
+                  height: 52,
                 ),
                 actions: [
                   TextButton(
@@ -80,14 +80,14 @@ class _LandingScreenState extends State<LandingScreen> {
                     style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10)),
                     child: Text('Iniciar sesión', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 8),
                   Center(
                     child: Padding(
                       padding: const EdgeInsets.only(right: 24.0),
                       child: GardenButton(
                         label: 'Registrarse',
-                        width: 120,
-                        height: 38,
+                        width: 150,
+                        height: 40,
                         onPressed: () => context.go('/register'),
                       ),
                     ),
