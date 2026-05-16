@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_logo_loader.dart';
 import '../../widgets/notification_bell.dart';
 
 // ── Datos geográficos de Santa Cruz de la Sierra ──────────────────────────
@@ -376,7 +377,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         if (_minRating > 0) 'minRating': _minRating.toString(),
       };
       final uri = Uri.parse('$_baseUrl/caregivers').replace(queryParameters: params);
-      final response = await http.get(uri);
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
         final list = (data['data']['caregivers'] as List).cast<Map<String, dynamic>>();
@@ -1650,7 +1651,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   Widget _buildCaregiverList(ThemeData theme, bool isDark) {
     final displayed = _displayCaregivers;
 
-    if (_isLoading && _caregivers.isEmpty) return _buildLoadingSkeleton();
+    if (_isLoading && _caregivers.isEmpty) return const GardenLogoLoader();
     if (_hasError && _caregivers.isEmpty) {
       return Center(
         child: Column(
@@ -1692,8 +1693,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       itemBuilder: (context, i) {
         if (i == displayed.length) {
           return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: CircularProgressIndicator(color: GardenColors.primary, strokeWidth: 2)),
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: GardenLogoLoader(size: 120),
           );
         }
         return _buildCaregiverCard(displayed[i]);
@@ -1907,28 +1908,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       ),
     );
   }
-
-  Widget _buildLoadingSkeleton() => ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: 6,
-        itemBuilder: (_, __) => const Padding(
-          padding: EdgeInsets.only(bottom: 12),
-          child: GardenCard(
-            padding: EdgeInsets.all(14),
-            child: Row(children: [
-              GardenSkeleton(width: 50, height: 50, radius: GardenRadius.lg),
-              SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                GardenSkeleton(width: 140, height: 14),
-                SizedBox(height: 6),
-                GardenSkeleton(width: 90, height: 12),
-                SizedBox(height: 8),
-                GardenSkeleton(width: 180, height: 12),
-              ])),
-            ]),
-          ),
-        ),
-      );
 
   // ── Map Panel ─────────────────────────────────────────────────────────────
 

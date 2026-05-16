@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/temporada_alta_badge.dart';
 import '../../services/agentes_service.dart';
+import '../../widgets/garden_logo_loader.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CaregiverProfileScreen extends StatefulWidget {
@@ -32,22 +33,26 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   }
 
   Future<void> _loadAll() async {
-    // Get token once, then fire all requests in parallel
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
     if (mounted) setState(() => _authToken = token);
 
+    // Carga principal: cuidador + mascotas del cliente (máx 8 s)
     await Future.wait([
       _fetchCaregiver(),
       if (token.isNotEmpty) _fetchClientPets(token),
-      if (token.isNotEmpty) _fetchFavoriteStatus(token),
     ]);
     if (mounted) setState(() => _isLoading = false);
+
+    // Favoritos corre después — no bloquea la pantalla
+    if (token.isNotEmpty) _fetchFavoriteStatus(token);
   }
 
   Future<void> _fetchCaregiver() async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}'));
+      final response = await http
+          .get(Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}'))
+          .timeout(const Duration(seconds: 8));
       final data = jsonDecode(response.body);
       if (data['success'] == true && mounted) setState(() => _caregiver = data['data']);
     } catch (_) {}
@@ -58,7 +63,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
       final res = await http.get(
         Uri.parse('$_baseUrl/client/pets'),
         headers: {'Authorization': 'Bearer $token'},
-      );
+      ).timeout(const Duration(seconds: 8));
       final data = jsonDecode(res.body);
       if (data['success'] == true && mounted) {
         setState(() => _clientPets = data['data'] as List? ?? []);
@@ -74,7 +79,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
       final response = await http.get(
         Uri.parse('$_baseUrl/client/my-profile'),
         headers: {'Authorization': 'Bearer $token'},
-      );
+      ).timeout(const Duration(seconds: 8));
       final data = jsonDecode(response.body);
       if (data['success'] == true && mounted) {
         final favorites = (data['data']['favoriteCaregiverIds'] as List?)?.cast<String>() ?? [];
@@ -138,7 +143,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     if (_isLoading) {
       return Scaffold(
         backgroundColor: bg,
-        body: const Center(child: CircularProgressIndicator(color: GardenColors.primary)),
+        body: GardenLogoLoader(bgColor: bg),
       );
     }
 
