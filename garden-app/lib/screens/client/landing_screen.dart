@@ -234,29 +234,52 @@ class _LandingState extends State<LandingScreen> {
     elevation: 0,
     scrolledUnderElevation: 0,
     pinned: true,
-    toolbarHeight: 64,
-    titleSpacing: 24,
-    bottom: PreferredSize(
-      preferredSize: const Size.fromHeight(1),
-      child: Container(height: 1, color: pal.border),
+    toolbarHeight: 68,
+    automaticallyImplyLeading: false,
+    flexibleSpace: Container(
+      decoration: BoxDecoration(
+        color: pal.bg,
+        border: Border(bottom: BorderSide(color: pal.border, width: 1)),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Row(children: [
+            // Logo
+            GestureDetector(
+              onTap: () => context.go('/'),
+              child: Image.asset(pal.logo, height: 56),
+            ),
+            const Spacer(),
+
+            if (mobile)
+              Builder(builder: (c) => GestureDetector(
+                onTap: () => Scaffold.of(c).openEndDrawer(),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: pal.border),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.menu_rounded, color: pal.textPri, size: 22),
+                ),
+              ))
+            else ...[
+              // Nav links con Inter explícito
+              _HeaderLink('Conviértete en cuidador', () => context.go('/become-caregiver'), pal),
+              const SizedBox(width: 4),
+              _HeaderLink('Iniciar sesión', () => context.go('/login'), pal),
+              const SizedBox(width: 16),
+              // Separador vertical
+              Container(width: 1, height: 22, color: pal.border),
+              const SizedBox(width: 16),
+              // CTA Registrarse — pill style
+              _PrimaryBtn('Registrarse', () => context.go('/register'), w: 140, h: 40),
+            ],
+          ]),
+        ),
+      ),
     ),
-    title: Image.asset(pal.logo, height: 60),
-    actions: mobile
-        ? [
-            Builder(builder: (c) => IconButton(
-              icon: Icon(Icons.menu_rounded, color: pal.textPri, size: 26),
-              onPressed: () => Scaffold.of(c).openEndDrawer(),
-            )),
-            const SizedBox(width: 8),
-          ]
-        : [
-            _NavLink('Buscar cuidadores', () => context.go('/marketplace')),
-            _NavLink('Para cuidadores',   () => context.go('/become-caregiver')),
-            _NavLink('Iniciar sesión',    () => context.go('/login')),
-            const SizedBox(width: 12),
-            _PrimaryBtn('Registrarse', () => context.go('/register'), w: 150, h: 40),
-            const SizedBox(width: 24),
-          ],
   );
 
   // ── Hero ────────────────────────────────────────────────────────────────────
@@ -647,31 +670,38 @@ class _OutlineBtnState extends State<_OutlineBtn> {
   }
 }
 
-class _NavLink extends StatefulWidget {
-  final String label; final VoidCallback onTap;
-  const _NavLink(this.label, this.onTap);
-  @override State<_NavLink> createState() => _NavLinkState();
+class _HeaderLink extends StatefulWidget {
+  final String label; final VoidCallback onTap; final _P pal;
+  const _HeaderLink(this.label, this.onTap, this.pal);
+  @override State<_HeaderLink> createState() => _HeaderLinkState();
 }
-class _NavLinkState extends State<_NavLink> {
+class _HeaderLinkState extends State<_HeaderLink> {
   bool _h = false;
-  @override Widget build(BuildContext context) {
-    final pal = _Theme.of(context);
-    return MouseRegion(
-      onEnter: (_) => setState(() => _h = true),
-      onExit:  (_) => setState(() => _h = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
-          child: AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 150),
-            style: TextStyle(color: _h ? pal.accent : pal.textSec, fontWeight: FontWeight.w500, fontSize: 14),
-            child: Text(widget.label),
+  @override Widget build(BuildContext context) => MouseRegion(
+    onEnter: (_) => setState(() => _h = true),
+    onExit:  (_) => setState(() => _h = false),
+    cursor: SystemMouseCursors.click,
+    child: GestureDetector(
+      onTap: widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: _h ? widget.pal.border.withValues(alpha: 0.5) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          widget.label,
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: _h ? widget.pal.textPri : widget.pal.textSec,
+            letterSpacing: -0.1,
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 // ─── Search bar ───────────────────────────────────────────────────────────────

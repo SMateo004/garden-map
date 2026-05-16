@@ -99,7 +99,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_new_rounded,
               color: isDark ? GardenColors.darkTextHint : GardenColors.lightTextHint, size: 18),
-          onPressed: () => context.pop(),
+          onPressed: () => context.go('/'),
         ),
         title: Row(
           mainAxisSize: MainAxisSize.min,
