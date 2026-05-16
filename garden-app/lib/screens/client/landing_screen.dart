@@ -16,21 +16,23 @@ class _P {
     return h < 7 || h >= 19;
   }
 
-  Color get bg        => dark ? const Color(0xFF090E09) : const Color(0xFFF7FAF5);
-  Color get surface   => dark ? const Color(0xFF101710) : Colors.white;
-  Color get surfaceEl => dark ? const Color(0xFF172017) : const Color(0xFFEFF5E9);
-  Color get border    => dark ? const Color(0xFF1E301E) : const Color(0xFFDDE8D3);
+  // ── Colores día: crema cálida, neutral, profesional ──
+  Color get bg        => dark ? const Color(0xFF090E09) : const Color(0xFFFAF8F5);
+  Color get surface   => dark ? const Color(0xFF101710) : const Color(0xFFFFFFFF);
+  Color get surfaceEl => dark ? const Color(0xFF172017) : const Color(0xFFF3EFE8);
+  Color get border    => dark ? const Color(0xFF1E301E) : const Color(0xFFE3DDD5);
   Color get primary   => const Color(0xFF4A7C23);
-  Color get accent    => dark ? const Color(0xFF7BC142) : const Color(0xFF3A6B18);
-  Color get textPri   => dark ? const Color(0xFFF2F6F0) : const Color(0xFF1A2A10);
-  Color get textSec   => dark ? const Color(0xFF9BAE90) : const Color(0xFF5B7844);
-  Color get textMut   => dark ? const Color(0xFF556050) : const Color(0xFF8FAF72);
+  Color get accent    => dark ? const Color(0xFF7BC142) : const Color(0xFF3A6218);
+  Color get textPri   => dark ? const Color(0xFFF2F6F0) : const Color(0xFF1A1714);
+  Color get textSec   => dark ? const Color(0xFF9BAE90) : const Color(0xFF6B6059);
+  Color get textMut   => dark ? const Color(0xFF556050) : const Color(0xFF9E9488);
   String get logo => dark
       ? 'assets/images/logo-horizontal-dark.png'
       : 'assets/images/logo-horizontal.png';
+  // Hero: noche = negro profundo / día = crema muy suave
   List<Color> get heroGrad => dark
       ? [const Color(0xFF0A1A0A), const Color(0xFF060D06), const Color(0xFF0B190A)]
-      : [const Color(0xFFEEF7E4), const Color(0xFFE6F2D8), const Color(0xFFF3FAEd)];
+      : [const Color(0xFFFDF9F3), const Color(0xFFF8F3EA), const Color(0xFFFBF7F0)];
 }
 
 // ─── InheritedWidget para acceso global a la paleta ───────────────────────────
@@ -247,77 +249,122 @@ class _LandingState extends State<LandingScreen> {
   Widget _sliverHero(bool mobile) => SliverToBoxAdapter(
     child: Builder(builder: (context) {
       final pal = _Theme.of(context);
-      return Container(
+      // Alto fijo para que Positioned(bottom:0) funcione en el Stack
+      final heroH = mobile ? 700.0 : 800.0;
+
+      return SizedBox(
         width: double.infinity,
-        constraints: BoxConstraints(minHeight: mobile ? 580 : 680),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: pal.heroGrad, stops: const [0.0, 0.5, 1.0],
+        height: heroH,
+        child: Container(
+          clipBehavior: Clip.hardEdge,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft, end: Alignment.bottomRight,
+              colors: pal.heroGrad, stops: const [0.0, 0.5, 1.0],
+            ),
           ),
-        ),
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              mobile ? 24 : 80, mobile ? 56 : 80,
-              mobile ? 24 : 80, mobile ? 56 : 72,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const _GreenTag('GARDEN · La plataforma líder en Bolivia')
-                    .animate().fadeIn(duration: 500.ms)
-                    .slideY(begin: 0.2, end: 0, duration: 500.ms, curve: Curves.easeOutCubic),
-                const SizedBox(height: 24),
+          child: Stack(
+            clipBehavior: Clip.hardEdge,
+            children: [
 
-                Builder(builder: (ctx) {
-                  final p = _Theme.of(ctx);
-                  return Text(
-                    'Tu mascota merece lo mejor.',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      fontSize: mobile ? 38 : 72, fontWeight: FontWeight.w900,
-                      color: p.textPri, height: 1.05, letterSpacing: -2.5),
-                  );
-                }).animate().fadeIn(delay: 150.ms, duration: 600.ms)
-                  .slideY(begin: 0.2, end: 0, delay: 150.ms, duration: 600.ms, curve: Curves.easeOutCubic),
-                const SizedBox(height: 20),
-
-                Builder(builder: (ctx) {
-                  final p = _Theme.of(ctx);
-                  return Text(
-                    mobile
-                        ? 'Cuidadores verificados por IA.\nPagos asegurados con escrow blockchain.'
-                        : 'Cuidadores verificados por IA. Pagos asegurados con escrow blockchain.',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      fontSize: mobile ? 16 : 20, fontWeight: FontWeight.w400,
-                      color: p.textSec, height: 1.6),
-                  );
-                }).animate().fadeIn(delay: 300.ms, duration: 600.ms)
-                  .slideY(begin: 0.2, end: 0, delay: 300.ms, duration: 600.ms, curve: Curves.easeOutCubic),
-                const SizedBox(height: 36),
-
-                Wrap(
-                  alignment: WrapAlignment.center, spacing: 12, runSpacing: 12,
-                  children: [
-                    _PrimaryBtn('Encontrar cuidador 🐾', _search, w: 230, h: 52),
-                    _OutlineBtn('Cómo funciona', () {}, w: 170, h: 52),
-                  ],
-                ).animate().fadeIn(delay: 450.ms, duration: 600.ms)
-                 .slideY(begin: 0.2, end: 0, delay: 450.ms, duration: 600.ms, curve: Curves.easeOutCubic),
-                const SizedBox(height: 56),
-
-                _SearchBar(
-                  mobile: mobile, svc: _svc, zone: _zone, size: _size, zones: _zones,
-                  onSvcChange:  (v) => setState(() => _svc  = v),
-                  onZoneChange: (v) => setState(() => _zone = v),
-                  onSizeChange: (v) => setState(() => _size = v),
-                  onSearch: _search,
-                ).animate().fadeIn(delay: 600.ms, duration: 600.ms)
-                 .slideY(begin: 0.1, end: 0, delay: 600.ms, duration: 600.ms, curve: Curves.easeOutCubic),
+              // ── Mascotas decorativas de fondo (solo desktop) ────────────────
+              if (!mobile) ...[
+                // Gato — izquierda
+                Positioned(
+                  left: 0, bottom: 0,
+                  child: Opacity(
+                    opacity: pal.dark ? 0.22 : 0.48,
+                    child: Image.asset(
+                      'assets/images/pets/cat_home.png',
+                      height: heroH * 0.62,
+                      fit: BoxFit.contain,
+                    ),
+                  ).animate().fadeIn(delay: 700.ms, duration: 900.ms)
+                   .slideX(begin: -0.15, end: 0, delay: 700.ms, duration: 900.ms, curve: Curves.easeOutCubic),
+                ),
+                // Perro — derecha
+                Positioned(
+                  right: 0, bottom: 0,
+                  child: Opacity(
+                    opacity: pal.dark ? 0.22 : 0.48,
+                    child: Image.asset(
+                      'assets/images/pets/dog_walk.png',
+                      height: heroH * 0.68,
+                      fit: BoxFit.contain,
+                    ),
+                  ).animate().fadeIn(delay: 850.ms, duration: 900.ms)
+                   .slideX(begin: 0.15, end: 0, delay: 850.ms, duration: 900.ms, curve: Curves.easeOutCubic),
+                ),
               ],
-            ),
+
+              // ── Contenido central ──────────────────────────────────────────
+              Positioned.fill(
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      mobile ? 24 : 200, mobile ? 48 : 72,
+                      mobile ? 24 : 200, mobile ? 48 : 64,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const _GreenTag('GARDEN · La plataforma líder en Bolivia')
+                            .animate().fadeIn(duration: 500.ms)
+                            .slideY(begin: 0.2, end: 0, duration: 500.ms, curve: Curves.easeOutCubic),
+                        const SizedBox(height: 24),
+
+                        Builder(builder: (ctx) {
+                          final p = _Theme.of(ctx);
+                          return Text(
+                            'Tu mascota merece lo mejor.',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              fontSize: mobile ? 36 : 68, fontWeight: FontWeight.w900,
+                              color: p.textPri, height: 1.05, letterSpacing: -2.5),
+                          );
+                        }).animate().fadeIn(delay: 150.ms, duration: 600.ms)
+                          .slideY(begin: 0.2, end: 0, delay: 150.ms, duration: 600.ms, curve: Curves.easeOutCubic),
+                        const SizedBox(height: 20),
+
+                        Builder(builder: (ctx) {
+                          final p = _Theme.of(ctx);
+                          return Text(
+                            mobile
+                                ? 'Cuidadores verificados por IA.\nPagos asegurados con escrow blockchain.'
+                                : 'Cuidadores verificados por IA. Pagos asegurados con escrow blockchain.',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              fontSize: mobile ? 15 : 19, fontWeight: FontWeight.w400,
+                              color: p.textSec, height: 1.6),
+                          );
+                        }).animate().fadeIn(delay: 300.ms, duration: 600.ms)
+                          .slideY(begin: 0.2, end: 0, delay: 300.ms, duration: 600.ms, curve: Curves.easeOutCubic),
+                        const SizedBox(height: 36),
+
+                        Wrap(
+                          alignment: WrapAlignment.center, spacing: 12, runSpacing: 12,
+                          children: [
+                            _PrimaryBtn('Encontrar cuidador 🐾', _search, w: 230, h: 52),
+                            _OutlineBtn('Cómo funciona', () {}, w: 170, h: 52),
+                          ],
+                        ).animate().fadeIn(delay: 450.ms, duration: 600.ms)
+                         .slideY(begin: 0.2, end: 0, delay: 450.ms, duration: 600.ms, curve: Curves.easeOutCubic),
+                        const SizedBox(height: 48),
+
+                        _SearchBar(
+                          mobile: mobile, svc: _svc, zone: _zone, size: _size, zones: _zones,
+                          onSvcChange:  (v) => setState(() => _svc  = v),
+                          onZoneChange: (v) => setState(() => _zone = v),
+                          onSizeChange: (v) => setState(() => _size = v),
+                          onSearch: _search,
+                        ).animate().fadeIn(delay: 600.ms, duration: 600.ms)
+                         .slideY(begin: 0.1, end: 0, delay: 600.ms, duration: 600.ms, curve: Curves.easeOutCubic),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       );
