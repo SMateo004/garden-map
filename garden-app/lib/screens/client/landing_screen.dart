@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // ── App store links (actualizar cuando estén disponibles) ─────────────────────
@@ -314,8 +315,8 @@ class _LandingState extends State<LandingScreen> {
               _sliverHero(mobile),
               // Stage 0 — después del hero → app section primero
               _petStage(0),
-              SliverToBoxAdapter(key: _howItWorksKey, child: _AppSection(mobile: mobile)),
-              SliverToBoxAdapter(child: _PainSection(scroll: _scroll, mobile: mobile)),
+              SliverToBoxAdapter(child: _AppSection(mobile: mobile)),
+              SliverToBoxAdapter(key: _howItWorksKey, child: _PainSection(scroll: _scroll, mobile: mobile)),
               SliverToBoxAdapter(child: _MidCta(onTap: _search, mobile: mobile)),
               // Stage 1 — entre mid-CTA y beneficios
               _petStage(1),
@@ -1392,20 +1393,23 @@ class _PhoneMockup extends StatelessWidget {
   final _P pal;
   const _PhoneMockup({required this.pal});
   @override Widget build(BuildContext context) => Container(
-    width: 200, height: 340,
+    width: 220, height: 380,
     decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: 0.08),
-      borderRadius: BorderRadius.circular(32),
-      border: Border.all(color: Colors.white.withValues(alpha: 0.18), width: 2),
+      borderRadius: BorderRadius.circular(28),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.35),
+          blurRadius: 40, offset: const Offset(0, 16),
+        ),
+      ],
     ),
-    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Icon(Icons.pets_rounded, color: Colors.white.withValues(alpha: 0.9), size: 48),
-      const SizedBox(height: 16),
-      Text('GARDEN', style: GoogleFonts.inter(
-        color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20, letterSpacing: 1)),
-      const SizedBox(height: 8),
-      Text('Próximamente', style: TextStyle(color: Colors.white54, fontSize: 12)),
-    ]),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: Image.asset(
+        'assets/images/simulador-garden.png',
+        fit: BoxFit.cover,
+      ),
+    ),
   );
 }
 
@@ -1500,26 +1504,139 @@ class _AppStoreBtn extends StatelessWidget {
 
 class _Footer extends StatelessWidget {
   final bool mobile; const _Footer({required this.mobile});
+
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
   @override Widget build(BuildContext context) {
     final pal = _Theme.of(context);
+    final px = mobile ? 24.0 : 80.0;
+
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.symmetric(horizontal: mobile ? 24 : 80, vertical: 40),
+      padding: EdgeInsets.fromLTRB(px, 48, px, 32),
       decoration: BoxDecoration(border: Border(top: BorderSide(color: pal.border))),
       child: Column(children: [
+        // ── Logo ──────────────────────────────────────────────────────
         Image.asset(pal.logo, height: 36),
-        const SizedBox(height: 16),
-        Text('© 2025 GARDEN · Santa Cruz de la Sierra, Bolivia',
-          style: TextStyle(color: pal.textMut, fontSize: 13)),
-        const SizedBox(height: 12),
-        Wrap(alignment: WrapAlignment.center, spacing: 24, children: [
-          Text('Términos de uso', style: TextStyle(color: pal.textSec, fontSize: 13)),
-          Text('Privacidad',      style: TextStyle(color: pal.textSec, fontSize: 13)),
-          Text('Contacto',        style: TextStyle(color: pal.textSec, fontSize: 13)),
+        const SizedBox(height: 24),
+
+        // ── Redes sociales ────────────────────────────────────────────
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 12, runSpacing: 12,
+          children: [
+            _SocialBtn(icon: FontAwesomeIcons.facebook,  label: 'Facebook',
+                color: const Color(0xFF1877F2),
+                url: 'https://www.facebook.com/profile.php?id=61589975727812',
+                pal: pal, openUrl: _openUrl),
+            _SocialBtn(icon: FontAwesomeIcons.instagram, label: 'Instagram',
+                color: const Color(0xFFE1306C),
+                url: 'https://www.instagram.com/gardenbo.pet/',
+                pal: pal, openUrl: _openUrl),
+            _SocialBtn(icon: FontAwesomeIcons.linkedin,  label: 'LinkedIn',
+                color: const Color(0xFF0A66C2),
+                url: 'https://www.linkedin.com/company/gardenbo',
+                pal: pal, openUrl: _openUrl),
+            _SocialBtn(icon: FontAwesomeIcons.tiktok,    label: 'TikTok',
+                color: pal.dark ? Colors.white : const Color(0xFF010101),
+                url: 'https://www.tiktok.com/@gardenbo.pet',
+                pal: pal, openUrl: _openUrl),
+          ],
+        ),
+        const SizedBox(height: 28),
+
+        // ── Info de contacto ──────────────────────────────────────────
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 28, runSpacing: 10,
+          children: [
+            _ContactItem(icon: Icons.location_on_outlined,
+                text: 'C. 6 Barrio Equipetrol, Santa Cruz', pal: pal),
+            _ContactItem(icon: Icons.email_outlined,
+                text: 'contactogardenbo@gmail.com', pal: pal,
+                url: 'mailto:contactogardenbo@gmail.com', openUrl: _openUrl),
+            _ContactItem(icon: Icons.phone_outlined,
+                text: '+591 75933133', pal: pal,
+                url: 'tel:+59175933133', openUrl: _openUrl),
+          ],
+        ),
+        const SizedBox(height: 28),
+
+        // ── Legal ─────────────────────────────────────────────────────
+        Divider(color: pal.border, height: 1),
+        const SizedBox(height: 20),
+        Wrap(alignment: WrapAlignment.center, spacing: 24, runSpacing: 8, children: [
+          Text('© 2025 GARDEN · Bolivia',
+            style: TextStyle(color: pal.textMut, fontSize: 12)),
+          Text('Términos de uso',
+            style: TextStyle(color: pal.textSec, fontSize: 12)),
+          Text('Privacidad',
+            style: TextStyle(color: pal.textSec, fontSize: 12)),
         ]),
       ]),
     );
   }
+}
+
+class _SocialBtn extends StatefulWidget {
+  final IconData icon; final String label, url, color_; final _P pal;
+  final Color color;
+  final Future<void> Function(String) openUrl;
+  const _SocialBtn({
+    required this.icon, required this.label, required this.color,
+    required this.url, required this.pal, required this.openUrl,
+  }) : color_ = '';
+  @override State<_SocialBtn> createState() => _SocialBtnState();
+}
+class _SocialBtnState extends State<_SocialBtn> {
+  bool _h = false;
+  @override Widget build(BuildContext context) => MouseRegion(
+    onEnter: (_) => setState(() => _h = true),
+    onExit:  (_) => setState(() => _h = false),
+    cursor: SystemMouseCursors.click,
+    child: GestureDetector(
+      onTap: () => widget.openUrl(widget.url),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: _h ? widget.color.withValues(alpha: 0.12) : widget.pal.surfaceEl,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _h ? widget.color.withValues(alpha: 0.5) : widget.pal.border,
+          ),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          FaIcon(widget.icon, size: 15,
+            color: _h ? widget.color : widget.pal.textSec),
+          const SizedBox(width: 8),
+          Text(widget.label,
+            style: TextStyle(
+              color: _h ? widget.color : widget.pal.textSec,
+              fontSize: 13, fontWeight: FontWeight.w600,
+            )),
+        ]),
+      ),
+    ),
+  );
+}
+
+class _ContactItem extends StatelessWidget {
+  final IconData icon; final String text; final _P pal;
+  final String? url; final Future<void> Function(String)? openUrl;
+  const _ContactItem({required this.icon, required this.text, required this.pal,
+      this.url, this.openUrl});
+  @override Widget build(BuildContext context) => GestureDetector(
+    onTap: url != null ? () => openUrl!(url!) : null,
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(icon, size: 14, color: pal.accent),
+      const SizedBox(width: 6),
+      Text(text, style: TextStyle(color: pal.textSec, fontSize: 13)),
+    ]),
+  );
 }
 
 // ─── Mobile drawer ────────────────────────────────────────────────────────────
