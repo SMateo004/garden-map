@@ -316,6 +316,7 @@ final GoRouter _router = GoRouter(
       name: 'caregiverProfile',
       builder: (context, state) => CaregiverProfileScreen(
         caregiverId: state.pathParameters['id']!,
+        initialData: state.extra as Map<String, dynamic>?,
       ),
     ),
     GoRoute(

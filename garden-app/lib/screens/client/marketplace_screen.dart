@@ -1869,7 +1869,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     }
 
     return GestureDetector(
-      onTap: () => context.push('/caregiver/${caregiver['id']}'),
+      onTap: () => context.push('/caregiver/${caregiver['id']}', extra: caregiver),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(

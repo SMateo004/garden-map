@@ -11,7 +11,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class CaregiverProfileScreen extends StatefulWidget {
   final String caregiverId;
-  const CaregiverProfileScreen({super.key, required this.caregiverId});
+  /// Datos básicos pre-cargados desde el marketplace (nombre, rating, zona, etc.)
+  /// Si se proveen, la pantalla se muestra al instante sin spinner.
+  final Map<String, dynamic>? initialData;
+
+  const CaregiverProfileScreen({
+    super.key,
+    required this.caregiverId,
+    this.initialData,
+  });
 
   @override
   State<CaregiverProfileScreen> createState() => _CaregiverProfileScreenState();
@@ -19,7 +27,9 @@ class CaregiverProfileScreen extends StatefulWidget {
 
 class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   Map<String, dynamic>? _caregiver;
+  // true = esperando la respuesta completa del API (solo cuando no hay initialData)
   bool _isLoading = true;
+  bool _loadError = false;
   List<dynamic> _clientPets = [];
   String _authToken = '';
   int _selectedPhotoIndex = 0;
@@ -29,6 +39,11 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   @override
   void initState() {
     super.initState();
+    // Si tenemos datos básicos del marketplace, los mostramos de inmediato
+    if (widget.initialData != null) {
+      _caregiver = widget.initialData;
+      _isLoading = false;
+    }
     _loadAll();
   }
 
@@ -37,25 +52,40 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     final token = prefs.getString('access_token') ?? '';
     if (mounted) setState(() => _authToken = token);
 
-    // Carga principal: cuidador + mascotas del cliente (máx 8 s)
+    // Carga completa en background (foto galería, bio, reseñas, mascotas)
     await Future.wait([
       _fetchCaregiver(),
       if (token.isNotEmpty) _fetchClientPets(token),
     ]);
     if (mounted) setState(() => _isLoading = false);
 
-    // Favoritos corre después — no bloquea la pantalla
+    // Favoritos: no bloquea
     if (token.isNotEmpty) _fetchFavoriteStatus(token);
   }
 
   Future<void> _fetchCaregiver() async {
-    try {
-      final response = await http
-          .get(Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}'))
-          .timeout(const Duration(seconds: 8));
-      final data = jsonDecode(response.body);
-      if (data['success'] == true && mounted) setState(() => _caregiver = data['data']);
-    } catch (_) {}
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final response = await http
+            .get(Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}'))
+            .timeout(const Duration(seconds: 10));
+        final data = jsonDecode(response.body);
+        if (response.statusCode == 404) {
+          // El cuidador realmente no existe — solo aquí mostramos "no encontrado"
+          if (mounted && _caregiver == null) setState(() => _loadError = true);
+          return;
+        }
+        if (data['success'] == true && mounted) {
+          setState(() { _caregiver = data['data']; _loadError = false; });
+          return;
+        }
+      } catch (_) {
+        // timeout o red — reintenta
+        await Future.delayed(const Duration(milliseconds: 600));
+      }
+    }
+    // Agotó reintentos: si no hay datos básicos, marca error
+    if (mounted && _caregiver == null) setState(() => _loadError = true);
   }
 
   Future<void> _fetchClientPets(String token) async {
@@ -140,18 +170,42 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
-    if (_isLoading) {
+    // Solo muestra loader si no hay ningún dato todavía
+    if (_isLoading && _caregiver == null) {
       return Scaffold(
         backgroundColor: bg,
         body: GardenLogoLoader(bgColor: bg),
       );
     }
 
-    if (_caregiver == null) {
+    // Error real (404 o 3 reintentos fallidos) y sin datos pre-cargados
+    if (_loadError && _caregiver == null) {
       return Scaffold(
         backgroundColor: bg,
-        appBar: AppBar(backgroundColor: surface),
-        body: Center(child: Text('Cuidador no encontrado', style: TextStyle(color: textColor))),
+        appBar: AppBar(
+          backgroundColor: surface,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 18),
+            onPressed: () => context.pop(),
+          ),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.wifi_off_rounded, size: 52, color: subtextColor),
+              const SizedBox(height: 16),
+              Text('No se pudo cargar', style: TextStyle(color: textColor, fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Text('Verifica tu conexión e intenta de nuevo', style: TextStyle(color: subtextColor, fontSize: 13)),
+              const SizedBox(height: 24),
+              GardenButton(label: 'Reintentar', width: 140, onPressed: () {
+                setState(() { _loadError = false; _isLoading = true; });
+                _loadAll();
+              }),
+            ],
+          ),
+        ),
       );
     }
 
