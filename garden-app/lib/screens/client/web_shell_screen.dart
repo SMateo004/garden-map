@@ -151,7 +151,7 @@ class _WebShellScreenState extends State<WebShellScreen> {
                           padding: const EdgeInsets.only(right: 8, left: 4),
                           child: GardenButton(
                             label: 'Registrarse',
-                            width: 120,
+                            width: 150,
                             height: 38,
                             onPressed: () => context.go('/register'),
                           ),
