@@ -122,8 +122,11 @@ class _LandingState extends State<LandingScreen> {
   final _scroll    = ScrollController();
   bool _isDark     = _P.isNight;
   String  _svc     = 'paseo';
-  String? _zone, _size;
+  String? _zone, _size, _petType;
   Timer?  _themeTimer;
+
+  /// Key para el scroll-to de "Cómo funciona"
+  final _howItWorksKey = GlobalKey();
 
   /// GlobalKeys para las 3 zonas de stage de mascotas (SizedBox en el scroll)
   final _stageKeys = List.generate(3, (_) => GlobalKey());
@@ -153,9 +156,20 @@ class _LandingState extends State<LandingScreen> {
 
   void _search() {
     var q = '?service=$_svc';
-    if (_zone != null) q += '&zone=$_zone';
-    if (_size  != null) q += '&size=$_size';
+    if (_zone    != null) q += '&zone=$_zone';
+    if (_size    != null) q += '&size=$_size';
+    if (_petType != null) q += '&petType=$_petType';
     context.go('/marketplace$q');
+  }
+
+  void _scrollToHowItWorks() {
+    final ctx = _howItWorksKey.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(ctx,
+        duration: const Duration(milliseconds: 700),
+        curve: Curves.easeOutCubic,
+      );
+    }
   }
 
   // ── Pet stage sliver (espacio visual para que la magia suceda) ───────────────
@@ -185,7 +199,7 @@ class _LandingState extends State<LandingScreen> {
               _sliverHero(mobile),
               // Stage 0 — después del hero
               _petStage(0),
-              SliverToBoxAdapter(child: _PainSection(scroll: _scroll, mobile: mobile)),
+              SliverToBoxAdapter(child: _PainSection(key: _howItWorksKey, scroll: _scroll, mobile: mobile)),
               SliverToBoxAdapter(child: _MidCta(onTap: _search, mobile: mobile)),
               // Stage 1 — entre mid-CTA y beneficios
               _petStage(1),
@@ -323,11 +337,6 @@ class _LandingState extends State<LandingScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const _GreenTag('GARDEN · La plataforma líder en Bolivia')
-                            .animate().fadeIn(duration: 500.ms)
-                            .slideY(begin: 0.2, end: 0, duration: 500.ms, curve: Curves.easeOutCubic),
-                        const SizedBox(height: 24),
-
                         Builder(builder: (ctx) {
                           final p = _Theme.of(ctx);
                           return Text(
@@ -360,17 +369,19 @@ class _LandingState extends State<LandingScreen> {
                           alignment: WrapAlignment.center, spacing: 12, runSpacing: 12,
                           children: [
                             _PrimaryBtn('Encontrar cuidador 🐾', _search, w: 230, h: 52),
-                            _OutlineBtn('Cómo funciona', () {}, w: 170, h: 52),
+                            _OutlineBtn('Cómo funciona', _scrollToHowItWorks, w: 170, h: 52),
                           ],
                         ).animate().fadeIn(delay: 450.ms, duration: 600.ms)
                          .slideY(begin: 0.2, end: 0, delay: 450.ms, duration: 600.ms, curve: Curves.easeOutCubic),
                         const SizedBox(height: 48),
 
                         _SearchBar(
-                          mobile: mobile, svc: _svc, zone: _zone, size: _size, zones: _zones,
-                          onSvcChange:  (v) => setState(() => _svc  = v),
-                          onZoneChange: (v) => setState(() => _zone = v),
-                          onSizeChange: (v) => setState(() => _size = v),
+                          mobile: mobile, svc: _svc, zone: _zone, size: _size,
+                          petType: _petType, zones: _zones,
+                          onSvcChange:     (v) => setState(() => _svc     = v),
+                          onZoneChange:    (v) => setState(() => _zone    = v),
+                          onSizeChange:    (v) => setState(() => _size    = v),
+                          onPetTypeChange: (v) => setState(() => _petType = v),
                           onSearch: _search,
                         ).animate().fadeIn(delay: 600.ms, duration: 600.ms)
                          .slideY(begin: 0.1, end: 0, delay: 600.ms, duration: 600.ms, curve: Curves.easeOutCubic),
@@ -665,15 +676,19 @@ class _NavLinkState extends State<_NavLink> {
 
 // ─── Search bar ───────────────────────────────────────────────────────────────
 class _SearchBar extends StatelessWidget {
-  final bool mobile; final String svc; final String? zone, size;
+  final bool mobile;
+  final String svc;
+  final String? zone, size, petType;
   final Map<String, String> zones;
   final ValueChanged<String> onSvcChange;
-  final ValueChanged<String?> onZoneChange, onSizeChange;
+  final ValueChanged<String?> onZoneChange, onSizeChange, onPetTypeChange;
   final VoidCallback onSearch;
   const _SearchBar({
-    required this.mobile, required this.svc, required this.zone, required this.size,
-    required this.zones, required this.onSvcChange, required this.onZoneChange,
-    required this.onSizeChange, required this.onSearch,
+    required this.mobile, required this.svc, required this.zone,
+    required this.size, required this.petType, required this.zones,
+    required this.onSvcChange, required this.onZoneChange,
+    required this.onSizeChange, required this.onPetTypeChange,
+    required this.onSearch,
   });
   @override Widget build(BuildContext context) {
     final pal = _Theme.of(context);
@@ -692,17 +707,23 @@ class _SearchBar extends StatelessWidget {
         children: [
           _SvcToggle(selected: svc, onChanged: onSvcChange),
           _DDark<String>(
-            w: 190, value: zone, hint: 'Zona', icon: Icons.location_on_rounded,
+            w: 148, value: petType, hint: 'Mascota', icon: Icons.pets_rounded,
+            items: ['Perro', 'Gato'].map((e) =>
+              DropdownMenuItem(value: e, child: Text(e))).toList(),
+            onChanged: onPetTypeChange,
+          ),
+          _DDark<String>(
+            w: 180, value: zone, hint: 'Zona', icon: Icons.location_on_rounded,
             items: zones.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
             onChanged: onZoneChange,
           ),
           _DDark<String>(
-            w: 155, value: size, hint: 'Tamaño', icon: Icons.straighten,
+            w: 148, value: size, hint: 'Tamaño', icon: Icons.straighten,
             items: ['PEQUEÑO','MEDIANO','GRANDE','GIGANTE'].map((e) =>
               DropdownMenuItem(value: e, child: Text(e[0]+e.substring(1).toLowerCase()))).toList(),
             onChanged: onSizeChange,
           ),
-          _PrimaryBtn('Buscar 🔍', onSearch, w: 140, h: 52),
+          _PrimaryBtn('Buscar 🔍', onSearch, w: 130, h: 52),
         ],
       ),
     );
@@ -768,7 +789,7 @@ class _DDark<T> extends StatelessWidget {
 
 class _PainSection extends StatelessWidget {
   final ScrollController scroll; final bool mobile;
-  const _PainSection({required this.scroll, required this.mobile});
+  const _PainSection({super.key, required this.scroll, required this.mobile});
   @override Widget build(BuildContext context) {
     final pal = _Theme.of(context);
     return Container(
