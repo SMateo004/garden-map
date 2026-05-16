@@ -320,8 +320,9 @@ class _LandingState extends State<LandingScreen> {
               _petStage(1),
               SliverToBoxAdapter(child: _BenefitsSection(scroll: _scroll, mobile: mobile)),
               SliverToBoxAdapter(child: _TestiSection(scroll: _scroll, mobile: mobile)),
-              // Stage 2 — entre testimonios y FAQ
+              // Stage 2 — entre testimonios y app section
               _petStage(2),
+              SliverToBoxAdapter(child: _AppSection(mobile: mobile)),
               SliverToBoxAdapter(child: _FaqSection(scroll: _scroll, mobile: mobile)),
               SliverToBoxAdapter(child: _FinalCta(mobile: mobile)),
               SliverToBoxAdapter(child: _Footer(mobile: mobile)),
@@ -1222,6 +1223,190 @@ class _FaqTileState extends State<_FaqTile> {
       ]),
     );
   }
+}
+
+// ─── App download section ─────────────────────────────────────────────────────
+class _AppSection extends StatelessWidget {
+  final bool mobile;
+  const _AppSection({required this.mobile});
+
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pal = _Theme.of(context);
+    return Container(
+        margin: EdgeInsets.symmetric(horizontal: mobile ? 16 : 80, vertical: 24),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: pal.dark
+                ? [const Color(0xFF0F2010), const Color(0xFF172A17)]
+                : [const Color(0xFF2E5A12), const Color(0xFF4A7C23)],
+          ),
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF4A7C23).withValues(alpha: pal.dark ? 0.35 : 0.28),
+              blurRadius: 48,
+              offset: const Offset(0, 16),
+            ),
+          ],
+        ),
+        child: mobile ? _buildMobile(context, pal) : _buildDesktop(context, pal),
+      ).animate().fadeIn(delay: 200.ms, duration: 600.ms).slideY(begin: 0.06, end: 0, delay: 200.ms, duration: 600.ms);
+  }
+
+  Widget _buildDesktop(BuildContext context, _P pal) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 64, vertical: 56),
+      child: Row(
+        children: [
+          // ── Texto izquierdo ────────────────────────────────────────
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text('📱 Disponible en iOS y Android',
+                    style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(height: 20),
+                Text('Llevá a GARDEN\nen tu bolsillo',
+                  style: GoogleFonts.inter(
+                    fontSize: 40, fontWeight: FontWeight.w900,
+                    color: Colors.white, letterSpacing: -1.5, height: 1.1,
+                  )),
+                const SizedBox(height: 16),
+                Text(
+                  'GPS en tiempo real en cada paseo, notificaciones instantáneas, chat con el cuidador y pago seguro desde tu teléfono.',
+                  style: GoogleFonts.inter(color: Colors.white70, fontSize: 15, height: 1.6),
+                ),
+                const SizedBox(height: 32),
+                Row(children: [
+                  _Btn(icon: Icons.apple_rounded, label: 'App Store',
+                      sub: 'Disponible en', onTap: () => _openUrl(_kAppStoreUrl)),
+                  const SizedBox(width: 12),
+                  _Btn(icon: Icons.android_rounded, label: 'Play Store',
+                      sub: 'Disponible en', onTap: () => _openUrl(_kPlayStoreUrl)),
+                ]),
+              ],
+            ),
+          ),
+          const SizedBox(width: 48),
+          // ── Mockup derecho ─────────────────────────────────────────
+          _PhoneMockup(pal: pal),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobile(BuildContext context, _P pal) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      child: Column(children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: const Text('📱 iOS y Android',
+            style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+        ),
+        const SizedBox(height: 16),
+        Text('GARDEN en tu\nteléfono',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.inter(
+            fontSize: 32, fontWeight: FontWeight.w900,
+            color: Colors.white, letterSpacing: -1.2, height: 1.1,
+          )),
+        const SizedBox(height: 12),
+        Text(
+          'GPS en vivo, notificaciones, chat y pago seguro desde tu app.',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.inter(color: Colors.white70, fontSize: 14, height: 1.55),
+        ),
+        const SizedBox(height: 28),
+        Row(children: [
+          Expanded(child: _Btn(icon: Icons.apple_rounded, label: 'App Store',
+              sub: 'Disponible en', onTap: () => _openUrl(_kAppStoreUrl))),
+          const SizedBox(width: 10),
+          Expanded(child: _Btn(icon: Icons.android_rounded, label: 'Play Store',
+              sub: 'Disponible en', onTap: () => _openUrl(_kPlayStoreUrl))),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _Btn extends StatefulWidget {
+  final IconData icon; final String label, sub; final VoidCallback onTap;
+  const _Btn({required this.icon, required this.label, required this.sub, required this.onTap});
+  @override State<_Btn> createState() => _BtnState();
+}
+class _BtnState extends State<_Btn> {
+  bool _h = false;
+  @override Widget build(BuildContext context) => MouseRegion(
+    onEnter: (_) => setState(() => _h = true),
+    onExit:  (_) => setState(() => _h = false),
+    cursor: SystemMouseCursors.click,
+    child: GestureDetector(
+      onTap: widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        decoration: BoxDecoration(
+          color: _h ? Colors.white : Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(widget.icon, color: _h ? const Color(0xFF3A6218) : Colors.white, size: 22),
+          const SizedBox(width: 10),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Text(widget.sub,
+              style: TextStyle(color: _h ? const Color(0xFF3A6218) : Colors.white60, fontSize: 10)),
+            Text(widget.label,
+              style: TextStyle(
+                color: _h ? const Color(0xFF3A6218) : Colors.white,
+                fontWeight: FontWeight.w800, fontSize: 15,
+              )),
+          ]),
+        ]),
+      ),
+    ),
+  );
+}
+
+class _PhoneMockup extends StatelessWidget {
+  final _P pal;
+  const _PhoneMockup({required this.pal});
+  @override Widget build(BuildContext context) => Container(
+    width: 200, height: 340,
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(32),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.18), width: 2),
+    ),
+    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Icon(Icons.pets_rounded, color: Colors.white.withValues(alpha: 0.9), size: 48),
+      const SizedBox(height: 16),
+      Text('GARDEN', style: GoogleFonts.inter(
+        color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20, letterSpacing: 1)),
+      const SizedBox(height: 8),
+      Text('Próximamente', style: TextStyle(color: Colors.white54, fontSize: 12)),
+    ]),
+  );
 }
 
 class _FinalCta extends StatelessWidget {
