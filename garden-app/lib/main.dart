@@ -181,6 +181,7 @@ final GoRouter _router = GoRouter(
           initialService: q['service'],
           initialZone: q['zone'],
           initialSize: q['size'],
+          initialPetType: q['petType'],
         );
       },
     ),

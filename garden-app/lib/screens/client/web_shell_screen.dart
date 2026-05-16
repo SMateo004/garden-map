@@ -15,6 +15,7 @@ class WebShellScreen extends StatefulWidget {
   final String? initialService;
   final String? initialZone;
   final String? initialSize;
+  final String? initialPetType;
 
   const WebShellScreen({
     super.key,
@@ -22,6 +23,7 @@ class WebShellScreen extends StatefulWidget {
     this.initialService,
     this.initialZone,
     this.initialSize,
+    this.initialPetType,
   });
 
   @override
@@ -67,6 +69,7 @@ class _WebShellScreenState extends State<WebShellScreen> {
           initialService: widget.initialService,
           initialZone: widget.initialZone,
           initialSize: widget.initialSize,
+          initialPetType: widget.initialPetType,
         );
       case 1:
         return const MyBookingsScreen();

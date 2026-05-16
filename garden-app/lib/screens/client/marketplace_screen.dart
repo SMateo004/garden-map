@@ -137,6 +137,7 @@ class MarketplaceScreen extends StatefulWidget {
   final String? initialService;
   final String? initialZone;
   final String? initialSize;
+  final String? initialPetType;
   final bool isMobileShell;
 
   const MarketplaceScreen({
@@ -144,6 +145,7 @@ class MarketplaceScreen extends StatefulWidget {
     this.initialService,
     this.initialZone,
     this.initialSize,
+    this.initialPetType,
     this.isMobileShell = false,
   });
 
@@ -162,6 +164,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   // ── Filters (API) ──
   String _selectedService = 'todos';
   String? _selectedZone;
+  String? _selectedPetType; // 'PERRO' | 'GATO' | null (todos)
   int? _minExperienceYears;
   bool _filterAggressive = false;
   bool _filterPuppies = false;
@@ -203,6 +206,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     int n = 0;
     if (_selectedService != 'todos') n++;
     if (_selectedZone != null) n++;
+    if (_selectedPetType != null) n++;
     if (_searchQuery.isNotEmpty) n++;
     if (_minExperienceYears != null) n++;
     if (_filterAggressive) n++;
@@ -279,6 +283,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     if (widget.initialService != null) _selectedService = widget.initialService!;
     if (widget.initialZone != null) _selectedZone = widget.initialZone;
     if (widget.initialSize != null) _selectedSizes = [widget.initialSize!];
+    if (widget.initialPetType != null) _selectedPetType = widget.initialPetType!.toUpperCase();
 
     _loadInitialData();
     if (kIsWeb) _checkOnboarding();
@@ -360,6 +365,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         'page': _currentPage.toString(),
         if (_selectedService != 'todos') 'service': _selectedService,
         if (_selectedZone != null) 'zone': _selectedZone!.toLowerCase(),
+        if (_selectedPetType != null) 'petType': _selectedPetType!,
         if (_minExperienceYears != null && _minExperienceYears! > 0) 'experienceYears': _minExperienceYears.toString(),
         if (_filterAggressive) 'acceptAggressive': 'true',
         if (_filterPuppies) 'acceptPuppies': 'true',
@@ -403,6 +409,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     setState(() {
       _selectedService = 'todos';
       _selectedZone = null;
+      _selectedPetType = null;
       _searchQuery = '';
       _searchController.clear();
       _minExperienceYears = null;
@@ -759,7 +766,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
             // ── Chips de servicio ──────────────────────────────────────
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 2, 12, 12),
+              padding: const EdgeInsets.fromLTRB(12, 2, 12, 4),
               child: Row(
                 children: [
                   _mobileServiceChip('todos', 'Todos', isDark),
@@ -767,6 +774,19 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   _mobileServiceChip('paseo', '🦮 Paseo', isDark),
                   const SizedBox(width: 8),
                   _mobileServiceChip('hospedaje', '🏠 Hospedaje', isDark),
+                ],
+              ),
+            ),
+            // ── Chips de mascota ───────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              child: Row(
+                children: [
+                  _mobilePetChip(null, '🐾 Todos', isDark),
+                  const SizedBox(width: 8),
+                  _mobilePetChip('PERRO', '🐕 Perro', isDark),
+                  const SizedBox(width: 8),
+                  _mobilePetChip('GATO', '🐱 Gato', isDark),
                 ],
               ),
             ),
@@ -817,6 +837,46 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             color: isSelected ? Colors.white : GardenColors.primary,
             fontSize: 13,
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _mobilePetChip(String? value, String label, bool isDark) {
+    final isSelected = _selectedPetType == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() => _selectedPetType = value);
+          _loadCaregivers(reset: true);
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? GardenColors.primary
+                : (isDark
+                    ? GardenColors.primary.withValues(alpha: 0.12)
+                    : GardenColors.lime.withValues(alpha: 0.75)),
+            borderRadius: BorderRadius.circular(GardenRadius.full),
+            boxShadow: isSelected
+                ? [BoxShadow(
+                    color: GardenColors.primary.withValues(alpha: 0.28),
+                    blurRadius: 10, offset: const Offset(0, 3),
+                  )]
+                : null,
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : GardenColors.primary,
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+              ),
+            ),
           ),
         ),
       ),
@@ -1196,6 +1256,20 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   ),
                   _divider(border),
 
+                  // ── Tipo de mascota ──
+                  _sectionTitle('Tipo de mascota', textColor),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      _petTypeChip(null, 'Todos 🐾', textColor),
+                      const SizedBox(width: 6),
+                      _petTypeChip('PERRO', 'Perro 🐕', textColor),
+                      const SizedBox(width: 6),
+                      _petTypeChip('GATO', 'Gato 🐱', textColor),
+                    ],
+                  ),
+                  _divider(border),
+
                   // ── Buscar ──
                   _sectionTitle('Buscar por nombre', textColor),
                   const SizedBox(height: 10),
@@ -1451,6 +1525,36 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       child: GestureDetector(
         onTap: () {
           setState(() => _selectedService = value);
+          _refreshSheet?.call();
+          _loadCaregivers(reset: true);
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: selected ? GardenColors.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: selected ? GardenColors.primary : GardenColors.darkBorder.withValues(alpha: 0.3)),
+          ),
+          child: Center(
+            child: Text(label,
+                style: TextStyle(
+                  color: selected ? Colors.white : textColor,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  fontSize: 12,
+                )),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _petTypeChip(String? val, String label, Color textColor) {
+    final selected = _selectedPetType == val;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() => _selectedPetType = val);
           _refreshSheet?.call();
           _loadCaregivers(reset: true);
         },
