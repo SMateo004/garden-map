@@ -312,17 +312,17 @@ class _LandingState extends State<LandingScreen> {
             slivers: [
               _sliverHeader(ctx, mobile, pal),
               _sliverHero(mobile),
-              // Stage 0 — después del hero
+              // Stage 0 — después del hero → app section primero
               _petStage(0),
-              SliverToBoxAdapter(child: _PainSection(key: _howItWorksKey, scroll: _scroll, mobile: mobile)),
+              SliverToBoxAdapter(key: _howItWorksKey, child: _AppSection(mobile: mobile)),
+              SliverToBoxAdapter(child: _PainSection(scroll: _scroll, mobile: mobile)),
               SliverToBoxAdapter(child: _MidCta(onTap: _search, mobile: mobile)),
               // Stage 1 — entre mid-CTA y beneficios
               _petStage(1),
               SliverToBoxAdapter(child: _BenefitsSection(scroll: _scroll, mobile: mobile)),
               SliverToBoxAdapter(child: _TestiSection(scroll: _scroll, mobile: mobile)),
-              // Stage 2 — entre testimonios y app section
+              // Stage 2 — entre testimonios y FAQ
               _petStage(2),
-              SliverToBoxAdapter(child: _AppSection(mobile: mobile)),
               SliverToBoxAdapter(child: _FaqSection(scroll: _scroll, mobile: mobile)),
               SliverToBoxAdapter(child: _FinalCta(mobile: mobile)),
               SliverToBoxAdapter(child: _Footer(mobile: mobile)),
@@ -364,7 +364,7 @@ class _LandingState extends State<LandingScreen> {
             // Logo
             GestureDetector(
               onTap: () => context.go('/'),
-              child: Image.asset(pal.logo, height: 56),
+              child: Image.asset(pal.logo, height: 78),
             ),
             const Spacer(),
 
