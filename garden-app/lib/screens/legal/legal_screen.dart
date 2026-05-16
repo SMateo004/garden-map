@@ -192,9 +192,9 @@ class PrivacyPolicyScreen extends StatelessWidget {
         _LegalSection(
           '10. Contacto',
           'Para consultas sobre privacidad:\n'
-          'Email: privacidad@garden.bo\n'
-          'Teléfono: +591 7XXXXXXX\n'
-          'Dirección: Santa Cruz de la Sierra, Bolivia.',
+          'Email: contactogardenbo@gmail.com\n'
+          'Teléfono: +591 75933133\n'
+          'Dirección: C. 6 Barrio Equipetrol, Santa Cruz de la Sierra, Bolivia.',
         ),
       ],
     );
@@ -561,11 +561,9 @@ class TermsOfServiceScreen extends StatelessWidget {
         _LegalSection(
           '25. Contacto y soporte',
           'Para consultas, reportes o ejercicio de derechos:\n\n'
-          '📧 Legal: legal@garden.bo\n'
-          '📧 Privacidad: privacidad@garden.bo\n'
-          '📧 Soporte general: hola@garden.bo\n'
-          '📞 WhatsApp: +591 7XXXXXXX\n'
-          '📍 Dirección: Santa Cruz de la Sierra, Bolivia\n\n'
+          '📧 Email: contactogardenbo@gmail.com\n'
+          '📞 WhatsApp / Teléfono: +591 75933133\n'
+          '📍 Dirección: C. 6 Barrio Equipetrol, Santa Cruz de la Sierra, Bolivia\n\n'
           'Horario de atención: Lunes a Viernes, 8:00 a 18:00 (GMT-4, hora Bolivia).\n\n'
           '© 2026 Garden Bolivia. Todos los derechos reservados.',
         ),
