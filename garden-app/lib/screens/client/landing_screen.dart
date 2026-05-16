@@ -105,9 +105,9 @@ const _faqs = [
 /// 3 escenas de mascotas — una por "stage" en el scroll.
 /// Cuando subas imágenes reales a assets/images/pets/, ponés el path en imagePath.
 const _petScenes = [
-  _PetData('🐕', 'De paseo 🦮',    fromLeft: true,  imagePath: null /* 'assets/images/pets/dog_walk.png' */),
-  _PetData('🐱', 'En hospedaje 🏠', fromLeft: false, imagePath: null /* 'assets/images/pets/cat_home.png' */),
-  _PetData('🐶', 'Con su cuidador 💚', fromLeft: true, imagePath: null /* 'assets/images/pets/dog_care.png' */),
+  _PetData('🐕', 'De paseo 🦮',       fromLeft: true,  imagePath: 'assets/images/pets/dog_walk.png'),
+  _PetData('🐱', 'En hospedaje 🏠',   fromLeft: false, imagePath: 'assets/images/pets/cat_home.png'),
+  _PetData('🐶', 'Con su cuidador 💚', fromLeft: true,  imagePath: 'assets/images/pets/dog_care.png'),
 ];
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
