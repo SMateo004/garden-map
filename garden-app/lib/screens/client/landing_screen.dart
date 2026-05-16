@@ -273,27 +273,42 @@ class _LandingState extends State<LandingScreen> {
                 Positioned(
                   left: 0, bottom: 0,
                   child: Opacity(
-                    opacity: pal.dark ? 0.22 : 0.48,
+                    opacity: pal.dark ? 0.20 : 0.46,
                     child: Image.asset(
                       'assets/images/pets/cat_home.png',
-                      height: heroH * 0.62,
+                      height: heroH * 0.60,
                       fit: BoxFit.contain,
                     ),
                   ).animate().fadeIn(delay: 700.ms, duration: 900.ms)
-                   .slideX(begin: -0.15, end: 0, delay: 700.ms, duration: 900.ms, curve: Curves.easeOutCubic),
+                   .slideX(begin: -0.12, end: 0, delay: 700.ms, duration: 900.ms, curve: Curves.easeOutCubic),
                 ),
-                // Perro — derecha
+                // Dog care — centro (peeking desde abajo, parcialmente oculto)
+                Positioned(
+                  bottom: -30, left: 0, right: 0,
+                  child: Center(
+                    child: Opacity(
+                      opacity: pal.dark ? 0.16 : 0.36,
+                      child: Image.asset(
+                        'assets/images/pets/dog_care.png',
+                        height: heroH * 0.48,
+                        fit: BoxFit.contain,
+                      ),
+                    ).animate().fadeIn(delay: 900.ms, duration: 900.ms)
+                     .slideY(begin: 0.12, end: 0, delay: 900.ms, duration: 900.ms, curve: Curves.easeOutCubic),
+                  ),
+                ),
+                // Perro caminando — derecha
                 Positioned(
                   right: 0, bottom: 0,
                   child: Opacity(
-                    opacity: pal.dark ? 0.22 : 0.48,
+                    opacity: pal.dark ? 0.20 : 0.46,
                     child: Image.asset(
                       'assets/images/pets/dog_walk.png',
-                      height: heroH * 0.68,
+                      height: heroH * 0.66,
                       fit: BoxFit.contain,
                     ),
-                  ).animate().fadeIn(delay: 850.ms, duration: 900.ms)
-                   .slideX(begin: 0.15, end: 0, delay: 850.ms, duration: 900.ms, curve: Curves.easeOutCubic),
+                  ).animate().fadeIn(delay: 800.ms, duration: 900.ms)
+                   .slideX(begin: 0.12, end: 0, delay: 800.ms, duration: 900.ms, curve: Curves.easeOutCubic),
                 ),
               ],
 
