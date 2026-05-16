@@ -52,6 +52,7 @@ dependencies:
   sentry_flutter: ^8.14.2
   posthog_flutter: ^4.6.0
   google_fonts: ^6.2.1
+  flutter_animate: ^4.5.2
   qr_flutter: ^4.1.0
 
 dev_dependencies:
