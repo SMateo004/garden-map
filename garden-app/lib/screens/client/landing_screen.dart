@@ -4,6 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+// ── App store links (actualizar cuando estén disponibles) ─────────────────────
+const _kAppStoreUrl  = 'https://apps.apple.com/app/garden-cuidadores/id000000000';
+const _kPlayStoreUrl = 'https://play.google.com/store/apps/details?id=com.garden.app';
 
 // ─── Palette (día/noche) ──────────────────────────────────────────────────────
 class _P {
@@ -155,12 +160,122 @@ class _LandingState extends State<LandingScreen> {
   }
 
   void _search() {
+    final mobile = MediaQuery.of(context).size.width < 768;
+    if (mobile) {
+      _showMobileSearchDialog();
+    } else {
+      _goToMarketplace();
+    }
+  }
+
+  void _goToMarketplace() {
     var q = '?service=$_svc';
     if (_zone    != null) q += '&zone=$_zone';
     if (_size    != null) q += '&size=$_size';
     if (_petType != null) q += '&petType=$_petType';
     context.go('/marketplace$q');
   }
+
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  void _showMobileSearchDialog() {
+    final pal = _P(_isDark);
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: pal.surface,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: pal.border),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 24, offset: const Offset(0, 8))],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 52, height: 52,
+                decoration: BoxDecoration(
+                  color: pal.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.smartphone_rounded, color: pal.primary, size: 26),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '¿Mejor en la app? 🐾',
+                style: GoogleFonts.inter(color: pal.textPri, fontSize: 18, fontWeight: FontWeight.w800),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'GARDEN tiene una app con GPS en tiempo real, notificaciones y mejor experiencia para tu mascota.',
+                style: GoogleFonts.inter(color: pal.textSec, fontSize: 13, height: 1.5),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              // Store buttons
+              Row(
+                children: [
+                  Expanded(child: _storeDialogBtn(
+                    icon: Icons.apple_rounded, label: 'App Store',
+                    onTap: () { Navigator.pop(ctx); _openUrl(_kAppStoreUrl); },
+                  )),
+                  const SizedBox(width: 10),
+                  Expanded(child: _storeDialogBtn(
+                    icon: Icons.android_rounded, label: 'Play Store',
+                    onTap: () { Navigator.pop(ctx); _openUrl(_kPlayStoreUrl); },
+                  )),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Continue on web
+              GestureDetector(
+                onTap: () { Navigator.pop(ctx); _goToMarketplace(); },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'Continuar en el navegador →',
+                    style: GoogleFonts.inter(
+                      color: pal.textMut, fontSize: 13, fontWeight: FontWeight.w500,
+                      decoration: TextDecoration.underline,
+                      decorationColor: pal.textMut,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _storeDialogBtn({required IconData icon, required String label, required VoidCallback onTap}) =>
+    GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF4A7C23),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Colors.white, size: 16),
+            const SizedBox(width: 7),
+            Text(label, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
+          ],
+        ),
+      ),
+    );
 
   void _scrollToHowItWorks() {
     final ctx = _howItWorksKey.currentContext;
@@ -1111,6 +1226,12 @@ class _FaqTileState extends State<_FaqTile> {
 
 class _FinalCta extends StatelessWidget {
   final bool mobile; const _FinalCta({required this.mobile});
+
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
   @override Widget build(BuildContext context) {
     final pal = _Theme.of(context);
     return Container(
@@ -1125,13 +1246,71 @@ class _FinalCta extends StatelessWidget {
           textAlign: TextAlign.center,
           style: TextStyle(color: pal.textSec, fontSize: 18)),
         const SizedBox(height: 40),
-        Wrap(alignment: WrapAlignment.center, spacing: 16, runSpacing: 12, children: [
-          _PrimaryBtn('Buscar cuidadores ahora 🐾', () => context.go('/marketplace'), w: 280, h: 56),
-          _OutlineBtn('Convertirse en cuidador', () => context.go('/become-caregiver'), w: 230, h: 56),
-        ]),
+        if (mobile) ...[
+          // Mobile: resaltar la app + opción web
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: pal.surfaceEl,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: pal.border),
+            ),
+            child: Column(children: [
+              Text('Descargá la app 📱',
+                style: GoogleFonts.inter(color: pal.textPri, fontSize: 16, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              Text('GPS en tiempo real, notificaciones y reservas al instante.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: pal.textSec, fontSize: 13, height: 1.4)),
+              const SizedBox(height: 16),
+              Row(children: [
+                Expanded(child: _AppStoreBtn(
+                  icon: Icons.apple_rounded, label: 'App Store',
+                  onTap: () => _openUrl(_kAppStoreUrl), pal: pal,
+                )),
+                const SizedBox(width: 10),
+                Expanded(child: _AppStoreBtn(
+                  icon: Icons.android_rounded, label: 'Play Store',
+                  onTap: () => _openUrl(_kPlayStoreUrl), pal: pal,
+                )),
+              ]),
+              const SizedBox(height: 14),
+              GestureDetector(
+                onTap: () => context.go('/marketplace'),
+                child: Text('Continuar en el navegador →',
+                  style: GoogleFonts.inter(
+                    color: pal.textMut, fontSize: 12, fontWeight: FontWeight.w500,
+                    decoration: TextDecoration.underline, decorationColor: pal.textMut,
+                  )),
+              ),
+            ]),
+          ),
+        ] else ...[
+          Wrap(alignment: WrapAlignment.center, spacing: 16, runSpacing: 12, children: [
+            _PrimaryBtn('Buscar cuidadores ahora 🐾', () => context.go('/marketplace'), w: 280, h: 56),
+            _OutlineBtn('Convertirse en cuidador', () => context.go('/become-caregiver'), w: 230, h: 56),
+          ]),
+        ],
       ]),
     );
   }
+}
+
+class _AppStoreBtn extends StatelessWidget {
+  final IconData icon; final String label; final VoidCallback onTap; final _P pal;
+  const _AppStoreBtn({required this.icon, required this.label, required this.onTap, required this.pal});
+  @override Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(color: pal.primary, borderRadius: BorderRadius.circular(12)),
+      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(icon, color: Colors.white, size: 16),
+        const SizedBox(width: 7),
+        Text(label, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
+      ]),
+    ),
+  );
 }
 
 class _Footer extends StatelessWidget {

@@ -7,9 +7,14 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_logo_loader.dart';
 import '../../widgets/notification_bell.dart';
+
+// ── App store links (actualizar cuando estén disponibles) ────────────────────
+const _kAppStoreUrl  = 'https://apps.apple.com/app/garden-cuidadores/id000000000';
+const _kPlayStoreUrl = 'https://play.google.com/store/apps/details?id=com.garden.app';
 
 // ── Datos geográficos de Santa Cruz de la Sierra ──────────────────────────
 
@@ -183,7 +188,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   // ── UI state ──
   bool _showFilters = true;
-  bool _showMap = false;
+  bool _showMap = false;      // se activa en desktop en el primer frame
+  bool _appBannerDismissed = false;
   String _authToken = '';
   String? _userName;
 
@@ -288,6 +294,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
     _loadInitialData();
     if (kIsWeb) _checkOnboarding();
+    // Abrir mapa por defecto en desktop web
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final w = MediaQuery.of(context).size.width;
+      if (kIsWeb && w >= 700 && !_showMap) {
+        setState(() => _showMap = true);
+      }
+    });
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 &&
           !_isLoading && _hasMore) {
@@ -689,6 +703,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             ),
             const SizedBox(height: 8),
 
+            // ── Banner app móvil (solo web en mobile) ─────────────────
+            if (kIsWeb) _buildMobileAppBanner(bg, border, textColor, subtextColor, isDark),
+            if (kIsWeb && !_appBannerDismissed) const SizedBox(height: 4),
+
             // ── Banner reserva activa / próxima ───────────────────────
             _buildActiveBookingBanner(),
             if (_activeBooking != null) const SizedBox(height: 8),
@@ -843,6 +861,106 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       ),
     );
   }
+
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Widget _buildMobileAppBanner(Color bg, Color border, Color textColor, Color subtextColor, bool isDark) {
+    if (_appBannerDismissed) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            GardenColors.primary.withValues(alpha: 0.08),
+            GardenColors.primary.withValues(alpha: 0.03),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: GardenColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.smartphone_rounded, color: GardenColors.primary, size: 16),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '¡Mejor experiencia en la app!',
+                  style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => setState(() => _appBannerDismissed = true),
+                child: Icon(Icons.close_rounded, size: 18, color: subtextColor),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Descargá GARDEN para una experiencia completa con notificaciones, GPS y más.',
+            style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _storeBtn(
+                  icon: Icons.apple_rounded,
+                  label: 'App Store',
+                  onTap: () => _openUrl(_kAppStoreUrl),
+                  isDark: isDark,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _storeBtn(
+                  icon: Icons.android_rounded,
+                  label: 'Play Store',
+                  onTap: () => _openUrl(_kPlayStoreUrl),
+                  isDark: isDark,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _storeBtn({required IconData icon, required String label, required VoidCallback onTap, required bool isDark}) =>
+    GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        decoration: BoxDecoration(
+          color: GardenColors.primary,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Colors.white, size: 15),
+            const SizedBox(width: 6),
+            Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+          ],
+        ),
+      ),
+    );
 
   Widget _mobilePetChip(String? value, String label, bool isDark) {
     final isSelected = _selectedPetType == value;
