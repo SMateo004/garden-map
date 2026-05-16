@@ -374,45 +374,50 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   Future<void> _loadCaregivers({bool reset = false}) async {
     if (reset) setState(() { _caregivers = []; _currentPage = 1; _hasMore = true; });
     setState(() => _isLoading = true);
-    try {
-      final params = <String, String>{
-        'limit': '20',
-        'page': _currentPage.toString(),
-        if (_selectedService != 'todos') 'service': _selectedService,
-        if (_selectedZone != null) 'zone': _selectedZone!.toLowerCase(),
-        if (_selectedPetType != null) 'petType': _selectedPetType!,
-        if (_minExperienceYears != null && _minExperienceYears! > 0) 'experienceYears': _minExperienceYears.toString(),
-        if (_filterAggressive) 'acceptAggressive': 'true',
-        if (_filterPuppies) 'acceptPuppies': 'true',
-        if (_filterSeniors) 'acceptSeniors': 'true',
-        if (_selectedSizes.isNotEmpty) 'sizesAccepted': _selectedSizes.join(','),
-        if (_searchQuery.isNotEmpty) 'search': _searchQuery,
-        if (_filterVerifiedOnly) 'verified': 'true',
-        if (_minRating > 0) 'minRating': _minRating.toString(),
-      };
-      final uri = Uri.parse('$_baseUrl/caregivers').replace(queryParameters: params);
-      final response = await http.get(uri).timeout(const Duration(seconds: 8));
-      final data = jsonDecode(response.body);
-      if (response.statusCode == 200 && data['success'] == true) {
-        final list = (data['data']['caregivers'] as List).cast<Map<String, dynamic>>();
-        final pagination = data['data']['pagination'];
-        setState(() {
-          if (reset) {
-            _caregivers = list;
-          } else {
-            _caregivers.addAll(list);
-          }
-          _hasMore = _currentPage < pagination['pages'];
-          _hasError = false;
-        });
-      } else {
-        throw Exception('Error');
+
+    final params = <String, String>{
+      'limit': '20',
+      'page': _currentPage.toString(),
+      if (_selectedService != 'todos') 'service': _selectedService,
+      if (_selectedZone != null) 'zone': _selectedZone!.toLowerCase(),
+      if (_selectedPetType != null) 'petType': _selectedPetType!,
+      if (_minExperienceYears != null && _minExperienceYears! > 0) 'experienceYears': _minExperienceYears.toString(),
+      if (_filterAggressive) 'acceptAggressive': 'true',
+      if (_filterPuppies) 'acceptPuppies': 'true',
+      if (_filterSeniors) 'acceptSeniors': 'true',
+      if (_selectedSizes.isNotEmpty) 'sizesAccepted': _selectedSizes.join(','),
+      if (_searchQuery.isNotEmpty) 'search': _searchQuery,
+      if (_filterVerifiedOnly) 'verified': 'true',
+      if (_minRating > 0) 'minRating': _minRating.toString(),
+    };
+    final uri = Uri.parse('$_baseUrl/caregivers').replace(queryParameters: params);
+
+    // Hasta 3 intentos con timeout generoso (cold start del servidor puede tardar)
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final response = await http.get(uri).timeout(const Duration(seconds: 25));
+        final data = jsonDecode(response.body);
+        if (response.statusCode == 200 && data['success'] == true) {
+          final list = (data['data']['caregivers'] as List).cast<Map<String, dynamic>>();
+          final pagination = data['data']['pagination'];
+          if (mounted) setState(() {
+            if (reset) {
+              _caregivers = list;
+            } else {
+              _caregivers.addAll(list);
+            }
+            _hasMore = _currentPage < pagination['pages'];
+            _hasError = false;
+          });
+          return; // éxito
+        }
+      } catch (_) {
+        if (attempt < 2) await Future.delayed(const Duration(seconds: 1));
       }
-    } catch (_) {
-      setState(() => _hasError = true);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
+    // Agotó los 3 intentos
+    if (mounted) setState(() => _hasError = true);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _loadNextPage() async {
