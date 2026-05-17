@@ -360,13 +360,11 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
       SocialUserData? data;
       if (provider == SocialProvider.google) {
         data = await SocialAuthService.signInWithGoogle();
-      } else if (provider == SocialProvider.apple) {
-        data = await SocialAuthService.signInWithApple();
       } else {
         data = await SocialAuthService.signInWithFacebook();
       }
 
-      if (data == null) return; // user cancelled
+      if (data == null) return;
 
       final result = await SocialAuthService.loginWithBackend(data);
       if (mounted) widget.onResult(result);
@@ -388,19 +386,13 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
     return Column(
       children: [
         _SocialBtn(
-          label: 'Continuar con Google',
+          provider: SocialProvider.google,
           loading: _loading == SocialProvider.google,
           onTap: () => _handleProvider(SocialProvider.google),
         ),
         const SizedBox(height: 10),
         _SocialBtn(
-          label: 'Continuar con Apple',
-          loading: _loading == SocialProvider.apple,
-          onTap: () => _handleProvider(SocialProvider.apple),
-        ),
-        const SizedBox(height: 10),
-        _SocialBtn(
-          label: 'Continuar con Facebook',
+          provider: SocialProvider.facebook,
           loading: _loading == SocialProvider.facebook,
           onTap: () => _handleProvider(SocialProvider.facebook),
         ),
@@ -410,51 +402,155 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
 }
 
 class _SocialBtn extends StatelessWidget {
-  final String label;
+  final SocialProvider provider;
   final bool loading;
   final VoidCallback onTap;
 
   const _SocialBtn({
-    required this.label,
+    required this.provider,
     required this.loading,
     required this.onTap,
   });
 
+  static const _fbBlue = Color(0xFF1877F2);
+  static const _googleRed = Color(0xFFEA4335);
+  static const _googleBlue = Color(0xFF4285F4);
+  static const _googleYellow = Color(0xFFFBBC05);
+  static const _googleGreen = Color(0xFF34A853);
+
+  bool get _isFacebook => provider == SocialProvider.facebook;
+
   @override
   Widget build(BuildContext context) {
     final isDark = themeNotifier.isDark;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-    final border = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-    final textColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final label = _isFacebook ? 'Continuar con Facebook' : 'Continuar con Google';
+
+    final bgColor = _isFacebook
+        ? _fbBlue
+        : (isDark ? const Color(0xFF2C2C2E) : Colors.white);
+    final borderColor = _isFacebook
+        ? _fbBlue
+        : (isDark ? const Color(0xFF3A3A3C) : const Color(0xFFDADCE0));
+    final textColor = _isFacebook
+        ? Colors.white
+        : (isDark ? Colors.white : const Color(0xFF3C4043));
+    final progressColor = _isFacebook ? Colors.white : GardenColors.primary;
 
     return SizedBox(
       width: double.infinity,
-      height: 46,
+      height: 48,
       child: GestureDetector(
         onTap: loading ? null : onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
-            color: surface,
+            color: bgColor,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: border),
+            border: Border.all(color: borderColor),
+            boxShadow: _isFacebook
+                ? [BoxShadow(color: _fbBlue.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))]
+                : [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 1))],
           ),
-          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: loading
-              ? const SizedBox(
-                  width: 18, height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 1.5, color: GardenColors.primary),
-                )
-              : Text(
-                  label,
-                  style: TextStyle(
-                    color: textColor,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0.1,
+              ? Center(
+                  child: SizedBox(
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 1.5, color: progressColor),
                   ),
+                )
+              : Row(
+                  children: [
+                    if (_isFacebook)
+                      const _FacebookLogo()
+                    else
+                      const _GoogleLogo(),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.1,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 28),
+                  ],
                 ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GoogleLogo extends StatelessWidget {
+  const _GoogleLogo();
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 20, height: 20,
+      child: CustomPaint(painter: _GoogleGPainter()),
+    );
+  }
+}
+
+class _GoogleGPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+    const strokeW = 3.0;
+    final half = strokeW / 2;
+
+    void arc(Color c, double start, double sweep) {
+      canvas.drawArc(
+        rect.deflate(half),
+        start, sweep, false,
+        Paint()..color = c..style = PaintingStyle.stroke..strokeWidth = strokeW..strokeCap = StrokeCap.butt,
+      );
+    }
+
+    const pi = 3.14159265;
+    arc(const Color(0xFF4285F4), -pi / 4, pi / 2 + pi / 4 + pi / 8);
+    arc(const Color(0xFF34A853), pi / 2, pi / 2 + pi / 8);
+    arc(const Color(0xFFFBBC05), pi + pi / 12, pi / 3);
+    arc(const Color(0xFFEA4335), -pi / 2 - pi / 6, pi / 2 - pi / 12);
+
+    // horizontal bar of the G
+    final barPaint = Paint()
+      ..color = const Color(0xFF4285F4)
+      ..style = PaintingStyle.fill;
+    canvas.drawRect(
+      Rect.fromLTWH(center.dx, center.dy - strokeW / 2, radius - half, strokeW),
+      barPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _FacebookLogo extends StatelessWidget {
+  const _FacebookLogo();
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 20, height: 20,
+      child: Center(
+        child: Text(
+          'f',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            height: 1,
+            fontFamily: 'Georgia',
+          ),
         ),
       ),
     );

@@ -7,6 +7,7 @@
 
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../shared/async-handler.js';
+import { auditLog } from '../../services/audit.service.js';
 import * as caregiverProfileService from './caregiver-profile.service.js';
 import * as bookingService from '../booking-service/booking.service.js';
 import {
@@ -53,6 +54,7 @@ export const submit = asyncHandler(async (req: Request, res: Response) => {
     });
   }
   const result = await caregiverProfileService.submitProfile(userId);
+  auditLog({ userId, action: 'PROFILE_SUBMITTED', entity: 'CaregiverProfile', ip: req.ip });
   res.json(result);
 });
 

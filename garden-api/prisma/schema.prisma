@@ -791,3 +791,21 @@ model RefreshToken {
   @@index([tokenHash])
   @@map("refresh_tokens")
 }
+
+/// Registro de auditoría de todas las acciones importantes del sistema.
+/// Se acumula indefinidamente; el endpoint de exportación filtra por mes.
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?  // null para acciones de sistema
+  action    String   @db.VarChar(80)  // ej: BOOKING_CREATED, PAYMENT_APPROVED, PROFILE_SUBMITTED
+  entity    String   @db.VarChar(50)  // ej: Booking, Payment, CaregiverProfile, User
+  entityId  String?  @db.VarChar(100) // id del recurso afectado
+  details   String?  @db.Text         // JSON con contexto adicional
+  ip        String?  @db.VarChar(45)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

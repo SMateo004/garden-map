@@ -196,6 +196,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   // ── Reserva activa / próxima ──
   Map<String, dynamic>? _activeBooking;
 
+  // ── Current user id (para excluir propio perfil de cuidador) ──
+  String? _currentUserId;
+
   /// Callback that rebuilds the active filter sheet (if open).
   VoidCallback? _refreshSheet;
 
@@ -367,6 +370,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       setState(() {
         _authToken = token;
         _userName = prefs.getString('user_name');
+        _currentUserId = prefs.getString('user_id');
       });
     }
   }
@@ -398,7 +402,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         final response = await http.get(uri).timeout(const Duration(seconds: 25));
         final data = jsonDecode(response.body);
         if (response.statusCode == 200 && data['success'] == true) {
-          final list = (data['data']['caregivers'] as List).cast<Map<String, dynamic>>();
+          var list = (data['data']['caregivers'] as List).cast<Map<String, dynamic>>();
+          if (_currentUserId != null && _currentUserId!.isNotEmpty) {
+            list = list.where((c) => c['userId'] != _currentUserId).toList();
+          }
           final pagination = data['data']['pagination'];
           if (mounted) setState(() {
             if (reset) {

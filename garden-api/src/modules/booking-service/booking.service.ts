@@ -17,6 +17,7 @@ import {
 } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
 import { track } from '../../shared/analytics.js';
+import { auditLog } from '../../services/audit.service.js';
 import * as notificationService from '../../services/notification.service.js';
 import { blockchainService } from '../../services/blockchain.service.js';
 import { sendPushToUser } from '../../services/firebase.service.js';
@@ -382,6 +383,14 @@ export async function createBooking(
       serviceType: body.serviceType,
       totalAmount: Number(booking.totalAmount),
       caregiverId: body.caregiverId,
+    });
+
+    auditLog({
+      userId: clientId,
+      action: 'BOOKING_CREATED',
+      entity: 'Booking',
+      entityId: booking.id,
+      details: { serviceType: body.serviceType, totalAmount: Number(booking.totalAmount), caregiverId: body.caregiverId },
     });
 
     return bookingToResponse(booking);
@@ -1097,6 +1106,14 @@ export async function cancelBooking(
       )
       .catch((err) => logger.error('Notification onRefundProcessed failed', { bookingId, err }));
   }
+
+  auditLog({
+    userId: clientId,
+    action: 'BOOKING_CANCELLED',
+    entity: 'Booking',
+    entityId: bookingId,
+    details: { reason: cancellationReason ?? null, refundAmount: result.refundAmount, refundStatus: result.refundStatus },
+  });
 
   // Registro en Blockchain (asíncrono) — guarda txHash si la tx tiene éxito
   blockchainService.cancelBookingOnChain(bookingId, cancellationReason || 'Cancelado por usuario').then(async (txHash) => {
@@ -2336,6 +2353,14 @@ export async function concludeService(
       },
     });
     sendPushToUser(booking.clientId, 'Servicio finalizado ✅', `El cuidador terminó. Deja tu reseña para liberar el pago.`).catch(() => {});
+
+    auditLog({
+      userId: caregiverUserId,
+      action: 'BOOKING_COMPLETED',
+      entity: 'Booking',
+      entityId: bookingId,
+      details: { serviceType: booking.serviceType, gpsDistance },
+    });
 
     return bookingToResponse(updated);
   });

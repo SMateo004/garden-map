@@ -8,6 +8,7 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '../../shared/async-handler.js';
 import prisma from '../../config/database.js';
 import * as adminService from './admin.service.js';
+import { auditLog } from '../../services/audit.service.js';
 import {
   reviewCaregiverBodySchema,
   pendingCaregiversQuerySchema,
@@ -50,6 +51,7 @@ export const reviewCaregiver = asyncHandler(async (req: Request, res: Response) 
   const body = reviewCaregiverBodySchema.parse(req.body);
   const adminId = req.user!.userId;
   const result = await adminService.reviewCaregiver(profileId, adminId, body);
+  auditLog({ userId: adminId, action: `PROFILE_${body.action.toUpperCase()}`, entity: 'CaregiverProfile', entityId: profileId, details: { action: body.action }, ip: req.ip });
   res.json({ success: true, data: result });
 });
 
@@ -119,6 +121,7 @@ export const rejectPayment = asyncHandler(async (req: Request, res: Response) =>
   const bookingId = req.params.id!;
   const adminId = req.user!.userId;
   const result = await adminService.rejectPayment(bookingId, adminId);
+  auditLog({ userId: adminId, action: 'PAYMENT_REJECTED', entity: 'Booking', entityId: bookingId, ip: req.ip });
   res.json({ success: true, data: result });
 });
 
@@ -182,6 +185,7 @@ export const approvePayment = asyncHandler(async (req: Request, res: Response) =
     ).catch(() => {});
   }
 
+  auditLog({ userId: adminId, action: 'PAYMENT_APPROVED', entity: 'Booking', entityId: id, ip: req.ip });
   res.json({ success: true, data: { status: 'WAITING_CAREGIVER_APPROVAL' } });
 });
 
@@ -280,7 +284,7 @@ export const getWithdrawals = asyncHandler(async (req: Request, res: Response) =
 
 export const processWithdrawal = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  
+
   const tx = await prisma.walletTransaction.findUnique({ where: { id } });
   if (!tx || tx.type !== 'WITHDRAWAL' || tx.status !== 'PENDING') {
     return res.status(400).json({ success: false, error: { message: 'Solicitud no encontrada o no está pendiente' } });
@@ -290,6 +294,8 @@ export const processWithdrawal = asyncHandler(async (req: Request, res: Response
     where: { id },
     data: { status: 'PROCESSING' },
   });
+
+  auditLog({ userId: req.user!.userId, action: 'WITHDRAWAL_PROCESSING', entity: 'WalletTransaction', entityId: id, details: { amount: Number(tx.amount), caregiverId: tx.userId }, ip: req.ip });
 
   // Notificar al cuidador
   await prisma.notification.create({
@@ -380,6 +386,7 @@ export const completeWithdrawal = asyncHandler(async (req: Request, res: Respons
     throw err;
   }
 
+  auditLog({ userId: req.user!.userId, action: 'WITHDRAWAL_COMPLETED', entity: 'WalletTransaction', entityId: id, details: { amount: notifyAmount!, caregiverId: notifyUserId! }, ip: req.ip });
   res.json({ success: true, data: { status: 'COMPLETED' } });
 });
 
@@ -423,6 +430,7 @@ export const rejectWithdrawal = asyncHandler(async (req: Request, res: Response)
     });
   });
 
+  auditLog({ userId: req.user!.userId, action: 'WITHDRAWAL_REJECTED', entity: 'WalletTransaction', entityId: id, details: { amount: Number(tx.amount), caregiverId: tx.userId, reason: reason ?? null }, ip: req.ip });
   res.json({ success: true, data: { status: 'REJECTED' } });
 });
 

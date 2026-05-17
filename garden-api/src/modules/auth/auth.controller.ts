@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { ZodError } from 'zod';
 import prisma from '../../config/database.js';
+import { auditLog } from '../../services/audit.service.js';
 import * as authService from './auth.service.js';
 import * as userService from '../user-service/user.service.js';
 import {
@@ -130,6 +131,7 @@ export const registerCaregiver = asyncHandler(async (req: Request, res: Response
   }
 
   const result = await authService.registerCaregiver(body);
+  auditLog({ userId: result.user.id, action: 'USER_REGISTERED', entity: 'User', entityId: result.user.id, details: { role: 'CAREGIVER' }, ip: req.ip });
   res.status(201).json({
     success: true,
     data: {
@@ -188,6 +190,7 @@ export const registerClient = asyncHandler(async (req: Request, res: Response) =
 
   try {
     const result = await authService.registerClient(body);
+    auditLog({ userId: result.user.id, action: 'USER_REGISTERED', entity: 'User', entityId: result.user.id, details: { role: 'CLIENT' }, ip: req.ip });
     return res.status(201).json({
       success: true,
       data: {

@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
 import * as adminController from './admin.controller.js';
+import { asyncHandler } from '../../shared/async-handler.js';
+import { exportMonthAsTxt } from '../../services/audit.service.js';
 
 const router = Router();
 
@@ -145,5 +147,22 @@ router.get('/notifications/scheduled', adminController.getScheduledNotifications
 router.delete('/notifications/scheduled/:id', adminController.cancelScheduledNotification);
 /** GET /api/admin/notifications/history — historial de enviadas */
 router.get('/notifications/history', adminController.getNotificationHistory);
+
+// ── Audit log ─────────────────────────────────────────────────────────────
+/**
+ * GET /api/admin/audit-log/export?month=YYYY-MM
+ * Descarga el registro mensual como archivo TXT.
+ * Si no se especifica month, usa el mes actual.
+ */
+router.get('/audit-log/export', asyncHandler(async (req, res) => {
+  const month = typeof req.query.month === 'string' && /^\d{4}-\d{2}$/.test(req.query.month)
+    ? req.query.month
+    : new Date().toISOString().substring(0, 7);
+
+  const txt = await exportMonthAsTxt(month);
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="garden-audit-${month}.txt"`);
+  res.send(txt);
+}));
 
 export default router;
