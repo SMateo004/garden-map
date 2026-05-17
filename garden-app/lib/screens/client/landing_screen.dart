@@ -1408,6 +1408,7 @@ class _PhoneMockup extends StatelessWidget {
       child: Image.asset(
         'assets/images/simulador-garden.png',
         fit: BoxFit.cover,
+        filterQuality: FilterQuality.high,
       ),
     ),
   );
