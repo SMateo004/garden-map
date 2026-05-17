@@ -78,20 +78,13 @@ router.post('/profile/service-photo', authMiddleware, requireRole('CAREGIVER'),
       name: `service_${userId}_${Date.now()}`,
     });
 
-    // Atomic array_append with server-side count guard — prevents race conditions
-    // where concurrent uploads could exceed the limit or overwrite each other's writes.
-    const updated = await prisma.$executeRaw`
-      UPDATE caregiver_profiles
-      SET photos = array_append(photos, ${photoUrl}::text)
-      WHERE user_id = ${userId}
-        AND coalesce(array_length(photos, 1), 0) < 6
-    `;
+    const updatedProfile = await prisma.caregiverProfile.update({
+      where: { userId },
+      data: { photos: { push: photoUrl } },
+      select: { photos: true },
+    });
 
-    if (updated === 0) {
-      return res.status(400).json({ success: false, error: { message: 'Máximo 6 fotos permitidas' } });
-    }
-
-    res.json({ success: true, data: { photoUrl } });
+    res.json({ success: true, data: { photoUrl, totalPhotos: updatedProfile.photos.length } });
   })
 );
 
