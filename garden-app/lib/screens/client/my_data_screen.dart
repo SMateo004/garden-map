@@ -204,7 +204,13 @@ class _MyDataScreenState extends State<MyDataScreen> {
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         );
 
-        return Scaffold(
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop) return;
+            Navigator.of(context).pop(_pendingPhotoBytes != null);
+          },
+          child: Scaffold(
           backgroundColor: bg,
           appBar: AppBar(
             title: const Text('Mis Datos'),
@@ -417,6 +423,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                     ],
                   ),
                 ),
+          ),
         );
       },
     );

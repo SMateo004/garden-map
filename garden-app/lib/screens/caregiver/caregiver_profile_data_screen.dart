@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -75,6 +75,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   bool _afternoonSlot = true;
   bool _nightSlot = false;
   List<String> _photos = [];
+  final List<Uint8List?> _localPhotoData = [];
 
   static const _homeTypes = ['HOUSE', 'APARTMENT', 'FINCA', 'LOCAL'];
   static const _homeTypeLabels = {
@@ -167,6 +168,9 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     _afternoonSlot = _extractBlockEnabled(slots['afternoon'], paseoBlocks['afternoon'], paseoBlocks['TARDE'],    defaultValue: true);
     _nightSlot     = _extractBlockEnabled(slots['night'],     paseoBlocks['night'],     paseoBlocks['NOCHE'],    defaultValue: false);
     _photos = List<String>.from(profile['photos'] ?? []);
+    _localPhotoData
+      ..clear()
+      ..addAll(List.filled(_photos.length, null));
 
     _experienceYearsController.text = (profile['experienceYears'] ?? '').toString();
     if (_experienceYearsController.text == '5') _experienceYearsController.text = '5+';
@@ -322,7 +326,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       String? hType;
       if (_selectedHomeTypes.contains('HOUSE')) {
         hType = 'HOUSE';
-      } else if (_selectedHomeTypes.contains('APARTMENT')) hType = 'APARTMENT';
+      } else if (_selectedHomeTypes.contains('APARTMENT')) { hType = 'APARTMENT'; }
 
       final body = {
         'bio': _bioController.text.trim(),
@@ -413,7 +417,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       return;
     }
 
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+    // Skip imageQuality on web — canvas-based compression uses createObjectURL
+    // which throws TypeError in Flutter web (CanvasKit).
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: kIsWeb ? null : 85,
+    );
     if (picked == null) return;
     final bytes = Uint8List.fromList(await picked.readAsBytes());
     final fileName = picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
@@ -433,13 +442,25 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       final respBody = await response.stream.bytesToString();
       final data = jsonDecode(respBody);
 
+      if (!mounted) return;
       if (data['success'] == true) {
-        setState(() => _photos.add(data['data']['photoUrl']));
+        setState(() {
+          _photos.add(data['data']['photoUrl'] as String? ?? '');
+          _localPhotoData.add(bytes);
+        });
         _computeCompletion();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(data['error']?['message'] ?? data['message'] ?? 'Error al subir foto'),
+          backgroundColor: GardenColors.error,
+        ));
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al subir: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Error al subir: $e'),
+        backgroundColor: GardenColors.error,
+      ));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -448,6 +469,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   void _deletePhoto(int index) async {
     setState(() {
       _photos.removeAt(index);
+      if (index < _localPhotoData.length) _localPhotoData.removeAt(index);
       _computeCompletion();
     });
   }
@@ -1002,12 +1024,18 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             ),
           );
         }
+        final localBytes = index < _localPhotoData.length ? _localPhotoData[index] : null;
         return Stack(
           children: [
             Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                image: DecorationImage(image: NetworkImage(fixImageUrl(_photos[index])), fit: BoxFit.cover),
+                image: DecorationImage(
+                  image: localBytes != null
+                      ? MemoryImage(localBytes) as ImageProvider
+                      : NetworkImage(fixImageUrl(_photos[index])),
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
             Positioned(
