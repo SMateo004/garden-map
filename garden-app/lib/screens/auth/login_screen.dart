@@ -27,13 +27,15 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _navigateAfterLogin(String role) {
+  void _navigateAfterLogin(String role, {String? activeRole}) {
     FcmService.registerAfterLogin();
-    if (role == 'ADMIN') {
+    // Use activeRole if it overrides the permanent role (e.g. CAREGIVER switched to CLIENT)
+    final effectiveRole = (activeRole != null && activeRole.isNotEmpty) ? activeRole : role;
+    if (effectiveRole == 'ADMIN') {
       context.go('/admin');
-    } else if (role == 'CLIENT') {
+    } else if (effectiveRole == 'CLIENT') {
       kIsWeb ? context.go('/marketplace') : context.go('/service-selector');
-    } else if (role == 'CAREGIVER') {
+    } else if (effectiveRole == 'CAREGIVER') {
       context.go('/caregiver/home');
     } else {
       context.go('/marketplace');
@@ -49,7 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     if (result.userExists) {
-      _navigateAfterLogin(result.role ?? 'CLIENT');
+      _navigateAfterLogin(result.role ?? 'CLIENT', activeRole: result.activeRole);
     } else {
       // Email no registrado → ir al registro pre-llenado
       final d = result.userData;
@@ -77,8 +79,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       final prefs = await SharedPreferences.getInstance();
       final role = prefs.getString('user_role') ?? '';
+      final activeRole = prefs.getString('active_role');
       if (!mounted) return;
-      _navigateAfterLogin(role);
+      _navigateAfterLogin(role, activeRole: activeRole);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

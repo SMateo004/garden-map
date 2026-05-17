@@ -20,7 +20,7 @@ export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
   expiresIn: string;
-  user: { id: string; email: string; role: string; firstName: string; lastName: string; profilePicture?: string | null };
+  user: { id: string; email: string; role: string; activeRole?: string | null; firstName: string; lastName: string; profilePicture?: string | null };
 }
 
 export interface RegisterCaregiverResult {
@@ -530,6 +530,7 @@ export async function login(
       id: user.id,
       email: user.email,
       role: user.role,
+      activeRole: user.activeRole ?? null,
       firstName: user.firstName,
       lastName: user.lastName,
       profilePicture: user.profilePicture,

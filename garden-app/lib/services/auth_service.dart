@@ -71,13 +71,21 @@ class AuthService {
 
   Future<void> saveUserData(Map<String, dynamic> user) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('user_role', user['role'] as String? ?? '');
+    final permanentRole = user['role'] as String? ?? '';
+    final activeRole = user['activeRole'] as String?;
+    await prefs.setString('user_role', permanentRole);
     await prefs.setString('user_id', user['id'] as String? ?? '');
     await prefs.setString(
       'user_name',
       user['fullName'] as String? ?? '${user['firstName']} ${user['lastName']}',
     );
     await prefs.setString('user_photo', user['profilePicture'] as String? ?? '');
+    // Persist active_role from the server; clear if null or same as permanent role
+    if (activeRole != null && activeRole.isNotEmpty && activeRole != permanentRole) {
+      await prefs.setString('active_role', activeRole);
+    } else {
+      await prefs.remove('active_role');
+    }
   }
 
   // ── Session refresh ─────────────────────────────────────────────────────────

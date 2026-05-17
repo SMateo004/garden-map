@@ -37,6 +37,7 @@ class SocialLoginResult {
   final String? accessToken;
   final String? refreshToken;
   final String? role;
+  final String? activeRole;
   final String? userName;
   // Populated when userExists == false (register flow)
   final SocialUserData? userData;
@@ -48,6 +49,7 @@ class SocialLoginResult {
     this.accessToken,
     this.refreshToken,
     this.role,
+    this.activeRole,
     this.userName,
     this.userData,
   });
@@ -236,9 +238,10 @@ class SocialAuthService {
         final d = body['data'] as Map<String, dynamic>;
         final user = d['user'] as Map<String, dynamic>;
         final role = user['role'] as String;
+        final activeRole = user['activeRole'] as String?;
         final name = '${user['firstName']} ${user['lastName']}';
 
-        // Persist tokens — mismas claves que AuthService
+        // Persist tokens + roles — mismas claves que AuthService
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('access_token',  d['accessToken'] as String);
         await prefs.setString('refresh_token', d['refreshToken'] as String);
@@ -246,8 +249,12 @@ class SocialAuthService {
         await prefs.setString('user_id',       user['id'] as String? ?? '');
         await prefs.setString('user_name',     name);
         await prefs.setString('user_photo',    user['profilePicture'] as String? ?? '');
-        // active_role igual al role permanente al inicio de sesión
-        await prefs.setString('active_role',   role);
+        // Save active_role only if it overrides the permanent role
+        if (activeRole != null && activeRole.isNotEmpty && activeRole != role) {
+          await prefs.setString('active_role', activeRole);
+        } else {
+          await prefs.remove('active_role');
+        }
 
         return SocialLoginResult(
           success: true,
@@ -255,6 +262,7 @@ class SocialAuthService {
           accessToken: d['accessToken'] as String,
           refreshToken: d['refreshToken'] as String,
           role: role,
+          activeRole: activeRole,
           userName: name,
         );
       }

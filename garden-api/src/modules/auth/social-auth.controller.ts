@@ -126,6 +126,7 @@ export async function socialLogin(req: Request, res: Response, next: NextFunctio
           id: user.id,
           email: user.email,
           role: user.role,
+          activeRole: user.activeRole ?? null,
           firstName: user.firstName,
           lastName: user.lastName,
           profilePicture: user.profilePicture,
