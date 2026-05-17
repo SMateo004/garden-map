@@ -314,6 +314,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         return;
       }
 
+      // Step 7 sub-check: T&C acceptance (persisted in DB)
+      final termsAccepted = profile['termsAccepted'] == true;
+      if (!termsAccepted) {
+        setState(() => _currentStep = 6);
+        return;
+      }
+
       // Step 7: Verificación de identidad — requiere identityVerificationStatus VERIFIED
       final identityStatus = (profile['identityVerificationStatus'] as String? ?? '').toUpperCase();
       if (identityStatus != 'VERIFIED' && identityStatus != 'APPROVED') {
@@ -345,6 +352,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           'Authorization': 'Bearer $_authToken',
           'Content-Type': 'application/json',
         },
+        body: jsonEncode({
+          'termsAccepted': true,
+          'privacyAccepted': true,
+          'verificationAccepted': true,
+        }),
       );
 
       // Guard against HTML error pages (502/503 from server)
@@ -424,15 +436,45 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   bool _validateCurrentStep() {
     switch (_currentStep) {
       case 0:
-        if (_firstNameController.text.trim().isEmpty ||
-            _lastNameController.text.trim().isEmpty ||
-            _emailController.text.trim().isEmpty ||
-            _passwordController.text.isEmpty ||
-            _phoneController.text.trim().isEmpty ||
-            _addressController.text.trim().isEmpty ||
-            _dateOfBirth == null) {
+        if (_firstNameController.text.trim().isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Completa todos los campos requeridos')),
+            const SnackBar(content: Text('Falta: Nombre')),
+          );
+          return false;
+        }
+        if (_lastNameController.text.trim().isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Falta: Apellido')),
+          );
+          return false;
+        }
+        if (_emailController.text.trim().isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Falta: Correo electrónico')),
+          );
+          return false;
+        }
+        if (_passwordController.text.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Falta: Contraseña')),
+          );
+          return false;
+        }
+        if (_phoneController.text.trim().isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Falta: Número de teléfono')),
+          );
+          return false;
+        }
+        if (_addressController.text.trim().isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Falta: Dirección')),
+          );
+          return false;
+        }
+        if (_dateOfBirth == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Falta: Fecha de nacimiento')),
           );
           return false;
         }
@@ -763,7 +805,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           (profile['user'] as Map?)?['emailVerified'] == true;
 
       if (identityDone && emailVerified) {
-        await _completeWizard();
+        // Both done — go to email step which will trigger final submit
+        setState(() => _currentStep = 8);
       } else if (identityDone) {
         setState(() => _currentStep = 8);
       } else {

@@ -3430,7 +3430,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                       _completionChip('Perfil cuidador', detail?['caregiverProfileComplete'] == true, borderColor),
                       _completionChip('Disponibilidad', detail?['availabilityComplete'] == true, borderColor),
                       _completionChip('Email verificado', detail?['emailVerified'] == true, borderColor),
-                      _completionChip('Identidad', detail?['identityVerificationStatus'] == 'APPROVED', borderColor),
+                      _completionChip('Identidad', detail?['identityVerificationStatus'] == 'APPROVED' || detail?['identityVerificationStatus'] == 'VERIFIED', borderColor),
                       _completionChip('Términos', detail?['termsAccepted'] == true, borderColor),
                     ]),
                   ])),

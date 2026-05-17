@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../legal/legal_screen.dart';
 
 class CaregiverProfileDataScreen extends StatefulWidget {
   /// When true, the screen hides its own AppBar/Scaffold and calls
@@ -32,6 +33,8 @@ class CaregiverProfileDataScreen extends StatefulWidget {
 class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _termsAccepted = false;
+  bool _verificationAccepted = false;
   String _caregiverToken = '';
   int _completionPercentage = 0;
 
@@ -182,6 +185,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     _acceptAggressive = profile['acceptAggressive'] as bool?;
     _acceptPuppies = profile['acceptPuppies'] as bool?;
     _acceptSeniors = profile['acceptSeniors'] as bool?;
+    _termsAccepted = profile['termsAccepted'] == true;
+    _verificationAccepted = profile['verificationAccepted'] == true;
   }
 
   Future<void> _loadData() async {
@@ -355,6 +360,14 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       return _showValidationError('Indica si aceptas mascotas mayores (Sí/No)');
     }
 
+    if (widget.embeddedMode && !_termsAccepted) {
+      return _showValidationError('Debes aceptar los Términos de Servicio y la Política de Privacidad para continuar');
+    }
+
+    if (widget.embeddedMode && !_verificationAccepted) {
+      return _showValidationError('Debes aceptar las condiciones de verificación de identidad para continuar');
+    }
+
     setState(() => _isSaving = true);
     try {
       // Mapping CASA/APARTAMENTO to Enum if only one selected
@@ -423,6 +436,21 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       );
 
       if (jsonDecode(response.body)['success'] == true) {
+        // If in embedded mode, persist T&C acceptance to the DB
+        if (widget.embeddedMode) {
+          await http.patch(
+            Uri.parse('$_baseUrl/caregiver/profile'),
+            headers: {
+              'Authorization': 'Bearer $_caregiverToken',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'termsAccepted': true,
+              'privacyAccepted': true,
+              'verificationAccepted': true,
+            }),
+          );
+        }
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Cambios guardados correctamente'), backgroundColor: GardenColors.success, duration: Duration(seconds: 2)),
@@ -818,7 +846,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             const Divider(height: 48),
 
             if (widget.embeddedMode) ...[
+              // T&C acceptance — only shown in embedded (wizard) mode
+              _buildTermsSection(),
               const SizedBox(height: 24),
+            ],
+
+            if (widget.embeddedMode) ...[
               SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -1103,6 +1136,87 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
           items: _zones.map((z) => DropdownMenuItem(value: z, child: Text(z.replaceAll('_', ' '), style: TextStyle(color: textColor)))).toList(),
           onChanged: (val) { if (val != null) setState(() => _selectedZone = val); },
         ),
+      ),
+    );
+  }
+
+  Widget _buildTermsSection() {
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final surface = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _termsAccepted ? GardenColors.primary.withValues(alpha: 0.5) : borderColor,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            child: Text(
+              'Términos y condiciones',
+              style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Para continuar con el proceso de registro como cuidador, debes aceptar nuestros términos.',
+              style: TextStyle(color: subtextColor, fontSize: 13),
+            ),
+          ),
+          const SizedBox(height: 8),
+          CheckboxListTile(
+            value: _termsAccepted,
+            onChanged: (val) => setState(() => _termsAccepted = val ?? false),
+            activeColor: GardenColors.primary,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: const Text(
+              'He leído y acepto los Términos de Servicio y la Política de Privacidad de GARDEN',
+              style: TextStyle(fontSize: 13),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 56, bottom: 8),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TermsOfServiceScreen())),
+                  child: const Text(
+                    'Términos de Servicio',
+                    style: TextStyle(color: GardenColors.primary, fontSize: 12, decoration: TextDecoration.underline),
+                  ),
+                ),
+                Text('  •  ', style: TextStyle(color: subtextColor, fontSize: 12)),
+                GestureDetector(
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen())),
+                  child: const Text(
+                    'Política de Privacidad',
+                    style: TextStyle(color: GardenColors.primary, fontSize: 12, decoration: TextDecoration.underline),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          CheckboxListTile(
+            value: _verificationAccepted,
+            onChanged: (val) => setState(() => _verificationAccepted = val ?? false),
+            activeColor: GardenColors.primary,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: const Text(
+              'Acepto las condiciones de verificación de identidad de GARDEN',
+              style: TextStyle(fontSize: 13),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }
