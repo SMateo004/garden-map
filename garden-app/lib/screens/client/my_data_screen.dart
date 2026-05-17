@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -18,6 +19,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
   bool _saving = false;
   bool _uploadingPhoto = false;
   String _token = '';
+  Uint8List? _pendingPhotoBytes;
 
   late TextEditingController _firstCtrl;
   late TextEditingController _lastCtrl;
@@ -111,7 +113,12 @@ class _MyDataScreenState extends State<MyDataScreen> {
       final data = jsonDecode(response.body);
       if (!mounted) return;
       if (response.statusCode == 200 && data['success'] == true) {
-        setState(() => _userData = {...?_userData, 'profilePicture': data['data']['url']});
+        // Use local bytes to display the photo immediately — avoids CORS issues
+        // when Flutter web tries to load the storage URL (S3/CDN) directly.
+        setState(() {
+          _pendingPhotoBytes = bytes;
+          _userData = {...?_userData, 'profilePicture': data['data']['url'] as String? ?? ''};
+        });
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Foto actualizada'), backgroundColor: GardenColors.success));
       } else {
@@ -229,13 +236,18 @@ class _MyDataScreenState extends State<MyDataScreen> {
                                         padding: EdgeInsets.all(30),
                                         child: CircularProgressIndicator(color: GardenColors.primary, strokeWidth: 2))
                                     : ClipOval(
-                                        child: _userData?['profilePicture'] != null
-                                            ? Image.network(
-                                                fixImageUrl(_userData!['profilePicture'] as String),
+                                        child: _pendingPhotoBytes != null
+                                            ? Image.memory(
+                                                _pendingPhotoBytes!,
                                                 width: 100, height: 100, fit: BoxFit.cover,
-                                                errorBuilder: (_, __, ___) => _avatarFallback(textColor),
                                               )
-                                            : _avatarFallback(textColor),
+                                            : _userData?['profilePicture'] != null
+                                                ? Image.network(
+                                                    fixImageUrl(_userData!['profilePicture'] as String),
+                                                    width: 100, height: 100, fit: BoxFit.cover,
+                                                    errorBuilder: (_, __, ___) => _avatarFallback(textColor),
+                                                  )
+                                                : _avatarFallback(textColor),
                                       ),
                               ),
                             ),
