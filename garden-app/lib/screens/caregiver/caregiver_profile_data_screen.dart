@@ -267,14 +267,40 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   }
 
   Future<void> _saveAllData() async {
-    // ── Validación de campos obligatorios ──
+    // ── Validación completa de campos obligatorios ──
     final bio = _bioController.text.trim();
     if (bio.length < 10) {
       return _showValidationError('La bio debe tener al menos 10 caracteres');
     }
+    if (_bioDetailController.text.trim().length < 10) {
+      return _showValidationError('La descripción detallada debe tener al menos 10 caracteres');
+    }
+    if (_addressController.text.trim().isEmpty) {
+      return _showValidationError('Ingresa tu dirección');
+    }
     if (_selectedServices.isEmpty) {
       return _showValidationError('Selecciona al menos un servicio');
     }
+    if (_selectedHomeTypes.isEmpty) {
+      return _showValidationError('Selecciona al menos un tipo de espacio');
+    }
+    if (_acceptedPetTypes.isEmpty) {
+      return _showValidationError('Selecciona al menos un tipo de mascota que aceptas');
+    }
+    if (_acceptedSizes.isEmpty) {
+      return _showValidationError('Selecciona al menos un tamaño de mascota aceptado');
+    }
+
+    // Fotos mínimas según servicio
+    final minPhotos = _selectedServices.contains('HOSPEDAJE') ? 4 : 2;
+    if (_photos.length < minPhotos) {
+      return _showValidationError(
+        _selectedServices.contains('HOSPEDAJE')
+            ? 'Para hospedaje necesitas al menos 4 fotos de tu espacio'
+            : 'Sube al menos 2 fotos de tu espacio',
+      );
+    }
+
     if (_selectedServices.contains('PASEO')) {
       if ((_pricePerWalk60Controller.text.trim().isEmpty) ||
           (double.tryParse(_pricePerWalk60Controller.text) ?? 0) <= 0) {
@@ -287,7 +313,19 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         return _showValidationError('Ingresa el precio por noche del hospedaje');
       }
     }
-    // Campos del perfil profesional (deben coincidir con lo que exige submitProfile en el backend)
+
+    // FAQ
+    if (_includesController.text.trim().length < 5) {
+      return _showValidationError('Describe qué incluye tu servicio (sección Preguntas frecuentes)');
+    }
+    if (_requirementsController.text.trim().length < 5) {
+      return _showValidationError('Describe los requisitos de tu servicio (sección Preguntas frecuentes)');
+    }
+    if (_emergencyController.text.trim().length < 5) {
+      return _showValidationError('Describe cómo actúas ante emergencias (sección Preguntas frecuentes)');
+    }
+
+    // Campos del perfil profesional
     final expYearsText = _experienceYearsController.text.trim().replaceAll('+', '');
     if (expYearsText.isEmpty || int.tryParse(expYearsText) == null) {
       return _showValidationError('Ingresa los años de experiencia');
@@ -296,16 +334,16 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       return _showValidationError('Describe tu experiencia (mínimo 5 caracteres)');
     }
     if (_whyCaregiverController.text.trim().length < 3) {
-      return _showValidationError('Explica por qué eres cuidador (mínimo 3 caracteres)');
+      return _showValidationError('Explica por qué eres cuidador');
     }
     if (_whatDiffersController.text.trim().length < 3) {
-      return _showValidationError('Explica qué te diferencia (mínimo 3 caracteres)');
+      return _showValidationError('Explica qué te diferencia de otros cuidadores');
     }
     if (_handleAnxiousController.text.trim().length < 3) {
       return _showValidationError('Describe cómo manejas mascotas ansiosas');
     }
     if (_emergencyResponseController.text.trim().length < 3) {
-      return _showValidationError('Describe cómo respondes a emergencias');
+      return _showValidationError('Describe cómo respondes a emergencias médicas');
     }
     if (_acceptAggressive == null) {
       return _showValidationError('Indica si aceptas mascotas agresivas (Sí/No)');
@@ -315,9 +353,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     }
     if (_acceptSeniors == null) {
       return _showValidationError('Indica si aceptas mascotas mayores (Sí/No)');
-    }
-    if (_acceptedSizes.isEmpty) {
-      return _showValidationError('Selecciona al menos un tamaño de mascota aceptado');
     }
 
     setState(() => _isSaving = true);
@@ -373,6 +408,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
           'faq': {
             'includes': _includesController.text.trim(),
             'requirements': _requirementsController.text.trim(),
+            'emergency': _emergencyController.text.trim(),
           },
         },
       };
