@@ -28,6 +28,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   List<Map<String, dynamic>> _bookings = [];
   bool _isLoading = true;
   bool _setupPending = false; // true = show resume-registration screen
+  String _caregiverStatus = ''; // DRAFT | PENDING_REVIEW | REJECTED | APPROVED
   bool _conversionInProgress = false; // true = CLIENT→CAREGIVER in progress
   bool _isAbandoningConversion = false;
   String _caregiverToken = '';
@@ -81,6 +82,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       // Siempre verificar el estado real del backend
       if (_caregiver != null) {
         final status = (_caregiver!['status'] as String? ?? '').toUpperCase();
+        _caregiverStatus = status;
         if (status != 'APPROVED') {
           if (mounted) setState(() => _setupPending = true);
         }
@@ -2693,6 +2695,33 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
+    final isPendingReview = _caregiverStatus == 'PENDING_REVIEW';
+    final isRejected = _caregiverStatus == 'REJECTED';
+
+    final iconData = isPendingReview
+        ? Icons.hourglass_top_rounded
+        : isRejected
+            ? Icons.cancel_outlined
+            : Icons.assignment_late_outlined;
+
+    final gradientColors = isPendingReview
+        ? [const Color(0xFF1565C0), const Color(0xFF0D47A1)]
+        : isRejected
+            ? [GardenColors.error, const Color(0xFFB71C1C)]
+            : [GardenColors.primary, const Color(0xFF1B5E20)];
+
+    final title = isPendingReview
+        ? 'Perfil en revisión'
+        : isRejected
+            ? 'Perfil rechazado'
+            : 'Completa tu registro';
+
+    final subtitle = isPendingReview
+        ? 'Tu perfil ha sido enviado correctamente y está siendo revisado por nuestro equipo. Te notificaremos cuando sea aprobado. Esto puede tomar 1-2 días hábiles.'
+        : isRejected
+            ? 'Tu perfil fue revisado y necesita correcciones. Revisa los comentarios del equipo GARDEN y vuelve a enviarlo.'
+            : 'Tu perfil aún no está completo. Termina los pasos pendientes para que tu perfil sea visible en el marketplace.';
+
     return Container(
       color: bg,
       child: SafeArea(
@@ -2707,24 +2736,24 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                   height: 96,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      colors: [GardenColors.primary, Color(0xFF1B5E20)],
+                    gradient: LinearGradient(
+                      colors: gradientColors,
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: GardenColors.primary.withValues(alpha: 0.35),
+                        color: gradientColors.first.withValues(alpha: 0.35),
                         blurRadius: 28,
                         spreadRadius: 4,
                       ),
                     ],
                   ),
-                  child: const Icon(Icons.assignment_late_outlined, color: Colors.white, size: 48),
+                  child: Icon(iconData, color: Colors.white, size: 48),
                 ),
                 const SizedBox(height: 28),
                 Text(
-                  'Completa tu registro',
+                  title,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: textColor,
@@ -2734,7 +2763,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Tu perfil aún no está completo. Termina los pasos pendientes para que tu perfil sea visible en el marketplace.',
+                  subtitle,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: subtextColor,
@@ -2743,12 +2772,13 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 40),
+                if (!isPendingReview) ...[
                 SizedBox(
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: GardenColors.primary,
+                      backgroundColor: isRejected ? GardenColors.error : GardenColors.primary,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       elevation: 0,
@@ -2764,20 +2794,22 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                         router.go('/caregiver/onboarding', extra: {'resumeMode': true});
                       }
                     },
-                    child: const Row(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.arrow_forward_rounded, size: 22),
-                        SizedBox(width: 10),
+                        Icon(isRejected ? Icons.edit_outlined : Icons.arrow_forward_rounded, size: 22),
+                        const SizedBox(width: 10),
                         Text(
-                          'Continuar registro',
-                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                          isRejected ? 'Revisar mi perfil' : 'Continuar registro',
+                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
                         ),
                       ],
                     ),
                   ),
                 ),
+                ],
                 const SizedBox(height: 16),
+                if (!isPendingReview) ...[
                 _isAbandoningConversion
                     ? const Padding(
                         padding: EdgeInsets.symmetric(vertical: 8),
@@ -2799,6 +2831,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                           ),
                         ),
                       ),
+                ],
                 TextButton(
                   onPressed: () async {
                     final prefs = await SharedPreferences.getInstance();
