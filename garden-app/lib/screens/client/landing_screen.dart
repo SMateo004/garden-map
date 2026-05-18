@@ -138,8 +138,11 @@ class _LandingState extends State<LandingScreen> {
   final _stageKeys = List.generate(3, (_) => GlobalKey());
 
   /// GlobalKeys para las secciones con imagen decorativa scroll-linked
-  final _painSectionKey  = GlobalKey();
-  final _testiSectionKey = GlobalKey();
+  final _painSectionKey     = GlobalKey();
+  final _testiSectionKey    = GlobalKey();
+  /// Keys para anclar las imágenes al límite entre secciones
+  final _benefitsSectionKey = GlobalKey();
+  final _faqSectionKey      = GlobalKey();
 
   static const _zones = {
     'EQUIPETROL': 'Equipetrol', 'URBARI': 'Urbari', 'NORTE': 'Norte',
@@ -323,11 +326,11 @@ class _LandingState extends State<LandingScreen> {
               SliverToBoxAdapter(key: _howItWorksKey, child: _PainSection(scroll: _scroll, mobile: mobile, sectionKey: _painSectionKey)),
               // Stage 1 — entre pain y beneficios
               _petStage(1),
-              SliverToBoxAdapter(child: _BenefitsSection(scroll: _scroll, mobile: mobile)),
+              SliverToBoxAdapter(child: _BenefitsSection(scroll: _scroll, mobile: mobile, sectionKey: _benefitsSectionKey)),
               SliverToBoxAdapter(child: _TestiSection(scroll: _scroll, mobile: mobile, sectionKey: _testiSectionKey)),
               // Stage 2 — entre testimonios y FAQ
               _petStage(2),
-              SliverToBoxAdapter(child: _FaqSection(scroll: _scroll, mobile: mobile)),
+              SliverToBoxAdapter(child: _FaqSection(scroll: _scroll, mobile: mobile, sectionKey: _faqSectionKey)),
               SliverToBoxAdapter(child: _FinalCta(mobile: mobile)),
               SliverToBoxAdapter(child: _Footer(mobile: mobile)),
             ],
@@ -348,10 +351,10 @@ class _LandingState extends State<LandingScreen> {
           if (!mobile && !MediaQuery.of(context).disableAnimations)
             IgnorePointer(
               child: _SectionImageLayer(
-                scroll:    _scroll,
-                painKey:   _painSectionKey,
-                testiKey:  _testiSectionKey,
-                screenH:   h,
+                scroll:       _scroll,
+                benefitsKey:  _benefitsSectionKey,
+                faqKey:       _faqSectionKey,
+                screenH:      h,
               ),
             ),
         ]),
@@ -680,14 +683,14 @@ class _PetWidget extends StatelessWidget {
 // ─── Overlay con imágenes decorativas scroll-linked por sección ───────────────
 class _SectionImageLayer extends StatelessWidget {
   final ScrollController scroll;
-  final GlobalKey painKey;
-  final GlobalKey testiKey;
+  final GlobalKey benefitsKey;
+  final GlobalKey faqKey;
   final double screenH;
 
   const _SectionImageLayer({
     required this.scroll,
-    required this.painKey,
-    required this.testiKey,
+    required this.benefitsKey,
+    required this.faqKey,
     required this.screenH,
   });
 
@@ -698,17 +701,18 @@ class _SectionImageLayer extends StatelessWidget {
       builder: (ctx, _) {
         final items = <Widget>[];
 
-        // ── Hombre con perro — izquierda, sección "Los problemas que resolvemos"
-        final painBox = painKey.currentContext?.findRenderObject() as RenderBox?;
-        if (painBox != null && painBox.hasSize) {
-          final dy = painBox.localToGlobal(Offset.zero).dy;
-          final progress = ((screenH - dy) / (screenH * 0.60)).clamp(0.0, 1.0);
-          const imgH = 460.0;
-          // Cuando progress=1 queda con -120px: 120px ocultos detrás del borde izquierdo
-          final dx = -(imgH * (1.0 - progress)) - 120;
+        // ── Hombre con perro — izquierda, entre "Los problemas…" y "¿Por qué GARDEN?"
+        final benBox = benefitsKey.currentContext?.findRenderObject() as RenderBox?;
+        if (benBox != null && benBox.hasSize) {
+          final dy = benBox.localToGlobal(Offset.zero).dy;
+          final progress = ((screenH - dy) / (screenH * 0.55)).clamp(0.0, 1.0);
+          const imgH = 500.0;
+          // Centra la imagen en el límite entre secciones (mitad arriba, mitad abajo)
+          final topAnchor = dy - imgH * 0.5;
+          final dx = -(imgH * (1.0 - progress)) - 100;
           items.add(Positioned(
             left: 0,
-            top: dy + 40,
+            top: topAnchor,
             child: Transform.translate(
               offset: Offset(dx, 0),
               child: Opacity(
@@ -723,17 +727,17 @@ class _SectionImageLayer extends StatelessWidget {
           ));
         }
 
-        // ── Mujer con gato — derecha, sección "Confianza que se siente"
-        final testiBox = testiKey.currentContext?.findRenderObject() as RenderBox?;
-        if (testiBox != null && testiBox.hasSize) {
-          final dy = testiBox.localToGlobal(Offset.zero).dy;
-          final progress = ((screenH - dy) / (screenH * 0.60)).clamp(0.0, 1.0);
-          const imgH = 460.0;
-          // Cuando progress=1 queda con +120px: 120px ocultos detrás del borde derecho
-          final dx = (imgH * (1.0 - progress)) + 120;
+        // ── Mujer con gato — derecha, entre "Confianza que se siente" y "Resolvemos tus dudas"
+        final faqBox = faqKey.currentContext?.findRenderObject() as RenderBox?;
+        if (faqBox != null && faqBox.hasSize) {
+          final dy = faqBox.localToGlobal(Offset.zero).dy;
+          final progress = ((screenH - dy) / (screenH * 0.55)).clamp(0.0, 1.0);
+          const imgH = 500.0;
+          final topAnchor = dy - imgH * 0.5;
+          final dx = (imgH * (1.0 - progress)) + 100;
           items.add(Positioned(
             right: 0,
-            top: dy + 40,
+            top: topAnchor,
             child: Transform.translate(
               offset: Offset(dx, 0),
               child: Opacity(
@@ -1091,11 +1095,14 @@ class _PainCardState extends State<_PainCard> {
 }
 
 class _BenefitsSection extends StatelessWidget {
-  final ScrollController scroll; final bool mobile;
-  const _BenefitsSection({required this.scroll, required this.mobile});
+  final ScrollController scroll;
+  final bool mobile;
+  final GlobalKey? sectionKey;
+  const _BenefitsSection({required this.scroll, required this.mobile, this.sectionKey});
   @override Widget build(BuildContext context) {
     final pal = _Theme.of(context);
     return Container(
+      key: sectionKey,
       width: double.infinity, color: pal.surface,
       padding: EdgeInsets.symmetric(horizontal: mobile ? 24 : 80, vertical: 96),
       child: Column(children: [
@@ -1223,11 +1230,14 @@ class _TestiCard extends StatelessWidget {
 }
 
 class _FaqSection extends StatelessWidget {
-  final ScrollController scroll; final bool mobile;
-  const _FaqSection({required this.scroll, required this.mobile});
+  final ScrollController scroll;
+  final bool mobile;
+  final GlobalKey? sectionKey;
+  const _FaqSection({required this.scroll, required this.mobile, this.sectionKey});
   @override Widget build(BuildContext context) {
     final pal = _Theme.of(context);
     return Container(
+      key: sectionKey,
       width: double.infinity, color: pal.surface,
       padding: EdgeInsets.symmetric(horizontal: mobile ? 24 : 80, vertical: 96),
       child: Column(children: [
