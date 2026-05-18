@@ -361,13 +361,8 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
     };
   }
 
-  // Bloquear re-envío si ya está en revisión
-  if (profile.status === CaregiverStatus.PENDING_REVIEW) {
-    return {
-      success: true,
-      message: 'Tu perfil ya fue enviado y está siendo revisado por nuestro equipo. Te notificaremos cuando sea aprobado.',
-    };
-  }
+  // Si ya fue enviado antes, permitir re-submit (puede haber completado pasos faltantes)
+  // El status se actualizará a APPROVED si pasa todas las validaciones.
 
   const missing = getMissingRequiredFieldsForSubmit(profile);
 
@@ -400,28 +395,28 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
     await tx.caregiverProfile.update({
       where: { id: (profile as any).id },
       data: {
-        // PENDING_REVIEW: el admin debe aprobar manualmente antes de ser visible en marketplace
-        status: CaregiverStatus.PENDING_REVIEW,
+        // Al completar los 9 pasos (incluyendo verificación de identidad y email),
+        // el perfil queda aprobado automáticamente — las verificaciones son el proceso de aprobación.
+        status: CaregiverStatus.APPROVED,
         profileStatus: 'SUBMITTED',
-        // Consent was validated in the controller before calling this function.
         termsAcceptedAt: new Date(),
         termsAccepted: true,
         privacyAccepted: true,
-        verificationAccepted: true, // All three validated at controller layer
+        verificationAccepted: true,
       } as any,
     });
 
-    // Notificación al cuidador: perfil enviado, esperando revisión
+    // Notificación al cuidador: perfil aprobado
     await tx.notification.create({
       data: {
         userId,
-        title: '¡Perfil enviado! Estamos revisando tu solicitud',
-        message: 'Recibimos tu perfil completo. Nuestro equipo lo revisará y recibirás una notificación cuando sea aprobado (generalmente en menos de 24 horas).',
+        title: '¡Tu perfil ha sido aprobado! 🎉',
+        message: 'Ya eres parte de GARDEN. Tu perfil es visible en el marketplace y puedes empezar a recibir reservas.',
         type: 'PROFILE_SUBMITTED',
       },
     });
 
-    // Notificación al admin para revisión manual
+    // Notificación al admin (informativa)
     await tx.adminNotification.create({
       data: {
         type: ADMIN_NOTIFICATION_TYPE_SUBMIT,
@@ -430,22 +425,22 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
     });
   });
 
-  // Blockchain: sync como no-verificado aún (admin aprobará después)
+  // Blockchain: sync como verificado (completó todos los pasos)
   blockchainService.syncProfileOnChain(
     userId,
     `${profile.user.firstName} ${profile.user.lastName}`,
     'CAREGIVER',
-    false // verified=false hasta que admin apruebe
+    true
   ).catch(err => logger.error('Blockchain sync failed (caregiver submit)', { userId, err }));
 
-  logger.info('CaregiverProfile: enviado a revisión (PENDING_REVIEW)', {
+  logger.info('CaregiverProfile: aprobado automáticamente tras completar todos los pasos', {
     profileId: profile.id,
     userId,
   });
 
   return {
     success: true,
-    message: '¡Perfil enviado! Nuestro equipo revisará tu solicitud y te notificará cuando esté aprobado.',
+    message: '¡Perfil completado y aprobado! Ya puedes recibir reservas en GARDEN.',
   };
 }
 
