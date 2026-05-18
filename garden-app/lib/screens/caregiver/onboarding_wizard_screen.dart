@@ -81,6 +81,19 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   bool _holidays = false;
   final List<String> _times = [];
 
+  // Keys for step navigation on error
+  final _keyStep0Name = GlobalKey();
+  final _keyStep0Email = GlobalKey();
+  final _keyStep0Password = GlobalKey();
+  final _keyStep0Phone = GlobalKey();
+  final _keyStep0Address = GlobalKey();
+  final _keyStep0Dob = GlobalKey();
+  final _keyStep0Bio = GlobalKey();
+  final _keyStep1Services = GlobalKey();
+  final _keyStep1Zone = GlobalKey();
+  final _keyStep2Days = GlobalKey();
+  final _keyStep2Times = GlobalKey();
+
   // Paso 5: Precio
   double _precioFinal = 90.0;
   String _authToken = '';
@@ -433,108 +446,109 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
+  void _showStepError(String msg, {GlobalKey? scrollTo}) {
+    if (scrollTo?.currentContext != null) {
+      Scrollable.ensureVisible(
+        scrollTo!.currentContext!,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+        alignment: 0.1,
+      );
+    }
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: Colors.red.shade700,
+      duration: const Duration(seconds: 5),
+      action: scrollTo?.currentContext != null
+          ? SnackBarAction(
+              label: 'Ver campo',
+              textColor: Colors.white,
+              onPressed: () {
+                if (scrollTo?.currentContext != null) {
+                  Scrollable.ensureVisible(
+                    scrollTo!.currentContext!,
+                    duration: const Duration(milliseconds: 400),
+                    curve: Curves.easeInOut,
+                  );
+                }
+              },
+            )
+          : null,
+    ));
+  }
+
   bool _validateCurrentStep() {
     switch (_currentStep) {
       case 0:
         if (_firstNameController.text.trim().isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Falta: Nombre')),
-          );
+          _showStepError('Falta: Nombre', scrollTo: _keyStep0Name);
           return false;
         }
         if (_lastNameController.text.trim().isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Falta: Apellido')),
-          );
+          _showStepError('Falta: Apellido', scrollTo: _keyStep0Name);
           return false;
         }
         if (_emailController.text.trim().isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Falta: Correo electrónico')),
-          );
+          _showStepError('Falta: Correo electrónico', scrollTo: _keyStep0Email);
           return false;
         }
         if (_passwordController.text.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Falta: Contraseña')),
-          );
+          _showStepError('Falta: Contraseña', scrollTo: _keyStep0Password);
           return false;
         }
         if (_phoneController.text.trim().isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Falta: Número de teléfono')),
-          );
+          _showStepError('Falta: Número de teléfono', scrollTo: _keyStep0Phone);
           return false;
         }
         if (_addressController.text.trim().isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Falta: Dirección')),
-          );
+          _showStepError('Falta: Dirección', scrollTo: _keyStep0Address);
           return false;
         }
         if (_dateOfBirth == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Falta: Fecha de nacimiento')),
-          );
+          _showStepError('Falta: Fecha de nacimiento', scrollTo: _keyStep0Dob);
           return false;
         }
         if (_bioController.text.trim().length < 50) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('La descripción debe tener al menos 50 caracteres')),
-          );
+          _showStepError('La descripción debe tener al menos 50 caracteres', scrollTo: _keyStep0Bio);
           return false;
         }
         return true;
       case 1:
         if (_servicesOffered.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Selecciona al menos un servicio')),
-          );
+          _showStepError('Selecciona al menos un servicio', scrollTo: _keyStep1Services);
           return false;
         }
         if (_selectedZone == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Selecciona tu zona en Santa Cruz')),
-          );
+          _showStepError('Selecciona tu zona en Santa Cruz', scrollTo: _keyStep1Zone);
           return false;
         }
         return true;
       case 2:
         if (!_weekdays && !_weekends && !_holidays) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Selecciona al menos un día disponible')),
-          );
+          _showStepError('Selecciona al menos un día disponible', scrollTo: _keyStep2Days);
           return false;
         }
         if (_times.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Selecciona al menos un horario')),
-          );
+          _showStepError('Selecciona al menos un horario', scrollTo: _keyStep2Times);
           return false;
         }
         return true;
       case 3:
         final minFotos = _servicesOffered.contains('HOSPEDAJE') ? 4 : 2;
         if (_photoUrls.length < minFotos) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Sube al menos $minFotos fotos para continuar')),
-          );
+          _showStepError('Sube al menos $minFotos fotos para continuar');
           return false;
         }
         return true;
       case 4:
         if (_precioFinal <= 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Por favor, selecciona o acepta un precio razonable')),
-          );
+          _showStepError('Por favor, selecciona o acepta un precio razonable');
           return false;
         }
         return true;
       case 5: // Foto de perfil (retrato) — triggers registration
         if (_profilePhotoUrl == null && _localProfilePhoto == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Por favor, sube una foto de perfil profesional')),
-          );
+          _showStepError('Por favor, sube una foto de perfil profesional');
           return false;
         }
         return true;
@@ -967,6 +981,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           const SizedBox(height: 28),
 
           // Nombre + Apellido
+          SizedBox(key: _keyStep0Name, height: 0),
           Row(children: [
             Expanded(child: TextFormField(controller: _firstNameController, style: TextStyle(color: textColor),
                 decoration: _field('Nombre', Icons.person_outlined))),
@@ -976,14 +991,17 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           ]),
           const SizedBox(height: 16),
 
+          SizedBox(key: _keyStep0Email, height: 0),
           TextFormField(controller: _emailController, keyboardType: TextInputType.emailAddress,
               style: TextStyle(color: textColor), decoration: _field('Correo electrónico', Icons.email_outlined)),
           const SizedBox(height: 16),
 
+          SizedBox(key: _keyStep0Password, height: 0),
           TextFormField(controller: _passwordController, obscureText: true,
               style: TextStyle(color: textColor), decoration: _field('Contraseña (mínimo 8 caracteres)', Icons.lock_outlined)),
           const SizedBox(height: 16),
 
+          SizedBox(key: _keyStep0Phone, height: 0),
           TextFormField(controller: _phoneController, keyboardType: TextInputType.number,
               style: TextStyle(color: textColor), decoration: _field('Teléfono (ej: 76543210)', Icons.phone_outlined)),
           const SizedBox(height: 4),
@@ -993,11 +1011,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           ),
           const SizedBox(height: 16),
 
+          SizedBox(key: _keyStep0Address, height: 0),
           TextFormField(controller: _addressController,
               style: TextStyle(color: textColor), decoration: _field('Dirección completa', Icons.home_work_outlined)),
           const SizedBox(height: 16),
 
           // Date of birth
+          SizedBox(key: _keyStep0Dob, height: 0),
           GestureDetector(
             onTap: () async {
               final picked = await showDatePicker(
@@ -1043,6 +1063,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           ),
           const SizedBox(height: 16),
 
+          SizedBox(key: _keyStep0Bio, height: 0),
           TextFormField(
             controller: _bioController,
             maxLines: 4,
@@ -1268,6 +1289,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           Text('Selecciona los servicios que brindarás', style: TextStyle(fontSize: 14, color: subtextColor)),
           const SizedBox(height: 28),
 
+          SizedBox(key: _keyStep1Services, height: 0),
           Text('Servicios', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           Row(children: [
@@ -1277,6 +1299,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           ]),
           const SizedBox(height: 28),
 
+          SizedBox(key: _keyStep1Zone, height: 0),
           Text('Zona en Santa Cruz', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
@@ -1384,6 +1407,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           Text('Selecciona los días y horarios en que puedes cuidar mascotas', style: TextStyle(fontSize: 14, color: subtextColor)),
           const SizedBox(height: 28),
 
+          SizedBox(key: _keyStep2Days, height: 0),
           Text('Días disponibles', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           availSwitch('Días de semana', 'Lunes a Viernes', _weekdays, (v) => setState(() => _weekdays = v)),
@@ -1391,6 +1415,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           availSwitch('Feriados', 'Días festivos nacionales', _holidays, (v) => setState(() => _holidays = v)),
 
           const SizedBox(height: 12),
+          SizedBox(key: _keyStep2Times, height: 0),
           Text('Horarios', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           Wrap(

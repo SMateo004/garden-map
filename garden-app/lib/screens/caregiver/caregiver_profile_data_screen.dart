@@ -38,6 +38,24 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   String _caregiverToken = '';
   int _completionPercentage = 0;
 
+  // GlobalKeys for scroll-to-field on validation error
+  final _keyBio = GlobalKey();
+  final _keyBioDetail = GlobalKey();
+  final _keyAddress = GlobalKey();
+  final _keyServices = GlobalKey();
+  final _keySpaceType = GlobalKey();
+  final _keyPriceWalk = GlobalKey();
+  final _keyPriceHospedaje = GlobalKey();
+  final _keyPetTypes = GlobalKey();
+  final _keySizes = GlobalKey();
+  final _keyPhotos = GlobalKey();
+  final _keyFaq = GlobalKey();
+  final _keyExperience = GlobalKey();
+  final _keyPolicies = GlobalKey();
+  final _keyHandleAnxious = GlobalKey();
+  final _keyEmergencyResponse = GlobalKey();
+  final _keyTerms = GlobalKey();
+
   // Controllers
   final _bioController = TextEditingController();
   final _bioDetailController = TextEditingController();
@@ -266,8 +284,35 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     setState(() => _completionPercentage = ((score / total) * 100).round());
   }
 
-  void _showValidationError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: GardenColors.error));
+  void _showValidationError(String msg, {GlobalKey? scrollTo}) {
+    if (scrollTo?.currentContext != null) {
+      Scrollable.ensureVisible(
+        scrollTo!.currentContext!,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+        alignment: 0.1,
+      );
+    }
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: GardenColors.error,
+      duration: const Duration(seconds: 5),
+      action: scrollTo?.currentContext != null
+          ? SnackBarAction(
+              label: 'Ir al campo',
+              textColor: Colors.white,
+              onPressed: () {
+                if (scrollTo?.currentContext != null) {
+                  Scrollable.ensureVisible(
+                    scrollTo!.currentContext!,
+                    duration: const Duration(milliseconds: 400),
+                    curve: Curves.easeInOut,
+                  );
+                }
+              },
+            )
+          : null,
+    ));
     setState(() => _isSaving = false);
   }
 
@@ -275,25 +320,25 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     // ── Validación completa de campos obligatorios ──
     final bio = _bioController.text.trim();
     if (bio.length < 10) {
-      return _showValidationError('La bio debe tener al menos 10 caracteres');
+      return _showValidationError('La bio debe tener al menos 10 caracteres', scrollTo: _keyBio);
     }
     if (_bioDetailController.text.trim().length < 10) {
-      return _showValidationError('La descripción detallada debe tener al menos 10 caracteres');
+      return _showValidationError('La descripción detallada debe tener al menos 10 caracteres', scrollTo: _keyBioDetail);
     }
     if (_addressController.text.trim().isEmpty) {
-      return _showValidationError('Ingresa tu dirección');
+      return _showValidationError('Ingresa tu dirección', scrollTo: _keyAddress);
     }
     if (_selectedServices.isEmpty) {
-      return _showValidationError('Selecciona al menos un servicio');
+      return _showValidationError('Selecciona al menos un servicio', scrollTo: _keyServices);
     }
-    if (_selectedHomeTypes.isEmpty) {
-      return _showValidationError('Selecciona al menos un tipo de espacio');
+    if (_selectedServices.contains('HOSPEDAJE') && _selectedHomeTypes.isEmpty) {
+      return _showValidationError('Selecciona al menos un tipo de espacio para hospedaje', scrollTo: _keySpaceType);
     }
     if (_acceptedPetTypes.isEmpty) {
-      return _showValidationError('Selecciona al menos un tipo de mascota que aceptas');
+      return _showValidationError('Selecciona al menos un tipo de mascota que aceptas', scrollTo: _keyPetTypes);
     }
     if (_acceptedSizes.isEmpty) {
-      return _showValidationError('Selecciona al menos un tamaño de mascota aceptado');
+      return _showValidationError('Selecciona al menos un tamaño de mascota aceptado', scrollTo: _keySizes);
     }
 
     // Fotos mínimas según servicio
@@ -303,69 +348,70 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         _selectedServices.contains('HOSPEDAJE')
             ? 'Para hospedaje necesitas al menos 4 fotos de tu espacio'
             : 'Sube al menos 2 fotos de tu espacio',
+        scrollTo: _keyPhotos,
       );
     }
 
     if (_selectedServices.contains('PASEO')) {
       if ((_pricePerWalk60Controller.text.trim().isEmpty) ||
           (double.tryParse(_pricePerWalk60Controller.text) ?? 0) <= 0) {
-        return _showValidationError('Ingresa el precio del paseo (1 hora)');
+        return _showValidationError('Ingresa el precio del paseo (1 hora)', scrollTo: _keyPriceWalk);
       }
     }
     if (_selectedServices.contains('HOSPEDAJE')) {
       if ((_pricePerDayController.text.trim().isEmpty) ||
           (double.tryParse(_pricePerDayController.text) ?? 0) <= 0) {
-        return _showValidationError('Ingresa el precio por noche del hospedaje');
+        return _showValidationError('Ingresa el precio por noche del hospedaje', scrollTo: _keyPriceHospedaje);
       }
     }
 
     // FAQ
     if (_includesController.text.trim().length < 5) {
-      return _showValidationError('Describe qué incluye tu servicio (sección Preguntas frecuentes)');
+      return _showValidationError('Describe qué incluye tu servicio (sección Preguntas frecuentes)', scrollTo: _keyFaq);
     }
     if (_requirementsController.text.trim().length < 5) {
-      return _showValidationError('Describe los requisitos de tu servicio (sección Preguntas frecuentes)');
+      return _showValidationError('Describe los requisitos de tu servicio (sección Preguntas frecuentes)', scrollTo: _keyFaq);
     }
     if (_emergencyController.text.trim().length < 5) {
-      return _showValidationError('Describe cómo actúas ante emergencias (sección Preguntas frecuentes)');
+      return _showValidationError('Describe cómo actúas ante emergencias (sección Preguntas frecuentes)', scrollTo: _keyFaq);
     }
 
     // Campos del perfil profesional
     final expYearsText = _experienceYearsController.text.trim().replaceAll('+', '');
     if (expYearsText.isEmpty || int.tryParse(expYearsText) == null) {
-      return _showValidationError('Ingresa los años de experiencia');
+      return _showValidationError('Ingresa los años de experiencia', scrollTo: _keyExperience);
     }
     if (_experienceDescController.text.trim().length < 5) {
-      return _showValidationError('Describe tu experiencia (mínimo 5 caracteres)');
+      return _showValidationError('Describe tu experiencia (mínimo 5 caracteres)', scrollTo: _keyExperience);
     }
     if (_whyCaregiverController.text.trim().length < 3) {
-      return _showValidationError('Explica por qué eres cuidador');
+      return _showValidationError('Explica por qué eres cuidador', scrollTo: _keyExperience);
     }
     if (_whatDiffersController.text.trim().length < 3) {
-      return _showValidationError('Explica qué te diferencia de otros cuidadores');
+      return _showValidationError('Explica qué te diferencia de otros cuidadores', scrollTo: _keyExperience);
     }
     if (_handleAnxiousController.text.trim().length < 3) {
-      return _showValidationError('Describe cómo manejas mascotas ansiosas');
+      return _showValidationError('Describe cómo manejas mascotas ansiosas', scrollTo: _keyHandleAnxious);
     }
     if (_emergencyResponseController.text.trim().length < 3) {
-      return _showValidationError('Describe cómo respondes a emergencias médicas');
+      return _showValidationError('Describe cómo respondes a emergencias médicas', scrollTo: _keyEmergencyResponse);
     }
     if (_acceptAggressive == null) {
-      return _showValidationError('Indica si aceptas mascotas agresivas (Sí/No)');
+      return _showValidationError('Indica si aceptas mascotas agresivas (Sí/No)', scrollTo: _keyPolicies);
     }
     if (_acceptPuppies == null) {
-      return _showValidationError('Indica si aceptas cachorros (Sí/No)');
+      return _showValidationError('Indica si aceptas cachorros (Sí/No)', scrollTo: _keyPolicies);
     }
     if (_acceptSeniors == null) {
-      return _showValidationError('Indica si aceptas mascotas mayores (Sí/No)');
+      return _showValidationError('Indica si aceptas mascotas mayores (Sí/No)', scrollTo: _keyPolicies);
     }
 
     if (widget.embeddedMode && !_termsAccepted) {
-      return _showValidationError('Debes aceptar los Términos de Servicio y la Política de Privacidad para continuar');
+      return _showValidationError('Debes aceptar los Términos de Servicio y la Política de Privacidad para continuar', scrollTo: _keyTerms);
     }
 
     if (widget.embeddedMode && !_verificationAccepted) {
-      return _showValidationError('Debes aceptar las condiciones de verificación de identidad para continuar');
+      return _showValidationError('Debes aceptar las condiciones de verificación de identidad para continuar', scrollTo: _keyTerms);
     }
 
     setState(() => _isSaving = true);
@@ -592,6 +638,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             const SizedBox(height: 32),
 
             // Sección 2 — Sobre ti
+            SizedBox(key: _keyBio, height: 0),
             _sectionTitle('Sobre ti como cuidador', textColor),
             GardenInput(
               hint: 'Resumen corto (bio)',
@@ -601,6 +648,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 12),
+            SizedBox(key: _keyBioDetail, height: 0),
             GardenInput(
               hint: 'Biografía detallada: experiencia, método de cuidado, etc.',
               controller: _bioDetailController,
@@ -610,10 +658,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             ),
             const Divider(height: 48),
 
+            SizedBox(key: _keyAddress, height: 0),
             const Divider(height: 48),
 
             if (_selectedServices.contains('HOSPEDAJE')) ...[
               // Sección 3 — Tu espacio
+              SizedBox(key: _keySpaceType, height: 0),
               _sectionTitle('Tu espacio', textColor),
               _buildHomeTypes(surface, borderColor),
               const SizedBox(height: 16),
@@ -634,11 +684,13 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             ],
 
             // Sección 4 — Servicios
+            SizedBox(key: _keyServices, height: 0),
             _sectionTitle('Servicios que ofreces', textColor),
             _buildServiceChips(surface, borderColor),
 
             if (_selectedServices.contains('PASEO')) ...[
               const SizedBox(height: 24),
+              SizedBox(key: _keyPriceWalk, height: 0),
               Row(children: [
                 const Icon(Icons.directions_walk_rounded, color: GardenColors.primary, size: 18),
                 const SizedBox(width: 8),
@@ -702,6 +754,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
             if (_selectedServices.contains('HOSPEDAJE')) ...[
               const SizedBox(height: 24),
+              SizedBox(key: _keyPriceHospedaje, height: 0),
               Row(children: [
                 const Icon(Icons.house_rounded, color: GardenColors.primary, size: 18),
                 const SizedBox(width: 8),
@@ -745,6 +798,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             const Divider(height: 48),
 
             // Sección 6 — Tipos de mascotas
+            SizedBox(key: _keyPetTypes, height: 0),
             _sectionTitle('Mascotas que aceptas', textColor),
             Wrap(
               spacing: 8,
@@ -753,6 +807,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             const Divider(height: 48),
 
             // Sección 7 — Tamaños
+            SizedBox(key: _keySizes, height: 0),
             _sectionTitle('Tamaños aceptados', textColor),
             Column(
               children: _petSizes.map((s) => _buildCheckTile(_petSizeLabels[s]!, _acceptedSizes.contains(s), (v) {
@@ -766,6 +821,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             const Divider(height: 48),
 
             // Sección 8 — Fotos
+            SizedBox(key: _keyPhotos, height: 0),
             _sectionTitle('Fotos de tu servicio', textColor),
             _buildPhotoGrid(borderColor),
             const SizedBox(height: 8),
@@ -776,6 +832,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             const Divider(height: 48),
 
             // Sección 9 — FAQ
+            SizedBox(key: _keyFaq, height: 0),
             _sectionTitle('Preguntas frecuentes', textColor),
             GardenInput(hint: '¿Qué incluye tu servicio?', controller: _includesController, maxLines: 2),
             const SizedBox(height: 12),
@@ -785,6 +842,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             const Divider(height: 48),
 
             // Sección EXTRA — Experiencia detallada
+            SizedBox(key: _keyExperience, height: 0),
             _sectionTitle('Tu experiencia profesional', textColor),
             Text('Años cuidando mascotas', style: TextStyle(color: subtextColor, fontSize: 13)),
             const SizedBox(height: 8),
@@ -826,6 +884,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             const Divider(height: 48),
 
             // Sección EXTRA — Mascotas que aceptas
+            SizedBox(key: _keyPolicies, height: 0),
             _sectionTitle('Políticas de mascotas', textColor),
             _acceptSwitch('¿Aceptas mascotas agresivas?', _acceptAggressive, (val) => setState(() => _acceptAggressive = val), textColor, subtextColor, surface, borderColor),
             const SizedBox(height: 8),
@@ -837,9 +896,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
             // Sección EXTRA — Situaciones especiales
             _sectionTitle('Situaciones especiales', textColor),
+            SizedBox(key: _keyHandleAnxious, height: 0),
             _sectionField('¿Cómo manejas mascotas ansiosas?', _handleAnxiousController,
               'Describe tu método para mascotas con ansiedad o estrés', maxLines: 3),
             const SizedBox(height: 16),
+            SizedBox(key: _keyEmergencyResponse, height: 0),
             _sectionField('¿Cómo respondes ante emergencias?', _emergencyResponseController,
               'Protocolo ante una situación de emergencia veterinaria', maxLines: 3),
 
@@ -847,6 +908,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
             if (widget.embeddedMode) ...[
               // T&C acceptance — only shown in embedded (wizard) mode
+              SizedBox(key: _keyTerms, height: 0),
               _buildTermsSection(),
               const SizedBox(height: 24),
             ],
