@@ -1106,7 +1106,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
     return Container(
-      height: 60,
+      height: 64,
       color: surface,
       child: Column(
         children: [
@@ -1115,14 +1115,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: [
-                  // Logo
+                  // Logo — mismo tamaño que landing
                   GestureDetector(
                     onTap: () => context.go('/marketplace'),
-                    child: Image.asset('assets/images/logo-horizontal.png', height: 143),
+                    child: Image.asset('assets/images/logo-horizontal.png', height: 40),
                   ),
-                  const SizedBox(width: 6),
-                  Text('·', style: TextStyle(color: subtextColor, fontSize: 18)),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
+                  Text('·', style: TextStyle(color: subtextColor, fontSize: 16)),
+                  const SizedBox(width: 8),
                   Text('Cuidadores en Santa Cruz', style: TextStyle(color: subtextColor, fontSize: 13)),
                   const Spacer(),
                   if (_authToken.isNotEmpty) ...[
@@ -1149,14 +1149,20 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     ),
                   ] else ...[
                     TextButton(
+                      onPressed: () => context.go('/about'),
+                      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
+                      child: Text('¿Quiénes somos?',
+                          style: TextStyle(color: subtextColor, fontWeight: FontWeight.w500, fontSize: 13)),
+                    ),
+                    TextButton(
                       onPressed: () => context.go('/register'),
-                      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10)),
+                      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
                       child: const Text('Ser cuidador',
                           style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 13)),
                     ),
                     TextButton(
                       onPressed: () => context.go('/login'),
-                      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10)),
+                      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
                       child: Text('Iniciar sesión',
                           style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
                     ),

@@ -368,51 +368,48 @@ class _LandingState extends State<LandingScreen> {
     elevation: 0,
     scrolledUnderElevation: 0,
     pinned: true,
-    toolbarHeight: 68,
+    toolbarHeight: 64,
     automaticallyImplyLeading: false,
-    flexibleSpace: Container(
-      decoration: BoxDecoration(
-        color: pal.bg,
-        border: Border(bottom: BorderSide(color: pal.border, width: 1)),
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Row(children: [
-            // Logo
-            GestureDetector(
-              onTap: () => context.go('/'),
-              child: Image.asset(pal.logo, height: 78),
-            ),
-            const Spacer(),
-
-            if (mobile)
-              Builder(builder: (c) => GestureDetector(
-                onTap: () => Scaffold.of(c).openEndDrawer(),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: pal.border),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(Icons.menu_rounded, color: pal.textPri, size: 22),
-                ),
-              ))
-            else ...[
-              // Nav links con Inter explícito
-              _HeaderLink('Conviértete en cuidador', () => context.go('/become-caregiver'), pal),
-              const SizedBox(width: 4),
-              _HeaderLink('Iniciar sesión', () => context.go('/login'), pal),
-              const SizedBox(width: 16),
-              // Separador vertical
-              Container(width: 1, height: 22, color: pal.border),
-              const SizedBox(width: 16),
-              // CTA Registrarse — pill style
-              _PrimaryBtn('Registrarse', () => context.go('/register'), w: 140, h: 40),
-            ],
-          ]),
+    // Sin flexibleSpace ni SafeArea interno — SliverAppBar ya maneja el top padding
+    title: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(children: [
+        // Logo
+        GestureDetector(
+          onTap: () => context.go('/'),
+          child: Image.asset(pal.logo, height: 40),
         ),
-      ),
+        const Spacer(),
+
+        if (mobile)
+          Builder(builder: (c) => GestureDetector(
+            onTap: () => Scaffold.of(c).openEndDrawer(),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                border: Border.all(color: pal.border),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.menu_rounded, color: pal.textPri, size: 22),
+            ),
+          ))
+        else ...[
+          _HeaderLink('¿Quiénes somos?', () => context.go('/about'), pal),
+          const SizedBox(width: 4),
+          _HeaderLink('Conviértete en cuidador', () => context.go('/become-caregiver'), pal),
+          const SizedBox(width: 4),
+          _HeaderLink('Iniciar sesión', () => context.go('/login'), pal),
+          const SizedBox(width: 16),
+          Container(width: 1, height: 22, color: pal.border),
+          const SizedBox(width: 16),
+          _PrimaryBtn('Registrarse', () => context.go('/register'), w: 140, h: 40),
+        ],
+      ]),
+    ),
+    titleSpacing: 0,
+    bottom: PreferredSize(
+      preferredSize: const Size.fromHeight(1),
+      child: Container(height: 1, color: pal.border),
     ),
   );
 
@@ -1733,6 +1730,8 @@ class _MobileMenu extends StatelessWidget {
           const SizedBox(height: 28),
           Divider(color: pal.border),
           const SizedBox(height: 16),
+          _MI('¿Quiénes somos?', Icons.info_outline_rounded,
+            () { Navigator.pop(context); go('/about'); }, pal),
           _MI('Buscar cuidadores', Icons.search_rounded,
             () { Navigator.pop(context); go('/marketplace'); }, pal),
           _MI('Para cuidadores', Icons.pets_rounded,

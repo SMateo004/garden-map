@@ -106,5 +106,11 @@
 			<string>fbapi</string>
 			<string>fb-messenger-share-api</string>
 		</array>
+		<key>NSLocalNetworkUsageDescription</key>
+		<string>Se usa para detectar dispositivos en la red local durante el desarrollo.</string>
+		<key>NSBonjourServices</key>
+		<array>
+			<string>_dartobservatory._tcp</string>
+		</array>
 	</dict>
 </plist>
