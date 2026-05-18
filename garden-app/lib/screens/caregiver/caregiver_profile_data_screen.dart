@@ -372,10 +372,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     if (_requirementsController.text.trim().length < 5) {
       return _showValidationError('Describe los requisitos de tu servicio (sección Preguntas frecuentes)', scrollTo: _keyFaq);
     }
-    if (_emergencyController.text.trim().length < 5) {
-      return _showValidationError('Describe cómo actúas ante emergencias (sección Preguntas frecuentes)', scrollTo: _keyFaq);
-    }
-
     // Campos del perfil profesional
     final expYearsText = _experienceYearsController.text.trim().replaceAll('+', '');
     if (expYearsText.isEmpty || int.tryParse(expYearsText) == null) {
