@@ -65,7 +65,7 @@ export const MAX_BIO_CHARS = MAX_BIO_LENGTH;
 export const PHOTO_COUNT = { min: MIN_PHOTOS, max: MAX_PHOTOS };
 /** Solo JPG/PNG para fotos de perfil (requisito MVP) */
 export const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png'] as const;
-export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB por archivo
+export const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB por archivo
 
 /** Validación Zod del array de archivos: min 4, max 6 (tipos y tamaño los valida Multer) */
 export const caregiverPhotosFilesSchema = z

@@ -11,7 +11,7 @@ import { uploadImage, uploadImages } from '../../services/storage.service.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 20 * 1024 * 1024 },
 });
 
 /** POST /api/upload/registration-photos — multipart 'photos' (4-6). No auth. */
@@ -42,7 +42,7 @@ export const uploadProfilePhotoHandler = [
 
     if (!file) throw new CaregiverProfileValidationError('Se requiere una foto (campo profilePhoto)');
     if (!file.mimetype.startsWith('image/')) throw new CaregiverProfileValidationError('El archivo debe ser una imagen');
-    if (file.size > 5 * 1024 * 1024) throw new CaregiverProfileValidationError('La foto no debe superar 5 MB');
+    if (file.size > 20 * 1024 * 1024) throw new CaregiverProfileValidationError('La foto no debe superar 20 MB');
 
     const profile = await prisma.caregiverProfile.findUnique({ where: { userId } });
     if (!profile) throw new CaregiverProfileValidationError('No tienes perfil de cuidador.');

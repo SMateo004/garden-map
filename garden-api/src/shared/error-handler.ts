@@ -32,7 +32,7 @@ export function errorHandler(
     if (err.code === 'LIMIT_FILE_SIZE') {
       return res.status(413).json({
         success: false,
-        error: { code: 'FILE_TOO_LARGE', message: 'El archivo supera el tamaño máximo permitido (5MB)' },
+        error: { code: 'FILE_TOO_LARGE', message: 'El archivo supera el tamaño máximo permitido (20MB)' },
       });
     }
     if (err.code === 'LIMIT_UNEXPECTED_FILE') {
