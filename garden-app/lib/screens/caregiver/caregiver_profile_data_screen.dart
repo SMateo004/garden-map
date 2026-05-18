@@ -318,10 +318,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
   Future<void> _saveAllData() async {
     // ── Validación completa de campos obligatorios ──
-    final bio = _bioController.text.trim();
-    if (bio.length < 10) {
-      return _showValidationError('La bio debe tener al menos 10 caracteres', scrollTo: _keyBio);
-    }
     if (_bioDetailController.text.trim().length < 10) {
       return _showValidationError('La descripción detallada debe tener al menos 10 caracteres', scrollTo: _keyBioDetail);
     }
@@ -339,17 +335,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     }
     if (_acceptedSizes.isEmpty) {
       return _showValidationError('Selecciona al menos un tamaño de mascota aceptado', scrollTo: _keySizes);
-    }
-
-    // Fotos mínimas según servicio
-    final minPhotos = _selectedServices.contains('HOSPEDAJE') ? 4 : 2;
-    if (_photos.length < minPhotos) {
-      return _showValidationError(
-        _selectedServices.contains('HOSPEDAJE')
-            ? 'Para hospedaje necesitas al menos 4 fotos de tu espacio'
-            : 'Sube al menos 2 fotos de tu espacio',
-        scrollTo: _keyPhotos,
-      );
     }
 
     if (_selectedServices.contains('PASEO')) {
@@ -636,14 +621,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             // Sección 2 — Sobre ti
             SizedBox(key: _keyBio, height: 0),
             _sectionTitle('Sobre ti como cuidador', textColor),
-            GardenInput(
-              hint: 'Resumen corto (bio)',
-              controller: _bioController,
-              maxLength: 500,
-              maxLines: 2,
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 12),
             SizedBox(key: _keyBioDetail, height: 0),
             GardenInput(
               hint: 'Biografía detallada: experiencia, método de cuidado, etc.',
@@ -776,24 +753,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             _buildZoneDropdown(surface, borderColor, textColor),
             const Divider(height: 48),
 
-            // Sección 5 — Disponibilidad
-            _sectionTitle('Disponibilidad general', textColor),
-            _buildSwitchTile('Lunes a Viernes', _weekdays, (v) => setState(() => _weekdays = v)),
-            _buildSwitchTile('Sábados y Domingos', _weekends, (v) => setState(() => _weekends = v)),
-            _buildSwitchTile('Feriados', _holidays, (v) => setState(() => _holidays = v)),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                _slotChip('Mañana', _morningSlot, (v) => setState(() => _morningSlot = v), surface, borderColor),
-                const SizedBox(width: 8),
-                _slotChip('Tarde', _afternoonSlot, (v) => setState(() => _afternoonSlot = v), surface, borderColor),
-                const SizedBox(width: 8),
-                _slotChip('Noche', _nightSlot, (v) => setState(() => _nightSlot = v), surface, borderColor),
-              ],
-            ),
-            const Divider(height: 48),
-
-            // Sección 6 — Tipos de mascotas
+            // Sección 5 — Tipos de mascotas
             SizedBox(key: _keyPetTypes, height: 0),
             _sectionTitle('Mascotas que aceptas', textColor),
             Wrap(
@@ -816,18 +776,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             ),
             const Divider(height: 48),
 
-            // Sección 8 — Fotos
-            SizedBox(key: _keyPhotos, height: 0),
-            _sectionTitle('Fotos de tu servicio', textColor),
-            _buildPhotoGrid(borderColor),
-            const SizedBox(height: 8),
-            if (_selectedServices.contains('HOSPEDAJE')) 
-              const Text('Requerido: 4 a 6 fotos de tu espacio y mascotas', style: TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.bold))
-            else
-              const Text('Requerido: Al menos 2 fotos para el servicio de paseo', style: TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
-            const Divider(height: 48),
-
-            // Sección 9 — FAQ
+            // Sección 8 — FAQ
             SizedBox(key: _keyFaq, height: 0),
             _sectionTitle('Preguntas frecuentes', textColor),
             GardenInput(hint: '¿Qué incluye tu servicio?', controller: _includesController, maxLines: 2),

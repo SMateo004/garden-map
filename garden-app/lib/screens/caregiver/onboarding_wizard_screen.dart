@@ -94,8 +94,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   final _keyStep2Days = GlobalKey();
   final _keyStep2Times = GlobalKey();
 
-  // Paso 5: Precio
-  double _precioFinal = 90.0;
+  // Paso 5: Precio (uno por cada servicio)
+  double _precioHospedaje = 90.0; // pricePerDay (por noche)
+  double _precioPaseo = 90.0;     // pricePerWalk60 (por hora)
   String _authToken = '';
   Map<String, dynamic>? _priceStats;
 
@@ -240,10 +241,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       // Step 3: Photos — restore confirmed URLs (shown with green checkmark in grid)
       _photoUrls = List<String>.from(profile['photos'] ?? []);
 
-      // Step 4: Price
-      _precioFinal = hasHospedaje
-          ? ((profile['pricePerDay'] ?? 0) as num).toDouble()
-          : ((profile['pricePerWalk60'] ?? 0) as num).toDouble();
+      // Step 4: Price (separate for each service)
+      final pDay = ((profile['pricePerDay'] ?? 0) as num).toDouble();
+      final pWalk = ((profile['pricePerWalk60'] ?? 0) as num).toDouble();
+      _precioHospedaje = pDay > 0 ? pDay : 90.0;
+      _precioPaseo = pWalk > 0 ? pWalk : 90.0;
 
       // Step 5: Profile photo
       _profilePhotoUrl = profile['profilePhoto'] as String?;
@@ -541,8 +543,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         }
         return true;
       case 4:
-        if (_precioFinal <= 0) {
-          _showStepError('Por favor, selecciona o acepta un precio razonable');
+        if (_servicesOffered.contains('HOSPEDAJE') && _precioHospedaje <= 0) {
+          _showStepError('Por favor, selecciona un precio para Hospedaje');
+          return false;
+        }
+        if (_servicesOffered.contains('PASEO') && _precioPaseo <= 0) {
+          _showStepError('Por favor, selecciona un precio para Paseo');
           return false;
         }
         return true;
@@ -653,8 +659,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       if (!_validateCurrentStep()) return;
       setState(() => _isLoading = true);
       await _patchProfile({
-        if (_servicesOffered.contains('HOSPEDAJE')) 'pricePerDay': _precioFinal.toInt(),
-        if (_servicesOffered.contains('PASEO')) 'pricePerWalk60': _precioFinal.toInt(),
+        if (_servicesOffered.contains('HOSPEDAJE')) 'pricePerDay': _precioHospedaje.toInt(),
+        if (_servicesOffered.contains('PASEO')) 'pricePerWalk60': _precioPaseo.toInt(),
       });
       setState(() { _isLoading = false; _currentStep++; });
       return;
@@ -1448,152 +1454,118 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   }
 
   // ── PASO 5: Precio ────────────────────────────────────────
-  Widget _buildStep5() {
-    final isDark = themeNotifier.isDark;
-    final textColor    = isDark ? GardenColors.darkTextPrimary   : GardenColors.lightTextPrimary;
-
+  Widget _buildPriceCard({
+    required String titulo,
+    required String unidad,
+    required String emoji,
+    required double value,
+    required ValueChanged<double> onChanged,
+  }) {
     const double sliderMin = 50.0;
     const double sliderMax = 290.0;
-
-    // Inicializar precio si todavía es 0
-    if (_precioFinal <= 0) {
-      final avg = (_priceStats?['avgPrice'] as num?)?.toDouble() ?? 90.0;
-      _precioFinal = avg.clamp(sliderMin, sliderMax);
-    }
-
-    final double sliderValue = _precioFinal.clamp(sliderMin, sliderMax);
-
-    // Posición relativa para el badge
-    final double ratio = (sliderValue - sliderMin) / (sliderMax - sliderMin);
+    final double sv = value.clamp(sliderMin, sliderMax);
+    final double ratio = (sv - sliderMin) / (sliderMax - sliderMin);
     final String posicion = ratio < 0.33 ? 'ECONÓMICO' : ratio < 0.66 ? 'ESTÁNDAR' : 'PREMIUM';
     final Color posicionColor = posicion == 'ECONÓMICO'
         ? const Color(0xFF2196F3)
-        : posicion == 'PREMIUM'
-            ? const Color(0xFFFFD700)
-            : const Color(0xFF4CAF50);
+        : posicion == 'PREMIUM' ? const Color(0xFFFFD700) : const Color(0xFF4CAF50);
 
-    final bool isPaseo = _servicesOffered.contains('PASEO') && !_servicesOffered.contains('HOSPEDAJE');
-    final String unidad = isPaseo ? '/ 1 hora' : '/ noche';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C2A1A),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4)),
+      ),
+      child: Column(children: [
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text(emoji, style: const TextStyle(fontSize: 22)),
+          const SizedBox(width: 8),
+          Text(titulo, style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w700)),
+        ]),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            const Text('Bs ', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white70)),
+            Text(sv.toStringAsFixed(0), style: const TextStyle(fontSize: 64, fontWeight: FontWeight.bold, color: Colors.white)),
+          ],
+        ),
+        Text(unidad, style: const TextStyle(color: Colors.white60, fontSize: 13)),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(color: posicionColor, borderRadius: BorderRadius.circular(20)),
+          child: Text(posicion, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold,
+              color: posicion == 'PREMIUM' ? Colors.black : Colors.white)),
+        ),
+        const SizedBox(height: 20),
+        Slider(
+          value: sv, min: sliderMin, max: sliderMax, divisions: 48,
+          activeColor: GardenColors.primary, inactiveColor: Colors.white24, thumbColor: Colors.white,
+          label: 'Bs ${sv.toStringAsFixed(0)}',
+          onChanged: onChanged,
+        ),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Text('Bs 50', style: TextStyle(color: Colors.white54, fontSize: 11)),
+          const Text('Bs 290', style: TextStyle(color: Colors.white54, fontSize: 11)),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _buildStep5() {
+    final offersHospedaje = _servicesOffered.contains('HOSPEDAJE');
+    final offersPaseo = _servicesOffered.contains('PASEO');
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header banner
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [GardenColors.primary, Color(0xFF4A5E28)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+                begin: Alignment.topLeft, end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(16),
             ),
             child: const Row(children: [
               Icon(Icons.payments_outlined, color: Colors.white, size: 36),
               SizedBox(width: 16),
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Elige tu precio', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white)),
-                  SizedBox(height: 4),
-                  Text('Ajusta la barra para fijar tu tarifa. Puedes cambiarlo después.',
-                      style: TextStyle(fontSize: 12, color: Colors.white70)),
-                ],
-              )),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Elige tus precios', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white)),
+                SizedBox(height: 4),
+                Text('Ajusta la barra para fijar tu tarifa. Puedes cambiarlo después.',
+                    style: TextStyle(fontSize: 12, color: Colors.white70)),
+              ])),
             ]),
           ),
           const SizedBox(height: 24),
 
-          // Tarjeta principal
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1C2A1A),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4)),
+          if (offersHospedaje) ...[
+            _buildPriceCard(
+              titulo: 'Hospedaje',
+              unidad: '/ noche',
+              emoji: '🏠',
+              value: _precioHospedaje,
+              onChanged: (v) => setState(() => _precioHospedaje = v),
             ),
-            child: Column(
-              children: [
-                // Precio grande
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    const Text('Bs ', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white70)),
-                    Text(
-                      sliderValue.toStringAsFixed(0),
-                      style: const TextStyle(fontSize: 72, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                  ],
-                ),
-                Text(unidad, style: const TextStyle(color: Colors.white60, fontSize: 14)),
-                const SizedBox(height: 12),
-
-                // Badge posición
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: posicionColor,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(posicion,
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold,
-                      color: posicion == 'PREMIUM' ? Colors.black : Colors.white)),
-                ),
-                const SizedBox(height: 28),
-
-                // Slider
-                Slider(
-                  value: sliderValue,
-                  min: sliderMin,
-                  max: sliderMax,
-                  divisions: 48,
-                  activeColor: GardenColors.primary,
-                  inactiveColor: Colors.white24,
-                  thumbColor: Colors.white,
-                  label: 'Bs ${sliderValue.toStringAsFixed(0)}',
-                  onChanged: (v) => setState(() => _precioFinal = v),
-                ),
-
-                // Etiquetas min / max
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Bs 50', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                    Text('Bs 290', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // Nota
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(children: [
-                    const Icon(Icons.info_outline, color: Colors.white60, size: 16),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(
-                      'Precio sugerido: Bs 90 $unidad · Máximo: Bs 290',
-                      style: const TextStyle(color: Colors.white60, fontSize: 12),
-                    )),
-                  ]),
-                ),
-              ],
+            if (offersPaseo) const SizedBox(height: 20),
+          ],
+          if (offersPaseo)
+            _buildPriceCard(
+              titulo: 'Paseo',
+              unidad: '/ 1 hora',
+              emoji: '🦮',
+              value: _precioPaseo,
+              onChanged: (v) => setState(() => _precioPaseo = v),
             ),
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: Text('Precio elegido: Bs ${sliderValue.toStringAsFixed(0)} $unidad',
-              style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w600)),
-          ),
         ],
       ),
     );
