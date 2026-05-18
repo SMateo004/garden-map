@@ -339,95 +339,9 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
               ),
             ),
 
-            // ── Hero foto ───────────────────────────────────────
-            if (photos.isNotEmpty)
-              SizedBox(
-                width: double.infinity,
-                height: 420,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      child: GestureDetector(
-                      onTap: () => _openPhotoViewer(photos, _selectedPhotoIndex),
-                      child: Image.network(
-                        fixImageUrl(photos[_selectedPhotoIndex]),
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: GardenColors.primary.withValues(alpha: 0.1),
-                          child: const Icon(Icons.pets, size: 80, color: GardenColors.primary),
-                        ),
-                      ),
-                    )),
-                    // Gradiente inferior
-                    Positioned(
-                      bottom: 0, left: 0, right: 0,
-                      child: Container(height: 160, decoration: BoxDecoration(
-                        gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                          colors: [Colors.transparent, Colors.black.withValues(alpha: 0.6)]),
-                      )),
-                    ),
-                    // Thumbnails abajo a la derecha
-                    if (photos.length > 1)
-                      Positioned(
-                        bottom: 20, left: 32,
-                        child: Row(
-                          children: photos.asMap().entries.map<Widget>((e) {
-                            final sel = e.key == _selectedPhotoIndex;
-                            return MouseRegion(
-                              cursor: SystemMouseCursors.click,
-                              child: GestureDetector(
-                              onTap: () => setState(() => _selectedPhotoIndex = e.key),
-                              child: Container(
-                                margin: const EdgeInsets.only(right: 8),
-                                width: sel ? 60 : 48, height: sel ? 60 : 48,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: sel ? Colors.white : Colors.white38, width: sel ? 2.5 : 1),
-                                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 4)],
-                                ),
-                                child: ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(fixImageUrl(e.value), fit: BoxFit.cover)),
-                              ),
-                            ));
-                          }).toList(),
-                        ),
-                      ),
-                    // Badge "Ver todas las fotos"
-                    Positioned(
-                      bottom: 20, right: 32,
-                      child: MouseRegion(
-                        cursor: SystemMouseCursors.click,
-                        child: GestureDetector(
-                        onTap: () => _openPhotoViewer(photos, 0),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
-                          ),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            const Icon(Icons.photo_library_outlined, color: Colors.white, size: 15),
-                            const SizedBox(width: 6),
-                            Text('Ver ${photos.length} fotos', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                          ]),
-                        ),
-                      )),
-                    ),
-                  ],
-                ),
-              )
-            else
-              Container(
-                width: double.infinity, height: 280,
-                color: GardenColors.primary.withValues(alpha: 0.08),
-                child: const Icon(Icons.pets, size: 80, color: GardenColors.primary),
-              ),
-
             // ── Cuerpo principal: 2 columnas ────────────────────
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 40),
+              padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 32),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
