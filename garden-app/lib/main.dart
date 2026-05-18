@@ -6,6 +6,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/client/client_welcome_screen.dart';
 import 'screens/client/landing_screen.dart';
+import 'screens/client/about_screen.dart';
 import 'screens/caregiver/onboarding_wizard_screen.dart';
 import 'screens/test_agentes_screen.dart';
 import 'screens/admin/admin_panel_screen.dart';
@@ -153,6 +154,11 @@ final GoRouter _router = GoRouter(
           clientConversionMode: extra['clientConversionMode'] as bool? ?? false,
         );
       },
+    ),
+    GoRoute(
+      path: '/about',
+      name: 'about',
+      builder: (context, state) => const AboutScreen(),
     ),
     GoRoute(
       path: '/become-caregiver',
