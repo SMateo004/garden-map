@@ -703,11 +703,12 @@ class _SectionImageLayer extends StatelessWidget {
         if (painBox != null && painBox.hasSize) {
           final dy = painBox.localToGlobal(Offset.zero).dy;
           final progress = ((screenH - dy) / (screenH * 0.60)).clamp(0.0, 1.0);
-          const imgH = 480.0;
-          final dx = -imgH * (1.0 - progress);
+          const imgH = 460.0;
+          // Cuando progress=1 queda con -120px: 120px ocultos detrás del borde izquierdo
+          final dx = -(imgH * (1.0 - progress)) - 120;
           items.add(Positioned(
             left: 0,
-            top: dy + 60,
+            top: dy + 40,
             child: Transform.translate(
               offset: Offset(dx, 0),
               child: Opacity(
@@ -727,11 +728,12 @@ class _SectionImageLayer extends StatelessWidget {
         if (testiBox != null && testiBox.hasSize) {
           final dy = testiBox.localToGlobal(Offset.zero).dy;
           final progress = ((screenH - dy) / (screenH * 0.60)).clamp(0.0, 1.0);
-          const imgH = 480.0;
-          final dx = imgH * (1.0 - progress);
+          const imgH = 460.0;
+          // Cuando progress=1 queda con +120px: 120px ocultos detrás del borde derecho
+          final dx = (imgH * (1.0 - progress)) + 120;
           items.add(Positioned(
             right: 0,
-            top: dy + 60,
+            top: dy + 40,
             child: Transform.translate(
               offset: Offset(dx, 0),
               child: Opacity(
