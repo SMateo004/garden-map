@@ -347,9 +347,10 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    GestureDetector(
-                      onTap: () => _openPhotoViewer(photos, _selectedPhotoIndex),
+                    MouseRegion(
                       cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                      onTap: () => _openPhotoViewer(photos, _selectedPhotoIndex),
                       child: Image.network(
                         fixImageUrl(photos[_selectedPhotoIndex]),
                         fit: BoxFit.cover,
@@ -358,7 +359,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           child: const Icon(Icons.pets, size: 80, color: GardenColors.primary),
                         ),
                       ),
-                    ),
+                    )),
                     // Gradiente inferior
                     Positioned(
                       bottom: 0, left: 0, right: 0,
@@ -372,11 +373,12 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                       Positioned(
                         bottom: 20, left: 32,
                         child: Row(
-                          children: photos.asMap().entries.map((e) {
+                          children: photos.asMap().entries.map<Widget>((e) {
                             final sel = e.key == _selectedPhotoIndex;
-                            return GestureDetector(
-                              onTap: () => setState(() => _selectedPhotoIndex = e.key),
+                            return MouseRegion(
                               cursor: SystemMouseCursors.click,
+                              child: GestureDetector(
+                              onTap: () => setState(() => _selectedPhotoIndex = e.key),
                               child: Container(
                                 margin: const EdgeInsets.only(right: 8),
                                 width: sel ? 60 : 48, height: sel ? 60 : 48,
@@ -387,16 +389,17 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                                 ),
                                 child: ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(fixImageUrl(e.value), fit: BoxFit.cover)),
                               ),
-                            );
+                            ));
                           }).toList(),
                         ),
                       ),
                     // Badge "Ver todas las fotos"
                     Positioned(
                       bottom: 20, right: 32,
-                      child: GestureDetector(
-                        onTap: () => _openPhotoViewer(photos, 0),
+                      child: MouseRegion(
                         cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                        onTap: () => _openPhotoViewer(photos, 0),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                           decoration: BoxDecoration(
@@ -410,7 +413,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                             Text('Ver ${photos.length} fotos', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
                           ]),
                         ),
-                      ),
+                      )),
                     ),
                   ],
                 ),
@@ -987,9 +990,10 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, crossAxisSpacing: 10, mainAxisSpacing: 10),
       itemCount: photos.length,
-      itemBuilder: (_, index) => GestureDetector(
-        onTap: () => _openPhotoViewer(photos, index),
+      itemBuilder: (_, index) => MouseRegion(
         cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+        onTap: () => _openPhotoViewer(photos, index),
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
@@ -1011,7 +1015,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
               ),
             ]),
           ),
-        ),
+        )),
       ),
     );
   }
