@@ -377,7 +377,7 @@ class _LandingState extends State<LandingScreen> {
         // Logo
         GestureDetector(
           onTap: () => context.go('/'),
-          child: Image.asset(pal.logo, height: 40),
+          child: Image.asset(pal.logo, height: 52),
         ),
         const Spacer(),
 

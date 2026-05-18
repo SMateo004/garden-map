@@ -92,7 +92,7 @@ class _AboutState extends State<AboutScreen> {
             SliverToBoxAdapter(child: _MissionVisionSection(scroll: _scroll, mobile: mobile)),
             SliverToBoxAdapter(child: _ValuesSection(scroll: _scroll, mobile: mobile)),
             SliverToBoxAdapter(child: _TeamSection(scroll: _scroll, mobile: mobile)),
-            SliverToBoxAdapter(child: _LegalSection(mobile: mobile, openUrl: _openUrl)),
+            SliverToBoxAdapter(child: _LegalSection(mobile: mobile)),
             SliverToBoxAdapter(child: _FooterAbout(mobile: mobile)),
           ],
         ),
@@ -112,7 +112,7 @@ class _AboutState extends State<AboutScreen> {
       child: Row(children: [
         GestureDetector(
           onTap: () => context.go('/'),
-          child: Image.asset(pal.logo, height: 40),
+          child: Image.asset(pal.logo, height: 52),
         ),
         const Spacer(),
         if (mobile)
@@ -650,6 +650,7 @@ class _TeamSection extends StatelessWidget {
                         'con el objetivo de hacer de Bolivia un referente en cuidado animal responsable.',
                     color: const Color(0xFF4A7C23),
                     pal: pal,
+                    photoPath: 'assets/images/team/ceo.jpg',
                   )),
                 const SizedBox(height: 24),
                 _Reveal(scroll: scroll, delay: 300.ms,
@@ -661,6 +662,7 @@ class _TeamSection extends StatelessWidget {
                         'funcione con la excelencia que nuestras mascotas merecen.',
                     color: const Color(0xFF2E6B8A),
                     pal: pal,
+                    photoPath: 'assets/images/team/coo.jpg',
                   )),
               ])
             : Row(
@@ -676,6 +678,7 @@ class _TeamSection extends StatelessWidget {
                           'con el objetivo de hacer de Bolivia un referente en cuidado animal responsable.',
                       color: const Color(0xFF4A7C23),
                       pal: pal,
+                      photoPath: 'assets/images/team/ceo.jpg',
                     )),
                   const SizedBox(width: 28),
                   _Reveal(scroll: scroll, delay: 320.ms,
@@ -687,6 +690,7 @@ class _TeamSection extends StatelessWidget {
                           'funcione con la excelencia que nuestras mascotas merecen.',
                       color: const Color(0xFF2E6B8A),
                       pal: pal,
+                      photoPath: 'assets/images/team/coo.jpg',
                     )),
                 ],
               ),
@@ -699,9 +703,12 @@ class _FounderCard extends StatefulWidget {
   final String initials, name, role, bio;
   final Color color;
   final _P pal;
+  /// Ruta del asset de foto (opcional). Ej: 'assets/images/team/ceo.jpg'
+  final String? photoPath;
   const _FounderCard({
     required this.initials, required this.name, required this.role,
     required this.bio, required this.color, required this.pal,
+    this.photoPath,
   });
   @override State<_FounderCard> createState() => _FounderCardState();
 }
@@ -737,7 +744,7 @@ class _FounderCardState extends State<_FounderCard> {
               ),
             ),
           ),
-          // Avatar (overlaps banner)
+          // Avatar (overlaps banner) — foto real si existe, iniciales si no
           Transform.translate(
             offset: const Offset(0, -40),
             child: Container(
@@ -748,8 +755,17 @@ class _FounderCardState extends State<_FounderCard> {
                 border: Border.all(color: pal.surface, width: 4),
                 boxShadow: [BoxShadow(color: widget.color.withValues(alpha: 0.4), blurRadius: 20, offset: const Offset(0, 6))],
               ),
-              child: Center(child: Text(widget.initials,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 24))),
+              child: ClipOval(
+                child: widget.photoPath != null
+                    ? Image.asset(
+                        widget.photoPath!,
+                        fit: BoxFit.cover, width: 80, height: 80,
+                        errorBuilder: (_, __, ___) => Center(child: Text(widget.initials,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 24))),
+                      )
+                    : Center(child: Text(widget.initials,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 24))),
+              ),
             ),
           ),
           // Content
@@ -788,8 +804,7 @@ class _FounderCardState extends State<_FounderCard> {
 // ─── Legal / T&C ─────────────────────────────────────────────────────────────
 class _LegalSection extends StatelessWidget {
   final bool mobile;
-  final Future<void> Function(String) openUrl;
-  const _LegalSection({required this.mobile, required this.openUrl});
+  const _LegalSection({required this.mobile});
 
   @override
   Widget build(BuildContext context) {
@@ -824,7 +839,7 @@ class _LegalSection extends StatelessWidget {
               style: GoogleFonts.inter(color: pal.textSec, fontSize: 14, height: 1.7),
             ),
             const SizedBox(height: 32),
-            Wrap(
+            Builder(builder: (ctx) => Wrap(
               alignment: WrapAlignment.center,
               spacing: 14,
               runSpacing: 12,
@@ -832,19 +847,19 @@ class _LegalSection extends StatelessWidget {
                 _LegalBtn(
                   icon: Icons.description_outlined,
                   label: 'Términos y condiciones',
-                  onTap: () => openUrl('https://garden-app.vercel.app/terms'),
+                  onTap: () => ctx.go('/terms'),
                   pal: pal,
                   filled: true,
                 ),
                 _LegalBtn(
                   icon: Icons.privacy_tip_outlined,
                   label: 'Política de privacidad',
-                  onTap: () => openUrl('https://garden-app.vercel.app/privacy'),
+                  onTap: () => ctx.go('/privacy'),
                   pal: pal,
                   filled: false,
                 ),
               ],
-            ),
+            )),
           ]),
         ),
       ),

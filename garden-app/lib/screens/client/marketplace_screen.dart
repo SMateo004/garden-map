@@ -1118,7 +1118,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   // Logo — mismo tamaño que landing
                   GestureDetector(
                     onTap: () => context.go('/marketplace'),
-                    child: Image.asset('assets/images/logo-horizontal.png', height: 40),
+                    child: Image.asset('assets/images/logo-horizontal.png', height: 52),
                   ),
                   const SizedBox(width: 8),
                   Text('·', style: TextStyle(color: subtextColor, fontSize: 16)),
