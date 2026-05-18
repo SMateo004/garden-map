@@ -650,7 +650,7 @@ class _TeamSection extends StatelessWidget {
                         'con el objetivo de hacer de Bolivia un referente en cuidado animal responsable.',
                     color: const Color(0xFF4A7C23),
                     pal: pal,
-                    photoPath: 'assets/images/team/ceo.jpg',
+                    photoPath: 'assets/images/team/ceo.png',
                   )),
                 const SizedBox(height: 24),
                 _Reveal(scroll: scroll, delay: 300.ms,
@@ -662,7 +662,7 @@ class _TeamSection extends StatelessWidget {
                         'funcione con la excelencia que nuestras mascotas merecen.',
                     color: const Color(0xFF2E6B8A),
                     pal: pal,
-                    photoPath: 'assets/images/team/coo.jpg',
+                    photoPath: 'assets/images/team/coo.png',
                   )),
               ])
             : Row(
@@ -678,7 +678,7 @@ class _TeamSection extends StatelessWidget {
                           'con el objetivo de hacer de Bolivia un referente en cuidado animal responsable.',
                       color: const Color(0xFF4A7C23),
                       pal: pal,
-                      photoPath: 'assets/images/team/ceo.jpg',
+                      photoPath: 'assets/images/team/ceo.png',
                     )),
                   const SizedBox(width: 28),
                   _Reveal(scroll: scroll, delay: 320.ms,
@@ -690,7 +690,7 @@ class _TeamSection extends StatelessWidget {
                           'funcione con la excelencia que nuestras mascotas merecen.',
                       color: const Color(0xFF2E6B8A),
                       pal: pal,
-                      photoPath: 'assets/images/team/coo.jpg',
+                      photoPath: 'assets/images/team/coo.png',
                     )),
                 ],
               ),
@@ -703,7 +703,7 @@ class _FounderCard extends StatefulWidget {
   final String initials, name, role, bio;
   final Color color;
   final _P pal;
-  /// Ruta del asset de foto (opcional). Ej: 'assets/images/team/ceo.jpg'
+  /// Ruta del asset de foto (opcional). Ej: 'assets/images/team/ceo.png'
   final String? photoPath;
   const _FounderCard({
     required this.initials, required this.name, required this.role,
