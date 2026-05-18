@@ -343,6 +343,17 @@ class _LandingState extends State<LandingScreen> {
                 screenH:    h,
               ),
             ),
+
+          // ── Overlay imágenes de sección (solo desktop) ────────────────────
+          if (!mobile && !MediaQuery.of(context).disableAnimations)
+            IgnorePointer(
+              child: _SectionImageLayer(
+                scroll:    _scroll,
+                painKey:   _painSectionKey,
+                testiKey:  _testiSectionKey,
+                screenH:   h,
+              ),
+            ),
         ]),
       ),
     );
@@ -666,69 +677,77 @@ class _PetWidget extends StatelessWidget {
   }
 }
 
-// ─── Scroll-linked slide-in image ─────────────────────────────────────────────
-class _SlideInImage extends StatefulWidget {
+// ─── Overlay con imágenes decorativas scroll-linked por sección ───────────────
+class _SectionImageLayer extends StatelessWidget {
   final ScrollController scroll;
-  final GlobalKey sectionKey;
-  final String imagePath;
-  final bool fromLeft;
-  final double height;
+  final GlobalKey painKey;
+  final GlobalKey testiKey;
+  final double screenH;
 
-  const _SlideInImage({
+  const _SectionImageLayer({
     required this.scroll,
-    required this.sectionKey,
-    required this.imagePath,
-    required this.fromLeft,
-    required this.height,
+    required this.painKey,
+    required this.testiKey,
+    required this.screenH,
   });
 
   @override
-  State<_SlideInImage> createState() => _SlideInImageState();
-}
-
-class _SlideInImageState extends State<_SlideInImage> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.scroll.addListener(_onScroll);
-    });
-  }
-
-  @override
-  void dispose() {
-    widget.scroll.removeListener(_onScroll);
-    super.dispose();
-  }
-
-  void _onScroll() {
-    if (mounted) setState(() {});
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (MediaQuery.of(context).disableAnimations) {
-      return Image.asset(widget.imagePath, height: widget.height, fit: BoxFit.contain);
-    }
+    return AnimatedBuilder(
+      animation: scroll,
+      builder: (ctx, _) {
+        final items = <Widget>[];
 
-    final screenH = MediaQuery.of(context).size.height;
-    final box = widget.sectionKey.currentContext?.findRenderObject() as RenderBox?;
-    double progress = 0.0;
-    if (box != null && box.hasSize) {
-      final dy = box.localToGlobal(Offset.zero).dy;
-      progress = ((screenH - dy) / (screenH * 0.65)).clamp(0.0, 1.0);
-    }
+        // ── Hombre con perro — izquierda, sección "Los problemas que resolvemos"
+        final painBox = painKey.currentContext?.findRenderObject() as RenderBox?;
+        if (painBox != null && painBox.hasSize) {
+          final dy = painBox.localToGlobal(Offset.zero).dy;
+          final progress = ((screenH - dy) / (screenH * 0.60)).clamp(0.0, 1.0);
+          const imgH = 480.0;
+          final dx = -imgH * (1.0 - progress);
+          items.add(Positioned(
+            left: 0,
+            top: dy + 60,
+            child: Transform.translate(
+              offset: Offset(dx, 0),
+              child: Opacity(
+                opacity: progress,
+                child: Image.asset(
+                  'assets/images/landing_man_dog.png',
+                  height: imgH,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+          ));
+        }
 
-    final dx = widget.fromLeft
-        ? -widget.height * (1.0 - progress)
-        : widget.height * (1.0 - progress);
+        // ── Mujer con gato — derecha, sección "Confianza que se siente"
+        final testiBox = testiKey.currentContext?.findRenderObject() as RenderBox?;
+        if (testiBox != null && testiBox.hasSize) {
+          final dy = testiBox.localToGlobal(Offset.zero).dy;
+          final progress = ((screenH - dy) / (screenH * 0.60)).clamp(0.0, 1.0);
+          const imgH = 480.0;
+          final dx = imgH * (1.0 - progress);
+          items.add(Positioned(
+            right: 0,
+            top: dy + 60,
+            child: Transform.translate(
+              offset: Offset(dx, 0),
+              child: Opacity(
+                opacity: progress,
+                child: Image.asset(
+                  'assets/images/landing_woman_cat.png',
+                  height: imgH,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+          ));
+        }
 
-    return Transform.translate(
-      offset: Offset(dx, 0),
-      child: Opacity(
-        opacity: progress,
-        child: Image.asset(widget.imagePath, height: widget.height, fit: BoxFit.contain),
-      ),
+        return Stack(children: items);
+      },
     );
   }
 }
@@ -1012,47 +1031,24 @@ class _PainSection extends StatelessWidget {
 
   @override Widget build(BuildContext context) {
     final pal = _Theme.of(context);
-    final content = Column(children: [
-      _Reveal(scroll: scroll, child: const _GreenTag('¿Te suena familiar?')),
-      const SizedBox(height: 20),
-      _Reveal(scroll: scroll, delay: 100.ms,
-        child: Text('Los problemas que resolvemos', textAlign: TextAlign.center,
-          style: GoogleFonts.inter(fontSize: mobile ? 28 : 44, fontWeight: FontWeight.w900,
-            color: pal.textPri, letterSpacing: -1.5))),
-      const SizedBox(height: 56),
-      Wrap(alignment: WrapAlignment.center, spacing: 20, runSpacing: 20,
-        children: List.generate(_pains.length, (i) => _Reveal(
-          scroll: scroll, delay: Duration(milliseconds: 80 * i),
-          child: _PainCard(_pains[i], mobile: mobile),
-        ))),
-    ]);
-
     return Container(
       key: sectionKey,
       width: double.infinity,
       padding: EdgeInsets.symmetric(horizontal: mobile ? 24 : 80, vertical: 96),
-      child: (mobile || sectionKey == null)
-          ? content
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                ClipRect(
-                  child: SizedBox(
-                    width: 320,
-                    height: 400,
-                    child: _SlideInImage(
-                      scroll: scroll,
-                      sectionKey: sectionKey!,
-                      imagePath: 'assets/images/pets/dog_walk.png',
-                      fromLeft: true,
-                      height: 360,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 48),
-                Expanded(child: content),
-              ],
-            ),
+      child: Column(children: [
+        _Reveal(scroll: scroll, child: const _GreenTag('¿Te suena familiar?')),
+        const SizedBox(height: 20),
+        _Reveal(scroll: scroll, delay: 100.ms,
+          child: Text('Los problemas que resolvemos', textAlign: TextAlign.center,
+            style: GoogleFonts.inter(fontSize: mobile ? 28 : 44, fontWeight: FontWeight.w900,
+              color: pal.textPri, letterSpacing: -1.5))),
+        const SizedBox(height: 56),
+        Wrap(alignment: WrapAlignment.center, spacing: 20, runSpacing: 20,
+          children: List.generate(_pains.length, (i) => _Reveal(
+            scroll: scroll, delay: Duration(milliseconds: 80 * i),
+            child: _PainCard(_pains[i], mobile: mobile),
+          ))),
+      ]),
     );
   }
 }
@@ -1086,37 +1082,6 @@ class _PainCardState extends State<_PainCard> {
           Text(widget.p.title, style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.w700, color: pal.textPri)),
           const SizedBox(height: 8),
           Text(widget.p.desc, style: TextStyle(color: pal.textSec, fontSize: 14, height: 1.65)),
-        ]),
-      ),
-    );
-  }
-}
-
-class _MidCta extends StatelessWidget {
-  final VoidCallback onTap; final bool mobile;
-  const _MidCta({required this.onTap, required this.mobile});
-  @override Widget build(BuildContext context) {
-    final pal = _Theme.of(context);
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: mobile ? 24 : 80, vertical: 16),
-      child: Container(
-        width: double.infinity,
-        padding: EdgeInsets.symmetric(horizontal: mobile ? 28 : 64, vertical: 56),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [pal.primary.withValues(alpha: 0.2), pal.primary.withValues(alpha: 0.06)],
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: pal.primary.withValues(alpha: 0.28)),
-        ),
-        child: Column(children: [
-          Text('Únete a miles de dueños que ya confían en GARDEN',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(fontSize: mobile ? 22 : 32, fontWeight: FontWeight.w800,
-              color: pal.textPri, letterSpacing: -1, height: 1.2)),
-          const SizedBox(height: 28),
-          _PrimaryBtn('Buscar cuidadores ahora', onTap, w: 260, h: 52),
         ]),
       ),
     );
@@ -1201,47 +1166,24 @@ class _TestiSection extends StatelessWidget {
 
   @override Widget build(BuildContext context) {
     final pal = _Theme.of(context);
-    final content = Column(children: [
-      _Reveal(scroll: scroll, child: const _GreenTag('Lo que dicen nuestros usuarios')),
-      const SizedBox(height: 20),
-      _Reveal(scroll: scroll, delay: 100.ms,
-        child: Text('Confianza que se siente', textAlign: TextAlign.center,
-          style: GoogleFonts.inter(fontSize: mobile ? 28 : 44, fontWeight: FontWeight.w900,
-            color: pal.textPri, letterSpacing: -1.5))),
-      const SizedBox(height: 56),
-      Wrap(alignment: WrapAlignment.center, spacing: 20, runSpacing: 20,
-        children: List.generate(_testis.length, (i) => _Reveal(
-          scroll: scroll, delay: Duration(milliseconds: 80 * i),
-          child: _TestiCard(_testis[i], mobile: mobile),
-        ))),
-    ]);
-
     return Container(
       key: sectionKey,
       width: double.infinity,
       padding: EdgeInsets.symmetric(horizontal: mobile ? 24 : 80, vertical: 96),
-      child: (mobile || sectionKey == null)
-          ? content
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(child: content),
-                const SizedBox(width: 48),
-                ClipRect(
-                  child: SizedBox(
-                    width: 320,
-                    height: 400,
-                    child: _SlideInImage(
-                      scroll: scroll,
-                      sectionKey: sectionKey!,
-                      imagePath: 'assets/images/pets/cat_home.png',
-                      fromLeft: false,
-                      height: 360,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+      child: Column(children: [
+        _Reveal(scroll: scroll, child: const _GreenTag('Lo que dicen nuestros usuarios')),
+        const SizedBox(height: 20),
+        _Reveal(scroll: scroll, delay: 100.ms,
+          child: Text('Confianza que se siente', textAlign: TextAlign.center,
+            style: GoogleFonts.inter(fontSize: mobile ? 28 : 44, fontWeight: FontWeight.w900,
+              color: pal.textPri, letterSpacing: -1.5))),
+        const SizedBox(height: 56),
+        Wrap(alignment: WrapAlignment.center, spacing: 20, runSpacing: 20,
+          children: List.generate(_testis.length, (i) => _Reveal(
+            scroll: scroll, delay: Duration(milliseconds: 80 * i),
+            child: _TestiCard(_testis[i], mobile: mobile),
+          ))),
+      ]),
     );
   }
 }
