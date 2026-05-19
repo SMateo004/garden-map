@@ -1,10 +1,17 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+
+// Importación condicional para dart:html (solo disponible en web)
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
 
 class MyPetsScreen extends StatefulWidget {
   const MyPetsScreen({super.key});
@@ -445,7 +452,45 @@ class _PetFormSheetState extends State<_PetFormSheet> {
     super.dispose();
   }
 
-  Future<String?> _uploadFile(List<int> bytes, String fileName) async {
+  /// Selecciona una imagen y devuelve (bytes, fileName).
+  /// En web usa dart:html para evitar el bug de createObjectURL del image_picker.
+  Future<({Uint8List bytes, String name})?> _pickImageBytes({int quality = 85}) async {
+    if (kIsWeb) {
+      final completer = Completer<({Uint8List bytes, String name})?>();
+      final input = html.FileUploadInputElement()..accept = 'image/*';
+      input.onChange.listen((_) async {
+        if (input.files == null || input.files!.isEmpty) {
+          completer.complete(null);
+          return;
+        }
+        final file = input.files![0];
+        final reader = html.FileReader();
+        reader.readAsArrayBuffer(file);
+        await reader.onLoad.first;
+        final result = reader.result;
+        if (result is Uint8List) {
+          completer.complete((bytes: result, name: file.name));
+        } else if (result is ByteBuffer) {
+          completer.complete((bytes: result.asUint8List(), name: file.name));
+        } else {
+          completer.completeError(Exception('No se pudo leer la imagen'));
+        }
+      });
+      input.click();
+      return completer.future;
+    } else {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: quality);
+      if (picked == null) return null;
+      final bytes = await picked.readAsBytes();
+      final name = picked.name.isEmpty
+          ? 'pet_${DateTime.now().millisecondsSinceEpoch}.jpg'
+          : picked.name;
+      return (bytes: bytes, name: name);
+    }
+  }
+
+  Future<String?> _uploadFile(Uint8List bytes, String fileName) async {
     if (widget.token.isEmpty) throw Exception('No hay sesión activa. Vuelve a iniciar sesión.');
     final uri = Uri.parse('${widget.baseUrl}/upload/pet-photo');
     final request = http.MultipartRequest('POST', uri);
@@ -460,7 +505,6 @@ class _PetFormSheetState extends State<_PetFormSheet> {
     if (res.statusCode == 200 && data['success'] == true) {
       return data['data']['url'] as String;
     }
-    // Extrae el mensaje real del backend (formato: { error: { message: '...' } })
     final errMsg = (data['error'] as Map<String, dynamic>?)?['message']
         ?? data['message'] as String?
         ?? 'Error ${res.statusCode} al subir archivo';
@@ -468,15 +512,11 @@ class _PetFormSheetState extends State<_PetFormSheet> {
   }
 
   Future<void> _pickPhoto() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
-    if (picked == null) return;
+    final img = await _pickImageBytes(quality: 85);
+    if (img == null) return;
     setState(() => _uploadingPhoto = true);
     try {
-      final url = await _uploadFile(
-        await picked.readAsBytes(),
-        picked.name.isEmpty ? 'pet_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name,
-      );
+      final url = await _uploadFile(img.bytes, img.name);
       if (url != null) setState(() => _photoUrl = url);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -493,15 +533,11 @@ class _PetFormSheetState extends State<_PetFormSheet> {
         const SnackBar(content: Text('Máximo 4 fotos adicionales'), backgroundColor: GardenColors.warning));
       return;
     }
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-    if (picked == null) return;
+    final img = await _pickImageBytes(quality: 80);
+    if (img == null) return;
     setState(() => _uploadingExtra = true);
     try {
-      final url = await _uploadFile(
-        await picked.readAsBytes(),
-        picked.name.isEmpty ? 'extra_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name,
-      );
+      final url = await _uploadFile(img.bytes, img.name);
       if (url != null) setState(() => _extraPhotos = [..._extraPhotos, url]);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -518,15 +554,11 @@ class _PetFormSheetState extends State<_PetFormSheet> {
         const SnackBar(content: Text('Máximo 4 fotos de vacunas'), backgroundColor: GardenColors.warning));
       return;
     }
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-    if (picked == null) return;
+    final img = await _pickImageBytes(quality: 80);
+    if (img == null) return;
     setState(() => _uploadingVaccine = true);
     try {
-      final url = await _uploadFile(
-        await picked.readAsBytes(),
-        picked.name.isEmpty ? 'vaccine_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name,
-      );
+      final url = await _uploadFile(img.bytes, img.name);
       if (url != null) setState(() => _vaccinePhotos = [..._vaccinePhotos, url]);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -543,15 +575,11 @@ class _PetFormSheetState extends State<_PetFormSheet> {
         const SnackBar(content: Text('Máximo 4 documentos'), backgroundColor: GardenColors.warning));
       return;
     }
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
-    if (picked == null) return;
+    final img = await _pickImageBytes(quality: 90);
+    if (img == null) return;
     setState(() => _uploadingDocument = true);
     try {
-      final url = await _uploadFile(
-        await picked.readAsBytes(),
-        picked.name.isEmpty ? 'doc_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name,
-      );
+      final url = await _uploadFile(img.bytes, img.name);
       if (url != null) setState(() => _documents = [..._documents, url]);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
