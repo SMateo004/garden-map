@@ -239,7 +239,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
   const cached = await cache.get<CaregiverDetail>(cacheKey);
   if (cached) return cached;
 
-  // Solo visibles para clientes: APPROVED, verified, no suspendido
+  // Solo visibles para clientes: APPROVED + verified, no suspendido
   const publicWhere = {
     id,
     suspended: false,

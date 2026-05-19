@@ -399,6 +399,8 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
         // el perfil queda aprobado automáticamente — las verificaciones son el proceso de aprobación.
         status: CaregiverStatus.APPROVED,
         profileStatus: 'SUBMITTED',
+        verified: true,
+        verifiedAt: new Date(),
         termsAcceptedAt: new Date(),
         termsAccepted: true,
         privacyAccepted: true,
