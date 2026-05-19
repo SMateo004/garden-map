@@ -1068,35 +1068,49 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
               ),
             ],
           ),
-          body: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _filterPill('Todas', 'todas', isDark),
-                      _filterPill('Activas', 'activas', isDark),
-                      _filterPill('Completadas', 'completadas', isDark),
-                      _filterPill('Canceladas', 'canceladas', isDark),
-                    ],
+          body: LayoutBuilder(builder: (context, constraints) {
+            final isWide = constraints.maxWidth > 700;
+            return Column(
+              children: [
+                Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: isWide ? 860 : double.infinity),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(isWide ? 40 : 16, 12, isWide ? 40 : 16, 12),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _filterPill('Todas', 'todas', isDark),
+                            _filterPill('Activas', 'activas', isDark),
+                            _filterPill('Completadas', 'completadas', isDark),
+                            _filterPill('Canceladas', 'canceladas', isDark),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
-                    : _filteredBookings.isEmpty
-                        ? _buildEmptyState(isDark)
-                        : ListView.builder(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: _filteredBookings.length,
-                            itemBuilder: (context, index) => _buildBookingCard(_filteredBookings[index], isDark),
-                          ),
-              ),
-            ],
-          ),
+                Expanded(
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+                      : _filteredBookings.isEmpty
+                          ? _buildEmptyState(isDark)
+                          : Align(
+                              alignment: Alignment.topCenter,
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(maxWidth: isWide ? 860 : double.infinity),
+                                child: ListView.builder(
+                                  padding: EdgeInsets.fromLTRB(isWide ? 40 : 16, 16, isWide ? 40 : 16, 16),
+                                  itemCount: _filteredBookings.length,
+                                  itemBuilder: (context, index) => _buildBookingCard(_filteredBookings[index], isDark),
+                                ),
+                              ),
+                            ),
+                ),
+              ],
+            );
+          }),
         );
       },
     );

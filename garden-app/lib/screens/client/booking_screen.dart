@@ -661,13 +661,20 @@ class _BookingScreenState extends State<BookingScreen> {
         backgroundColor: surface,
         elevation: 0,
       ),
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+      body: LayoutBuilder(builder: (context, constraints) {
+        final isWide = constraints.maxWidth > 700;
+        return Stack(
+          children: [
+            SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(isWide ? 0 : 20, isWide ? 32 : 20, isWide ? 0 : 20, 120),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: isWide ? 860 : double.infinity),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: isWide ? 40 : 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                 // Info Cuidador
                 _buildCaregiverHeader(),
                 const SizedBox(height: 24),
@@ -1132,26 +1139,37 @@ class _BookingScreenState extends State<BookingScreen> {
               ],
             ),
           ),
+        ),
+      ),
+    ),
 
           // Botón Sticky
           Positioned(
             bottom: 0, left: 0, right: 0,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
               decoration: BoxDecoration(
                 color: bg,
                 border: Border(top: BorderSide(color: borderColor)),
                 boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, -4))],
               ),
-              child: GardenButton(
-                label: _isSubmitting ? 'Creando reserva...' : 'Confirmar reserva',
-                loading: _isSubmitting,
-                onPressed: _createBooking,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: isWide ? 860 : double.infinity),
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(isWide ? 40 : 20, 16, isWide ? 40 : 20, 32),
+                    child: GardenButton(
+                      label: _isSubmitting ? 'Creando reserva...' : 'Confirmar reserva',
+                      loading: _isSubmitting,
+                      onPressed: _createBooking,
+                    ),
+                  ),
+                ),
               ),
             ),
           )
         ],
-      ),
+      );
+      }),
     );
     } catch (e, stack) {
       debugPrint('BUILD ERROR: $e');

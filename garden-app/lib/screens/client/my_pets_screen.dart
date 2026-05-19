@@ -159,10 +159,16 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                   : RefreshIndicator(
                       color: GardenColors.primary,
                       onRefresh: _load,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-                        itemCount: _pets.length,
-                        itemBuilder: (ctx, i) {
+                      child: LayoutBuilder(builder: (context, constraints) {
+                        final isWide = constraints.maxWidth > 700;
+                        return Align(
+                          alignment: Alignment.topCenter,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(maxWidth: isWide ? 860 : double.infinity),
+                            child: ListView.builder(
+                              padding: EdgeInsets.fromLTRB(isWide ? 40 : 16, 12, isWide ? 40 : 16, 100),
+                              itemCount: _pets.length,
+                              itemBuilder: (ctx, i) {
                           final pet = _pets[i];
                           return Dismissible(
                             key: Key(pet['id'] as String),
@@ -192,7 +198,10 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                             ),
                           );
                         },
-                      ),
+                            ),
+                          ),
+                        );
+                      }),
                     ),
         );
       },
