@@ -46,8 +46,10 @@ class _BookingScreenState extends State<BookingScreen> {
   bool _multiDaySameTime = true; // ¿misma hora para todos?
   String? _multiDaySharedTime; // hora única cuando _multiDaySameTime = true
   Map<String, String> _perDayTimes = {}; // dateStr -> hora cuando _multiDaySameTime = false
-  List<Map<String, dynamic>> _multiDayBookings = []; // reservas combinadas de todas las fechas
-  bool _loadingMultiDayTimes = false;
+  // Datos reales del cuidador para el rango multi-día (1 sola llamada API)
+  Map<String, List<Map<String, dynamic>>> _multiDaySlotsByDate = {}; // dateStr -> slots con start/end reales
+  List<Map<String, dynamic>> _multiDayRangeBookings = []; // reservas activas en el rango
+  bool _loadingMultiDayData = false;
 
   // Meet & Greet opcional
   bool _includeMG = false;
@@ -440,7 +442,6 @@ class _BookingScreenState extends State<BookingScreen> {
       // Resetear hora compartida al cambiar la selección de días
       _multiDaySharedTime = null;
     });
-    if (_multiDayTimeSlot != null) _loadMultiDayBookings();
   }
 
   Widget _buildDurationChip({
@@ -828,6 +829,8 @@ class _BookingScreenState extends State<BookingScreen> {
                                 _selectedStartTime = null;
                                 _availableSlots = [];
                               });
+                              // Cargar disponibilidad real del cuidador para los próximos 30 días
+                              if (_multiDaySlotsByDate.isEmpty) _loadMultiDayData();
                             }),
                           ],
                         ),
@@ -1184,36 +1187,83 @@ class _BookingScreenState extends State<BookingScreen> {
           itemBuilder: (_, i) {
             if (i < startPad) return const SizedBox();
             final date = days[i - startPad];
+            final ds = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
             final isSelected = _isDateSelected(date);
+
+            // Deshabilitar si el cuidador no tiene slots habilitados ese día
+            final bool isUnavailable = _multiDaySlotsByDate.isNotEmpty &&
+                (_multiDaySlotsByDate[ds] == null ||
+                 (_multiDaySlotsByDate[ds]!.isEmpty) ||
+                 _multiDaySlotsByDate[ds]!.every((s) => s['enabled'] != true));
+
             return GestureDetector(
-              onTap: () => _toggleDate(date),
+              onTap: isUnavailable ? null : () => _toggleDate(date),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 decoration: BoxDecoration(
-                  color: isSelected ? GardenColors.primary : surface,
+                  color: isUnavailable
+                      ? (themeNotifier.isDark ? Colors.white.withValues(alpha: 0.04) : Colors.grey.withValues(alpha: 0.08))
+                      : isSelected
+                          ? GardenColors.primary
+                          : surface,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: isSelected ? GardenColors.primary : borderColor,
+                    color: isUnavailable
+                        ? borderColor.withValues(alpha: 0.4)
+                        : isSelected
+                            ? GardenColors.primary
+                            : borderColor,
                     width: 1,
                   ),
                 ),
-                child: Center(
-                  child: Text(
-                    '${date.day}',
-                    style: TextStyle(
-                      color: isSelected ? Colors.white : textColor,
-                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-                      fontSize: 13,
+                child: Stack(
+                  children: [
+                    Center(
+                      child: Text(
+                        '${date.day}',
+                        style: TextStyle(
+                          color: isUnavailable
+                              ? subtextColor.withValues(alpha: 0.4)
+                              : isSelected
+                                  ? Colors.white
+                                  : textColor,
+                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                          fontSize: 13,
+                        ),
+                      ),
                     ),
-                  ),
+                    // Marca de no disponible
+                    if (isUnavailable)
+                      Positioned(
+                        bottom: 3,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: Container(
+                            width: 4,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: subtextColor.withValues(alpha: 0.3),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             );
           },
         ),
         const SizedBox(height: 8),
+        if (_loadingMultiDayData)
+          const Center(child: Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: SizedBox(width: 16, height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary)),
+          )),
         Text(
-          'Toca los días para seleccionar o quitar. Puedes elegir hasta 30 días.',
+          'Toca los días para seleccionar o quitar. Días grises = no disponible.',
           style: TextStyle(color: subtextColor, fontSize: 11),
         ),
       ],
@@ -1230,40 +1280,44 @@ class _BookingScreenState extends State<BookingScreen> {
     return Row(
       children: slots.map((s) {
         final isSelected = _multiDayTimeSlot == s['key'];
+        final slotKey = s['key'] as String;
+        final slotEnabled = _isSlotEnabledForAllDates(slotKey);
         return Expanded(
           child: GestureDetector(
-            onTap: () {
-              setState(() {
-                _multiDayTimeSlot = s['key'] as String;
-                _multiDaySharedTime = null;
-                _perDayTimes = {};
-              });
-              _loadMultiDayBookings();
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: isSelected ? GardenColors.primary : (themeNotifier.isDark ? GardenColors.darkSurface : GardenColors.lightSurface),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: isSelected ? GardenColors.primary : (themeNotifier.isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
-                ),
-              ),
-              child: Column(
-                children: [
-                  Text(s['icon']!, style: const TextStyle(fontSize: 20)),
-                  const SizedBox(height: 4),
-                  Text(
-                    s['label']!,
-                    style: TextStyle(
-                      color: isSelected ? Colors.white : textColor,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
+            onTap: slotEnabled
+                ? () => setState(() {
+                      _multiDayTimeSlot = slotKey;
+                      _multiDaySharedTime = null;
+                      _perDayTimes = {};
+                    })
+                : null,
+            child: Opacity(
+              opacity: slotEnabled ? 1.0 : 0.35,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: isSelected ? GardenColors.primary : (themeNotifier.isDark ? GardenColors.darkSurface : GardenColors.lightSurface),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isSelected ? GardenColors.primary : (themeNotifier.isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
                   ),
-                ],
+                ),
+                child: Column(
+                  children: [
+                    Text(s['icon']!, style: const TextStyle(fontSize: 20)),
+                    const SizedBox(height: 4),
+                    Text(
+                      s['label']!,
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : textColor,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1272,71 +1326,164 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
-  // ─── Multi-day time helpers ──────────────────────────────────────────────
+  // ─── Multi-day availability helpers ─────────────────────────────────────
 
-  /// Devuelve rangos horarios de un slot por clave
-  Map<String, dynamic> _slotForKey(String key) {
-    return switch (key) {
-      'MANANA' => {'start': '07:00', 'end': '12:00'},
-      'TARDE'  => {'start': '12:00', 'end': '18:00'},
-      _        => {'start': '18:00', 'end': '22:00'},
-    };
-  }
-
-  /// Carga reservas activas del cuidador para todas las fechas seleccionadas
-  Future<void> _loadMultiDayBookings() async {
-    if (_selectedDates.isEmpty) return;
-    setState(() => _loadingMultiDayTimes = true);
-    final combined = <Map<String, dynamic>>[];
+  /// Una sola llamada API: carga slots reales y reservas del cuidador para los próximos 30 días
+  Future<void> _loadMultiDayData() async {
+    setState(() => _loadingMultiDayData = true);
     try {
-      await Future.wait(_selectedDates.map((date) async {
-        final dateStr = date.toIso8601String().split('T')[0];
-        final uri = Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}/availability')
-            .replace(queryParameters: {'date': dateStr, 'service': 'PASEO'});
-        final response = await http.get(uri);
-        final body = jsonDecode(response.body);
-        if (body is Map && body['success'] == true) {
-          final d = body['data'];
-          if (d is Map && d['bookedPaseos'] is List) {
-            combined.addAll((d['bookedPaseos'] as List).cast<Map<String, dynamic>>());
-          }
+      final today = DateTime.now();
+      final from  = today.add(const Duration(days: 1));
+      final to    = today.add(const Duration(days: 31));
+      final uri   = Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}/availability')
+          .replace(queryParameters: {
+            'from': from.toIso8601String().split('T')[0],
+            'to':   to.toIso8601String().split('T')[0],
+          });
+      final response = await http.get(uri);
+      final body = jsonDecode(response.body);
+      if (body is Map && body['success'] == true) {
+        final data = body['data'];
+        if (data is Map) {
+          final paseosRaw = data['paseos'] as Map? ?? {};
+          final bookingsRaw = data['bookedPaseos'];
+          setState(() {
+            _multiDaySlotsByDate = paseosRaw.map(
+              (k, v) => MapEntry(k as String, (v as List).cast<Map<String, dynamic>>()),
+            );
+            _multiDayRangeBookings = bookingsRaw is List
+                ? bookingsRaw.cast<Map<String, dynamic>>()
+                : [];
+          });
         }
-      }));
+      }
     } catch (e) {
-      debugPrint('Error loading multi-day bookings: $e');
+      debugPrint('Error loading multi-day data: $e');
     } finally {
-      if (mounted) setState(() {
-        _multiDayBookings = combined;
-        _loadingMultiDayTimes = false;
-      });
+      if (mounted) setState(() => _loadingMultiDayData = false);
     }
   }
 
-  /// ¿Choca este horario en la fecha indicada? (null = cualquier fecha)
+  /// ¿El cuidador atiende este slot (MANANA/TARDE/NOCHE) en TODAS las fechas seleccionadas?
+  bool _isSlotEnabledForAllDates(String slotKey) {
+    if (_selectedDates.isEmpty || _multiDaySlotsByDate.isEmpty) return true;
+    for (final d in _selectedDates) {
+      final ds = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      final daySlots = _multiDaySlotsByDate[ds] ?? [];
+      final found = daySlots.any(
+        (s) => (s['slot'] ?? s['key']) == slotKey && s['enabled'] == true,
+      );
+      if (!found) return false;
+    }
+    return true;
+  }
+
+  /// Rango horario real del cuidador para un slot en una fecha concreta (con fallback)
+  Map<String, dynamic> _slotRangeForDate(String slotKey, String dateStr) {
+    final daySlots = _multiDaySlotsByDate[dateStr] ?? [];
+    final slot = daySlots.firstWhere(
+      (s) => (s['slot'] ?? s['key']) == slotKey,
+      orElse: () => <String, dynamic>{},
+    );
+    if (slot.isNotEmpty && slot['start'] != null && slot['end'] != null) {
+      return {'start': slot['start'], 'end': slot['end']};
+    }
+    // Fallback a valores típicos si no hay datos
+    return switch (slotKey) {
+      'MANANA' => {'start': '08:00', 'end': '11:00'},
+      'TARDE'  => {'start': '13:00', 'end': '17:00'},
+      _        => {'start': '19:00', 'end': '22:00'},
+    };
+  }
+
+  /// Para "misma hora": intersección del rango real entre todas las fechas seleccionadas
+  Map<String, dynamic> _computeSharedSlotRange() {
+    if (_selectedDates.isEmpty || _multiDayTimeSlot == null) {
+      return _slotRangeForDate(_multiDayTimeSlot ?? 'MANANA', '');
+    }
+    int maxStartMins = 0;
+    int minEndMins   = 24 * 60;
+    for (final d in _selectedDates) {
+      final ds    = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      final range = _slotRangeForDate(_multiDayTimeSlot!, ds);
+      final sp    = (range['start'] as String).split(':');
+      final ep    = (range['end']   as String).split(':');
+      final s     = int.parse(sp[0]) * 60 + int.parse(sp[1]);
+      final e     = int.parse(ep[0]) * 60 + int.parse(ep[1]);
+      if (s > maxStartMins) maxStartMins = s;
+      if (e < minEndMins)   minEndMins   = e;
+    }
+    if (maxStartMins >= minEndMins) return {'start': '99:00', 'end': '99:00'}; // sin intersección
+    return {
+      'start': '${(maxStartMins ~/ 60).toString().padLeft(2, '0')}:${(maxStartMins % 60).toString().padLeft(2, '0')}',
+      'end':   '${(minEndMins   ~/ 60).toString().padLeft(2, '0')}:${(minEndMins   % 60).toString().padLeft(2, '0')}',
+    };
+  }
+
+  /// ¿Choca este horario con alguna reserva existente?
+  /// dateStr=null → chequea en CUALQUIER fecha seleccionada (modo "misma hora")
   bool _isMultiDayTimeConflicting(String time, String? dateStr) {
-    if (_multiDayBookings.isEmpty) return false;
-    final parts = time.split(':');
+    if (_multiDayRangeBookings.isEmpty) return false;
+    final parts    = time.split(':');
     final newStart = int.parse(parts[0]) * 60 + int.parse(parts[1]);
-    final newEnd = newStart + _selectedDuration + 30; // +30 min descanso
-    for (final b in _multiDayBookings) {
-      if (dateStr != null && b['date'] != dateStr) continue;
-      final sp = (b['startTime'] as String).split(':');
+    final newEnd   = newStart + _selectedDuration + 30; // +30 min descanso
+    for (final b in _multiDayRangeBookings) {
+      final bDate = b['date'] as String? ?? b['walkDate'] as String? ?? '';
+      // Si modo por día: solo chequear la fecha específica
+      // Si modo misma hora: chequear en las fechas seleccionadas únicamente
+      if (dateStr != null && bDate != dateStr) continue;
+      if (dateStr == null) {
+        // Verificar si esta reserva pertenece a una de las fechas seleccionadas
+        final isRelevant = _selectedDates.any((d) {
+          final ds = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+          return ds == bDate;
+        });
+        if (!isRelevant) continue;
+      }
+      final rawTime = b['startTime'] as String?;
+      if (rawTime == null || rawTime.isEmpty) continue;
+      final sp    = rawTime.split(':');
       final bStart = int.parse(sp[0]) * 60 + int.parse(sp[1]);
-      final bEnd = bStart + (b['duration'] as int? ?? 60) + 30;
+      final bEnd   = bStart + (b['duration'] as int? ?? 60) + 30;
       if (newStart < bEnd && newEnd > bStart) return true;
     }
     return false;
   }
 
-  /// Chips de hora para multi-día. dateStr=null → hora compartida; dateStr→ hora por día
-  Widget _buildMultiDayTimeChips(Map<String, dynamic> slot, String? dateStr) {
-    final startHour = int.parse((slot['start'] as String).split(':')[0]);
-    final endHour   = int.parse((slot['end']   as String).split(':')[0]);
+  /// Chips de hora para multi-día.
+  /// dateStr=null → hora compartida para todos (usa intersección de rangos)
+  /// dateStr≠null → hora individual para esa fecha (usa rango de esa fecha)
+  Widget _buildMultiDayTimeChips(String? dateStr) {
+    final range = dateStr == null
+        ? _computeSharedSlotRange()
+        : _slotRangeForDate(_multiDayTimeSlot!, dateStr);
+
+    final startParts = (range['start'] as String).split(':');
+    final endParts   = (range['end']   as String).split(':');
+    final startHour  = int.parse(startParts[0]);
+    final startMin   = int.parse(startParts[1]);
+    final endHour    = int.parse(endParts[0]);
+
+    // Sin intersección válida
+    if (startHour >= endHour && startHour != 0) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(
+          'Los días seleccionados tienen horarios incompatibles en este bloque.',
+          style: TextStyle(
+            color: themeNotifier.isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary,
+            fontSize: 12,
+          ),
+        ),
+      );
+    }
 
     final timeSlots = <String>[];
-    for (int h = startHour; h < endHour; h++) {
+    for (int h = startHour; h <= endHour; h++) {
       for (int m = 0; m < 60; m += 30) {
-        if (h * 60 + m + _selectedDuration + 30 <= endHour * 60) {
+        if (h == startHour && m < startMin) continue;
+        final totalEnd = h * 60 + m + _selectedDuration + 30;
+        if (totalEnd <= endHour * 60) {
           timeSlots.add('${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}');
         }
       }
@@ -1408,7 +1555,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
   /// Sección completa de selección de hora para modo multi-día
   Widget _buildMultiDayTimePicker(Color textColor, Color subtextColor, Color borderColor, Color surface) {
-    if (_loadingMultiDayTimes) {
+    if (_loadingMultiDayData) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: 20),
@@ -1416,8 +1563,6 @@ class _BookingScreenState extends State<BookingScreen> {
         ),
       );
     }
-
-    final slot = _slotForKey(_multiDayTimeSlot!);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1433,7 +1578,6 @@ class _BookingScreenState extends State<BookingScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        // Toggle: misma hora / hora por día
         Container(
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
@@ -1465,7 +1609,7 @@ class _BookingScreenState extends State<BookingScreen> {
             style: TextStyle(color: subtextColor, fontSize: 12),
           ),
           const SizedBox(height: 10),
-          _buildMultiDayTimeChips(slot, null),
+          _buildMultiDayTimeChips(null),
         ] else ...[
           Text(
             'Selecciona la hora para cada día por separado.',
@@ -1506,7 +1650,7 @@ class _BookingScreenState extends State<BookingScreen> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                _buildMultiDayTimeChips(slot, ds),
+                _buildMultiDayTimeChips(ds),
                 const SizedBox(height: 16),
               ],
             );
