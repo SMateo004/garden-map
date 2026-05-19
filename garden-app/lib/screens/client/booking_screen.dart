@@ -48,6 +48,7 @@ class _BookingScreenState extends State<BookingScreen> {
   Map<String, String> _perDayTimes = {}; // dateStr -> hora cuando _multiDaySameTime = false
   // Datos reales del cuidador para el rango multi-día (1 sola llamada API)
   Map<String, List<Map<String, dynamic>>> _multiDaySlotsByDate = {}; // dateStr -> slots con start/end reales
+  Set<String> _blockedDates = {}; // fechas explícitamente bloqueadas por el cuidador
   List<Map<String, dynamic>> _multiDayRangeBookings = []; // reservas activas en el rango
   bool _loadingMultiDayData = false;
 
@@ -862,9 +863,8 @@ class _BookingScreenState extends State<BookingScreen> {
                           final mon = months[date.month - 1];
 
                           // Verificar disponibilidad real del cuidador ese día
-                          final bool isDayUnavailable = _multiDaySlotsByDate.isNotEmpty &&
-                              (_multiDaySlotsByDate[ds] == null ||
-                               _multiDaySlotsByDate[ds]!.isEmpty ||
+                          final bool isDayUnavailable = _blockedDates.contains(ds) ||
+                              (_multiDaySlotsByDate.containsKey(ds) &&
                                _multiDaySlotsByDate[ds]!.every((s) => s['enabled'] != true));
 
                           return GestureDetector(
@@ -1230,9 +1230,8 @@ class _BookingScreenState extends State<BookingScreen> {
             final isSelected = _isDateSelected(date);
 
             // Deshabilitar si el cuidador no tiene slots habilitados ese día
-            final bool isUnavailable = _multiDaySlotsByDate.isNotEmpty &&
-                (_multiDaySlotsByDate[ds] == null ||
-                 (_multiDaySlotsByDate[ds]!.isEmpty) ||
+            final bool isUnavailable = _blockedDates.contains(ds) ||
+                (_multiDaySlotsByDate.containsKey(ds) &&
                  _multiDaySlotsByDate[ds]!.every((s) => s['enabled'] != true));
 
             return GestureDetector(
@@ -1386,10 +1385,14 @@ class _BookingScreenState extends State<BookingScreen> {
         if (data is Map) {
           final paseosRaw = data['paseos'] as Map? ?? {};
           final bookingsRaw = data['bookedPaseos'];
+          final blockedRaw  = data['blockedDates'];
           setState(() {
             _multiDaySlotsByDate = paseosRaw.map(
               (k, v) => MapEntry(k as String, (v as List).cast<Map<String, dynamic>>()),
             );
+            _blockedDates = blockedRaw is List
+                ? Set<String>.from(blockedRaw.cast<String>())
+                : {};
             _multiDayRangeBookings = bookingsRaw is List
                 ? bookingsRaw.cast<Map<String, dynamic>>()
                 : [];

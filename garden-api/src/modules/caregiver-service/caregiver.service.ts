@@ -453,6 +453,7 @@ export interface CaregiverAvailabilityResponse {
   to: string;   // ISO date
   hospedaje: string[]; // fechas YYYY-MM-DD disponibles para hospedaje
   paseos: Record<string, PaseoSlot[]>; // fecha -> [{slot, enabled, start?, end?}] disponibles
+  blockedDates: string[]; // fechas YYYY-MM-DD explícitamente bloqueadas por el cuidador
   bookedPaseos?: { date: string; startTime: string; duration: number; status: string }[];
 }
 
@@ -508,6 +509,7 @@ export async function getCaregiverAvailability(
         to: endDate.toISOString().slice(0, 10),
         hospedaje: [],
         paseos: {},
+        blockedDates: [],
       };
     }
 
@@ -524,6 +526,7 @@ export async function getCaregiverAvailability(
         to: endDate.toISOString().slice(0, 10),
         hospedaje: [],
         paseos: {},
+        blockedDates: [],
       };
     }
 
@@ -599,6 +602,7 @@ export async function getCaregiverAvailability(
         to: endDate.toISOString().slice(0, 10),
         hospedaje: [],
         paseos: {},
+        blockedDates: [],
       };
     }
 
@@ -694,6 +698,14 @@ export async function getCaregiverAvailability(
         });
         // Continuar con el siguiente registro en lugar de fallar todo
         continue;
+      }
+    }
+
+    // Recopilar fechas explícitamente bloqueadas (isAvailable=false, sin slots de paseo)
+    const blockedDates: string[] = [];
+    for (const dateStr of datesWithExplicitRow) {
+      if (!paseosByDate[dateStr]) {
+        blockedDates.push(dateStr);
       }
     }
 
@@ -810,6 +822,7 @@ export async function getCaregiverAvailability(
       to: endDate.toISOString().slice(0, 10),
       hospedaje: finalHospedajeDates,
       paseos: paseosByDate,
+      blockedDates,
       bookedPaseos,
     };
   } catch (err) {
@@ -835,6 +848,7 @@ export async function getCaregiverAvailability(
       to: eD.toISOString().slice(0, 10),
       hospedaje: [],
       paseos: {},
+      blockedDates: [],
       bookedPaseos: [],
     };
   }
