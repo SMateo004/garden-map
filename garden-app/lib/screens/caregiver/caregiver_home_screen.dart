@@ -410,19 +410,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       if (data['success'] == true) {
         await _loadAvailability();
         _computeDayStatuses();
-        // Forzar reconstrucción del panel cerrando y reabriendo el día seleccionado
-        final currentDay = _selectedDay;
-        setState(() => _selectedDay = null);
-        await Future.delayed(const Duration(milliseconds: 100));
-        if (!mounted) return;
-        setState(() => _selectedDay = currentDay);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${blockKey == 'morning' ? 'Mañana' : blockKey == 'afternoon' ? 'Tarde' : 'Noche'} ${enabled ? 'activado' : 'desactivado'} para este día'),
-            backgroundColor: enabled ? Colors.green : Colors.orange,
-            duration: const Duration(seconds: 2),
-          ),
-        );
       } else {
         throw Exception(data['error']?['message'] ?? 'Error');
       }
@@ -2349,7 +2336,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               context: context,
               backgroundColor: Colors.transparent,
               isScrollControlled: true,
-              builder: (_) => _buildDayPanel(date),
+              useRootNavigator: true,
+              builder: (ctx) => _buildDayPanel(ctx, date),
             );
           },
           child: Container(
@@ -2385,132 +2373,220 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     );
   }
 
-  Widget _buildDayPanel(DateTime date) {
+  Widget _buildDayPanel(BuildContext sheetCtx, DateTime date) {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
     final dateStr = date.toIso8601String().split('T')[0];
-    final status = _dayStatus[dateStr] ?? 'available';
-    final isBooked = status == 'booked';
-    
-    return GlassBox(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '${date.day}/${date.month}/${date.year}',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-              if (isBooked)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: kPrimaryColor, borderRadius: BorderRadius.circular(8)),
-                  child: const Text('Reservado', style: TextStyle(color: Colors.white, fontSize: 12)),
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          if (!isBooked) ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Bloquear día completo', style: TextStyle(color: Colors.white)),
-                Switch(
-                  value: status == 'blocked',
-                  activeColor: Colors.red,
-                  onChanged: (val) => _toggleDayBlock(dateStr, val),
-                ),
-              ],
-            ),
-            if (status != 'blocked') ...[
-              const Divider(color: Colors.white12),
-              const Text('Horarios disponibles este día:',
-                style: TextStyle(color: kTextSecondary, fontSize: 13)),
-              const SizedBox(height: 8),
-              _buildDayTimeBlocks(dateStr),
-            ],
-          ] else
-            const Text(
-              'Este día tiene reservas activas. ¡Mantente atento!',
-              style: TextStyle(color: kTextSecondary, fontSize: 14),
-            ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildDayTimeBlocks(String dateStr) {
-    final raw = _availability?['defaultSchedule']?['paseoTimeBlocks'];
-    final rawGlobal = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+    return StatefulBuilder(
+      builder: (ctx, setSheetState) {
+        final currentStatus = _dayStatus[dateStr] ?? 'available';
+        final isBooked = currentStatus == 'booked';
+        final isBlocked = currentStatus == 'blocked';
 
-    final rawDateEntry = (_availability?['dates'] as Map?)?[dateStr];
-    final rawTimeBlocks = rawDateEntry is Map ? rawDateEntry['timeBlocks'] : null;
-    final rawSlots = rawTimeBlocks is Map ? rawTimeBlocks['slots'] : null;
-    final dayOverride = rawSlots is Map ? Map<String, dynamic>.from(rawSlots) : <String, dynamic>{};
+        final slotLabels = {
+          'morning': 'Mañana',
+          'afternoon': 'Tarde',
+          'night': 'Noche',
+        };
+        final slotIcons = {
+          'morning': Icons.wb_sunny_outlined,
+          'afternoon': Icons.wb_cloudy_outlined,
+          'night': Icons.nightlight_outlined,
+        };
 
-    return Column(
-      children: ['morning', 'afternoon', 'night'].map((blockKey) {
-        final rawGlobalBlock = rawGlobal[blockKey];
-        final globalBlock = rawGlobalBlock is Map
-          ? Map<String, dynamic>.from(rawGlobalBlock)
-          : {
-              'enabled': true,
-              'start': blockKey == 'morning' ? '08:00' : blockKey == 'afternoon' ? '13:00' : '19:00',
-              'end':   blockKey == 'morning' ? '11:00' : blockKey == 'afternoon' ? '17:00' : '22:00',
-            };
+        // Read slot state from availability each rebuild
+        final raw = _availability?['defaultSchedule']?['paseoTimeBlocks'];
+        final rawGlobal = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+        final rawDateEntry = ((_availability?['overrides'] ?? _availability?['dates']) as Map?)?[dateStr];
+        final rawTimeBlocks = rawDateEntry is Map ? rawDateEntry['timeBlocks'] : null;
+        final rawSlots = rawTimeBlocks is Map ? rawTimeBlocks['slots'] : null;
+        final dayOverride = rawSlots is Map ? Map<String, dynamic>.from(rawSlots) : <String, dynamic>{};
 
-        final label = blockKey == 'morning' ? 'Mañana' : blockKey == 'afternoon' ? 'Tarde' : 'Noche';
-        final rawDayBlock = dayOverride[blockKey];
-        final dayBlockOverride = rawDayBlock is Map ? Map<String, dynamic>.from(rawDayBlock) : null;
-        final isEnabled = dayBlockOverride != null
-          ? dayBlockOverride['enabled'] == true
-          : globalBlock['enabled'] == true;
-        final isCustomized = dayOverride.containsKey(blockKey);
+        Map<String, String> slotRange(String key) {
+          final g = rawGlobal[key];
+          final start = g is Map ? (g['start'] ?? (key == 'morning' ? '08:00' : key == 'afternoon' ? '13:00' : '19:00')) : (key == 'morning' ? '08:00' : key == 'afternoon' ? '13:00' : '19:00');
+          final end   = g is Map ? (g['end']   ?? (key == 'morning' ? '11:00' : key == 'afternoon' ? '17:00' : '22:00')) : (key == 'morning' ? '11:00' : key == 'afternoon' ? '17:00' : '22:00');
+          return {'start': start, 'end': end};
+        }
+
+        bool slotEnabled(String key) {
+          final g = rawGlobal[key];
+          final globalOn = g is Map ? g['enabled'] == true : true;
+          final d = dayOverride[key];
+          return d is Map ? d['enabled'] == true : globalOn;
+        }
+
+        const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+        final weekdays = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+        final dayLabel = '${weekdays[date.weekday - 1]}, ${date.day} ${months[date.month - 1]}';
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: kBackgroundColor,
-            borderRadius: BorderRadius.circular(10),
-            border: isCustomized ? Border.all(color: kAccentColor.withValues(alpha: 0.5)) : null,
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.48,
           ),
-          child: Row(
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 10, bottom: 4),
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: borderColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                child: Row(
                   children: [
-                    Row(children: [
-                      Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      if (isCustomized) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: kAccentColor.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text('Personalizado', style: TextStyle(color: kAccentColor, fontSize: 10)),
+                    Expanded(
+                      child: Text(
+                        dayLabel,
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
                         ),
-                      ],
-                    ]),
-                    Text('${globalBlock['start']} - ${globalBlock['end']}',
-                      style: const TextStyle(color: kTextSecondary, fontSize: 12)),
+                      ),
+                    ),
+                    if (isBooked)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: GardenColors.primary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4)),
+                        ),
+                        child: Text('Reservado',
+                          style: TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ),
+                    if (isBlocked && !isBooked)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: GardenColors.error.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: GardenColors.error.withValues(alpha: 0.4)),
+                        ),
+                        child: Text('Bloqueado',
+                          style: TextStyle(color: GardenColors.error, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ),
                   ],
                 ),
               ),
-              Switch(
-                value: isEnabled,
-                activeColor: kPrimaryColor,
-                onChanged: (val) => _toggleDayBlockImmediate(dateStr, blockKey, val),
+              const SizedBox(height: 4),
+              Divider(height: 1, color: borderColor),
+              // Content
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+                  child: isBooked
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            children: [
+                              Icon(Icons.info_outline, size: 16, color: subtextColor),
+                              const SizedBox(width: 8),
+                              Text('Tienes una reserva activa este día',
+                                style: TextStyle(color: subtextColor, fontSize: 13)),
+                            ],
+                          ),
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Block toggle row
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Bloquear día',
+                                        style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
+                                      Text('No recibirás servicios este día',
+                                        style: TextStyle(color: subtextColor, fontSize: 12)),
+                                    ],
+                                  ),
+                                ),
+                                Switch(
+                                  value: isBlocked,
+                                  activeColor: GardenColors.error,
+                                  onChanged: (val) async {
+                                    // Optimistic local update via parent setState
+                                    setState(() {
+                                      _dayStatus[dateStr] = val ? 'blocked' : 'available';
+                                    });
+                                    setSheetState(() {});
+                                    await _toggleDayBlock(dateStr, val);
+                                  },
+                                ),
+                              ],
+                            ),
+                            if (!isBlocked) ...[
+                              const SizedBox(height: 12),
+                              Divider(height: 1, color: borderColor),
+                              const SizedBox(height: 12),
+                              Text('Turnos disponibles',
+                                style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 0.4)),
+                              const SizedBox(height: 8),
+                              ...['morning', 'afternoon', 'night'].map((key) {
+                                final range = slotRange(key);
+                                final enabled = slotEnabled(key);
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: Row(
+                                    children: [
+                                      Icon(slotIcons[key], size: 16, color: enabled ? GardenColors.primary : subtextColor),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(slotLabels[key]!,
+                                              style: TextStyle(
+                                                color: enabled ? textColor : subtextColor,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                              )),
+                                            Text('${range['start']} – ${range['end']}',
+                                              style: TextStyle(color: subtextColor, fontSize: 11)),
+                                          ],
+                                        ),
+                                      ),
+                                      Switch(
+                                        value: enabled,
+                                        activeColor: GardenColors.primary,
+                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        onChanged: (val) async {
+                                          await _toggleDayBlockImmediate(dateStr, key, val);
+                                          setSheetState(() {});
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }),
+                            ],
+                          ],
+                        ),
+                ),
               ),
             ],
           ),
         );
-      }).toList(),
+      },
     );
   }
 
