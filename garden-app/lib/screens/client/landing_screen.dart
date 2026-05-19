@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
@@ -931,14 +932,29 @@ class _SearchBar extends StatelessWidget {
   });
   @override Widget build(BuildContext context) {
     final pal = _Theme.of(context);
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 860),
+
+    final glassColor = pal.dark
+        ? Colors.white.withValues(alpha: 0.07)
+        : Colors.white.withValues(alpha: 0.55);
+    final glassBorder = pal.dark
+        ? Colors.white.withValues(alpha: 0.15)
+        : Colors.white.withValues(alpha: 0.85);
+    final shadowColor = Colors.black.withValues(alpha: pal.dark ? 0.35 : 0.10);
+
+    final inner = Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: pal.surface,
+        color: glassColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: pal.border),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: pal.dark ? 0.5 : 0.1), blurRadius: 48, offset: const Offset(0, 16))],
+        border: Border.all(color: glassBorder, width: 1.2),
+        boxShadow: [
+          BoxShadow(color: shadowColor, blurRadius: 48, offset: const Offset(0, 16)),
+          // Resaltado interior superior (efecto glass)
+          BoxShadow(
+            color: Colors.white.withValues(alpha: pal.dark ? 0.04 : 0.30),
+            blurRadius: 0, offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Wrap(
         alignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center,
@@ -966,6 +982,17 @@ class _SearchBar extends StatelessWidget {
         ],
       ),
     );
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 860),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+          child: inner,
+        ),
+      ),
+    );
   }
 }
 
@@ -976,7 +1003,17 @@ class _SvcToggle extends StatelessWidget {
     final pal = _Theme.of(context);
     return Container(
       width: 230, height: 52,
-      decoration: BoxDecoration(color: pal.surfaceEl, borderRadius: BorderRadius.circular(14), border: Border.all(color: pal.border)),
+      decoration: BoxDecoration(
+        color: pal.dark
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.white.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: pal.dark
+              ? Colors.white.withValues(alpha: 0.12)
+              : Colors.white.withValues(alpha: 0.70),
+        ),
+      ),
       child: Row(children: ['paseo','hospedaje'].map((s) {
         final active = selected == s;
         return Expanded(child: GestureDetector(
@@ -1010,7 +1047,17 @@ class _DDark<T> extends StatelessWidget {
     final pal = _Theme.of(context);
     return Container(
       width: w, height: 52, padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(color: pal.surfaceEl, borderRadius: BorderRadius.circular(14), border: Border.all(color: pal.border)),
+      decoration: BoxDecoration(
+        color: pal.dark
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.white.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: pal.dark
+              ? Colors.white.withValues(alpha: 0.12)
+              : Colors.white.withValues(alpha: 0.70),
+        ),
+      ),
       child: DropdownButtonHideUnderline(child: DropdownButton<T>(
         value: value,
         hint: Text(hint, style: TextStyle(color: pal.textSec, fontSize: 13, fontWeight: FontWeight.w500)),
