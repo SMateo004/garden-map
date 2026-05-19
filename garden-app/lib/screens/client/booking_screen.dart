@@ -252,6 +252,7 @@ class _BookingScreenState extends State<BookingScreen> {
       try {
         final uri = Uri.parse('https://nominatim.openstreetmap.org/search').replace(queryParameters: {
           'q': q, 'format': 'json', 'limit': '5', 'countrycodes': 'bo', 'accept-language': 'es',
+          'viewbox': '-63.35,-17.65,-63.05,-17.92', 'bounded': '1',
         });
         final res = await http.get(uri, headers: {'User-Agent': 'GardenApp/1.0'});
         // Stale guard: discard if user already typed something different
