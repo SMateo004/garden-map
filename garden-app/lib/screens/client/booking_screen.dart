@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -242,12 +241,6 @@ class _BookingScreenState extends State<BookingScreen> {
     }
   }
 
-  String get _googleMapsKey {
-    if (kIsWeb) return 'AIzaSyB8SgAWB79TjJVXexd4byx8U8_T5NNwQV0';
-    // On mobile both keys point to the same project — iOS key works for HTTP calls on iOS
-    return 'AIzaSyAxbYAWSmaAG1ijHv5rbj2z2kA1fzcjp6s';
-  }
-
   void _searchMGLocations(String query) {
     _mgSearchDebounce?.cancel();
     if (query.trim().length < 3) {
@@ -257,22 +250,13 @@ class _BookingScreenState extends State<BookingScreen> {
     _mgSearchDebounce = Timer(const Duration(milliseconds: 450), () async {
       final q = query.trim();
       try {
-        final uri = Uri.parse('https://maps.googleapis.com/maps/api/place/autocomplete/json').replace(queryParameters: {
-          'input': q,
-          'key': _googleMapsKey,
-          'components': 'country:bo',
-          'location': '-17.78,-63.18',
-          'radius': '30000',
-          'language': 'es',
-          'types': 'establishment|geocode',
-        });
+        final uri = Uri.parse('$_baseUrl/places/autocomplete')
+            .replace(queryParameters: {'input': q});
         final res = await http.get(uri);
         if (!mounted || _mgPlaceCtrl.text.trim() != q) return;
         final body = jsonDecode(res.body) as Map;
-        if (body['status'] == 'OK' || body['status'] == 'ZERO_RESULTS') {
-          final predictions = (body['predictions'] as List? ?? []).cast<Map<String, dynamic>>();
-          setState(() => _mgLocationSuggestions = predictions);
-        }
+        final predictions = (body['predictions'] as List? ?? []).cast<Map<String, dynamic>>();
+        setState(() => _mgLocationSuggestions = predictions);
       } catch (_) {}
     });
   }
@@ -288,11 +272,8 @@ class _BookingScreenState extends State<BookingScreen> {
     });
     if (placeId.isEmpty) return;
     try {
-      final uri = Uri.parse('https://maps.googleapis.com/maps/api/place/details/json').replace(queryParameters: {
-        'place_id': placeId,
-        'fields': 'geometry',
-        'key': _googleMapsKey,
-      });
+      final uri = Uri.parse('$_baseUrl/places/details')
+          .replace(queryParameters: {'place_id': placeId});
       final res = await http.get(uri);
       if (!mounted) return;
       final body = jsonDecode(res.body) as Map;

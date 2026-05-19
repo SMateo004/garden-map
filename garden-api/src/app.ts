@@ -26,6 +26,7 @@ import chatRoutes from './modules/chat/chat.routes.js';
 import walletRoutes from './modules/wallet/wallet.routes.js';
 import disputeRoutes from './modules/dispute/dispute.routes.js';
 import meetAndGreetRoutes from './modules/meet-and-greet/meet-and-greet.routes.js';
+import placesRoutes from './modules/places/places.routes.js';
 
 const app = express();
 
@@ -250,6 +251,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/disputes', disputeRoutes);
 app.use('/api/meet-and-greet', meetAndGreetRoutes);
+app.use('/api/places', placesRoutes);
 
 // Keys exposed to all unauthenticated clients (feature flags only — no financial/operational data).
 const PUBLIC_SETTING_KEYS = new Set([
