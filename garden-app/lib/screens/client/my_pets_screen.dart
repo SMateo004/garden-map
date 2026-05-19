@@ -150,14 +150,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                       borderRadius: BorderRadius.circular(GardenRadius.full),
                       boxShadow: GardenShadows.primary,
                     ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.add_rounded, color: Colors.white, size: 16),
-                        SizedBox(width: 4),
-                        Text('Agregar', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
-                      ],
-                    ),
+                    child: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
                   ),
                 ),
               ),

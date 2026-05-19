@@ -882,11 +882,14 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                 boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08), blurRadius: 20, offset: const Offset(0, -4))],
               ),
               child: Row(children: [
-                Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                  Text(priceDisplay, style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
-                  Text('precio por servicio', style: TextStyle(color: subtextColor, fontSize: 12)),
-                ]),
-                const SizedBox(width: 20),
+                // Solo muestra precio si ofrece UN solo servicio
+                if (!(offersHospedaje && offersPaseo)) ...[
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                    Text(priceDisplay, style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+                    Text('precio por servicio', style: TextStyle(color: subtextColor, fontSize: 12)),
+                  ]),
+                  const SizedBox(width: 20),
+                ],
                 Expanded(child: GardenButton(label: 'Reservar ahora', icon: Icons.calendar_today_outlined, onPressed: _onReserve)),
               ]),
             ),
