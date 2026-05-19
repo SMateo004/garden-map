@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -60,6 +61,8 @@ class _BookingScreenState extends State<BookingScreen> {
   List<Map<String, dynamic>> _mgLocationSuggestions = [];
   double? _mgSelectedLat;
   double? _mgSelectedLng;
+  Timer? _mgSearchDebounce;
+  bool _mgTimeExpanded = true;
 
   List<Map<String, dynamic>> _availableSlots = [];
   List<Map<String, dynamic>> _bookedPaseos = []; // reservas activas del cuidador
@@ -82,6 +85,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
   @override
   void dispose() {
+    _mgSearchDebounce?.cancel();
     _mgPlaceCtrl.dispose();
     super.dispose();
   }
@@ -237,20 +241,25 @@ class _BookingScreenState extends State<BookingScreen> {
     }
   }
 
-  Future<void> _searchMGLocations(String query) async {
-    if (query.trim().length < 3) { setState(() => _mgLocationSuggestions = []); return; }
-    try {
-      final uri = Uri.parse('https://nominatim.openstreetmap.org/search').replace(queryParameters: {
-        'q': query,
-        'format': 'json',
-        'limit': '5',
-        'countrycodes': 'bo',
-        'accept-language': 'es',
-      });
-      final res = await http.get(uri, headers: {'User-Agent': 'GardenApp/1.0'});
-      final list = jsonDecode(res.body) as List;
-      if (mounted) setState(() => _mgLocationSuggestions = list.cast<Map<String, dynamic>>());
-    } catch (_) {}
+  void _searchMGLocations(String query) {
+    _mgSearchDebounce?.cancel();
+    if (query.trim().length < 3) {
+      setState(() => _mgLocationSuggestions = []);
+      return;
+    }
+    _mgSearchDebounce = Timer(const Duration(milliseconds: 450), () async {
+      final q = query.trim();
+      try {
+        final uri = Uri.parse('https://nominatim.openstreetmap.org/search').replace(queryParameters: {
+          'q': q, 'format': 'json', 'limit': '5', 'countrycodes': 'bo', 'accept-language': 'es',
+        });
+        final res = await http.get(uri, headers: {'User-Agent': 'GardenApp/1.0'});
+        // Stale guard: discard if user already typed something different
+        if (!mounted || _mgPlaceCtrl.text.trim() != q) return;
+        final list = jsonDecode(res.body) as List;
+        setState(() => _mgLocationSuggestions = list.cast<Map<String, dynamic>>());
+      } catch (_) {}
+    });
   }
 
   Future<void> _createBooking() async {
@@ -2001,6 +2010,7 @@ class _BookingScreenState extends State<BookingScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Header row: shows selected time + Cambiar button when collapsed
                 Row(
                   children: [
                     const Icon(Icons.access_time, size: 16, color: GardenColors.primary),
@@ -2012,10 +2022,30 @@ class _BookingScreenState extends State<BookingScreen> {
                       style: TextStyle(
                         color: _mgTime != null ? textColor : subtextColor,
                         fontSize: 14,
+                        fontWeight: _mgTime != null ? FontWeight.w600 : FontWeight.normal,
                       ),
                     ),
+                    if (_mgTime != null) ...[
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => setState(() => _mgTimeExpanded = !_mgTimeExpanded),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: GardenColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            _mgTimeExpanded ? 'Cerrar' : 'Cambiar',
+                            style: const TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
+                if (_mgTimeExpanded) ...[
                 const SizedBox(height: 10),
                 Wrap(
                   spacing: 8,
@@ -2035,8 +2065,10 @@ class _BookingScreenState extends State<BookingScreen> {
                             return GestureDetector(
                               onTap: isConflicting
                                   ? null
-                                  : () => setState(() =>
-                                      _mgTime = TimeOfDay(hour: h, minute: m)),
+                                  : () => setState(() {
+                                      _mgTime = TimeOfDay(hour: h, minute: m);
+                                      _mgTimeExpanded = false;
+                                    }),
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 150),
                                 padding: const EdgeInsets.symmetric(
@@ -2081,6 +2113,7 @@ class _BookingScreenState extends State<BookingScreen> {
                       ],
                   ],
                 ),
+                ], // end if (_mgTimeExpanded)
               ],
             ),
             const SizedBox(height: 10),
