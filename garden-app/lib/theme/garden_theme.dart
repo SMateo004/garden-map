@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
@@ -1087,11 +1088,33 @@ GardenBadge bookingStatusBadge(String status) {
 
 // ── TEMA GLOBAL ────────────────────────────────────────────────────────────
 class ThemeNotifier extends ChangeNotifier {
-  bool _isDark = false; // light mode por defecto
+  // Noche: 19:00 → 07:00 (dark), Día: 07:00 → 19:00 (light)
+  static const int _nightStart = 19;
+  static const int _nightEnd   = 7;
+
+  bool _isDark = _isNightHour();
+  bool _manualOverride = false;
+  Timer? _timer;
+
+  ThemeNotifier() {
+    // Revisa el horario cada minuto
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) => _syncWithSchedule());
+  }
+
+  static bool _isNightHour() {
+    final h = DateTime.now().hour;
+    return h >= _nightStart || h < _nightEnd;
+  }
+
+  void _syncWithSchedule() {
+    if (_manualOverride) return;
+    setDark(_isNightHour());
+  }
 
   bool get isDark => _isDark;
 
   void toggle() {
+    _manualOverride = true;
     _isDark = !_isDark;
     notifyListeners();
   }
@@ -1101,6 +1124,18 @@ class ThemeNotifier extends ChangeNotifier {
       _isDark = dark;
       notifyListeners();
     }
+  }
+
+  /// Resetea el override manual y vuelve al horario automático
+  void resetToSchedule() {
+    _manualOverride = false;
+    setDark(_isNightHour());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 }
 
