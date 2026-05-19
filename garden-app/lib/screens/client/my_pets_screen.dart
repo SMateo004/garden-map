@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -8,10 +7,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
-
-// Importación condicional para dart:html (solo disponible en web)
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+import '../../utils/web_file_picker.dart';
 
 class MyPetsScreen extends StatefulWidget {
   const MyPetsScreen({super.key});
@@ -449,28 +445,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
   /// En web usa dart:html para evitar el bug de createObjectURL del image_picker.
   Future<({Uint8List bytes, String name})?> _pickImageBytes({int quality = 85}) async {
     if (kIsWeb) {
-      final completer = Completer<({Uint8List bytes, String name})?>();
-      final input = html.FileUploadInputElement()..accept = 'image/*';
-      input.onChange.listen((_) async {
-        if (input.files == null || input.files!.isEmpty) {
-          completer.complete(null);
-          return;
-        }
-        final file = input.files![0];
-        final reader = html.FileReader();
-        reader.readAsArrayBuffer(file);
-        await reader.onLoad.first;
-        final result = reader.result;
-        if (result is Uint8List) {
-          completer.complete((bytes: result, name: file.name));
-        } else if (result is ByteBuffer) {
-          completer.complete((bytes: result.asUint8List(), name: file.name));
-        } else {
-          completer.completeError(Exception('No se pudo leer la imagen'));
-        }
-      });
-      input.click();
-      return completer.future;
+      return pickImageFromWebInput();
     } else {
       final picker = ImagePicker();
       final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: quality);
