@@ -26,8 +26,8 @@ router.post(
 // Ruta protegida: foto principal de perfil cuidador (upload + persist en caregiver_profiles.profilePhoto)
 router.post('/profile-photo', authMiddleware, requireRole('CAREGIVER'), ...uploadController.uploadProfilePhotoHandler);
 
-// Ruta protegida para foto de mascota (requiere auth CLIENT)
-router.post('/pet-photo', authMiddleware, requireRole('CLIENT'), ...uploadController.uploadPetPhotoHandler);
+// Ruta protegida para foto de mascota (CLIENT o CAREGIVER — un cuidador también puede tener mascotas)
+router.post('/pet-photo', authMiddleware, requireRole('CLIENT', 'CAREGIVER'), ...uploadController.uploadPetPhotoHandler);
 
 // Ruta protegida para fotos de servicio (caregiver start/end)
 router.post('/service-photo', authMiddleware, requireRole('CAREGIVER'), ...uploadController.uploadServicePhotoHandler);

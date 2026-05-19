@@ -5,9 +5,9 @@ import * as clientPetsController from './client-pets.controller.js';
 
 const router = Router();
 
-// Todas las rutas requieren auth + role CLIENT
+// Rutas accesibles para CLIENT y CAREGIVER (un cuidador también puede tener mascotas)
 router.use(authMiddleware);
-router.use(requireRole('CLIENT'));
+router.use(requireRole('CLIENT', 'CAREGIVER'));
 
 router.get('/my-profile', clientProfileController.getMyProfile);
 router.patch('/profile', clientProfileController.patchProfile);

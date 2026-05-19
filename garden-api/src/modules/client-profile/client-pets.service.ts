@@ -84,13 +84,13 @@ export async function getPetsByUserId(userId: string): Promise<PetListItem[]> {
 const MAX_PETS_PER_CLIENT = 10;
 
 export async function createPet(userId: string, body: CreatePetBody): Promise<PetListItem> {
-  const profile = await prisma.clientProfile.findUnique({
+  // Auto-crear clientProfile si no existe (ej: un cuidador que también tiene mascotas)
+  const profile = await prisma.clientProfile.upsert({
     where: { userId },
+    create: { userId, isComplete: false },
+    update: {},
     select: { id: true },
   });
-  if (!profile) {
-    throw new NotFoundError('No tienes perfil de cliente');
-  }
 
   // Limit: max 10 mascotas por perfil — evita abuso de almacenamiento
   const petCount = await prisma.pet.count({ where: { clientProfileId: profile.id } });
@@ -173,13 +173,12 @@ export async function updatePet(
   petId: string,
   body: PatchPetBody
 ): Promise<PetListItem> {
-  const profile = await prisma.clientProfile.findUnique({
+  const profile = await prisma.clientProfile.upsert({
     where: { userId },
+    create: { userId, isComplete: false },
+    update: {},
     select: { id: true },
   });
-  if (!profile) {
-    throw new NotFoundError('No tienes perfil de cliente');
-  }
 
   const pet = await prisma.pet.findFirst({
     where: { id: petId, clientProfileId: profile.id },
@@ -251,11 +250,12 @@ export async function updatePet(
  * Elimina una mascota. Valida que pertenezca al cliente. Recalcula isComplete del perfil.
  */
 export async function deletePet(userId: string, petId: string): Promise<void> {
-  const profile = await prisma.clientProfile.findUnique({
+  const profile = await prisma.clientProfile.upsert({
     where: { userId },
+    create: { userId, isComplete: false },
+    update: {},
     select: { id: true, userId: true },
   });
-  if (!profile) throw new NotFoundError('No tienes perfil de cliente');
 
   const pet = await prisma.pet.findFirst({
     where: { id: petId, clientProfileId: profile.id },
