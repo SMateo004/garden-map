@@ -3592,7 +3592,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                     ]),
                     const SizedBox(height: 10),
                     row('CI / Documento', detail?['ciNumber'] as String?),
-                    row('Verificación biométrica', detail?['verificationStatus'] as String?),
+                    row('Verificación biométrica', detail?['identityVerificationStatus'] as String?),
                     if (detail?['identityVerificationSubmittedAt'] != null)
                       row('Enviado el', (detail!['identityVerificationSubmittedAt'] as String).substring(0, 10)),
                     if (detail?['lastIdentityVerificationSessionId'] != null)
@@ -3825,12 +3825,13 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
 
   Widget _identityStatusChip(String status) {
     final color = switch (status) {
-      'APPROVED' => GardenColors.success,
-      'REJECTED' => GardenColors.error,
-      'REVIEW'   => GardenColors.warning,
-      _          => Colors.grey,
+      'VERIFIED' || 'APPROVED' => GardenColors.success,
+      'REJECTED'               => GardenColors.error,
+      'REVIEW'                 => GardenColors.warning,
+      _                        => Colors.grey,
     };
     final label = switch (status) {
+      'VERIFIED' => 'Verificada',
       'APPROVED' => 'Aprobada',
       'REJECTED' => 'Rechazada',
       'REVIEW'   => 'En revisión',
