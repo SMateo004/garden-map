@@ -94,6 +94,8 @@ class _BookingScreenState extends State<BookingScreen> {
         }
         if (_pets.isNotEmpty) _selectedPetId = _pets.first['id'];
       });
+      // Precargar disponibilidad real del cuidador (para filtrar días no disponibles)
+      if (_selectedService == 'PASEO') _loadMultiDayData();
       return;
     }
 
@@ -128,6 +130,8 @@ class _BookingScreenState extends State<BookingScreen> {
                _selectedService = services.first;
              }
           });
+          // Precargar disponibilidad real del cuidador (para filtrar días no disponibles)
+          if (_selectedService == 'PASEO') _loadMultiDayData();
         }
       }
     } catch (e) {
@@ -829,7 +833,7 @@ class _BookingScreenState extends State<BookingScreen> {
                                 _selectedStartTime = null;
                                 _availableSlots = [];
                               });
-                              // Cargar disponibilidad real del cuidador para los próximos 30 días
+                              // Datos ya cargados en init; recargar solo si falta
                               if (_multiDaySlotsByDate.isEmpty) _loadMultiDayData();
                             }),
                           ],
@@ -848,6 +852,7 @@ class _BookingScreenState extends State<BookingScreen> {
                         itemCount: 14,
                         itemBuilder: (_, i) {
                           final date = DateTime.now().add(Duration(days: i + 1));
+                          final ds = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
                           final isSelected = _selectedDate != null &&
                               _selectedDate!.year == date.year &&
                               _selectedDate!.month == date.month &&
@@ -855,8 +860,15 @@ class _BookingScreenState extends State<BookingScreen> {
                           const months = ['ENE','FEB','MAR','ABR','MAY','JUN',
                                           'JUL','AGO','SEP','OCT','NOV','DIC'];
                           final mon = months[date.month - 1];
+
+                          // Verificar disponibilidad real del cuidador ese día
+                          final bool isDayUnavailable = _multiDaySlotsByDate.isNotEmpty &&
+                              (_multiDaySlotsByDate[ds] == null ||
+                               _multiDaySlotsByDate[ds]!.isEmpty ||
+                               _multiDaySlotsByDate[ds]!.every((s) => s['enabled'] != true));
+
                           return GestureDetector(
-                            onTap: () async {
+                            onTap: isDayUnavailable ? null : () async {
                               setState(() => _selectedDate = date);
                               await _loadAvailableSlots(date);
                             },
@@ -865,29 +877,56 @@ class _BookingScreenState extends State<BookingScreen> {
                               margin: const EdgeInsets.only(right: 10),
                               width: 58,
                               decoration: BoxDecoration(
-                                color: isSelected ? GardenColors.primary : surface,
+                                color: isDayUnavailable
+                                    ? (themeNotifier.isDark
+                                        ? Colors.white.withValues(alpha: 0.04)
+                                        : Colors.grey.withValues(alpha: 0.08))
+                                    : isSelected
+                                        ? GardenColors.primary
+                                        : surface,
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
-                                    color: isSelected ? GardenColors.primary : borderColor),
+                                  color: isDayUnavailable
+                                      ? borderColor.withValues(alpha: 0.35)
+                                      : isSelected
+                                          ? GardenColors.primary
+                                          : borderColor,
+                                ),
                               ),
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text(mon,
                                       style: TextStyle(
-                                        color: isSelected
-                                            ? Colors.white.withValues(alpha: 0.8)
-                                            : subtextColor,
+                                        color: isDayUnavailable
+                                            ? subtextColor.withValues(alpha: 0.4)
+                                            : isSelected
+                                                ? Colors.white.withValues(alpha: 0.8)
+                                                : subtextColor,
                                         fontSize: 10,
                                         fontWeight: FontWeight.w700,
                                       )),
                                   const SizedBox(height: 4),
                                   Text('${date.day}',
                                       style: TextStyle(
-                                        color: isSelected ? Colors.white : textColor,
+                                        color: isDayUnavailable
+                                            ? subtextColor.withValues(alpha: 0.4)
+                                            : isSelected
+                                                ? Colors.white
+                                                : textColor,
                                         fontSize: 22,
                                         fontWeight: FontWeight.w800,
                                       )),
+                                  if (isDayUnavailable)
+                                    Container(
+                                      margin: const EdgeInsets.only(top: 2),
+                                      width: 4,
+                                      height: 4,
+                                      decoration: const BoxDecoration(
+                                        color: GardenColors.error,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),
