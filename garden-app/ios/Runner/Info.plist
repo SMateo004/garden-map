@@ -112,5 +112,11 @@
 		<array>
 			<string>_dartobservatory._tcp</string>
 		</array>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>GARDEN necesita acceso a tu galería para subir fotos de tus mascotas.</string>
+		<key>NSCameraUsageDescription</key>
+		<string>GARDEN necesita acceso a tu cámara para tomar fotos de tus mascotas.</string>
+		<key>NSPhotoLibraryAddUsageDescription</key>
+		<string>GARDEN necesita permiso para guardar fotos en tu galería.</string>
 	</dict>
 </plist>
