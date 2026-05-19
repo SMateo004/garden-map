@@ -182,6 +182,11 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           statuses[dateStr] = 'blocked';
           continue;
         }
+        // Un override explícito con isAvailable:true siempre gana al schedule por defecto
+        if (override is Map && override['isAvailable'] == true) {
+          statuses[dateStr] = 'available';
+          continue;
+        }
       }
 
       // Verificar si el tipo de día está desactivado en el schedule predeterminado
