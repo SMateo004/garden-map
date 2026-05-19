@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -241,6 +242,12 @@ class _BookingScreenState extends State<BookingScreen> {
     }
   }
 
+  String get _googleMapsKey {
+    if (kIsWeb) return 'AIzaSyB8SgAWB79TjJVXexd4byx8U8_T5NNwQV0';
+    // On mobile both keys point to the same project — iOS key works for HTTP calls on iOS
+    return 'AIzaSyAxbYAWSmaAG1ijHv5rbj2z2kA1fzcjp6s';
+  }
+
   void _searchMGLocations(String query) {
     _mgSearchDebounce?.cancel();
     if (query.trim().length < 3) {
@@ -250,17 +257,55 @@ class _BookingScreenState extends State<BookingScreen> {
     _mgSearchDebounce = Timer(const Duration(milliseconds: 450), () async {
       final q = query.trim();
       try {
-        final uri = Uri.parse('https://nominatim.openstreetmap.org/search').replace(queryParameters: {
-          'q': q, 'format': 'json', 'limit': '5', 'countrycodes': 'bo', 'accept-language': 'es',
-          'viewbox': '-63.35,-17.65,-63.05,-17.92', 'bounded': '1',
+        final uri = Uri.parse('https://maps.googleapis.com/maps/api/place/autocomplete/json').replace(queryParameters: {
+          'input': q,
+          'key': _googleMapsKey,
+          'components': 'country:bo',
+          'location': '-17.78,-63.18',
+          'radius': '30000',
+          'language': 'es',
+          'types': 'establishment|geocode',
         });
-        final res = await http.get(uri, headers: {'User-Agent': 'GardenApp/1.0'});
-        // Stale guard: discard if user already typed something different
+        final res = await http.get(uri);
         if (!mounted || _mgPlaceCtrl.text.trim() != q) return;
-        final list = jsonDecode(res.body) as List;
-        setState(() => _mgLocationSuggestions = list.cast<Map<String, dynamic>>());
+        final body = jsonDecode(res.body) as Map;
+        if (body['status'] == 'OK' || body['status'] == 'ZERO_RESULTS') {
+          final predictions = (body['predictions'] as List? ?? []).cast<Map<String, dynamic>>();
+          setState(() => _mgLocationSuggestions = predictions);
+        }
       } catch (_) {}
     });
+  }
+
+  Future<void> _selectMGPlace(Map<String, dynamic> prediction) async {
+    final placeId = prediction['place_id'] as String? ?? '';
+    final description = prediction['description'] as String? ?? '';
+    setState(() {
+      _mgPlaceCtrl.text = description;
+      _mgLocationSuggestions = [];
+      _mgSelectedLat = null;
+      _mgSelectedLng = null;
+    });
+    if (placeId.isEmpty) return;
+    try {
+      final uri = Uri.parse('https://maps.googleapis.com/maps/api/place/details/json').replace(queryParameters: {
+        'place_id': placeId,
+        'fields': 'geometry',
+        'key': _googleMapsKey,
+      });
+      final res = await http.get(uri);
+      if (!mounted) return;
+      final body = jsonDecode(res.body) as Map;
+      if (body['status'] == 'OK') {
+        final loc = body['result']?['geometry']?['location'];
+        if (loc != null) {
+          setState(() {
+            _mgSelectedLat = (loc['lat'] as num).toDouble();
+            _mgSelectedLng = (loc['lng'] as num).toDouble();
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _createBooking() async {
@@ -2167,23 +2212,11 @@ class _BookingScreenState extends State<BookingScreen> {
                   itemCount: _mgLocationSuggestions.length,
                   itemBuilder: (_, i) {
                     final s = _mgLocationSuggestions[i];
-                    final fullName = (s['display_name'] ?? '') as String;
-                    final segments = fullName.split(',');
-                    final primaryName = segments.first.trim();
-                    final secondaryAddr = segments.length > 1
-                        ? segments.sublist(1).join(',').trim()
-                        : '';
+                    final fmt = s['structured_formatting'] as Map? ?? {};
+                    final primaryName = (fmt['main_text'] ?? s['description'] ?? '') as String;
+                    final secondaryAddr = (fmt['secondary_text'] ?? '') as String;
                     return InkWell(
-                      onTap: () {
-                        setState(() {
-                          _mgPlaceCtrl.text = fullName;
-                          _mgSelectedLat =
-                              double.tryParse(s['lat']?.toString() ?? '');
-                          _mgSelectedLng =
-                              double.tryParse(s['lon']?.toString() ?? '');
-                          _mgLocationSuggestions = [];
-                        });
-                      },
+                      onTap: () => _selectMGPlace(s),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 10),
