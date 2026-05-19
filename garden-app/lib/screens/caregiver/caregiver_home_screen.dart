@@ -910,8 +910,17 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final isPaseo     = serviceType == 'PASEO';
     final bookingId   = booking['id'] as String? ?? '';
 
+    // Multi-day paseo support
+    final rawWalkDaysPending = booking['walkDays'];
+    final walkDaysListPending = rawWalkDaysPending is List
+        ? rawWalkDaysPending.cast<Map<String, dynamic>>()
+        : <Map<String, dynamic>>[];
+    final isMultiDayPending = walkDaysListPending.isNotEmpty;
+
     String dateLabel = '';
-    if (dateStr != null) {
+    if (isMultiDayPending) {
+      dateLabel = '${walkDaysListPending.length} días';
+    } else if (dateStr != null) {
       try {
         final d = DateTime.parse(dateStr);
         final now = DateTime.now();
@@ -991,10 +1000,14 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     _infoChip(isPaseo ? 'Paseo' : 'Hospedaje', Icons.pets_rounded, subtextColor, borderColor),
                     if (dateLabel.isNotEmpty)
                       _infoChip(dateLabel, Icons.calendar_today_rounded, subtextColor, borderColor),
-                    if (startTime != null)
+                    if (!isMultiDayPending && startTime != null)
                       _infoChip(startTime, Icons.access_time_rounded, subtextColor, borderColor),
                   ],
                 ),
+                if (isMultiDayPending) ...[
+                  const SizedBox(height: 10),
+                  _buildWalkDaysSchedule(walkDaysListPending, subtextColor, borderColor),
+                ],
               ],
             ),
           ),
@@ -1134,8 +1147,17 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final isPaseo     = serviceType == 'PASEO';
     final net         = _caregiverNetAmount(booking);
 
+    // Multi-day paseo support
+    final rawWalkDays = booking['walkDays'];
+    final walkDaysList = rawWalkDays is List
+        ? rawWalkDays.cast<Map<String, dynamic>>()
+        : <Map<String, dynamic>>[];
+    final isMultiDay = walkDaysList.isNotEmpty;
+
     String dateLabel = '';
-    if (dateStr != null) {
+    if (isMultiDay) {
+      dateLabel = '${walkDaysList.length} días';
+    } else if (dateStr != null) {
       try {
         final d = DateTime.parse(dateStr);
         final now = DateTime.now();
@@ -1243,10 +1265,14 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     _infoChip(isPaseo ? 'Paseo' : 'Hospedaje', Icons.pets_rounded, subtextColor, borderColor),
                     if (dateLabel.isNotEmpty)
                       _infoChip(dateLabel, Icons.calendar_today_rounded, subtextColor, borderColor),
-                    if (startTime != null)
+                    if (!isMultiDay && startTime != null)
                       _infoChip(startTime, Icons.access_time_rounded, subtextColor, borderColor),
                   ],
                 ),
+                if (isMultiDay) ...[
+                  const SizedBox(height: 10),
+                  _buildWalkDaysSchedule(walkDaysList, subtextColor, borderColor),
+                ],
               ],
             ),
           ),
@@ -1299,6 +1325,74 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           Icon(icon, size: 11, color: subtextColor),
           const SizedBox(width: 4),
           Text(label, style: TextStyle(color: subtextColor, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  /// Muestra los días y horarios de un paseo multi-día al cuidador
+  Widget _buildWalkDaysSchedule(
+    List<Map<String, dynamic>> walkDays,
+    Color subtextColor,
+    Color borderColor,
+  ) {
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: GardenColors.primary.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.calendar_month_rounded, size: 12, color: GardenColors.primary),
+              const SizedBox(width: 5),
+              Text(
+                'Horario por día',
+                style: const TextStyle(
+                  color: GardenColors.primary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: walkDays.map((day) {
+              final dateStr = day['date'] as String? ?? '';
+              final time    = day['startTime'] as String?;
+              final slot    = day['timeSlot'] as String? ?? '';
+              String dayLabel = dateStr;
+              try {
+                final d = DateTime.parse(dateStr);
+                dayLabel = '${d.day} ${months[d.month - 1]}';
+              } catch (_) {}
+              final slotEmoji = slot == 'MANANA' ? '🌤' : slot == 'TARDE' ? '🌇' : '🌙';
+              final label = time != null ? '$dayLabel · $time' : '$dayLabel $slotEmoji';
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: GardenColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: GardenColors.primary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
         ],
       ),
     );

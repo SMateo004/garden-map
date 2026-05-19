@@ -42,7 +42,12 @@ class _BookingScreenState extends State<BookingScreen> {
   // Multi-day paseo
   bool _isMultiDay = false;
   final List<DateTime> _selectedDates = []; // fechas seleccionadas en modo multi-día
-  String? _multiDayTimeSlot; // slot compartido para todos los días
+  String? _multiDayTimeSlot; // slot compartido para todos los días (MANANA/TARDE/NOCHE)
+  bool _multiDaySameTime = true; // ¿misma hora para todos?
+  String? _multiDaySharedTime; // hora única cuando _multiDaySameTime = true
+  Map<String, String> _perDayTimes = {}; // dateStr -> hora cuando _multiDaySameTime = false
+  List<Map<String, dynamic>> _multiDayBookings = []; // reservas combinadas de todas las fechas
+  bool _loadingMultiDayTimes = false;
 
   // Meet & Greet opcional
   bool _includeMG = false;
@@ -256,6 +261,21 @@ class _BookingScreenState extends State<BookingScreen> {
           _showError('Selecciona un horario para los paseos');
           return;
         }
+        if (_multiDaySameTime) {
+          if (_multiDaySharedTime == null) {
+            _showError('Selecciona una hora para los paseos');
+            return;
+          }
+        } else {
+          final missing = _selectedDates.any((d) {
+            final ds = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+            return !_perDayTimes.containsKey(ds);
+          });
+          if (missing) {
+            _showError('Selecciona la hora para cada día');
+            return;
+          }
+        }
       } else {
         if (_selectedTimeSlot == null) {
           _showError('Selecciona un horario');
@@ -283,9 +303,13 @@ class _BookingScreenState extends State<BookingScreen> {
             'caregiverId': widget.caregiverId,
             'petId': _selectedPetId,
             'duration': _selectedDuration,
-            'walkDays': _selectedDates.map((d) => {
-              'date': d.toIso8601String().split('T')[0],
-              'timeSlot': _multiDayTimeSlot,
+            'walkDays': _selectedDates.map((d) {
+              final ds = d.toIso8601String().split('T')[0];
+              return {
+                'date': ds,
+                'timeSlot': _multiDayTimeSlot,
+                'startTime': _multiDaySameTime ? _multiDaySharedTime : _perDayTimes[ds],
+              };
             }).toList(),
           };
         } else {
@@ -404,15 +428,19 @@ class _BookingScreenState extends State<BookingScreen> {
   void _toggleDate(DateTime date) {
     setState(() {
       if (_isDateSelected(date)) {
+        final ds = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
         _selectedDates.removeWhere(
           (d) => d.year == date.year && d.month == date.month && d.day == date.day,
         );
+        _perDayTimes.remove(ds);
       } else {
         _selectedDates.add(date);
-        // ordenar por fecha
         _selectedDates.sort((a, b) => a.compareTo(b));
       }
+      // Resetear hora compartida al cambiar la selección de días
+      _multiDaySharedTime = null;
     });
+    if (_multiDayTimeSlot != null) _loadMultiDayBookings();
   }
 
   Widget _buildDurationChip({
@@ -923,10 +951,14 @@ class _BookingScreenState extends State<BookingScreen> {
                       Text('Horario para todos los días',
                           style: GardenText.h4.copyWith(color: textColor)),
                       const SizedBox(height: 4),
-                      Text('El mismo horario se aplicará a todos los días seleccionados.',
+                      Text('El mismo bloque horario se aplicará a todos los días seleccionados.',
                           style: TextStyle(color: subtextColor, fontSize: 12)),
                       const SizedBox(height: 12),
                       _buildMultiDaySlotSelector(textColor, subtextColor),
+                      if (_multiDayTimeSlot != null) ...[
+                        const SizedBox(height: 24),
+                        _buildMultiDayTimePicker(textColor, subtextColor, borderColor, surface),
+                      ],
                     ],
                   ],
                 ] else if (_selectedService == 'HOSPEDAJE') ...[
@@ -1200,7 +1232,14 @@ class _BookingScreenState extends State<BookingScreen> {
         final isSelected = _multiDayTimeSlot == s['key'];
         return Expanded(
           child: GestureDetector(
-            onTap: () => setState(() => _multiDayTimeSlot = s['key']),
+            onTap: () {
+              setState(() {
+                _multiDayTimeSlot = s['key'] as String;
+                _multiDaySharedTime = null;
+                _perDayTimes = {};
+              });
+              _loadMultiDayBookings();
+            },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
               margin: const EdgeInsets.only(right: 8),
@@ -1230,6 +1269,279 @@ class _BookingScreenState extends State<BookingScreen> {
           ),
         );
       }).toList(),
+    );
+  }
+
+  // ─── Multi-day time helpers ──────────────────────────────────────────────
+
+  /// Devuelve rangos horarios de un slot por clave
+  Map<String, dynamic> _slotForKey(String key) {
+    return switch (key) {
+      'MANANA' => {'start': '07:00', 'end': '12:00'},
+      'TARDE'  => {'start': '12:00', 'end': '18:00'},
+      _        => {'start': '18:00', 'end': '22:00'},
+    };
+  }
+
+  /// Carga reservas activas del cuidador para todas las fechas seleccionadas
+  Future<void> _loadMultiDayBookings() async {
+    if (_selectedDates.isEmpty) return;
+    setState(() => _loadingMultiDayTimes = true);
+    final combined = <Map<String, dynamic>>[];
+    try {
+      await Future.wait(_selectedDates.map((date) async {
+        final dateStr = date.toIso8601String().split('T')[0];
+        final uri = Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}/availability')
+            .replace(queryParameters: {'date': dateStr, 'service': 'PASEO'});
+        final response = await http.get(uri);
+        final body = jsonDecode(response.body);
+        if (body is Map && body['success'] == true) {
+          final d = body['data'];
+          if (d is Map && d['bookedPaseos'] is List) {
+            combined.addAll((d['bookedPaseos'] as List).cast<Map<String, dynamic>>());
+          }
+        }
+      }));
+    } catch (e) {
+      debugPrint('Error loading multi-day bookings: $e');
+    } finally {
+      if (mounted) setState(() {
+        _multiDayBookings = combined;
+        _loadingMultiDayTimes = false;
+      });
+    }
+  }
+
+  /// ¿Choca este horario en la fecha indicada? (null = cualquier fecha)
+  bool _isMultiDayTimeConflicting(String time, String? dateStr) {
+    if (_multiDayBookings.isEmpty) return false;
+    final parts = time.split(':');
+    final newStart = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+    final newEnd = newStart + _selectedDuration + 30; // +30 min descanso
+    for (final b in _multiDayBookings) {
+      if (dateStr != null && b['date'] != dateStr) continue;
+      final sp = (b['startTime'] as String).split(':');
+      final bStart = int.parse(sp[0]) * 60 + int.parse(sp[1]);
+      final bEnd = bStart + (b['duration'] as int? ?? 60) + 30;
+      if (newStart < bEnd && newEnd > bStart) return true;
+    }
+    return false;
+  }
+
+  /// Chips de hora para multi-día. dateStr=null → hora compartida; dateStr→ hora por día
+  Widget _buildMultiDayTimeChips(Map<String, dynamic> slot, String? dateStr) {
+    final startHour = int.parse((slot['start'] as String).split(':')[0]);
+    final endHour   = int.parse((slot['end']   as String).split(':')[0]);
+
+    final timeSlots = <String>[];
+    for (int h = startHour; h < endHour; h++) {
+      for (int m = 0; m < 60; m += 30) {
+        if (h * 60 + m + _selectedDuration + 30 <= endHour * 60) {
+          timeSlots.add('${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}');
+        }
+      }
+    }
+
+    final available = timeSlots.where((t) => !_isMultiDayTimeConflicting(t, dateStr)).toList();
+
+    if (available.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 4, bottom: 4),
+        child: Text(
+          'No hay horarios disponibles en este bloque',
+          style: TextStyle(
+            color: themeNotifier.isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary,
+            fontSize: 12,
+          ),
+        ),
+      );
+    }
+
+    final selectedTime = dateStr == null ? _multiDaySharedTime : _perDayTimes[dateStr];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: available.map((time) {
+        final isSelected = selectedTime == time;
+        return GestureDetector(
+          onTap: () => setState(() {
+            if (dateStr == null) {
+              _multiDaySharedTime = time;
+            } else {
+              _perDayTimes[dateStr] = time;
+            }
+          }),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? GardenColors.primary
+                  : themeNotifier.isDark
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : GardenColors.lightSurface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected
+                    ? GardenColors.primary
+                    : (themeNotifier.isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
+                width: isSelected ? 0 : 1,
+              ),
+            ),
+            child: Text(
+              time,
+              style: GardenText.metadata.copyWith(
+                color: isSelected
+                    ? Colors.white
+                    : themeNotifier.isDark
+                        ? GardenColors.darkTextPrimary
+                        : GardenColors.lightTextPrimary,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  /// Sección completa de selección de hora para modo multi-día
+  Widget _buildMultiDayTimePicker(Color textColor, Color subtextColor, Color borderColor, Color surface) {
+    if (_loadingMultiDayTimes) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary),
+        ),
+      );
+    }
+
+    final slot = _slotForKey(_multiDayTimeSlot!);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('Hora del paseo', style: GardenText.h4.copyWith(color: textColor)),
+            const Spacer(),
+            Text(
+              '* 30 min de descanso incluidos',
+              style: TextStyle(color: GardenColors.primary, fontSize: 10, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Toggle: misma hora / hora por día
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: themeNotifier.isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: borderColor),
+          ),
+          child: Row(
+            children: [
+              _buildTimeToggleTab('Misma hora', _multiDaySameTime, () {
+                setState(() {
+                  _multiDaySameTime = true;
+                  _perDayTimes = {};
+                });
+              }),
+              _buildTimeToggleTab('Hora por día', !_multiDaySameTime, () {
+                setState(() {
+                  _multiDaySameTime = false;
+                  _multiDaySharedTime = null;
+                });
+              }),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (_multiDaySameTime) ...[
+          Text(
+            'La misma hora se aplicará a todos los días seleccionados.',
+            style: TextStyle(color: subtextColor, fontSize: 12),
+          ),
+          const SizedBox(height: 10),
+          _buildMultiDayTimeChips(slot, null),
+        ] else ...[
+          Text(
+            'Selecciona la hora para cada día por separado.',
+            style: TextStyle(color: subtextColor, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          ..._selectedDates.map((d) {
+            const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+            final ds = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+            final picked = _perDayTimes[ds];
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '${d.day} ${months[d.month - 1]}',
+                      style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13),
+                    ),
+                    if (picked != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: GardenColors.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          picked,
+                          style: const TextStyle(
+                            color: GardenColors.primary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 8),
+                _buildMultiDayTimeChips(slot, ds),
+                const SizedBox(height: 16),
+              ],
+            );
+          }),
+        ],
+      ],
+    );
+  }
+
+  /// Tab del toggle "Misma hora / Hora por día"
+  Widget _buildTimeToggleTab(String label, bool isActive, VoidCallback onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isActive ? GardenColors.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isActive
+                    ? Colors.white
+                    : (themeNotifier.isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1530,6 +1842,16 @@ class _BookingScreenState extends State<BookingScreen> {
           if (_selectedService == 'PASEO' && _isMultiDay && _multiDayTimeSlot != null)
             _summaryRow(Icons.access_time, 'Horario',
                 _multiDayTimeSlot == 'MANANA' ? 'Mañana' : _multiDayTimeSlot == 'TARDE' ? 'Tarde' : 'Noche'),
+          if (_selectedService == 'PASEO' && _isMultiDay && _multiDaySameTime && _multiDaySharedTime != null)
+            _summaryRow(Icons.schedule, 'Hora', _multiDaySharedTime!),
+          if (_selectedService == 'PASEO' && _isMultiDay && !_multiDaySameTime && _perDayTimes.isNotEmpty)
+            _summaryRow(Icons.schedule, 'Horas',
+                _selectedDates.map((d) {
+                  final ds = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+                  const m = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+                  final t = _perDayTimes[ds] ?? '--:--';
+                  return '${d.day} ${m[d.month-1]}: $t';
+                }).join(' · ')),
           if (_selectedService == 'PASEO' && !_isMultiDay && _selectedStartTime != null)
             _summaryRow(Icons.access_time, 'Hora', _selectedStartTime!),
           const Divider(height: 24),
