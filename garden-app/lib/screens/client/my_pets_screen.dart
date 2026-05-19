@@ -446,6 +446,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
   }
 
   Future<String?> _uploadFile(List<int> bytes, String fileName) async {
+    if (widget.token.isEmpty) throw Exception('No hay sesión activa. Vuelve a iniciar sesión.');
     final uri = Uri.parse('${widget.baseUrl}/upload/pet-photo');
     final request = http.MultipartRequest('POST', uri);
     request.headers['Authorization'] = 'Bearer ${widget.token}';
@@ -453,12 +454,17 @@ class _PetFormSheetState extends State<_PetFormSheet> {
       'photo', bytes, filename: fileName,
       contentType: MediaType('image', 'jpeg'),
     ));
-    final res = await http.Response.fromStream(await request.send());
-    final data = jsonDecode(res.body);
+    final streamedRes = await request.send();
+    final res = await http.Response.fromStream(streamedRes);
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
     if (res.statusCode == 200 && data['success'] == true) {
       return data['data']['url'] as String;
     }
-    throw Exception(data['message'] ?? 'Error al subir archivo');
+    // Extrae el mensaje real del backend (formato: { error: { message: '...' } })
+    final errMsg = (data['error'] as Map<String, dynamic>?)?['message']
+        ?? data['message'] as String?
+        ?? 'Error ${res.statusCode} al subir archivo';
+    throw Exception(errMsg);
   }
 
   Future<void> _pickPhoto() async {
