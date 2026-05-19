@@ -711,10 +711,39 @@ export async function getCaregiverAvailability(
 
     // Aplicar horario predeterminado (o defaults absolutos) a fechas sin fila explícita
     const defaultSchedule = (profile?.defaultAvailabilitySchedule as any) || { hospedajeDefault: true };
+    const weekdaysEnabled = defaultSchedule.weekdays !== false;
+    const weekendsEnabled = defaultSchedule.weekends !== false;
+    const holidaysEnabled = defaultSchedule.holidays !== false;
+    // Feriados bolivianos (misma lista que usa la app del cuidador)
+    const bolivianHolidays = new Set([
+      '2025-01-01','2025-01-22','2025-02-17','2025-02-18','2025-04-18','2025-04-19',
+      '2025-05-01','2025-06-19','2025-06-21','2025-08-06','2025-10-12','2025-11-02',
+      '2025-12-25','2026-01-01','2026-01-22','2026-02-16','2026-02-17','2026-04-03',
+      '2026-04-04','2026-05-01','2026-06-11','2026-06-21','2026-08-06','2026-10-12',
+      '2026-11-02','2026-12-25',
+    ]);
+
     const cur = new Date(startDate);
     while (cur <= endDate) {
       const dStr = cur.toISOString().slice(0, 10);
       if (!datesWithExplicitRow.has(dStr)) {
+        const dayOfWeek = cur.getUTCDay(); // 0=domingo, 6=sábado
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const isHoliday = bolivianHolidays.has(dStr);
+
+        // Respetar los flags de tipo de día del schedule predeterminado del cuidador
+        const dayTypeEnabled =
+          (isHoliday && holidaysEnabled) ||
+          (!isHoliday && isWeekend && weekendsEnabled) ||
+          (!isHoliday && !isWeekend && weekdaysEnabled);
+
+        if (!dayTypeEnabled) {
+          // Este tipo de día está desactivado en el schedule del cuidador — bloquearlo
+          blockedDates.push(dStr);
+          cur.setDate(cur.getDate() + 1);
+          continue;
+        }
+
         if (defaultSchedule.hospedajeDefault !== false) {
           hospedajeDates.push(dStr);
         }
@@ -739,6 +768,7 @@ export async function getCaregiverAvailability(
       caregiverId,
       hospedajeCount: hospedajeDates.length,
       paseosCount: Object.keys(paseosByDate).length,
+      blockedDatesCount: blockedDates.length,
     });
     // 5. Fetch all active bookings (both types) to calculate real availability
     const expirationDate = new Date(Date.now() - 15 * 60 * 1000);

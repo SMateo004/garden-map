@@ -41,9 +41,11 @@ export function parseTimeBlocks(value: any): PaseoSlot[] {
 
     if (slots.length > 0) return slots;
 
-    // 1.1 Si enabled es true pero no logramos extraer ningún slot de arriba,
-    // es probable que sea legacy data o mal configurado. Asumimos todos habilitados con rangos por defecto.
-    if (value.enabled === true) {
+    // 1.1 Si enabled es true Y no hay configuración de slots en absoluto (legacy data),
+    // asumimos todos los bloques habilitados con rangos por defecto.
+    // No aplicar si los slots existen pero tienen enabled:false (día configurado pero todo desactivado).
+    const hasAnySlotConfig = Object.values(s).some((v) => v !== null && v !== undefined);
+    if (value.enabled === true && !hasAnySlotConfig) {
         return [
             { slot: 'MANANA', enabled: true, start: '08:00', end: '11:00' },
             { slot: 'TARDE', enabled: true, start: '13:00', end: '17:00' },
