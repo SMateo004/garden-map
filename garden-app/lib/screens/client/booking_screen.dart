@@ -66,6 +66,14 @@ class _BookingScreenState extends State<BookingScreen> {
   bool _loadingSlots = false;
   String? _selectedStartTime; // hora específica dentro del slot, ej: "09:00"
 
+  /// Start date of the booking (first selected date or single-day date)
+  DateTime? get _bookingStartDate {
+    if (_selectedService == 'PASEO' && _isMultiDay && _selectedDates.isNotEmpty) {
+      return _selectedDates.reduce((a, b) => a.isBefore(b) ? a : b);
+    }
+    return _selectedDate;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -446,6 +454,11 @@ class _BookingScreenState extends State<BookingScreen> {
       }
       // Resetear hora compartida al cambiar la selección de días
       _multiDaySharedTime = null;
+      // Clear M&G date if it's no longer before the earliest selected booking date
+      if (_mgDate != null && _selectedDates.isNotEmpty) {
+        final earliest = _selectedDates.reduce((a, b) => a.isBefore(b) ? a : b);
+        if (!_mgDate!.isBefore(earliest)) _mgDate = null;
+      }
     });
   }
 
@@ -869,7 +882,13 @@ class _BookingScreenState extends State<BookingScreen> {
 
                           return GestureDetector(
                             onTap: isDayUnavailable ? null : () async {
-                              setState(() => _selectedDate = date);
+                              setState(() {
+                                _selectedDate = date;
+                                // Clear M&G date if it's no longer before the booking date
+                                if (_mgDate != null && !_mgDate!.isBefore(date)) {
+                                  _mgDate = null;
+                                }
+                              });
                               await _loadAvailableSlots(date);
                             },
                             child: AnimatedContainer(
@@ -1613,7 +1632,7 @@ class _BookingScreenState extends State<BookingScreen> {
           children: [
             Text('Hora del paseo', style: GardenText.h4.copyWith(color: textColor)),
             const Spacer(),
-            Text(
+            const Text(
               '* 30 min de descanso incluidos',
               style: TextStyle(color: GardenColors.primary, fontSize: 10, fontWeight: FontWeight.w500),
             ),
@@ -1809,7 +1828,7 @@ class _BookingScreenState extends State<BookingScreen> {
       child: Center(
         child: Text(
           (pet['name'] as String? ?? 'P')[0].toUpperCase(),
-          style: TextStyle(
+          style: const TextStyle(
             color: GardenColors.primary,
             fontWeight: FontWeight.w900,
             fontSize: 20,
@@ -1819,7 +1838,37 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
+  /// Returns true if the given hour:minute slot on the M&G date conflicts with a caregiver booking
+  bool _isMGSlotConflicting(int hour, int minute) {
+    if (_mgDate == null) return false;
+    final mgDateStr =
+        '${_mgDate!.year}-${_mgDate!.month.toString().padLeft(2, '0')}-${_mgDate!.day.toString().padLeft(2, '0')}';
+    final slotMin = hour * 60 + minute;
+    for (final b in _multiDayRangeBookings) {
+      final bDate = (b['date'] ?? b['walkDate'] ?? '') as String;
+      if (!bDate.startsWith(mgDateStr)) continue;
+      final st = (b['startTime'] ?? '') as String;
+      if (st.isEmpty) continue;
+      final parts = st.split(':');
+      if (parts.length < 2) continue;
+      final startMin = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+      final dur = (b['duration'] as num?)?.toInt() ?? 60;
+      if (slotMin >= startMin - 30 && slotMin < startMin + dur) return true;
+    }
+    return false;
+  }
+
+  /// Friendly date label like "Lun, 26 may 2026"
+  String _formatMGDate(DateTime d) {
+    const weekdays = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    return '${weekdays[d.weekday - 1]}, ${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
   Widget _buildMeetAndGreetSection(Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    final isDark = themeNotifier.isDark;
+    final bookingStart = _bookingStartDate;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1830,6 +1879,7 @@ class _BookingScreenState extends State<BookingScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Header row ─────────────────────────────────────────────────
           Row(
             children: [
               const Text('🐾', style: TextStyle(fontSize: 20)),
@@ -1838,8 +1888,10 @@ class _BookingScreenState extends State<BookingScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Meet & Greet', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 15)),
-                    Text('Conoce al cuidador antes del servicio', style: TextStyle(color: subtextColor, fontSize: 12)),
+                    Text('Meet & Greet',
+                        style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 15)),
+                    Text('Conoce al cuidador antes del servicio',
+                        style: TextStyle(color: subtextColor, fontSize: 12)),
                   ],
                 ),
               ),
@@ -1850,84 +1902,190 @@ class _BookingScreenState extends State<BookingScreen> {
               ),
             ],
           ),
+
           if (_includeMG) ...[
             const SizedBox(height: 16),
-            // Date picker
+
+            // ── 1. Date picker ──────────────────────────────────────────
             GestureDetector(
               onTap: () async {
                 final now = DateTime.now();
+                // lastDate = day before booking start, or now+60 if no booking date yet
+                final lastDate = bookingStart != null
+                    ? bookingStart.subtract(const Duration(days: 1))
+                    : now.add(const Duration(days: 60));
+                // If lastDate is before today there's nothing to pick
+                if (lastDate.isBefore(now)) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('El M&G debe ser antes de la fecha de reserva. Selecciona primero la fecha del servicio.'),
+                    ),
+                  );
+                  return;
+                }
+                final initialDate = (_mgDate != null && _mgDate!.isBefore(lastDate) && !_mgDate!.isBefore(now))
+                    ? _mgDate!
+                    : now.add(const Duration(days: 1)).isAfter(lastDate)
+                        ? lastDate
+                        : now.add(const Duration(days: 1));
                 final picked = await showDatePicker(
                   context: context,
-                  initialDate: _mgDate ?? now.add(const Duration(days: 1)),
+                  initialDate: initialDate,
                   firstDate: now,
-                  lastDate: now.add(const Duration(days: 60)),
-                  builder: (ctx, child) => Theme(
-                    data: Theme.of(ctx).copyWith(
-                      colorScheme: const ColorScheme.dark(primary: GardenColors.primary),
-                    ),
-                    child: child!,
-                  ),
+                  lastDate: lastDate,
+                  builder: (ctx, child) {
+                    return Theme(
+                      data: (isDark ? ThemeData.dark() : ThemeData.light()).copyWith(
+                        colorScheme: isDark
+                            ? const ColorScheme.dark(
+                                primary: GardenColors.primary,
+                                onPrimary: Colors.white,
+                              )
+                            : const ColorScheme.light(
+                                primary: GardenColors.primary,
+                                onPrimary: Colors.white,
+                                surface: Colors.white,
+                                onSurface: Colors.black87,
+                              ),
+                      ),
+                      child: child!,
+                    );
+                  },
                 );
                 if (picked != null) setState(() => _mgDate = picked);
               },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: borderColor),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.calendar_today, size: 16, color: GardenColors.primary),
-                    const SizedBox(width: 10),
-                    Text(
-                      _mgDate != null
-                          ? '${_mgDate!.day}/${_mgDate!.month}/${_mgDate!.year}'
-                          : 'Seleccionar fecha',
-                      style: TextStyle(color: _mgDate != null ? textColor : subtextColor, fontSize: 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: borderColor),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ],
-                ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_today, size: 16, color: GardenColors.primary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _mgDate != null ? _formatMGDate(_mgDate!) : 'Seleccionar fecha',
+                            style: TextStyle(
+                              color: _mgDate != null ? textColor : subtextColor,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        if (_mgDate != null)
+                          GestureDetector(
+                            onTap: () => setState(() => _mgDate = null),
+                            child: Icon(Icons.close, size: 16, color: subtextColor),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (bookingStart != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4, left: 4),
+                      child: Text(
+                        'Debe ser antes del ${_formatMGDate(bookingStart)}',
+                        style: TextStyle(color: subtextColor, fontSize: 11),
+                      ),
+                    ),
+                ],
               ),
             ),
             const SizedBox(height: 10),
-            // Time picker
-            GestureDetector(
-              onTap: () async {
-                final picked = await showTimePicker(
-                  context: context,
-                  initialTime: _mgTime ?? const TimeOfDay(hour: 10, minute: 0),
-                  builder: (ctx, child) => Theme(
-                    data: Theme.of(ctx).copyWith(
-                      colorScheme: const ColorScheme.dark(primary: GardenColors.primary),
-                    ),
-                    child: child!,
-                  ),
-                );
-                if (picked != null) setState(() => _mgTime = picked);
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: borderColor),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
+
+            // ── 2. Inline time chips (07:00–21:00, 30-min steps) ───────
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Icon(Icons.access_time, size: 16, color: GardenColors.primary),
-                    const SizedBox(width: 10),
+                    const Icon(Icons.access_time, size: 16, color: GardenColors.primary),
+                    const SizedBox(width: 8),
                     Text(
                       _mgTime != null
                           ? '${_mgTime!.hour.toString().padLeft(2, '0')}:${_mgTime!.minute.toString().padLeft(2, '0')}'
                           : 'Seleccionar hora',
-                      style: TextStyle(color: _mgTime != null ? textColor : subtextColor, fontSize: 14),
+                      style: TextStyle(
+                        color: _mgTime != null ? textColor : subtextColor,
+                        fontSize: 14,
+                      ),
                     ),
                   ],
                 ),
-              ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (int h = 7; h <= 21; h++)
+                      for (int m = 0; m < 60; m += 30) ...[
+                        if (h == 21 && m > 0) ...[],
+                        if (!(h == 21 && m > 0))
+                          Builder(builder: (_) {
+                            final isConflicting = _isMGSlotConflicting(h, m);
+                            final isSelected = _mgTime != null &&
+                                _mgTime!.hour == h &&
+                                _mgTime!.minute == m;
+                            final label =
+                                '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+                            return GestureDetector(
+                              onTap: isConflicting
+                                  ? null
+                                  : () => setState(() =>
+                                      _mgTime = TimeOfDay(hour: h, minute: m)),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isConflicting
+                                      ? (isDark
+                                          ? Colors.white.withValues(alpha: 0.04)
+                                          : Colors.grey.withValues(alpha: 0.08))
+                                      : isSelected
+                                          ? GardenColors.primary
+                                          : (isDark
+                                              ? Colors.white.withValues(alpha: 0.06)
+                                              : GardenColors.lightSurface),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: isConflicting
+                                        ? borderColor.withValues(alpha: 0.35)
+                                        : isSelected
+                                            ? GardenColors.primary
+                                            : borderColor,
+                                    width: isSelected ? 0 : 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  label,
+                                  style: TextStyle(
+                                    color: isConflicting
+                                        ? subtextColor.withValues(alpha: 0.4)
+                                        : isSelected
+                                            ? Colors.white
+                                            : textColor,
+                                    fontSize: 12,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w800
+                                        : FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                      ],
+                  ],
+                ),
+              ],
             ),
             const SizedBox(height: 10),
-            // Meeting point with autocomplete
+
+            // ── 3. Meeting point with improved suggestions ──────────────
             TextField(
               controller: _mgPlaceCtrl,
               style: TextStyle(color: textColor, fontSize: 14),
@@ -1935,8 +2093,22 @@ class _BookingScreenState extends State<BookingScreen> {
               decoration: InputDecoration(
                 hintText: 'Punto de encuentro',
                 hintStyle: TextStyle(color: subtextColor, fontSize: 13),
-                prefixIcon: Icon(Icons.location_on, color: GardenColors.primary, size: 18),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                prefixIcon: const Icon(Icons.location_on, color: GardenColors.primary, size: 18),
+                suffixIcon: _mgPlaceCtrl.text.isNotEmpty
+                    ? IconButton(
+                        icon: Icon(Icons.close, size: 16, color: subtextColor),
+                        onPressed: () {
+                          setState(() {
+                            _mgPlaceCtrl.clear();
+                            _mgLocationSuggestions = [];
+                            _mgSelectedLat = null;
+                            _mgSelectedLng = null;
+                          });
+                        },
+                      )
+                    : null,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: borderColor),
@@ -1949,7 +2121,7 @@ class _BookingScreenState extends State<BookingScreen> {
             ),
             if (_mgLocationSuggestions.isNotEmpty)
               Container(
-                constraints: const BoxConstraints(maxHeight: 180),
+                constraints: const BoxConstraints(maxHeight: 200),
                 margin: const EdgeInsets.only(top: 4),
                 decoration: BoxDecoration(
                   border: Border.all(color: borderColor),
@@ -1961,17 +2133,58 @@ class _BookingScreenState extends State<BookingScreen> {
                   itemCount: _mgLocationSuggestions.length,
                   itemBuilder: (_, i) {
                     final s = _mgLocationSuggestions[i];
-                    return ListTile(
-                      dense: true,
-                      title: Text(s['display_name'] ?? '', style: TextStyle(color: textColor, fontSize: 12)),
+                    final fullName = (s['display_name'] ?? '') as String;
+                    final segments = fullName.split(',');
+                    final primaryName = segments.first.trim();
+                    final secondaryAddr = segments.length > 1
+                        ? segments.sublist(1).join(',').trim()
+                        : '';
+                    return InkWell(
                       onTap: () {
                         setState(() {
-                          _mgPlaceCtrl.text = s['display_name'] ?? '';
-                          _mgSelectedLat = double.tryParse(s['lat']?.toString() ?? '');
-                          _mgSelectedLng = double.tryParse(s['lon']?.toString() ?? '');
+                          _mgPlaceCtrl.text = fullName;
+                          _mgSelectedLat =
+                              double.tryParse(s['lat']?.toString() ?? '');
+                          _mgSelectedLng =
+                              double.tryParse(s['lon']?.toString() ?? '');
                           _mgLocationSuggestions = [];
                         });
                       },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.place,
+                                size: 18, color: GardenColors.primary),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    primaryName,
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  if (secondaryAddr.isNotEmpty)
+                                    Text(
+                                      secondaryAddr,
+                                      style: TextStyle(
+                                          color: subtextColor, fontSize: 11),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     );
                   },
                 ),
