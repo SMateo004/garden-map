@@ -364,58 +364,20 @@ class _LandingState extends State<LandingScreen> {
   }
 
   // ── Header ──────────────────────────────────────────────────────────────────
-  Widget _sliverHeader(BuildContext ctx, bool mobile, _P pal) => SliverAppBar(
-    backgroundColor: pal.bg,
-    elevation: 0,
-    scrolledUnderElevation: 0,
-    pinned: true,
-    toolbarHeight: 64,
-    automaticallyImplyLeading: false,
-    actions: mobile
-        ? [
-            Builder(builder: (c) => Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: GestureDetector(
-                onTap: () => Scaffold.of(c).openEndDrawer(),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: pal.border),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(Icons.menu_rounded, color: pal.textPri, size: 22),
-                ),
-              ),
-            )),
-          ]
-        : [
-            _HeaderLink('¿Quiénes somos?', () => context.go('/about'), pal),
-            const SizedBox(width: 4),
-            _HeaderLink('Conviértete en cuidador', () => context.go('/become-caregiver'), pal),
-            const SizedBox(width: 4),
-            _HeaderLink('Iniciar sesión', () => context.go('/login'), pal),
-            const SizedBox(width: 16),
-            Container(width: 1, height: 22, color: pal.border),
-            const SizedBox(width: 16),
-            Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: _PrimaryBtn('Registrarse', () => context.go('/register'), w: 140, h: 40),
-            ),
-          ],
-    // Sin flexibleSpace ni SafeArea interno — SliverAppBar ya maneja el top padding
-    title: Padding(
-      padding: const EdgeInsets.only(left: 16),
-      child: GestureDetector(
-        onTap: () => context.go('/'),
-        child: Image.asset(pal.logo, height: 52),
-      ),
-    ),
-    titleSpacing: 0,
-    bottom: PreferredSize(
-      preferredSize: const Size.fromHeight(1),
-      child: Container(height: 1, color: pal.border),
-    ),
-  );
+  Widget _sliverHeader(BuildContext ctx, bool mobile, _P pal) =>
+      SliverPersistentHeader(
+        pinned: true,
+        delegate: _HeaderDelegate(
+          mobile: mobile,
+          pal: pal,
+          onLogoTap: () => context.go('/'),
+          onOpenMenu: () => Scaffold.of(ctx).openEndDrawer(),
+          onAbout: () => context.go('/about'),
+          onBecome: () => context.go('/become-caregiver'),
+          onLogin: () => context.go('/login'),
+          onRegister: () => context.go('/register'),
+        ),
+      );
 
   // ── Hero ────────────────────────────────────────────────────────────────────
   Widget _sliverHero(bool mobile) => SliverToBoxAdapter(
@@ -1763,6 +1725,86 @@ class _ContactItem extends StatelessWidget {
       Text(text, style: TextStyle(color: pal.textSec, fontSize: 13)),
     ]),
   );
+}
+
+// ─── Header delegate (SliverPersistentHeader — sin AppBar magic) ──────────────
+class _HeaderDelegate extends SliverPersistentHeaderDelegate {
+  final bool mobile;
+  final _P pal;
+  final VoidCallback onLogoTap;
+  final VoidCallback onOpenMenu;
+  final VoidCallback onAbout;
+  final VoidCallback onBecome;
+  final VoidCallback onLogin;
+  final VoidCallback onRegister;
+
+  const _HeaderDelegate({
+    required this.mobile,
+    required this.pal,
+    required this.onLogoTap,
+    required this.onOpenMenu,
+    required this.onAbout,
+    required this.onBecome,
+    required this.onLogin,
+    required this.onRegister,
+  });
+
+  @override double get minExtent => 65;
+  @override double get maxExtent => 65;
+  @override bool shouldRebuild(_HeaderDelegate old) =>
+      old.mobile != mobile || old.pal.dark != pal.dark;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: pal.bg,
+      child: Column(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  // Logo
+                  GestureDetector(
+                    onTap: onLogoTap,
+                    child: Image.asset(pal.logo, height: 52),
+                  ),
+                  const Spacer(),
+                  if (mobile)
+                    GestureDetector(
+                      onTap: onOpenMenu,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: pal.border),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(Icons.menu_rounded, color: pal.textPri, size: 22),
+                      ),
+                    )
+                  else ...[
+                    _HeaderLink('¿Quiénes somos?', onAbout, pal),
+                    const SizedBox(width: 4),
+                    _HeaderLink('Conviértete en cuidador', onBecome, pal),
+                    const SizedBox(width: 4),
+                    _HeaderLink('Iniciar sesión', onLogin, pal),
+                    const SizedBox(width: 16),
+                    Container(width: 1, height: 22, color: pal.border),
+                    const SizedBox(width: 16),
+                    _PrimaryBtn('Registrarse', onRegister, w: 140, h: 40),
+                    const SizedBox(width: 8),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          // Bottom border
+          Container(height: 1, color: pal.border),
+        ],
+      ),
+    );
+  }
 }
 
 // ─── Mobile drawer ────────────────────────────────────────────────────────────
