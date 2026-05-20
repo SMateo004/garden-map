@@ -40,6 +40,7 @@ import 'screens/onboarding/mobile_service_selector_screen.dart';
 import 'screens/onboarding/maintenance_screen.dart';
 import 'screens/caregiver/mobile_verify_screen.dart';
 import 'screens/legal/legal_screen.dart';
+import 'screens/caregiver/professional_register_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -401,6 +402,11 @@ final GoRouter _router = GoRouter(
       path: '/terms',
       name: 'terms',
       builder: (context, state) => const TermsOfServiceScreen(),
+    ),
+    GoRoute(
+      path: '/sign-in/profesional',
+      name: 'professionalRegister',
+      builder: (context, state) => const ProfessionalRegisterScreen(),
     ),
   ],
 );

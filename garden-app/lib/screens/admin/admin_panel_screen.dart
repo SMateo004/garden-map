@@ -579,6 +579,27 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     }
   }
 
+  Future<void> _toggleProfessional(String caregiverId, bool currentValue) async {
+    try {
+      final response = await http.patch(
+        Uri.parse('$_baseUrl/admin/caregivers/$caregiverId/toggle-professional'),
+        headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadCaregivers();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(!currentValue ? 'Cuidador marcado como profesional' : 'Flag profesional removido'),
+            backgroundColor: !currentValue ? GardenColors.primary : GardenColors.warning,
+          ));
+        }
+      }
+    } catch (e) {
+      debugPrint('toggleProfessional error: $e');
+    }
+  }
+
   Widget _idBadge(String label, String value) {
     final isDark = themeNotifier.isDark;
     return Container(
@@ -966,6 +987,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     final status = caregiver['status'] as String? ?? '';
     final canReview = status == 'PENDING_REVIEW' || status == 'NEEDS_REVISION' || status == 'DRAFT';
     final isApproved = status == 'APPROVED';
+    final isProfessional = caregiver['isProfessional'] == true;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -973,7 +995,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       decoration: BoxDecoration(
         color: surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor),
+        border: Border.all(color: isProfessional ? GardenColors.primary.withValues(alpha: 0.4) : borderColor),
       ),
       child: Column(
         children: [
@@ -989,7 +1011,21 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(caregiver['fullName'] ?? '—', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                    Row(children: [
+                      Flexible(child: Text(caregiver['fullName'] ?? '—', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15))),
+                      if (isProfessional) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: GardenColors.primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4)),
+                          ),
+                          child: const Text('Profesional', style: TextStyle(color: GardenColors.primary, fontSize: 10, fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ]),
                     Text(caregiver['email'] ?? '—', style: TextStyle(color: subtextColor, fontSize: 12)),
                   ],
                 ),
@@ -1046,6 +1082,22 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 ),
                 const SizedBox(width: 8),
               ],
+              IconButton(
+                icon: Icon(
+                  isProfessional ? Icons.workspace_premium : Icons.workspace_premium_outlined,
+                  size: 20,
+                  color: isProfessional ? GardenColors.primary : subtextColor,
+                ),
+                tooltip: isProfessional ? 'Quitar profesional' : 'Marcar como profesional',
+                style: IconButton.styleFrom(
+                  side: BorderSide(color: isProfessional ? GardenColors.primary.withValues(alpha: 0.5) : borderColor),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  minimumSize: const Size(42, 38),
+                  maximumSize: const Size(42, 38),
+                ),
+                onPressed: () => _toggleProfessional(caregiver['id'] as String, isProfessional),
+              ),
+              const SizedBox(width: 8),
               IconButton(
                 icon: const Icon(Icons.visibility_outlined, size: 20),
                 style: IconButton.styleFrom(

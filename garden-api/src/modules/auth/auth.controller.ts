@@ -721,3 +721,29 @@ export const resetPassword = asyncHandler(async (req: Request, res: Response) =>
   await passwordResetService.resetPassword(token, password);
   res.json({ success: true, message: '¡Contraseña restablecida! Ahora puedes iniciar sesión.' });
 });
+
+/** POST /api/auth/validate-professional-code — verifica el código de registro profesional sin crear nada. */
+export const validateProfessionalCode = asyncHandler(async (req: Request, res: Response) => {
+  const { code } = req.body ?? {};
+  if (!code || typeof code !== 'string') {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_CODE', message: 'Código requerido.' } });
+  }
+  const valid = await authService.validateProfessionalCode(code);
+  if (!valid) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_PROFESSIONAL_CODE', message: 'Código de registro profesional inválido.' } });
+  }
+  return res.json({ success: true, data: { valid: true } });
+});
+
+/** POST /api/auth/register-professional — registro de cuidador profesional con código. */
+export const registerProfessional = asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body ?? {};
+  if (!body.code || typeof body.code !== 'string') {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_CODE', message: 'Código de registro requerido.' } });
+  }
+  if (!body.email || !body.password || !body.firstName || !body.lastName || !body.phone) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_FIELDS', message: 'Faltan campos obligatorios.' } });
+  }
+  const result = await authService.registerProfessional(body);
+  return res.status(201).json({ success: true, data: result });
+});

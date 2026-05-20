@@ -132,6 +132,12 @@ router.post('/social/register-client', registerLimiter, socialRegisterClient);
 
 // ── Password Reset ────────────────────────────────────────────────────────────
 /** POST /api/auth/forgot-password — body: { email }. Sends reset link. Always 200. */
+/** POST /api/auth/validate-professional-code — verifica código sin crear cuenta. Body: { code }. */
+router.post('/validate-professional-code', authController.validateProfessionalCode);
+
+/** POST /api/auth/register-professional — registro profesional con código de admin. */
+router.post('/register-professional', registerLimiter, authController.registerProfessional);
+
 router.post('/forgot-password', passwordResetLimiter, authController.forgotPassword);
 
 /** GET /api/auth/validate-reset-token?token=<raw> — validates token before showing reset form. */

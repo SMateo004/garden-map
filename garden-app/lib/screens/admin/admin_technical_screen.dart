@@ -361,6 +361,10 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                     title: 'Modo mantenimiento', subtitle: 'Muestra aviso a todos los usuarios',
                     settingKey: 'maintenanceMode', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
+                  _buildStringTile(icon: Icons.workspace_premium_rounded, iconColor: Colors.indigo,
+                    title: 'Código cuidador profesional', subtitle: 'Código para registro de cuidadores profesionales',
+                    settingKey: 'professionalRegistrationCode', surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
                 ]),
                 const SizedBox(height: 16),
 
@@ -970,6 +974,118 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
             onPressed: () {
               final parsed = num.tryParse(ctrl.text.trim());
               if (parsed != null && parsed >= 0) Navigator.pop(ctx, parsed);
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (result != null) await _updateSetting(settingKey, result);
+  }
+
+  Widget _buildStringTile({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required String settingKey,
+    required Color surface,
+    required Color textColor,
+    required Color subtextColor,
+    required Color borderColor,
+  }) {
+    final value = (_settings[settingKey] ?? '').toString();
+    final display = value.isEmpty ? '—' : value;
+
+    return ListTile(
+      leading: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: iconColor.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: iconColor, size: 18),
+      ),
+      title: Text(title,
+          style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
+      subtitle: Text(subtitle, style: TextStyle(color: subtextColor, fontSize: 11)),
+      trailing: GestureDetector(
+        onTap: () => _showStringDialog(settingKey, title, value, textColor, subtextColor, surface, borderColor),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: iconColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: iconColor.withValues(alpha: 0.3)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 100),
+              child: Text(display,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: iconColor, fontSize: 13, fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.edit_rounded, color: iconColor.withValues(alpha: 0.6), size: 13),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showStringDialog(
+    String settingKey,
+    String title,
+    String currentValue,
+    Color textColor,
+    Color subtextColor,
+    Color surface,
+    Color borderColor,
+  ) async {
+    final ctrl = TextEditingController(text: currentValue);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(title, style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          if (currentValue.isNotEmpty)
+            Text('Valor actual: $currentValue',
+                style: TextStyle(color: subtextColor, fontSize: 12)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: ctrl,
+            autofocus: true,
+            style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w600),
+            decoration: InputDecoration(
+              hintText: 'Ingrese el código...',
+              hintStyle: TextStyle(color: subtextColor.withValues(alpha: 0.6)),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: borderColor)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: GardenColors.primary, width: 2)),
+              filled: true,
+              fillColor: GardenColors.primary.withValues(alpha: 0.05),
+            ),
+          ),
+        ]),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancelar', style: TextStyle(color: subtextColor)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: GardenColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              final trimmed = ctrl.text.trim();
+              Navigator.pop(ctx, trimmed);
             },
             child: const Text('Guardar'),
           ),

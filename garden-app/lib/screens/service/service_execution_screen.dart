@@ -700,22 +700,75 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           border: Border(top: BorderSide(color: borderColor)),
           boxShadow: GardenShadows.elevated,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            GardenButton(
-              label: _isProcessing ? 'Iniciando...' : (isPaseo ? '🦮  Iniciar paseo' : '🏠  Iniciar hospedaje'),
-              loading: _isProcessing,
-              color: isPaseo ? GardenColors.forest : GardenColors.primary,
-              onPressed: _startService,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'El pago en escrow se liberará al finalizar',
-              style: TextStyle(color: subtextColor, fontSize: 11),
-              textAlign: TextAlign.center,
-            ),
-          ],
+        child: Builder(
+          builder: (context) {
+            final blockReason = _getStartServiceBlockReason();
+            final isBlocked = blockReason != null;
+            final isWebNonPro = kIsWeb && !_caregiverIsProfessional;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isBlocked) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: isWebNonPro
+                          ? GardenColors.primary.withValues(alpha: 0.10)
+                          : GardenColors.warning.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isWebNonPro
+                            ? GardenColors.primary.withValues(alpha: 0.3)
+                            : GardenColors.warning.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(children: [
+                      Icon(
+                        isWebNonPro ? Icons.phone_android_rounded : Icons.info_outline_rounded,
+                        size: 16,
+                        color: isWebNonPro ? GardenColors.primary : GardenColors.warning,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(
+                        blockReason,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isWebNonPro ? GardenColors.primary : GardenColors.warning,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      )),
+                    ]),
+                  ),
+                ],
+                GardenButton(
+                  label: _isProcessing ? 'Iniciando...' : (isPaseo ? '🦮  Iniciar paseo' : '🏠  Iniciar hospedaje'),
+                  loading: _isProcessing,
+                  color: isBlocked
+                      ? (isDark ? GardenColors.darkBorder : GardenColors.lightBorder)
+                      : (isPaseo ? GardenColors.forest : GardenColors.primary),
+                  onPressed: isBlocked ? () {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(blockReason!),
+                      backgroundColor: isWebNonPro ? GardenColors.primary : GardenColors.warning,
+                      duration: const Duration(seconds: 4),
+                    ));
+                  } : _startService,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isBlocked && !isWebNonPro
+                      ? blockReason!
+                      : 'El pago en escrow se liberará al finalizar',
+                  style: TextStyle(color: subtextColor, fontSize: 11),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -2564,6 +2617,87 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         ),
       ),
     );
+  }
+
+  // --- RESTRICCIONES PARA INICIAR SERVICIO ---
+
+  /// Devuelve true si el cuidador es profesional.
+  /// Lee isProfessional del booking.caregiver o de SharedPreferences como fallback.
+  bool get _caregiverIsProfessional {
+    // Intentar leer desde los datos de la reserva (caregiver profile embebido)
+    final caregiverData = _booking?['caregiver'] as Map<String, dynamic>?;
+    if (caregiverData != null && caregiverData.containsKey('isProfessional')) {
+      return caregiverData['isProfessional'] == true;
+    }
+    // Fallback: leer del nivel superior del booking si viene aplanado
+    return _booking?['isProfessional'] == true;
+  }
+
+  /// Retorna null si se puede iniciar, o un mensaje de error si no.
+  String? _getStartServiceBlockReason() {
+    // 1. Web + no profesional
+    if (kIsWeb && !_caregiverIsProfessional) {
+      return 'Para iniciar el servicio ve a tu teléfono';
+    }
+
+    final now = DateTime.now();
+
+    // 2. Verificar que la fecha de hoy coincida con la fecha de la reserva
+    final serviceType = _booking?['serviceType'] as String? ?? '';
+    DateTime? bookingDate;
+    if (serviceType == 'PASEO') {
+      final walkDateStr = _booking?['walkDate'] as String?;
+      if (walkDateStr != null) {
+        bookingDate = DateTime.tryParse(walkDateStr);
+      }
+    } else {
+      // HOSPEDAJE: usar startDate
+      final startDateStr = _booking?['startDate'] as String?;
+      if (startDateStr != null) {
+        bookingDate = DateTime.tryParse(startDateStr);
+      }
+    }
+
+    if (bookingDate != null) {
+      final today = DateTime(now.year, now.month, now.day);
+      final bookingDay = DateTime(bookingDate.year, bookingDate.month, bookingDate.day);
+      if (today != bookingDay) {
+        final diff = bookingDay.difference(today).inDays;
+        if (diff > 0) {
+          return 'El servicio es en $diff día${diff == 1 ? '' : 's'}. Podrás iniciarlo el día del servicio.';
+        } else {
+          return 'La fecha del servicio ya pasó. Contacta a soporte.';
+        }
+      }
+    }
+
+    // 3. Verificar ventana de ±30 minutos del slot (solo PASEO)
+    if (serviceType == 'PASEO') {
+      final timeSlot = _booking?['timeSlot'] as String?;
+      if (timeSlot != null) {
+        int? slotHour;
+        switch (timeSlot) {
+          case 'MANANA': slotHour = 8; break;
+          case 'TARDE': slotHour = 14; break;
+          case 'NOCHE': slotHour = 19; break;
+        }
+        if (slotHour != null) {
+          final slotStart = DateTime(now.year, now.month, now.day, slotHour, 0);
+          final windowStart = slotStart.subtract(const Duration(minutes: 30));
+          final windowEnd = slotStart.add(const Duration(minutes: 30));
+          if (now.isBefore(windowStart)) {
+            final minutesLeft = windowStart.difference(now).inMinutes;
+            final slotName = timeSlot == 'MANANA' ? 'Mañana (8:00)' : timeSlot == 'TARDE' ? 'Tarde (14:00)' : 'Noche (19:00)';
+            return 'Podrás iniciar en $minutesLeft min. La ventana para el turno $slotName abre a las ${windowStart.hour.toString().padLeft(2, '0')}:${windowStart.minute.toString().padLeft(2, '0')}.';
+          }
+          if (now.isAfter(windowEnd)) {
+            return 'La ventana de inicio para este turno ya cerró. Contacta a soporte si el servicio aún debe realizarse.';
+          }
+        }
+      }
+    }
+
+    return null; // Sin restricciones
   }
 
   // --- LOGICA DE ACCIONES ---

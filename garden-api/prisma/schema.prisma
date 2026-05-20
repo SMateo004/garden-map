@@ -164,6 +164,8 @@ model CaregiverProfile {
   serviceDetails                  Json?
   /// Checklist items when admin requests revision (e.g. "Foto borrosa", "Documento no legible")
   reviewChecklist                 Json?              @db.JsonB
+  /// true = cuidador profesional registrado con código de admin (omite verificación CI, aprobado automáticamente)
+  isProfessional                  Boolean            @default(false)
   availability                    Availability[]
   bookings                        Booking[]          @relation("CaregiverBookings")
   user                            User               @relation(fields: [userId], references: [id], onDelete: Cascade)

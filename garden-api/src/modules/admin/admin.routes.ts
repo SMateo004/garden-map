@@ -30,6 +30,9 @@ router.patch('/caregivers/:id/activate', adminController.activateCaregiver);
 /** DELETE /api/admin/caregivers/:id — absolute delete (removes User + Profile + all). */
 router.delete('/caregivers/:id', adminController.deleteCaregiver);
 
+/** PATCH /api/admin/caregivers/:id/toggle-professional — assign/remove professional flag. */
+router.patch('/caregivers/:id/toggle-professional', adminController.toggleProfessional);
+
 /** Manually verify caregiver email. */
 router.patch('/caregivers/:id/verify-email', adminController.verifyEmail);
 

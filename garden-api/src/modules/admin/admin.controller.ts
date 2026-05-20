@@ -94,6 +94,12 @@ export const toggleVerify = asyncHandler(async (req: Request, res: Response) => 
   res.json({ success: true, data: { caregiver: result } });
 });
 
+/** PATCH /api/admin/caregivers/:id/toggle-professional — toggle isProfessional flag. */
+export const toggleProfessional = asyncHandler(async (req: Request, res: Response) => {
+  const result = await adminService.toggleProfessional(req.params.id!, req.user!.userId);
+  res.json({ success: true, data: result });
+});
+
 /** PATCH /api/admin/caregivers/:id/unlock-verification — reset identity verification lockout. */
 export const unlockVerification = asyncHandler(async (req: Request, res: Response) => {
   const result = await adminService.unlockVerification(req.params.id!, req.user!.userId);

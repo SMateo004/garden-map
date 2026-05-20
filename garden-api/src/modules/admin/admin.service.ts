@@ -140,6 +140,7 @@ export async function getCaregiverDetailForAdmin(profileId: string): Promise<Adm
     ciNumber: profile.ciNumber,
     emailVerified: u.emailVerified,
     reviewChecklist: Array.isArray((profile as any).reviewChecklist) ? (profile as any).reviewChecklist : null,
+    isProfessional: (profile as any).isProfessional ?? false,
     // Compute completeness from actual profile data (not stale stored flags)
     personalInfoComplete: Boolean(u.firstName?.trim() && u.lastName?.trim() && u.phone?.trim()),
     caregiverProfileComplete: Boolean(
@@ -249,6 +250,39 @@ export async function toggleVerify(caregiverId: string, adminId: string): Promis
   return { verified: updated.verified, verifiedAt: updated.verifiedAt };
 }
 
+/**
+ * Toggle isProfessional para un cuidador existente.
+ * No cambia su status ni verified — solo actualiza el flag.
+ */
+export async function toggleProfessional(
+  caregiverId: string,
+  adminId: string
+): Promise<{ isProfessional: boolean }> {
+  const profile = await prisma.caregiverProfile.findUnique({ where: { id: caregiverId } });
+  if (!profile) throw new CaregiverNotFoundError(caregiverId);
+
+  const newValue = !(profile as any).isProfessional;
+
+  await prisma.caregiverProfile.update({
+    where: { id: caregiverId },
+    data: { isProfessional: newValue } as any,
+  });
+
+  await prisma.adminAction.create({
+    data: {
+      adminId,
+      actionType: 'TOGGLE_PROFESSIONAL',
+      targetId: caregiverId,
+      notes: newValue ? 'Marcado como profesional' : 'Profesional removido',
+    },
+  });
+
+  await getCache().del(`caregivers:detail:${caregiverId}`);
+  await delByPrefix('caregivers:list:');
+
+  return { isProfessional: newValue };
+}
+
 /** Lista TODOS los cuidadores con filtro opcional por status. status=pendientes → PENDING_REVIEW + NEEDS_REVISION. */
 export async function listCaregivers(
   page: number,
@@ -290,6 +324,7 @@ export async function listCaregivers(
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,
     rejectionReason: c.rejectionReason,
+    isProfessional: (c as any).isProfessional ?? false,
   }));
   return { caregivers: items, total, page, limit };
 }
@@ -335,6 +370,7 @@ export async function listPendingCaregivers(
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,
     rejectionReason: c.rejectionReason,
+    isProfessional: (c as any).isProfessional ?? false,
   }));
 
   return { caregivers: items, total, page, limit };

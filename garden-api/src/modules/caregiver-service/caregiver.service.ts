@@ -200,6 +200,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       acceptPuppies: c.acceptPuppies,
       acceptSeniors: c.acceptSeniors,
       sizesAccepted: c.sizesAccepted,
+      isProfessional: (c as any).isProfessional ?? false,
       // Store raw coords in cache; jitter is applied AFTER retrieval so each response
       // gets fresh noise and cached data doesn't leak a static jittered position.
       _addressLat: c.addressLat ?? null,
@@ -436,6 +437,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     maxPets: profile.maxPets,
     oftenOut: profile.oftenOut,
     spaceDescription: profile.spaceDescription,
+    isProfessional: (profile as any).isProfessional ?? false,
   };
 
   // Enriquecer con reputación de blockchain

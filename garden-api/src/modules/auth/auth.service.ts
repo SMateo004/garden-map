@@ -609,6 +609,144 @@ export async function updateCaregiverProfile(
 }
 
 
+// ── Register Professional ─────────────────────────────────────────────────────
+
+export interface RegisterProfessionalBody {
+  code: string;
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  bio?: string;
+  zone?: string;
+  services?: string[];
+  pricePerDay?: number;
+  pricePerWalk60?: number;
+  photos?: string[];
+  profilePhoto?: string;
+  address?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Verifica que el código de registro profesional es válido.
+ * No crea nada — solo comprueba el código contra AppSettings.professionalRegistrationCode.
+ */
+export async function validateProfessionalCode(code: string): Promise<boolean> {
+  const stored = await getStringSetting('professionalRegistrationCode', '');
+  if (!stored || stored.trim() === '') return false;
+  return code.trim() === stored.trim();
+}
+
+/**
+ * Registro de cuidador profesional.
+ * Requiere code == AppSettings.professionalRegistrationCode.
+ * Crea usuario CAREGIVER + CaregiverProfile con isProfessional=true, verified=true, status=APPROVED.
+ */
+export async function registerProfessional(body: RegisterProfessionalBody): Promise<RegisterCaregiverResult> {
+  // Validate code
+  const valid = await validateProfessionalCode(body.code);
+  if (!valid) {
+    throw new BadRequestError(
+      'Código de registro profesional inválido.',
+      'INVALID_PROFESSIONAL_CODE'
+    );
+  }
+
+  const [existingEmail, existingPhone] = await Promise.all([
+    prisma.user.findUnique({ where: { email: body.email.toLowerCase() } }),
+    prisma.user.findUnique({ where: { phone: body.phone } }),
+  ]);
+
+  if (existingEmail) throw new ConflictError('Ya existe una cuenta con este email', 'EMAIL_EXISTS', 'email');
+  if (existingPhone) throw new ConflictError('Ya existe una cuenta con este teléfono', 'PHONE_EXISTS', 'phone');
+
+  const passwordHash = await hashPassword(body.password);
+  const email = body.email.toLowerCase().trim();
+
+  const now = new Date();
+
+  const result = await prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        email,
+        passwordHash,
+        role: UserRole.CAREGIVER,
+        firstName: body.firstName.trim(),
+        lastName: body.lastName.trim(),
+        phone: body.phone.trim(),
+        country: 'Bolivia',
+        city: 'Santa Cruz de la Sierra',
+        isOver18: true,
+      },
+    });
+
+    const profile = await tx.caregiverProfile.create({
+      data: {
+        userId: user.id,
+        bio: typeof body.bio === 'string' ? body.bio : null,
+        zone: body.zone as any ?? null,
+        photos: ensureAbsoluteUrls((body.photos ?? []) as string[]),
+        profilePhoto: ensureAbsoluteUrl(body.profilePhoto as string | undefined) ?? null,
+        servicesOffered: (body.services ?? []) as any[],
+        pricePerDay: body.pricePerDay ?? null,
+        pricePerWalk60: body.pricePerWalk60 ?? null,
+        address: typeof body.address === 'string' ? body.address : null,
+        status: CaregiverStatus.APPROVED,
+        verified: true,
+        verifiedAt: now,
+        approvedAt: now,
+        identityVerificationStatus: 'VERIFIED',
+        identityVerificationToken: randomBytes(32).toString('hex'),
+        emailVerified: true,
+        isProfessional: true,
+        defaultAvailabilitySchedule: {
+          hospedajeDefault: true,
+          paseoTimeBlocks: {
+            morning: { enabled: true, start: '08:00', end: '11:00' },
+            afternoon: { enabled: true, start: '13:00', end: '17:00' },
+            night: { enabled: true, start: '19:00', end: '22:00' }
+          }
+        },
+      },
+    });
+
+    return { user, profile };
+  });
+
+  // Blockchain sync (async, non-blocking)
+  blockchainService.syncProfileOnChain(
+    result.user.id,
+    `${result.user.firstName} ${result.user.lastName}`,
+    'CAREGIVER',
+    true // professional = verified from the start
+  ).catch(err => logger.error('Blockchain sync failed (professional register)', { userId: result.user.id, err }));
+
+  const payload: JwtPayload = { userId: result.user.id, role: result.user.role };
+  const { token: accessToken, expiresIn } = signAccessToken(payload);
+  const refreshToken = await createRefreshToken(result.user.id);
+
+  track(result.user.id, 'user_registered', { role: 'CAREGIVER', professional: true, email: result.user.email });
+  identify(result.user.id, { role: 'CAREGIVER', professional: true, email: result.user.email, firstName: result.user.firstName, lastName: result.user.lastName });
+
+  return {
+    user: {
+      id: result.user.id,
+      email: result.user.email,
+      role: result.user.role,
+      firstName: result.user.firstName,
+      lastName: result.user.lastName,
+      profilePicture: result.user.profilePicture,
+    },
+    profileId: result.profile.id,
+    verificationStatus: result.profile.verificationStatus,
+    accessToken,
+    refreshToken,
+    expiresIn,
+  };
+}
+
 // ── Switch Role ───────────────────────────────────────────────────────────────
 
 export interface SwitchRoleResult {
