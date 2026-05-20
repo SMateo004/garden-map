@@ -18,19 +18,25 @@ import { type PaseoSlot, parseTimeBlocks } from '../../shared/availability-utils
 import { PHOTO_COUNT, MAX_BIO_CHARS } from './caregiver.validation.js';
 import logger from '../../shared/logger.js';
 import { blockchainService } from '../../services/blockchain.service.js';
+import { getNumericSetting } from '../../utils/settings-cache.js';
 
 const cache = getCache();
-const MARKUP_RATE = 0.10;
+
+/** Lee la comisión configurada por el admin (con cache 30 s). */
+async function getMarkupRate(): Promise<number> {
+  const pct = await getNumericSetting('platformCommissionPct', 10);
+  return pct / 100;
+}
 
 /**
- * Aplica el 10% de comisión GARDEN al precio del cuidador.
- * El cliente ve el precio final, pero al cuidador se le paga su base.
+ * Aplica la comisión GARDEN al precio del cuidador.
+ * El cliente ve el precio final (precio cuidador × (1 + rate)).
  */
-function applyMarkup(price: number | null | undefined): number | null {
+function applyMarkup(price: number | null | undefined, rate: number): number | null {
   // price === 0 means "service not offered" — return null so UIs don't render "Bs 0"
   if (price === null || price === undefined || price === 0) return null;
   const val = typeof price === 'number' ? price : Number(price);
-  return Math.round(val * (1 + MARKUP_RATE));
+  return Math.round(val * (1 + rate));
 }
 
 /**
@@ -62,6 +68,8 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
   })}`;
   const cached = await cache.get<PaginatedCaregivers>(cacheKey);
   if (cached) return applyCoordJitter(cached);
+
+  const markupRate = await getMarkupRate();
 
   const zones: Zone[] | undefined = Array.isArray(zone)
     ? (zone as Zone[])
@@ -118,11 +126,11 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
 
   if (priceRange) {
     if (priceRange === 'economico') {
-      where.pricePerDay = { gte: Math.ceil(60 / (1 + MARKUP_RATE)), lte: Math.floor(100 / (1 + MARKUP_RATE)) };
+      where.pricePerDay = { gte: Math.ceil(60 / (1 + markupRate)), lte: Math.floor(100 / (1 + markupRate)) };
     } else if (priceRange === 'estandar') {
-      where.pricePerDay = { gte: Math.ceil(100 / (1 + MARKUP_RATE)), lte: Math.floor(140 / (1 + MARKUP_RATE)) };
+      where.pricePerDay = { gte: Math.ceil(100 / (1 + markupRate)), lte: Math.floor(140 / (1 + markupRate)) };
     } else {
-      where.pricePerDay = { gte: Math.ceil(140 / (1 + MARKUP_RATE)) };
+      where.pricePerDay = { gte: Math.ceil(140 / (1 + markupRate)) };
     }
   }
 
@@ -177,9 +185,9 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       services: c.servicesOffered,
       rating: c.rating,
       reviewCount: c.reviewCount,
-      pricePerDay: applyMarkup(c.pricePerDay),
-      pricePerWalk30: applyMarkup(c.pricePerWalk30),
-      pricePerWalk60: applyMarkup(c.pricePerWalk60),
+      pricePerDay: applyMarkup(c.pricePerDay, markupRate),
+      pricePerWalk30: applyMarkup(c.pricePerWalk30, markupRate),
+      pricePerWalk60: applyMarkup(c.pricePerWalk60, markupRate),
       verified: c.verified,
       spaceType: Array.isArray(c.spaceType) ? c.spaceType : (c.spaceType ? [c.spaceType] : []),
       experienceYears: c.experienceYears,
@@ -238,6 +246,8 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
   const cacheKey = `caregivers:detail:${id}`;
   const cached = await cache.get<CaregiverDetail>(cacheKey);
   if (cached) return cached;
+
+  const markupRate = await getMarkupRate();
 
   // Solo visibles para clientes: APPROVED + verified, no suspendido
   const publicWhere = {
@@ -377,9 +387,9 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     services: profile.servicesOffered,
     rating: profile.rating,
     reviewCount: profile.reviewCount,
-    pricePerDay: applyMarkup(profile.pricePerDay),
-    pricePerWalk30: applyMarkup(profile.pricePerWalk30),
-    pricePerWalk60: applyMarkup(profile.pricePerWalk60),
+    pricePerDay: applyMarkup(profile.pricePerDay, markupRate),
+    pricePerWalk30: applyMarkup(profile.pricePerWalk30, markupRate),
+    pricePerWalk60: applyMarkup(profile.pricePerWalk60, markupRate),
     verified: profile.verified,
     spaceType: Array.isArray(profile.spaceType) ? profile.spaceType : (profile.spaceType ? [profile.spaceType] : []),
     bio: profile.bio,
@@ -933,7 +943,8 @@ export async function createCaregiverProfile(
     include: { user: { select: { firstName: true, lastName: true, profilePicture: true } } },
   });
 
-  return mapProfileToListItem(profile);
+  const markupRate = await getMarkupRate();
+  return mapProfileToListItem(profile, markupRate);
 }
 
 /**
@@ -994,12 +1005,12 @@ export async function upsertCaregiverProfile(
   }
 
   return {
-    profile: mapProfileToListItem(result.profile),
+    profile: mapProfileToListItem(result.profile, await getMarkupRate()),
     created: result.created,
   };
 }
 
-function mapProfileToListItem(profile: any): CaregiverListItem {
+function mapProfileToListItem(profile: any, markupRate: number): CaregiverListItem {
   const p = profile;
   return {
     id: profile.id,
@@ -1011,9 +1022,9 @@ function mapProfileToListItem(profile: any): CaregiverListItem {
     services: profile.servicesOffered,
     rating: profile.rating,
     reviewCount: profile.reviewCount,
-    pricePerDay: applyMarkup(profile.pricePerDay),
-    pricePerWalk30: applyMarkup(profile.pricePerWalk30),
-    pricePerWalk60: applyMarkup(profile.pricePerWalk60),
+    pricePerDay: applyMarkup(profile.pricePerDay, markupRate),
+    pricePerWalk30: applyMarkup(profile.pricePerWalk30, markupRate),
+    pricePerWalk60: applyMarkup(profile.pricePerWalk60, markupRate),
     verified: profile.verified,
     spaceType: Array.isArray(profile.spaceType) ? profile.spaceType : (profile.spaceType ? [profile.spaceType] : []),
     experienceYears: profile.experienceYears,

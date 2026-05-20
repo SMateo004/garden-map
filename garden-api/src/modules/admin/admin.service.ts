@@ -779,7 +779,7 @@ export async function approveExtensionPayment(
 
   const evt = events[idx];
   const { extraAmount } = evt;
-  const commissionPct = await (await import('../../utils/settings-cache.js')).getNumericSetting('commissionPct', 10);
+  const commissionPct = await (await import('../../utils/settings-cache.js')).getNumericSetting('platformCommissionPct', 10);
   const COMMISSION_RATE = commissionPct / 100;
   const pricePerUnitClient = Number(booking.pricePerUnit);
   const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + COMMISSION_RATE));

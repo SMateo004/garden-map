@@ -778,7 +778,7 @@ class _FinancialTabState extends State<_FinancialTab>
           ),
 
           _finSection('Ingresos de GARDEN', textColor, borderColor, surface, [
-            _finRow('Comisiones cobradas (10% por servicio)', commissionsEarned, textColor, subtextColor),
+            _finRow('Comisiones cobradas (por servicio)', commissionsEarned, textColor, subtextColor),
             _finRow('Comisiones año en curso', yearIncome, textColor, subtextColor),
             _finRow('Total ingresos', commissionsEarned, textColor, subtextColor, isTotal: true, highlight: true),
           ]),
@@ -919,7 +919,7 @@ class _FinancialTabState extends State<_FinancialTab>
           const SizedBox(height: 16),
 
           _finSection('Entradas este mes', textColor, borderColor, surface, [
-            _finRow('Comisiones cobradas (10%)', commissionsIn, textColor, subtextColor),
+            _finRow('Comisiones cobradas', commissionsIn, textColor, subtextColor),
             _finRow('Total entradas', commissionsIn, textColor, subtextColor, isTotal: true, highlight: true),
           ]),
           const SizedBox(height: 12),
