@@ -238,8 +238,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         final price = (_selectedService == 'hospedaje'
             ? (c['pricePerDay'] ?? 0)
             : _selectedService == 'paseo'
-                ? (c['pricePerWalk60'] ?? c['pricePerWalk30'] ?? 0)
-                : (c['pricePerWalk60'] ?? c['pricePerWalk30'] ?? c['pricePerDay'] ?? 0)) as num;
+                ? (c['pricePerWalk30'] ?? c['pricePerWalk60'] ?? 0)
+                : (c['pricePerWalk30'] ?? c['pricePerWalk60'] ?? c['pricePerDay'] ?? 0)) as num;
         return price >= _priceRange.start && (price <= _priceRange.end || _priceRange.end >= 500);
       }).toList();
     }
@@ -260,8 +260,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         case 'price_asc':
           num _resolvePrice(Map<String, dynamic> c, num fallback) {
             if (_selectedService == 'hospedaje') return (c['pricePerDay'] ?? fallback) as num;
-            if (_selectedService == 'paseo') return (c['pricePerWalk60'] ?? c['pricePerWalk30'] ?? fallback) as num;
-            return (c['pricePerWalk60'] ?? c['pricePerWalk30'] ?? c['pricePerDay'] ?? fallback) as num;
+            if (_selectedService == 'paseo') return (c['pricePerWalk30'] ?? c['pricePerWalk60'] ?? fallback) as num;
+            return (c['pricePerWalk30'] ?? c['pricePerWalk60'] ?? c['pricePerDay'] ?? fallback) as num;
           }
           final pa = _resolvePrice(a, 999);
           final pb = _resolvePrice(b, 999);
@@ -269,8 +269,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         case 'price_desc':
           num _resolvePrice2(Map<String, dynamic> c) {
             if (_selectedService == 'hospedaje') return (c['pricePerDay'] ?? 0) as num;
-            if (_selectedService == 'paseo') return (c['pricePerWalk60'] ?? c['pricePerWalk30'] ?? 0) as num;
-            return (c['pricePerWalk60'] ?? c['pricePerWalk30'] ?? c['pricePerDay'] ?? 0) as num;
+            if (_selectedService == 'paseo') return (c['pricePerWalk30'] ?? c['pricePerWalk60'] ?? 0) as num;
+            return (c['pricePerWalk30'] ?? c['pricePerWalk60'] ?? c['pricePerDay'] ?? 0) as num;
           }
           final pa = _resolvePrice2(a);
           final pb = _resolvePrice2(b);
@@ -1869,17 +1869,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     if (_selectedService == 'hospedaje') {
       if (hasDayPrice) prices.add(('Bs $priceDay', '/noche'));
     } else if (_selectedService == 'paseo') {
-      if (hasWalk60Price) {
-        prices.add(('Bs $priceWalk60', '1 hora'));
-      } else if (hasWalk30Price) {
+      // Show 30-min price first (lower anchor), fallback to 1hr if no 30min
+      if (hasWalk30Price) {
         prices.add(('Bs $priceWalk30', '30 min'));
+      } else if (hasWalk60Price) {
+        prices.add(('Bs $priceWalk60', '1 hora'));
       }
     } else {
       // 'todos' — show only prices for services the caregiver actually offers
-      if (hasWalk60Price) {
-        prices.add(('Bs $priceWalk60', '1 hora 🦮'));
-      } else if (hasWalk30Price) {
+      if (hasWalk30Price) {
         prices.add(('Bs $priceWalk30', '30 min 🦮'));
+      } else if (hasWalk60Price) {
+        prices.add(('Bs $priceWalk60', '1 hora 🦮'));
       }
       if (hasDayPrice) {
         prices.add(('Bs $priceDay', '/noche 🏠'));
