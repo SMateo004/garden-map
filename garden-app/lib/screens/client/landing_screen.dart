@@ -371,42 +371,44 @@ class _LandingState extends State<LandingScreen> {
     pinned: true,
     toolbarHeight: 64,
     automaticallyImplyLeading: false,
-    actions: const [],
+    actions: mobile
+        ? [
+            Builder(builder: (c) => Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: GestureDetector(
+                onTap: () => Scaffold.of(c).openEndDrawer(),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: pal.border),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.menu_rounded, color: pal.textPri, size: 22),
+                ),
+              ),
+            )),
+          ]
+        : [
+            _HeaderLink('¿Quiénes somos?', () => context.go('/about'), pal),
+            const SizedBox(width: 4),
+            _HeaderLink('Conviértete en cuidador', () => context.go('/become-caregiver'), pal),
+            const SizedBox(width: 4),
+            _HeaderLink('Iniciar sesión', () => context.go('/login'), pal),
+            const SizedBox(width: 16),
+            Container(width: 1, height: 22, color: pal.border),
+            const SizedBox(width: 16),
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: _PrimaryBtn('Registrarse', () => context.go('/register'), w: 140, h: 40),
+            ),
+          ],
     // Sin flexibleSpace ni SafeArea interno — SliverAppBar ya maneja el top padding
     title: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(children: [
-        // Logo
-        GestureDetector(
-          onTap: () => context.go('/'),
-          child: Image.asset(pal.logo, height: 52),
-        ),
-        const Spacer(),
-
-        if (mobile)
-          Builder(builder: (c) => GestureDetector(
-            onTap: () => Scaffold.of(c).openEndDrawer(),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                border: Border.all(color: pal.border),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(Icons.menu_rounded, color: pal.textPri, size: 22),
-            ),
-          ))
-        else ...[
-          _HeaderLink('¿Quiénes somos?', () => context.go('/about'), pal),
-          const SizedBox(width: 4),
-          _HeaderLink('Conviértete en cuidador', () => context.go('/become-caregiver'), pal),
-          const SizedBox(width: 4),
-          _HeaderLink('Iniciar sesión', () => context.go('/login'), pal),
-          const SizedBox(width: 16),
-          Container(width: 1, height: 22, color: pal.border),
-          const SizedBox(width: 16),
-          _PrimaryBtn('Registrarse', () => context.go('/register'), w: 140, h: 40),
-        ],
-      ]),
+      padding: const EdgeInsets.only(left: 16),
+      child: GestureDetector(
+        onTap: () => context.go('/'),
+        child: Image.asset(pal.logo, height: 52),
+      ),
     ),
     titleSpacing: 0,
     bottom: PreferredSize(
