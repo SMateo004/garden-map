@@ -371,6 +371,7 @@ class _LandingState extends State<LandingScreen> {
     pinned: true,
     toolbarHeight: 64,
     automaticallyImplyLeading: false,
+    actions: const [],
     // Sin flexibleSpace ni SafeArea interno — SliverAppBar ya maneja el top padding
     title: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
