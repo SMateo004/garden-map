@@ -175,11 +175,15 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     }
 
     final pricePerWalk60Raw = _caregiver!['pricePerWalk60'];
+    final pricePerWalk30Raw = _caregiver!['pricePerWalk30'];
     final pricePerDayRaw = _caregiver!['pricePerDay'];
     final pricePerDay = (pricePerDayRaw != null && (pricePerDayRaw as num) > 0) ? pricePerDayRaw : null;
     final pricePerWalk60 = (pricePerWalk60Raw != null && (pricePerWalk60Raw as num) > 0) ? pricePerWalk60Raw : null;
+    final pricePerWalk30 = (pricePerWalk30Raw != null && (pricePerWalk30Raw as num) > 0) ? pricePerWalk30Raw : null;
     final offersHospedaje = pricePerDay != null;
-    final offersPaseo = pricePerWalk60 != null;
+    final offersPaseo = pricePerWalk30 != null || pricePerWalk60 != null;
+    final walkDisplayPrice = pricePerWalk30 ?? pricePerWalk60;
+    final walkDisplayUnit = pricePerWalk30 != null ? '30 min' : 'hora';
     final isDark = themeNotifier.isDark;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
@@ -202,7 +206,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
               const SizedBox(height: 20),
               _ServiceOption(icon: Icons.home_outlined, label: 'Hospedaje', sublabel: 'Bs $pricePerDay/noche', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: bookingExtra); }),
               const SizedBox(height: 12),
-              _ServiceOption(icon: Icons.directions_walk, label: 'Paseo', sublabel: 'Bs $pricePerWalk60/hora', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: bookingExtra); }),
+              _ServiceOption(icon: Icons.directions_walk, label: 'Paseo', sublabel: 'Bs $walkDisplayPrice/$walkDisplayUnit', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: bookingExtra); }),
             ],
           ),
         ),
@@ -252,12 +256,16 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     final bioDetail = _caregiver!['bioDetail'] as String? ?? '';
     final verified = _caregiver!['verified'] == true;
     final pricePerWalk60Raw = _caregiver!['pricePerWalk60'];
+    final pricePerWalk30Raw = _caregiver!['pricePerWalk30'];
     final pricePerDayRaw = _caregiver!['pricePerDay'];
     final pricePerWalk60 = (pricePerWalk60Raw != null && (pricePerWalk60Raw as num) > 0) ? pricePerWalk60Raw : null;
+    final pricePerWalk30 = (pricePerWalk30Raw != null && (pricePerWalk30Raw as num) > 0) ? pricePerWalk30Raw : null;
     final pricePerDay = (pricePerDayRaw != null && (pricePerDayRaw as num) > 0) ? pricePerDayRaw : null;
     final offersHospedaje = pricePerDay != null;
-    final offersPaseo = pricePerWalk60 != null;
-    final priceDisplay = offersPaseo ? 'Bs $pricePerWalk60/hora' : offersHospedaje ? 'Bs $pricePerDay/noche' : 'Consultar';
+    final offersPaseo = pricePerWalk30 != null || pricePerWalk60 != null;
+    final walkDisplayPrice = pricePerWalk30 ?? pricePerWalk60;
+    final walkDisplayUnit = pricePerWalk30 != null ? '30 min' : 'hora';
+    final priceDisplay = offersPaseo ? 'Bs $walkDisplayPrice/$walkDisplayUnit' : offersHospedaje ? 'Bs $pricePerDay/noche' : 'Consultar';
 
     return LayoutBuilder(builder: (context, constraints) {
       final isWide = constraints.maxWidth > 900;
@@ -267,7 +275,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
           textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
           photos: photos, services: services, name: name, rating: rating,
           reviewCount: reviewCount, zone: zone, bio: bio, bioDetail: bioDetail,
-          verified: verified, pricePerWalk60: pricePerWalk60, pricePerDay: pricePerDay,
+          verified: verified, pricePerWalk60: pricePerWalk60, pricePerWalk30: pricePerWalk30, pricePerDay: pricePerDay,
           offersHospedaje: offersHospedaje, offersPaseo: offersPaseo, priceDisplay: priceDisplay,
         );
       }
@@ -276,7 +284,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
         textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
         photos: photos, services: services, name: name, rating: rating,
         reviewCount: reviewCount, zone: zone, bio: bio, bioDetail: bioDetail,
-        verified: verified, pricePerWalk60: pricePerWalk60, pricePerDay: pricePerDay,
+        verified: verified, pricePerWalk60: pricePerWalk60, pricePerWalk30: pricePerWalk30, pricePerDay: pricePerDay,
         offersHospedaje: offersHospedaje, offersPaseo: offersPaseo, priceDisplay: priceDisplay,
       );
     });
@@ -291,7 +299,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     required List<String> photos, required List<String> services, required String name,
     required String rating, required int reviewCount, required String zone,
     required String bio, required String bioDetail, required bool verified,
-    required dynamic pricePerWalk60, required dynamic pricePerDay,
+    required dynamic pricePerWalk60, required dynamic pricePerWalk30, required dynamic pricePerDay,
     required bool offersHospedaje, required bool offersPaseo, required String priceDisplay,
   }) {
     final cardBg = isDark ? GardenColors.darkSurfaceElevated : Colors.white;
@@ -548,8 +556,8 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                               const SizedBox(height: 12),
                               ...services.map((s) {
                                 final isWalk = s == 'PASEO';
-                                final price = isWalk ? pricePerWalk60 : pricePerDay;
-                                final unit = isWalk ? '/ hora' : '/ noche';
+                                final price = isWalk ? (pricePerWalk30 ?? pricePerWalk60) : pricePerDay;
+                                final unit = isWalk ? (pricePerWalk30 != null ? '/ 30 min' : '/ hora') : '/ noche';
                                 return Container(
                                   margin: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                                   padding: const EdgeInsets.all(14),
@@ -647,7 +655,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     required List<String> photos, required List<String> services, required String name,
     required String rating, required int reviewCount, required String zone,
     required String bio, required String bioDetail, required bool verified,
-    required dynamic pricePerWalk60, required dynamic pricePerDay,
+    required dynamic pricePerWalk60, required dynamic pricePerWalk30, required dynamic pricePerDay,
     required bool offersHospedaje, required bool offersPaseo, required String priceDisplay,
   }) {
     return Scaffold(
@@ -754,7 +762,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                             Text(isWalk ? 'Paseo' : 'Hospedaje', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
                             const SizedBox(height: 4),
                             if (isWalk)
-                              Text('Bs ${pricePerWalk60 ?? '—'} / 1 hora', style: const TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600))
+                              Text('Bs ${pricePerWalk30 ?? pricePerWalk60 ?? '—'} / ${pricePerWalk30 != null ? '30 min' : '1 hora'}', style: const TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600))
                             else
                               Text('Bs ${pricePerDay ?? '—'} / noche', style: const TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
                           ]),
