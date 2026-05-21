@@ -43,6 +43,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
   bool _gpsBlocked = false;
   bool _socketConnected = false;
   Timer? _socketWatchdog; // alerta si socket no conecta en 10s
+  Timer? _pollTimer;       // HTTP polling fallback para el cliente
   DateTime? _lastSent;
   double _distanceMeters = 0;
 
@@ -58,13 +59,55 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
       _startGps();
     } else {
       _connectSocket();
+      // HTTP polling fallback: if socket doesn't connect in 12s, poll every 5s
+      _socketWatchdog = Timer(const Duration(seconds: 12), () {
+        if (!_socketConnected && mounted) {
+          debugPrint('GPS: Socket no conectó — activando polling HTTP cada 5s');
+          _startPolling();
+        }
+      });
     }
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      if (!mounted) return;
+      try {
+        final res = await http.get(
+          Uri.parse('$_baseUrl/bookings/${widget.bookingId}/track'),
+          headers: {'Authorization': 'Bearer ${widget.token}'},
+        );
+        final data = jsonDecode(res.body);
+        if (data['success'] == true && mounted) {
+          final raw = data['data'] as List? ?? [];
+          if (raw.isEmpty) return;
+          final pts = raw
+              .map((p) => LatLng((p['lat'] as num).toDouble(), (p['lng'] as num).toDouble()))
+              .toList();
+          final latest = pts.last;
+          setState(() {
+            // Solo agregar el último punto si es nuevo
+            if (_track.isEmpty || _track.last != latest) {
+              _track.clear();
+              _track.addAll(pts);
+              _currentPos = latest;
+              _distanceMeters = _haversineTotal(_track);
+            }
+          });
+          try { _mapController.move(latest, _mapController.camera.zoom); } catch (_) {}
+        }
+      } catch (e) {
+        debugPrint('GPS: polling error: $e');
+      }
+    });
   }
 
   @override
   void dispose() {
     _gpsSub?.cancel();
     _socketWatchdog?.cancel();
+    _pollTimer?.cancel();
     _socket?.disconnect();
     _socket?.dispose();
     super.dispose();
@@ -189,23 +232,10 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
           .build(),
       );
 
-      // Watchdog: si en 15s no conecta, notificar al usuario
-      _socketWatchdog = Timer(const Duration(seconds: 15), () {
-        if (!_socketConnected && mounted) {
-          debugPrint('GPS: Socket.io no conectó en 15s');
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⚠️ Sin conexión en tiempo real. Reintentando...'),
-              duration: Duration(seconds: 4),
-            ),
-          );
-          _socket?.connect();
-        }
-      });
-
       _socket!.onConnect((_) {
         _socketConnected = true;
         _socketWatchdog?.cancel();
+        _pollTimer?.cancel(); // socket conectó: detener polling si estaba activo
         debugPrint('GPS: Socket conectado ✓');
         _socket!.emit('join_booking', widget.bookingId);
       });
