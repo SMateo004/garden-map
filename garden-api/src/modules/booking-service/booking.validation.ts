@@ -224,7 +224,7 @@ export type TrackLocationBody = z.infer<typeof trackLocationBodySchema>;
 
 /** POST /api/bookings/:id/conclude — cuidador finaliza el servicio. */
 export const concludeServiceBodySchema = z.object({
-  photo: z.string().url('photo debe ser una URL válida').min(1, 'photo es obligatoria'),
+  photo: z.string().optional().default(''),
   lat: z
     .number({ invalid_type_error: 'lat debe ser un número' })
     .min(-90, 'lat debe estar entre -90 y 90')
