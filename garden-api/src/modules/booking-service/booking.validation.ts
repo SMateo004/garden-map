@@ -201,7 +201,7 @@ export type ExtendPaseoBody = z.infer<typeof extendPaseoBodySchema>;
 
 /** POST /api/bookings/:id/start — cuidador inicia el servicio (foto obligatoria). */
 export const startServiceBodySchema = z.object({
-  photo: z.string().url('photo debe ser una URL válida').optional().default(''),
+  photo: z.string().optional().default(''),
 });
 export type StartServiceBody = z.infer<typeof startServiceBodySchema>;
 
