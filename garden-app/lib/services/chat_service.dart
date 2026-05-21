@@ -105,7 +105,9 @@ class ChatService extends ChangeNotifier {
       _socket!.on('new_message', (data) {
         if (_isDisposed) return;
         try {
-          final msg = ChatMessage.fromJson(Map<String, dynamic>.from(data as Map));
+          // socket_io_client v2 may wrap the payload in a List — unwrap if needed
+          final raw = (data is List && data.isNotEmpty) ? data.first : data;
+          final msg = ChatMessage.fromJson(Map<String, dynamic>.from(raw as Map));
           // Deduplicar: puede que ya esté si se envió por HTTP
           if (_messages.any((m) => m.id == msg.id)) return;
           _messages.add(msg);

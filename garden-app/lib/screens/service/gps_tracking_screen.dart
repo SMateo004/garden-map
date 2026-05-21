@@ -206,7 +206,12 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
       _socket!.on('gps_update', (raw) {
         if (!mounted) return;
         try {
-          final map = (raw is Map) ? raw : <String, dynamic>{};
+          // socket_io_client v2 wraps socket.io v4 payloads in a List — unwrap if needed
+          final map = (raw is Map)
+              ? raw
+              : (raw is List && raw.isNotEmpty && raw.first is Map)
+                  ? raw.first as Map
+                  : <String, dynamic>{};
           final lat = (map['lat'] as num).toDouble();
           final lng = (map['lng'] as num).toDouble();
           final pt = LatLng(lat, lng);
