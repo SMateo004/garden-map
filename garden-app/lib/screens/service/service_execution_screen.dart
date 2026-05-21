@@ -2671,28 +2671,47 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       }
     }
 
-    // 3. Verificar ventana de ±30 minutos del slot (solo PASEO)
+    // 3. Verificar ventana de ±30 minutos de la hora configurada (solo PASEO)
     if (serviceType == 'PASEO') {
-      final timeSlot = _booking?['timeSlot'] as String?;
-      if (timeSlot != null) {
-        int? slotHour;
-        switch (timeSlot) {
-          case 'MANANA': slotHour = 8; break;
-          case 'TARDE': slotHour = 14; break;
-          case 'NOCHE': slotHour = 19; break;
+      // Intentar leer la hora exacta configurada por el cuidador (HH:MM)
+      final startTimeStr = _booking?['startTime'] as String?;
+      DateTime? scheduledTime;
+
+      if (startTimeStr != null && startTimeStr.contains(':')) {
+        final parts = startTimeStr.split(':');
+        final h = int.tryParse(parts[0]);
+        final m = int.tryParse(parts[1]);
+        if (h != null && m != null) {
+          scheduledTime = DateTime(now.year, now.month, now.day, h, m);
         }
-        if (slotHour != null) {
-          final slotStart = DateTime(now.year, now.month, now.day, slotHour, 0);
-          final windowStart = slotStart.subtract(const Duration(minutes: 30));
-          final windowEnd = slotStart.add(const Duration(minutes: 30));
-          if (now.isBefore(windowStart)) {
-            final minutesLeft = windowStart.difference(now).inMinutes;
-            final slotName = timeSlot == 'MANANA' ? 'Mañana (8:00)' : timeSlot == 'TARDE' ? 'Tarde (14:00)' : 'Noche (19:00)';
-            return 'Podrás iniciar en $minutesLeft min. La ventana para el turno $slotName abre a las ${windowStart.hour.toString().padLeft(2, '0')}:${windowStart.minute.toString().padLeft(2, '0')}.';
+      }
+
+      // Fallback: usar hora fija del turno si no hay startTime
+      if (scheduledTime == null) {
+        final timeSlot = _booking?['timeSlot'] as String?;
+        if (timeSlot != null) {
+          int? slotHour;
+          switch (timeSlot) {
+            case 'MANANA': slotHour = 8; break;
+            case 'TARDE':  slotHour = 14; break;
+            case 'NOCHE':  slotHour = 19; break;
           }
-          if (now.isAfter(windowEnd)) {
-            return 'La ventana de inicio para este turno ya cerró. Contacta a soporte si el servicio aún debe realizarse.';
+          if (slotHour != null) {
+            scheduledTime = DateTime(now.year, now.month, now.day, slotHour, 0);
           }
+        }
+      }
+
+      if (scheduledTime != null) {
+        final windowStart = scheduledTime.subtract(const Duration(minutes: 30));
+        final windowEnd   = scheduledTime.add(const Duration(minutes: 30));
+        final timeLabel   = '${scheduledTime.hour.toString().padLeft(2, '0')}:${scheduledTime.minute.toString().padLeft(2, '0')}';
+        if (now.isBefore(windowStart)) {
+          final minutesLeft = windowStart.difference(now).inMinutes;
+          return 'Podrás iniciar en $minutesLeft min. La ventana abre a las ${windowStart.hour.toString().padLeft(2, '0')}:${windowStart.minute.toString().padLeft(2, '0')} (±30 min de las $timeLabel).';
+        }
+        if (now.isAfter(windowEnd)) {
+          return 'La ventana de inicio para las $timeLabel ya cerró. Contacta a soporte si el servicio aún debe realizarse.';
         }
       }
     }
