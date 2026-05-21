@@ -189,18 +189,15 @@ export async function createBooking(
       );
     }
 
-    // VALIDACIÓN: Mínimo 1 día de anticipación (no se puede reservar hoy ni fechas pasadas)
+    // VALIDACIÓN: Solo bloquear fechas pasadas (mismo día permitido)
     const now = new Date();
-    // Bolivia is UTC-4 year-round (no DST). The server runs UTC, so subtract 4h to get the
-    // correct Bolivian calendar date before comparing against user-submitted YYYY-MM-DD strings.
     const BOLIVIA_OFFSET_MS = 4 * 60 * 60 * 1000;
     const todayStr = new Date(now.getTime() - BOLIVIA_OFFSET_MS).toISOString().split('T')[0] || '';
-    // Para multi-día de paseo, verificamos todas las fechas; para single-day o hospedaje, la fecha principal
     if (body.serviceType === ServiceType.HOSPEDAJE) {
       const requestedDate = body.startDate;
-      if (requestedDate && requestedDate <= todayStr) {
+      if (requestedDate && requestedDate < todayStr) {
         throw new BookingValidationError(
-          'Las reservas deben realizarse con al menos un día de anticipación. Por favor, selecciona una fecha a partir de mañana.',
+          'No puedes reservar en fechas pasadas.',
           'BOOKING_VALIDATION',
           'startDate'
         );
@@ -210,9 +207,9 @@ export async function createBooking(
       const singleDate = (body as any).walkDate as string | undefined;
       const datesToCheck = walkDays ? walkDays.map((d) => d.date) : singleDate ? [singleDate] : [];
       for (const d of datesToCheck) {
-        if (d <= todayStr) {
+        if (d < todayStr) {
           throw new BookingValidationError(
-            'Las reservas deben realizarse con al menos un día de anticipación. Por favor, selecciona fechas a partir de mañana.',
+            'No puedes reservar en fechas pasadas.',
             'BOOKING_VALIDATION',
             'walkDate'
           );
