@@ -173,31 +173,44 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
   void _connectSocket() {
     try {
       final wsUrl = _baseUrl.replaceAll('/api', '');
-      _socket = IO.io(wsUrl, <String, dynamic>{
-        'transports': ['polling', 'websocket'],
-        'autoConnect': false,
-        'auth': {'token': widget.token},
-      });
+      debugPrint('GPS: Conectando socket a $wsUrl con token: ${widget.token.substring(0, 20)}...');
 
-      // Watchdog: si en 10s no conecta, notificar al usuario
-      _socketWatchdog = Timer(const Duration(seconds: 10), () {
+      _socket = IO.io(
+        wsUrl,
+        IO.OptionBuilder()
+          .setTransports(['polling', 'websocket'])
+          .setAuth({'token': widget.token})
+          .disableAutoConnect()
+          .setTimeout(15000)
+          .setReconnectionAttempts(3)
+          .build(),
+      );
+
+      // Watchdog: si en 15s no conecta, notificar al usuario
+      _socketWatchdog = Timer(const Duration(seconds: 15), () {
         if (!_socketConnected && mounted) {
-          debugPrint('GPS: Socket.io no conectó en 10s');
+          debugPrint('GPS: Socket.io no conectó en 15s');
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('⚠️ Sin conexión en tiempo real. Reintentando...'),
               duration: Duration(seconds: 4),
             ),
           );
-          _socket?.connect(); // reintento
+          _socket?.connect();
         }
       });
 
       _socket!.onConnect((_) {
         _socketConnected = true;
         _socketWatchdog?.cancel();
-        debugPrint('GPS: Socket conectado');
+        debugPrint('GPS: Socket conectado ✓');
         _socket!.emit('join_booking', widget.bookingId);
+      });
+      _socket!.onConnectError((data) {
+        debugPrint('GPS: Socket connect error: $data');
+      });
+      _socket!.onError((data) {
+        debugPrint('GPS: Socket error: $data');
       });
       _socket!.onDisconnect((_) {
         _socketConnected = false;
