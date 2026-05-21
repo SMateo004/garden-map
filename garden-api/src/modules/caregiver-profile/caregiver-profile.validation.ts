@@ -160,6 +160,9 @@ const timeBlocksSchema = z.object({
 
 const defaultScheduleSchema = z.object({
   hospedajeDefault: z.boolean().optional(),
+  weekdays:  z.boolean().optional(),
+  weekends:  z.boolean().optional(),
+  holidays:  z.boolean().optional(),
   paseoTimeBlocks: timeBlocksSchema.optional(),
   weekly: z.record(z.string(), z.object({
     enabled: z.boolean(),
