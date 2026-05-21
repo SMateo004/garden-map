@@ -31,14 +31,11 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
 
     io = new SocketServer(httpServer, {
         cors: {
-            origin: (origin, callback) => {
-                if (!origin) return callback(null, true);
-                if (explicitOrigins.includes(origin)) return callback(null, true);
-                if (devPatterns.some((p: RegExp | string) =>
-                    typeof p === 'string' ? p === origin : p.test(origin)
-                )) return callback(null, true);
-                callback(new Error(`CORS: socket origin not allowed — ${origin}`));
-            },
+            // Socket.io connections are authenticated via JWT token in the handshake.
+            // CORS is not a meaningful security boundary here — allow all origins so
+            // native mobile clients (Flutter Android/iOS) can connect regardless of
+            // what Origin header (if any) the socket_io_client sends.
+            origin: true,
             methods: ['GET', 'POST'],
             credentials: true,
         },
