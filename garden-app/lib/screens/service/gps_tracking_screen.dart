@@ -172,8 +172,11 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
   // ── CLIENTE: recibe GPS via Socket.io ────────────────────────────────────
   void _connectSocket() {
     try {
-      final wsUrl = _baseUrl.replaceAll('/api', '');
-      debugPrint('GPS: Conectando socket a $wsUrl con token: ${widget.token.substring(0, 20)}...');
+      // Strip the /api path to get just scheme://host[:port] for socket.io
+      // replaceAll('/api','') is wrong — it also strips /api from subdomains like api.gardenbo.com
+      final uri = Uri.parse(_baseUrl);
+      final wsUrl = '${uri.scheme}://${uri.host}${(uri.port != 80 && uri.port != 443 && uri.hasPort) ? ':${uri.port}' : ''}';
+      debugPrint('GPS: Conectando socket a $wsUrl (base: $_baseUrl)');
 
       _socket = IO.io(
         wsUrl,
