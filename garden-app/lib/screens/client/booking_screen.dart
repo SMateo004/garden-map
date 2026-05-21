@@ -908,7 +908,7 @@ class _BookingScreenState extends State<BookingScreen> {
                         scrollDirection: Axis.horizontal,
                         itemCount: 14,
                         itemBuilder: (_, i) {
-                          final date = DateTime.now().add(Duration(days: i + 1));
+                          final date = DateTime.now().add(Duration(days: i));
                           final ds = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
                           final isSelected = _selectedDate != null &&
                               _selectedDate!.year == date.year &&
@@ -1235,7 +1235,7 @@ class _BookingScreenState extends State<BookingScreen> {
   /// Calendario de cuadrícula para seleccionar múltiples días (próximos 30 días)
   Widget _buildMultiDayCalendar(Color textColor, Color subtextColor, Color borderColor, Color surface) {
     final today = DateTime.now();
-    final firstDay = today.add(const Duration(days: 1));
+    final firstDay = today;
     final lastDay = today.add(const Duration(days: 30));
 
     // Agrupar por semana para mostrar en cuadrícula
@@ -1444,8 +1444,8 @@ class _BookingScreenState extends State<BookingScreen> {
     setState(() => _loadingMultiDayData = true);
     try {
       final today = DateTime.now();
-      final from  = today.add(const Duration(days: 1));
-      final to    = today.add(const Duration(days: 31));
+      final from  = today;
+      final to    = today.add(const Duration(days: 30));
       final uri   = Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}/availability')
           .replace(queryParameters: {
             'from': from.toIso8601String().split('T')[0],

@@ -24,8 +24,41 @@ ALTER TABLE "caregiver_profiles" DROP COLUMN IF EXISTS "selfie";
 -- -------------------------------------------------------
 -- 3. Rename tables to consistent snake_case convention.
 --    All other tables already use snake_case via @@map.
+--    Each rename is conditional: only runs if source exists
+--    and destination does not (fully idempotent).
 -- -------------------------------------------------------
-ALTER TABLE "AjustePrecio"    RENAME TO "ajuste_precios";
-ALTER TABLE "ChatMessage"     RENAME TO "chat_messages";
-ALTER TABLE "MeetAndGreet"    RENAME TO "meet_and_greets";
-ALTER TABLE "SugerenciaPrecio" RENAME TO "sugerencia_precios";
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'AjustePrecio')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'ajuste_precios')
+  THEN
+    EXECUTE 'ALTER TABLE "AjustePrecio" RENAME TO "ajuste_precios"';
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'ChatMessage')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'chat_messages')
+  THEN
+    EXECUTE 'ALTER TABLE "ChatMessage" RENAME TO "chat_messages"';
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'MeetAndGreet')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'meet_and_greets')
+  THEN
+    EXECUTE 'ALTER TABLE "MeetAndGreet" RENAME TO "meet_and_greets"';
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'SugerenciaPrecio')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'sugerencia_precios')
+  THEN
+    EXECUTE 'ALTER TABLE "SugerenciaPrecio" RENAME TO "sugerencia_precios"';
+  END IF;
+END $$;
