@@ -2872,29 +2872,39 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
 
     final isPendingReview = _caregiverStatus == 'PENDING_REVIEW';
     final isRejected = _caregiverStatus == 'REJECTED';
+    final isSuspended = _caregiverStatus == 'SUSPENDED';
+    final suspensionReason = _caregiver?['suspensionReason'] as String?;
 
-    final iconData = isPendingReview
-        ? Icons.hourglass_top_rounded
-        : isRejected
-            ? Icons.cancel_outlined
-            : Icons.assignment_late_outlined;
+    final iconData = isSuspended
+        ? Icons.shield_outlined
+        : isPendingReview
+            ? Icons.hourglass_top_rounded
+            : isRejected
+                ? Icons.cancel_outlined
+                : Icons.assignment_late_outlined;
 
-    final gradientColors = isPendingReview
-        ? [const Color(0xFF1565C0), const Color(0xFF0D47A1)]
-        : isRejected
-            ? [GardenColors.error, const Color(0xFFB71C1C)]
-            : [GardenColors.primary, const Color(0xFF1B5E20)];
+    final gradientColors = isSuspended
+        ? [const Color(0xFFE65100), const Color(0xFFBF360C)]
+        : isPendingReview
+            ? [const Color(0xFF1565C0), const Color(0xFF0D47A1)]
+            : isRejected
+                ? [GardenColors.error, const Color(0xFFB71C1C)]
+                : [GardenColors.primary, const Color(0xFF1B5E20)];
 
-    final title = isPendingReview
-        ? 'Perfil en revisión'
-        : isRejected
-            ? 'Perfil rechazado'
-            : 'Completa tu registro';
+    final title = isSuspended
+        ? 'Perfil bajo revisión'
+        : isPendingReview
+            ? 'Perfil en revisión'
+            : isRejected
+                ? 'Perfil rechazado'
+                : 'Completa tu registro';
 
-    final subtitle = isPendingReview
-        ? 'Tu perfil ha sido enviado correctamente y está siendo revisado por nuestro equipo. Te notificaremos cuando sea aprobado. Esto puede tomar 1-2 días hábiles.'
-        : isRejected
-            ? 'Tu perfil fue revisado y necesita correcciones. Revisa los comentarios del equipo GARDEN y vuelve a enviarlo.'
+    final subtitle = isSuspended
+        ? 'Nuestro equipo ha detectado actividad inusual y tu perfil está temporalmente bajo revisión. No apareces en el marketplace mientras dure este proceso.${suspensionReason != null ? '\n\nMotivo: $suspensionReason' : ''}\n\nTe notificaremos cuando se resuelva. Si tienes dudas, contáctanos en soporte@garden.com.'
+        : isPendingReview
+            ? 'Tu perfil ha sido enviado correctamente y está siendo revisado por nuestro equipo. Te notificaremos cuando sea aprobado. Esto puede tomar 1-2 días hábiles.'
+            : isRejected
+                ? 'Tu perfil fue revisado y necesita correcciones. Revisa los comentarios del equipo GARDEN y vuelve a enviarlo.'
             : 'Tu perfil aún no está completo. Termina los pasos pendientes para que tu perfil sea visible en el marketplace.';
 
     return Container(
@@ -2947,7 +2957,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 40),
-                if (!isPendingReview) ...[
+                if (!isPendingReview && !isSuspended) ...[
                 SizedBox(
                   width: double.infinity,
                   height: 56,
@@ -2984,7 +2994,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 ),
                 ],
                 const SizedBox(height: 16),
-                if (!isPendingReview) ...[
+                if (!isPendingReview && !isSuspended) ...[
                 _isAbandoningConversion
                     ? const Padding(
                         padding: EdgeInsets.symmetric(vertical: 8),

@@ -27,6 +27,9 @@ router.patch('/caregivers/:id/suspend', adminController.suspendCaregiver);
 /** PATCH /api/admin/caregivers/:id/activate — restore profile. */
 router.patch('/caregivers/:id/activate', adminController.activateCaregiver);
 
+/** PATCH /api/admin/caregivers/:id/flag-review — poner bajo revisión por actividad sospechosa. */
+router.patch('/caregivers/:id/flag-review', adminController.flagCaregiverForReview);
+
 /** DELETE /api/admin/caregivers/:id — absolute delete (removes User + Profile + all). */
 router.delete('/caregivers/:id', adminController.deleteCaregiver);
 

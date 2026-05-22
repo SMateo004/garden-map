@@ -33,10 +33,11 @@ export async function patchUserInfo(
   });
   if (!profile) throw new BadRequestError('No tienes perfil de cuidador', 'CAREGIVER_PROFILE_NOT_FOUND');
 
-  // Se permite editar aunque esté APPROVED (ej: cambio de teléfono).
-  if (profile.profileStatus === 'SUBMITTED' || profile.profileStatus === 'UNDER_REVIEW') {
+  // Bloquear edición solo cuando el perfil está bajo revisión del admin (suspended).
+  // Los perfiles APPROVED (incluye auto-aprobados) sí pueden editarse.
+  if (profile.profileStatus === 'UNDER_REVIEW') {
     throw new ForbiddenError(
-      'Tu perfil está en revisión y no puede ser editado en este momento.',
+      'Tu perfil está bajo revisión del equipo GARDEN y no puede ser editado en este momento.',
       'PROFILE_IN_REVIEW_READONLY'
     );
   }
@@ -186,10 +187,11 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   }
 
   // Se permite editar aunque esté APPROVED.
+  // Solo se bloquea si el admin puso el perfil UNDER_REVIEW.
 
-  if (profile.profileStatus === 'SUBMITTED' || profile.profileStatus === 'UNDER_REVIEW') {
+  if (profile.profileStatus === 'UNDER_REVIEW') {
     throw new ForbiddenError(
-      'Tu perfil está en revisión y no puede ser editado en este momento.',
+      'Tu perfil está bajo revisión del equipo GARDEN y no puede ser editado en este momento.',
       'PROFILE_IN_REVIEW_READONLY'
     );
   }
@@ -399,7 +401,7 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
         // Al completar los 9 pasos (incluyendo verificación de identidad y email),
         // el perfil queda aprobado automáticamente — las verificaciones son el proceso de aprobación.
         status: CaregiverStatus.APPROVED,
-        profileStatus: 'SUBMITTED',
+        profileStatus: 'APPROVED',
         verified: true,
         verifiedAt: new Date(),
         termsAcceptedAt: new Date(),

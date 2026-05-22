@@ -579,6 +579,52 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     }
   }
 
+  Future<void> _flagCaregiverForReview(String id) async {
+    final reasonCtrl = TextEditingController(text: 'Actividad sospechosa detectada');
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => GardenGlassDialog(
+        title: const Text('Solicitar revisión de perfil'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('El perfil quedará temporalmente fuera del marketplace mientras se revisa. Se notificará al cuidador.', style: TextStyle(fontSize: 13)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              decoration: const InputDecoration(labelText: 'Motivo', hintText: 'Actividad sospechosa detectada'),
+              style: TextStyle(color: themeNotifier.isDark ? Colors.white : Colors.black),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE65100)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Solicitar revisión', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true && reasonCtrl.text.trim().isNotEmpty) {
+      try {
+        final response = await http.patch(
+          Uri.parse('$_baseUrl/admin/caregivers/$id/flag-review'),
+          headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+          body: jsonEncode({'reason': reasonCtrl.text.trim()}),
+        );
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          await _loadCaregivers();
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Perfil puesto bajo revisión'), backgroundColor: Color(0xFFE65100)));
+        }
+      } catch (e) { debugPrint(e.toString()); }
+    }
+  }
+
   Future<void> _toggleProfessional(String caregiverId, bool currentValue) async {
     try {
       final response = await http.patch(
@@ -1061,12 +1107,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               ] else if (isApproved) ...[
                 Expanded(
                   child: GardenButton(
-                    label: 'Revocar',
-                    icon: Icons.remove_circle_outline,
+                    label: 'Revisar',
+                    icon: Icons.shield_outlined,
                     height: 38,
-                    color: GardenColors.error,
+                    color: const Color(0xFFE65100),
                     outline: true,
-                    onPressed: () => _revokeCaregiver(caregiver['id'] as String),
+                    onPressed: () => _flagCaregiverForReview(caregiver['id'] as String),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1144,6 +1190,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         isDark: isDark,
         onReview: _reviewCaregiver,
         onSuspend: _suspendCaregiver,
+        onFlagReview: _flagCaregiverForReview,
         statusBadge: _statusBadge,
       ),
     );
@@ -3060,6 +3107,7 @@ class _CaregiverDetailSheet extends StatefulWidget {
   final bool isDark;
   final Future<void> Function(String id, String action, {bool force}) onReview;
   final Future<void> Function(String id) onSuspend;
+  final Future<void> Function(String id) onFlagReview;
   final Widget Function(String status) statusBadge;
 
   const _CaregiverDetailSheet({
@@ -3070,6 +3118,7 @@ class _CaregiverDetailSheet extends StatefulWidget {
     required this.isDark,
     required this.onReview,
     required this.onSuspend,
+    required this.onFlagReview,
     required this.statusBadge,
   });
 
@@ -3804,20 +3853,42 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                   ),
                   const SizedBox(height: 8),
                 ],
-                if (isApproved || isSuspended) ...[
+                if (isApproved) ...[
                   GardenButton(
-                    label: isSuspended ? 'Reactivar cuidador' : 'Suspender cuidador',
-                    icon: isSuspended ? Icons.check_circle_outline : Icons.block,
+                    label: 'Solicitar revisión',
+                    icon: Icons.shield_outlined,
                     height: 42,
-                    color: isSuspended ? GardenColors.success : GardenColors.warning,
+                    color: const Color(0xFFE65100),
                     outline: true,
                     onPressed: () async {
                       Navigator.pop(context);
-                      if (isSuspended) {
-                        await widget.onReview(widget.caregiverId, 'approve', force: true);
-                      } else {
-                        await widget.onSuspend(widget.caregiverId);
-                      }
+                      await widget.onFlagReview(widget.caregiverId);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  GardenButton(
+                    label: 'Suspender cuidador',
+                    icon: Icons.block,
+                    height: 42,
+                    color: GardenColors.warning,
+                    outline: true,
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      await widget.onSuspend(widget.caregiverId);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                if (isSuspended) ...[
+                  GardenButton(
+                    label: 'Reactivar cuidador',
+                    icon: Icons.check_circle_outline,
+                    height: 42,
+                    color: GardenColors.success,
+                    outline: true,
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      await widget.onReview(widget.caregiverId, 'approve', force: true);
                     },
                   ),
                   const SizedBox(height: 8),

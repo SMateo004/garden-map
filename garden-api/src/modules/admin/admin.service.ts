@@ -1436,6 +1436,58 @@ export async function suspendCaregiver(
   return { success: true, suspended: true };
 }
 
+/**
+ * Poner un perfil APROBADO bajo revisión temporal por actividad sospechosa.
+ * - Oculta al cuidador del marketplace (suspended=true, status=SUSPENDED).
+ * - Notifica al cuidador con el motivo.
+ * - El admin puede reactivar con activateCaregiver().
+ */
+export async function flagCaregiverForReview(
+  profileId: string,
+  adminId: string,
+  reason: string
+) {
+  const profile = await prisma.caregiverProfile.findUnique({
+    where: { id: profileId },
+    include: { user: true },
+  });
+  if (!profile) throw new CaregiverNotFoundError(profileId);
+
+  await prisma.caregiverProfile.update({
+    where: { id: profileId },
+    data: {
+      suspended: true,
+      suspendedAt: new Date(),
+      suspensionReason: reason,
+      status: CaregiverStatus.SUSPENDED,
+    },
+  });
+
+  await prisma.notification.create({
+    data: {
+      userId: profile.userId,
+      title: 'Tu perfil está bajo revisión temporal',
+      message: `Hola ${profile.user.firstName}, hemos detectado actividad inusual en tu cuenta y tu perfil ha sido puesto temporalmente bajo revisión. Motivo: ${reason}. Tu perfil no es visible en el marketplace mientras dure la revisión. Te notificaremos cuando se resuelva. Si tienes dudas, contáctanos.`,
+      type: 'PROFILE_UNDER_REVIEW',
+    },
+  });
+
+  await prisma.adminAction.create({
+    data: {
+      adminId,
+      actionType: 'CAREGIVER_FLAG_REVIEW',
+      targetId: profileId,
+      notes: reason,
+    },
+  });
+
+  await getCache().del(`caregivers:detail:${profileId}`);
+  await delByPrefix('caregivers:list:');
+
+  logger.info('Admin: perfil marcado para revisión', { profileId, adminId, reason });
+  return { success: true, underReview: true };
+}
+
 /** Activar cuidador (revertir suspensión) */
 export async function activateCaregiver(
   profileId: string,

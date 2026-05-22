@@ -48,6 +48,13 @@ export const activateCaregiverSchema = z.object({
 
 export type ActivateCaregiverBody = z.infer<typeof activateCaregiverSchema>;
 
+/** Schema para solicitar revisión de perfil aprobado por actividad sospechosa */
+export const flagReviewSchema = z.object({
+  reason: z.string().min(5, 'El motivo debe tener al menos 5 caracteres').max(1000).default('Actividad sospechosa detectada'),
+});
+
+export type FlagReviewBody = z.infer<typeof flagReviewSchema>;
+
 export const deleteCaregiverSchema = z.object({
   reason: z.string().min(5, 'El motivo es obligatorio para eliminar').max(1000),
   adminPassword: z.string().min(1, 'La contraseña de admin es obligatoria'),

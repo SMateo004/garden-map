@@ -15,6 +15,7 @@ import {
   listCaregiversQuerySchema,
   suspendCaregiverSchema,
   activateCaregiverSchema,
+  flagReviewSchema,
   deleteCaregiverSchema,
   createGiftCodeSchema,
   rejectWithdrawalSchema,
@@ -70,6 +71,15 @@ export const activateCaregiver = asyncHandler(async (req: Request, res: Response
   const { notes } = activateCaregiverSchema.parse(req.body);
   const adminId = req.user!.userId;
   const result = await adminService.activateCaregiver(profileId, adminId, notes);
+  res.json({ success: true, data: result });
+});
+
+/** PATCH /api/admin/caregivers/:id/flag-review — poner perfil aprobado bajo revisión por actividad sospechosa. */
+export const flagCaregiverForReview = asyncHandler(async (req: Request, res: Response) => {
+  const profileId = req.params.id!;
+  const { reason } = flagReviewSchema.parse(req.body);
+  const adminId = req.user!.userId;
+  const result = await adminService.flagCaregiverForReview(profileId, adminId, reason);
   res.json({ success: true, data: result });
 });
 
