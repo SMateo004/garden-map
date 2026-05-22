@@ -189,15 +189,17 @@ export async function createBooking(
       );
     }
 
-    // VALIDACIÓN: Solo bloquear fechas pasadas (mismo día permitido)
+    // VALIDACIÓN: Mínimo 1 día de anticipación (no se puede reservar hoy ni fechas pasadas)
     const now = new Date();
     const BOLIVIA_OFFSET_MS = 4 * 60 * 60 * 1000;
     const todayStr = new Date(now.getTime() - BOLIVIA_OFFSET_MS).toISOString().split('T')[0] || '';
+    const tomorrowDate = new Date(now.getTime() - BOLIVIA_OFFSET_MS + 24 * 60 * 60 * 1000);
+    const tomorrowStr = tomorrowDate.toISOString().split('T')[0] || '';
     if (body.serviceType === ServiceType.HOSPEDAJE) {
       const requestedDate = body.startDate;
-      if (requestedDate && requestedDate < todayStr) {
+      if (requestedDate && requestedDate <= todayStr) {
         throw new BookingValidationError(
-          'No puedes reservar en fechas pasadas.',
+          'Las reservas deben realizarse con al menos un día de anticipación. Por favor, selecciona una fecha a partir de mañana.',
           'BOOKING_VALIDATION',
           'startDate'
         );
@@ -207,9 +209,9 @@ export async function createBooking(
       const singleDate = (body as any).walkDate as string | undefined;
       const datesToCheck = walkDays ? walkDays.map((d) => d.date) : singleDate ? [singleDate] : [];
       for (const d of datesToCheck) {
-        if (d < todayStr) {
+        if (d <= todayStr) {
           throw new BookingValidationError(
-            'No puedes reservar en fechas pasadas.',
+            'Las reservas deben realizarse con al menos un día de anticipación. Por favor, selecciona fechas a partir de mañana.',
             'BOOKING_VALIDATION',
             'walkDate'
           );

@@ -911,13 +911,16 @@ class _BookingScreenState extends State<BookingScreen> {
 
                   if (!_isMultiDay) ...[
                     // ── Modo un día: chips de fecha ──
-                    SizedBox(
+                    if (_loadingMultiDayData)
+                      const SizedBox(height: 72, child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+                    else SizedBox(
                       height: 72,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
                         itemCount: 14,
+                        // i=1: start from tomorrow (1-day advance booking requirement)
                         itemBuilder: (_, i) {
-                          final date = DateTime.now().add(Duration(days: i));
+                          final date = DateTime.now().add(Duration(days: i + 1));
                           final ds = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
                           final isSelected = _selectedDate != null &&
                               _selectedDate!.year == date.year &&
