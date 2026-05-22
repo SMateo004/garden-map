@@ -54,6 +54,7 @@ class _BookingScreenState extends State<BookingScreen> {
   Set<String> _blockedDates = {}; // fechas explícitamente bloqueadas por el cuidador
   List<Map<String, dynamic>> _multiDayRangeBookings = []; // reservas activas en el rango
   bool _loadingMultiDayData = false;
+  bool _multiDayDataLoaded = false; // true una vez que la llamada API terminó (éxito o error)
 
   // Meet & Greet opcional
   bool _includeMG = false;
@@ -937,9 +938,15 @@ class _BookingScreenState extends State<BookingScreen> {
                           final mon = months[date.month - 1];
 
                           // Verificar disponibilidad real del cuidador ese día
+                          // Un día está bloqueado si:
+                          //  1. Está en _blockedDates (cuidador lo desactivó explícitamente), O
+                          //  2. Está en _multiDaySlotsByDate pero todos sus slots están disabled, O
+                          //  3. Los datos ya cargaron (_multiDayDataLoaded) y el día NO aparece en
+                          //     _multiDaySlotsByDate → el backend no lo registró como disponible
                           final bool isDayUnavailable = _blockedDates.contains(ds) ||
                               (_multiDaySlotsByDate.containsKey(ds) &&
-                               _multiDaySlotsByDate[ds]!.every((s) => s['enabled'] != true));
+                               _multiDaySlotsByDate[ds]!.every((s) => s['enabled'] != true)) ||
+                              (_multiDayDataLoaded && !_multiDaySlotsByDate.containsKey(ds));
 
                           return GestureDetector(
                             onTap: isDayUnavailable ? null : () async {
@@ -1333,7 +1340,8 @@ class _BookingScreenState extends State<BookingScreen> {
             // Deshabilitar si el cuidador no tiene slots habilitados ese día
             final bool isUnavailable = _blockedDates.contains(ds) ||
                 (_multiDaySlotsByDate.containsKey(ds) &&
-                 _multiDaySlotsByDate[ds]!.every((s) => s['enabled'] != true));
+                 _multiDaySlotsByDate[ds]!.every((s) => s['enabled'] != true)) ||
+                (_multiDayDataLoaded && !_multiDaySlotsByDate.containsKey(ds));
 
             return GestureDetector(
               onTap: isUnavailable ? null : () => _toggleDate(date),
@@ -1503,7 +1511,10 @@ class _BookingScreenState extends State<BookingScreen> {
     } catch (e) {
       debugPrint('Error loading multi-day data: $e');
     } finally {
-      if (mounted) setState(() => _loadingMultiDayData = false);
+      if (mounted) setState(() {
+        _loadingMultiDayData = false;
+        _multiDayDataLoaded = true;
+      });
     }
   }
 

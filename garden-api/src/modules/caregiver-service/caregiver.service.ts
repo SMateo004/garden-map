@@ -761,8 +761,9 @@ export async function getCaregiverAvailability(
         }
         const ptb = defaultSchedule.paseoTimeBlocks || defaultSchedule.weekly?.[dStr]; // fallback to weekly if exists
         let slots = parseTimeBlocks(ptb);
-        // Si no hay horario configurado en absoluto para el perfil, habilitar todos los bloques por defecto
-        if (!profile.defaultAvailabilitySchedule && slots.length === 0) {
+        // Si no hay ningún bloque configurado (ptb ausente), habilitar todos los bloques por defecto
+        // Nota: si ptb existe pero todos los slots están disabled, slots=[] y el día queda bloqueado
+        if (!ptb && slots.length === 0) {
           slots = [
             { slot: 'MANANA', enabled: true, start: '08:00', end: '11:00' },
             { slot: 'TARDE', enabled: true, start: '13:00', end: '17:00' },
@@ -771,6 +772,9 @@ export async function getCaregiverAvailability(
         }
         if (slots.length > 0) {
           paseosByDate[dStr] = slots;
+        } else if (ptb) {
+          // paseoTimeBlocks configurados pero todos los slots desactivados → bloquear día
+          blockedDates.push(dStr);
         }
       }
       cur.setDate(cur.getDate() + 1);
