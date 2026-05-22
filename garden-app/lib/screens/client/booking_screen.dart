@@ -1093,84 +1093,109 @@ class _BookingScreenState extends State<BookingScreen> {
                 ] else if (_selectedService == 'HOSPEDAJE') ...[
                   Text('Fechas', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ListTile(
-                          tileColor: surface,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: borderColor)),
-                          title: const Text('Llegada', style: TextStyle(fontSize: 12, color: GardenColors.primary)),
-                          subtitle: Text(_selectedDate == null ? '---' : formatDate(_selectedDate!), style: TextStyle(color: textColor)),
-                          onTap: () async {
-                            final tomorrow = DateTime.now().add(const Duration(days: 1));
-                            final lastDate = DateTime.now().add(const Duration(days: 90));
-                            // initialDate debe satisfacer selectableDayPredicate → buscar el primer día libre
-                            DateTime firstAvailable = tomorrow;
-                            while (firstAvailable.isBefore(lastDate) &&
-                                _blockedDates.contains(firstAvailable.toIso8601String().split('T')[0])) {
-                              firstAvailable = firstAvailable.add(const Duration(days: 1));
-                            }
-                            final date = await showDatePicker(
-                              context: context,
-                              initialDate: firstAvailable,
-                              firstDate: tomorrow,
-                              lastDate: lastDate,
-                              selectableDayPredicate: (d) {
-                                final ds = d.toIso8601String().split('T')[0];
-                                return !_blockedDates.contains(ds);
-                              },
-                            );
-                            if (date != null) {
-                              setState(() {
-                                _selectedDate = date;
-                                if (_endDate != null && _endDate!.isBefore(_selectedDate!)) _endDate = null;
-                              });
-                            }
-                          },
+                  // ── Selector de rango en un solo calendario ──
+                  GestureDetector(
+                    onTap: () async {
+                      final tomorrow = DateTime.now().add(const Duration(days: 1));
+                      final lastDate = DateTime.now().add(const Duration(days: 90));
+                      // initialDate debe satisfacer selectableDayPredicate → primer día libre
+                      DateTime firstAvailable = tomorrow;
+                      while (firstAvailable.isBefore(lastDate) &&
+                          _blockedDates.contains(firstAvailable.toIso8601String().split('T')[0])) {
+                        firstAvailable = firstAvailable.add(const Duration(days: 1));
+                      }
+                      final range = await showDateRangePicker(
+                        context: context,
+                        initialDateRange: (_selectedDate != null && _endDate != null)
+                            ? DateTimeRange(start: _selectedDate!, end: _endDate!)
+                            : null,
+                        firstDate: tomorrow,
+                        lastDate: lastDate,
+                        initialEntryMode: DatePickerEntryMode.calendarOnly,
+                        selectableDayPredicate: (d, start, end) {
+                          final ds = d.toIso8601String().split('T')[0];
+                          return !_blockedDates.contains(ds);
+                        },
+                        builder: (context, child) => Theme(
+                          data: Theme.of(context).copyWith(
+                            colorScheme: Theme.of(context).colorScheme.copyWith(
+                              primary: GardenColors.primary,
+                              onPrimary: Colors.white,
+                              surface: surface,
+                              onSurface: textColor,
+                            ),
+                          ),
+                          child: child!,
                         ),
+                      );
+                      if (range != null) {
+                        setState(() {
+                          _selectedDate = range.start;
+                          _endDate = range.end;
+                        });
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: (_selectedDate != null && _endDate != null) ? GardenColors.primary : borderColor),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ListTile(
-                          tileColor: surface,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: borderColor)),
-                          title: const Text('Salida', style: TextStyle(fontSize: 12, color: GardenColors.primary)),
-                          subtitle: Text(_endDate == null ? '---' : formatDate(_endDate!), style: TextStyle(color: textColor)),
-                          onTap: () async {
-                            if (_selectedDate == null) return _showError('Selecciona primero la llegada');
-                            final minEnd = _selectedDate!.add(const Duration(days: 1));
-                            final lastDate = DateTime.now().add(const Duration(days: 90));
-                            // initialDate debe satisfacer selectableDayPredicate → buscar el primer día libre
-                            DateTime firstAvailableEnd = minEnd;
-                            while (firstAvailableEnd.isBefore(lastDate) &&
-                                _blockedDates.contains(firstAvailableEnd.toIso8601String().split('T')[0])) {
-                              firstAvailableEnd = firstAvailableEnd.add(const Duration(days: 1));
-                            }
-                            final date = await showDatePicker(
-                              context: context,
-                              initialDate: firstAvailableEnd,
-                              firstDate: minEnd,
-                              lastDate: lastDate,
-                              selectableDayPredicate: (d) {
-                                final ds = d.toIso8601String().split('T')[0];
-                                return !_blockedDates.contains(ds);
-                              },
-                            );
-                            if (date != null) setState(() => _endDate = date);
-                          },
-                        ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.calendar_month_outlined, color: GardenColors.primary, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('Llegada', style: TextStyle(fontSize: 11, color: GardenColors.primary, fontWeight: FontWeight.w600)),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            _selectedDate == null ? '---' : formatDate(_selectedDate!),
+                                            style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w500),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Icon(Icons.arrow_forward, size: 16, color: subtextColor),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          Text('Salida', style: TextStyle(fontSize: 11, color: GardenColors.primary, fontWeight: FontWeight.w600)),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            _endDate == null ? '---' : formatDate(_endDate!),
+                                            style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w500),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (_selectedDate != null && _endDate != null) ...[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    '${_endDate!.difference(_selectedDate!).inDays} noches',
+                                    style: const TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.chevron_right, color: subtextColor, size: 20),
+                        ],
                       ),
-                    ],
-                  ),
-                  if (_selectedDate != null && _endDate != null) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      '${_endDate!.difference(_selectedDate!).inDays} noches',
-                      style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.bold),
                     ),
-                  ],
+                  ),
                 ],
 
                 const SizedBox(height: 24),
