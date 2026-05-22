@@ -20,9 +20,11 @@ class _MobileServiceSelectorScreenState
   late final Animation<Offset> _card1Slide;
   late final Animation<double> _card2Fade;
   late final Animation<Offset> _card2Slide;
+  late final Animation<double> _card3Fade;
+  late final Animation<Offset> _card3Slide;
 
   String? _userName;
-  String? _tapping; // 'paseo' | 'hospedaje' — para animación de tap
+  String? _tapping; // 'paseo' | 'hospedaje' | 'guarderia' — para animación de tap
 
   @override
   void initState() {
@@ -52,12 +54,21 @@ class _MobileServiceSelectorScreenState
     );
     _card2Fade = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _entranceCtrl,
-          curve: const Interval(0.45, 0.85, curve: Curves.easeOut)),
+          curve: const Interval(0.45, 0.80, curve: Curves.easeOut)),
     );
     _card2Slide =
         Tween<Offset>(begin: const Offset(0.2, 0), end: Offset.zero).animate(
       CurvedAnimation(parent: _entranceCtrl,
-          curve: const Interval(0.45, 0.85, curve: Curves.easeOut)),
+          curve: const Interval(0.45, 0.80, curve: Curves.easeOut)),
+    );
+    _card3Fade = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _entranceCtrl,
+          curve: const Interval(0.60, 1.0, curve: Curves.easeOut)),
+    );
+    _card3Slide =
+        Tween<Offset>(begin: const Offset(-0.2, 0), end: Offset.zero).animate(
+      CurvedAnimation(parent: _entranceCtrl,
+          curve: const Interval(0.60, 1.0, curve: Curves.easeOut)),
     );
 
     _entranceCtrl.forward();
@@ -213,6 +224,33 @@ class _MobileServiceSelectorScreenState
                       textColor: textColor,
                       subtextColor: subtextColor,
                       onTap: () => _select('hospedaje'),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ── Tarjeta GUARDERÍA ──
+                SlideTransition(
+                  position: _card3Slide,
+                  child: FadeTransition(
+                    opacity: _card3Fade,
+                    child: _ServiceCard(
+                      service: 'guarderia',
+                      emoji: '🏡',
+                      title: 'Guardería',
+                      description: 'Deja a tu mascota por horas con un cuidador. Ideal para jornadas laborales.',
+                      features: const ['Por horas (3h a 10h)', 'Foto al inicio y al final', 'Precio por hora'],
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF6A1B9A), Color(0xFFAB47BC)],
+                      ),
+                      isTapping: _tapping == 'guarderia',
+                      surface: surface,
+                      textColor: textColor,
+                      subtextColor: subtextColor,
+                      onTap: () => _select('guarderia'),
                     ),
                   ),
                 ),

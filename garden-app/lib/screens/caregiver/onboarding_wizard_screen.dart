@@ -95,8 +95,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   final _keyStep2Times = GlobalKey();
 
   // Paso 5: Precio (uno por cada servicio)
-  double _precioHospedaje = 90.0; // pricePerDay (por noche)
-  double _precioPaseo = 90.0;     // pricePerWalk60 (por hora)
+  double _precioHospedaje = 90.0;  // pricePerDay (por noche)
+  double _precioPaseo = 90.0;      // pricePerWalk60 (por hora)
+  double _precioGuarderia = 90.0;  // pricePerGuarderia (por hora)
   String _authToken = '';
   Map<String, dynamic>? _priceStats;
 
@@ -551,6 +552,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           _showStepError('Por favor, selecciona un precio para Paseo');
           return false;
         }
+        if (_servicesOffered.contains('GUARDERIA') && _precioGuarderia <= 0) {
+          _showStepError('Por favor, selecciona un precio para Guardería');
+          return false;
+        }
         return true;
       case 5: // Foto de perfil (retrato) — triggers registration
         if (_profilePhotoUrl == null && _localProfilePhoto == null) {
@@ -661,6 +666,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       await _patchProfile({
         if (_servicesOffered.contains('HOSPEDAJE')) 'pricePerDay': _precioHospedaje.toInt(),
         if (_servicesOffered.contains('PASEO')) 'pricePerWalk60': _precioPaseo.toInt(),
+        if (_servicesOffered.contains('GUARDERIA')) 'pricePerGuarderia': _precioGuarderia.toInt(),
       });
       setState(() { _isLoading = false; _currentStep++; });
       return;
@@ -1302,6 +1308,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             Expanded(child: serviceCard('HOSPEDAJE', '🏠', 'Hospedaje')),
             const SizedBox(width: 12),
             Expanded(child: serviceCard('PASEO', '🦮', 'Paseo')),
+            const SizedBox(width: 12),
+            Expanded(child: serviceCard('GUARDERIA', '🏡', 'Guardería')),
           ]),
           const SizedBox(height: 28),
 
@@ -1520,6 +1528,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   Widget _buildStep5() {
     final offersHospedaje = _servicesOffered.contains('HOSPEDAJE');
     final offersPaseo = _servicesOffered.contains('PASEO');
+    final offersGuarderia = _servicesOffered.contains('GUARDERIA');
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -1556,15 +1565,25 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               value: _precioHospedaje,
               onChanged: (v) => setState(() => _precioHospedaje = v),
             ),
-            if (offersPaseo) const SizedBox(height: 20),
+            if (offersPaseo || offersGuarderia) const SizedBox(height: 20),
           ],
-          if (offersPaseo)
+          if (offersPaseo) ...[
             _buildPriceCard(
               titulo: 'Paseo',
               unidad: '/ 1 hora',
               emoji: '🦮',
               value: _precioPaseo,
               onChanged: (v) => setState(() => _precioPaseo = v),
+            ),
+            if (offersGuarderia) const SizedBox(height: 20),
+          ],
+          if (offersGuarderia)
+            _buildPriceCard(
+              titulo: 'Guardería',
+              unidad: '/ hora',
+              emoji: '🏡',
+              value: _precioGuarderia,
+              onChanged: (v) => setState(() => _precioGuarderia = v),
             ),
         ],
       ),

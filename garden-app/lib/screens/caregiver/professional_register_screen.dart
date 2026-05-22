@@ -70,6 +70,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
   // Paso 5: Precio
   double _precioHospedaje = 90.0;
   double _precioPaseo = 90.0;
+  double _precioGuarderia = 90.0;
 
   // Paso 6: Foto de perfil
   String? _profilePhotoUrl;
@@ -191,6 +192,10 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
         }
         if (_servicesOffered.contains('PASEO') && _precioPaseo <= 0) {
           _showStepError('Por favor, selecciona un precio para Paseo');
+          return false;
+        }
+        if (_servicesOffered.contains('GUARDERIA') && _precioGuarderia <= 0) {
+          _showStepError('Por favor, selecciona un precio para Guardería');
           return false;
         }
         return true;
@@ -315,6 +320,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           'services': _servicesOffered,
           if (_servicesOffered.contains('HOSPEDAJE')) 'pricePerDay': _precioHospedaje.toInt(),
           if (_servicesOffered.contains('PASEO')) 'pricePerWalk60': _precioPaseo.toInt(),
+          if (_servicesOffered.contains('GUARDERIA')) 'pricePerGuarderia': _precioGuarderia.toInt(),
           'photos': _photoUrls,
           if (_profilePhotoUrl != null) 'profilePhoto': _profilePhotoUrl,
         }),
@@ -706,6 +712,8 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           Expanded(child: serviceCard('HOSPEDAJE', '🏠', 'Hospedaje')),
           const SizedBox(width: 12),
           Expanded(child: serviceCard('PASEO', '🦮', 'Paseo')),
+          const SizedBox(width: 12),
+          Expanded(child: serviceCard('GUARDERIA', '🏡', 'Guardería')),
         ]),
         const SizedBox(height: 28),
 
@@ -1004,6 +1012,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
   Widget _buildStep5() {
     final offersHospedaje = _servicesOffered.contains('HOSPEDAJE');
     final offersPaseo = _servicesOffered.contains('PASEO');
+    final offersGuarderia = _servicesOffered.contains('GUARDERIA');
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1031,11 +1040,16 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
         if (offersHospedaje) ...[
           _buildPriceCard(titulo: 'Hospedaje', unidad: '/ noche', emoji: '🏠',
               value: _precioHospedaje, onChanged: (v) => setState(() => _precioHospedaje = v)),
-          if (offersPaseo) const SizedBox(height: 20),
+          if (offersPaseo || offersGuarderia) const SizedBox(height: 20),
         ],
-        if (offersPaseo)
+        if (offersPaseo) ...[
           _buildPriceCard(titulo: 'Paseo', unidad: '/ 1 hora', emoji: '🦮',
               value: _precioPaseo, onChanged: (v) => setState(() => _precioPaseo = v)),
+          if (offersGuarderia) const SizedBox(height: 20),
+        ],
+        if (offersGuarderia)
+          _buildPriceCard(titulo: 'Guardería', unidad: '/ hora', emoji: '🏡',
+              value: _precioGuarderia, onChanged: (v) => setState(() => _precioGuarderia = v)),
       ]),
     );
   }

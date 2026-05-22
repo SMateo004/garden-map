@@ -239,7 +239,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             ? (c['pricePerDay'] ?? 0)
             : _selectedService == 'paseo'
                 ? (c['pricePerWalk30'] ?? c['pricePerWalk60'] ?? 0)
-                : (c['pricePerWalk30'] ?? c['pricePerWalk60'] ?? c['pricePerDay'] ?? 0)) as num;
+                : _selectedService == 'guarderia'
+                    ? (c['pricePerGuarderia'] ?? c['pricePerWalk60'] ?? 0)
+                    : (c['pricePerWalk30'] ?? c['pricePerWalk60'] ?? c['pricePerDay'] ?? 0)) as num;
         return price >= _priceRange.start && (price <= _priceRange.end || _priceRange.end >= 500);
       }).toList();
     }
@@ -261,6 +263,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           num _resolvePrice(Map<String, dynamic> c, num fallback) {
             if (_selectedService == 'hospedaje') return (c['pricePerDay'] ?? fallback) as num;
             if (_selectedService == 'paseo') return (c['pricePerWalk30'] ?? c['pricePerWalk60'] ?? fallback) as num;
+            if (_selectedService == 'guarderia') return (c['pricePerGuarderia'] ?? c['pricePerWalk60'] ?? fallback) as num;
             return (c['pricePerWalk30'] ?? c['pricePerWalk60'] ?? c['pricePerDay'] ?? fallback) as num;
           }
           final pa = _resolvePrice(a, 999);
@@ -270,6 +273,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           num _resolvePrice2(Map<String, dynamic> c) {
             if (_selectedService == 'hospedaje') return (c['pricePerDay'] ?? 0) as num;
             if (_selectedService == 'paseo') return (c['pricePerWalk30'] ?? c['pricePerWalk60'] ?? 0) as num;
+            if (_selectedService == 'guarderia') return (c['pricePerGuarderia'] ?? c['pricePerWalk60'] ?? 0) as num;
             return (c['pricePerWalk30'] ?? c['pricePerWalk60'] ?? c['pricePerDay'] ?? 0) as num;
           }
           final pa = _resolvePrice2(a);
@@ -805,6 +809,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   _mobileServiceChip('paseo', '🦮 Paseo', isDark),
                   const SizedBox(width: 8),
                   _mobileServiceChip('hospedaje', '🏠 Hospedaje', isDark),
+                  const SizedBox(width: 8),
+                  _mobileServiceChip('guarderia', '🏡 Guardería', isDark),
                 ],
               ),
             ),
@@ -1389,6 +1395,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       _serviceChip('Paseo 🦮', 'paseo', textColor),
                       const SizedBox(width: 6),
                       _serviceChip('Hospedaje 🏠', 'hospedaje', textColor),
+                      const SizedBox(width: 6),
+                      _serviceChip('Guardería 🏡', 'guarderia', textColor),
                     ],
                   ),
                   _divider(border),
@@ -1866,15 +1874,19 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final bool hasWalk60Price = priceWalk60 != null && (priceWalk60 as num) > 0;
     final bool hasWalk30Price = priceWalk30 != null && (priceWalk30 as num) > 0;
 
+    final priceGuarderia = caregiver['pricePerGuarderia'];
+    final bool hasGuarderiaPrice = priceGuarderia != null && (priceGuarderia as num) > 0;
+
     if (_selectedService == 'hospedaje') {
       if (hasDayPrice) prices.add(('Bs $priceDay', '/noche'));
     } else if (_selectedService == 'paseo') {
-      // Show 30-min price first (lower anchor), fallback to 1hr if no 30min
       if (hasWalk30Price) {
         prices.add(('Bs $priceWalk30', '30 min'));
       } else if (hasWalk60Price) {
         prices.add(('Bs $priceWalk60', '1 hora'));
       }
+    } else if (_selectedService == 'guarderia') {
+      if (hasGuarderiaPrice) prices.add(('Bs $priceGuarderia', '/hora 🏡'));
     } else {
       // 'todos' — show only prices for services the caregiver actually offers
       if (hasWalk30Price) {
@@ -1884,6 +1896,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       }
       if (hasDayPrice) {
         prices.add(('Bs $priceDay', '/noche 🏠'));
+      }
+      if (hasGuarderiaPrice) {
+        prices.add(('Bs $priceGuarderia', '/hora 🏡'));
       }
     }
 
