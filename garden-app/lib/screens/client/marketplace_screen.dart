@@ -419,6 +419,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             }
             _hasMore = _currentPage < pagination['pages'];
             _hasError = false;
+            _isLoading = false;
           });
           return; // éxito
         }
