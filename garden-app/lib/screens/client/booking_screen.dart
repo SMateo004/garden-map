@@ -305,7 +305,9 @@ class _BookingScreenState extends State<BookingScreen> {
       _showError('Selecciona un tipo de servicio');
       return;
     }
-    if (_selectedDate == null) {
+    // Multi-day PASEO uses _selectedDates, not _selectedDate — skip the single-date check
+    final isMultiDayPaseo = _selectedService == 'PASEO' && _isMultiDay;
+    if (!isMultiDayPaseo && _selectedDate == null) {
       _showError('Selecciona una fecha');
       return;
     }
