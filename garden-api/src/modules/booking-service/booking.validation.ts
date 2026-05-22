@@ -4,9 +4,9 @@ const dateOnlyRegex = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Solo serviceType para el primer paso: errores claros en el discriminador. */
 const serviceTypeSchema = z.object({
-  serviceType: z.enum(['HOSPEDAJE', 'PASEO'], {
-    required_error: 'Debes seleccionar HOSPEDAJE o PASEO como tipo de servicio',
-    invalid_type_error: 'serviceType debe ser HOSPEDAJE o PASEO',
+  serviceType: z.enum(['HOSPEDAJE', 'PASEO', 'GUARDERIA'], {
+    required_error: 'Debes seleccionar HOSPEDAJE, PASEO o GUARDERIA como tipo de servicio',
+    invalid_type_error: 'serviceType debe ser HOSPEDAJE, PASEO o GUARDERIA',
   }),
 });
 
@@ -92,7 +92,28 @@ export const paseoSchema = z
     }
   );
 
-export type CreateBookingBody = z.infer<typeof hospedajeSchema> | z.infer<typeof paseoSchema>;
+/** Schema completo para guardería (igual que paseo single-day pero con duración fija). */
+export const guarderiaSchema = z.object({
+  serviceType: z.literal('GUARDERIA'),
+  caregiverId: z.string().uuid('caregiverId inválido'),
+  petId: z.string().uuid('petId inválido'),
+  walkDate: z.string().regex(dateOnlyRegex, 'walkDate: formato YYYY-MM-DD'),
+  timeSlot: z.enum(['MANANA', 'TARDE'], {
+    errorMap: () => ({ message: 'timeSlot debe ser MANANA o TARDE' }),
+  }),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/, 'startTime formato HH:mm').optional(),
+  duration: z.coerce
+    .number()
+    .int()
+    .refine((n) => [180, 240, 360, 480, 600].includes(n), {
+      message: 'Duración debe ser 180, 240, 360, 480 o 600 minutos',
+    }),
+});
+
+export type CreateBookingBody =
+  | z.infer<typeof hospedajeSchema>
+  | z.infer<typeof paseoSchema>
+  | z.infer<typeof guarderiaSchema>;
 
 /**
  * Validación en dos pasos: primero serviceType, luego el subesquema correspondiente.
@@ -109,6 +130,14 @@ export function parseCreateBookingBody(data: unknown): CreateBookingBody {
 
   if (serviceType === 'HOSPEDAJE') {
     const result = hospedajeSchema.safeParse(data);
+    if (!result.success) {
+      throw result.error;
+    }
+    return result.data;
+  }
+
+  if (serviceType === 'GUARDERIA') {
+    const result = guarderiaSchema.safeParse(data);
     if (!result.success) {
       throw result.error;
     }

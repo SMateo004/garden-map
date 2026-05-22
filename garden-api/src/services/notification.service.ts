@@ -78,7 +78,11 @@ function name(first?: string | null, last?: string | null, fallback = 'Usuario')
 }
 
 function serviceLabel(type: string) {
-  return type === 'HOSPEDAJE' ? 'Hospedaje' : 'Paseo';
+  switch (type) {
+    case 'HOSPEDAJE': return 'Hospedaje';
+    case 'GUARDERIA': return 'Guardería';
+    default: return 'Paseo';
+  }
 }
 
 function dateRange(booking: { serviceType: string; startDate?: Date | null; endDate?: Date | null; walkDate?: Date | null; timeSlot?: string | null }): string {

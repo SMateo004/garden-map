@@ -40,6 +40,7 @@ export interface PatchCaregiverProfileBody {
   pricePerDay?: number;
   pricePerWalk30?: number;
   pricePerWalk60?: number;
+  pricePerGuarderia?: number;
   rates?: any;
   termsAccepted?: boolean;
   privacyAccepted?: boolean;

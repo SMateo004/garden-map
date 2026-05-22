@@ -35,11 +35,12 @@ class _BookingScreenState extends State<BookingScreen> {
 
   // Selecciones del usuario
   String? _selectedPetId;
-  String? _selectedService; // 'PASEO' o 'HOSPEDAJE'
-  DateTime? _selectedDate; // para paseo single: fecha del paseo; para hospedaje: fecha inicio
+  String? _selectedService; // 'PASEO', 'HOSPEDAJE' o 'GUARDERIA'
+  DateTime? _selectedDate; // para paseo single / guardería: fecha; para hospedaje: fecha inicio
   DateTime? _endDate; // solo hospedaje
   String? _selectedTimeSlot; // 'MANANA', 'TARDE', 'NOCHE'
   int _selectedDuration = 60; // solo paseo: 60 minutos (walk30 deshabilitado)
+  int _guarderiaSelectedDuration = 180; // solo guardería: 180 min por defecto
   bool _isSubmitting = false;
 
   // Multi-day paseo
@@ -108,6 +109,8 @@ class _BookingScreenState extends State<BookingScreen> {
           _selectedService = widget.preloadedService;
         } else if (services.contains('PASEO')) {
           _selectedService = 'PASEO';
+        } else if (services.contains('GUARDERIA')) {
+          _selectedService = 'GUARDERIA';
         } else if (services.isNotEmpty) {
           _selectedService = services.first;
         }
@@ -147,6 +150,8 @@ class _BookingScreenState extends State<BookingScreen> {
                _selectedService = widget.preloadedService;
              } else if (services.contains('PASEO')) {
                _selectedService = 'PASEO';
+             } else if (services.contains('GUARDERIA')) {
+               _selectedService = 'GUARDERIA';
              } else if (services.isNotEmpty) {
                _selectedService = services.first;
              }
@@ -312,6 +317,12 @@ class _BookingScreenState extends State<BookingScreen> {
       _showError('Selecciona una fecha');
       return;
     }
+    if (_selectedService == 'GUARDERIA') {
+      if (_selectedTimeSlot == null) {
+        _showError('Selecciona un horario (Mañana o Tarde)');
+        return;
+      }
+    }
     if (_selectedService == 'PASEO') {
       if (_isMultiDay) {
         if (_selectedDates.isEmpty) {
@@ -356,7 +367,17 @@ class _BookingScreenState extends State<BookingScreen> {
     setState(() => _isSubmitting = true);
     try {
       final Map<String, dynamic> body;
-      if (_selectedService == 'PASEO') {
+      if (_selectedService == 'GUARDERIA') {
+        body = {
+          'serviceType': 'GUARDERIA',
+          'caregiverId': widget.caregiverId,
+          'petId': _selectedPetId,
+          'walkDate': _selectedDate!.toIso8601String().split('T')[0],
+          'timeSlot': _selectedTimeSlot,
+          'duration': _guarderiaSelectedDuration,
+          if (_selectedStartTime != null) 'startTime': _selectedStartTime,
+        };
+      } else if (_selectedService == 'PASEO') {
         if (_isMultiDay) {
           // Reserva multi-día
           body = {
@@ -458,7 +479,13 @@ class _BookingScreenState extends State<BookingScreen> {
 
   double? _calculatePrice() {
     if (_caregiver == null || _selectedService == null) return null;
-    if (_selectedService == 'PASEO') {
+    if (_selectedService == 'GUARDERIA') {
+      if (_selectedDate == null || _selectedTimeSlot == null) return null;
+      final pricePerGuarderia = (_caregiver!['pricePerGuarderia'] as num?)?.toDouble()
+          ?? (_caregiver!['pricePerWalk60'] as num?)?.toDouble();
+      if (pricePerGuarderia == null || pricePerGuarderia <= 0) return null;
+      return pricePerGuarderia * (_guarderiaSelectedDuration / 60);
+    } else if (_selectedService == 'PASEO') {
       final price60 = (_caregiver!['pricePerWalk60'] as num?)?.toDouble();
       if (price60 == null) return null;
       final unitPrice = _selectedDuration == 30 ? (price60 / 2).roundToDouble() : price60;
@@ -618,6 +645,10 @@ class _BookingScreenState extends State<BookingScreen> {
             } else if (_selectedService == 'HOSPEDAJE') {
               priceText = _caregiver!['pricePerDay'] != null ? 'Bs ${_caregiver!['pricePerDay']}' : '—';
               priceUnit = 'por noche';
+            } else if (_selectedService == 'GUARDERIA') {
+              final pg = _caregiver!['pricePerGuarderia'] ?? _caregiver!['pricePerWalk60'];
+              priceText = pg != null ? 'Bs $pg' : '—';
+              priceUnit = 'por hora';
             } else {
               final p60 = _caregiver!['pricePerWalk60'];
               priceText = p60 != null ? 'Bs $p60/hora' : '—';
@@ -1089,6 +1120,169 @@ class _BookingScreenState extends State<BookingScreen> {
                         _buildMultiDayTimePicker(textColor, subtextColor, borderColor, surface),
                       ],
                     ],
+                  ],
+                ] else if (_selectedService == 'GUARDERIA') ...[
+                  // ── Guardería: duración fija ──
+                  Text('Duración', style: GardenText.h4.copyWith(color: textColor)),
+                  const SizedBox(height: 12),
+                  Builder(builder: (_) {
+                    final pricePerGuarderia = (_caregiver!['pricePerGuarderia'] as num?)?.toDouble()
+                        ?? (_caregiver!['pricePerWalk60'] as num?)?.toDouble() ?? 0.0;
+                    return Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [180, 240, 360, 480, 600].map((mins) {
+                        final isSelected = _guarderiaSelectedDuration == mins;
+                        final hours = mins ~/ 60;
+                        final price = (pricePerGuarderia * (mins / 60)).round();
+                        return GestureDetector(
+                          onTap: () => setState(() => _guarderiaSelectedDuration = mins),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 18),
+                            decoration: BoxDecoration(
+                              color: isSelected ? GardenColors.primary : surface,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: isSelected ? GardenColors.primary : borderColor),
+                            ),
+                            child: Column(
+                              children: [
+                                Text('${hours}h', style: TextStyle(
+                                  color: isSelected ? Colors.white : textColor,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                )),
+                                Text(pricePerGuarderia > 0 ? 'Bs $price' : '—', style: TextStyle(
+                                  color: isSelected ? Colors.white.withValues(alpha: 0.85) : subtextColor,
+                                  fontSize: 12,
+                                )),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    );
+                  }),
+                  const SizedBox(height: 24),
+                  Divider(color: borderColor),
+                  const SizedBox(height: 24),
+
+                  // ── Guardería: fecha ──
+                  Text('Fecha', style: GardenText.h4.copyWith(color: textColor)),
+                  const SizedBox(height: 12),
+                  if (_loadingMultiDayData)
+                    const SizedBox(height: 72, child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+                  else SizedBox(
+                    height: 72,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: 14,
+                      itemBuilder: (_, i) {
+                        final date = DateTime.now().add(Duration(days: i + 1));
+                        final ds = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+                        final isSelected = _selectedDate != null &&
+                            _selectedDate!.year == date.year &&
+                            _selectedDate!.month == date.month &&
+                            _selectedDate!.day == date.day;
+                        const months = ['ENE','FEB','MAR','ABR','MAY','JUN',
+                                        'JUL','AGO','SEP','OCT','NOV','DIC'];
+                        final mon = months[date.month - 1];
+                        final bool isDayUnavailable = _blockedDates.contains(ds) ||
+                            (_multiDaySlotsByDate.containsKey(ds) &&
+                             _multiDaySlotsByDate[ds]!.every((s) => s['enabled'] != true)) ||
+                            (_multiDayDataLoaded && !_multiDaySlotsByDate.containsKey(ds));
+                        return GestureDetector(
+                          onTap: isDayUnavailable ? null : () async {
+                            setState(() {
+                              _selectedDate = date;
+                              _selectedTimeSlot = null;
+                              _selectedStartTime = null;
+                            });
+                            await _loadAvailableSlots(date);
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            margin: const EdgeInsets.only(right: 10),
+                            width: 58,
+                            decoration: BoxDecoration(
+                              color: isDayUnavailable
+                                  ? (themeNotifier.isDark ? Colors.white.withValues(alpha: 0.04) : Colors.grey.withValues(alpha: 0.08))
+                                  : isSelected ? GardenColors.primary : surface,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: isDayUnavailable
+                                    ? borderColor.withValues(alpha: 0.35)
+                                    : isSelected ? GardenColors.primary : borderColor,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(mon, style: TextStyle(
+                                  color: isDayUnavailable ? subtextColor.withValues(alpha: 0.4) : isSelected ? Colors.white.withValues(alpha: 0.8) : subtextColor,
+                                  fontSize: 10, fontWeight: FontWeight.w700,
+                                )),
+                                const SizedBox(height: 4),
+                                Text('${date.day}', style: TextStyle(
+                                  color: isDayUnavailable ? subtextColor.withValues(alpha: 0.4) : isSelected ? Colors.white : textColor,
+                                  fontSize: 22, fontWeight: FontWeight.w800,
+                                )),
+                                if (isDayUnavailable)
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 2),
+                                    width: 4, height: 4,
+                                    decoration: const BoxDecoration(color: GardenColors.error, shape: BoxShape.circle),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  if (_loadingSlots)
+                    const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(child: CircularProgressIndicator(color: GardenColors.primary)),
+                    ),
+                  // ── Guardería: horario (solo MANANA y TARDE) ──
+                  if (_selectedDate != null && _availableSlots.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    Text('Horario', style: GardenText.h4.copyWith(color: textColor)),
+                    const SizedBox(height: 12),
+                    ...(_availableSlots.where((slot) => slot['slot'] != 'NOCHE').map((slot) {
+                      final slotName = slot['slot'] as String;
+                      final label = slotName == 'MANANA' ? 'Mañana' : 'Tarde';
+                      final range = '${slot['start']} - ${slot['end']}';
+                      final isSelected = _selectedTimeSlot == slotName;
+                      return GestureDetector(
+                        onTap: () => setState(() {
+                          _selectedTimeSlot = slotName;
+                          _selectedStartTime = null;
+                        }),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: isSelected ? GardenColors.primary.withValues(alpha: 0.08) : surface,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: isSelected ? GardenColors.primary : borderColor),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                                color: GardenColors.primary, size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+                              const SizedBox(width: 8),
+                              Text(range, style: TextStyle(color: subtextColor, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                      );
+                    })).toList(),
                   ],
                 ] else if (_selectedService == 'HOSPEDAJE') ...[
                   Text('Fechas', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
@@ -2364,6 +2558,10 @@ class _BookingScreenState extends State<BookingScreen> {
       fechaText = '';
     }
 
+    final String serviceDisplayName = _selectedService == 'PASEO' ? 'Paseo'
+        : _selectedService == 'GUARDERIA' ? 'Guardería'
+        : 'Hospedaje';
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -2377,9 +2575,14 @@ class _BookingScreenState extends State<BookingScreen> {
           Text('Resumen de reserva', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           _summaryRow(Icons.pets, 'Mascota', petName),
-          _summaryRow(Icons.settings, 'Servicio', _selectedService == 'PASEO' ? 'Paseo' : 'Hospedaje'),
+          _summaryRow(Icons.settings, 'Servicio', serviceDisplayName),
           if (_selectedService == 'PASEO')
             _summaryRow(Icons.timer_outlined, 'Duración', '$_selectedDuration min'),
+          if (_selectedService == 'GUARDERIA') ...[
+            _summaryRow(Icons.timer_outlined, 'Duración', '${_guarderiaSelectedDuration ~/ 60}h'),
+            if (_selectedTimeSlot != null)
+              _summaryRow(Icons.access_time, 'Horario', _selectedTimeSlot == 'MANANA' ? 'Mañana' : 'Tarde'),
+          ],
           if (fechaText.isNotEmpty)
             _summaryRow(Icons.calendar_today, _isMultiDay ? 'Días' : 'Fecha', fechaText),
           if (_selectedService == 'PASEO' && _isMultiDay && _multiDayTimeSlot != null)

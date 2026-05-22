@@ -149,7 +149,7 @@ class BookingConfirmedScreen extends StatelessWidget {
                         const SizedBox(height: 10),
                         _row(
                           'Servicio',
-                          serviceType == 'PASEO' ? 'Paseo' : 'Hospedaje',
+                          serviceType == 'PASEO' ? 'Paseo' : serviceType == 'GUARDERIA' ? 'Guardería' : 'Hospedaje',
                           textColor, subtextColor,
                         ),
                         const SizedBox(height: 16),

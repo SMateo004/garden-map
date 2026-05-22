@@ -863,7 +863,7 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                   shape: BoxShape.circle,
                 ),
                 child: Center(
-                  child: Text(serviceType == 'PASEO' ? '🦮' : '🏠',
+                  child: Text(serviceType == 'PASEO' ? '🦮' : serviceType == 'GUARDERIA' ? '🏡' : '🏠',
                       style: const TextStyle(fontSize: 16)),
                 ),
               ),
@@ -875,7 +875,7 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                     Row(
                       children: [
                         Text(
-                          serviceType == 'PASEO' ? 'Paseo' : 'Hospedaje',
+                          serviceType == 'PASEO' ? 'Paseo' : serviceType == 'GUARDERIA' ? 'Guardería' : 'Hospedaje',
                           style: TextStyle(
                               color: textColor,
                               fontWeight: FontWeight.w700,

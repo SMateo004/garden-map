@@ -74,7 +74,7 @@ export async function createCheckoutSession(
           currency: 'bob',
           unit_amount: amountCentavos,
           product_data: {
-            name: `GARDEN - Reserva ${booking.serviceType === 'HOSPEDAJE' ? 'Hospedaje' : 'Paseo'}`,
+            name: `GARDEN - Reserva ${booking.serviceType === 'HOSPEDAJE' ? 'Hospedaje' : booking.serviceType === 'GUARDERIA' ? 'Guardería por horas' : 'Paseo'}`,
             description: `Cuidador: ${booking.caregiver.user.firstName} ${booking.caregiver.user.lastName}. Mascota: ${booking.petName}.`,
             images: booking.caregiver.photos.length ? [booking.caregiver.photos[0]!] : undefined,
           },

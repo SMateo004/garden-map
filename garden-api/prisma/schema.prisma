@@ -91,6 +91,7 @@ model CaregiverProfile {
   pricePerDay                     Int?
   pricePerWalk30                  Int?
   pricePerWalk60                  Int?
+  pricePerGuarderia               Float?
   rates                           Json?
   termsAccepted                   Boolean?
   privacyAccepted                 Boolean?
@@ -532,6 +533,7 @@ enum UserRole {
 enum ServiceType {
   HOSPEDAJE
   PASEO
+  GUARDERIA
 }
 
 enum Zone {

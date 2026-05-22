@@ -76,6 +76,12 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
       error: { code: 'PASEO_DISABLED', message: 'El servicio de paseos está temporalmente deshabilitado.' },
     });
   }
+  if (body.serviceType === 'GUARDERIA' && !await getBoolSetting('guarderiaEnabled', true)) {
+    return res.status(503).json({
+      success: false,
+      error: { code: 'GUARDERIA_DISABLED', message: 'El servicio de guardería está temporalmente deshabilitado.' },
+    });
+  }
 
   try {
     const booking = await bookingService.createBooking(clientId, body);

@@ -37,7 +37,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   bool _isLoadingPayments = false;
   String _adminToken = '';
   String _caregiverStatusFilter = 'pendientes';
-  String _paymentsHistoryFilter = 'todos'; // 'todos', 'PASEO', 'HOSPEDAJE'
+  String _paymentsHistoryFilter = 'todos'; // 'todos', 'PASEO', 'HOSPEDAJE', 'GUARDERIA'
   final TextEditingController _caregiverSearchCtrl = TextEditingController();
   final TextEditingController _reservationsSearchCtrl = TextEditingController();
   final TextEditingController _paymentsSearchCtrl = TextEditingController();
@@ -1873,7 +1873,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     Widget pendingCard(Map<String, dynamic> p) {
       final status = p['status'] as String? ?? '';
       final date = p['walkDate'] ?? p['startDate'] ?? '—';
-      final isPaseo = p['serviceType'] == 'PASEO';
+      final svcType = p['serviceType'] as String? ?? '';
+      final isPaseo = svcType == 'PASEO';
+      final isGuarderia = svcType == 'GUARDERIA';
+      final svcLabel = isPaseo ? 'Paseo' : isGuarderia ? 'Guardería' : 'Hospedaje';
+      final svcIcon = isPaseo ? Icons.directions_walk_rounded : isGuarderia ? Icons.home_work_rounded : Icons.home_rounded;
       return Container(
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
@@ -1890,10 +1894,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
             ),
             child: Row(children: [
-              Icon(isPaseo ? Icons.directions_walk_rounded : Icons.home_rounded,
-                size: 14, color: GardenColors.warning),
+              Icon(svcIcon, size: 14, color: GardenColors.warning),
               const SizedBox(width: 6),
-              Text(isPaseo ? 'Paseo' : 'Hospedaje',
+              Text(svcLabel,
                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: GardenColors.warning)),
               const Spacer(),
               _paymentStatusBadge(status),
@@ -1963,7 +1966,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       // caregiverPayout  = totalAmount − commissionAmount = precio original del cuidador
       final commission = double.tryParse(p['commissionAmount']?.toString() ?? '0') ?? (amount * 0.10);
       final caregiverPayout = amount - commission;
-      final isPaseo = p['serviceType'] == 'PASEO';
+      final svcType2 = p['serviceType'] as String? ?? '';
+      final isPaseo = svcType2 == 'PASEO';
+      final isGuarderia2 = svcType2 == 'GUARDERIA';
+      final svcLabel2 = isPaseo ? 'Paseo' : isGuarderia2 ? 'Guardería' : 'Hospedaje';
+      final svcIcon2 = isPaseo ? Icons.directions_walk_rounded : isGuarderia2 ? Icons.home_work_rounded : Icons.home_rounded;
       final paidAt = p['paidAt'] as String?;
       String dateStr = '—';
       if (paidAt != null) {
@@ -1992,10 +1999,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
               ),
               child: Row(children: [
-                Icon(isPaseo ? Icons.directions_walk_rounded : Icons.home_rounded,
-                  size: 14, color: GardenColors.success),
+                Icon(svcIcon2, size: 14, color: GardenColors.success),
                 const SizedBox(width: 6),
-                Text(isPaseo ? 'Paseo' : 'Hospedaje',
+                Text(svcLabel2,
                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: GardenColors.success)),
                 const SizedBox(width: 8),
                 Container(
@@ -2360,7 +2366,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(children: [
-              for (final f in [('Todos', 'todos'), ('Paseos', 'PASEO'), ('Hospedaje', 'HOSPEDAJE')]) ...[
+              for (final f in [('Todos', 'todos'), ('Paseos', 'PASEO'), ('Hospedaje', 'HOSPEDAJE'), ('Guardería', 'GUARDERIA')]) ...[
                 GestureDetector(
                   onTap: () => setState(() => _paymentsHistoryFilter = f.$2),
                   child: AnimatedContainer(
@@ -2848,8 +2854,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                       itemBuilder: (context, i) {
                         final r = filtered[i];
                         final status = r['status'] as String? ?? '';
-                        final isPaseo = r['serviceType'] == 'PASEO';
-                        final date = isPaseo
+                        final rSvcType = r['serviceType'] as String? ?? '';
+                        final isPaseo = rSvcType == 'PASEO';
+                        final isGuarderia = rSvcType == 'GUARDERIA';
+                        final date = (isPaseo || isGuarderia)
                             ? (r['walkDate'] ?? '—')
                             : '${r['startDate'] ?? '?'} – ${r['endDate'] ?? '?'}';
                         return GestureDetector(
@@ -2870,7 +2878,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                   children: [
                                     Expanded(
                                       child: Text(
-                                        '${isPaseo ? 'Paseo' : 'Hospedaje'} · ${r['petName'] ?? ''}',
+                                        '${isPaseo ? 'Paseo' : isGuarderia ? 'Guardería' : 'Hospedaje'} · ${r['petName'] ?? ''}',
                                         style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14),
                                       ),
                                     ),

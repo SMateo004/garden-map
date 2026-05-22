@@ -121,7 +121,7 @@ class _PriceSuggestionBannerState extends State<PriceSuggestionBanner> {
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
     final trendEmoji = tendencia == 'rising' ? '📈' : tendencia == 'falling' ? '📉' : '➡️';
-    final serviceLabel = serviceType == 'PASEO' ? '🐕 Paseo' : '🏠 Hospedaje';
+    final serviceLabel = serviceType == 'PASEO' ? '🐕 Paseo' : serviceType == 'GUARDERIA' ? '🏡 Guardería' : '🏠 Hospedaje';
     final confianzaColor = confianza == 'alta'
         ? GardenColors.success
         : confianza == 'media' ? GardenColors.warning : GardenColors.lightTextSecondary;

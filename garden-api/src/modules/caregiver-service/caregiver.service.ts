@@ -100,7 +100,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
     where.zone = { notIn: blockedZones as Zone[] };
   }
 
-  if (service === ServiceType.PASEO || service === ServiceType.HOSPEDAJE) {
+  if (service === ServiceType.PASEO || service === ServiceType.HOSPEDAJE || service === ServiceType.GUARDERIA) {
     where.servicesOffered = { has: service as ServiceType };
   }
 
@@ -188,6 +188,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       pricePerDay: applyMarkup(c.pricePerDay, markupRate),
       pricePerWalk30: applyMarkup(c.pricePerWalk30, markupRate),
       pricePerWalk60: applyMarkup(c.pricePerWalk60, markupRate),
+      pricePerGuarderia: applyMarkup((c as any).pricePerGuarderia, markupRate),
       verified: c.verified,
       spaceType: Array.isArray(c.spaceType) ? c.spaceType : (c.spaceType ? [c.spaceType] : []),
       experienceYears: c.experienceYears,
@@ -391,6 +392,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     pricePerDay: applyMarkup(profile.pricePerDay, markupRate),
     pricePerWalk30: applyMarkup(profile.pricePerWalk30, markupRate),
     pricePerWalk60: applyMarkup(profile.pricePerWalk60, markupRate),
+    pricePerGuarderia: applyMarkup((profile as any).pricePerGuarderia, markupRate),
     verified: profile.verified,
     spaceType: Array.isArray(profile.spaceType) ? profile.spaceType : (profile.spaceType ? [profile.spaceType] : []),
     bio: profile.bio,

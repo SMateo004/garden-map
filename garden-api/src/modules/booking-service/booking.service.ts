@@ -169,6 +169,7 @@ export async function createBooking(
         pricePerDay: true,
         pricePerWalk30: true,
         pricePerWalk60: true,
+        pricePerGuarderia: true,
         servicesOffered: true,
       },
     });
@@ -219,10 +220,7 @@ export async function createBooking(
       }
     }
 
-    const hasService =
-      body.serviceType === ServiceType.HOSPEDAJE
-        ? caregiver.servicesOffered.includes(ServiceType.HOSPEDAJE)
-        : caregiver.servicesOffered.includes(ServiceType.PASEO);
+    const hasService = caregiver.servicesOffered.includes(body.serviceType as ServiceType);
     if (!hasService) {
       throw new BookingValidationError(
         `El cuidador no ofrece el servicio ${body.serviceType}`,
@@ -233,6 +231,15 @@ export async function createBooking(
 
     if (body.serviceType === ServiceType.HOSPEDAJE) {
       await assertHospedajeAvailability(tx, body.caregiverId, body.startDate, body.endDate);
+    } else if (body.serviceType === ServiceType.GUARDERIA) {
+      await assertPaseoAvailability(
+        tx,
+        body.caregiverId,
+        (body as any).walkDate,
+        (body as any).timeSlot,
+        (body as any).startTime,
+        (body as any).duration
+      );
     } else {
       const walkDays = (body as any).walkDays as Array<{ date: string; timeSlot: string; startTime?: string }> | undefined;
       if (walkDays && walkDays.length > 0) {
@@ -284,6 +291,16 @@ export async function createBooking(
       }
       totalDays = computedDays;
       totalAmount = totalDays * pricePerUnit;
+    } else if (body.serviceType === ServiceType.GUARDERIA) {
+      const duration = (body as any).duration as number;
+      const p60 = caregiver.pricePerWalk60 ?? 0;
+      const priceGuarderia = (caregiver as any).pricePerGuarderia ?? p60;
+      if (priceGuarderia <= 0) {
+        throw new BookingValidationError('El cuidador no tiene precio de guardería configurado', 'BOOKING_VALIDATION', 'caregiverId');
+      }
+      // Precio por hora de guardería × horas solicitadas
+      pricePerUnit = Math.round(priceGuarderia * (duration / 60));
+      totalAmount = pricePerUnit;
     } else {
       const duration = (body as any).duration;
       const p60 = caregiver.pricePerWalk60 ?? 0;
@@ -326,6 +343,13 @@ export async function createBooking(
           endDate: new Date(body.endDate),
           totalDays,
         }
+        : body.serviceType === ServiceType.GUARDERIA
+        ? {
+          walkDate: new Date((body as any).walkDate),
+          timeSlot: (body as any).timeSlot,
+          startTime: (body as any).startTime,
+          duration: (body as any).duration,
+        }
         : (() => {
           const walkDays = (body as any).walkDays as Array<{ date: string; timeSlot: string; startTime?: string }> | undefined;
           const isMultiDay = walkDays && walkDays.length > 0;
@@ -357,7 +381,7 @@ export async function createBooking(
         data: {
           userId: caregiverUser.userId,
           title: '¡Nueva solicitud de reserva!',
-          message: `Tienes una nueva solicitud de ${body.serviceType === 'HOSPEDAJE' ? 'hospedaje' : 'paseo'} para ${pet.name}. Revisa tu buzón para aceptar o rechazar.`,
+          message: `Tienes una nueva solicitud de ${body.serviceType === 'HOSPEDAJE' ? 'hospedaje' : body.serviceType === 'GUARDERIA' ? 'guardería' : 'paseo'} para ${pet.name}. Revisa tu buzón para aceptar o rechazar.`,
           type: 'NEW_BOOKING',
         },
       });
@@ -677,7 +701,7 @@ export async function checkExtensionAvailability(
   });
 
   if (!booking) return { allowedMinutes: 0, reason: 'Reserva no encontrada' };
-  if (booking.serviceType !== ServiceType.PASEO) return { allowedMinutes: 0, reason: 'Solo paseos pueden extenderse' };
+  if (booking.serviceType !== ServiceType.PASEO) return { allowedMinutes: 0, reason: 'Solo paseos pueden extenderse (no guardería ni hospedaje)' };
   if (booking.status !== BookingStatus.IN_PROGRESS) return { allowedMinutes: 0, reason: 'El paseo no está en curso' };
 
   const now = new Date();
@@ -1016,7 +1040,7 @@ export async function calculateRefund(
     return { refundAmount: 0, refundStatus: RefundStatus.REJECTED, refundPercent: 0 };
   }
 
-  // PASEO: referencia = mediodía del walkDate para calcular horas hasta el servicio
+  // PASEO / GUARDERIA: referencia = mediodía del walkDate para calcular horas hasta el servicio
   const walkDate = booking.walkDate
     ? new Date(
       booking.walkDate.getFullYear(),
@@ -2311,7 +2335,7 @@ export async function trackServiceLocation(
 
   const booking = await prisma.booking.findFirst({ where: { id: bookingId, caregiverId: profile.id } });
   if (!booking) throw new BookingNotFoundError(bookingId);
-  if (booking.serviceType !== ServiceType.PASEO) throw new BadRequestError('GPS solo disponible para paseos');
+  if (booking.serviceType !== ServiceType.PASEO) throw new BadRequestError('GPS solo disponible para paseos (no guardería ni hospedaje)');
 
   // Guard: only track while the walk is actually in progress
   if (booking.status !== BookingStatus.IN_PROGRESS) {
@@ -2494,7 +2518,7 @@ export async function confirmReceiptByClient(
         type: 'EARNING',
         amount: amount,
         balance: balanceBefore + amount, // nuevo saldo = anterior + ganancia
-        description: `Ganancia por ${booking.serviceType === 'PASEO' ? 'paseo' : 'hospedaje'} - ${booking.petName}`,
+        description: `Ganancia por ${booking.serviceType === 'PASEO' ? 'paseo' : booking.serviceType === 'GUARDERIA' ? 'guardería' : 'hospedaje'} - ${booking.petName}`,
         bookingId: booking.id,
         status: 'COMPLETED',
       },

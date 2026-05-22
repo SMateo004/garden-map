@@ -40,11 +40,12 @@ export const serviceAvailabilityItemSchema = z.object({
   lastMinute: z.boolean(),
 });
 
-/** Mapa servicio -> disponibilidad (HOSPEDAJE, PASEO) */
+/** Mapa servicio -> disponibilidad (HOSPEDAJE, PASEO, GUARDERIA) */
 export const serviceAvailabilitySchema = z
   .object({
     HOSPEDAJE: serviceAvailabilityItemSchema.optional(),
     PASEO: serviceAvailabilityItemSchema.optional(),
+    GUARDERIA: serviceAvailabilityItemSchema.optional(),
   })
   .optional();
 

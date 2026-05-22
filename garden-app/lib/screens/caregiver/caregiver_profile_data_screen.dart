@@ -63,6 +63,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   final _pricePerDayController = TextEditingController();
   final _pricePerWalk30Controller = TextEditingController();
   final _pricePerWalk60Controller = TextEditingController();
+  final _pricePerGuarderiaController = TextEditingController();
   final _includesController = TextEditingController();
   final _emergencyController = TextEditingController();
   final _requirementsController = TextEditingController();
@@ -167,6 +168,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     _pricePerDayController.text = (profile['pricePerDay'] ?? 0).toString();
     _pricePerWalk30Controller.text = (profile['pricePerWalk30'] ?? 0).toString();
     _pricePerWalk60Controller.text = (profile['pricePerWalk60'] ?? 0).toString();
+    // Pre-rellena con precio de paseo/hora si no tiene precio de guardería configurado
+    final savedGuarderia = profile['pricePerGuarderia'];
+    _pricePerGuarderiaController.text = savedGuarderia != null && (savedGuarderia as num) > 0
+        ? savedGuarderia.toString()
+        : (profile['pricePerWalk60'] ?? 0).toString();
     _includesController.text = faq['includes'] ?? '';
     _emergencyController.text = faq['emergency'] ?? '';
     _requirementsController.text = faq['requirements'] ?? '';
@@ -349,6 +355,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         return _showValidationError('Ingresa el precio por noche del hospedaje', scrollTo: _keyPriceHospedaje);
       }
     }
+    if (_selectedServices.contains('GUARDERIA')) {
+      if ((_pricePerGuarderiaController.text.trim().isEmpty) ||
+          (double.tryParse(_pricePerGuarderiaController.text) ?? 0) <= 0) {
+        return _showValidationError('Ingresa el precio por hora de guardería');
+      }
+    }
 
     // FAQ
     if (_includesController.text.trim().length < 5) {
@@ -415,6 +427,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         'pricePerWalk30': _offersWalk30
             ? ((double.tryParse(_pricePerWalk60Controller.text) ?? 0) / 2).round()
             : 0,
+        'pricePerGuarderia': (double.tryParse(_pricePerGuarderiaController.text) ?? 0),
         'homeType': hType,
         'spaceType': _selectedHomeTypes,
         'hasYard': _hasYard,
@@ -725,6 +738,26 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
               ),
             ],
 
+            if (_selectedServices.contains('GUARDERIA')) ...[
+              const SizedBox(height: 24),
+              Row(children: [
+                const Icon(Icons.home_work_rounded, color: GardenColors.primary, size: 18),
+                const SizedBox(width: 8),
+                Text('Precio de guardería', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+              ]),
+              const SizedBox(height: 10),
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Precio por hora de guardería', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Text('Recomendado: igual al precio de paseo/hora', style: TextStyle(color: subtextColor, fontSize: 11)),
+                const SizedBox(height: 6),
+                Row(children: [
+                  Expanded(child: GardenInput(hint: 'Ej: 60 (Bs/hora)', controller: _pricePerGuarderiaController, keyboardType: TextInputType.number)),
+                  const Expanded(child: SizedBox()),
+                ]),
+              ]),
+            ],
+
             if (_selectedServices.contains('HOSPEDAJE')) ...[
               const SizedBox(height: 24),
               SizedBox(key: _keyPriceHospedaje, height: 0),
@@ -1012,8 +1045,9 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   Widget _buildServiceChips(Color surface, Color border) {
     return Wrap(
       spacing: 8,
-      children: ['PASEO', 'HOSPEDAJE'].map((s) {
-        final label = s == 'PASEO' ? '🦮 Paseo' : '🏠 Hospedaje';
+      runSpacing: 8,
+      children: ['PASEO', 'HOSPEDAJE', 'GUARDERIA'].map((s) {
+        final label = s == 'PASEO' ? '🦮 Paseo' : s == 'GUARDERIA' ? '🏡 Guardería' : '🏠 Hospedaje';
         return _filterChip(s, label, _selectedServices, surface, border);
       }).toList(),
     );

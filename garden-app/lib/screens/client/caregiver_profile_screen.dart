@@ -177,11 +177,14 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     final pricePerWalk60Raw = _caregiver!['pricePerWalk60'];
     final pricePerWalk30Raw = _caregiver!['pricePerWalk30'];
     final pricePerDayRaw = _caregiver!['pricePerDay'];
+    final pricePerGuarderiaRaw = _caregiver!['pricePerGuarderia'];
     final pricePerDay = (pricePerDayRaw != null && (pricePerDayRaw as num) > 0) ? pricePerDayRaw : null;
     final pricePerWalk60 = (pricePerWalk60Raw != null && (pricePerWalk60Raw as num) > 0) ? pricePerWalk60Raw : null;
     final pricePerWalk30 = (pricePerWalk30Raw != null && (pricePerWalk30Raw as num) > 0) ? pricePerWalk30Raw : null;
+    final pricePerGuarderia = (pricePerGuarderiaRaw != null && (pricePerGuarderiaRaw as num) > 0) ? pricePerGuarderiaRaw : null;
     final offersHospedaje = pricePerDay != null;
     final offersPaseo = pricePerWalk30 != null || pricePerWalk60 != null;
+    final offersGuarderia = pricePerGuarderia != null;
     final walkDisplayPrice = pricePerWalk30 ?? pricePerWalk60;
     final walkDisplayUnit = pricePerWalk30 != null ? '30 min' : 'hora';
     final isDark = themeNotifier.isDark;
@@ -190,7 +193,9 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
 
     final bookingExtra = {'caregiver': _caregiver, 'pets': _clientPets, 'token': token};
 
-    if (offersHospedaje && offersPaseo) {
+    final offeredCount = [offersHospedaje, offersPaseo, offersGuarderia].where((v) => v).length;
+
+    if (offeredCount > 1) {
       showModalBottomSheet(
         context: context,
         backgroundColor: Colors.transparent,
@@ -204,16 +209,23 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
               const SizedBox(height: 20),
               Text('¿Qué servicio necesitas?', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
               const SizedBox(height: 20),
-              _ServiceOption(icon: Icons.home_outlined, label: 'Hospedaje', sublabel: 'Bs $pricePerDay/noche', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: {...bookingExtra, 'serviceType': 'HOSPEDAJE'}); }),
-              const SizedBox(height: 12),
-              _ServiceOption(icon: Icons.directions_walk, label: 'Paseo', sublabel: 'Bs $walkDisplayPrice/$walkDisplayUnit', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: {...bookingExtra, 'serviceType': 'PASEO'}); }),
+              if (offersHospedaje) ...[
+                _ServiceOption(icon: Icons.home_outlined, label: 'Hospedaje', sublabel: 'Bs $pricePerDay/noche', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: {...bookingExtra, 'serviceType': 'HOSPEDAJE'}); }),
+                const SizedBox(height: 12),
+              ],
+              if (offersPaseo) ...[
+                _ServiceOption(icon: Icons.directions_walk, label: 'Paseo', sublabel: 'Bs $walkDisplayPrice/$walkDisplayUnit', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: {...bookingExtra, 'serviceType': 'PASEO'}); }),
+                const SizedBox(height: 12),
+              ],
+              if (offersGuarderia)
+                _ServiceOption(icon: Icons.home_work_outlined, label: 'Guardería', sublabel: 'Bs $pricePerGuarderia/hora', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: {...bookingExtra, 'serviceType': 'GUARDERIA'}); }),
             ],
           ),
         ),
       );
     } else {
       // Single service — detect which one it is
-      final singleService = offersHospedaje ? 'HOSPEDAJE' : 'PASEO';
+      final singleService = offersHospedaje ? 'HOSPEDAJE' : offersGuarderia ? 'GUARDERIA' : 'PASEO';
       context.push('/booking/${widget.caregiverId}', extra: {...bookingExtra, 'serviceType': singleService});
     }
   }
@@ -558,8 +570,27 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                               const SizedBox(height: 12),
                               ...services.map((s) {
                                 final isWalk = s == 'PASEO';
-                                final price = isWalk ? (pricePerWalk30 ?? pricePerWalk60) : pricePerDay;
-                                final unit = isWalk ? (pricePerWalk30 != null ? '/ 30 min' : '/ hora') : '/ noche';
+                                final isGuarderia = s == 'GUARDERIA';
+                                final dynamic price;
+                                final String unit;
+                                final String emoji;
+                                final String label;
+                                if (isWalk) {
+                                  price = pricePerWalk30 ?? pricePerWalk60;
+                                  unit = pricePerWalk30 != null ? '/ 30 min' : '/ hora';
+                                  emoji = '🦮';
+                                  label = 'Paseo';
+                                } else if (isGuarderia) {
+                                  price = _caregiver?['pricePerGuarderia'];
+                                  unit = '/ hora';
+                                  emoji = '🏡';
+                                  label = 'Guardería';
+                                } else {
+                                  price = pricePerDay;
+                                  unit = '/ noche';
+                                  emoji = '🏠';
+                                  label = 'Hospedaje';
+                                }
                                 return Container(
                                   margin: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                                   padding: const EdgeInsets.all(14),
@@ -570,9 +601,9 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                                   ),
                                   child: Row(
                                     children: [
-                                      Text(isWalk ? '🦮' : '🏠', style: const TextStyle(fontSize: 24)),
+                                      Text(emoji, style: const TextStyle(fontSize: 24)),
                                       const SizedBox(width: 12),
-                                      Expanded(child: Text(isWalk ? 'Paseo' : 'Hospedaje', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700))),
+                                      Expanded(child: Text(label, style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700))),
                                       Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                                         Text('Bs ${price ?? '—'}', style: const TextStyle(color: GardenColors.primary, fontSize: 18, fontWeight: FontWeight.w800)),
                                         Text(unit, style: TextStyle(color: subtextColor, fontSize: 11)),
@@ -752,23 +783,32 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                       // Servicios
                       Text('Servicios', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 12),
-                      Row(children: services.map((s) {
+                      Wrap(spacing: 12, runSpacing: 12, children: services.map((s) {
                         final isWalk = s == 'PASEO';
-                        return Expanded(child: Container(
-                          margin: EdgeInsets.only(right: services.last != s ? 12 : 0),
+                        final isGuarderia = s == 'GUARDERIA';
+                        final String sEmoji = isWalk ? '🦮' : isGuarderia ? '🏡' : '🏠';
+                        final String sLabel = isWalk ? 'Paseo' : isGuarderia ? 'Guardería' : 'Hospedaje';
+                        final String sPrice;
+                        if (isWalk) {
+                          sPrice = 'Bs ${pricePerWalk30 ?? pricePerWalk60 ?? '—'} / ${pricePerWalk30 != null ? '30 min' : '1 hora'}';
+                        } else if (isGuarderia) {
+                          final pg = _caregiver?['pricePerGuarderia'];
+                          sPrice = 'Bs ${pg ?? '—'} / hora';
+                        } else {
+                          sPrice = 'Bs ${pricePerDay ?? '—'} / noche';
+                        }
+                        return Container(
+                          width: 140,
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor)),
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(isWalk ? '🦮' : '🏠', style: const TextStyle(fontSize: 28)),
+                            Text(sEmoji, style: const TextStyle(fontSize: 28)),
                             const SizedBox(height: 8),
-                            Text(isWalk ? 'Paseo' : 'Hospedaje', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+                            Text(sLabel, style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
                             const SizedBox(height: 4),
-                            if (isWalk)
-                              Text('Bs ${pricePerWalk30 ?? pricePerWalk60 ?? '—'} / ${pricePerWalk30 != null ? '30 min' : '1 hora'}', style: const TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600))
-                            else
-                              Text('Bs ${pricePerDay ?? '—'} / noche', style: const TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                            Text(sPrice, style: const TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
                           ]),
-                        ));
+                        );
                       }).toList()),
                       const SizedBox(height: 24),
                       Divider(color: borderColor),
@@ -1146,7 +1186,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
           const SizedBox(height: 10),
           Wrap(spacing: 6, children: [
             if (petName != null) _reviewChip('🐾 $petName', subtextColor, borderColor, surface),
-            if (serviceType != null) _reviewChip(serviceType == 'PASEO' ? '🦮 Paseo' : '🏠 Hospedaje', subtextColor, borderColor, surface),
+            if (serviceType != null) _reviewChip(serviceType == 'PASEO' ? '🦮 Paseo' : serviceType == 'GUARDERIA' ? '🏡 Guardería' : '🏠 Hospedaje', subtextColor, borderColor, surface),
           ]),
         ],
         if (comment != null && comment.trim().isNotEmpty) ...[
