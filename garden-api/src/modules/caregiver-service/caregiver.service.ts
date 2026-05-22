@@ -47,7 +47,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
   const {
     service, zone, priceRange, spaceTypes,
     experienceYears, acceptAggressive, acceptPuppies, acceptSeniors, sizesAccepted,
-    search,
+    search, petType,
     page = 1, limit = 10, cursor,
   } = filters;
 
@@ -62,6 +62,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
     acceptSeniors: acceptSeniors ?? '',
     sizesAccepted: Array.isArray(sizesAccepted) ? sizesAccepted.join(',') : sizesAccepted ?? '',
     search: search ?? '',
+    petType: petType ?? '',
     page,
     limit,
     cursor: cursor ?? '',
@@ -144,6 +145,11 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
 
   if (sizesAccepted && Array.isArray(sizesAccepted) && sizesAccepted.length > 0) {
     (where as any).sizesAccepted = { hasSome: sizesAccepted };
+  }
+
+  // Filtrar por tipo de mascota del cliente: solo mostrar cuidadores que acepten esa especie
+  if (petType) {
+    (where as any).animalTypes = { has: petType };
   }
 
   if (search && search.trim()) {

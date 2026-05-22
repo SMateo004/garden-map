@@ -48,6 +48,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
       acceptSeniors: query.acceptSeniors,
       sizesAccepted: query.sizesAccepted,
       search: query.search,
+      petType: query.petType as 'DOGS' | 'CATS' | undefined,
       page: query.page,
       limit: query.limit,
       cursor: query.cursor,

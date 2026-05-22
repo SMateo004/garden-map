@@ -23,6 +23,14 @@ export const createCaregiverProfileSchema = z.object({
 /** Query params para GET /api/caregivers (MVP + spec técnica) */
 export const listCaregiversQuerySchema = z.object({
   service: z.string().optional().transform((v) => v?.toLowerCase()).pipe(z.enum(['hospedaje', 'paseo', 'guarderia', 'ambos']).optional()),
+  /** Tipo de mascota: 'DOGS' | 'CATS'. Flutter puede enviar 'PERRO'/'GATO' o directamente el valor enum. */
+  petType: z.string().optional().transform((v) => {
+    if (!v) return undefined;
+    const upper = v.toUpperCase();
+    if (upper === 'PERRO' || upper === 'DOGS') return 'DOGS';
+    if (upper === 'GATO' || upper === 'CATS') return 'CATS';
+    return undefined;
+  }),
   zone: z.enum(['equipetrol', 'urbari', 'norte', 'las_palmas', 'centro', 'remanzo', 'sur', 'urubo_norte', 'urubo_sur', 'otros']).optional(),
   priceRange: z.enum(['economico', 'estandar', 'premium']).optional(),
   // spaceTypes: comma-separated string que se convierte a array (ej: "casa_con_patio,departamento_pequeno")

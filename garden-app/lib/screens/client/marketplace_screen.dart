@@ -170,7 +170,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   // ── Filters (API) ──
   String _selectedService = 'todos';
   String? _selectedZone;
-  String? _selectedPetType; // 'PERRO' | 'GATO' | null (todos)
+  String? _selectedPetType; // 'DOGS' | 'CATS' | null (todos)
   int? _minExperienceYears;
   bool _filterAggressive = false;
   bool _filterPuppies = false;
@@ -821,9 +821,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 children: [
                   _mobilePetChip(null, '🐾 Todos', isDark),
                   const SizedBox(width: 8),
-                  _mobilePetChip('PERRO', '🐕 Perro', isDark),
+                  _mobilePetChip('DOGS', '🐕 Perro', isDark),
                   const SizedBox(width: 8),
-                  _mobilePetChip('GATO', '🐱 Gato', isDark),
+                  _mobilePetChip('CATS', '🐱 Gato', isDark),
                 ],
               ),
             ),
@@ -1408,9 +1408,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     children: [
                       _petTypeChip(null, 'Todos 🐾', textColor),
                       const SizedBox(width: 6),
-                      _petTypeChip('PERRO', 'Perro 🐕', textColor),
+                      _petTypeChip('DOGS', 'Perro 🐕', textColor),
                       const SizedBox(width: 6),
-                      _petTypeChip('GATO', 'Gato 🐱', textColor),
+                      _petTypeChip('CATS', 'Gato 🐱', textColor),
                     ],
                   ),
                   _divider(border),

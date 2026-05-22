@@ -87,6 +87,8 @@ export interface CaregiverFilters {
   acceptSeniors?: boolean;
   sizesAccepted?: any[];
   search?: string;
+  /** Tipo de mascota del cliente: 'DOGS' | 'CATS'. Filtra cuidadores que acepten esa especie. */
+  petType?: 'DOGS' | 'CATS';
 }
 
 export interface PaginatedCaregivers {
