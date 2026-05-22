@@ -17,11 +17,12 @@ export const createCaregiverProfileSchema = z.object({
   pricePerDay: z.coerce.number().int().min(0).optional(),
   pricePerWalk30: z.coerce.number().int().min(0).optional(),
   pricePerWalk60: z.coerce.number().int().min(0).optional(),
+  pricePerGuarderia: z.coerce.number().int().min(0).optional(),
 });
 
 /** Query params para GET /api/caregivers (MVP + spec técnica) */
 export const listCaregiversQuerySchema = z.object({
-  service: z.string().optional().transform((v) => v?.toLowerCase()).pipe(z.enum(['hospedaje', 'paseo', 'ambos']).optional()),
+  service: z.string().optional().transform((v) => v?.toLowerCase()).pipe(z.enum(['hospedaje', 'paseo', 'guarderia', 'ambos']).optional()),
   zone: z.enum(['equipetrol', 'urbari', 'norte', 'las_palmas', 'centro', 'remanzo', 'sur', 'urubo_norte', 'urubo_sur', 'otros']).optional(),
   priceRange: z.enum(['economico', 'estandar', 'premium']).optional(),
   // spaceTypes: comma-separated string que se convierte a array (ej: "casa_con_patio,departamento_pequeno")

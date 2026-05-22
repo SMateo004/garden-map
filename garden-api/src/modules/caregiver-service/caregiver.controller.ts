@@ -31,9 +31,10 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     const query = listCaregiversQuerySchema.parse(req.query);
     const normalizedService = query.service?.toLowerCase();
     const serviceFilter =
-      normalizedService === 'paseo' || normalizedService === 'hospedaje'
-        ? (normalizedService === 'paseo' ? 'PASEO' : 'HOSPEDAJE')
-        : undefined;
+      normalizedService === 'paseo' ? 'PASEO' :
+      normalizedService === 'hospedaje' ? 'HOSPEDAJE' :
+      normalizedService === 'guarderia' ? 'GUARDERIA' :
+      undefined;
     const zoneFilter = query.zone ? [ZONE_QUERY_TO_ENUM[query.zone]].filter(Boolean) : undefined;
 
     const result = await caregiverService.listCaregivers({
@@ -239,6 +240,7 @@ function parseCaregiverBody(body: Record<string, unknown>): unknown {
     pricePerDay: body.pricePerDay !== undefined && body.pricePerDay !== '' ? body.pricePerDay : undefined,
     pricePerWalk30: body.pricePerWalk30 !== undefined && body.pricePerWalk30 !== '' ? body.pricePerWalk30 : undefined,
     pricePerWalk60: body.pricePerWalk60 !== undefined && body.pricePerWalk60 !== '' ? body.pricePerWalk60 : undefined,
+    pricePerGuarderia: body.pricePerGuarderia !== undefined && body.pricePerGuarderia !== '' ? body.pricePerGuarderia : undefined,
   };
 }
 

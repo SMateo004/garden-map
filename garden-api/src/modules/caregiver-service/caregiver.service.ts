@@ -188,7 +188,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       pricePerDay: applyMarkup(c.pricePerDay, markupRate),
       pricePerWalk30: applyMarkup(c.pricePerWalk30, markupRate),
       pricePerWalk60: applyMarkup(c.pricePerWalk60, markupRate),
-      pricePerGuarderia: applyMarkup((c as any).pricePerGuarderia, markupRate),
+      pricePerGuarderia: applyMarkup(c.pricePerGuarderia, markupRate),
       verified: c.verified,
       spaceType: Array.isArray(c.spaceType) ? c.spaceType : (c.spaceType ? [c.spaceType] : []),
       experienceYears: c.experienceYears,
@@ -392,7 +392,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     pricePerDay: applyMarkup(profile.pricePerDay, markupRate),
     pricePerWalk30: applyMarkup(profile.pricePerWalk30, markupRate),
     pricePerWalk60: applyMarkup(profile.pricePerWalk60, markupRate),
-    pricePerGuarderia: applyMarkup((profile as any).pricePerGuarderia, markupRate),
+    pricePerGuarderia: applyMarkup(profile.pricePerGuarderia, markupRate),
     verified: profile.verified,
     spaceType: Array.isArray(profile.spaceType) ? profile.spaceType : (profile.spaceType ? [profile.spaceType] : []),
     bio: profile.bio,
@@ -971,6 +971,7 @@ export async function createCaregiverProfile(
       pricePerDay: input.pricePerDay,
       pricePerWalk30: input.pricePerWalk30,
       pricePerWalk60: input.pricePerWalk60,
+      pricePerGuarderia: input.pricePerGuarderia,
       verified: false,
     },
     include: { user: { select: { firstName: true, lastName: true, profilePicture: true } } },
@@ -1008,6 +1009,7 @@ export async function upsertCaregiverProfile(
     pricePerDay: input.pricePerDay ?? null,
     pricePerWalk30: input.pricePerWalk30 ?? null,
     pricePerWalk60: input.pricePerWalk60 ?? null,
+    pricePerGuarderia: input.pricePerGuarderia ?? null,
   };
 
   const result = await prisma.$transaction(async (tx) => {
@@ -1058,6 +1060,7 @@ function mapProfileToListItem(profile: any, markupRate: number): CaregiverListIt
     pricePerDay: applyMarkup(profile.pricePerDay, markupRate),
     pricePerWalk30: applyMarkup(profile.pricePerWalk30, markupRate),
     pricePerWalk60: applyMarkup(profile.pricePerWalk60, markupRate),
+    pricePerGuarderia: applyMarkup(profile.pricePerGuarderia, markupRate),
     verified: profile.verified,
     spaceType: Array.isArray(profile.spaceType) ? profile.spaceType : (profile.spaceType ? [profile.spaceType] : []),
     experienceYears: profile.experienceYears,

@@ -14,6 +14,7 @@ export interface CaregiverListItem {
   pricePerDay: number | null;
   pricePerWalk30: number | null;
   pricePerWalk60: number | null;
+  pricePerGuarderia: number | null;
   verified: boolean;
   spaceType: string[]; // Array de tipos de espacio seleccionados
   experienceYears: any;
@@ -109,4 +110,5 @@ export interface CreateCaregiverProfileInput {
   pricePerDay?: number;
   pricePerWalk30?: number;
   pricePerWalk60?: number;
+  pricePerGuarderia?: number;
 }
