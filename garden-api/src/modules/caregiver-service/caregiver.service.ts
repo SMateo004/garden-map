@@ -618,6 +618,12 @@ export async function getCaregiverAvailability(
       };
     }
 
+    // Calcular defaultSchedule aquí para usarlo como fallback en filas explícitas y en el loop de fechas sin fila
+    const defaultSchedule = (profile?.defaultAvailabilitySchedule as any) || { hospedajeDefault: true };
+    const weekdaysEnabled = defaultSchedule.weekdays !== false;
+    const weekendsEnabled = defaultSchedule.weekends !== false;
+    const holidaysEnabled = defaultSchedule.holidays !== false;
+
     // Procesar filas de disponibilidad con manejo robusto de errores
     const hospedajeDates: string[] = [];
     const paseosByDate: Record<string, PaseoSlot[]> = {};
@@ -694,8 +700,22 @@ export async function getCaregiverAvailability(
           hospedajeDates.push(dateStr);
         }
 
-        // Procesar timeBlocks de forma segura para paseos
-        const slots = parseTimeBlocks((a as any).timeBlocks);
+        // Procesar timeBlocks de forma segura para paseos.
+        // Si la fila no tiene timeBlocks propios, heredar del schedule por defecto
+        // para que el cuidador no pierda sus slots al marcar días en el calendario.
+        let slots = parseTimeBlocks((a as any).timeBlocks);
+        if (slots.length === 0) {
+          const ptbDefault = defaultSchedule.paseoTimeBlocks;
+          slots = parseTimeBlocks(ptbDefault);
+          if (!ptbDefault && slots.length === 0) {
+            // Sin configuración explícita → usar slots por defecto si el día está habilitado
+            slots = [
+              { slot: 'MANANA', enabled: true, start: '08:00', end: '11:00' },
+              { slot: 'TARDE', enabled: true, start: '13:00', end: '17:00' },
+              { slot: 'NOCHE', enabled: true, start: '19:00', end: '22:00' }
+            ];
+          }
+        }
         if (slots.length > 0) {
           paseosByDate[dateStr] = slots;
         }
@@ -722,10 +742,6 @@ export async function getCaregiverAvailability(
     }
 
     // Aplicar horario predeterminado (o defaults absolutos) a fechas sin fila explícita
-    const defaultSchedule = (profile?.defaultAvailabilitySchedule as any) || { hospedajeDefault: true };
-    const weekdaysEnabled = defaultSchedule.weekdays !== false;
-    const weekendsEnabled = defaultSchedule.weekends !== false;
-    const holidaysEnabled = defaultSchedule.holidays !== false;
     // Feriados bolivianos (misma lista que usa la app del cuidador)
     const bolivianHolidays = new Set([
       '2025-01-01','2025-01-22','2025-02-17','2025-02-18','2025-04-18','2025-04-19',
