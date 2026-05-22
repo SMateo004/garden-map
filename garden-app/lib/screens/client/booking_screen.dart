@@ -113,7 +113,7 @@ class _BookingScreenState extends State<BookingScreen> {
         if (_pets.isNotEmpty) _selectedPetId = _pets.first['id'];
       });
       // Precargar disponibilidad real del cuidador (para filtrar días no disponibles)
-      if (_selectedService == 'PASEO') _loadMultiDayData();
+      _loadMultiDayData();
       return;
     }
 
@@ -151,7 +151,7 @@ class _BookingScreenState extends State<BookingScreen> {
              }
           });
           // Precargar disponibilidad real del cuidador (para filtrar días no disponibles)
-          if (_selectedService == 'PASEO') _loadMultiDayData();
+          _loadMultiDayData();
         }
       }
     } catch (e) {
@@ -1087,11 +1087,16 @@ class _BookingScreenState extends State<BookingScreen> {
                           title: const Text('Llegada', style: TextStyle(fontSize: 12, color: GardenColors.primary)),
                           subtitle: Text(_selectedDate == null ? '---' : formatDate(_selectedDate!), style: TextStyle(color: textColor)),
                           onTap: () async {
+                            final tomorrow = DateTime.now().add(const Duration(days: 1));
                             final date = await showDatePicker(
                               context: context,
-                              initialDate: DateTime.now(),
-                              firstDate: DateTime.now(),
+                              initialDate: tomorrow,
+                              firstDate: tomorrow,
                               lastDate: DateTime.now().add(const Duration(days: 90)),
+                              selectableDayPredicate: (d) {
+                                final ds = d.toIso8601String().split('T')[0];
+                                return !_blockedDates.contains(ds);
+                              },
                             );
                             if (date != null) {
                               setState(() {
@@ -1112,11 +1117,16 @@ class _BookingScreenState extends State<BookingScreen> {
                           subtitle: Text(_endDate == null ? '---' : formatDate(_endDate!), style: TextStyle(color: textColor)),
                           onTap: () async {
                             if (_selectedDate == null) return _showError('Selecciona primero la llegada');
+                            final minEnd = _selectedDate!.add(const Duration(days: 1));
                             final date = await showDatePicker(
                               context: context,
-                              initialDate: _selectedDate!.add(const Duration(days: 1)),
-                              firstDate: _selectedDate!.add(const Duration(days: 1)),
+                              initialDate: minEnd,
+                              firstDate: minEnd,
                               lastDate: DateTime.now().add(const Duration(days: 90)),
+                              selectableDayPredicate: (d) {
+                                final ds = d.toIso8601String().split('T')[0];
+                                return !_blockedDates.contains(ds);
+                              },
                             );
                             if (date != null) setState(() => _endDate = date);
                           },
