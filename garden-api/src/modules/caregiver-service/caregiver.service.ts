@@ -701,14 +701,23 @@ export async function getCaregiverAvailability(
         }
 
         // Procesar timeBlocks de forma segura para paseos.
-        // Si la fila no tiene timeBlocks propios, heredar del schedule por defecto
-        // para que el cuidador no pierda sus slots al marcar días en el calendario.
-        let slots = parseTimeBlocks((a as any).timeBlocks);
+        // Si la fila tiene el formato {enabled:true, slots:{null,null,null}} el cuidador marcó
+        // el día como "disponible" pero sin configurar slots → tratarlo como sin override y
+        // heredar del schedule por defecto (que tiene los slots reales del cuidador).
+        let rawTimeBlocks = (a as any).timeBlocks;
+        if (
+          rawTimeBlocks?.slots &&
+          typeof rawTimeBlocks.slots === 'object' &&
+          Object.values(rawTimeBlocks.slots as object).every((v) => v === null || v === undefined)
+        ) {
+          rawTimeBlocks = null; // Sin slots reales → ignorar, usar defaultSchedule
+        }
+        let slots = parseTimeBlocks(rawTimeBlocks);
         if (slots.length === 0) {
           const ptbDefault = defaultSchedule.paseoTimeBlocks;
           slots = parseTimeBlocks(ptbDefault);
           if (!ptbDefault && slots.length === 0) {
-            // Sin configuración explícita → usar slots por defecto si el día está habilitado
+            // Sin configuración en ningún lado → todos los bloques habilitados con defaults
             slots = [
               { slot: 'MANANA', enabled: true, start: '08:00', end: '11:00' },
               { slot: 'TARDE', enabled: true, start: '13:00', end: '17:00' },
