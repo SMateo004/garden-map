@@ -204,15 +204,17 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
               const SizedBox(height: 20),
               Text('¿Qué servicio necesitas?', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
               const SizedBox(height: 20),
-              _ServiceOption(icon: Icons.home_outlined, label: 'Hospedaje', sublabel: 'Bs $pricePerDay/noche', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: bookingExtra); }),
+              _ServiceOption(icon: Icons.home_outlined, label: 'Hospedaje', sublabel: 'Bs $pricePerDay/noche', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: {...bookingExtra, 'serviceType': 'HOSPEDAJE'}); }),
               const SizedBox(height: 12),
-              _ServiceOption(icon: Icons.directions_walk, label: 'Paseo', sublabel: 'Bs $walkDisplayPrice/$walkDisplayUnit', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: bookingExtra); }),
+              _ServiceOption(icon: Icons.directions_walk, label: 'Paseo', sublabel: 'Bs $walkDisplayPrice/$walkDisplayUnit', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: {...bookingExtra, 'serviceType': 'PASEO'}); }),
             ],
           ),
         ),
       );
     } else {
-      context.push('/booking/${widget.caregiverId}', extra: bookingExtra);
+      // Single service — detect which one it is
+      final singleService = offersHospedaje ? 'HOSPEDAJE' : 'PASEO';
+      context.push('/booking/${widget.caregiverId}', extra: {...bookingExtra, 'serviceType': singleService});
     }
   }
 

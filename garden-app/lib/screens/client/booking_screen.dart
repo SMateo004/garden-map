@@ -11,6 +11,7 @@ class BookingScreen extends StatefulWidget {
   final Map<String, dynamic>? preloadedCaregiver;
   final List<dynamic>? preloadedPets;
   final String? preloadedToken;
+  final String? preloadedService; // 'PASEO' | 'HOSPEDAJE' — pre-selected from profile screen
 
   const BookingScreen({
     super.key,
@@ -18,6 +19,7 @@ class BookingScreen extends StatefulWidget {
     this.preloadedCaregiver,
     this.preloadedPets,
     this.preloadedToken,
+    this.preloadedService,
   });
 
   @override
@@ -100,7 +102,10 @@ class _BookingScreenState extends State<BookingScreen> {
         _caregiver = widget.preloadedCaregiver!;
         _pets = pets;
         _isLoading = false;
-        if (services.contains('PASEO')) {
+        // Respect the service pre-selected from the profile screen, else auto-detect
+        if (widget.preloadedService != null && services.contains(widget.preloadedService)) {
+          _selectedService = widget.preloadedService;
+        } else if (services.contains('PASEO')) {
           _selectedService = 'PASEO';
         } else if (services.isNotEmpty) {
           _selectedService = services.first;
@@ -136,8 +141,10 @@ class _BookingScreenState extends State<BookingScreen> {
           setState(() {
              _caregiver = data['data'];
              final services = (_caregiver!['services'] as List?)?.cast<String>() ?? [];
-             // Priorizar PASEO; si no ofrece paseo, elegir el primer servicio disponible
-             if (services.contains('PASEO')) {
+             // Respect pre-selected service from profile screen; fallback to PASEO or first
+             if (widget.preloadedService != null && services.contains(widget.preloadedService)) {
+               _selectedService = widget.preloadedService;
+             } else if (services.contains('PASEO')) {
                _selectedService = 'PASEO';
              } else if (services.isNotEmpty) {
                _selectedService = services.first;

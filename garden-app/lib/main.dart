@@ -253,6 +253,7 @@ final GoRouter _router = GoRouter(
           preloadedCaregiver: extra?['caregiver'] as Map<String, dynamic>?,
           preloadedPets: extra?['pets'] as List<dynamic>?,
           preloadedToken: extra?['token'] as String?,
+          preloadedService: extra?['serviceType'] as String?,
         );
       },
     ),
