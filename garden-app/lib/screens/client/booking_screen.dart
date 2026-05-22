@@ -887,8 +887,13 @@ class _BookingScreenState extends State<BookingScreen> {
                             _buildDayModeTab('1 día', !_isMultiDay, () {
                               setState(() {
                                 _isMultiDay = false;
+                                _selectedDate = null;      // force fresh date pick
                                 _selectedDates.clear();
                                 _multiDayTimeSlot = null;
+                                _bookedPaseos = [];        // clear stale conflict data
+                                _availableSlots = [];
+                                _selectedTimeSlot = null;
+                                _selectedStartTime = null;
                               });
                             }),
                             _buildDayModeTab('Varios días', _isMultiDay, () {
@@ -898,6 +903,7 @@ class _BookingScreenState extends State<BookingScreen> {
                                 _selectedTimeSlot = null;
                                 _selectedStartTime = null;
                                 _availableSlots = [];
+                                _bookedPaseos = [];        // clear stale conflict data
                               });
                               // Datos ya cargados en init; recargar solo si falta
                               if (_multiDaySlotsByDate.isEmpty) _loadMultiDayData();
