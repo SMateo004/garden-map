@@ -394,6 +394,36 @@ export async function createBooking(
   });
 }
 
+// Bolivian public holidays (ISO strings) — kept in sync with the caregiver home screen list
+const BOLIVIA_HOLIDAYS = new Set([
+  '2025-01-01','2025-01-22','2025-02-24','2025-02-25','2025-04-18','2025-04-19',
+  '2025-05-01','2025-06-19','2025-06-21','2025-08-06','2025-10-12','2025-11-02',
+  '2025-12-25','2026-01-01','2026-01-22','2026-02-16','2026-02-17','2026-04-03',
+  '2026-04-04','2026-05-01','2026-06-11','2026-06-21','2026-08-06','2026-10-12',
+  '2026-11-02','2026-12-25',
+]);
+
+/**
+ * Returns true if the given date is allowed by the caregiver's day-type flags
+ * (weekdays / weekends / holidays). An explicit Availability row with isAvailable=true
+ * always overrides these defaults, so pass hasExplicitOverride=true to skip the check.
+ */
+function isDayTypeAllowed(
+  date: Date,
+  schedule: Record<string, unknown>,
+  hasExplicitOverride: boolean
+): boolean {
+  if (hasExplicitOverride) return true;
+  const dateStr = date.toISOString().slice(0, 10);
+  const dow = date.getUTCDay(); // 0=Sun … 6=Sat
+  const isWeekend = dow === 0 || dow === 6;
+  const isHoliday = BOLIVIA_HOLIDAYS.has(dateStr);
+
+  if (isHoliday) return schedule['holidays'] !== false;
+  if (isWeekend) return schedule['weekends'] !== false;
+  return schedule['weekdays'] !== false;
+}
+
 /** Hospedaje: todos los días en [start, end) deben estar disponibles (fila con isAvailable=true o defaultSchedule.hospedajeDefault). */
 async function assertHospedajeAvailability(
   tx: Prisma.TransactionClient,
@@ -412,8 +442,8 @@ async function assertHospedajeAvailability(
     where: { id: caregiverId },
     select: { defaultAvailabilitySchedule: true },
   });
-  const defaultSchedule = profile?.defaultAvailabilitySchedule as { hospedajeDefault?: boolean } | null;
-  const hospedajeDefault = defaultSchedule?.hospedajeDefault !== false;
+  const defaultSchedule = (profile?.defaultAvailabilitySchedule as Record<string, unknown>) ?? {};
+  const hospedajeDefault = defaultSchedule['hospedajeDefault'] !== false;
 
   const availabilityRows = await tx.availability.findMany({
     where: { caregiverId, date: { in: dates } },
@@ -423,9 +453,13 @@ async function assertHospedajeAvailability(
     const dStr = d.toISOString().slice(0, 10);
     const row = availabilityRows.find((r) => r.date.toISOString().slice(0, 10) === dStr);
     if (row) {
+      // Explicit row: isAvailable wins; no day-type check needed
       if (row.isAvailable) availableSet.add(dStr);
-    } else if (hospedajeDefault) {
-      availableSet.add(dStr);
+    } else {
+      // No explicit row: check hospedajeDefault AND weekdays/weekends/holidays flags
+      if (hospedajeDefault && isDayTypeAllowed(d, defaultSchedule, false)) {
+        availableSet.add(dStr);
+      }
     }
   }
   const missing = dates.filter(
@@ -487,14 +521,24 @@ async function assertPaseoAvailability(
     where: { id: caregiverId },
     select: { defaultAvailabilitySchedule: true },
   });
-  const defaultSchedule = profile?.defaultAvailabilitySchedule as { paseoTimeBlocks?: Record<string, boolean> } | null;
-  const defaultBlocks = defaultSchedule?.paseoTimeBlocks;
+  const defaultSchedule = (profile?.defaultAvailabilitySchedule as Record<string, unknown>) ?? {};
+  const defaultBlocks = defaultSchedule['paseoTimeBlocks'] as Record<string, boolean> | undefined;
 
   const avail = await tx.availability.findUnique({
     where: {
       caregiverId_date: { caregiverId, date },
     },
   });
+
+  // Check weekdays/weekends/holidays flags unless there's an explicit override row with isAvailable=true
+  const hasExplicitAvailable = avail?.isAvailable === true;
+  if (!isDayTypeAllowed(date, defaultSchedule, hasExplicitAvailable)) {
+    throw new AvailabilityConflictError(
+      `El cuidador no trabaja los ${date.getUTCDay() === 0 || date.getUTCDay() === 6 ? 'fines de semana' : 'días laborables'} el ${walkDate}. Elige otra fecha.`,
+      'walkDate'
+    );
+  }
+
   let slotAvailable = false;
   if (avail) {
     if (!avail.isAvailable) {
