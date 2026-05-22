@@ -575,7 +575,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
 
   Widget _buildBookingCard(Map<String, dynamic> booking, bool isDark) {
     final status = booking['status'] as String;
-    final isPaseo = booking['serviceType'] == 'PASEO';
+    final serviceType = booking['serviceType'] as String? ?? '';
+    final isPaseo = serviceType == 'PASEO';
+    final isGuarderia = serviceType == 'GUARDERIA';
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
@@ -712,8 +714,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                           color: GardenColors.primary.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(GardenRadius.md),
                         ),
-                        child: Icon(isPaseo ? Icons.directions_walk_rounded : Icons.home_rounded,
-                            color: GardenColors.primary, size: 18),
+                        child: Icon(
+                          isPaseo ? Icons.directions_walk_rounded
+                              : isGuarderia ? Icons.cottage_outlined
+                              : Icons.home_rounded,
+                          color: GardenColors.primary, size: 18),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -722,23 +727,38 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                           children: [
                             Text(booking['petName'] ?? 'Mascota',
                                 style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
-                            Text(isPaseo ? 'Paseo de ${booking['duration']} min' : 'Hospedaje',
-                                style: TextStyle(color: subtextColor, fontSize: 12)),
+                            Text(
+                              isPaseo
+                                  ? 'Paseo de ${booking['duration']} min'
+                                  : isGuarderia
+                                      ? 'Guardería ${(booking['duration'] as num? ?? 0) ~/ 60}h'
+                                      : 'Hospedaje',
+                              style: TextStyle(color: subtextColor, fontSize: 12),
+                            ),
                           ],
                         ),
                       ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            isPaseo ? booking['walkDate'] ?? '' : '${booking['startDate']}',
-                            style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13),
-                          ),
-                          Text(
-                            isPaseo ? (booking['timeSlot'] ?? '') : '${booking['totalDays']} noches',
-                            style: TextStyle(color: subtextColor, fontSize: 11),
-                          ),
-                        ],
+                      // Flexible evita overflow cuando la fecha/texto es largo
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              (isPaseo || isGuarderia)
+                                  ? (booking['walkDate'] ?? '').toString().split('T')[0]
+                                  : (booking['startDate'] ?? '').toString().split('T')[0],
+                              style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              (isPaseo || isGuarderia)
+                                  ? (booking['timeSlot'] ?? '')
+                                  : '${booking['totalDays'] ?? 0} noches',
+                              style: TextStyle(color: subtextColor, fontSize: 11),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -894,10 +914,8 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                       ),
                     ),
                   ],
-                  // Meet & Greet para HOSPEDAJE CONFIRMED
-                  // Solo mostrar botón M&G si NO está aceptado; si está ACCEPTED,
-                  // el botón "Abrir chat" de arriba ya es suficiente.
-                  if (status == 'CONFIRMED' && !isPaseo) ...[
+                  // Meet & Greet para HOSPEDAJE CONFIRMED (no aplica a GUARDERIA ni PASEO)
+                  if (status == 'CONFIRMED' && serviceType == 'HOSPEDAJE') ...[
                     Builder(builder: (_) {
                       final mg = booking['meetAndGreet'] as Map<String, dynamic>?;
                       final mgStatus = mg?['status'] as String?;
