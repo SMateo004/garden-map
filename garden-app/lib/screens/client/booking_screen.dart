@@ -1104,11 +1104,18 @@ class _BookingScreenState extends State<BookingScreen> {
                           subtitle: Text(_selectedDate == null ? '---' : formatDate(_selectedDate!), style: TextStyle(color: textColor)),
                           onTap: () async {
                             final tomorrow = DateTime.now().add(const Duration(days: 1));
+                            final lastDate = DateTime.now().add(const Duration(days: 90));
+                            // initialDate debe satisfacer selectableDayPredicate → buscar el primer día libre
+                            DateTime firstAvailable = tomorrow;
+                            while (firstAvailable.isBefore(lastDate) &&
+                                _blockedDates.contains(firstAvailable.toIso8601String().split('T')[0])) {
+                              firstAvailable = firstAvailable.add(const Duration(days: 1));
+                            }
                             final date = await showDatePicker(
                               context: context,
-                              initialDate: tomorrow,
+                              initialDate: firstAvailable,
                               firstDate: tomorrow,
-                              lastDate: DateTime.now().add(const Duration(days: 90)),
+                              lastDate: lastDate,
                               selectableDayPredicate: (d) {
                                 final ds = d.toIso8601String().split('T')[0];
                                 return !_blockedDates.contains(ds);
@@ -1134,11 +1141,18 @@ class _BookingScreenState extends State<BookingScreen> {
                           onTap: () async {
                             if (_selectedDate == null) return _showError('Selecciona primero la llegada');
                             final minEnd = _selectedDate!.add(const Duration(days: 1));
+                            final lastDate = DateTime.now().add(const Duration(days: 90));
+                            // initialDate debe satisfacer selectableDayPredicate → buscar el primer día libre
+                            DateTime firstAvailableEnd = minEnd;
+                            while (firstAvailableEnd.isBefore(lastDate) &&
+                                _blockedDates.contains(firstAvailableEnd.toIso8601String().split('T')[0])) {
+                              firstAvailableEnd = firstAvailableEnd.add(const Duration(days: 1));
+                            }
                             final date = await showDatePicker(
                               context: context,
-                              initialDate: minEnd,
+                              initialDate: firstAvailableEnd,
                               firstDate: minEnd,
-                              lastDate: DateTime.now().add(const Duration(days: 90)),
+                              lastDate: lastDate,
                               selectableDayPredicate: (d) {
                                 final ds = d.toIso8601String().split('T')[0];
                                 return !_blockedDates.contains(ds);
