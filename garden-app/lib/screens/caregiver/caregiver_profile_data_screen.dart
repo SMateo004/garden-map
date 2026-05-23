@@ -332,9 +332,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     if (_bioDetailController.text.trim().length < 10) {
       return _showValidationError('La descripción detallada debe tener al menos 10 caracteres', scrollTo: _keyBioDetail);
     }
-    if (_addressController.text.trim().isEmpty) {
-      return _showValidationError('Ingresa tu dirección', scrollTo: _keyAddress);
-    }
     if (_selectedServices.isEmpty) {
       return _showValidationError('Selecciona al menos un servicio', scrollTo: _keyServices);
     }
