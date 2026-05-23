@@ -138,9 +138,11 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
     (where as any).experienceYears = { gte: experienceYears };
   }
 
-  if (acceptAggressive !== undefined) where.acceptAggressive = acceptAggressive;
-  if (acceptPuppies !== undefined) where.acceptPuppies = acceptPuppies;
-  if (acceptSeniors !== undefined) where.acceptSeniors = acceptSeniors;
+  // Exclusion logic: only hide caregivers who explicitly said NO.
+  // NULL (unset) means unknown → show them (same pattern as petType filter).
+  if (acceptAggressive) where.acceptAggressive = { not: false };
+  if (acceptPuppies) where.acceptPuppies = { not: false };
+  if (acceptSeniors) where.acceptSeniors = { not: false };
 
   // sizesAccepted: excluir cuidadores que tienen tamaños configurados Y ninguno coincide.
   // NULL/[] = sin restricción → deben aparecer en todos los filtros de tamaño.
