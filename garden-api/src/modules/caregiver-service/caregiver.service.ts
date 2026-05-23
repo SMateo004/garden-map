@@ -170,19 +170,32 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
   }
 
   // Filtrar por tipo de mascota del cliente.
-  // Usamos subquery raw para excluir cuidadores que restringen EXPLÍCITAMENTE al otro tipo.
-  // Esto maneja correctamente NULL (no configurado) y [] (sin restricción) — ambos aparecen.
-  // Solo se excluyen cuidadores con array no-vacío que no contiene petType.
+  // Excluye cuidadores que tienen preferencias configuradas y el petType solicitado NO está.
+  // Fuente de verdad: columna animalTypes. Fallback: serviceDetails.acceptedPetTypes.
+  // array_length(ARRAY[], 1) = NULL en PG → "vacío o null" se detecta con IS NULL.
   if (petType) {
     try {
       const excluded = await prisma.$queryRaw<{ id: string }[]>`
         SELECT id FROM "caregiver_profiles"
-        WHERE "animalTypes" IS NOT NULL
-          AND array_length("animalTypes", 1) IS NOT NULL
-          AND array_length("animalTypes", 1) > 0
-          AND NOT ("animalTypes"::text[] @> ARRAY[${petType}]::text[])
+        WHERE (
+          -- Caso 1: columna animalTypes tiene datos y no incluye petType
+          (
+            array_length("animalTypes", 1) IS NOT NULL
+            AND array_length("animalTypes", 1) > 0
+            AND NOT ("animalTypes"::text[] @> ARRAY[${petType}]::text[])
+          )
+          OR
+          -- Caso 2: columna vacía/null pero serviceDetails tiene datos y no incluye petType
+          (
+            array_length("animalTypes", 1) IS NULL
+            AND "serviceDetails" IS NOT NULL
+            AND jsonb_typeof("serviceDetails"->'acceptedPetTypes') = 'array'
+            AND jsonb_array_length("serviceDetails"->'acceptedPetTypes') > 0
+            AND NOT ("serviceDetails"->'acceptedPetTypes' @> ${`["${petType}"]`}::jsonb)
+          )
+        )
       `;
-      logger.debug('petType filter', { petType, excludedCount: excluded.length });
+      logger.info('petType filter applied', { petType, excludedCount: excluded.length, excludedIds: excluded.map(e => e.id) });
       if (excluded.length > 0) {
         const existingNotIn = (where as any).id?.notIn ?? [];
         where.id = { notIn: [...existingNotIn, ...excluded.map((e) => e.id)] };
