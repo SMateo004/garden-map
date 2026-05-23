@@ -622,20 +622,24 @@ async function assertPaseoAvailability(
     const requestedEnd = requestedStart + requestedDuration;
     const requestedEndWithBuffer = requestedEnd + 30;
 
-    // Verificar límites del bloque del cuidador
-    const availRow = avail || (defaultBlocks ? { timeBlocks: defaultBlocks } : null);
-    if (availRow) {
-      const slots = parseTimeBlocks((availRow as any).timeBlocks || availRow);
-      const currentBlock = slots.find(s => s.slot === timeSlot);
-      if (currentBlock?.start && currentBlock?.end) {
-        const blockStart = timeToMins(currentBlock.start);
-        const blockEnd = timeToMins(currentBlock.end);
-        if (requestedStart < blockStart || requestedEnd > blockEnd) {
-          throw new AvailabilityConflictError(
-            `El horario seleccionado (${startTime}) está fuera del rango atendido por el cuidador (${currentBlock.start} - ${currentBlock.end})`,
-            'startTime'
-          );
-        }
+    // Verificar límites del bloque del cuidador.
+    // Prioridad: avail.timeBlocks con tiempos reales → defaultSchedule.paseoTimeBlocks → sin límite.
+    // Cuando avail.timeBlocks tiene slots en null (formato "sin override"), los defaults hardcodeados
+    // de parseTimeBlocks no reflejan los tiempos personalizados del cuidador, así que caemos al
+    // defaultSchedule que sí tiene los rangos reales configurados por el cuidador.
+    let rangeSlots = avail?.timeBlocks ? parseTimeBlocks(avail.timeBlocks) : [];
+    if ((rangeSlots.length === 0 || rangeSlots.every(s => !s.start || !s.end)) && defaultBlocks) {
+      rangeSlots = parseTimeBlocks(defaultBlocks);
+    }
+    const currentBlock = rangeSlots.find(s => s.slot === timeSlot);
+    if (currentBlock?.start && currentBlock?.end) {
+      const blockStart = timeToMins(currentBlock.start);
+      const blockEnd = timeToMins(currentBlock.end);
+      if (requestedStart < blockStart || requestedEnd > blockEnd) {
+        throw new AvailabilityConflictError(
+          `El horario seleccionado (${startTime}) está fuera del rango atendido por el cuidador (${currentBlock.start} - ${currentBlock.end})`,
+          'startTime'
+        );
       }
     }
 
