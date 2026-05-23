@@ -1426,7 +1426,7 @@ class _BookingScreenState extends State<BookingScreen> {
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(isWide ? 40 : 20, 16, isWide ? 40 : 20, 32),
                     child: GardenButton(
-                      label: _isSubmitting ? 'Creando reserva...' : 'Confirmar reserva',
+                      label: _isSubmitting ? 'Procesando...' : 'Continuar al pago',
                       loading: _isSubmitting,
                       onPressed: _createBooking,
                     ),

@@ -371,22 +371,8 @@ export async function createBooking(
       data: bookingData,
     });
 
-    // Notificación al cuidador: nueva solicitud
-    const caregiverUser = await tx.caregiverProfile.findUnique({
-      where: { id: body.caregiverId },
-      select: { userId: true },
-    });
-    if (caregiverUser) {
-      await tx.notification.create({
-        data: {
-          userId: caregiverUser.userId,
-          title: '¡Nueva solicitud de reserva!',
-          message: `Tienes una nueva solicitud de ${body.serviceType === 'HOSPEDAJE' ? 'hospedaje' : body.serviceType === 'GUARDERIA' ? 'guardería' : 'paseo'} para ${pet.name}. Revisa tu buzón para aceptar o rechazar.`,
-          type: 'NEW_BOOKING',
-        },
-      });
-      sendPushToUser(caregiverUser.userId, '¡Nueva solicitud de reserva! 🐾', `${pet.name} necesita un cuidador. Revisa tu buzón.`).catch(() => {});
-    }
+    // No notificamos al cuidador aquí — solo cuando el pago sea confirmado
+    // (onBookingWaitingApproval se dispara al pasar a WAITING_CAREGIVER_APPROVAL).
 
     logger.info('Cliente seleccionó mascota para reserva', {
       userId: clientId,
