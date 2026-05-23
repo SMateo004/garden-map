@@ -171,4 +171,31 @@ router.get('/audit-log/export', asyncHandler(async (req, res) => {
   res.send(txt);
 }));
 
+// ── Diagnóstico temporal — filtros de mascota ─────────────────────────────
+// GET /api/admin/debug/animal-types — muestra animalTypes real en DB para todos los cuidadores aprobados
+import prisma from '../../config/database.js';
+router.get('/debug/animal-types', asyncHandler(async (_req, res) => {
+  const profiles = await prisma.caregiverProfile.findMany({
+    where: { status: 'APPROVED' },
+    select: {
+      id: true,
+      animalTypes: true,
+      sizesAccepted: true,
+      serviceDetails: true,
+      user: { select: { firstName: true, lastName: true } },
+    },
+  });
+  res.json({
+    success: true,
+    data: profiles.map((p) => ({
+      id: p.id,
+      name: `${p.user?.firstName} ${p.user?.lastName}`,
+      animalTypes: p.animalTypes,
+      sizesAccepted: p.sizesAccepted,
+      serviceDetailsAcceptedPetTypes: (p.serviceDetails as any)?.acceptedPetTypes ?? null,
+      serviceDetailsAcceptedSizes: (p.serviceDetails as any)?.acceptedSizes ?? null,
+    })),
+  });
+}));
+
 export default router;

@@ -229,7 +229,10 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.ownPets !== undefined) updateData.ownPets = body.ownPets;
   if (body.currentPetsDetails !== undefined) updateData.currentPetsDetails = body.currentPetsDetails;
   if (body.caredOthers !== undefined) updateData.caredOthers = body.caredOthers;
-  if (body.animalTypes !== undefined) updateData.animalTypes = body.animalTypes;
+  if (body.animalTypes !== undefined) {
+    updateData.animalTypes = { set: body.animalTypes as any[] };
+    logger.info('patchProfile: saving animalTypes', { userId, animalTypes: body.animalTypes });
+  }
   if (body.experienceDescription !== undefined) updateData.experienceDescription = body.experienceDescription;
   if (body.whyCaregiver !== undefined) updateData.whyCaregiver = body.whyCaregiver;
   if (body.whatDiffers !== undefined) updateData.whatDiffers = body.whatDiffers;
@@ -239,7 +242,10 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.acceptMedication !== undefined) updateData.acceptMedication = body.acceptMedication;
   if (body.acceptPuppies !== undefined) updateData.acceptPuppies = body.acceptPuppies;
   if (body.acceptSeniors !== undefined) updateData.acceptSeniors = body.acceptSeniors;
-  if (body.sizesAccepted !== undefined) updateData.sizesAccepted = body.sizesAccepted;
+  if (body.sizesAccepted !== undefined) {
+    updateData.sizesAccepted = { set: body.sizesAccepted as string[] };
+    logger.info('patchProfile: saving sizesAccepted', { userId, sizesAccepted: body.sizesAccepted });
+  }
   if (body.noAcceptBreeds !== undefined) updateData.noAcceptBreeds = body.noAcceptBreeds;
   if (body.breedsWhy !== undefined) updateData.breedsWhy = body.breedsWhy;
   if (body.homeType !== undefined) updateData.homeType = body.homeType;
