@@ -148,19 +148,10 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
   }
 
   // Filtrar por tipo de mascota del cliente.
-  // - Si el cuidador tiene animalTypes vacío → acepta todos (siempre aparece).
-  // - Si tiene valores explícitos → solo aparece si incluye el tipo solicitado.
+  // Solo aparecen cuidadores que tienen explícitamente ese tipo en su array.
+  // Si el cuidador tiene animalTypes vacío o no incluyó esa especie, no aparece.
   if (petType) {
-    const existingAnd = (where as any).AND ?? [];
-    (where as any).AND = [
-      ...existingAnd,
-      {
-        OR: [
-          { animalTypes: { isEmpty: true } },
-          { animalTypes: { has: petType } },
-        ],
-      },
-    ];
+    (where as any).animalTypes = { has: petType };
   }
 
   if (search && search.trim()) {

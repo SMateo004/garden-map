@@ -186,7 +186,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     _allowsLargePets = details['allowsLargePets'] ?? false;
     _allowsMultiplePets = details['allowsMultiplePets'] ?? false;
     _maxPets = details['maxPets'] ?? 1;
-    _acceptedPetTypes = List<String>.from(details['acceptedPetTypes'] ?? []);
+    // Prioridad: campo animalTypes del DB (fuente de verdad para el marketplace)
+    // Fallback: serviceDetails.acceptedPetTypes (legacy)
+    final dbAnimalTypes = List<String>.from(profile['animalTypes'] ?? []);
+    _acceptedPetTypes = dbAnimalTypes.isNotEmpty
+        ? dbAnimalTypes
+        : List<String>.from(details['acceptedPetTypes'] ?? []);
     _acceptedSizes = List<String>.from(details['acceptedSizes'] ?? []);
     _weekdays = availability['weekdays'] ?? defaultSchedule['weekdays'] ?? true;
     _weekends = availability['weekends'] ?? defaultSchedule['weekends'] ?? false;
@@ -442,6 +447,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         'acceptPuppies': _acceptPuppies ?? false,
         'acceptSeniors': _acceptSeniors ?? false,
         'sizesAccepted': _acceptedSizes,
+        // Campo clave para el filtro del marketplace — debe coincidir con DB AnimalType enum
+        'animalTypes': _acceptedPetTypes,
         'serviceDetails': {
           'allowsLargePets': _allowsLargePets,
           'allowsMultiplePets': _allowsMultiplePets,
