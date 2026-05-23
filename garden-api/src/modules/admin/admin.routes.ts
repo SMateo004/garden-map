@@ -3,6 +3,7 @@ import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js
 import * as adminController from './admin.controller.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import { exportMonthAsTxt } from '../../services/audit.service.js';
+import prisma from '../../config/database.js';
 
 const router = Router();
 
@@ -173,7 +174,6 @@ router.get('/audit-log/export', asyncHandler(async (req, res) => {
 
 // ── Diagnóstico temporal — filtros de mascota ─────────────────────────────
 // GET /api/admin/debug/animal-types — muestra animalTypes real en DB para todos los cuidadores aprobados
-import prisma from '../../config/database.js';
 router.get('/debug/animal-types', asyncHandler(async (_req, res) => {
   const profiles = await prisma.caregiverProfile.findMany({
     where: { status: 'APPROVED' },
