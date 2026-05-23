@@ -623,12 +623,19 @@ async function assertPaseoAvailability(
     const requestedEndWithBuffer = requestedEnd + 30;
 
     // Verificar límites del bloque del cuidador.
-    // Prioridad: avail.timeBlocks con tiempos reales → defaultSchedule.paseoTimeBlocks → sin límite.
-    // Cuando avail.timeBlocks tiene slots en null (formato "sin override"), los defaults hardcodeados
-    // de parseTimeBlocks no reflejan los tiempos personalizados del cuidador, así que caemos al
-    // defaultSchedule que sí tiene los rangos reales configurados por el cuidador.
-    let rangeSlots = avail?.timeBlocks ? parseTimeBlocks(avail.timeBlocks) : [];
-    if ((rangeSlots.length === 0 || rangeSlots.every(s => !s.start || !s.end)) && defaultBlocks) {
+    // Misma lógica que getCaregiverAvailability: si avail.timeBlocks tiene slots en null
+    // (formato "sin override real"), lo ignoramos y usamos defaultSchedule.paseoTimeBlocks
+    // que contiene los rangos personalizados del cuidador.
+    let rawRangeBlocks: any = avail?.timeBlocks ?? null;
+    if (
+      rawRangeBlocks?.slots &&
+      typeof rawRangeBlocks.slots === 'object' &&
+      Object.values(rawRangeBlocks.slots as object).every((v) => v === null || v === undefined)
+    ) {
+      rawRangeBlocks = null; // slots todos null → sin override real → usar defaultSchedule
+    }
+    let rangeSlots = rawRangeBlocks ? parseTimeBlocks(rawRangeBlocks) : [];
+    if (rangeSlots.length === 0 && defaultBlocks) {
       rangeSlots = parseTimeBlocks(defaultBlocks);
     }
     const currentBlock = rangeSlots.find(s => s.slot === timeSlot);
