@@ -18,5 +18,5 @@ RUN npx prisma generate
 # Build TypeScript with relaxed config (production build)
 RUN npx tsc -p tsconfig.build.json || true
 
-# Start: run migrations then start server
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/server.js"]
+# Start: run pending migrations then start server
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
