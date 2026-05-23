@@ -55,6 +55,7 @@ export interface CaregiverDetail extends CaregiverListItem {
   oftenOut?: boolean | null;
   typicalDay?: string | null;
   spaceDescription?: string | null;
+  isProfessional?: boolean | null;
   blockchainReputation?: {
     average: number;
     count: number;

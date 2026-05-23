@@ -180,6 +180,7 @@ export interface AdminCaregiverDetailDto {
   identityVerificationSubmittedAt: string | null;
   lastIdentityVerificationSessionId?: string;
   emailVerified: boolean;
+  isProfessional: boolean;
   reviewChecklist: string[] | null;
 
   // --- Flags de completitud ---
