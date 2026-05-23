@@ -1,5 +1,4 @@
-import { CaregiverStatus, ServiceType, Zone, type TimeSlot } from '@prisma/client';
-import type { Prisma } from '@prisma/client';
+import { CaregiverStatus, ServiceType, Zone, Prisma, type TimeSlot } from '@prisma/client';
 import prisma from '../../config/database.js';
 import { getCache, CAREGIVER_LIST_CACHE_TTL, CAREGIVER_DETAIL_CACHE_TTL } from '../../shared/cache.js';
 import {
@@ -143,18 +142,57 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
   if (acceptPuppies !== undefined) where.acceptPuppies = acceptPuppies;
   if (acceptSeniors !== undefined) where.acceptSeniors = acceptSeniors;
 
+  // sizesAccepted: excluir cuidadores que tienen tamaños configurados Y ninguno coincide.
+  // NULL/[] = sin restricción → deben aparecer en todos los filtros de tamaño.
   if (sizesAccepted && Array.isArray(sizesAccepted) && sizesAccepted.length > 0) {
-    (where as any).sizesAccepted = { hasSome: sizesAccepted };
+    try {
+      const sizeParams = sizesAccepted.map((s) => Prisma.sql`${s}`);
+      const excluded = await prisma.$queryRaw<{ id: string }[]>(
+        Prisma.sql`
+          SELECT id FROM "caregiver_profiles"
+          WHERE "sizesAccepted" IS NOT NULL
+            AND array_length("sizesAccepted", 1) IS NOT NULL
+            AND array_length("sizesAccepted", 1) > 0
+            AND NOT ("sizesAccepted"::text[] && ARRAY[${Prisma.join(sizeParams)}]::text[])
+        `,
+      );
+      logger.debug('sizesAccepted filter', { sizesAccepted, excludedCount: excluded.length });
+      if (excluded.length > 0) {
+        const existingNotIn = (where as any).id?.notIn ?? [];
+        where.id = { notIn: [...existingNotIn, ...excluded.map((e) => e.id)] };
+      }
+    } catch (err) {
+      logger.error('sizesAccepted subquery failed, skipping filter', {
+        sizesAccepted,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   // Filtrar por tipo de mascota del cliente.
-  // isEmpty:true cubre tanto NULL como [] gracias a la migración que convirtió NULLs a [].
-  // Cuidadores que solo aceptan CATS quedan excluidos si se filtra por DOGS, y viceversa.
+  // Usamos subquery raw para excluir cuidadores que restringen EXPLÍCITAMENTE al otro tipo.
+  // Esto maneja correctamente NULL (no configurado) y [] (sin restricción) — ambos aparecen.
+  // Solo se excluyen cuidadores con array no-vacío que no contiene petType.
   if (petType) {
-    (where as any).OR = [
-      { animalTypes: { isEmpty: true } }, // array vacío = sin restricción
-      { animalTypes: { has: petType } },  // acepta explícitamente esta especie
-    ];
+    try {
+      const excluded = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "caregiver_profiles"
+        WHERE "animalTypes" IS NOT NULL
+          AND array_length("animalTypes", 1) IS NOT NULL
+          AND array_length("animalTypes", 1) > 0
+          AND NOT ("animalTypes"::text[] @> ARRAY[${petType}]::text[])
+      `;
+      logger.debug('petType filter', { petType, excludedCount: excluded.length });
+      if (excluded.length > 0) {
+        const existingNotIn = (where as any).id?.notIn ?? [];
+        where.id = { notIn: [...existingNotIn, ...excluded.map((e) => e.id)] };
+      }
+    } catch (err) {
+      logger.error('petType subquery failed, skipping filter', {
+        petType,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   if (search && search.trim()) {

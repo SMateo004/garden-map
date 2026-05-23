@@ -1591,10 +1591,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   Wrap(
                     spacing: 6, runSpacing: 6,
                     children: [
-                      _sizeChip('PEQUEÑO', 'Pequeño 🐾', textColor),
-                      _sizeChip('MEDIANO', 'Mediano 🐕', textColor),
-                      _sizeChip('GRANDE', 'Grande 🐕‍🦺', textColor),
-                      _sizeChip('GIGANTE', 'Gigante 🦮', textColor),
+                      _sizeChip('SMALL', 'Pequeño 🐾', textColor),
+                      _sizeChip('MEDIUM', 'Mediano 🐕', textColor),
+                      _sizeChip('LARGE', 'Grande 🐕‍🦺', textColor),
+                      _sizeChip('GIANT', 'Gigante 🦮', textColor),
                     ],
                   ),
                   _divider(border),
