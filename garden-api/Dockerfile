@@ -19,4 +19,4 @@ RUN npx prisma generate
 RUN npx tsc -p tsconfig.build.json || true
 
 # Start: run pending migrations then start server
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
+CMD ["sh", "-c", "npx prisma migrate resolve --rolled-back 20260523000004_seed_guarderia_enabled 2>/dev/null || true && npx prisma migrate deploy && node dist/server.js"]
