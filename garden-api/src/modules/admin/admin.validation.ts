@@ -89,6 +89,7 @@ export const ALLOWED_SETTING_KEYS = [
   'maintenanceMode',
   'hospedajeEnabled',
   'paseoEnabled',
+  'guarderiaEnabled',
   'retirosEnabled',
   'disputasEnabled',
   'preciosDinamicosEnabled',

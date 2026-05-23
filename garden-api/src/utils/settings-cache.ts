@@ -8,14 +8,22 @@ import prisma from '../config/database.js';
 const _cache: Record<string, { raw: string; ts: number }> = {};
 const TTL = 30_000; // 30 segundos
 
+const _NOT_FOUND = '__NOT_FOUND__';
+
 async function _getRaw(key: string): Promise<string | null> {
     const now = Date.now();
-    if (_cache[key] && now - _cache[key]!.ts < TTL) return _cache[key]!.raw;
+    if (_cache[key] && now - _cache[key]!.ts < TTL) {
+        const cached = _cache[key]!.raw;
+        return cached === _NOT_FOUND ? null : cached;
+    }
     try {
         const setting = await prisma.appSettings.findUnique({ where: { key } });
-        const raw = setting?.value ?? 'null';
-        _cache[key] = { raw, ts: now };
-        return raw;
+        if (!setting) {
+            _cache[key] = { raw: _NOT_FOUND, ts: now };
+            return null; // → getBoolSetting uses defaultValue
+        }
+        _cache[key] = { raw: setting.value, ts: now };
+        return setting.value;
     } catch {
         return null;
     }
