@@ -99,8 +99,7 @@ export function errorHandler(
     success: false,
     error: {
       code: 'INTERNAL_ERROR',
-      message: err.message ?? 'Error interno del servidor',
-      details: err.stack?.split('\n').slice(0, 5).join(' | '),
+      message: 'Error interno del servidor',
     },
   });
 }

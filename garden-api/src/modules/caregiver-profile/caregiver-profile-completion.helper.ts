@@ -58,11 +58,11 @@ export async function checkAndAutoSubmitProfile(userId: string) {
     const hasPhotosAndServices = Boolean(services.length > 0 && photos.length >= minPhotos && profile.zone);
     const hasAnimalAndSizes = Boolean(Array.isArray(profile.animalTypes) && profile.animalTypes.length > 0 && Array.isArray(profile.sizesAccepted) && profile.sizesAccepted.length > 0);
 
-    const caregiverProfileComplete = hasBio && hasBioDetail && hasExperience && hasRequiredQuestions && hasPhotosAndServices && hasAnimalAndSizes && (
+    const caregiverProfileComplete = Boolean(hasBio && hasBioDetail && hasExperience && hasRequiredQuestions && hasPhotosAndServices && hasAnimalAndSizes && (
         services.includes(ServiceType.HOSPEDAJE)
             ? (profile.homeType && profile.spaceDescription && profile.spaceDescription.trim().length >= 3)
             : true
-    );
+    ));
 
     // 3. Availability Complete — caregiver must have at least a price set for each offered service
     const hasPaseoPrice = Boolean(profile.pricePerWalk30 != null || profile.pricePerWalk60 != null);
