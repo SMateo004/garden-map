@@ -95,17 +95,12 @@ export function errorHandler(
   });
 
   // En desarrollo, incluir más detalles del error
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  const errorMessage = isDevelopment
-    ? `Error interno del servidor: ${err.message}`
-    : 'Error interno del servidor';
-
   return res.status(500).json({
     success: false,
     error: {
       code: 'INTERNAL_ERROR',
-      message: errorMessage,
-      ...(isDevelopment && { details: err.stack }),
+      message: err.message ?? 'Error interno del servidor',
+      details: err.stack?.split('\n').slice(0, 5).join(' | '),
     },
   });
 }
