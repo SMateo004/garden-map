@@ -897,7 +897,7 @@ export async function getCaregiverAvailability(
                 endDate: { gte: startDate }
               },
               {
-                serviceType: 'PASEO',
+                serviceType: { in: ['PASEO', 'GUARDERIA'] },
                 walkDate: { gte: startDate, lte: endDate }
               }
             ]
@@ -938,7 +938,7 @@ export async function getCaregiverAvailability(
 
     // 7. Prepare bookedPaseos for frontend validation/UI
     const bookedPaseos = activeBookings
-      .filter(b => b.serviceType === 'PASEO' && b.walkDate)
+      .filter(b => (b.serviceType === 'PASEO' || b.serviceType === 'GUARDERIA') && b.walkDate)
       .map(b => ({
         date: b.walkDate!.toISOString().slice(0, 10),
         startTime: b.startTime || '00:00',

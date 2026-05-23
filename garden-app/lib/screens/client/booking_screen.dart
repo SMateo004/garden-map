@@ -322,6 +322,10 @@ class _BookingScreenState extends State<BookingScreen> {
         _showError('Selecciona un horario (Mañana o Tarde)');
         return;
       }
+      if (_selectedStartTime == null) {
+        _showError('Selecciona una hora de inicio');
+        return;
+      }
     }
     if (_selectedService == 'PASEO') {
       if (_isMultiDay) {
@@ -375,7 +379,7 @@ class _BookingScreenState extends State<BookingScreen> {
           'walkDate': _selectedDate!.toIso8601String().split('T')[0],
           'timeSlot': _selectedTimeSlot,
           'duration': _guarderiaSelectedDuration,
-          if (_selectedStartTime != null) 'startTime': _selectedStartTime,
+          'startTime': _selectedStartTime!,
         };
       } else if (_selectedService == 'PASEO') {
         if (_isMultiDay) {
@@ -1136,7 +1140,12 @@ class _BookingScreenState extends State<BookingScreen> {
                         final hours = mins ~/ 60;
                         final price = (pricePerGuarderia * (mins / 60)).round();
                         return GestureDetector(
-                          onTap: () => setState(() => _guarderiaSelectedDuration = mins),
+                          onTap: () => setState(() {
+                            _guarderiaSelectedDuration = mins;
+                            _selectedDate = null;
+                            _selectedTimeSlot = null;
+                            _selectedStartTime = null;
+                          }),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 180),
                             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 18),
@@ -1190,7 +1199,8 @@ class _BookingScreenState extends State<BookingScreen> {
                         final bool isDayUnavailable = _blockedDates.contains(ds) ||
                             (_multiDaySlotsByDate.containsKey(ds) &&
                              _multiDaySlotsByDate[ds]!.every((s) => s['enabled'] != true)) ||
-                            (_multiDayDataLoaded && !_multiDaySlotsByDate.containsKey(ds));
+                            (_multiDayDataLoaded && !_multiDaySlotsByDate.containsKey(ds)) ||
+                            _guarderiaHasNoTimeAvailable(ds);
                         return GestureDetector(
                           onTap: isDayUnavailable ? null : () async {
                             setState(() {
@@ -1255,32 +1265,46 @@ class _BookingScreenState extends State<BookingScreen> {
                       final label = slotName == 'MANANA' ? 'Mañana' : 'Tarde';
                       final range = '${slot['start']} - ${slot['end']}';
                       final isSelected = _selectedTimeSlot == slotName;
-                      return GestureDetector(
-                        onTap: () => setState(() {
-                          _selectedTimeSlot = slotName;
-                          _selectedStartTime = null;
-                        }),
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          decoration: BoxDecoration(
-                            color: isSelected ? GardenColors.primary.withValues(alpha: 0.08) : surface,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: isSelected ? GardenColors.primary : borderColor),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                                color: GardenColors.primary, size: 20,
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          GestureDetector(
+                            onTap: () => setState(() {
+                              _selectedTimeSlot = slotName;
+                              _selectedStartTime = null;
+                            }),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              decoration: BoxDecoration(
+                                color: isSelected ? GardenColors.primary.withValues(alpha: 0.08) : surface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: isSelected ? GardenColors.primary : borderColor),
                               ),
-                              const SizedBox(width: 8),
-                              Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
-                              const SizedBox(width: 8),
-                              Text(range, style: TextStyle(color: subtextColor, fontSize: 12)),
-                            ],
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                                    color: GardenColors.primary, size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+                                  const SizedBox(width: 8),
+                                  Text(range, style: TextStyle(color: subtextColor, fontSize: 12)),
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
+                          if (isSelected) ...[
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text('Hora de inicio',
+                                  style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                            ),
+                            _buildTimeChips(slot, _selectedDate!, durationOverride: _guarderiaSelectedDuration),
+                            const SizedBox(height: 12),
+                          ],
+                        ],
                       );
                     })).toList(),
                   ],
@@ -1462,11 +1486,12 @@ class _BookingScreenState extends State<BookingScreen> {
     }
   }
 
-  bool _isTimeConflicting(String time, String dateStr) {
+  bool _isTimeConflicting(String time, String dateStr, {int? durationOverride}) {
     if (_bookedPaseos.isEmpty) return false;
     final parts = time.split(':');
     final newStart = int.parse(parts[0]) * 60 + int.parse(parts[1]);
-    final newEnd = newStart + _selectedDuration + 30; // +30 min descanso
+    final dur = durationOverride ?? _selectedDuration;
+    final newEnd = newStart + dur + 30; // +30 min buffer entre servicios
     for (final b in _bookedPaseos) {
       if (b['date'] != dateStr) continue;
       final sp = (b['startTime'] as String).split(':');
@@ -1749,6 +1774,39 @@ class _BookingScreenState extends State<BookingScreen> {
         _multiDayDataLoaded = true;
       });
     }
+  }
+
+  /// Para GUARDERIA: ¿hay alguna hora de inicio válida en este día para la duración seleccionada?
+  /// Devuelve true si el día debe deshabilitarse (sin tiempo suficiente).
+  bool _guarderiaHasNoTimeAvailable(String dateStr) {
+    if (!_multiDayDataLoaded) return false;
+    final daySlots = _multiDaySlotsByDate[dateStr];
+    if (daySlots == null || daySlots.isEmpty) return true;
+    final usableSlots = daySlots.where((s) => s['enabled'] == true && s['slot'] != 'NOCHE').toList();
+    if (usableSlots.isEmpty) return true;
+    for (final slot in usableSlots) {
+      final sp = (slot['start'] as String? ?? '08:00').split(':');
+      final ep = (slot['end'] as String? ?? '11:00').split(':');
+      final slotStartMin = int.parse(sp[0]) * 60 + (sp.length > 1 ? int.parse(sp[1]) : 0);
+      final slotEndMin = int.parse(ep[0]) * 60 + (ep.length > 1 ? int.parse(ep[1]) : 0);
+      if (slotStartMin + _guarderiaSelectedDuration > slotEndMin) continue;
+      for (int t = slotStartMin; t + _guarderiaSelectedDuration <= slotEndMin; t += 30) {
+        final h = t ~/ 60;
+        final m = t % 60;
+        final timeStr = '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+        bool conflicts = false;
+        for (final b in _multiDayRangeBookings) {
+          if (b['date'] != dateStr || b['startTime'] == null) continue;
+          final bs = (b['startTime'] as String).split(':');
+          final bStart = int.parse(bs[0]) * 60 + int.parse(bs[1]);
+          final bEnd = bStart + (b['duration'] as int? ?? 30) + 30;
+          final newEnd = t + _guarderiaSelectedDuration + 30;
+          if (t < bEnd && newEnd > bStart) { conflicts = true; break; }
+        }
+        if (!conflicts) return false; // Hay al menos una hora válida
+      }
+    }
+    return true; // Ninguna hora válida → deshabilitar día
   }
 
   /// ¿El cuidador atiende este slot (MANANA/TARDE/NOCHE) en TODAS las fechas seleccionadas?
@@ -2076,25 +2134,32 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
-  Widget _buildTimeChips(Map<String, dynamic> slot, DateTime date) {
+  Widget _buildTimeChips(Map<String, dynamic> slot, DateTime date, {int? durationOverride}) {
+    final effectiveDuration = durationOverride ?? _selectedDuration;
     final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
     final startParts = (slot['start'] as String).split(':');
     final endParts = (slot['end'] as String).split(':');
     final startHour = int.parse(startParts[0]);
+    final startMin = startParts.length > 1 ? int.parse(startParts[1]) : 0;
     final endHour = int.parse(endParts[0]);
+    final endMin = endParts.length > 1 ? int.parse(endParts[1]) : 0;
+    final slotEndMinutes = endHour * 60 + endMin;
 
     final timeSlots = <String>[];
-    for (int h = startHour; h < endHour; h++) {
-      for (int m = 0; m < 60; m += 30) {
-        final totalMinutes = h * 60 + m + _selectedDuration + 30;
-        if (totalMinutes <= endHour * 60) {
+    for (int h = startHour; h <= endHour; h++) {
+      final mStart = (h == startHour) ? startMin : 0;
+      for (int m = mStart; m < 60; m += 30) {
+        final slotStart = h * 60 + m;
+        if (slotStart >= slotEndMinutes) break;
+        // El servicio completo debe caber dentro del bloque (sin buffer en el límite del bloque)
+        if (slotStart + effectiveDuration <= slotEndMinutes) {
           timeSlots.add('${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}');
         }
       }
     }
 
-    // Ocultar horarios que ya están reservados (incluye buffer de descanso)
-    final available = timeSlots.where((t) => !_isTimeConflicting(t, dateStr)).toList();
+    // Ocultar horarios que ya están reservados (incluye buffer de descanso entre servicios)
+    final available = timeSlots.where((t) => !_isTimeConflicting(t, dateStr, durationOverride: effectiveDuration)).toList();
 
     if (available.isEmpty) {
       return Padding(
