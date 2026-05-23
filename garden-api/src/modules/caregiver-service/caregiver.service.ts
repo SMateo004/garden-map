@@ -148,11 +148,10 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
   }
 
   // Filtrar por tipo de mascota del cliente.
-  // Casos incluidos: sin configurar (null), sin restricción (vacío), o acepta la especie.
+  // isEmpty:true cubre tanto NULL como [] gracias a la migración que convirtió NULLs a [].
   // Cuidadores que solo aceptan CATS quedan excluidos si se filtra por DOGS, y viceversa.
   if (petType) {
     (where as any).OR = [
-      { animalTypes: null },              // campo no configurado = sin restricción
       { animalTypes: { isEmpty: true } }, // array vacío = sin restricción
       { animalTypes: { has: petType } },  // acepta explícitamente esta especie
     ];
