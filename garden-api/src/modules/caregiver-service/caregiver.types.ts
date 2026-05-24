@@ -7,6 +7,8 @@ export interface CaregiverListItem {
   profilePicture: string | null;
   /** URLs de fotos del perfil (Cloudinary). Incluir en listado para mostrar galería. */
   photos: string[];
+  /** Fotos del paseador (solo cuidadores PASEO). */
+  walkerPhotos: string[];
   zone: string;
   services: ServiceType[];
   rating: number;
