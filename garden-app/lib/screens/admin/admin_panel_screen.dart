@@ -9,6 +9,7 @@ import 'admin_owners_screen.dart';
 import 'admin_general_screen.dart';
 import 'admin_technical_screen.dart';
 import 'admin_notifications_screen.dart';
+import 'admin_vets_screen.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -767,6 +768,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     _buildWithdrawalsTab(surface, textColor, subtextColor, borderColor),
                     _buildGiftCodesTab(surface, textColor, subtextColor, borderColor),
                     AdminOwnersScreen(adminToken: _adminToken),
+                    AdminVetsScreen(adminToken: _adminToken),
                     AdminGeneralScreen(adminToken: _adminToken),
                     AdminTechnicalScreen(adminToken: _adminToken),
                     AdminNotificationsScreen(adminToken: _adminToken),
@@ -791,6 +793,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       ('Retiros', Icons.account_balance_rounded),
       ('Códigos', Icons.card_giftcard_outlined),
       ('Dueños', Icons.pets_rounded),
+      ('Veterinarias', Icons.local_hospital_rounded),
       ('Administración', Icons.business_center_rounded),
       ('Técnica', Icons.developer_mode_rounded),
       ('Notificaciones', Icons.campaign_rounded),
