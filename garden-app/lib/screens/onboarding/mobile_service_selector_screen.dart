@@ -106,12 +106,11 @@ class _MobileServiceSelectorScreenState
       body: SafeArea(
         child: AnimatedBuilder(
           animation: _entranceCtrl,
-          builder: (_, __) => Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+          builder: (_, __) => SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(24, safePad.top > 0 ? 16 : 24, 24, 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(height: safePad.top > 0 ? 16 : 24),
 
                 // ── Header ──
                 SlideTransition(
@@ -174,7 +173,7 @@ class _MobileServiceSelectorScreenState
                   ),
                 ),
 
-                const SizedBox(height: 36),
+                const SizedBox(height: 20),
 
                 // ── Tarjeta PASEO ──
                 SlideTransition(
@@ -255,20 +254,17 @@ class _MobileServiceSelectorScreenState
                   ),
                 ),
 
-                const Spacer(),
+                const SizedBox(height: 20),
 
                 // ── Footer ──
                 FadeTransition(
                   opacity: _card2Fade,
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Center(
-                      child: Text(
-                        'Siempre puedes cambiar el servicio después',
-                        style: TextStyle(
-                            color: subtextColor.withValues(alpha: 0.6),
-                            fontSize: 12),
-                      ),
+                  child: Center(
+                    child: Text(
+                      'Siempre puedes cambiar el servicio después',
+                      style: TextStyle(
+                          color: subtextColor.withValues(alpha: 0.6),
+                          fontSize: 12),
                     ),
                   ),
                 ),
@@ -329,56 +325,59 @@ class _ServiceCard extends StatelessWidget {
               ),
             ],
           ),
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
-              // Emoji grande
+              // Emoji
               Container(
-                width: 72,
-                height: 72,
+                width: 54,
+                height: 54,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
                 ),
                 child: Center(
-                  child: Text(emoji, style: const TextStyle(fontSize: 36)),
+                  child: Text(emoji, style: const TextStyle(fontSize: 26)),
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
 
               // Texto
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(title,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 20,
+                          fontSize: 17,
                           fontWeight: FontWeight.w800,
                         )),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Text(description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.85),
-                          fontSize: 13,
-                          height: 1.4,
+                          color: Colors.white.withValues(alpha: 0.82),
+                          fontSize: 12,
+                          height: 1.35,
                         )),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 7),
                     Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
+                      spacing: 5,
+                      runSpacing: 3,
                       children: features.map((f) => Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(10),
+                          color: Colors.white.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(f,
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 11,
+                              fontSize: 10,
                               fontWeight: FontWeight.w600,
                             )),
                       )).toList(),
@@ -390,14 +389,14 @@ class _ServiceCard extends StatelessWidget {
               // Flecha
               const SizedBox(width: 8),
               Container(
-                width: 32,
-                height: 32,
+                width: 28,
+                height: 28,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
+                  color: Colors.white.withValues(alpha: 0.18),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.arrow_forward_rounded,
-                    color: Colors.white, size: 18),
+                    color: Colors.white, size: 15),
               ),
             ],
           ),

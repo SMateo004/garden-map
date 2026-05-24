@@ -807,7 +807,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             ),
 
             // ── Chips de servicio ──────────────────────────────────────
-            Padding(
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.fromLTRB(12, 2, 12, 4),
               child: Row(
                 children: [
