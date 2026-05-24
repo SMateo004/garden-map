@@ -629,6 +629,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         },
       });
       setState(() { _isLoading = false; _currentStep++; });
+      // Auto-skip step 3 for PASEO-only caregivers
+      if (_currentStep == 3 && _servicesOffered.length == 1 && _servicesOffered.contains('PASEO')) {
+        setState(() => _currentStep++);
+      }
       return;
     }
 

@@ -856,8 +856,8 @@ class _ProposalSheetState extends State<_ProposalSheet> {
   void initState() {
     super.initState();
     _modalidad = widget.modalidad;
-    _date = widget.proposedDate;
-    _time = widget.proposedTime;
+    _date = null;
+    _time = null;
   }
 
   @override
