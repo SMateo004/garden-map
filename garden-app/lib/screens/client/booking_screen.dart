@@ -2471,6 +2471,7 @@ class _BookingScreenState extends State<BookingScreen> {
                 ],
               ),
             ),
+            if (_mgDate != null) ...[
             const SizedBox(height: 10),
 
             // ── 2. Inline time chips (07:00–21:00, 30-min steps) ───────
@@ -2583,6 +2584,9 @@ class _BookingScreenState extends State<BookingScreen> {
                 ], // end if (_mgTimeExpanded)
               ],
             ),
+            ], // end if (_mgDate != null)
+
+            if (_mgDate != null && _mgTime != null) ...[
             const SizedBox(height: 10),
 
             // ── 3. Meeting point with improved suggestions ──────────────
@@ -2682,6 +2686,7 @@ class _BookingScreenState extends State<BookingScreen> {
               'El cuidador recibirá esta propuesta automáticamente tras confirmar el pago.',
               style: TextStyle(color: subtextColor, fontSize: 11),
             ),
+            ], // end if (_mgDate != null && _mgTime != null)
           ],
         ],
       ),
