@@ -477,48 +477,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = themeNotifier.isDark;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final hintColor = isDark ? GardenColors.darkTextHint : GardenColors.lightTextHint;
+    // AnimatedBuilder garantiza que ESTA pantalla se reconstruya cada vez que
+    // el tema cambia — incluyendo cuando el usuario lo cambia desde aquí mismo.
+    return AnimatedBuilder(
+      animation: themeNotifier,
+      builder: (context, _) {
+        final isDark = themeNotifier.isDark;
+        final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+        final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+        final hintColor = isDark ? GardenColors.darkTextHint : GardenColors.lightTextHint;
 
-    return Scaffold(
-      backgroundColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
-      appBar: AppBar(
-        backgroundColor: surface,
-        elevation: 0,
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: GardenColors.primary.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(GardenRadius.sm),
-              ),
-              child: const Icon(Icons.person_rounded, color: GardenColors.primary, size: 18),
+        return Scaffold(
+          backgroundColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
+          appBar: AppBar(
+            backgroundColor: surface,
+            elevation: 0,
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: GardenColors.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(GardenRadius.sm),
+                  ),
+                  child: const Icon(Icons.person_rounded, color: GardenColors.primary, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Text('Mi Perfil', style: GardenText.h4.copyWith(color: textColor)),
+              ],
             ),
-            const SizedBox(width: 10),
-            Text('Mi Perfil', style: GardenText.h4.copyWith(color: textColor)),
-          ],
-        ),
-        centerTitle: true,
-        actions: [
-          if (_token.isNotEmpty)
-            IconButton(
-              icon: Icon(Icons.logout_rounded, color: hintColor, size: 20),
-              onPressed: _logout,
-            ),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: _token.isEmpty || _userData == null
-                  ? _buildUnauthenticatedState()
-                  : _buildAuthenticatedState(),
-            ),
+            centerTitle: true,
+            actions: [
+              if (_token.isNotEmpty)
+                IconButton(
+                  icon: Icon(Icons.logout_rounded, color: hintColor, size: 20),
+                  onPressed: _logout,
+                ),
+            ],
+          ),
+          body: _isLoading
+              ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: _token.isEmpty || _userData == null
+                      ? _buildUnauthenticatedState()
+                      : _buildAuthenticatedState(),
+                ),
+        );
+      },
     );
   }
 
@@ -1261,35 +1268,34 @@ class _ThemeOptionBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final unselectedColor =
+        isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 7),
           decoration: BoxDecoration(
             color: selected ? GardenColors.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(GardenRadius.md - 1),
+            borderRadius: BorderRadius.circular(GardenRadius.sm),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
                 icon,
-                size: 18,
-                color: selected
-                    ? Colors.white
-                    : (isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+                size: 14,
+                color: selected ? Colors.white : unselectedColor,
               ),
-              const SizedBox(height: 4),
+              const SizedBox(width: 5),
               Text(
                 label,
                 style: TextStyle(
-                  color: selected
-                      ? Colors.white
-                      : (isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+                  color: selected ? Colors.white : unselectedColor,
                   fontSize: 11,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                 ),
               ),
             ],
@@ -1308,7 +1314,7 @@ class _ThemeOptionDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 1,
-      height: 36,
+      height: 28,
       color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder,
     );
   }
