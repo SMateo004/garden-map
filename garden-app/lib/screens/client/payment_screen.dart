@@ -229,6 +229,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
+  Widget _securityRow(IconData icon, String text, Color textColor, Color subtextColor) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 14, color: subtextColor),
+        const SizedBox(width: 8),
+        Expanded(child: Text(text, style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4))),
+      ],
+    );
+  }
+
   Widget _buildPaymentBody() {
     if (_booking == null) {
       return Center(
@@ -376,7 +387,57 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 20),
+
+          // Nota de seguridad del pago
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: GardenColors.success.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: GardenColors.success.withValues(alpha: 0.3)),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: GardenColors.success.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.lock_outline_rounded, color: GardenColors.success, size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text('Tu pago está protegido',
+                          style: TextStyle(color: GardenColors.success, fontWeight: FontWeight.w800, fontSize: 14)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _securityRow(
+                  Icons.schedule_rounded,
+                  'El cuidador recibe el pago únicamente cuando el servicio es completado.',
+                  textColor, subtextColor,
+                ),
+                const SizedBox(height: 8),
+                _securityRow(
+                  Icons.account_balance_wallet_outlined,
+                  'Si el servicio no se concreta, el monto es devuelto íntegro a tu billetera Garden.',
+                  textColor, subtextColor,
+                ),
+                const SizedBox(height: 8),
+                _securityRow(
+                  Icons.verified_user_outlined,
+                  'Garden custodia el dinero hasta confirmar que todo salió bien.',
+                  textColor, subtextColor,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
 
           GardenButton(
             label: _isSubmitting ? 'Procesando...' : 'Generar QR de pago',
