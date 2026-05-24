@@ -589,8 +589,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ),
               const SizedBox(height: 32),
               GardenButton(
-                label: 'Volver al inicio',
-                onPressed: () => context.go('/marketplace'),
+                label: 'Ver mis reservas',
+                icon: Icons.list_alt_rounded,
+                onPressed: () async {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setString('highlight_booking_id', widget.bookingId);
+                  if (mounted) context.go('/my-bookings-tab');
+                },
               ),
               const SizedBox(height: 16),
             ],

@@ -88,6 +88,56 @@ router.post('/profile/service-photo', authMiddleware, requireRole('CAREGIVER'),
   })
 );
 
+router.post('/profile/walker-photo', authMiddleware, requireRole('CAREGIVER'),
+  upload.single('walkerPhoto'),
+  asyncHandler(async (req, res) => {
+    const userId = (req as any).user.userId;
+    const file = req.file;
+    if (!file) return res.status(400).json({ success: false, error: { message: 'No se proporcionó foto' } });
+    if (!file.mimetype.startsWith('image/')) {
+      return res.status(400).json({ success: false, error: { message: 'Solo se permiten imágenes (JPG/PNG)' } });
+    }
+
+    const profile = await prisma.caregiverProfile.findFirst({ where: { userId }, select: { walkerPhotos: true } });
+    if (!profile) return res.status(404).json({ success: false, error: { message: 'Perfil no encontrado' } });
+    if (((profile as any).walkerPhotos?.length ?? 0) >= 4) {
+      return res.status(400).json({ success: false, error: { message: 'Máximo 4 fotos permitidas' } });
+    }
+
+    const photoUrl = await uploadImage(file.buffer, {
+      folder: 'caregivers',
+      name: `walker_${userId}_${Date.now()}`,
+    });
+
+    const updatedProfile = await prisma.caregiverProfile.update({
+      where: { userId },
+      data: { walkerPhotos: { push: photoUrl } } as any,
+      select: { walkerPhotos: true } as any,
+    });
+
+    res.json({ success: true, data: { photoUrl, totalPhotos: (updatedProfile as any).walkerPhotos.length } });
+  })
+);
+
+router.delete('/profile/walker-photo', authMiddleware, requireRole('CAREGIVER'),
+  asyncHandler(async (req, res) => {
+    const userId = (req as any).user.userId;
+    const { photoUrl } = req.body as { photoUrl: string };
+    if (!photoUrl) return res.status(400).json({ success: false, error: { message: 'photoUrl requerido' } });
+
+    const profile = await prisma.caregiverProfile.findFirst({ where: { userId }, select: { walkerPhotos: true } });
+    if (!profile) return res.status(404).json({ success: false, error: { message: 'Perfil no encontrado' } });
+
+    const updatedPhotos = ((profile as any).walkerPhotos as string[]).filter((p: string) => p !== photoUrl);
+    await prisma.caregiverProfile.update({
+      where: { userId },
+      data: { walkerPhotos: { set: updatedPhotos } } as any,
+    });
+
+    res.json({ success: true, data: { message: 'Foto eliminada' } });
+  })
+);
+
 router.post('/profile/photo', authMiddleware, requireRole('CAREGIVER'),
   upload.single('photo'),
   asyncHandler(async (req, res) => {

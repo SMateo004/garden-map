@@ -23,6 +23,11 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
   Uint8List? _newPhotoBytes;
   String? _newPhotoName;
 
+  // Walker photos (PASEO-only caregivers)
+  List<String> _walkerPhotos = [];
+  bool _uploadingWalkerPhoto = false;
+  List<String> _servicesOffered = [];
+
   // Controladores de texto
   final _bioController = TextEditingController();
   final _addressController = TextEditingController();
@@ -78,6 +83,8 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
           _selectedBankName = profile['bankName'] as String? ?? '';
           _selectedBankType = profile['bankType'] as String? ?? 'CUENTA_AHORRO';
           _bankAccountController.text = profile['bankAccount'] as String? ?? '';
+          _walkerPhotos = (profile['walkerPhotos'] as List?)?.cast<String>() ?? [];
+          _servicesOffered = (profile['servicesOffered'] as List?)?.cast<String>() ?? [];
           _bankHolderController.text = profile['bankHolder'] as String? ?? '';
         });
       }
@@ -123,6 +130,52 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
       debugPrint('Error uploading photo: $e');
       return null;
     }
+  }
+
+  Future<void> _pickAndUploadWalkerPhoto() async {
+    if (_walkerPhotos.length >= 4) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Máximo 4 fotos permitidas')));
+      return;
+    }
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85, maxWidth: 1200);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    setState(() => _uploadingWalkerPhoto = true);
+    try {
+      final uri = Uri.parse('$_baseUrl/caregiver/profile/walker-photo');
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Authorization'] = 'Bearer $_caregiverToken';
+      String mimeType = picked.name.endsWith('.png') ? 'image/png' : 'image/jpeg';
+      request.files.add(http.MultipartFile.fromBytes(
+        'walkerPhoto', bytes,
+        filename: picked.name,
+        contentType: MediaType.parse(mimeType),
+      ));
+      final streamed = await request.send();
+      final response = await http.Response.fromStream(streamed);
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        setState(() => _walkerPhotos.add(data['data']['photoUrl'] as String));
+      } else {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error']?['message'] ?? 'Error al subir foto'), backgroundColor: GardenColors.error));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: GardenColors.error));
+    } finally {
+      if (mounted) setState(() => _uploadingWalkerPhoto = false);
+    }
+  }
+
+  Future<void> _deleteWalkerPhoto(String photoUrl) async {
+    try {
+      await http.delete(
+        Uri.parse('$_baseUrl/caregiver/profile/walker-photo'),
+        headers: {'Authorization': 'Bearer $_caregiverToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'photoUrl': photoUrl}),
+      );
+      setState(() => _walkerPhotos.remove(photoUrl));
+    } catch (_) {}
   }
 
   Future<void> _saveProfile() async {
@@ -243,12 +296,18 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
         final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
         final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
+        final isPaseoOnly = _servicesOffered.length == 1 && _servicesOffered.contains('PASEO');
+        final needsWalkerPhotos = isPaseoOnly && _walkerPhotos.isEmpty;
+
         return Scaffold(
           backgroundColor: bg,
           appBar: AppBar(
             backgroundColor: surface,
             elevation: 0,
-            title: Text('Editar perfil', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+            title: Text(
+              needsWalkerPhotos ? 'Completar perfil' : 'Editar perfil',
+              style: TextStyle(color: needsWalkerPhotos ? GardenColors.primary : textColor, fontWeight: FontWeight.bold),
+            ),
             iconTheme: IconThemeData(color: textColor),
             actions: [
               if (_isSaving)
@@ -328,6 +387,12 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
                       _buildPersonalInfoSection(textColor, subtextColor, isDark),
                       const Divider(height: 32),
 
+                      // Sección — Fotos de paseador (solo PASEO-only)
+                      if (isPaseoOnly) ...[
+                        _buildWalkerPhotosSection(textColor, subtextColor, borderColor, isDark, needsWalkerPhotos),
+                        const Divider(height: 32),
+                      ],
+
                       // Sección — Datos de cobro
                       _buildBankSection(textColor, subtextColor, surface, borderColor, isDark),
                       const Divider(height: 32),
@@ -346,6 +411,73 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
                 ),
         );
       },
+    );
+  }
+
+  Widget _buildWalkerPhotosSection(Color textColor, Color subtextColor, Color borderColor, bool isDark, bool needsCompletion) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Fotos tuyas como cuidador', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 2),
+                  Text('Fotos contigo con mascotas o en actividades de paseo (mín. 2)', style: TextStyle(color: subtextColor, fontSize: 12)),
+                ],
+              ),
+            ),
+            if (needsCompletion)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: GardenColors.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                child: const Text('Incompleto', style: TextStyle(color: GardenColors.warning, fontSize: 11, fontWeight: FontWeight.w700)),
+              ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8),
+          itemCount: _walkerPhotos.length < 4 ? _walkerPhotos.length + 1 : 4,
+          itemBuilder: (context, index) {
+            if (index == _walkerPhotos.length) {
+              return GestureDetector(
+                onTap: _uploadingWalkerPhoto ? null : _pickAndUploadWalkerPhoto,
+                child: Container(
+                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: borderColor)),
+                  child: _uploadingWalkerPhoto && index == _walkerPhotos.length
+                      ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary)))
+                      : const Icon(Icons.add_a_photo_outlined, color: GardenColors.primary),
+                ),
+              );
+            }
+            return Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.network(_walkerPhotos[index], fit: BoxFit.cover, width: double.infinity, height: double.infinity),
+                ),
+                Positioned(
+                  right: 4, top: 4,
+                  child: GestureDetector(
+                    onTap: () => _deleteWalkerPhoto(_walkerPhotos[index]),
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                      child: const Icon(Icons.close, color: Colors.white, size: 14),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 

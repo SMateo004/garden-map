@@ -205,6 +205,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   // ── Controllers ──
   final TextEditingController _searchController = TextEditingController();
   Timer? _searchDebounce;
+  Timer? _activeBookingTimer;
   final ScrollController _scrollController = ScrollController();
   final MapController _mapController = MapController();
 
@@ -321,6 +322,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   void dispose() {
     _searchController.dispose();
     _searchDebounce?.cancel();
+    _activeBookingTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -330,6 +332,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   Future<void> _loadInitialData() async {
     await _loadToken();
     await Future.wait([_loadCaregivers(reset: true), _loadActiveBooking()]);
+    _activeBookingTimer?.cancel();
+    _activeBookingTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      if (mounted) _loadActiveBooking();
+    });
   }
 
 

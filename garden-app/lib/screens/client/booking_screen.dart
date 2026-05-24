@@ -1063,45 +1063,88 @@ class _BookingScreenState extends State<BookingScreen> {
                       ),
                     if (_availableSlots.isNotEmpty) ...[
                       const SizedBox(height: 24),
-                      Text('Horario', style: GardenText.h4.copyWith(color: textColor)),
-                      const SizedBox(height: 12),
-                      ..._availableSlots.map((slot) {
-                        final slotName = slot['slot'] as String;
-                        final label = slotName == 'MANANA' ? 'Mañana' : slotName == 'TARDE' ? 'Tarde' : 'Noche';
-                        final range = '${slot['start']} - ${slot['end']}';
-                        final isSelected = _selectedTimeSlot == slotName;
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              GestureDetector(
-                                onTap: () => setState(() {
-                                  _selectedTimeSlot = slotName;
-                                  _selectedStartTime = null;
-                                }),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                                      color: GardenColors.primary,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
-                                    const SizedBox(width: 8),
-                                    Text(range, style: TextStyle(color: subtextColor, fontSize: 12)),
-                                  ],
-                                ),
+                      Row(
+                        children: [
+                          Text('Horario', style: GardenText.h4.copyWith(color: textColor)),
+                          if (_selectedStartTime != null) ...[
+                            const Spacer(),
+                            GestureDetector(
+                              onTap: () => setState(() {
+                                _selectedTimeSlot = null;
+                                _selectedStartTime = null;
+                              }),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.edit_outlined, size: 16, color: GardenColors.primary),
+                                  const SizedBox(width: 4),
+                                  Text('Cambiar', style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                                ],
                               ),
-                              if (isSelected) ...[
-                                const SizedBox(height: 12),
-                                _buildTimeChips(slot, _selectedDate!),
-                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (_selectedStartTime != null) ...[
+                        // Compact summary once time is chosen
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: GardenColors.primary.withValues(alpha: 0.07),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.access_time_rounded, color: GardenColors.primary, size: 20),
+                              const SizedBox(width: 10),
+                              Text(
+                                '${_selectedTimeSlot == 'MANANA' ? 'Mañana' : _selectedTimeSlot == 'TARDE' ? 'Tarde' : 'Noche'} · $_selectedStartTime',
+                                style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 15),
+                              ),
                             ],
                           ),
-                        );
-                      }),
+                        ),
+                      ] else ...[
+                        ..._availableSlots.map((slot) {
+                          final slotName = slot['slot'] as String;
+                          final label = slotName == 'MANANA' ? 'Mañana' : slotName == 'TARDE' ? 'Tarde' : 'Noche';
+                          final range = '${slot['start']} - ${slot['end']}';
+                          final isSelected = _selectedTimeSlot == slotName;
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                GestureDetector(
+                                  onTap: () => setState(() {
+                                    _selectedTimeSlot = slotName;
+                                    _selectedStartTime = null;
+                                  }),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                                        color: GardenColors.primary,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+                                      const SizedBox(width: 8),
+                                      Text(range, style: TextStyle(color: subtextColor, fontSize: 12)),
+                                    ],
+                                  ),
+                                ),
+                                if (isSelected) ...[
+                                  const SizedBox(height: 12),
+                                  _buildTimeChips(slot, _selectedDate!),
+                                ],
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
                       const Text(
                         '* 30 min de descanso incluidos después del servicio',
                         style: TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w500),
@@ -1258,55 +1301,97 @@ class _BookingScreenState extends State<BookingScreen> {
                   // ── Guardería: horario (solo MANANA y TARDE) ──
                   if (_selectedDate != null && _availableSlots.isNotEmpty) ...[
                     const SizedBox(height: 24),
-                    Text('Horario', style: GardenText.h4.copyWith(color: textColor)),
-                    const SizedBox(height: 12),
-                    ...(_availableSlots.where((slot) => slot['slot'] != 'NOCHE').map((slot) {
-                      final slotName = slot['slot'] as String;
-                      final label = slotName == 'MANANA' ? 'Mañana' : 'Tarde';
-                      final range = '${slot['start']} - ${slot['end']}';
-                      final isSelected = _selectedTimeSlot == slotName;
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+                    Row(
+                      children: [
+                        Text('Horario', style: GardenText.h4.copyWith(color: textColor)),
+                        if (_selectedStartTime != null) ...[
+                          const Spacer(),
                           GestureDetector(
                             onTap: () => setState(() {
-                              _selectedTimeSlot = slotName;
+                              _selectedTimeSlot = null;
                               _selectedStartTime = null;
                             }),
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 10),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                              decoration: BoxDecoration(
-                                color: isSelected ? GardenColors.primary.withValues(alpha: 0.08) : surface,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: isSelected ? GardenColors.primary : borderColor),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                                    color: GardenColors.primary, size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
-                                  const SizedBox(width: 8),
-                                  Text(range, style: TextStyle(color: subtextColor, fontSize: 12)),
-                                ],
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.edit_outlined, size: 16, color: GardenColors.primary),
+                                const SizedBox(width: 4),
+                                Text('Cambiar', style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                              ],
                             ),
                           ),
-                          if (isSelected) ...[
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Text('Hora de inicio',
-                                  style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                            ),
-                            _buildTimeChips(slot, _selectedDate!, durationOverride: _guarderiaSelectedDuration),
-                            const SizedBox(height: 12),
-                          ],
                         ],
-                      );
-                    })).toList(),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (_selectedStartTime != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: GardenColors.primary.withValues(alpha: 0.07),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.access_time_rounded, color: GardenColors.primary, size: 20),
+                            const SizedBox(width: 10),
+                            Text(
+                              '${_selectedTimeSlot == 'MANANA' ? 'Mañana' : 'Tarde'} · $_selectedStartTime',
+                              style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else ...[
+                      ...(_availableSlots.where((slot) => slot['slot'] != 'NOCHE').map((slot) {
+                        final slotName = slot['slot'] as String;
+                        final label = slotName == 'MANANA' ? 'Mañana' : 'Tarde';
+                        final range = '${slot['start']} - ${slot['end']}';
+                        final isSelected = _selectedTimeSlot == slotName;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            GestureDetector(
+                              onTap: () => setState(() {
+                                _selectedTimeSlot = slotName;
+                                _selectedStartTime = null;
+                              }),
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 10),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? GardenColors.primary.withValues(alpha: 0.08) : surface,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: isSelected ? GardenColors.primary : borderColor),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                                      color: GardenColors.primary, size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+                                    const SizedBox(width: 8),
+                                    Text(range, style: TextStyle(color: subtextColor, fontSize: 12)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            if (isSelected) ...[
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Text('Hora de inicio',
+                                    style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                              ),
+                              _buildTimeChips(slot, _selectedDate!, durationOverride: _guarderiaSelectedDuration),
+                              const SizedBox(height: 12),
+                            ],
+                          ],
+                        );
+                      })).toList(),
+                    ],
                   ],
                 ] else if (_selectedService == 'HOSPEDAJE') ...[
                   Text('Fechas', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),

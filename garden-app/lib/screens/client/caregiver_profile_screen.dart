@@ -261,7 +261,10 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     }
 
     final photos = (_caregiver!['photos'] as List?)?.cast<String>() ?? [];
+    final walkerPhotos = (_caregiver!['walkerPhotos'] as List?)?.cast<String>() ?? [];
     final services = (_caregiver!['services'] as List?)?.cast<String>() ?? [];
+    final isPaseoOnly = services.length == 1 && services.contains('PASEO');
+    final displayPhotos = isPaseoOnly && walkerPhotos.isNotEmpty ? walkerPhotos : photos;
     final name = '${_caregiver!['firstName']} ${_caregiver!['lastName']}';
     final rating = (_caregiver!['rating'] as num? ?? 0).toStringAsFixed(1);
     final reviewCount = _caregiver!['reviewCount'] as int? ?? 0;
@@ -287,7 +290,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
         return _buildWideLayout(
           context: context, isDark: isDark, bg: bg, surface: surface,
           textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
-          photos: photos, services: services, name: name, rating: rating,
+          photos: displayPhotos, services: services, name: name, rating: rating,
           reviewCount: reviewCount, zone: zone, bio: bio, bioDetail: bioDetail,
           verified: verified, pricePerWalk60: pricePerWalk60, pricePerWalk30: pricePerWalk30, pricePerDay: pricePerDay,
           offersHospedaje: offersHospedaje, offersPaseo: offersPaseo, priceDisplay: priceDisplay,
@@ -296,7 +299,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
       return _buildNarrowLayout(
         context: context, isDark: isDark, bg: bg, surface: surface,
         textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
-        photos: photos, services: services, name: name, rating: rating,
+        photos: displayPhotos, services: services, name: name, rating: rating,
         reviewCount: reviewCount, zone: zone, bio: bio, bioDetail: bioDetail,
         verified: verified, pricePerWalk60: pricePerWalk60, pricePerWalk30: pricePerWalk30, pricePerDay: pricePerDay,
         offersHospedaje: offersHospedaje, offersPaseo: offersPaseo, priceDisplay: priceDisplay,

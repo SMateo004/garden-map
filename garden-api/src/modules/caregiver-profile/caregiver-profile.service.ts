@@ -224,6 +224,7 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.privacyAccepted !== undefined) updateData.privacyAccepted = body.privacyAccepted;
   if (body.verificationAccepted !== undefined) updateData.verificationAccepted = body.verificationAccepted;
   if (body.photos !== undefined) updateData.photos = ensureAbsoluteUrls(body.photos);
+  if ((body as any).walkerPhotos !== undefined) (updateData as any).walkerPhotos = ensureAbsoluteUrls((body as any).walkerPhotos);
   if (body.profilePhoto !== undefined) updateData.profilePhoto = ensureAbsoluteUrl(body.profilePhoto) ?? null;
   if (body.experienceYears !== undefined) updateData.experienceYears = body.experienceYears;
   if (body.ownPets !== undefined) updateData.ownPets = body.ownPets;

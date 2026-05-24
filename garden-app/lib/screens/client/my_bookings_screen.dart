@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -24,6 +25,10 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   final Set<String> _shownMGDecisionIds = {};
   SharedPreferences? _prefs;
 
+  String? _highlightBookingId;
+  Timer? _highlightClearTimer;
+  Timer? _refreshTimer;
+
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   @override
@@ -45,12 +50,38 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     final saved = prefs.getStringList('mg_decision_shown_ids') ?? [];
     _shownMGDecisionIds.addAll(saved);
     debugPrint('MY_BOOKINGS: mg_decision_shown_ids cargados: $saved');
+
+    // Highlight booking recién creado (viene de payment_screen)
+    final highlightId = prefs.getString('highlight_booking_id');
+    if (highlightId != null && highlightId.isNotEmpty) {
+      await prefs.remove('highlight_booking_id');
+      setState(() {
+        _highlightBookingId = highlightId;
+        _selectedFilter = 'activas';
+      });
+    }
+
     setState(() => _clientToken = token);
-    _loadBookings();
+    await _loadBookings();
+    _startAutoRefresh();
   }
 
-  Future<void> _loadBookings() async {
-    setState(() => _isLoading = true);
+  void _startAutoRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) _loadBookings(silent: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    _highlightClearTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadBookings({bool silent = false}) async {
+    if (!silent) setState(() => _isLoading = true);
     try {
       debugPrint('MY_BOOKINGS: Fetching /bookings/my with token: ${_clientToken.length > 20 ? _clientToken.substring(0, 20) : _clientToken}...');
       final response = await http.get(
@@ -60,12 +91,18 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       debugPrint('MY_BOOKINGS: Response ${response.statusCode}: ${response.body}');
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
-        setState(() => _bookings = (data['data'] as List).cast<Map<String, dynamic>>());
+        if (mounted) setState(() => _bookings = (data['data'] as List).cast<Map<String, dynamic>>());
         _checkMGDecisionNeeded();
+        // Schedule highlight clear after 5 seconds on first load
+        if (_highlightBookingId != null) {
+          _highlightClearTimer?.cancel();
+          _highlightClearTimer = Timer(const Duration(seconds: 5), () {
+            if (mounted) setState(() => _highlightBookingId = null);
+          });
+        }
       }
     } catch (e) {
       debugPrint('MY_BOOKINGS ERROR: $e');
-      // silencioso
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -582,6 +619,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final isHighlighted = booking['id'] == _highlightBookingId;
 
     Color statusColor;
     String statusText;
@@ -630,13 +668,19 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
         statusIcon = Icons.info_outline_rounded;
     }
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 600),
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: surface,
         borderRadius: BorderRadius.circular(GardenRadius.xl),
-        border: Border.all(color: borderColor),
-        boxShadow: GardenShadows.card,
+        border: Border.all(
+          color: isHighlighted ? GardenColors.success : borderColor,
+          width: isHighlighted ? 2 : 1,
+        ),
+        boxShadow: isHighlighted
+            ? [BoxShadow(color: GardenColors.success.withValues(alpha: 0.3), blurRadius: 16, spreadRadius: 1)]
+            : GardenShadows.card,
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(GardenRadius.xl),

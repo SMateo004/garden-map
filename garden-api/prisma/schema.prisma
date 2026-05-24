@@ -76,6 +76,7 @@ model CaregiverProfile {
   spaceType                       String[]
   spaceDescription                String?            @db.VarChar(500)
   photos                          String[]
+  walkerPhotos                    String[]
   profilePhoto                    String?
   address                         String?            @db.VarChar(500)
   addressLat                      Float?

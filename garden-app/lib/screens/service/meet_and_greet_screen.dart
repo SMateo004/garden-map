@@ -930,95 +930,99 @@ class _ProposalSheetState extends State<_ProposalSheet> {
           ),
           const SizedBox(height: 12),
 
-          Text('Hora', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          GestureDetector(
-            onTap: () async {
-              final picked = await showTimePicker(
-                context: context,
-                initialTime: const TimeOfDay(hour: 10, minute: 0),
-              );
-              if (picked != null) {
-                setState(() => _time = picked);
-                widget.onTimeChanged(picked);
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: borderColor),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.access_time_rounded, size: 16, color: GardenColors.primary),
-                  const SizedBox(width: 10),
-                  Text(timeLabel, style: TextStyle(color: _time == null ? subtextColor : textColor, fontSize: 14)),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          Row(
-            children: [
-              Text('Punto de encuentro', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          if (_date != null) ...[
+            Text('Hora', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () async {
+                final picked = await showTimePicker(
+                  context: context,
+                  initialTime: const TimeOfDay(hour: 10, minute: 0),
+                );
+                if (picked != null) {
+                  setState(() => _time = picked);
+                  widget.onTimeChanged(picked);
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: GardenColors.error.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(4),
+                  color: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor),
                 ),
-                child: const Text('Obligatorio', style: TextStyle(color: GardenColors.error, fontSize: 10, fontWeight: FontWeight.w600)),
+                child: Row(
+                  children: [
+                    const Icon(Icons.access_time_rounded, size: 16, color: GardenColors.primary),
+                    const SizedBox(width: 10),
+                    Text(timeLabel, style: TextStyle(color: _time == null ? subtextColor : textColor, fontSize: 14)),
+                  ],
+                ),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: widget.meetingPointCtrl,
-            maxLines: 2,
-            style: TextStyle(color: textColor, fontSize: 13),
-            decoration: InputDecoration(
-              hintText: 'Ej: Parque Central, entrada principal / Calle 45 #12-30',
-              hintStyle: TextStyle(color: subtextColor, fontSize: 13),
-              filled: true,
-              fillColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
-              contentPadding: const EdgeInsets.all(12),
-              prefixIcon: const Icon(Icons.location_on_rounded, color: GardenColors.primary, size: 18),
             ),
-          ),
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
+          ],
 
-          Text('Nota (opcional)', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          TextField(
-            controller: widget.noteCtrl,
-            maxLines: 2,
-            style: TextStyle(color: textColor, fontSize: 13),
-            decoration: InputDecoration(
-              hintText: 'Cualquier detalle adicional...',
-              hintStyle: TextStyle(color: subtextColor, fontSize: 13),
-              filled: true,
-              fillColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
-              contentPadding: const EdgeInsets.all(12),
+          if (_date != null && _time != null) ...[
+            Row(
+              children: [
+                Text('Punto de encuentro', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: GardenColors.error.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text('Obligatorio', style: TextStyle(color: GardenColors.error, fontSize: 10, fontWeight: FontWeight.w600)),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 20),
+            const SizedBox(height: 8),
+            TextField(
+              controller: widget.meetingPointCtrl,
+              maxLines: 2,
+              style: TextStyle(color: textColor, fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Ej: Parque Central, entrada principal / Calle 45 #12-30',
+                hintStyle: TextStyle(color: subtextColor, fontSize: 13),
+                filled: true,
+                fillColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
+                contentPadding: const EdgeInsets.all(12),
+                prefixIcon: const Icon(Icons.location_on_rounded, color: GardenColors.primary, size: 18),
+              ),
+            ),
+            const SizedBox(height: 12),
 
-          GardenButton(
-            label: 'Enviar propuesta',
-            icon: Icons.send_rounded,
-            height: 52,
-            color: GardenColors.primary,
-            onPressed: widget.submitting ? null : widget.onSubmit,
-          ),
+            Text('Nota (opcional)', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: widget.noteCtrl,
+              maxLines: 2,
+              style: TextStyle(color: textColor, fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Cualquier detalle adicional...',
+                hintStyle: TextStyle(color: subtextColor, fontSize: 13),
+                filled: true,
+                fillColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
+                contentPadding: const EdgeInsets.all(12),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            GardenButton(
+              label: 'Enviar propuesta',
+              icon: Icons.send_rounded,
+              height: 52,
+              color: GardenColors.primary,
+              onPressed: widget.submitting ? null : widget.onSubmit,
+            ),
+          ], // end if (_date != null && _time != null)
         ],
       ),
     );

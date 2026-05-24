@@ -245,6 +245,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       lastName: c.user?.lastName ?? '',
       profilePicture: c.profilePhoto ?? c.user?.profilePicture ?? null,
       photos: Array.isArray(c.photos) ? c.photos : [],
+      walkerPhotos: Array.isArray((c as any).walkerPhotos) ? (c as any).walkerPhotos : [],
       zone: c.zone ?? '',
       services: c.servicesOffered,
       rating: c.rating,
@@ -461,6 +462,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     spaceType: Array.isArray(profile.spaceType) ? profile.spaceType : (profile.spaceType ? [profile.spaceType] : []),
     bio: profile.bio,
     photos: Array.isArray(profile.photos) ? profile.photos : [],
+    walkerPhotos: Array.isArray((profile as any).walkerPhotos) ? (profile as any).walkerPhotos : [],
     availability: {
       hospedaje: hospedajeDates,
       paseos: paseosByDate,
@@ -1117,6 +1119,7 @@ function mapProfileToListItem(profile: any, markupRate: number): CaregiverListIt
     lastName: profile.user.lastName,
     profilePicture: p.profilePhoto ?? profile.user.profilePicture,
     photos: Array.isArray(p.photos) ? p.photos : [],
+    walkerPhotos: Array.isArray((p as any).walkerPhotos) ? (p as any).walkerPhotos : [],
     zone: profile.zone ?? '',
     services: profile.servicesOffered,
     rating: profile.rating,

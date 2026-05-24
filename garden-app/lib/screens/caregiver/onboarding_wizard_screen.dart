@@ -281,9 +281,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         return;
       }
 
-      // Step 3: Photos
+      // Step 3: Photos (skipped for PASEO-only caregivers)
       final photos = (profile['photos'] as List?) ?? [];
-      final minPhotos = servicesOffered.contains('HOSPEDAJE') ? 4 : 2;
+      final isPaseoOnly = servicesOffered.length == 1 && servicesOffered.contains('PASEO');
+      final minPhotos = servicesOffered.contains('HOSPEDAJE') ? 4 : isPaseoOnly ? 0 : 2;
       if (photos.length < minPhotos) {
         setState(() => _currentStep = 3);
         return;
@@ -537,6 +538,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         }
         return true;
       case 3:
+        final isPaseoOnly = _servicesOffered.length == 1 && _servicesOffered.contains('PASEO');
+        if (isPaseoOnly) return true;
         final minFotos = _servicesOffered.contains('HOSPEDAJE') ? 4 : 2;
         if (_photoUrls.length < minFotos) {
           _showStepError('Sube al menos $minFotos fotos para continuar');
@@ -629,8 +632,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       return;
     }
 
-    // Step 3: Fotos del hogar → upload then PATCH
+    // Step 3: Fotos → skipped for PASEO-only caregivers
     if (_currentStep == 3) {
+      final isPaseoOnly = _servicesOffered.length == 1 && _servicesOffered.contains('PASEO');
+      if (isPaseoOnly) {
+        setState(() => _currentStep++);
+        return;
+      }
       final minFotos = _servicesOffered.contains('HOSPEDAJE') ? 4 : 2;
       final total = _localPhotos.length + _photoUrls.length;
       if (total == 0) {
