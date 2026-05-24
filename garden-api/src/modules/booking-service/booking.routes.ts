@@ -196,4 +196,15 @@ router.post(
   serviceExecutionController.confirmReceipt
 );
 
+/**
+ * POST /api/bookings/:id/proceed-to-payment
+ * Transitions a PENDING_MG booking to PENDING_PAYMENT after the M&G date has passed.
+ */
+router.post(
+  '/:id/proceed-to-payment',
+  authMiddleware,
+  requireRole('CLIENT'),
+  bookingController.proceedToPayment
+);
+
 export default router;

@@ -3353,6 +3353,66 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                 ),
               ),
 
+              // M&G badge for PENDING_MG bookings
+              if (status == 'PENDING_MG') ...[
+                Divider(height: 1, color: widget.borderColor),
+                Builder(builder: (_) {
+                  final mg = booking['meetAndGreet'] as Map<String, dynamic>?;
+                  final proposedDateStr = mg?['proposedDate'] as String?;
+                  String dateLabel = 'Fecha pendiente';
+                  String meetingPoint = mg?['meetingPoint'] as String? ?? '';
+                  if (proposedDateStr != null) {
+                    try {
+                      final d = DateTime.parse(proposedDateStr).toLocal();
+                      const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+                      const days = ['lun','mar','mié','jue','vie','sáb','dom'];
+                      final h = d.hour.toString().padLeft(2,'0');
+                      final m = d.minute.toString().padLeft(2,'0');
+                      dateLabel = '${days[d.weekday-1]} ${d.day} ${months[d.month-1]} · $h:$m';
+                    } catch (_) {}
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6C63FF).withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.25)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            const Text('🤝', style: TextStyle(fontSize: 15)),
+                            const SizedBox(width: 8),
+                            Text('Meet & Greet programado',
+                                style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 13, fontWeight: FontWeight.w700)),
+                          ]),
+                          const SizedBox(height: 6),
+                          Row(children: [
+                            Icon(Icons.access_time_rounded, size: 13, color: widget.subtextColor),
+                            const SizedBox(width: 5),
+                            Text(dateLabel, style: TextStyle(color: widget.textColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                          ]),
+                          if (meetingPoint.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Row(children: [
+                              Icon(Icons.location_on_outlined, size: 13, color: widget.subtextColor),
+                              const SizedBox(width: 5),
+                              Expanded(child: Text(meetingPoint, style: TextStyle(color: widget.subtextColor, fontSize: 11), overflow: TextOverflow.ellipsis)),
+                            ]),
+                          ],
+                          const SizedBox(height: 6),
+                          Text('El cliente completará el pago después del M&G.',
+                              style: TextStyle(color: widget.subtextColor, fontSize: 10)),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ],
+
               // Acciones si aplica
               if (status == 'WAITING_CAREGIVER_APPROVAL') ...[
                 Divider(height: 1, color: widget.borderColor),

@@ -421,6 +421,19 @@ class _BookingScreenState extends State<BookingScreen> {
         };
       }
 
+      // If M&G enabled, include mgData in the booking body so backend creates PENDING_MG
+      if (_includeMG && _mgDate != null) {
+        final timeStr = _mgTime != null
+            ? '${_mgTime!.hour.toString().padLeft(2, '0')}:${_mgTime!.minute.toString().padLeft(2, '0')}'
+            : '10:00';
+        final dateStr = _mgDate!.toIso8601String().split('T')[0];
+        body['mgData'] = {
+          'modalidad': 'IN_PERSON',
+          'proposedDate': '${dateStr}T$timeStr:00',
+          if (_mgPlaceCtrl.text.trim().isNotEmpty) 'meetingPoint': _mgPlaceCtrl.text.trim(),
+        };
+      }
+
       final response = await http.post(
         Uri.parse('$_baseUrl/bookings'),
         headers: {
@@ -434,26 +447,15 @@ class _BookingScreenState extends State<BookingScreen> {
       if (response.statusCode == 201 && data['success'] == true) {
         final bookingId = data['data']['id'];
         if (!mounted) return;
-        debugPrint('[MG] Booking created: $bookingId, includeMG=$_includeMG');
-        // Construir mgData si el cliente quiere M&G
-        Map<String, dynamic>? mgData;
-        if (_includeMG && _mgDate != null && _mgPlaceCtrl.text.trim().isNotEmpty) {
-          final timeStr = _mgTime != null
-              ? '${_mgTime!.hour.toString().padLeft(2, '0')}:${_mgTime!.minute.toString().padLeft(2, '0')}'
-              : '10:00';
-          final dateStr = _mgDate!.toIso8601String().split('T')[0];
-          mgData = {
-            'modalidad': 'IN_PERSON',
-            'proposedDate': '${dateStr}T$timeStr:00',
-            'meetingPoint': _mgPlaceCtrl.text.trim(),
-            if (_mgSelectedLat != null && _mgSelectedLng != null) ...{
-              'meetingPointLat': _mgSelectedLat,
-              'meetingPointLng': _mgSelectedLng,
-            },
-          };
-          debugPrint('[MG] mgData built: $mgData');
+
+        if (_includeMG && _mgDate != null) {
+          // M&G flow: go to Mis Reservas with highlight — payment comes later
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('highlight_booking_id', bookingId);
+          if (mounted) context.go('/my-bookings-tab');
+        } else {
+          context.push('/payment/$bookingId');
         }
-        context.push('/payment/$bookingId', extra: mgData != null ? {'mgData': mgData} : null);
       } else {
         if (data['errors'] != null) {
           final errors = (data['errors'] as List)

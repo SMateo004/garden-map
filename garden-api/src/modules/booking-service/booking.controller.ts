@@ -5,6 +5,7 @@ import { AppError } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
 import {
   parseCreateBookingBody,
+  mgDataSchema,
   cancelBookingBodySchema,
   extendBookingBodySchema,
   changeDatesBookingBodySchema,
@@ -84,7 +85,8 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
   }
 
   try {
-    const booking = await bookingService.createBooking(clientId, body);
+    const mgDataRaw = mgDataSchema.parse((req.body as any).mgData);
+    const booking = await bookingService.createBooking(clientId, body, mgDataRaw);
     res.status(201).json({ success: true, data: booking });
   } catch (err) {
     if (err instanceof AppError && (err.statusCode === 400 || err.statusCode === 409)) {
@@ -101,6 +103,17 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
     }
     throw err;
   }
+});
+
+/**
+ * POST /api/bookings/:id/proceed-to-payment
+ * Transitions PENDING_MG → PENDING_PAYMENT after M&G date has passed.
+ */
+export const proceedToPayment = asyncHandler(async (req: Request, res: Response) => {
+  const bookingId = req.params.id!;
+  const clientId = req.user!.userId;
+  const booking = await bookingService.proceedToPayment(bookingId, clientId);
+  res.json({ success: true, data: booking });
 });
 
 /**

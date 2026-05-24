@@ -110,6 +110,17 @@ export const guarderiaSchema = z.object({
     }),
 });
 
+/** Schema for optional M&G data attached at booking creation. */
+export const mgDataSchema = z.object({
+  modalidad: z.enum(['IN_PERSON', 'VIRTUAL']).default('IN_PERSON'),
+  proposedDate: z.string().datetime({ message: 'proposedDate must be ISO datetime' }),
+  meetingPoint: z.string().max(500).optional(),
+  meetingPointLat: z.number().optional(),
+  meetingPointLng: z.number().optional(),
+}).optional();
+
+export type MgDataInput = z.infer<typeof mgDataSchema>;
+
 export type CreateBookingBody =
   | z.infer<typeof hospedajeSchema>
   | z.infer<typeof paseoSchema>

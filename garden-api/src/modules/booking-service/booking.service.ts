@@ -25,6 +25,7 @@ import { getIO } from '../../services/socket.service.js';
 import type {
   CreateBookingBody,
   InitPaymentBody,
+  MgDataInput,
 } from './booking.validation.js';
 import type { BookingCreateResult } from './booking.types.js';
 import { bookingToResponse } from './booking.types.js';
@@ -92,7 +93,8 @@ async function getBookingSettings() {
  */
 export async function createBooking(
   clientId: string,
-  body: CreateBookingBody
+  body: CreateBookingBody,
+  mgData?: MgDataInput
 ): Promise<BookingCreateResult> {
   // Leer configuración dinámica fuera de la transacción
   const cfg = await getBookingSettings();
@@ -328,7 +330,7 @@ export async function createBooking(
       caregiver: { connect: { id: body.caregiverId } },
       pet: { connect: { id: pet.id } },
       serviceType: body.serviceType as ServiceType,
-      status: BookingStatus.PENDING_PAYMENT,
+      status: mgData ? BookingStatus.PENDING_MG : BookingStatus.PENDING_PAYMENT,
       totalAmount: new Prisma.Decimal(totalAmount),
       pricePerUnit: new Prisma.Decimal(pricePerUnit),
       commissionAmount: new Prisma.Decimal(commissionAmount),
@@ -371,7 +373,33 @@ export async function createBooking(
       data: bookingData,
     });
 
-    // No notificamos al cuidador aquí — solo cuando el pago sea confirmado
+    // If M&G data provided: create MeetAndGreet record and notify caregiver immediately
+    if (mgData) {
+      await tx.meetAndGreet.create({
+        data: {
+          bookingId: booking.id,
+          proposedBy: clientId,
+          modalidad: mgData.modalidad ?? 'IN_PERSON',
+          proposedDate: new Date(mgData.proposedDate),
+          meetingPoint: mgData.meetingPoint ?? null,
+          status: 'PROPOSED',
+        },
+      });
+      // Notify caregiver about the M&G request
+      setImmediate(() => {
+        prisma.notification.create({
+          data: {
+            userId: caregiver.userId,
+            type: 'INFO',
+            title: '📅 Solicitud de Meet & Greet',
+            message: `Un cliente quiere conocerte antes de reservar. Revisa la fecha propuesta.`,
+          },
+        }).catch(() => {});
+        sendPushToUser(caregiver.userId, '📅 Meet & Greet solicitado', `Un cliente quiere conocerte antes de la reserva.`).catch(() => {});
+      });
+    }
+
+    // No notificamos al cuidador aquí para reservas normales — solo cuando el pago sea confirmado
     // (onBookingWaitingApproval se dispara al pasar a WAITING_CAREGIVER_APPROVAL).
 
     logger.info('Cliente seleccionó mascota para reserva', {
@@ -825,6 +853,36 @@ export function generateQR(
  * Inicia el flujo de pago: genera QR (placeholder) o marca reserva para aprobación manual por admin.
  * Solo cliente titular; reserva debe estar PENDING_PAYMENT.
  */
+/**
+ * Transitions a PENDING_MG booking to PENDING_PAYMENT.
+ * Validates: booking belongs to client, status is PENDING_MG, M&G date has already passed.
+ */
+export async function proceedToPayment(
+  bookingId: string,
+  clientId: string
+): Promise<BookingCreateResult> {
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, clientId },
+    include: { meetAndGreet: true },
+  });
+  if (!booking) throw new BookingNotFoundError(bookingId);
+  if (booking.status !== BookingStatus.PENDING_MG) {
+    throw new BookingValidationError('La reserva no está en estado de espera de Meet & Greet');
+  }
+  const mg = (booking as any).meetAndGreet;
+  if (!mg || !mg.proposedDate) {
+    throw new BookingValidationError('No hay Meet & Greet asociado a esta reserva');
+  }
+  if (new Date(mg.proposedDate) > new Date()) {
+    throw new BookingValidationError('El Meet & Greet aún no ha ocurrido. Podrás continuar con el pago después de la fecha programada.');
+  }
+  const updated = await prisma.booking.update({
+    where: { id: bookingId },
+    data: { status: BookingStatus.PENDING_PAYMENT },
+  });
+  return bookingToResponse(updated);
+}
+
 export async function initPayment(
   bookingId: string,
   clientId: string,

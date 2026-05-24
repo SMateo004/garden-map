@@ -553,6 +553,7 @@ enum Zone {
 /// Flujo: creación → pago (automático o aprobación admin) → confirmada → en curso → completada.
 /// Cancelación: cliente cancela (refund según política) o cuidador solicita → admin aprueba/rechaza.
 enum BookingStatus {
+  PENDING_MG
   PENDING_PAYMENT
   PAYMENT_PENDING_APPROVAL
   WAITING_CAREGIVER_APPROVAL

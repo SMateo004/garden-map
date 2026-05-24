@@ -238,7 +238,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     if (_selectedFilter == 'todas') return _bookings;
     if (_selectedFilter == 'activas') {
       return _bookings.where((b) => [
-        'PENDING_PAYMENT', 'PAYMENT_PENDING_APPROVAL',
+        'PENDING_MG', 'PENDING_PAYMENT', 'PAYMENT_PENDING_APPROVAL',
         'WAITING_CAREGIVER_APPROVAL', 'CONFIRMED', 'IN_PROGRESS'
       ].contains(b['status'])).toList();
     }
@@ -249,6 +249,27 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       return _bookings.where((b) => ['CANCELLED', 'REJECTED_BY_CAREGIVER'].contains(b['status'])).toList();
     }
     return _bookings;
+  }
+
+  Future<void> _proceedToPayment(String bookingId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/bookings/$bookingId/proceed-to-payment'),
+        headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        if (mounted) context.push('/payment/$bookingId');
+      } else {
+        throw Exception(data['error']?['message'] ?? 'Error al continuar con el pago');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: Colors.red.shade700),
+        );
+      }
+    }
   }
 
   Future<void> _cancelBooking(String bookingId) async {
@@ -626,6 +647,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     IconData statusIcon;
 
     switch (status) {
+      case 'PENDING_MG':
+        statusColor = const Color(0xFF6C63FF);
+        statusText = 'Meet & Greet pendiente';
+        statusIcon = Icons.handshake_outlined;
+        break;
       case 'PENDING_PAYMENT':
         statusColor = GardenColors.warning;
         statusText = 'Pendiente de pago';
@@ -875,6 +901,87 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                     ),
                   );
                 }),
+                if (status == 'PENDING_MG') ...[
+                  const SizedBox(height: 12),
+                  Builder(builder: (_) {
+                    final mg = booking['meetAndGreet'] as Map<String, dynamic>?;
+                    final proposedDateStr = mg?['proposedDate'] as String?;
+                    DateTime? proposedDate;
+                    String dateLabel = 'Fecha pendiente';
+                    String meetingPoint = mg?['meetingPoint'] as String? ?? '';
+                    if (proposedDateStr != null) {
+                      try {
+                        proposedDate = DateTime.parse(proposedDateStr).toLocal();
+                        const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+                        const days = ['lun','mar','mié','jue','vie','sáb','dom'];
+                        final h = proposedDate.hour.toString().padLeft(2,'0');
+                        final m = proposedDate.minute.toString().padLeft(2,'0');
+                        dateLabel = '${days[proposedDate.weekday-1]} ${proposedDate.day} ${months[proposedDate.month-1]} · $h:$m';
+                      } catch (_) {}
+                    }
+                    final mgPassed = proposedDate != null && DateTime.now().isAfter(proposedDate);
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6C63FF).withValues(alpha: 0.07),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.25)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(children: [
+                                const Text('🤝', style: TextStyle(fontSize: 15)),
+                                const SizedBox(width: 8),
+                                Text('Meet & Greet programado',
+                                    style: TextStyle(color: const Color(0xFF6C63FF), fontSize: 13, fontWeight: FontWeight.w700)),
+                              ]),
+                              const SizedBox(height: 6),
+                              Row(children: [
+                                Icon(Icons.access_time_rounded, size: 13, color: subtextColor),
+                                const SizedBox(width: 5),
+                                Text(dateLabel, style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                              ]),
+                              if (meetingPoint.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Row(children: [
+                                  Icon(Icons.location_on_outlined, size: 13, color: subtextColor),
+                                  const SizedBox(width: 5),
+                                  Expanded(child: Text(meetingPoint, style: TextStyle(color: subtextColor, fontSize: 11), overflow: TextOverflow.ellipsis)),
+                                ]),
+                              ],
+                              if (!mgPassed) ...[
+                                const SizedBox(height: 6),
+                                Text('El botón para continuar con el pago se activará después de la fecha del M&G.',
+                                    style: TextStyle(color: subtextColor, fontSize: 10)),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        GardenButton(
+                          label: mgPassed ? 'Continuar con el pago' : 'Esperando fecha M&G',
+                          icon: mgPassed ? Icons.arrow_forward_rounded : Icons.lock_clock_outlined,
+                          color: mgPassed ? GardenColors.primary : subtextColor,
+                          onPressed: mgPassed ? () => _proceedToPayment(booking['id'] as String) : null,
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton(
+                          onPressed: () => _cancelBooking(booking['id']),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.red),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            minimumSize: const Size(double.infinity, 40),
+                          ),
+                          child: const Text('Cancelar', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+                        ),
+                      ],
+                    );
+                  }),
+                ],
                 if (status == 'WAITING_CAREGIVER_APPROVAL' || status == 'CONFIRMED' || status == 'COMPLETED' || status == 'IN_PROGRESS') ...[
                   const SizedBox(height: 16),
                   Row(

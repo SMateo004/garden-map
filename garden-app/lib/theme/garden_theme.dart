@@ -1065,6 +1065,8 @@ class GardenInput extends StatelessWidget {
 // ── HELPER: Badge de estado de booking ────────────────────────────────────
 GardenBadge bookingStatusBadge(String status) {
   switch (status) {
+    case 'PENDING_MG':
+      return const GardenBadge(text: 'Meet & Greet', color: Color(0xFF6C63FF), icon: Icons.handshake_outlined);
     case 'PENDING_PAYMENT':
       return const GardenBadge(text: 'Pendiente de pago', color: GardenColors.warmBeige, textColor: Color(0xFF7A6A5A));
     case 'PAYMENT_PENDING_APPROVAL':
