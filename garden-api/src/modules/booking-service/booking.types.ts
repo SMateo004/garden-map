@@ -31,6 +31,7 @@ export interface BookingCreateResult {
   refundStatus?: string | null;
   paidAt?: string | null;
   caregiverName?: string;
+  caregiverPhone?: string | null;
   caregiverPhoto?: string | null;
   clientName?: string;
   clientEmail?: string;
@@ -110,6 +111,7 @@ export function bookingToResponse(b: any): BookingCreateResult {
   if (b.caregiver) {
     res.caregiverName = `${b.caregiver.user.firstName} ${b.caregiver.user.lastName}`;
     res.caregiverPhoto = b.caregiver.profilePhoto || b.caregiver.user.profilePicture;
+    res.caregiverPhone = b.caregiver?.user?.phone ?? null;
   }
 
   if (b.client) {

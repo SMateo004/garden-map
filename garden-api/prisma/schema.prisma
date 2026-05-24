@@ -798,6 +798,20 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+model VetClinic {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?
+  phone     String
+  lat       Float
+  lng       Float
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("vet_clinics")
+}
+
 /// Registro de auditoría de todas las acciones importantes del sistema.
 /// Se acumula indefinidamente; el endpoint de exportación filtra por mes.
 model AuditLog {

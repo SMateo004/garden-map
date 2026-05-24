@@ -198,4 +198,49 @@ router.get('/debug/animal-types', asyncHandler(async (_req, res) => {
   });
 }));
 
+/** GET /api/admin/vets — listar veterinarias */
+router.get('/vets', asyncHandler(async (_req, res) => {
+  const vets = await (prisma as any).vetClinic.findMany({ orderBy: { createdAt: 'desc' } });
+  res.json({ success: true, data: vets });
+}));
+
+/** POST /api/admin/vets — crear veterinaria */
+router.post('/vets', asyncHandler(async (req, res) => {
+  const { name, address, phone, lat, lng } = req.body;
+  if (!name || !phone || lat == null || lng == null) {
+    res.status(400).json({ success: false, error: { message: 'name, phone, lat, lng son requeridos' } });
+    return;
+  }
+  const vet = await (prisma as any).vetClinic.create({
+    data: { name, address: address ?? null, phone, lat: parseFloat(lat), lng: parseFloat(lng) },
+  });
+  res.json({ success: true, data: vet });
+}));
+
+/** PATCH /api/admin/vets/:id — actualizar veterinaria */
+router.patch('/vets/:id', asyncHandler(async (req, res) => {
+  const { name, address, phone, lat, lng, isActive } = req.body;
+  const vet = await (prisma as any).vetClinic.update({
+    where: { id: req.params.id },
+    data: {
+      ...(name !== undefined && { name }),
+      ...(address !== undefined && { address }),
+      ...(phone !== undefined && { phone }),
+      ...(lat !== undefined && { lat: parseFloat(lat) }),
+      ...(lng !== undefined && { lng: parseFloat(lng) }),
+      ...(isActive !== undefined && { isActive }),
+    },
+  });
+  res.json({ success: true, data: vet });
+}));
+
+/** DELETE /api/admin/vets/:id — desactivar veterinaria */
+router.delete('/vets/:id', asyncHandler(async (req, res) => {
+  await (prisma as any).vetClinic.update({
+    where: { id: req.params.id },
+    data: { isActive: false },
+  });
+  res.json({ success: true });
+}));
+
 export default router;

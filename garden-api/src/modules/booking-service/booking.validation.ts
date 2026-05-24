@@ -300,5 +300,7 @@ export const addEventBodySchema = z.object({
     .min(1, 'La descripción es obligatoria')
     .max(1000, 'La descripción no puede superar 1000 caracteres'),
   photoUrl: z.string().url('photoUrl debe ser una URL válida').optional(),
+  videoUrl: z.string().url('videoUrl debe ser una URL válida').optional(),
+  incidentType: z.string().max(100).optional(),
 });
 export type AddEventBody = z.infer<typeof addEventBodySchema>;

@@ -190,6 +190,52 @@ export async function uploadImage(buffer: Buffer, opts: UploadOptions): Promise<
 }
 
 /**
+ * Sube un archivo de video u otro tipo sin procesar con sharp.
+ * Prioridad: S3 → Cloudinary (resource_type video) → local.
+ */
+export async function uploadRawFile(buffer: Buffer, opts: UploadOptions, mimeType: string): Promise<string> {
+  const name = opts.name ?? randomUUID();
+  const ext = mimeType.includes('quicktime') ? '.mov' : mimeType.includes('webm') ? '.webm' : '.mp4';
+  const filename = `${name}${ext}`;
+
+  if (isS3Configured()) {
+    try {
+      const client = getS3Client()!;
+      const key = `garden/${opts.folder}/${filename}`;
+      await client.send(new PutObjectCommand({
+        Bucket: env.AWS_S3_BUCKET!,
+        Key: key,
+        Body: buffer,
+        ContentType: mimeType,
+      }));
+      const region = env.AWS_REGION ?? 'us-east-1';
+      const url = `https://${env.AWS_S3_BUCKET}.s3.${region}.amazonaws.com/${key}`;
+      logger.info('storage.service: video subido a S3', { url, folder: opts.folder });
+      return url;
+    } catch (err: any) {
+      logger.error('storage.service: fallo S3 video, intentando Cloudinary', { error: err?.message ?? err });
+    }
+  }
+
+  if (isCloudinaryConfigured()) {
+    return new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder: `garden/${opts.folder}`, public_id: name, resource_type: 'video' as any },
+        (err: any, result: any) => {
+          if (err || !result) reject(err ?? new Error('Cloudinary video upload failed'));
+          else resolve(result.secure_url);
+        }
+      );
+      stream.write(buffer);
+      stream.end();
+    });
+  }
+
+  // Local fallback
+  return uploadToLocal(buffer, opts.folder, filename);
+}
+
+/**
  * Sube múltiples imágenes en paralelo.
  */
 export async function uploadImages(buffers: Buffer[], opts: UploadOptions): Promise<string[]> {

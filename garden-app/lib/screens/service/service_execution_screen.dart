@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../theme/garden_theme.dart';
 import '../chat/chat_screen.dart';
 import 'gps_tracking_screen.dart';
@@ -44,8 +45,17 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   double _hospedajePricePerDay = 0;
   bool _loadingExtension = false;
 
-  // Photo upload state
+  // Photo/video upload state
   bool _isSendingPhoto = false;
+  bool _isSendingVideo = false;
+
+  // Photo reminder timers (caregiver side)
+  bool _reminder1Shown = false; // first photo (5 min PASEO / 15 min others)
+  bool _reminder2Shown = false; // midpoint photo (non-PASEO only)
+  bool _reminder3Shown = false; // end-of-service photo
+
+  // Emergency state (client side)
+  String? _caregiverPhone; // populated from booking response
 
   // GPS monitoring (PASEO only)
   StreamSubscription<ServiceStatus>? _gpsStatusSub;
@@ -102,9 +112,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       if (data['success'] == true) {
         setState(() {
           _booking = data['data'];
+          _caregiverPhone = data['data']?['caregiverPhone'] as String?;
           _serviceEvents = (_booking?['serviceEvents'] as List? ?? [])
               .map((e) => Map<String, dynamic>.from(e as Map))
-              .where((e) => e['photoUrl'] != null && e['photoUrl'].toString().isNotEmpty)
+              .where((e) =>
+                  (e['photoUrl'] != null && e['photoUrl'].toString().isNotEmpty) ||
+                  (e['videoUrl'] != null && e['videoUrl'].toString().isNotEmpty))
               .toList();
           _isLoading = false;
         });
@@ -273,7 +286,13 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       }
     }
     _serviceTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _elapsed += const Duration(seconds: 1));
+      if (mounted) {
+        setState(() => _elapsed += const Duration(seconds: 1));
+        // Check photo reminders every 30s to avoid excessive work
+        if (_elapsed.inSeconds % 30 == 0 && widget.role == 'CAREGIVER') {
+          _checkPhotoReminders();
+        }
+      }
     });
   }
 
@@ -1317,7 +1336,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         ? '${_elapsed.inHours.toString().padLeft(2,'0')}:${(_elapsed.inMinutes%60).toString().padLeft(2,'0')}:${(_elapsed.inSeconds%60).toString().padLeft(2,'0')}'
         : '${_elapsed.inHours}h con tu cuidador';
     final incidents = (_booking?['serviceEvents'] as List<dynamic>? ?? [])
-        .where((e) => e['type'] == 'INCIDENT').toList();
+        .where((e) => e['type'] == 'INCIDENT' || e['type'] == 'ACCIDENT').toList();
     final lastPhoto = _serviceEvents.isNotEmpty ? _serviceEvents.last : null;
     final heroColors = isPaseo
         ? [GardenColors.forest, const Color(0xFF0B5C2E)]
@@ -1479,6 +1498,25 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         ],
                       ),
                     ),
+                    // ── Botón de llamada de emergencia al cuidador ────────────
+                    if (_caregiverPhone != null && _caregiverPhone!.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () => launchUrl(Uri.parse('tel:$_caregiverPhone')),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: GardenColors.error,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.md)),
+                          ),
+                          icon: const Icon(Icons.phone_rounded, size: 18),
+                          label: const Text('Llamar al cuidador', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 14),
                   ],
 
@@ -1848,10 +1886,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
     final isHospedaje = _booking?['serviceType'] == 'HOSPEDAJE';
+    final isPaseo = _booking?['serviceType'] == 'PASEO';
     final timerStr = isHospedaje
         ? '${_elapsed.inHours}h ${(_elapsed.inMinutes % 60).toString().padLeft(2,'0')}m'
         : '${_elapsed.inHours.toString().padLeft(2,'0')}:${(_elapsed.inMinutes%60).toString().padLeft(2,'0')}:${(_elapsed.inSeconds%60).toString().padLeft(2,'0')}';
-    final minPhotos = isHospedaje ? 4 : 2;
+    final minPhotos = isPaseo ? 2 : 3;
     final photoCount = _serviceEvents.length;
     final isPhotoMet = photoCount >= minPhotos;
     final photoProgress = (photoCount / minPhotos).clamp(0.0, 1.0);
@@ -2049,13 +2088,14 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   // ── Grid de acciones ─────────────────────────────────────
                   Text('Acciones', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
                   const SizedBox(height: 12),
+                  // Row 1: Foto + Video
                   Row(
                     children: [
                       Expanded(
                         child: _ActionTile(
                           icon: Icons.camera_alt_rounded,
                           label: _isSendingPhoto ? 'Enviando...' : 'Foto',
-                          sublabel: 'Enviar al dueño',
+                          sublabel: 'Obligatorio',
                           color: GardenColors.primary,
                           onTap: _isSendingPhoto ? () {} : _sendServicePhoto,
                           isDark: isDark,
@@ -2063,6 +2103,23 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         ),
                       ),
                       const SizedBox(width: 12),
+                      Expanded(
+                        child: _ActionTile(
+                          icon: Icons.videocam_rounded,
+                          label: _isSendingVideo ? 'Enviando...' : 'Video',
+                          sublabel: 'Opcional',
+                          color: const Color(0xFF7C4DFF),
+                          onTap: _isSendingVideo ? () {} : _sendServiceVideo,
+                          isDark: isDark,
+                          loading: _isSendingVideo,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Row 2: Chat + Emergencia
+                  Row(
+                    children: [
                       Expanded(
                         child: _ActionTile(
                           icon: Icons.chat_bubble_rounded,
@@ -2079,33 +2136,63 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                           isDark: isDark,
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
+                      const SizedBox(width: 12),
                       Expanded(
                         child: _ActionTile(
-                          icon: Icons.warning_amber_rounded,
-                          label: 'Incidente',
+                          icon: Icons.emergency_rounded,
+                          label: 'Emergencia',
                           sublabel: 'Reportar',
-                          color: GardenColors.warning,
+                          color: GardenColors.error,
                           onTap: _showReportDialog,
                           isDark: isDark,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _ActionTile(
-                          icon: Icons.check_circle_rounded,
-                          label: 'Finalizar',
-                          sublabel: 'Servicio',
-                          color: GardenColors.success,
-                          onTap: _showFinishConfirmation,
-                          isDark: isDark,
-                        ),
-                      ),
                     ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Row 3: Finalizar (full width)
+                  GestureDetector(
+                    onTap: _showFinishConfirmation,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+                        borderRadius: BorderRadius.circular(GardenRadius.xl),
+                        border: Border.all(color: GardenColors.success.withValues(alpha: 0.25)),
+                        boxShadow: GardenShadows.card,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40, height: 40,
+                            decoration: BoxDecoration(
+                              color: GardenColors.success.withValues(alpha: 0.11),
+                              borderRadius: BorderRadius.circular(GardenRadius.md),
+                            ),
+                            child: const Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 20),
+                          ),
+                          const SizedBox(width: 14),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Finalizar servicio',
+                                style: TextStyle(
+                                  color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
+                                  fontWeight: FontWeight.w800, fontSize: 14)),
+                              Text('${_serviceEvents.length} / $minPhotos fotos completadas',
+                                style: TextStyle(
+                                  color: _serviceEvents.length >= minPhotos ? GardenColors.success : GardenColors.warning,
+                                  fontSize: 11)),
+                            ],
+                          ),
+                          const Spacer(),
+                          Icon(Icons.arrow_forward_ios_rounded,
+                            size: 14,
+                            color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+                        ],
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 22),
 
@@ -2876,8 +2963,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   }
 
   void _showFinishConfirmation() {
-    final isHospedaje = _booking?['serviceType'] == 'HOSPEDAJE';
-    final minPhotos = isHospedaje ? 4 : 2;
+    final minPhotos = _booking?['serviceType'] == 'PASEO' ? 2 : 3;
     if (_serviceEvents.length < minPhotos) {
       final remaining = minPhotos - _serviceEvents.length;
       final isDark = themeNotifier.isDark;
@@ -3041,139 +3127,459 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Photo / Video helpers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<void> _sendServiceVideo() async {
+    if (_isSendingVideo) return;
+    final picker = ImagePicker();
+    final picked = await picker.pickVideo(source: ImageSource.camera, maxDuration: const Duration(minutes: 2));
+    if (picked == null) return;
+    if (!mounted) return;
+    setState(() => _isSendingVideo = true);
+    try {
+      final bytes = await picked.readAsBytes();
+      final fileName = 'video_${DateTime.now().millisecondsSinceEpoch}.mp4';
+      final uri = Uri.parse('$_baseUrl/bookings/${widget.bookingId}/event');
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Authorization'] = 'Bearer $_token';
+      request.fields['type'] = 'PHOTO';
+      request.fields['description'] = 'Video del servicio';
+      request.files.add(http.MultipartFile.fromBytes(
+        'photo', bytes,
+        filename: fileName,
+        contentType: MediaType('video', 'mp4'),
+      ));
+      final streamed = await request.send();
+      final response = await http.Response.fromStream(streamed);
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadBooking();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('🎥 Video enviado al dueño'), backgroundColor: GardenColors.success),
+          );
+        }
+      } else {
+        throw Exception(data['error']?['message'] ?? 'Error al enviar el video');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo enviar el video: $e'), backgroundColor: GardenColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSendingVideo = false);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Photo reminder system
+  // ─────────────────────────────────────────────────────────────────────────
+
+  void _checkPhotoReminders() {
+    if (_booking?['status'] != 'IN_PROGRESS') return;
+    final isPaseo = _booking?['serviceType'] == 'PASEO';
+    final durationMin = int.tryParse(_booking?['duration']?.toString() ?? '0') ?? 0;
+    final elapsedMin = _elapsed.inMinutes;
+    final photoCount = _serviceEvents.length;
+    final minPhotos = isPaseo ? 2 : 3;
+
+    // Reminder 1: first photo
+    if (!_reminder1Shown && photoCount == 0) {
+      final threshold = isPaseo ? 5 : 15;
+      if (elapsedMin >= threshold) {
+        _reminder1Shown = true;
+        _showPhotoReminderBanner(
+          '📸 ¡Envía la primera foto!',
+          isPaseo ? 'Han pasado 5 minutos. El dueño espera ver a su mascota.' : 'Han pasado 15 minutos sin fotos.',
+        );
+      }
+    }
+
+    // Reminder 2: mid-service (not for PASEO)
+    if (!isPaseo && !_reminder2Shown && photoCount < 2 && durationMin > 0 && elapsedMin >= durationMin ~/ 2) {
+      _reminder2Shown = true;
+      _showPhotoReminderBanner('📸 ¡Foto de mitad del servicio!', 'Ya vas por la mitad del servicio.');
+    }
+
+    // Reminder 3: before end
+    if (!_reminder3Shown && photoCount < minPhotos - 1 && durationMin > 0) {
+      final endThreshold = isPaseo ? (durationMin - 10) : (durationMin - 15);
+      if (endThreshold > 0 && elapsedMin >= endThreshold) {
+        _reminder3Shown = true;
+        _showPhotoReminderBanner(
+          '📸 ¡Última foto antes de finalizar!',
+          isPaseo ? 'Quedan ~10 minutos. Envía la foto final.' : 'Quedan ~15 minutos. Envía la foto final.',
+        );
+      }
+    }
+  }
+
+  void _showPhotoReminderBanner(String title, String subtitle) {
+    if (!mounted) return;
+    final isDark = themeNotifier.isDark;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? GardenColors.darkSurface : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56, height: 56,
+              decoration: BoxDecoration(
+                color: GardenColors.warning.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.camera_alt_rounded, color: GardenColors.warning, size: 28),
+            ),
+            const SizedBox(height: 14),
+            Text(title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
+                fontSize: 16, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            Text(subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary,
+                fontSize: 13)),
+          ],
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: GardenColors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _sendServicePhoto();
+            },
+            child: const Text('Enviar foto ahora', style: TextStyle(color: Colors.white)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Recordar después',
+              style: TextStyle(color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Emergency incident report — multi-step flow
+  // ─────────────────────────────────────────────────────────────────────────
+
+  static const _incidentTypes = [
+    {'icon': '🐾', 'label': 'Pelea con otro animal', 'type': 'ACCIDENT', 'color': 0xFFE53935},
+    {'icon': '🤕', 'label': 'Mascota lesionada', 'type': 'ACCIDENT', 'color': 0xFFE53935},
+    {'icon': '🤢', 'label': 'Vómito / Malestar', 'type': 'ILLNESS', 'color': 0xFFFF8F00},
+    {'icon': '🚗', 'label': 'Accidente de tráfico', 'type': 'ACCIDENT', 'color': 0xFFE53935},
+    {'icon': '😰', 'label': 'Mascota perdida', 'type': 'INCIDENT', 'color': 0xFFFF8F00},
+    {'icon': '⚡', 'label': 'Otra emergencia', 'type': 'INCIDENT', 'color': 0xFFE53935},
+  ];
+
+  Future<void> _reportIncident(String incidentLabel, String eventType) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/event'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'type': eventType,
+          'description': incidentLabel,
+          'incidentType': incidentLabel,
+        }),
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('🚨 Emergencia reportada. El dueño fue notificado.'),
+          backgroundColor: GardenColors.error,
+          duration: const Duration(seconds: 4),
+        ));
+      }
+    } catch (_) {}
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchNearestVets() async {
+    try {
+      Position pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      final res = await http.get(
+        Uri.parse('$_baseUrl/vets/nearest?lat=${pos.latitude}&lng=${pos.longitude}'),
+        headers: {'Authorization': 'Bearer $_token'},
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] == true) {
+        return List<Map<String, dynamic>>.from(data['data'] as List);
+      }
+    } catch (_) {}
+    return [];
+  }
+
   void _showReportDialog() {
-    final reportController = TextEditingController();
     final isDark = themeNotifier.isDark;
     final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final fieldBg = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: bg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(ctx).viewInsets.bottom + 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Handle
-            Center(
-              child: Container(
-                width: 40, height: 4,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (_, scrollCtrl) => SingleChildScrollView(
+          controller: scrollCtrl,
+          padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.of(ctx).padding.bottom + 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: Container(
+                width: 40, height: 4, margin: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: subtextColor.withValues(alpha: 0.3),
+                  color: subtextColor.withValues(alpha: 0.35),
                   borderRadius: BorderRadius.circular(2),
                 ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Título
-            Row(
-              children: [
+              )),
+              Row(children: [
                 Container(
-                  width: 40, height: 40,
-                  decoration: BoxDecoration(
-                    color: GardenColors.warning.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 22),
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.12), shape: BoxShape.circle),
+                  child: const Icon(Icons.emergency_rounded, color: GardenColors.error, size: 24),
                 ),
                 const SizedBox(width: 12),
-                Text('Reportar incidente',
-                  style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text('El dueño será notificado inmediatamente',
-              style: TextStyle(color: subtextColor, fontSize: 13)),
-            const SizedBox(height: 20),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('🚨 Emergencia', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w900)),
+                    Text('El dueño será notificado al instante', style: TextStyle(color: subtextColor, fontSize: 12)),
+                  ],
+                )),
+              ]),
+              const SizedBox(height: 20),
+              Text('¿Qué está pasando?', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+              const SizedBox(height: 12),
+              // Incident type grid
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 2.8,
+                children: _incidentTypes.map((item) {
+                  final color = Color(item['color'] as int);
+                  return GestureDetector(
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      final label = item['label'] as String;
+                      final type = item['type'] as String;
+                      await _reportIncident(label, type);
+                      if (mounted) _showEmergencyResources(label);
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: color.withValues(alpha: 0.25)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(item['icon'] as String, style: const TextStyle(fontSize: 18)),
+                          const SizedBox(width: 8),
+                          Flexible(child: Text(item['label'] as String, style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w600))),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 20),
+              Center(child: TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('Cancelar', style: TextStyle(color: subtextColor)),
+              )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-            // Campo de descripción
-            Text('¿Qué ocurrió?', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
-            const SizedBox(height: 8),
-            TextField(
-              controller: reportController,
-              maxLines: 4,
-              autofocus: true,
-              style: TextStyle(color: textColor),
-              decoration: InputDecoration(
-                hintText: 'Describe el incidente con el mayor detalle posible...',
-                hintStyle: TextStyle(color: subtextColor),
-                filled: true,
-                fillColor: fieldBg,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.all(14),
+  void _showEmergencyResources(String incidentLabel) {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx2, setSt) {
+          List<Map<String, dynamic>> nearestVets = [];
+          bool loadingVets = true;
+
+          // Load vets on first build
+          Future.microtask(() async {
+            final vets = await _fetchNearestVets();
+            setSt(() { nearestVets = vets; loadingVets = false; });
+          });
+
+          return DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.75,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            builder: (_, scrollCtrl) => SingleChildScrollView(
+              controller: scrollCtrl,
+              padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.of(ctx).padding.bottom + 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(child: Container(
+                    width: 40, height: 4, margin: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(color: subtextColor.withValues(alpha: 0.35), borderRadius: BorderRadius.circular(2)),
+                  )),
+                  // Header
+                  Row(children: [
+                    Container(
+                      width: 44, height: 44,
+                      decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.12), shape: BoxShape.circle),
+                      child: const Icon(Icons.crisis_alert_rounded, color: GardenColors.error, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Recursos de emergencia', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w900)),
+                        Text(incidentLabel, style: TextStyle(color: GardenColors.error, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ],
+                    )),
+                  ]),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: GardenColors.error.withValues(alpha: 0.07),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 14),
+                      const SizedBox(width: 8),
+                      Text('El dueño ya fue notificado', style: TextStyle(color: GardenColors.success, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ]),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // ── Sección: Veterinarias cercanas ──
+                  Text('🏥 Veterinarias cercanas', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 10),
+                  if (loadingVets)
+                    const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
+                  else if (nearestVets.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text('No hay veterinarias registradas en el sistema aún.', style: TextStyle(color: subtextColor, fontSize: 12)),
+                    )
+                  else
+                    ...nearestVets.map((vet) => Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
+                      ),
+                      child: Row(children: [
+                        Container(
+                          width: 38, height: 38,
+                          decoration: BoxDecoration(color: const Color(0xFF00897B).withValues(alpha: 0.12), shape: BoxShape.circle),
+                          child: const Icon(Icons.local_hospital_rounded, color: Color(0xFF00897B), size: 18),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(vet['name'] as String, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
+                            if ((vet['address'] ?? '').toString().isNotEmpty)
+                              Text(vet['address'] as String, style: TextStyle(color: subtextColor, fontSize: 11)),
+                            Text(
+                              '${((vet['distanceKm'] ?? 0) as num).toStringAsFixed(1)} km',
+                              style: const TextStyle(color: Color(0xFF00897B), fontSize: 11, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        )),
+                        GestureDetector(
+                          onTap: () => launchUrl(Uri.parse('tel:${vet['phone']}')),
+                          child: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(color: const Color(0xFF00897B).withValues(alpha: 0.1), shape: BoxShape.circle),
+                            child: const Icon(Icons.phone_rounded, color: Color(0xFF00897B), size: 18),
+                          ),
+                        ),
+                      ]),
+                    )).toList(),
+
+                  const SizedBox(height: 20),
+                  // ── Sección: Emergencias nacionales ──
+                  Text('📞 Emergencias nacionales', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 10),
+                  ...[
+                    {'label': '🚔 Policía Bolivia', 'number': '110'},
+                    {'label': '🚒 Bomberos', 'number': '119'},
+                    {'label': '🚑 Ambulancia', 'number': '118'},
+                  ].map((e) => _EmergencyCallTile(
+                    label: e['label']!, number: e['number']!,
+                    isDark: isDark, textColor: textColor, subtextColor: subtextColor,
+                  )).toList(),
+
+                  const SizedBox(height: 20),
+                  // ── Sección: GARDEN ──
+                  Text('🌿 Soporte GARDEN', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 10),
+                  _EmergencyCallTile(
+                    label: '🌿 Emergencias GARDEN',
+                    number: '+59175933133',
+                    numberDisplay: '+591 75933133',
+                    isDark: isDark, textColor: textColor, subtextColor: subtextColor,
+                    highlight: true,
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isDark ? GardenColors.darkSurfaceElevated : const Color(0xFFF5F5F5),
+                        foregroundColor: subtextColor,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => Navigator.pop(ctx2),
+                      child: const Text('Cerrar'),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 20),
-
-            // Botones
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: BorderSide(color: subtextColor.withValues(alpha: 0.4)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: Text('Cancelar', style: TextStyle(color: subtextColor)),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: GardenColors.warning,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () async {
-                      final desc = reportController.text.trim();
-                      if (desc.isEmpty) return;
-                      Navigator.pop(ctx);
-                      try {
-                        final res = await http.post(
-                          Uri.parse('$_baseUrl/bookings/${widget.bookingId}/event'),
-                          headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
-                          body: jsonEncode({'type': 'INCIDENT', 'description': desc}),
-                        );
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text(res.statusCode == 200
-                                ? '⚠️ Incidente reportado. El dueño fue notificado.'
-                                : 'Error al enviar el reporte. Intenta de nuevo.'),
-                            backgroundColor: res.statusCode == 200 ? GardenColors.warning : GardenColors.error,
-                            duration: const Duration(seconds: 4),
-                          ));
-                        }
-                      } catch (_) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                            content: Text('Sin conexión. Verifica tu internet.'),
-                            backgroundColor: GardenColors.error,
-                          ));
-                        }
-                      }
-                    },
-                    child: const Text('Enviar reporte', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -4109,6 +4515,86 @@ class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Emergency call tile ───────────────────────────────────────────────────────
+
+class _EmergencyCallTile extends StatelessWidget {
+  final String label;
+  final String number;
+  final String? numberDisplay;
+  final bool isDark;
+  final Color textColor;
+  final Color subtextColor;
+  final bool highlight;
+
+  const _EmergencyCallTile({
+    required this.label,
+    required this.number,
+    required this.isDark,
+    required this.textColor,
+    required this.subtextColor,
+    this.numberDisplay,
+    this.highlight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = highlight
+        ? GardenColors.primary.withValues(alpha: 0.08)
+        : (isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated);
+    final borderColor = highlight
+        ? GardenColors.primary.withValues(alpha: 0.3)
+        : (isDark ? GardenColors.darkBorder : GardenColors.lightBorder);
+    final accentColor = highlight ? GardenColors.primary : GardenColors.error;
+
+    return GestureDetector(
+      onTap: () => launchUrl(Uri.parse('tel:$number')),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.phone_rounded, color: accentColor, size: 18),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text(
+                    numberDisplay ?? number,
+                    style: TextStyle(color: accentColor, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: accentColor,
+                borderRadius: BorderRadius.circular(GardenRadius.full),
+              ),
+              child: const Text('Llamar', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+            ),
+          ],
         ),
       ),
     );

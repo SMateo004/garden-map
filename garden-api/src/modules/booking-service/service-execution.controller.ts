@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../shared/async-handler.js';
 import * as bookingService from './booking.service.js';
-import { uploadImage } from '../../services/storage.service.js';
+import { uploadImage, uploadRawFile } from '../../services/storage.service.js';
 import {
   startServiceBodySchema,
   trackLocationBodySchema,
@@ -28,19 +28,30 @@ export const addEvent = asyncHandler(async (req: Request, res: Response) => {
     const bookingId = req.params.id!;
     const caregiverUserId = req.user!.userId;
 
-    // If a file was uploaded, resolve URL first then merge into body for validation
+    // Detect if the uploaded file is a video or image
     let uploadedPhotoUrl: string | undefined;
+    let uploadedVideoUrl: string | undefined;
     if (req.file) {
-        uploadedPhotoUrl = await uploadImage(req.file.buffer, {
-            folder: 'service-events',
-            name: `event_${bookingId}_${Date.now()}`,
-        });
+        const mime = req.file.mimetype;
+        if (mime.startsWith('video/')) {
+            uploadedVideoUrl = await uploadRawFile(req.file.buffer, {
+                folder: 'service-events',
+                name: `video_${bookingId}_${Date.now()}`,
+            }, mime);
+        } else {
+            uploadedPhotoUrl = await uploadImage(req.file.buffer, {
+                folder: 'service-events',
+                name: `event_${bookingId}_${Date.now()}`,
+            });
+        }
     }
 
     const bodyToValidate = {
         type: req.body.type,
         description: req.body.description,
         photoUrl: uploadedPhotoUrl ?? req.body.photoUrl,
+        videoUrl: uploadedVideoUrl ?? req.body.videoUrl,
+        incidentType: req.body.incidentType,
     };
 
     const parsed = addEventBodySchema.safeParse(bodyToValidate);
@@ -53,7 +64,9 @@ export const addEvent = asyncHandler(async (req: Request, res: Response) => {
         caregiverUserId,
         parsed.data.type,
         parsed.data.description,
-        parsed.data.photoUrl
+        parsed.data.photoUrl,
+        parsed.data.videoUrl,
+        parsed.data.incidentType,
     );
     res.json({ success: true, data: booking });
 });

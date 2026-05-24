@@ -2329,7 +2329,9 @@ export async function addServiceEvent(
   caregiverUserId: string,
   type: string,
   description: string,
-  photoUrl?: string
+  photoUrl?: string,
+  videoUrl?: string,
+  incidentType?: string
 ): Promise<BookingCreateResult> {
   // Validate event type to prevent arbitrary string injection
   if (!ALLOWED_EVENT_TYPES.includes(type as any)) {
@@ -2363,6 +2365,8 @@ export async function addServiceEvent(
     type,
     description,
     photoUrl: photoUrl ?? null,
+    videoUrl: videoUrl ?? null,
+    incidentType: incidentType ?? null,
     timestamp: new Date().toISOString(),
   });
 
@@ -2371,8 +2375,8 @@ export async function addServiceEvent(
     data: { serviceEvents: events },
   });
 
-  // Si es un incidente, notificar al dueño en tiempo real
-  if (type === 'INCIDENT') {
+  // Si es un incidente o accidente, notificar al dueño en tiempo real
+  if (type === 'INCIDENT' || type === 'ACCIDENT') {
     await prisma.notification.create({
       data: {
         userId: booking.clientId,
@@ -2381,6 +2385,9 @@ export async function addServiceEvent(
         type: 'SERVICE_INCIDENT',
       },
     });
+
+    // Push notification urgente al dueño
+    await sendPushToUser(booking.clientId, '🚨 Emergencia durante el servicio', `${incidentType ? `[${incidentType}] ` : ''}${description}. Abre la app para contactar al cuidador.`);
 
     // Emitir al booking room (si el dueño está en el chat o en la pantalla del servicio)
     const io = getIO();
