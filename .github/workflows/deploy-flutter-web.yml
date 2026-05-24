@@ -80,9 +80,9 @@ jobs:
       # ── 7. Build Vercel output structure ──────────────────────────────────
       - name: Prepare Vercel output
         run: |
-          mkdir -p garden-app/.vercel/output/static
-          cp -r garden-app/build/web/. garden-app/.vercel/output/static/
-          cat > garden-app/.vercel/output/config.json << 'VCONFIG'
+          mkdir -p .vercel/output/static
+          cp -r garden-app/build/web/. .vercel/output/static/
+          cat > .vercel/output/config.json << 'VCONFIG'
           {
             "version": 3,
             "routes": [
