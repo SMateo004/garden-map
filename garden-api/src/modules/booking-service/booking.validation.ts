@@ -113,7 +113,7 @@ export const guarderiaSchema = z.object({
 /** Schema for optional M&G data attached at booking creation. */
 export const mgDataSchema = z.object({
   modalidad: z.enum(['IN_PERSON', 'VIRTUAL']).default('IN_PERSON'),
-  proposedDate: z.string().datetime({ message: 'proposedDate must be ISO datetime' }),
+  proposedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?/, 'proposedDate must be ISO datetime format (YYYY-MM-DDTHH:mm)'),
   meetingPoint: z.string().max(500).optional(),
   meetingPointLat: z.number().optional(),
   meetingPointLng: z.number().optional(),

@@ -67,6 +67,7 @@ class _BookingScreenState extends State<BookingScreen> {
   double? _mgSelectedLng;
   Timer? _mgSearchDebounce;
   bool _mgTimeExpanded = true;
+  bool _mgVirtual = false; // false = Presencial, true = Virtual
 
   List<Map<String, dynamic>> _availableSlots = [];
   List<Map<String, dynamic>> _bookedPaseos = []; // reservas activas del cuidador
@@ -428,7 +429,7 @@ class _BookingScreenState extends State<BookingScreen> {
             : '10:00';
         final dateStr = _mgDate!.toIso8601String().split('T')[0];
         body['mgData'] = {
-          'modalidad': 'IN_PERSON',
+          'modalidad': _mgVirtual ? 'VIRTUAL' : 'IN_PERSON',
           'proposedDate': '${dateStr}T$timeStr:00',
           if (_mgPlaceCtrl.text.trim().isNotEmpty) 'meetingPoint': _mgPlaceCtrl.text.trim(),
         };
@@ -2382,7 +2383,59 @@ class _BookingScreenState extends State<BookingScreen> {
           ),
 
           if (_includeMG) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+
+            // ── Modalidad: Presencial / Virtual ────────────────────────
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() { _mgVirtual = false; }),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: !_mgVirtual ? GardenColors.primary : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: !_mgVirtual ? GardenColors.primary : borderColor),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.location_on_outlined, size: 14, color: !_mgVirtual ? Colors.white : subtextColor),
+                          const SizedBox(width: 5),
+                          Text('Presencial', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: !_mgVirtual ? Colors.white : subtextColor)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() { _mgVirtual = true; }),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _mgVirtual ? GardenColors.primary : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: _mgVirtual ? GardenColors.primary : borderColor),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.video_call_outlined, size: 14, color: _mgVirtual ? Colors.white : subtextColor),
+                          const SizedBox(width: 5),
+                          Text('Virtual', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _mgVirtual ? Colors.white : subtextColor)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
 
             // ── 1. Date picker ──────────────────────────────────────────
             GestureDetector(
@@ -2588,10 +2641,10 @@ class _BookingScreenState extends State<BookingScreen> {
             ),
             ], // end if (_mgDate != null)
 
-            if (_mgDate != null && _mgTime != null) ...[
+            if (_mgDate != null && _mgTime != null && !_mgVirtual) ...[
             const SizedBox(height: 10),
 
-            // ── 3. Meeting point with improved suggestions ──────────────
+            // ── 3. Meeting point (only for in-person M&G) ───────────────
             TextField(
               controller: _mgPlaceCtrl,
               style: TextStyle(color: textColor, fontSize: 14),
@@ -2685,10 +2738,32 @@ class _BookingScreenState extends State<BookingScreen> {
               ),
             const SizedBox(height: 8),
             Text(
-              'El cuidador recibirá esta propuesta automáticamente tras confirmar el pago.',
+              'Coordina el punto de encuentro con el cuidador por chat.',
               style: TextStyle(color: subtextColor, fontSize: 11),
             ),
-            ], // end if (_mgDate != null && _mgTime != null)
+            ], // end if (_mgDate != null && _mgTime != null && !_mgVirtual)
+
+            if (_mgDate != null && _mgTime != null && _mgVirtual) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: GardenColors.primary.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.video_call_outlined, size: 15, color: GardenColors.primary),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(
+                    'El M&G será por videollamada. Coordina el enlace con el cuidador por chat.',
+                    style: TextStyle(color: subtextColor, fontSize: 11),
+                  )),
+                ],
+              ),
+            ),
+            ],
           ],
         ],
       ),

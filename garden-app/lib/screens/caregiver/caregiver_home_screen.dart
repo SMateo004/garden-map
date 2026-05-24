@@ -2611,6 +2611,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       isDark: isDark,
       onRespond: _respondBooking,
       onRequestCancellation: _requestCancellation,
+      onRefresh: _loadBookings,
       token: _caregiverToken,
     );
   }
@@ -3044,6 +3045,7 @@ class _ExpandableBookingCard extends StatefulWidget {
   final bool isDark;
   final Function(String, String) onRespond;
   final Function(String, String) onRequestCancellation;
+  final VoidCallback? onRefresh;
   final String token;
 
   const _ExpandableBookingCard({
@@ -3055,6 +3057,7 @@ class _ExpandableBookingCard extends StatefulWidget {
     required this.isDark,
     required this.onRespond,
     required this.onRequestCancellation,
+    this.onRefresh,
     required this.token,
   });
 
@@ -3064,6 +3067,49 @@ class _ExpandableBookingCard extends StatefulWidget {
 
 class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
   bool _expanded = false;
+
+  String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
+
+  Future<void> _cancelMGBooking(String bookingId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Cancelar reserva'),
+        content: const Text('¿Confirmas que el Meet & Greet no resultó exitoso y deseas cancelar la reserva?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sí, cancelar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/bookings/$bookingId/cancel-mg'),
+        headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Reserva cancelada'), backgroundColor: Colors.orange),
+          );
+        }
+        widget.onRefresh?.call();
+      } else {
+        throw Exception(data['error']?['message'] ?? 'Error al cancelar');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: Colors.red.shade700),
+        );
+      }
+    }
+  }
 
   Future<void> _showCancellationDialog(String bookingId) async {
     final reasonController = TextEditingController();
@@ -3361,53 +3407,72 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                   final proposedDateStr = mg?['proposedDate'] as String?;
                   String dateLabel = 'Fecha pendiente';
                   String meetingPoint = mg?['meetingPoint'] as String? ?? '';
+                  DateTime? proposedDate;
                   if (proposedDateStr != null) {
                     try {
-                      final d = DateTime.parse(proposedDateStr).toLocal();
+                      proposedDate = DateTime.parse(proposedDateStr).toLocal();
                       const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
                       const days = ['lun','mar','mié','jue','vie','sáb','dom'];
-                      final h = d.hour.toString().padLeft(2,'0');
-                      final m = d.minute.toString().padLeft(2,'0');
-                      dateLabel = '${days[d.weekday-1]} ${d.day} ${months[d.month-1]} · $h:$m';
+                      final h = proposedDate.hour.toString().padLeft(2,'0');
+                      final m = proposedDate.minute.toString().padLeft(2,'0');
+                      dateLabel = '${days[proposedDate.weekday-1]} ${proposedDate.day} ${months[proposedDate.month-1]} · $h:$m';
                     } catch (_) {}
                   }
+                  final mgPassed = proposedDate != null && DateTime.now().isAfter(proposedDate);
                   return Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF6C63FF).withValues(alpha: 0.07),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.25)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(children: [
-                            const Text('🤝', style: TextStyle(fontSize: 15)),
-                            const SizedBox(width: 8),
-                            Text('Meet & Greet programado',
-                                style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 13, fontWeight: FontWeight.w700)),
-                          ]),
-                          const SizedBox(height: 6),
-                          Row(children: [
-                            Icon(Icons.access_time_rounded, size: 13, color: widget.subtextColor),
-                            const SizedBox(width: 5),
-                            Text(dateLabel, style: TextStyle(color: widget.textColor, fontSize: 12, fontWeight: FontWeight.w600)),
-                          ]),
-                          if (meetingPoint.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Row(children: [
-                              Icon(Icons.location_on_outlined, size: 13, color: widget.subtextColor),
-                              const SizedBox(width: 5),
-                              Expanded(child: Text(meetingPoint, style: TextStyle(color: widget.subtextColor, fontSize: 11), overflow: TextOverflow.ellipsis)),
-                            ]),
-                          ],
-                          const SizedBox(height: 6),
-                          Text('El cliente completará el pago después del M&G.',
-                              style: TextStyle(color: widget.subtextColor, fontSize: 10)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6C63FF).withValues(alpha: 0.07),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.25)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(children: [
+                                const Text('🤝', style: TextStyle(fontSize: 15)),
+                                const SizedBox(width: 8),
+                                Text('Meet & Greet programado',
+                                    style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 13, fontWeight: FontWeight.w700)),
+                              ]),
+                              const SizedBox(height: 6),
+                              Row(children: [
+                                Icon(Icons.access_time_rounded, size: 13, color: widget.subtextColor),
+                                const SizedBox(width: 5),
+                                Text(dateLabel, style: TextStyle(color: widget.textColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                              ]),
+                              if (meetingPoint.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Row(children: [
+                                  Icon(Icons.location_on_outlined, size: 13, color: widget.subtextColor),
+                                  const SizedBox(width: 5),
+                                  Expanded(child: Text(meetingPoint, style: TextStyle(color: widget.subtextColor, fontSize: 11), overflow: TextOverflow.ellipsis)),
+                                ]),
+                              ],
+                              const SizedBox(height: 6),
+                              Text('El cliente completará el pago después del M&G.',
+                                  style: TextStyle(color: widget.subtextColor, fontSize: 10)),
+                            ],
+                          ),
+                        ),
+                        if (mgPassed) ...[
+                          const SizedBox(height: 10),
+                          OutlinedButton(
+                            onPressed: () => _cancelMGBooking(booking['id'] as String),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Colors.red),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              minimumSize: const Size(double.infinity, 40),
+                            ),
+                            child: const Text('Cancelar — M&G no salió bien', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+                          ),
                         ],
-                      ),
+                      ],
                     ),
                   );
                 }),
@@ -3496,11 +3561,11 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                   ),
                 ),
 
-              if (status == 'CONFIRMED' || status == 'IN_PROGRESS' || status == 'WAITING_CAREGIVER_APPROVAL')
+              if (status == 'CONFIRMED' || status == 'IN_PROGRESS' || status == 'WAITING_CAREGIVER_APPROVAL' || status == 'PENDING_MG')
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                   child: GardenButton(
-                    label: 'Abrir chat',
+                    label: status == 'PENDING_MG' ? 'Coordinar M&G por chat' : 'Abrir chat',
                     icon: Icons.chat_outlined,
                     outline: true,
                     height: 40,

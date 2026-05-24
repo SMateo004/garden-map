@@ -117,6 +117,17 @@ export const proceedToPayment = asyncHandler(async (req: Request, res: Response)
 });
 
 /**
+ * POST /api/bookings/:id/cancel-mg
+ * Cancela una reserva PENDING_MG tras el M&G. Disponible para cliente o cuidador.
+ */
+export const cancelMG = asyncHandler(async (req: Request, res: Response) => {
+  const bookingId = req.params.id!;
+  const userId = req.user!.userId;
+  await bookingService.cancelMGBooking(bookingId, userId);
+  res.json({ success: true });
+});
+
+/**
  * POST /api/bookings/:id/cancel
  * Cancela la reserva y aplica política de reembolso (MVP: 48h/12h). Solo cliente titular.
  */

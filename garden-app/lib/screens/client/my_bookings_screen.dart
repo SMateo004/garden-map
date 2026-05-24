@@ -968,15 +968,37 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                           color: mgPassed ? GardenColors.primary : subtextColor,
                           onPressed: mgPassed ? () => _proceedToPayment(booking['id'] as String) : null,
                         ),
+                        if (mgPassed) ...[
+                          const SizedBox(height: 8),
+                          OutlinedButton(
+                            onPressed: () => _showMGDecisionSheet(booking['id'] as String),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Colors.red),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              minimumSize: const Size(double.infinity, 40),
+                            ),
+                            child: const Text('Cancelar — M&G no salió bien', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+                          ),
+                        ],
                         const SizedBox(height: 8),
-                        OutlinedButton(
-                          onPressed: () => _cancelBooking(booking['id']),
+                        OutlinedButton.icon(
+                          onPressed: () => Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => ChatScreen(
+                              bookingId: booking['id'] as String,
+                              otherPersonName: booking['caregiverName'] as String? ?? 'Cuidador',
+                              token: _clientToken,
+                              role: 'CLIENT',
+                              bookingStatus: status,
+                            ),
+                          )),
+                          icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+                          label: const Text('Coordinar M&G por chat', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.red),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            foregroundColor: GardenColors.primary,
+                            side: const BorderSide(color: GardenColors.primary),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             minimumSize: const Size(double.infinity, 40),
                           ),
-                          child: const Text('Cancelar', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
                         ),
                       ],
                     );

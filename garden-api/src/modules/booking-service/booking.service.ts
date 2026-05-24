@@ -883,6 +883,53 @@ export async function proceedToPayment(
   return bookingToResponse(updated);
 }
 
+/**
+ * Cancels a PENDING_MG booking after the M&G date has passed.
+ * Can be called by either the client or the caregiver (userId is checked against both).
+ */
+export async function cancelMGBooking(bookingId: string, userId: string): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const booking = await tx.booking.findFirst({
+      where: {
+        id: bookingId,
+        status: BookingStatus.PENDING_MG,
+        OR: [{ clientId: userId }, { caregiverId: userId }],
+      },
+      include: { meetAndGreet: true },
+    });
+    if (!booking) throw new BookingNotFoundError(bookingId);
+
+    const mg = (booking as any).meetAndGreet;
+    if (!mg || !mg.proposedDate) {
+      throw new BookingValidationError('Esta reserva no tiene Meet & Greet programado');
+    }
+    if (new Date(mg.proposedDate) > new Date()) {
+      throw new BookingValidationError('Solo puedes cancelar después de la fecha del Meet & Greet');
+    }
+
+    await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: BookingStatus.CANCELLED,
+        cancelledAt: new Date(),
+        cancellationReason: 'Meet & Greet no resultó exitoso',
+        refundAmount: new Prisma.Decimal(0),
+        refundStatus: RefundStatus.REJECTED,
+      },
+    });
+
+    const otherId = booking.clientId === userId ? booking.caregiverId : booking.clientId;
+    await tx.notification.create({
+      data: {
+        userId: otherId,
+        title: 'Reserva cancelada',
+        message: 'La reserva fue cancelada después del Meet & Greet.',
+        type: 'BOOKING_CANCELLED',
+      },
+    });
+  });
+}
+
 export async function initPayment(
   bookingId: string,
   clientId: string,

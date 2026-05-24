@@ -207,4 +207,11 @@ router.post(
   bookingController.proceedToPayment
 );
 
+/** POST /api/bookings/:id/cancel-mg — cancela PENDING_MG tras M&G; disponible para cliente o cuidador. */
+router.post(
+  '/:id/cancel-mg',
+  authMiddleware,
+  bookingController.cancelMG
+);
+
 export default router;
