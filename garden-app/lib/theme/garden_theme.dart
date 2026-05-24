@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
+import 'dart:ui' show ImageFilter, PlatformDispatcher;
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
