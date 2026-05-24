@@ -3,6 +3,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // ── PALETA OFICIAL GARDEN ──────────────────────────────────────────────────
 // Paleta: oliva #778C43 · vivid-green #58E262 · lima #D9EF9F · beige #DBD0C4
@@ -1089,54 +1090,88 @@ GardenBadge bookingStatusBadge(String status) {
 }
 
 // ── TEMA GLOBAL ────────────────────────────────────────────────────────────
-class ThemeNotifier extends ChangeNotifier {
-  // Noche: 19:00 → 07:00 (dark), Día: 07:00 → 19:00 (light)
-  static const int _nightStart = 19;
-  static const int _nightEnd   = 7;
 
-  bool _isDark = _isNightHour();
-  bool _manualOverride = false;
-  Timer? _timer;
+/// Los tres modos de tema que soporta la app.
+enum GardenThemeMode {
+  /// Sigue la configuración del sistema operativo del teléfono.
+  system,
+  /// Siempre claro.
+  light,
+  /// Siempre oscuro.
+  dark,
+}
+
+class ThemeNotifier extends ChangeNotifier {
+  static const String _prefKey = 'garden_theme_mode';
+
+  GardenThemeMode _mode = GardenThemeMode.system;
+  bool _isDark = false;
 
   ThemeNotifier() {
-    // Revisa el horario cada minuto
-    _timer = Timer.periodic(const Duration(minutes: 1), (_) => _syncWithSchedule());
+    // Escucha los cambios de brillo del sistema operativo en tiempo real
+    PlatformDispatcher.instance.onPlatformBrightnessChanged = _onSystemBrightnessChanged;
+    // Estado inicial — se recalcula en init() una vez cargadas las prefs
+    _isDark = _computeIsDark();
   }
 
-  static bool _isNightHour() {
-    final h = DateTime.now().hour;
-    return h >= _nightStart || h < _nightEnd;
+  void _onSystemBrightnessChanged() {
+    if (_mode == GardenThemeMode.system) _updateDark();
   }
 
-  void _syncWithSchedule() {
-    if (_manualOverride) return;
-    setDark(_isNightHour());
+  bool _computeIsDark() {
+    switch (_mode) {
+      case GardenThemeMode.dark:
+        return true;
+      case GardenThemeMode.light:
+        return false;
+      case GardenThemeMode.system:
+        return PlatformDispatcher.instance.platformBrightness == Brightness.dark;
+    }
   }
 
-  bool get isDark => _isDark;
-
-  void toggle() {
-    _manualOverride = true;
-    _isDark = !_isDark;
-    notifyListeners();
-  }
-
-  void setDark(bool dark) {
-    if (_isDark != dark) {
-      _isDark = dark;
+  void _updateDark() {
+    final v = _computeIsDark();
+    if (_isDark != v) {
+      _isDark = v;
       notifyListeners();
     }
   }
 
-  /// Resetea el override manual y vuelve al horario automático
-  void resetToSchedule() {
-    _manualOverride = false;
-    setDark(_isNightHour());
+  // ── Getters públicos ──────────────────────────────────────────────────────
+  bool get isDark => _isDark;
+  GardenThemeMode get mode => _mode;
+
+  // ── Inicialización asíncrona (llamar desde _bootstrap) ────────────────────
+  Future<void> init() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getString(_prefKey);
+    if (stored != null) {
+      _mode = GardenThemeMode.values.firstWhere(
+        (m) => m.name == stored,
+        orElse: () => GardenThemeMode.system,
+      );
+    }
+    _updateDark();
+  }
+
+  // ── Cambiar modo ──────────────────────────────────────────────────────────
+  Future<void> setMode(GardenThemeMode mode) async {
+    if (_mode == mode) return;
+    _mode = mode;
+    _updateDark();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefKey, mode.name);
+    notifyListeners();
+  }
+
+  /// Compatibilidad con código anterior (alterna claro ↔ oscuro).
+  void toggle() {
+    setMode(_isDark ? GardenThemeMode.light : GardenThemeMode.dark);
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    PlatformDispatcher.instance.onPlatformBrightnessChanged = null;
     super.dispose();
   }
 }

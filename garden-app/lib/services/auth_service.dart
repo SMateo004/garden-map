@@ -3,6 +3,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Se emite cuando el servidor devuelve 401 y el refresh token también es inválido.
+/// La app escucha esto para redirigir al login de forma global.
+final sessionExpiredNotifier = ValueNotifier<bool>(false);
+
 class AuthService {
   final String baseUrl = const String.fromEnvironment(
     'API_URL',
@@ -117,6 +121,8 @@ class AuthService {
 
   /// Ejecuta una petición HTTP autenticada con auto-renovación de token.
   /// Si recibe 401, intenta renovar el token una vez y reintenta.
+  /// Si el refresh también falla, dispara [sessionExpiredNotifier] para
+  /// que la app redirija al login globalmente.
   Future<http.Response> authenticatedRequest(
     Future<http.Response> Function(String token) request,
   ) async {
@@ -127,6 +133,10 @@ class AuthService {
       final newToken = await renewAccessToken();
       if (newToken != null) {
         response = await request(newToken);
+      } else {
+        // Refresh falló — sesión definitivamente expirada
+        await clearToken();
+        sessionExpiredNotifier.value = true;
       }
     }
     return response;

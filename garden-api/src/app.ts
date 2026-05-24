@@ -28,6 +28,7 @@ import disputeRoutes from './modules/dispute/dispute.routes.js';
 import meetAndGreetRoutes from './modules/meet-and-greet/meet-and-greet.routes.js';
 import placesRoutes from './modules/places/places.routes.js';
 import vetsRoutes from './modules/vets/vets.routes.js';
+import appHealthRoutes from './modules/app-health/app-health.routes.js';
 
 const app = express();
 
@@ -254,6 +255,7 @@ app.use('/api/disputes', disputeRoutes);
 app.use('/api/meet-and-greet', meetAndGreetRoutes);
 app.use('/api/places', placesRoutes);
 app.use('/api/vets', vetsRoutes);
+app.use('/api/app', appHealthRoutes);
 
 // Keys exposed to all unauthenticated clients (feature flags only — no financial/operational data).
 const PUBLIC_SETTING_KEYS = new Set([

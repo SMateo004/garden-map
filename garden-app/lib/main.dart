@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'package:go_router/go_router.dart';
 import 'screens/auth/login_screen.dart';
@@ -48,6 +49,7 @@ import 'package:posthog_flutter/posthog_flutter.dart';
 import 'theme/garden_theme.dart';
 import 'services/local_notification_service.dart';
 import 'services/fcm_service.dart';
+import 'services/auth_service.dart';
 
 // ── Build-time env (set via --dart-define) ─────────────────
 const _kSentryDsn    = String.fromEnvironment('SENTRY_DSN');
@@ -89,9 +91,37 @@ class _MobileAuthGateState extends State<_MobileAuthGate> {
   }
 }
 
+// ── Rutas públicas (accesibles sin sesión) ──────────────────
+const _publicPaths = {
+  '/',
+  '/splash',
+  '/login',
+  '/register',
+  '/onboarding',
+  '/about',
+  '/become-caregiver',
+  '/maintenance',
+  '/privacy',
+  '/terms',
+  '/sign-in/profesional',
+  '/caregiver/onboarding',
+  '/client-welcome',
+};
+
 // ── Router ─────────────────────────────────────────────────
 final GoRouter _router = GoRouter(
   initialLocation: '/',
+  // Redirige al login si se intenta acceder a una ruta protegida sin sesión.
+  redirect: (context, state) async {
+    final path = state.matchedLocation;
+    if (_publicPaths.any((p) => path == p || path.startsWith('$p/'))) {
+      return null; // ruta pública — sin restricción
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token') ?? '';
+    if (token.isEmpty) return '/login';
+    return null;
+  },
   routes: [
     GoRoute(
       path: '/',
@@ -416,6 +446,9 @@ final GoRouter _router = GoRouter(
 Future<void> _bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Cargar preferencia de tema guardada antes de mostrar nada
+  await themeNotifier.init();
+
   // Web: necesita options explícitas (no hay google-services.json en web)
   // Mobile: Firebase se inicializa nativamente vía google-services.json — sin options
   if (kIsWeb) {
@@ -426,9 +459,16 @@ Future<void> _bootstrap() async {
 
   if (!kIsWeb) {
     // Crashlytics: captura errores de Flutter y de la plataforma nativa
-    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+    FlutterError.onError = (details) {
+      FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+      FcmService.reportErrorToAdmin(
+        'Flutter error: ${details.exception}',
+        details.stack?.toString() ?? '',
+      );
+    };
     PlatformDispatcher.instance.onError = (error, stack) {
       FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      FcmService.reportErrorToAdmin('Platform error: $error', stack.toString());
       return true;
     };
 
@@ -466,8 +506,44 @@ void main() async {
   }
 }
 
-class GardenApp extends StatelessWidget {
+class GardenApp extends StatefulWidget {
   const GardenApp({super.key});
+
+  @override
+  State<GardenApp> createState() => _GardenAppState();
+}
+
+class _GardenAppState extends State<GardenApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Inyectar router en FcmService para navegación desde notificaciones
+    FcmService.setRouter(_router);
+    // Escuchar sesión expirada globalmente: redirige al login desde cualquier pantalla.
+    sessionExpiredNotifier.addListener(_onSessionExpired);
+  }
+
+  @override
+  void dispose() {
+    sessionExpiredNotifier.removeListener(_onSessionExpired);
+    super.dispose();
+  }
+
+  void _onSessionExpired() {
+    if (!sessionExpiredNotifier.value) return;
+    sessionExpiredNotifier.value = false; // reset para no re-disparar
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _router.go('/login');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tu sesión ha expirado. Inicia sesión de nuevo.'),
+          backgroundColor: Color(0xFFD32F2F),
+          duration: Duration(seconds: 4),
+        ),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -479,8 +555,76 @@ class GardenApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           routerConfig: _router,
           theme: gardenTheme(dark: themeNotifier.isDark),
+          // Widget de error personalizado — evita la pantalla roja de Flutter en producción
+          builder: (context, child) {
+            ErrorWidget.builder = (details) => _GardenErrorWidget(
+              error: details.exception.toString(),
+            );
+            return child ?? const SizedBox.shrink();
+          },
         );
       },
+    );
+  }
+}
+
+// ── Error screen en producción ──────────────────────────────
+class _GardenErrorWidget extends StatelessWidget {
+  final String error;
+  const _GardenErrorWidget({required this.error});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    return Scaffold(
+      backgroundColor:
+          isDark ? const Color(0xFF121212) : const Color(0xFFF2EDE4),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('🐾', style: TextStyle(fontSize: 48)),
+              const SizedBox(height: 16),
+              Text(
+                'Algo salió mal',
+                style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black87,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'El equipo GARDEN ya fue notificado.\nIntenta cerrar y abrir la app.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: isDark ? Colors.white60 : Colors.black54,
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+              ),
+              if (kDebugMode) ...[
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                  ),
+                  child: Text(
+                    error,
+                    style: const TextStyle(
+                        color: Colors.red, fontSize: 11, fontFamily: 'monospace'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

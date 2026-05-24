@@ -701,43 +701,83 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _sectionLabel('Preferencias', textColor),
         const SizedBox(height: 10),
 
-        // Modo oscuro
+        // ── Selector de tema ─────────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
-          child: Material(
-            color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
-            borderRadius: BorderRadius.circular(GardenRadius.md),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(GardenRadius.md),
-                border: Border.all(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: GardenColors.primary.withValues(alpha: 0.09),
-                      borderRadius: BorderRadius.circular(GardenRadius.sm),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+              borderRadius: BorderRadius.circular(GardenRadius.md),
+              border: Border.all(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: GardenColors.primary.withValues(alpha: 0.09),
+                        borderRadius: BorderRadius.circular(GardenRadius.sm),
+                      ),
+                      child: const Icon(Icons.palette_outlined, color: GardenColors.primary, size: 17),
                     ),
-                    child: Icon(
-                      themeNotifier.isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-                      color: GardenColors.primary, size: 17,
-                    ),
+                    const SizedBox(width: 12),
+                    Text('Apariencia',
+                        style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Selector de 3 opciones
+                Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
+                    borderRadius: BorderRadius.circular(GardenRadius.md),
+                    border: Border.all(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text('Modo oscuro',
-                        style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
+                  child: Row(
+                    children: [
+                      _ThemeOptionBtn(
+                        icon: Icons.phone_android_rounded,
+                        label: 'Sistema',
+                        selected: themeNotifier.mode == GardenThemeMode.system,
+                        isDark: isDark,
+                        onTap: () => themeNotifier.setMode(GardenThemeMode.system),
+                      ),
+                      _ThemeOptionDivider(isDark: isDark),
+                      _ThemeOptionBtn(
+                        icon: Icons.light_mode_rounded,
+                        label: 'Claro',
+                        selected: themeNotifier.mode == GardenThemeMode.light,
+                        isDark: isDark,
+                        onTap: () => themeNotifier.setMode(GardenThemeMode.light),
+                      ),
+                      _ThemeOptionDivider(isDark: isDark),
+                      _ThemeOptionBtn(
+                        icon: Icons.dark_mode_rounded,
+                        label: 'Oscuro',
+                        selected: themeNotifier.mode == GardenThemeMode.dark,
+                        isDark: isDark,
+                        onTap: () => themeNotifier.setMode(GardenThemeMode.dark),
+                      ),
+                    ],
                   ),
-                  Switch(
-                    value: themeNotifier.isDark,
-                    onChanged: (_) => themeNotifier.toggle(),
-                    activeColor: GardenColors.primary,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  themeNotifier.mode == GardenThemeMode.system
+                      ? '📱 Siguiendo la configuración de tu teléfono'
+                      : themeNotifier.mode == GardenThemeMode.dark
+                          ? '🌙 Modo oscuro activado'
+                          : '☀️ Modo claro activado',
+                  style: TextStyle(
+                    color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary,
+                    fontSize: 11,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -1200,4 +1240,76 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     ),
   );
+}
+
+// ── Widgets privados para el selector de tema ─────────────────────────────────
+
+class _ThemeOptionBtn extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _ThemeOptionBtn({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: selected ? GardenColors.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(GardenRadius.md - 1),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: selected
+                    ? Colors.white
+                    : (isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: selected
+                      ? Colors.white
+                      : (isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+                  fontSize: 11,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ThemeOptionDivider extends StatelessWidget {
+  final bool isDark;
+  const _ThemeOptionDivider({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 36,
+      color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder,
+    );
+  }
 }
