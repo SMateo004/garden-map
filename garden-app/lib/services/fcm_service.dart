@@ -3,14 +3,14 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode, debugPrint;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'local_notification_service.dart';
+import 'secure_storage_service.dart';
 
 /// Background message handler — must be top-level function (FCM requirement).
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // FCM muestra la notificación del sistema automáticamente en background/terminated.
-  debugPrint('[FCM] Background message: ${message.messageId}');
+  if (kDebugMode) debugPrint('[FCM] Background message: ${message.messageId}');
 }
 
 class FcmService {
@@ -104,25 +104,26 @@ class FcmService {
       try {
         final token = await _fcm.getToken();
         if (token != null) {
-          debugPrint('[FCM] Token obtenido: ${token.substring(0, 20)}...');
+          // Only log token hint in debug builds — never expose in release logs
+          if (kDebugMode) debugPrint('[FCM] Token obtenido (debug only)');
           await _saveTokenToBackend(token);
           return;
         }
       } catch (e) {
-        debugPrint('[FCM] Intento ${i + 1}/$retries falló: $e');
+        if (kDebugMode) debugPrint('[FCM] Intento ${i + 1}/$retries falló: $e');
         if (i < retries - 1) {
           await Future.delayed(Duration(seconds: (i + 1) * 2));
         }
       }
     }
-    debugPrint('[FCM] No se pudo registrar el token después de $retries intentos');
+    if (kDebugMode) debugPrint('[FCM] No se pudo registrar el token después de $retries intentos');
   }
 
   /// Envía el token FCM al backend para recibir notificaciones push.
+  /// Lee el access token desde el almacenamiento seguro (Keychain / EncryptedSharedPreferences).
   static Future<void> _saveTokenToBackend(String token) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final authToken = prefs.getString('access_token') ?? '';
+      final authToken = await SecureStorageService.getAccessToken() ?? '';
       if (authToken.isEmpty) return; // Aún no autenticado — se llamará después del login
 
       final res = await http.put(
@@ -133,13 +134,13 @@ class FcmService {
         },
         body: jsonEncode({'fcmToken': token}),
       );
-      if (res.statusCode == 200) {
-        debugPrint('[FCM] Token registrado en el backend correctamente');
-      } else {
-        debugPrint('[FCM] Backend rechazó el token: ${res.statusCode}');
+      if (kDebugMode) {
+        debugPrint(res.statusCode == 200
+            ? '[FCM] Token registrado en el backend'
+            : '[FCM] Backend rechazó el token: ${res.statusCode}');
       }
     } catch (e) {
-      debugPrint('[FCM] Error al guardar token en backend: $e');
+      if (kDebugMode) debugPrint('[FCM] Error al guardar token en backend: $e');
     }
   }
 
@@ -151,16 +152,19 @@ class FcmService {
 
   /// Reporta un error crítico al backend para que el admin reciba una notificación push.
   /// Se llama desde los handlers globales de error en main.dart.
+  // Set via --dart-define=APP_SECRET=xxx at build time
+  static const _appSecret = String.fromEnvironment('APP_SECRET');
+
   static Future<void> reportErrorToAdmin(String error, String stackTrace) async {
     if (kDebugMode) return; // Solo en producción
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final authToken = prefs.getString('access_token') ?? '';
+      final authToken = await SecureStorageService.getAccessToken() ?? '';
 
       await http.post(
-        Uri.parse('$_baseUrl/admin/error-report'),
+        Uri.parse('$_baseUrl/app/error-report'),
         headers: {
           if (authToken.isNotEmpty) 'Authorization': 'Bearer $authToken',
+          if (_appSecret.isNotEmpty) 'X-App-Secret': _appSecret,
           'Content-Type': 'application/json',
         },
         body: jsonEncode({

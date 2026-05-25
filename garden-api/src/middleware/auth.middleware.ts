@@ -40,7 +40,16 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
       } else {
         next();
       }
-    }).catch(() => next()); // fail-open: never block on blacklist errors
+    }).catch((err) => {
+      // Fail-closed: if the blacklist check throws (e.g., Redis configured but down),
+      // block the request rather than silently allow a potentially revoked token.
+      logger.error('Auth: blacklist check failed — blocking request', {
+        path: req.path,
+        userId: payload.userId,
+        error: (err as Error).message,
+      });
+      next(new UnauthorizedError('No se pudo verificar la sesión. Intenta de nuevo.'));
+    });
   } catch {
     logger.warn('Auth: 401 — token inválido o expirado', { path: req.path, method: req.method });
     next(new UnauthorizedError('Token inválido o expirado'));

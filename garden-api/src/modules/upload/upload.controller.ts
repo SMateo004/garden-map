@@ -8,6 +8,7 @@ import { delByPrefix } from '../../shared/cache.js';
 import multer from 'multer';
 import { randomUUID } from 'crypto';
 import { uploadImage, uploadImages } from '../../services/storage.service.js';
+import { assertImageBuffer } from '../../shared/mime-validation.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -25,6 +26,9 @@ export const uploadRegistrationPhotosHandler = asyncHandler(async (req: Request,
     );
   }
 
+  // Validate magic bytes for every file to prevent MIME spoofing
+  await Promise.all(files.map((f) => assertImageBuffer(f.buffer)));
+
   const tempId = randomUUID();
   const buffers = files.map((f) => f.buffer);
   const urls = await uploadImages(buffers, { folder: 'caregivers', name: `reg-${tempId}` });
@@ -41,8 +45,9 @@ export const uploadProfilePhotoHandler = [
     const userId = req.user!.userId;
 
     if (!file) throw new CaregiverProfileValidationError('Se requiere una foto (campo profilePhoto)');
-    if (!file.mimetype.startsWith('image/')) throw new CaregiverProfileValidationError('El archivo debe ser una imagen');
     if (file.size > 20 * 1024 * 1024) throw new CaregiverProfileValidationError('La foto no debe superar 20 MB');
+    // Magic bytes check — client-supplied MIME headers cannot be trusted
+    await assertImageBuffer(file.buffer);
 
     const profile = await prisma.caregiverProfile.findUnique({ where: { userId } });
     if (!profile) throw new CaregiverProfileValidationError('No tienes perfil de cuidador.');
@@ -67,7 +72,7 @@ export const uploadPetPhotoHandler = [
     const userId = req.user!.userId;
 
     if (!file) throw new CaregiverProfileValidationError('Se requiere una foto (JPG/PNG, máx. 5MB)');
-    if (!file.mimetype.startsWith('image/')) throw new CaregiverProfileValidationError('El archivo debe ser una imagen');
+    await assertImageBuffer(file.buffer);
 
     const url = await uploadImage(file.buffer, { folder: 'pets', name: `pet-${userId}-${Date.now()}` });
 
@@ -89,7 +94,7 @@ export const uploadServicePhotoHandler = [
     const userId = req.user!.userId;
 
     if (!file) throw new CaregiverProfileValidationError('Se requiere una foto (JPG/PNG, máx. 5MB)');
-    if (!file.mimetype.startsWith('image/')) throw new CaregiverProfileValidationError('El archivo debe ser una imagen');
+    await assertImageBuffer(file.buffer);
 
     const url = await uploadImage(file.buffer, { folder: 'service-events', name: `svc-${userId}-${Date.now()}` });
     logger.info('Foto servicio subida', { url, userId });
@@ -103,7 +108,7 @@ export const uploadPublicSinglePhotoHandler = [
   asyncHandler(async (req: Request, res: Response) => {
     const file = req.file;
     if (!file) throw new CaregiverProfileValidationError('Se requiere una foto');
-    if (!file.mimetype.startsWith('image/')) throw new CaregiverProfileValidationError('El archivo debe ser una imagen');
+    await assertImageBuffer(file.buffer);
 
     const url = await uploadImage(file.buffer, { folder: 'public', name: `pub-${randomUUID()}` });
     res.json({ success: true, data: { url } });
@@ -118,7 +123,7 @@ export const uploadUserPhotoHandler = [
     const userId = req.user!.userId;
 
     if (!file) throw new CaregiverProfileValidationError('Se requiere una foto (JPG/PNG, máx. 5MB)');
-    if (!file.mimetype.startsWith('image/')) throw new CaregiverProfileValidationError('El archivo debe ser una imagen');
+    await assertImageBuffer(file.buffer);
 
     const url = await uploadImage(file.buffer, { folder: 'users', name: `user-${userId}-${Date.now()}` });
 

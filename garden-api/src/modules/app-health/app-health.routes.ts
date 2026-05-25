@@ -8,25 +8,32 @@
  *  3. Notifica al admin con: tipo de error, severidad y resultado de resolución
  *
  * No requiere rol ADMIN — accesible con o sin sesión activa.
+ * Protegido por: rate limiting estricto + header X-App-Secret opcional.
  */
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { asyncHandler } from '../../shared/async-handler.js';
 import { analyzeAndResolveError } from '../../agents/error-resolution.agent.js';
 import { sendPushToUser } from '../../services/firebase.service.js';
+import { env } from '../../config/env.js';
 import prisma from '../../config/database.js';
 import logger from '../../shared/logger.js';
 
 const router = Router();
 
-// Máximo 5 reportes por IP por minuto para evitar spam / loops de error
+// Máximo 3 reportes por IP por minuto — más restrictivo para evitar spam / loops de error
 const errorReportLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 5,
+  max: 3,
   standardHeaders: true,
   legacyHeaders: false,
+  skipFailedRequests: false,
   message: { success: false, message: 'Demasiados reportes. Intenta más tarde.' },
 });
+
+// Si APP_SECRET está configurado en el entorno, valida el header X-App-Secret
+// para asegurar que sólo builds legítimas de la app pueden reportar errores.
+const _appSecret = (env as Record<string, unknown>)['APP_SECRET'] as string | undefined;
 
 // Emojis por severidad para el título del push
 const SEVERITY_EMOJI: Record<string, string> = {
@@ -37,6 +44,18 @@ const SEVERITY_EMOJI: Record<string, string> = {
 };
 
 router.post('/error-report', errorReportLimiter, asyncHandler(async (req, res) => {
+  // Optional app-secret validation: if APP_SECRET is set, reject requests
+  // that don't include the matching X-App-Secret header.
+  if (_appSecret) {
+    const supplied = req.headers['x-app-secret'] as string | undefined;
+    if (!supplied || supplied !== _appSecret) {
+      logger.warn('[APP-HEALTH] Rejected error-report — bad or missing X-App-Secret', { ip: req.ip });
+      // Return 200 to avoid leaking whether the endpoint exists to scanners
+      res.json({ success: true });
+      return;
+    }
+  }
+
   const { error, stackTrace, platform, timestamp } = req.body as {
     error?: string;
     stackTrace?: string;

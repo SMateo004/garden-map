@@ -81,8 +81,15 @@ export async function isTokenBlacklisted(rawToken: string): Promise<boolean> {
       return true;
     }
   } catch (err: any) {
-    // On error assume not blacklisted (fail-open to avoid locking out users)
-    logger.warn('[TokenBlacklist] Failed to check blacklist', { error: err.message });
+    const redis = getRedisClient();
+    if (redis) {
+      // Redis IS configured but the check failed (e.g. connection lost).
+      // Re-throw so authMiddleware can fail-closed and block the request.
+      logger.error('[TokenBlacklist] Redis check failed — re-throwing for fail-closed handling', { error: err.message });
+      throw err;
+    }
+    // Redis not configured → unexpected path; log and fail-open
+    logger.warn('[TokenBlacklist] Unexpected error in in-memory check', { error: err.message });
     return false;
   }
 }

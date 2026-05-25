@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'secure_storage_service.dart';
 
 /// Se emite cuando el servidor devuelve 401 y el refresh token también es inválido.
 /// La app escucha esto para redirigir al login de forma global.
@@ -23,27 +24,21 @@ class AuthService {
     'Authorization': 'Bearer $token',
   };
 
-  // ── Token storage ───────────────────────────────────────────────────────────
+  // ── Token storage (backed by flutter_secure_storage) ───────────────────────
+  // Tokens are stored in iOS Keychain / Android EncryptedSharedPreferences so
+  // they cannot be extracted from a non-rooted device.
 
-  Future<void> saveToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('access_token', token);
-  }
+  Future<void> saveToken(String token) =>
+      SecureStorageService.saveAccessToken(token);
 
-  Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('access_token');
-  }
+  Future<String?> getToken() =>
+      SecureStorageService.getAccessToken();
 
-  Future<void> saveRefreshToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('refresh_token', token);
-  }
+  Future<void> saveRefreshToken(String token) =>
+      SecureStorageService.saveRefreshToken(token);
 
-  Future<String?> getRefreshToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('refresh_token');
-  }
+  Future<String?> getRefreshToken() =>
+      SecureStorageService.getRefreshToken();
 
   /// Guarda access + refresh tokens de una respuesta de la API.
   Future<void> _saveTokens(Map<String, dynamic> data) async {
@@ -62,9 +57,10 @@ class AuthService {
   }
 
   Future<void> clearToken() async {
+    // Clear sensitive tokens from secure storage
+    await SecureStorageService.clearAll();
+    // Clear non-sensitive user data from SharedPreferences
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('access_token');
-    await prefs.remove('refresh_token');
     await prefs.remove('user_role');
     await prefs.remove('active_role');
     await prefs.remove('user_id');
@@ -111,8 +107,8 @@ class AuthService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         if (data['success'] == true) {
           final tokens = data['data'] as Map<String, dynamic>;
-          await saveToken(tokens['accessToken'] as String);
-          await saveRefreshToken(tokens['refreshToken'] as String);
+          await SecureStorageService.saveAccessToken(tokens['accessToken'] as String);
+          await SecureStorageService.saveRefreshToken(tokens['refreshToken'] as String);
           return tokens['accessToken'] as String;
         }
       }

@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'package:go_router/go_router.dart';
 import 'screens/auth/login_screen.dart';
@@ -50,6 +49,7 @@ import 'theme/garden_theme.dart';
 import 'services/local_notification_service.dart';
 import 'services/fcm_service.dart';
 import 'services/auth_service.dart';
+import 'services/secure_storage_service.dart';
 
 // ── Build-time env (set via --dart-define) ─────────────────
 const _kSentryDsn    = String.fromEnvironment('SENTRY_DSN');
@@ -117,8 +117,8 @@ final GoRouter _router = GoRouter(
     if (_publicPaths.any((p) => path == p || path.startsWith('$p/'))) {
       return null; // ruta pública — sin restricción
     }
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token') ?? '';
+    // Leer desde almacenamiento seguro (Keychain / EncryptedSharedPreferences)
+    final token = await SecureStorageService.getAccessToken() ?? '';
     if (token.isEmpty) return '/login';
     return null;
   },
@@ -394,7 +394,7 @@ final GoRouter _router = GoRouter(
       name: 'mobileVerify',
       builder: (context, state) {
         final token = state.uri.queryParameters['token'] ?? '';
-        debugPrint('[Router] /mobile-verify — token: ${token.length > 20 ? token.substring(0, 20) : token}...');
+        if (kDebugMode) debugPrint('[Router] /mobile-verify — token length: ${token.length}');
         return MobileVerifyScreen(token: token);
       },
     ),
