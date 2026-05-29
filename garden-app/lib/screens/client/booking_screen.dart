@@ -962,7 +962,7 @@ class _BookingScreenState extends State<BookingScreen> {
                       height: 72,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
-                        itemCount: 14,
+                        itemCount: 30,
                         // i=1: start from tomorrow (1-day advance booking requirement)
                         itemBuilder: (_, i) {
                           final date = DateTime.now().add(Duration(days: i + 1));
@@ -1057,6 +1057,19 @@ class _BookingScreenState extends State<BookingScreen> {
                             ),
                           );
                         },
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, size: 13, color: subtextColor),
+                          const SizedBox(width: 5),
+                          Text(
+                            'Reservas disponibles para los próximos 30 días',
+                            style: TextStyle(fontSize: 11, color: subtextColor),
+                          ),
+                        ],
                       ),
                     ),
                     if (_loadingSlots)
@@ -1231,7 +1244,7 @@ class _BookingScreenState extends State<BookingScreen> {
                     height: 72,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
-                      itemCount: 14,
+                      itemCount: 30,
                       itemBuilder: (_, i) {
                         final date = DateTime.now().add(Duration(days: i + 1));
                         final ds = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -1294,6 +1307,19 @@ class _BookingScreenState extends State<BookingScreen> {
                           ),
                         );
                       },
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 13, color: subtextColor),
+                        const SizedBox(width: 5),
+                        Text(
+                          'Reservas disponibles para los próximos 30 días',
+                          style: TextStyle(fontSize: 11, color: subtextColor),
+                        ),
+                      ],
                     ),
                   ),
                   if (_loadingSlots)
@@ -1399,11 +1425,25 @@ class _BookingScreenState extends State<BookingScreen> {
                 ] else if (_selectedService == 'HOSPEDAJE') ...[
                   Text('Fechas', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
+                  // ── Info: límite de 30 días ──
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 13, color: subtextColor),
+                        const SizedBox(width: 5),
+                        Text(
+                          'Reservas disponibles para los próximos 30 días',
+                          style: TextStyle(fontSize: 11, color: subtextColor),
+                        ),
+                      ],
+                    ),
+                  ),
                   // ── Selector de rango en un solo calendario ──
                   GestureDetector(
                     onTap: () async {
                       final tomorrow = DateTime.now().add(const Duration(days: 1));
-                      final lastDate = DateTime.now().add(const Duration(days: 90));
+                      final lastDate = DateTime.now().add(const Duration(days: 30));
                       // initialDate debe satisfacer selectableDayPredicate → primer día libre
                       DateTime firstAvailable = tomorrow;
                       while (firstAvailable.isBefore(lastDate) &&
@@ -1758,6 +1798,17 @@ class _BookingScreenState extends State<BookingScreen> {
         Text(
           'Toca los días para seleccionar o quitar. Días grises = no disponible.',
           style: TextStyle(color: subtextColor, fontSize: 11),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Icon(Icons.info_outline, size: 13, color: subtextColor),
+            const SizedBox(width: 5),
+            Text(
+              'Reservas disponibles para los próximos 30 días',
+              style: TextStyle(fontSize: 11, color: subtextColor),
+            ),
+          ],
         ),
       ],
     );

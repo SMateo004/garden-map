@@ -473,6 +473,17 @@ async function assertHospedajeAvailability(
 ): Promise<void> {
   const start = new Date(startDate);
   const end = new Date(endDate);
+
+  // 30-day advance booking limit
+  const maxBookingDate = new Date();
+  maxBookingDate.setUTCHours(0, 0, 0, 0);
+  maxBookingDate.setUTCDate(maxBookingDate.getUTCDate() + 30);
+  if (start > maxBookingDate) {
+    throw new AvailabilityConflictError(
+      'Solo puedes hacer reservas con un máximo de 30 días de anticipación.',
+      'startDate'
+    );
+  }
   const dates: Date[] = [];
   for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
     dates.push(new Date(d));
@@ -556,6 +567,17 @@ async function assertPaseoAvailability(
   duration?: number | null
 ): Promise<void> {
   const date = new Date(walkDate);
+
+  // 30-day advance booking limit
+  const maxBookingDate = new Date();
+  maxBookingDate.setUTCHours(0, 0, 0, 0);
+  maxBookingDate.setUTCDate(maxBookingDate.getUTCDate() + 30);
+  if (date > maxBookingDate) {
+    throw new AvailabilityConflictError(
+      'Solo puedes hacer reservas con un máximo de 30 días de anticipación.',
+      'walkDate'
+    );
+  }
 
   const profile = await tx.caregiverProfile.findUnique({
     where: { id: caregiverId },
@@ -1337,12 +1359,6 @@ export async function extendBooking(
     }
     const start = booking.startDate!;
     const newEndNorm = new Date(newEndDate.getFullYear(), newEndDate.getMonth(), newEndDate.getDate(), 0, 0, 0);
-    const minEnd = new Date(start);
-    minEnd.setDate(minEnd.getDate() + 2);
-    if (newEndNorm < minEnd) {
-      throw new BookingValidationError('Hospedaje: mínimo 48 horas entre check-in y check-out');
-    }
-
     const dates: Date[] = [];
     for (let d = new Date(currentEnd); d < newEndNorm; d.setDate(d.getDate() + 1)) {
       dates.push(new Date(d));
@@ -1410,7 +1426,7 @@ export async function extendBooking(
 
 /**
  * Cambia las fechas de una reserva de hospedaje (nuevo startDate y endDate).
- * Solo CONFIRMED; cliente titular; mínimo 48h entre inicio y fin.
+ * Solo CONFIRMED; cliente titular; mínimo 1 noche entre check-in y check-out.
  * Comprueba disponibilidad y solapamientos (excluyendo esta reserva); recalcula montos.
  */
 export async function changeDatesBooking(
@@ -1446,12 +1462,6 @@ export async function changeDatesBooking(
     if (endNorm <= startNorm) {
       throw new BookingValidationError('La fecha de salida debe ser posterior a la de entrada');
     }
-    const minEnd = new Date(startNorm);
-    minEnd.setDate(minEnd.getDate() + 2);
-    if (endNorm < minEnd) {
-      throw new BookingValidationError('Hospedaje: mínimo 48 horas entre check-in y check-out');
-    }
-
     const dates: Date[] = [];
     for (let d = new Date(startNorm); d < endNorm; d.setDate(d.getDate() + 1)) {
       dates.push(new Date(d));
