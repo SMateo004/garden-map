@@ -2111,7 +2111,14 @@ export async function getBookingsByCaregiverUserId(
   if (!profile) return { bookings: [], pagination: { page, limit, total: 0, pages: 1 } };
 
   const skip = (page - 1) * limit;
-  const where = { caregiverId: profile.id };
+  // El cuidador solo ve reservas que ya han pasado por el pago (o están en M&G pendiente).
+  // PENDING_PAYMENT se excluye: la reserva no existe para el cuidador hasta que el cliente pague.
+  const where = {
+    caregiverId: profile.id,
+    status: {
+      notIn: [BookingStatus.PENDING_PAYMENT, BookingStatus.PAYMENT_PENDING_APPROVAL] as BookingStatus[],
+    },
+  };
 
   const [bookings, total] = await Promise.all([
     prisma.booking.findMany({

@@ -168,7 +168,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       // Verificar si tiene reserva confirmada
       final hasBooking = _bookings.any((b) =>
         (b['startDate'] == dateStr || b['walkDate'] == dateStr) &&
-        (b['status'] == 'CONFIRMED' || b['status'] == 'IN_PROGRESS' || b['status'] == 'PENDING_PAYMENT')
+        (b['status'] == 'CONFIRMED' || b['status'] == 'IN_PROGRESS' || b['status'] == 'WAITING_CAREGIVER_APPROVAL')
       );
 
       if (hasBooking) {
