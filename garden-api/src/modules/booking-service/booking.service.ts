@@ -464,7 +464,7 @@ function isDayTypeAllowed(
   return schedule['weekdays'] !== false;
 }
 
-/** Hospedaje: todos los días en [start, end) deben estar disponibles (fila con isAvailable=true o defaultSchedule.hospedajeDefault). */
+/** Hospedaje: bloquea solo si hay fila explícita isAvailable=false. Sin horarios ni schedule requeridos. */
 async function assertHospedajeAvailability(
   tx: Prisma.TransactionClient,
   caregiverId: string,
@@ -489,42 +489,17 @@ async function assertHospedajeAvailability(
     dates.push(new Date(d));
   }
 
-  const profile = await tx.caregiverProfile.findUnique({
-    where: { id: caregiverId },
-    select: { defaultAvailabilitySchedule: true },
+  // Para hospedaje solo se bloquean días con fila explícita isAvailable=false.
+  // No se requieren franjas horarias configuradas ni flags de horario default.
+  // El cuidador siempre puede confirmar o rechazar la reserva.
+  const blockedRows = await tx.availability.findMany({
+    where: { caregiverId, date: { in: dates }, isAvailable: false },
   });
-  const defaultSchedule = (profile?.defaultAvailabilitySchedule as Record<string, unknown>) ?? {};
-  const hospedajeDefault = defaultSchedule['hospedajeDefault'] !== false;
-
-  const availabilityRows = await tx.availability.findMany({
-    where: { caregiverId, date: { in: dates } },
-  });
-  const availableSet = new Set<string>();
-  for (const d of dates) {
-    const dStr = d.toISOString().slice(0, 10);
-    const row = availabilityRows.find((r) => r.date.toISOString().slice(0, 10) === dStr);
-    if (row) {
-      // Explicit row: isAvailable wins; no day-type check needed
-      if (row.isAvailable) availableSet.add(dStr);
-    } else {
-      // No explicit row: check hospedajeDefault AND weekdays/weekends/holidays flags
-      if (hospedajeDefault && isDayTypeAllowed(d, defaultSchedule, false)) {
-        availableSet.add(dStr);
-      }
-    }
-  }
-  const missing = dates.filter(
-    (d) => !availableSet.has(d.toISOString().slice(0, 10))
-  );
-  if (missing.length > 0) {
-    logger.warn('Hospedaje availability conflict', {
-      caregiverId,
-      startDate,
-      endDate,
-      missingDates: missing.map((d) => d.toISOString().slice(0, 10)),
-    });
+  if (blockedRows.length > 0) {
+    const blockedDates = blockedRows.map((r) => r.date.toISOString().slice(0, 10));
+    logger.warn('Hospedaje availability conflict — blocked dates', { caregiverId, startDate, endDate, blockedDates });
     throw new AvailabilityConflictError(
-      `Fecha(s) no disponible(s) para hospedaje: ${missing.map((d) => d.toISOString().slice(0, 10)).join(', ')}. Elige otras fechas.`,
+      `El cuidador no está disponible en: ${blockedDates.join(', ')}. Elige otras fechas.`,
       'startDate'
     );
   }
@@ -1363,20 +1338,13 @@ export async function extendBooking(
     for (let d = new Date(currentEnd); d < newEndNorm; d.setDate(d.getDate() + 1)) {
       dates.push(new Date(d));
     }
-    const availabilityRows = await tx.availability.findMany({
-      where: {
-        caregiverId: booking.caregiverId,
-        date: { in: dates },
-        isAvailable: true,
-      },
+    // Para hospedaje solo se bloquean días con fila explícita isAvailable=false.
+    const blockedExtRows = await tx.availability.findMany({
+      where: { caregiverId: booking.caregiverId, date: { in: dates }, isAvailable: false },
     });
-    const availableSet = new Set(
-      availabilityRows.map((r) => r.date.toISOString().slice(0, 10))
-    );
-    const missing = dates.filter((d) => !availableSet.has(d.toISOString().slice(0, 10)));
-    if (missing.length > 0) {
+    if (blockedExtRows.length > 0) {
       throw new AvailabilityConflictError(
-        `Fechas no disponibles para extensión: ${missing.map((d) => d.toISOString().slice(0, 10)).join(', ')}`
+        `El cuidador no está disponible en: ${blockedExtRows.map((r) => r.date.toISOString().slice(0, 10)).join(', ')}`
       );
     }
 
@@ -1466,20 +1434,13 @@ export async function changeDatesBooking(
     for (let d = new Date(startNorm); d < endNorm; d.setDate(d.getDate() + 1)) {
       dates.push(new Date(d));
     }
-    const availabilityRows = await tx.availability.findMany({
-      where: {
-        caregiverId: booking.caregiverId,
-        date: { in: dates },
-        isAvailable: true,
-      },
+    // Para hospedaje solo se bloquean días con fila explícita isAvailable=false.
+    const blockedChgRows = await tx.availability.findMany({
+      where: { caregiverId: booking.caregiverId, date: { in: dates }, isAvailable: false },
     });
-    const availableSet = new Set(
-      availabilityRows.map((r) => r.date.toISOString().slice(0, 10))
-    );
-    const missing = dates.filter((d) => !availableSet.has(d.toISOString().slice(0, 10)));
-    if (missing.length > 0) {
+    if (blockedChgRows.length > 0) {
       throw new AvailabilityConflictError(
-        `Fechas no disponibles: ${missing.map((d) => d.toISOString().slice(0, 10)).join(', ')}`
+        `El cuidador no está disponible en: ${blockedChgRows.map((r) => r.date.toISOString().slice(0, 10)).join(', ')}`
       );
     }
 
