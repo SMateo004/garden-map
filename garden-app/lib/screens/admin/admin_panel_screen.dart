@@ -10,6 +10,7 @@ import 'admin_general_screen.dart';
 import 'admin_technical_screen.dart';
 import 'admin_notifications_screen.dart';
 import 'admin_vets_screen.dart';
+import '../../services/auth_state.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -57,8 +58,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   }
 
   Future<void> _loadAdminToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token') ?? '';
+    final token = AuthState.token;
     if (token.isEmpty) {
       if (mounted) context.go('/login');
       return;

@@ -7,6 +7,8 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
 import '../client/my_data_screen.dart';
 import '../client/my_ratings_screen.dart';
+import '../../services/auth_state.dart';
+import '../../services/secure_storage_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -41,7 +43,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadInitialData() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _token = prefs.getString('access_token') ?? '';
+      _token = AuthState.token;
       _role = prefs.getString('user_role') ?? '';
       _activeRole = prefs.getString('active_role') ?? '';
       _conversionInProgress = prefs.getBool('client_conversion_in_progress') ?? false;
@@ -253,12 +255,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
 
   Future<void> _logout() async {
+    // Limpia el token en memoria y en almacenamiento seguro
+    await AuthState.clear();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('access_token');
     await prefs.remove('user_role');
     await prefs.remove('user_id');
     await prefs.remove('user_name');
     await prefs.remove('user_photo');
+    await prefs.remove('active_role');
     if (mounted) context.go('/login');
   }
 
@@ -1028,10 +1032,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         targetRole: targetRole,
       );
       if (!mounted) return;
-      // Actualizar token local (los nuevos tokens ya están en prefs)
-      final prefs = await SharedPreferences.getInstance();
+      // Actualizar token local desde AuthState (ya sincronizado por AuthService)
       setState(() {
-        _token = prefs.getString('access_token') ?? _token;
+        _token = AuthState.token;
         _activeRole = effectiveRole == _role ? '' : effectiveRole;
       });
       if (!mounted) return;
@@ -1207,9 +1210,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       if (response.statusCode == 200 && data['success'] == true) {
         final result = data['data'] as Map<String, dynamic>;
+        // Actualizar tokens en almacenamiento seguro y caché en memoria
+        await AuthState.update(result['accessToken'] as String);
+        await SecureStorageService.saveRefreshToken(result['refreshToken'] as String);
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('access_token', result['accessToken'] as String);
-        await prefs.setString('refresh_token', result['refreshToken'] as String);
         await prefs.setString('user_role', 'CLIENT');
         await prefs.remove('active_role');
         await prefs.remove('client_conversion_in_progress');

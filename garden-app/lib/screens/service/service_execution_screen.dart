@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
@@ -13,6 +12,7 @@ import '../../theme/garden_theme.dart';
 import '../chat/chat_screen.dart';
 import 'gps_tracking_screen.dart';
 import 'meet_and_greet_screen.dart';
+import '../../services/auth_state.dart';
 
 class ServiceExecutionScreen extends StatefulWidget {
   final String bookingId;
@@ -92,8 +92,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
   Future<void> _loadBooking() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      _token = prefs.getString('access_token') ?? '';
+      _token = AuthState.token;
       // Fallback: usar token pasado por navegación si SharedPreferences está vacío
       if (_token.isEmpty && widget.token != null && widget.token!.isNotEmpty) {
         _token = widget.token!;

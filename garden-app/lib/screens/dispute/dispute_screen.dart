@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../services/auth_state.dart';
 
 class DisputeScreen extends StatefulWidget {
   final String bookingId;
@@ -56,8 +56,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
   }
 
   Future<void> _loadToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() => _token = prefs.getString('access_token') ?? '');
+    setState(() => _token = AuthState.token);
   }
 
   Future<void> _submitClientReport() async {

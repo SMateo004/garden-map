@@ -48,8 +48,7 @@ import 'package:posthog_flutter/posthog_flutter.dart';
 import 'theme/garden_theme.dart';
 import 'services/local_notification_service.dart';
 import 'services/fcm_service.dart';
-import 'services/auth_service.dart';
-import 'services/secure_storage_service.dart';
+import 'services/auth_state.dart'; // sessionExpiredNotifier + AuthState
 
 // ── Build-time env (set via --dart-define) ─────────────────
 const _kSentryDsn    = String.fromEnvironment('SENTRY_DSN');
@@ -112,14 +111,14 @@ const _publicPaths = {
 final GoRouter _router = GoRouter(
   initialLocation: '/',
   // Redirige al login si se intenta acceder a una ruta protegida sin sesión.
-  redirect: (context, state) async {
+  redirect: (context, state) {
     final path = state.matchedLocation;
     if (_publicPaths.any((p) => path == p || path.startsWith('$p/'))) {
       return null; // ruta pública — sin restricción
     }
-    // Leer desde almacenamiento seguro (Keychain / EncryptedSharedPreferences)
-    final token = await SecureStorageService.getAccessToken() ?? '';
-    if (token.isEmpty) return '/login';
+    // AuthState.token es sincrónico (cacheado en memoria desde el startup).
+    // Si está vacío → sesión inexistente o expirada → redirigir a login.
+    if (!AuthState.hasSession) return '/login';
     return null;
   },
   routes: [
@@ -446,6 +445,10 @@ final GoRouter _router = GoRouter(
 Future<void> _bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Cargar token en memoria PRIMERO — el GoRouter redirect y todas las
+  // pantallas usan AuthState.token de forma sincrónica desde aquí en adelante.
+  await AuthState.initialize();
+
   // Cargar preferencia de tema guardada antes de mostrar nada
   await themeNotifier.init();
 
@@ -532,6 +535,9 @@ class _GardenAppState extends State<GardenApp> {
   void _onSessionExpired() {
     if (!sessionExpiredNotifier.value) return;
     sessionExpiredNotifier.value = false; // reset para no re-disparar
+    // Limpiar token en memoria para que el redirect del router también bloquee
+    // cualquier navegación hacia rutas protegidas.
+    AuthState.clear();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _router.go('/login');

@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../services/auth_state.dart';
 
 class AdminIdentityReviewScreen extends StatefulWidget {
   final String sessionId;
@@ -29,8 +29,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
   }
 
   Future<void> _init() async {
-    final prefs = await SharedPreferences.getInstance();
-    _adminToken = prefs.getString('access_token') ?? '';
+    _adminToken = AuthState.token;
     await _loadSession();
   }
 

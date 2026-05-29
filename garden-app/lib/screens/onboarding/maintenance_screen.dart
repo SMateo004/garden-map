@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/auth_state.dart';
 
 class MaintenanceScreen extends StatefulWidget {
   const MaintenanceScreen({super.key});
@@ -67,7 +68,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen>
         _checkTimer?.cancel();
         final prefs = await SharedPreferences.getInstance();
         final role = prefs.getString('user_role') ?? '';
-        final token = prefs.getString('access_token') ?? '';
+        final token = AuthState.token;
         if (!mounted) return;
         if (token.isEmpty) {
           context.go('/login');

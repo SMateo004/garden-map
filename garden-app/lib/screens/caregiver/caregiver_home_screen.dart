@@ -13,6 +13,8 @@ import '../chat/chat_screen.dart';
 import '../service/service_execution_screen.dart';
 import '../../widgets/pet_profile_sheet.dart';
 import '../../widgets/price_suggestion_banner.dart';
+import '../../services/auth_state.dart';
+import '../../services/secure_storage_service.dart';
 
 
 class CaregiverHomeScreen extends StatefulWidget {
@@ -61,7 +63,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   Future<void> _initData() async {
     setState(() => _isLoading = true);
     final prefs = await SharedPreferences.getInstance();
-    _caregiverToken = prefs.getString('access_token') ?? '';
+    _caregiverToken = AuthState.token;
     if (_caregiverToken.isEmpty) {
       if (mounted) context.go('/login');
       return;
@@ -2826,7 +2828,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     setState(() => _isAbandoningConversion = true);
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('access_token') ?? '';
+      final token = AuthState.token;
       final response = await http.post(
         Uri.parse('$_baseUrl/auth/abandon-caregiver-profile'),
         headers: {
@@ -2838,8 +2840,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       if (response.statusCode == 200 && data['success'] == true) {
         final result = data['data'] as Map<String, dynamic>;
-        await prefs.setString('access_token', result['accessToken'] as String);
-        await prefs.setString('refresh_token', result['refreshToken'] as String);
+        await AuthState.update(result['accessToken'] as String);
+        await SecureStorageService.saveRefreshToken(result['refreshToken'] as String);
         await prefs.setString('user_role', 'CLIENT');
         await prefs.remove('active_role');
         await prefs.remove('client_conversion_in_progress');
@@ -3020,9 +3022,12 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 ],
                 TextButton(
                   onPressed: () async {
+                    await AuthState.clear();
                     final prefs = await SharedPreferences.getInstance();
-                    await prefs.remove('access_token');
                     await prefs.remove('user_name');
+                    await prefs.remove('user_role');
+                    await prefs.remove('active_role');
+                    await prefs.remove('user_id');
                     if (mounted) context.go('/login');
                   },
                   child: Text(

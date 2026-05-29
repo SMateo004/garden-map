@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../utils/garden_banks.dart';
+import '../../services/auth_state.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -28,7 +29,7 @@ class _WalletScreenState extends State<WalletScreen> {
 
   Future<void> _initWallet() async {
     final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('access_token') ?? '';
+    _token = AuthState.token;
     _role = prefs.getString('user_role') ?? '';
     if (_token.isNotEmpty) {
       await _loadWallet();

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../services/auth_state.dart';
 
 class AccountDataScreen extends StatefulWidget {
   const AccountDataScreen({super.key});
@@ -33,7 +34,7 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
 
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('access_token') ?? '';
+    _token = AuthState.token;
     _role = prefs.getString('user_role') ?? '';
 
     try {

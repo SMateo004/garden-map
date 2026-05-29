@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../chat/chat_screen.dart';
+import '../../services/auth_state.dart';
 
 class MeetAndGreetScreen extends StatefulWidget {
   final String bookingId;
@@ -55,7 +56,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('access_token') ?? '';
+    _token = AuthState.token;
     _userId = prefs.getString('user_id') ?? '';
     await _loadMg();
     if (mounted) setState(() => _loading = false);

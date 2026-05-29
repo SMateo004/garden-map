@@ -4,9 +4,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../legal/legal_screen.dart';
+import '../../services/auth_state.dart';
 
 class CaregiverProfileDataScreen extends StatefulWidget {
   /// When true, the screen hides its own AppBar/Scaffold and calls
@@ -220,8 +220,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    final prefs = await SharedPreferences.getInstance();
-    _caregiverToken = prefs.getString('access_token') ?? '';
+    _caregiverToken = AuthState.token;
 
     try {
       final response = await http.get(
@@ -244,8 +243,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   /// Called in the background when [initialProfile] was provided.
   Future<void> _refreshFromApi() async {
     if (!mounted) return;
-    final prefs = await SharedPreferences.getInstance();
-    _caregiverToken = prefs.getString('access_token') ?? '';
+    _caregiverToken = AuthState.token;
     try {
       final response = await http.get(
         Uri.parse('$_baseUrl/caregiver/my-profile'),

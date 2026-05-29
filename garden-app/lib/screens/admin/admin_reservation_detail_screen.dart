@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../services/auth_state.dart';
 
 class AdminReservationDetailScreen extends StatefulWidget {
   final String bookingId;
@@ -38,8 +38,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
   }
 
   Future<void> _init() async {
-    final prefs = await SharedPreferences.getInstance();
-    _adminToken = prefs.getString('access_token') ?? '';
+    _adminToken = AuthState.token;
     await _load();
   }
 

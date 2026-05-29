@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../services/auth_state.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
   final VoidCallback? onComplete;
@@ -82,8 +82,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   String get _code => _controllers.map((c) => c.text).join();
 
   Future<void> _loadUserAndSendCode() async {
-    final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('access_token') ?? '';
+    _token = AuthState.token;
 
     // Fetch user email from /auth/me
     try {

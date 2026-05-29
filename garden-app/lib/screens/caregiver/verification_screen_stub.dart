@@ -5,8 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../services/auth_state.dart';
 
 class VerificationScreen extends StatefulWidget {
   final VoidCallback? onComplete;
@@ -67,8 +67,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
   }
 
   Future<void> _loadToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    String token = prefs.getString('access_token') ?? '';
+    String token = AuthState.token;
     if (token.isEmpty) {
       token = const String.fromEnvironment('TEST_JWT', defaultValue: '');
     }
@@ -217,8 +216,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
   Future<bool> _checkBlockchainBadge() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('access_token') ?? _caregiverToken;
+      final token = AuthState.token;
       final response = await http.get(
         Uri.parse('$_baseUrl/caregiver/my-profile'),
         headers: {'Authorization': 'Bearer $token'},

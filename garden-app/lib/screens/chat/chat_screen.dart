@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/chat_service.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
+import '../../services/auth_state.dart';
 
 class ChatScreen extends StatefulWidget {
   final String bookingId;
@@ -51,7 +52,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _initChat() async {
     final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('access_token') ?? '';
+    _token = AuthState.token;
     _currentUserId = prefs.getString('user_id') ?? '';
 
     // Fallback: usar token pasado por el caller si SharedPreferences está vacío

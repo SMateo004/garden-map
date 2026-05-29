@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_logo_loader.dart';
 import '../../widgets/notification_bell.dart';
+import '../../services/auth_state.dart';
 
 // ── App store links (actualizar cuando estén disponibles) ────────────────────
 const _kAppStoreUrl  = 'https://apps.apple.com/app/garden-cuidadores/id000000000';
@@ -374,7 +375,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   Future<void> _loadToken() async {
     final prefs = await SharedPreferences.getInstance();
-    String token = prefs.getString('access_token') ?? '';
+    String token = AuthState.token;
     if (token.isEmpty) token = const String.fromEnvironment('TEST_JWT', defaultValue: '');
     if (mounted) {
       setState(() {

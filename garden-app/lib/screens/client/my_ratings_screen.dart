@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../services/auth_state.dart';
 
 class MyRatingsScreen extends StatefulWidget {
   const MyRatingsScreen({super.key});
@@ -32,8 +32,7 @@ class _MyRatingsScreenState extends State<MyRatingsScreen> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('access_token') ?? '';
+    _token = AuthState.token;
     try {
       final res = await http.get(
         Uri.parse('$_baseUrl/client/my-reviews'),

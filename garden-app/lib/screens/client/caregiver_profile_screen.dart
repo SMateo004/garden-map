@@ -7,7 +7,7 @@ import '../../theme/garden_theme.dart';
 import '../../widgets/temporada_alta_badge.dart';
 import '../../services/agentes_service.dart';
 import '../../widgets/garden_logo_loader.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/auth_state.dart';
 
 class CaregiverProfileScreen extends StatefulWidget {
   final String caregiverId;
@@ -47,8 +47,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   }
 
   Future<void> _loadAll() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token') ?? '';
+    final token = AuthState.token;
     if (mounted) setState(() => _authToken = token);
     await Future.wait([
       _fetchCaregiver(),

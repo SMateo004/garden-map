@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../services/auth_state.dart';
 
 class BookingScreen extends StatefulWidget {
   final String caregiverId;
@@ -123,8 +124,7 @@ class _BookingScreenState extends State<BookingScreen> {
     }
 
     // Fallback: fetch everything
-    final prefs = await SharedPreferences.getInstance();
-    _clientToken = prefs.getString('access_token') ?? '';
+    _clientToken = AuthState.token;
     if (_clientToken.isEmpty) {
       if (mounted) context.go('/login');
       return;

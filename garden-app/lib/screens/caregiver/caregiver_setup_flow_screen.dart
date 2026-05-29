@@ -7,6 +7,7 @@ import '../../theme/garden_theme.dart';
 import 'caregiver_profile_data_screen.dart';
 import 'verification_screen.dart';
 import 'email_verification_screen.dart';
+import '../../services/auth_state.dart';
 
 /// Post-registration guided setup flow for caregivers.
 ///
@@ -57,8 +58,7 @@ class _CaregiverSetupFlowScreenState extends State<CaregiverSetupFlowScreen> {
   }
 
   Future<void> _init() async {
-    final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('access_token') ?? '';
+    _token = AuthState.token;
     await _loadProfileAndDetermineStep();
   }
 

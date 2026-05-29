@@ -8,6 +8,7 @@ import '../../theme/garden_theme.dart';
 import '../../widgets/notification_bell.dart';
 import '../service/meet_and_greet_screen.dart';
 import '../chat/chat_screen.dart';
+import '../../services/auth_state.dart';
 
 class MyBookingsScreen extends StatefulWidget {
   const MyBookingsScreen({super.key});
@@ -40,7 +41,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   Future<void> _initData() async {
     final prefs = await SharedPreferences.getInstance();
     _prefs = prefs;
-    String token = prefs.getString('access_token') ?? '';
+    String token = AuthState.token;
     debugPrint('MY_BOOKINGS: Loaded access_token: ${token.length > 20 ? token.substring(0, 20) : token}...');
     if (token.isEmpty) {
       token = const String.fromEnvironment('TEST_JWT', defaultValue: '');

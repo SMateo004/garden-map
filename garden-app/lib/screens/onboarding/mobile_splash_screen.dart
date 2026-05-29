@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/auth_state.dart';
 
 const _kSplashVersion = 'v3.0-logo-imagen';
 
@@ -95,7 +96,7 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
   }
 
   Future<void> _goToHome(SharedPreferences prefs) async {
-    final token = prefs.getString('access_token') ?? '';
+    final token = AuthState.token;
     final permanentRole = prefs.getString('user_role') ?? '';
     final activeRole = prefs.getString('active_role') ?? '';
     final role = activeRole.isNotEmpty ? activeRole : permanentRole;
@@ -124,6 +125,12 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
         headers: {'Authorization': 'Bearer $token'},
       ).timeout(const Duration(seconds: 6));
       debugPrint('[SPLASH] bookings status=${response.statusCode}');
+      // Si el token expiró, redirigir al login inmediatamente
+      if (response.statusCode == 401) {
+        AuthState.handleUnauthorized();
+        if (mounted) context.go('/login');
+        return;
+      }
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {

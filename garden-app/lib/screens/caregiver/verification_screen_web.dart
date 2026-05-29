@@ -6,8 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../services/auth_state.dart';
 
 /// Implementación WEB de la pantalla de verificación de identidad.
 /// Muestra un QR que el cuidador escanea con su teléfono.
@@ -64,8 +64,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
   }
 
   Future<void> _loadToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    String token = prefs.getString('access_token') ?? '';
+    String token = AuthState.token;
     if (token.isEmpty) token = const String.fromEnvironment('TEST_JWT', defaultValue: '');
     setState(() => _caregiverToken = token);
     debugPrint('[VerifyWeb] caregiverToken cargado: ${token.length > 20 ? token.substring(0, 20) : token}...');

@@ -13,6 +13,7 @@ import '../../services/auth_service.dart';
 import 'caregiver_profile_data_screen.dart';
 import 'verification_screen.dart';
 import 'email_verification_screen.dart';
+import '../../services/auth_state.dart';
 
 class OnboardingWizardScreen extends StatefulWidget {
   final String initialEmail;
@@ -124,8 +125,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   }
 
   Future<void> _loadToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    String token = prefs.getString('access_token') ?? '';
+    String token = AuthState.token;
 
     if (token.isEmpty) {
       token = const String.fromEnvironment('TEST_JWT', defaultValue: '');

@@ -6,6 +6,7 @@ import '../../widgets/notification_bell.dart';
 import 'marketplace_screen.dart';
 import 'my_bookings_screen.dart';
 import 'my_pets_screen.dart';
+import '../../services/auth_state.dart';
 
 /// Shell de navegación para el cliente en WEB.
 /// Muestra las pestañas en el header (AppBar) en lugar de la barra inferior.
@@ -52,7 +53,7 @@ class _WebShellScreenState extends State<WebShellScreen> {
 
   Future<void> _loadAuth() async {
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token') ?? '';
+    final token = AuthState.token;
     if (mounted) {
       setState(() {
         _authToken = token;

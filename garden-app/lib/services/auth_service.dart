@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'secure_storage_service.dart';
+import 'auth_state.dart'; // sessionExpiredNotifier + AuthState cache
 
-/// Se emite cuando el servidor devuelve 401 y el refresh token también es inválido.
-/// La app escucha esto para redirigir al login de forma global.
-final sessionExpiredNotifier = ValueNotifier<bool>(false);
+// sessionExpiredNotifier is defined in auth_state.dart and re-exported for
+// backward compatibility with any code that imports it from here.
+export 'auth_state.dart' show sessionExpiredNotifier;
 
 class AuthService {
   final String baseUrl = const String.fromEnvironment(
@@ -28,11 +28,16 @@ class AuthService {
   // Tokens are stored in iOS Keychain / Android EncryptedSharedPreferences so
   // they cannot be extracted from a non-rooted device.
 
-  Future<void> saveToken(String token) =>
-      SecureStorageService.saveAccessToken(token);
+  Future<void> saveToken(String token) async {
+    await SecureStorageService.saveAccessToken(token);
+    await AuthState.update(token); // keep in-memory cache in sync
+  }
 
-  Future<String?> getToken() =>
-      SecureStorageService.getAccessToken();
+  Future<String?> getToken() async {
+    // Prefer in-memory cache (synchronous); fall back to SecureStorage
+    if (AuthState.hasSession) return AuthState.token;
+    return SecureStorageService.getAccessToken();
+  }
 
   Future<void> saveRefreshToken(String token) =>
       SecureStorageService.saveRefreshToken(token);
@@ -57,6 +62,8 @@ class AuthService {
   }
 
   Future<void> clearToken() async {
+    // Clear in-memory token cache immediately
+    await AuthState.clear();
     // Clear sensitive tokens from secure storage
     await SecureStorageService.clearAll();
     // Clear non-sensitive user data from SharedPreferences
@@ -107,9 +114,12 @@ class AuthService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         if (data['success'] == true) {
           final tokens = data['data'] as Map<String, dynamic>;
-          await SecureStorageService.saveAccessToken(tokens['accessToken'] as String);
+          final newAccess = tokens['accessToken'] as String;
+          await SecureStorageService.saveAccessToken(newAccess);
           await SecureStorageService.saveRefreshToken(tokens['refreshToken'] as String);
-          return tokens['accessToken'] as String;
+          // Keep AuthState in-memory cache in sync
+          await AuthState.update(newAccess);
+          return newAccess;
         }
       }
     } catch (_) {}
