@@ -26,12 +26,11 @@ export const hospedajeSchema = z
     (data) => {
       const start = new Date(data.startDate);
       const end = new Date(data.endDate);
-      const diffMs = end.getTime() - start.getTime();
-      // Minimum 2 full days (48h) between check-in and check-out
-      return diffMs >= 2 * 24 * 60 * 60 * 1000;
+      // Minimum 1 night: endDate must be after startDate
+      return end > start;
     },
     {
-      message: 'La fecha de salida debe ser al menos 2 días después del check-in (mínimo 48 horas)',
+      message: 'La fecha de salida debe ser posterior al check-in',
       path: ['endDate'],
     }
   );
@@ -172,7 +171,7 @@ export const extendBookingBodySchema = z.object({
   newEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'newEndDate formato YYYY-MM-DD'),
 });
 
-/** POST /api/bookings/:id/change-dates — nuevas fechas (hospedaje). Mín 48h. */
+/** POST /api/bookings/:id/change-dates — nuevas fechas (hospedaje). Mín 1 noche. */
 export const changeDatesBookingBodySchema = z
   .object({
     newStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'newStartDate formato YYYY-MM-DD'),
