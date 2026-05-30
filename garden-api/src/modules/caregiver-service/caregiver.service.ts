@@ -915,7 +915,8 @@ export async function getCaregiverAvailability(
         walkDate: true,
         startTime: true,
         duration: true,
-        status: true
+        status: true,
+        petCount: true,
       }
     });
 
@@ -923,20 +924,23 @@ export async function getCaregiverAvailability(
     // maxPets=1 → block after 1 booking (original behaviour)
     // maxPets=2 → allow up to 2 simultaneous hospedaje bookings per day, etc.
     const caregiverMaxPets = (profile as any)?.maxPets ?? 1;
-    const hospedajeDateBookingCount = new Map<string, number>();
+    // Count occupied pet slots per date (sum petCount, not booking count)
+    const hospedajeDatePetCount = new Map<string, number>();
     activeBookings.forEach(b => {
       if (b.serviceType === 'HOSPEDAJE' && b.startDate && b.endDate) {
+        const bPetCount = (b as any).petCount ?? 1;
         let d = new Date(b.startDate);
         while (d < b.endDate) {
           const ds = d.toISOString().slice(0, 10);
-          hospedajeDateBookingCount.set(ds, (hospedajeDateBookingCount.get(ds) ?? 0) + 1);
+          hospedajeDatePetCount.set(ds, (hospedajeDatePetCount.get(ds) ?? 0) + bPetCount);
           d.setDate(d.getDate() + 1);
         }
       }
     });
 
+    // A date is available if at least 1 pet slot is free (remaining = maxPets - occupied > 0)
     const finalHospedajeDates = hospedajeDates.filter(
-      d => (hospedajeDateBookingCount.get(d) ?? 0) < caregiverMaxPets
+      d => (hospedajeDatePetCount.get(d) ?? 0) < caregiverMaxPets
     );
 
     // 7. Prepare bookedPaseos for frontend validation/UI
@@ -947,6 +951,7 @@ export async function getCaregiverAvailability(
         startTime: b.startTime || '00:00',
         duration: b.duration || 0,
         status: b.status,
+        petCount: (b as any).petCount ?? 1,
       }));
 
     logger.info('Availability processed with active bookings', {

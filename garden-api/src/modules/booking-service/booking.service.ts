@@ -143,21 +143,36 @@ export async function createBooking(
       );
     }
 
-    const pet = await tx.pet.findFirst({
+    // Validate petIds — all must belong to the requesting client
+    const petIdsInput: string[] = (body as any).petIds ?? [(body as any).petId].filter(Boolean);
+    if (!petIdsInput || petIdsInput.length === 0) {
+      throw new BadRequestError('Debes seleccionar al menos una mascota.', 'PET_NOT_OWNED', 'petIds');
+    }
+    if (petIdsInput.length > 3) {
+      throw new BadRequestError('Máximo 3 mascotas por reserva.', 'MAX_PETS_EXCEEDED', 'petIds');
+    }
+    // Remove duplicates just in case
+    const uniquePetIds = [...new Set(petIdsInput)];
+
+    const petsData = await tx.pet.findMany({
       where: {
-        id: body.petId,
+        id: { in: uniquePetIds },
         clientProfile: { userId: clientId },
       },
       select: { id: true, name: true, breed: true, age: true, size: true, specialNeeds: true },
     });
 
-    if (!pet) {
+    if (petsData.length !== uniquePetIds.length) {
       throw new BadRequestError(
-        'Mascota no encontrada o no te pertenece. Elige una mascota de tu perfil.',
+        'Una o más mascotas no fueron encontradas o no te pertenecen. Elige mascotas de tu perfil.',
         'PET_NOT_OWNED',
-        'petId'
+        'petIds'
       );
     }
+
+    // Keep pets in the order the client sent (so petIndex matches the discount order)
+    const orderedPets = uniquePetIds.map(id => petsData.find(p => p.id === id)!);
+    const pet = orderedPets[0]; // primary pet (backward compat)
 
     const caregiver = await tx.caregiverProfile.findFirst({
       where: {
@@ -173,6 +188,7 @@ export async function createBooking(
         pricePerWalk60: true,
         pricePerGuarderia: true,
         servicesOffered: true,
+        maxPets: true,
       },
     });
 
@@ -181,6 +197,16 @@ export async function createBooking(
         'Cuidador no encontrado o no disponible para reservas',
         'CAREGIVER_NOT_FOUND',
         'caregiverId'
+      );
+    }
+
+    // Validate pet count against caregiver's maxPets capacity
+    const caregiverMaxPets = caregiver.maxPets ?? 1;
+    if (uniquePetIds.length > caregiverMaxPets) {
+      throw new BadRequestError(
+        `Este cuidador acepta como máximo ${caregiverMaxPets} mascota${caregiverMaxPets > 1 ? 's' : ''} simultánea${caregiverMaxPets > 1 ? 's' : ''}. Has seleccionado ${uniquePetIds.length}.`,
+        'MAX_PETS_EXCEEDED',
+        'petIds'
       );
     }
 
@@ -232,7 +258,7 @@ export async function createBooking(
     }
 
     if (body.serviceType === ServiceType.HOSPEDAJE) {
-      await assertHospedajeAvailability(tx, body.caregiverId, body.startDate, body.endDate);
+      await assertHospedajeAvailability(tx, body.caregiverId, body.startDate, body.endDate, petCount);
     } else if (body.serviceType === ServiceType.GUARDERIA) {
       await assertPaseoAvailability(
         tx,
@@ -240,7 +266,8 @@ export async function createBooking(
         (body as any).walkDate,
         (body as any).timeSlot,
         (body as any).startTime,
-        (body as any).duration
+        (body as any).duration,
+        petCount
       );
     } else {
       const walkDays = (body as any).walkDays as Array<{ date: string; timeSlot: string; startTime?: string }> | undefined;
@@ -253,7 +280,8 @@ export async function createBooking(
             day.date,
             day.timeSlot as any,
             day.startTime,
-            (body as any).duration
+            (body as any).duration,
+            petCount
           );
         }
       } else {
@@ -263,7 +291,8 @@ export async function createBooking(
           (body as any).walkDate,
           (body as any).timeSlot,
           (body as any).startTime,
-          (body as any).duration
+          (body as any).duration,
+          petCount
         );
       }
     }
@@ -271,6 +300,13 @@ export async function createBooking(
     let pricePerUnit: number;
     let totalDays: number | null = null;
     let totalAmount: number;
+
+    // Multi-pet discount multipliers (applied to base price per additional pet of the SAME owner):
+    // Pet 1: 100%, Pet 2: 75%, Pet 3: 50%
+    const petDiscountFactors = [1.0, 0.75, 0.50];
+    const petCount = orderedPets.length;
+    // Total multiplier = sum of discount factors for each pet slot used
+    const petMultiplier = petDiscountFactors.slice(0, petCount).reduce((a, b) => a + b, 0);
 
     if (body.serviceType === ServiceType.HOSPEDAJE) {
       const perDay = caregiver.pricePerDay ?? 0;
@@ -292,7 +328,7 @@ export async function createBooking(
         throw new BookingValidationError('Las fechas no son válidas', 'BOOKING_VALIDATION', 'endDate');
       }
       totalDays = computedDays;
-      totalAmount = totalDays * pricePerUnit;
+      totalAmount = Math.round(totalDays * pricePerUnit * petMultiplier);
     } else if (body.serviceType === ServiceType.GUARDERIA) {
       const duration = (body as any).duration as number;
       const p60 = caregiver.pricePerWalk60 ?? 0;
@@ -300,9 +336,9 @@ export async function createBooking(
       if (priceGuarderia <= 0) {
         throw new BookingValidationError('El cuidador no tiene precio de guardería configurado', 'BOOKING_VALIDATION', 'caregiverId');
       }
-      // Precio por hora de guardería × horas solicitadas
+      // Precio por hora de guardería × horas solicitadas × descuento multi-mascota
       pricePerUnit = Math.round(priceGuarderia * (duration / 60));
-      totalAmount = pricePerUnit;
+      totalAmount = Math.round(pricePerUnit * petMultiplier);
     } else {
       const duration = (body as any).duration;
       const p60 = caregiver.pricePerWalk60 ?? 0;
@@ -314,9 +350,9 @@ export async function createBooking(
 
       // 30 min = mitad del precio de 60 min (sin campo separado en BD)
       pricePerUnit = duration === 30 ? Math.round(p60 / 2) : p60;
-      // Multi-day: multiply by number of days
+      // Multi-day: multiply by number of days; Multi-pet: apply discount multiplier
       const numDays = walkDays && walkDays.length > 0 ? walkDays.length : 1;
-      totalAmount = pricePerUnit * numDays;
+      totalAmount = Math.round(pricePerUnit * numDays * petMultiplier);
     }
 
     const subtotal = totalAmount;
@@ -325,16 +361,19 @@ export async function createBooking(
     // Client sees the unit price with markup
     pricePerUnit = Math.round(pricePerUnit * (1 + cfg.COMMISSION_RATE));
 
+    const allPetNames = orderedPets.map(p => p.name).join(', ');
+
     const bookingData: Prisma.BookingCreateInput = {
       client: { connect: { id: clientId } },
       caregiver: { connect: { id: body.caregiverId } },
-      pet: { connect: { id: pet.id } },
+      pet: pet.id ? { connect: { id: pet.id } } : undefined,
       serviceType: body.serviceType as ServiceType,
       status: mgData ? BookingStatus.PENDING_MG : BookingStatus.PENDING_PAYMENT,
       totalAmount: new Prisma.Decimal(totalAmount),
       pricePerUnit: new Prisma.Decimal(pricePerUnit),
       commissionAmount: new Prisma.Decimal(commissionAmount),
-      petName: pet.name,
+      petCount,
+      petName: allPetNames, // comma-separated for display in notifications/lists
       petBreed: pet.breed ?? null,
       petAge: pet.age ?? null,
       petSize: pet.size ?? undefined,
@@ -371,6 +410,20 @@ export async function createBooking(
 
     const booking = await tx.booking.create({
       data: bookingData,
+    });
+
+    // Create one BookingPet row per pet
+    await tx.bookingPet.createMany({
+      data: orderedPets.map((p, idx) => ({
+        bookingId: booking.id,
+        petId: p.id,
+        petIndex: idx + 1,
+        petName: p.name,
+        petBreed: p.breed ?? null,
+        petAge: p.age ?? null,
+        petSize: p.size ?? null,
+        specialNeeds: p.specialNeeds ?? null,
+      })),
     });
 
     // If M&G data provided: create MeetAndGreet record and notify caregiver immediately
@@ -464,12 +517,13 @@ function isDayTypeAllowed(
   return schedule['weekdays'] !== false;
 }
 
-/** Hospedaje: bloquea solo si hay fila explícita isAvailable=false o si se supera maxPets simultáneas. */
+/** Hospedaje: bloquea solo si hay fila explícita isAvailable=false o si se supera maxPets simultáneas (por total de mascotas). */
 async function assertHospedajeAvailability(
   tx: Prisma.TransactionClient,
   caregiverId: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  newPetCount = 1
 ): Promise<void> {
   const start = new Date(startDate);
   const end = new Date(endDate);
@@ -533,32 +587,31 @@ async function assertHospedajeAvailability(
       startDate: { lte: end },
       endDate: { gt: start },
     },
-    select: { startDate: true, endDate: true },
+    select: { startDate: true, endDate: true, petCount: true },
   });
 
-  if (overlappingBookings.length >= maxPets) {
-    // Check if any single day within the requested range is at full capacity
-    const dateCounts = new Map<string, number>();
-    for (const b of overlappingBookings) {
-      let d = new Date(b.startDate!);
-      while (d < b.endDate!) {
-        const ds = d.toISOString().slice(0, 10);
-        dateCounts.set(ds, (dateCounts.get(ds) ?? 0) + 1);
-        d.setDate(d.getDate() + 1);
-      }
+  // Count total pets (not bookings) per day — block when pets + newPetCount > maxPets
+  const datePetCounts = new Map<string, number>();
+  for (const b of overlappingBookings) {
+    let d = new Date(b.startDate!);
+    const bPetCount = b.petCount ?? 1;
+    while (d < b.endDate!) {
+      const ds = d.toISOString().slice(0, 10);
+      datePetCounts.set(ds, (datePetCounts.get(ds) ?? 0) + bPetCount);
+      d.setDate(d.getDate() + 1);
     }
-    // Check each requested day
-    let cur = new Date(start);
-    while (cur < end) {
-      const ds = cur.toISOString().slice(0, 10);
-      if ((dateCounts.get(ds) ?? 0) >= maxPets) {
-        throw new AvailabilityConflictError(
-          `El cuidador ya tiene el máximo de ${maxPets} mascota${maxPets > 1 ? 's' : ''} hospedada${maxPets > 1 ? 's' : ''} el ${ds}. Elige otras fechas.`,
-          'startDate'
-        );
-      }
-      cur.setDate(cur.getDate() + 1);
+  }
+  let cur = new Date(start);
+  while (cur < end) {
+    const ds = cur.toISOString().slice(0, 10);
+    const occupiedPets = datePetCounts.get(ds) ?? 0;
+    if (occupiedPets + newPetCount > maxPets) {
+      throw new AvailabilityConflictError(
+        `El cuidador ya tiene ${occupiedPets} mascota${occupiedPets !== 1 ? 's' : ''} hospedada${occupiedPets !== 1 ? 's' : ''} el ${ds} (máx. ${maxPets}). Elige otras fechas.`,
+        'startDate'
+      );
     }
+    cur.setDate(cur.getDate() + 1);
   }
 }
 
@@ -569,7 +622,8 @@ async function assertPaseoAvailability(
   walkDate: string,
   timeSlot: TimeSlot,
   startTime?: string | null,
-  duration?: number | null
+  duration?: number | null,
+  newPetCount = 1
 ): Promise<void> {
   const date = new Date(walkDate);
 
@@ -645,30 +699,33 @@ async function assertPaseoAvailability(
         }
       ]
     },
-    select: { startTime: true, duration: true, timeSlot: true },
+    select: { startTime: true, duration: true, timeSlot: true, petCount: true },
   });
 
   // Un bloque 'legacy' es aquel que no tiene hora de inicio (bloquea todo el slot)
   const legacyBookings = existingBookings.filter(b => (!b.startTime || b.startTime === '') && b.timeSlot === timeSlot);
   const timedBookings = existingBookings.filter(b => !!b.startTime && b.startTime !== '');
 
-  const isSpecific = !!startTime && startTime !== '';
-  logger.info('Check-Paseo-Avail', { walkDate, timeSlot, startTime, isSpecific, foundCount: existingBookings.length });
+  // Helper: total pets in a list of bookings
+  const sumPets = (bArr: typeof existingBookings) => bArr.reduce((s, b) => s + (b.petCount ?? 1), 0);
 
-  // 1. Si las reservas legacy en este bloque ya llenaron la capacidad, bloquear.
-  // Con maxPets>1, se permiten hasta maxPets reservas legacy en el mismo bloque.
-  if (legacyBookings.length >= maxPets) {
+  const isSpecific = !!startTime && startTime !== '';
+  logger.info('Check-Paseo-Avail', { walkDate, timeSlot, startTime, isSpecific, foundCount: existingBookings.length, newPetCount });
+
+  // 1. Si las reservas legacy en este bloque ya llenaron la capacidad (por mascotas), bloquear.
+  const legacyPets = sumPets(legacyBookings);
+  if (legacyPets + newPetCount > maxPets) {
     throw new AvailabilityConflictError(
-      `El bloque ${timeSlot} ya tiene ${legacyBookings.length} reserva${legacyBookings.length > 1 ? 's' : ''} que ocupa${legacyBookings.length > 1 ? 'n' : ''} todo el horario (máx. ${maxPets}).`,
+      `El bloque ${timeSlot} ya tiene ${legacyPets} mascota${legacyPets !== 1 ? 's' : ''} que ocupa${legacyPets !== 1 ? 'n' : ''} todo el horario (máx. ${maxPets}).`,
       'timeSlot'
     );
   }
 
   // 2. Si la NUEVA reserva no tiene hora y ya se llenó la capacidad del bloque, bloqueamos
-  const slotBookingsCount = existingBookings.filter(b => b.timeSlot === timeSlot).length;
-  if (!isSpecific && slotBookingsCount >= maxPets) {
+  const slotPets = sumPets(existingBookings.filter(b => b.timeSlot === timeSlot));
+  if (!isSpecific && slotPets + newPetCount > maxPets) {
     throw new AvailabilityConflictError(
-      `El bloque ${timeSlot} ya tiene ${slotBookingsCount} reserva${slotBookingsCount > 1 ? 's' : ''} (máx. ${maxPets}). Por favor, selecciona una hora específica para buscar disponibilidad.`,
+      `El bloque ${timeSlot} ya tiene ${slotPets} mascota${slotPets !== 1 ? 's' : ''} (máx. ${maxPets}). Por favor, selecciona una hora específica para buscar disponibilidad.`,
       'timeSlot'
     );
   }
@@ -708,9 +765,9 @@ async function assertPaseoAvailability(
       }
     }
 
-    // Contar cuántas reservas existentes se solapan en tiempo con la nueva.
-    // Solo bloquear cuando ese conteo llega a maxPets.
-    let overlapCount = 0;
+    // Sumar mascotas de reservas que se solapan en tiempo con la nueva.
+    // Solo bloquear cuando totalPets + newPetCount > maxPets.
+    let overlapPets = 0;
     let overlapExample: { startTime: string; endFormatted: string } | null = null;
     for (const b of timedBookings) {
       const bStart = timeToMins(b.startTime as string);
@@ -718,7 +775,7 @@ async function assertPaseoAvailability(
       const bEndWithBuffer = bStart + bDuration + 30;
 
       if (rangesOverlap(requestedStart, requestedEndWithBuffer, bStart, bEndWithBuffer)) {
-        overlapCount++;
+        overlapPets += b.petCount ?? 1;
         if (!overlapExample) {
           overlapExample = {
             startTime: b.startTime as string,
@@ -727,10 +784,10 @@ async function assertPaseoAvailability(
         }
       }
     }
-    if (overlapCount >= maxPets) {
-      logger.warn('Overlap capacity exceeded in PASEO booking', { requestedStart, overlapCount, maxPets });
+    if (overlapPets + newPetCount > maxPets) {
+      logger.warn('Overlap capacity exceeded in PASEO booking', { requestedStart, overlapPets, newPetCount, maxPets });
       throw new AvailabilityConflictError(
-        `Conflicto: El horario solicitado (${startTime}) se solapa con ${overlapCount} reserva${overlapCount > 1 ? 's' : ''} existente${overlapCount > 1 ? 's' : ''} (máx. ${maxPets} simultánea${maxPets > 1 ? 's' : ''}).`,
+        `Conflicto: El horario solicitado (${startTime}) se solapa con ${overlapPets} mascota${overlapPets !== 1 ? 's' : ''} existente${overlapPets !== 1 ? 's' : ''} (máx. ${maxPets} simultánea${maxPets > 1 ? 's' : ''}).`,
         'startTime'
       );
     }

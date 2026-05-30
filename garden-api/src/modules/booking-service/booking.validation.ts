@@ -15,7 +15,7 @@ export const hospedajeSchema = z
   .object({
     serviceType: z.literal('HOSPEDAJE'),
     caregiverId: z.string().uuid('caregiverId inválido'),
-    petId: z.string().uuid('petId inválido'),
+    petIds: z.array(z.string().uuid('petId inválido')).min(1, 'Debes seleccionar al menos una mascota').max(3, 'Máximo 3 mascotas por reserva'),
     startDate: z.string().regex(dateOnlyRegex, 'startDate: formato YYYY-MM-DD'),
     endDate: z.string().regex(dateOnlyRegex, 'endDate: formato YYYY-MM-DD'),
     // totalDays is accepted from the client for UX purposes but ALWAYS recomputed
@@ -55,7 +55,7 @@ export const paseoSchema = z
   .object({
     serviceType: z.literal('PASEO'),
     caregiverId: z.string().uuid('caregiverId inválido'),
-    petId: z.string().uuid('petId inválido'),
+    petIds: z.array(z.string().uuid('petId inválido')).min(1, 'Debes seleccionar al menos una mascota').max(3, 'Máximo 3 mascotas por reserva'),
     // Single-day fields (opcionales cuando se usa walkDays)
     walkDate: z.string().regex(dateOnlyRegex, 'walkDate: formato YYYY-MM-DD').optional(),
     timeSlot: z
@@ -95,7 +95,7 @@ export const paseoSchema = z
 export const guarderiaSchema = z.object({
   serviceType: z.literal('GUARDERIA'),
   caregiverId: z.string().uuid('caregiverId inválido'),
-  petId: z.string().uuid('petId inválido'),
+  petIds: z.array(z.string().uuid('petId inválido')).min(1, 'Debes seleccionar al menos una mascota').max(3, 'Máximo 3 mascotas por reserva'),
   walkDate: z.string().regex(dateOnlyRegex, 'walkDate: formato YYYY-MM-DD'),
   timeSlot: z.enum(['MANANA', 'TARDE'], {
     errorMap: () => ({ message: 'timeSlot debe ser MANANA o TARDE' }),

@@ -228,7 +228,8 @@ model Booking {
   duration                  Int?
   walkDays                  Json?            @db.JsonB  // multi-day paseo: [{ date, timeSlot, startTime? }]
   petId                     String?
-  petName                   String           @db.VarChar(200)
+  petCount                  Int              @default(1) // total mascotas en esta reserva (para chequeo de capacidad)
+  petName                   String           @db.VarChar(200) // nombre(s) separados por coma
   petBreed                  String?          @db.VarChar(100)
   petAge                    Int?
   petSize                   PetSize?
@@ -273,6 +274,7 @@ model Booking {
   dispute                   Dispute?
   messages                  ChatMessage[]
   meetAndGreet              MeetAndGreet?
+  bookingPets               BookingPet[]
 
   @@index([clientId, status])
   @@index([caregiverId, status])
@@ -281,6 +283,26 @@ model Booking {
   @@index([paidAt])
   @@index([petId])
   @@map("bookings")
+}
+
+/// Una fila por mascota en una reserva multi-mascota.
+/// petIndex = 1 → precio completo; 2 → -25%; 3 → -50%.
+model BookingPet {
+  id           String   @id @default(uuid())
+  bookingId    String
+  petId        String?
+  petIndex     Int      // 1, 2 o 3
+  petName      String   @db.VarChar(200)
+  petBreed     String?  @db.VarChar(100)
+  petAge       Int?
+  petSize      PetSize?
+  specialNeeds String?
+  booking      Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  pet          Pet?     @relation(fields: [petId], references: [id], onDelete: SetNull)
+
+  @@index([bookingId])
+  @@index([petId])
+  @@map("booking_pets")
 }
 
 model WalletTransaction {
@@ -368,6 +390,7 @@ model Pet {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   bookings        Booking[]
+  bookingPets     BookingPet[]
   clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
 
   @@index([clientProfileId])

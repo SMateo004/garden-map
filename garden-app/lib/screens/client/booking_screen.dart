@@ -35,7 +35,9 @@ class _BookingScreenState extends State<BookingScreen> {
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   // Selecciones del usuario
-  String? _selectedPetId;
+  // Multi-pet: ordered list of selected pet IDs (index 0 = full price, 1 = -25%, 2 = -50%)
+  List<String> _selectedPetIds = [];
+  String? get _selectedPetId => _selectedPetIds.isNotEmpty ? _selectedPetIds.first : null;
   String? _selectedService; // 'PASEO', 'HOSPEDAJE' o 'GUARDERIA'
   DateTime? _selectedDate; // para paseo single / guardería: fecha; para hospedaje: fecha inicio
   DateTime? _endDate; // solo hospedaje
@@ -117,7 +119,7 @@ class _BookingScreenState extends State<BookingScreen> {
         } else if (services.isNotEmpty) {
           _selectedService = services.first;
         }
-        if (_pets.isNotEmpty) _selectedPetId = _pets.first['id'];
+        if (_pets.isNotEmpty) _selectedPetIds = [_pets.first['id'] as String];
       });
       // Precargar disponibilidad real del cuidador (para filtrar días no disponibles)
       _loadMultiDayData();
@@ -182,7 +184,7 @@ class _BookingScreenState extends State<BookingScreen> {
           }
           setState(() => _pets = pets);
           if (_pets.isNotEmpty) {
-            _selectedPetId = _pets.first['id'];
+            _selectedPetIds = [_pets.first['id'] as String];
           } else {
              WidgetsBinding.instance.addPostFrameCallback((_) {
                ScaffoldMessenger.of(context).showSnackBar(
@@ -305,8 +307,8 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Future<void> _createBooking() async {
-    if (_selectedPetId == null) {
-      _showError('Selecciona una mascota');
+    if (_selectedPetIds.isEmpty) {
+      _showError('Selecciona al menos una mascota');
       return;
     }
     if (_selectedService == null) {
@@ -377,7 +379,7 @@ class _BookingScreenState extends State<BookingScreen> {
         body = {
           'serviceType': 'GUARDERIA',
           'caregiverId': widget.caregiverId,
-          'petId': _selectedPetId,
+          'petIds': _selectedPetIds,
           'walkDate': _selectedDate!.toIso8601String().split('T')[0],
           'timeSlot': _selectedTimeSlot,
           'duration': _guarderiaSelectedDuration,
@@ -389,7 +391,7 @@ class _BookingScreenState extends State<BookingScreen> {
           body = {
             'serviceType': 'PASEO',
             'caregiverId': widget.caregiverId,
-            'petId': _selectedPetId,
+            'petIds': _selectedPetIds,
             'duration': _selectedDuration,
             'walkDays': _selectedDates.map((d) {
               final ds = d.toIso8601String().split('T')[0];
@@ -404,7 +406,7 @@ class _BookingScreenState extends State<BookingScreen> {
           body = {
             'serviceType': 'PASEO',
             'caregiverId': widget.caregiverId,
-            'petId': _selectedPetId,
+            'petIds': _selectedPetIds,
             'walkDate': _selectedDate!.toIso8601String().split('T')[0],
             'timeSlot': _selectedTimeSlot,
             'duration': _selectedDuration,
@@ -416,7 +418,7 @@ class _BookingScreenState extends State<BookingScreen> {
         body = {
           'serviceType': 'HOSPEDAJE',
           'caregiverId': widget.caregiverId,
-          'petId': _selectedPetId,
+          'petIds': _selectedPetIds,
           'startDate': _selectedDate!.toIso8601String().split('T')[0],
           'endDate': _endDate!.toIso8601String().split('T')[0],
           'totalDays': totalDays > 0 ? totalDays : 1,
@@ -485,29 +487,41 @@ class _BookingScreenState extends State<BookingScreen> {
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
+  /// Multiplier for multi-pet pricing: 1st pet=1.0, 2nd pet=0.75, 3rd pet=0.50
+  double get _petPriceMultiplier {
+    const factors = [1.0, 0.75, 0.50];
+    final count = _selectedPetIds.length.clamp(1, 3);
+    double total = 0;
+    for (int i = 0; i < count; i++) {
+      total += factors[i];
+    }
+    return total;
+  }
+
   double? _calculatePrice() {
     if (_caregiver == null || _selectedService == null) return null;
+    final petMult = _petPriceMultiplier;
     if (_selectedService == 'GUARDERIA') {
       if (_selectedDate == null || _selectedTimeSlot == null) return null;
       final pricePerGuarderia = (_caregiver!['pricePerGuarderia'] as num?)?.toDouble()
           ?? (_caregiver!['pricePerWalk60'] as num?)?.toDouble();
       if (pricePerGuarderia == null || pricePerGuarderia <= 0) return null;
-      return pricePerGuarderia * (_guarderiaSelectedDuration / 60);
+      return pricePerGuarderia * (_guarderiaSelectedDuration / 60) * petMult;
     } else if (_selectedService == 'PASEO') {
       final price60 = (_caregiver!['pricePerWalk60'] as num?)?.toDouble();
       if (price60 == null) return null;
       final unitPrice = _selectedDuration == 30 ? (price60 / 2).roundToDouble() : price60;
       if (_isMultiDay) {
         final numDays = _selectedDates.length;
-        return numDays > 0 ? unitPrice * numDays : null;
+        return numDays > 0 ? unitPrice * numDays * petMult : null;
       }
-      return unitPrice;
+      return unitPrice * petMult;
     } else if (_selectedService == 'HOSPEDAJE') {
       if (_selectedDate != null && _endDate != null) {
         int days = _endDate!.difference(_selectedDate!).inDays;
         if (days <= 0) days = 1;
         final pricePerDay = (_caregiver!['pricePerDay'] as num?)?.toDouble() ?? 0.0;
-        return pricePerDay * days;
+        return pricePerDay * days * petMult;
       }
     }
     return null;
@@ -728,9 +742,39 @@ class _BookingScreenState extends State<BookingScreen> {
                 _buildCaregiverHeader(),
                 const SizedBox(height: 24),
                 
-                // Selección de Mascota
-                Text('Tu mascota', style: GardenText.h4.copyWith(color: textColor)),
-                const SizedBox(height: 16),
+                // Selección de Mascota(s)
+                Builder(builder: (_) {
+                  final maxSelect = _caregiverMaxPets;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text('Tus mascotas', style: GardenText.h4.copyWith(color: textColor)),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: GardenColors.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              'Máx. $maxSelect',
+                              style: const TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      if (maxSelect > 1)
+                        Text(
+                          'Puedes seleccionar hasta $maxSelect mascotas · 2ª -25% · 3ª -50%',
+                          style: TextStyle(color: subtextColor, fontSize: 11),
+                        ),
+                      const SizedBox(height: 12),
+                    ],
+                  );
+                }),
                 if (_pets.isEmpty)
                   GardenButton(
                     label: 'Agregar mascota',
@@ -738,68 +782,73 @@ class _BookingScreenState extends State<BookingScreen> {
                     onPressed: () => context.push('/my-pets'),
                   )
                 else
-                  SizedBox(
-                    height: 80,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _pets.length,
-                      itemBuilder: (context, index) {
-                        final pet = _pets[index];
-                        final isSelected = _selectedPetId == pet['id'];
-                        return GestureDetector(
-                          onTap: () => setState(() => _selectedPetId = pet['id']),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            width: 180,
-                            margin: const EdgeInsets.only(right: 12),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            decoration: isSelected
-                                ? BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                      colors: [
-                                        GardenColors.primary.withValues(alpha: 0.18),
-                                        GardenColors.primary.withValues(alpha: 0.08),
-                                      ],
-                                    ),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: GardenColors.primary, width: 1.5),
-                                  )
-                                : BoxDecoration(
-                                    color: isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFFAF7F2).withValues(alpha: 0.90),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: borderColor, width: 1.0),
+                  Column(
+                    children: _pets.map((pet) {
+                      final petId = pet['id'] as String;
+                      final petIndex = _selectedPetIds.indexOf(petId); // -1 if not selected
+                      final isSelected = petIndex >= 0;
+                      final atMax = _selectedPetIds.length >= _caregiverMaxPets;
+                      // Discount label for this pet if selected
+                      String? discountLabel;
+                      if (isSelected && petIndex == 1) discountLabel = '-25%';
+                      if (isSelected && petIndex == 2) discountLabel = '-50%';
+                      return GestureDetector(
+                        onTap: () => setState(() {
+                          if (isSelected) {
+                            _selectedPetIds.remove(petId);
+                          } else if (!atMax) {
+                            _selectedPetIds.add(petId);
+                          }
+                        }),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: isSelected
+                              ? BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      GardenColors.primary.withValues(alpha: 0.18),
+                                      GardenColors.primary.withValues(alpha: 0.08),
+                                    ],
                                   ),
-                            child: Row(
-                              children: [
-                                // Foto de la mascota
-                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: GardenColors.primary, width: 1.5),
+                                )
+                              : BoxDecoration(
+                                  color: (atMax && !isSelected)
+                                      ? (isDark ? Colors.white.withValues(alpha: 0.02) : const Color(0xFFF5F5F5))
+                                      : (isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFFAF7F2).withValues(alpha: 0.90)),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: (atMax && !isSelected) ? borderColor.withValues(alpha: 0.4) : borderColor, width: 1.0),
+                                ),
+                          child: Row(
+                            children: [
+                              // Foto
+                              Opacity(
+                                opacity: (atMax && !isSelected) ? 0.4 : 1.0,
+                                child: ClipRRect(
                                   borderRadius: BorderRadius.circular(10),
                                   child: SizedBox(
-                                    width: 48,
-                                    height: 56,
+                                    width: 48, height: 56,
                                     child: () {
                                       final rawUrl = pet['photoUrl'] as String? ?? '';
                                       final url = rawUrl.isNotEmpty ? fixImageUrl(rawUrl) : '';
                                       if (url.isEmpty) return _petPlaceholder(pet, isSelected, textColor);
-                                      return Image.network(
-                                        url,
-                                        width: 48,
-                                        height: 56,
-                                        fit: BoxFit.cover,
+                                      return Image.network(url, width: 48, height: 56, fit: BoxFit.cover,
                                         errorBuilder: (_, __, ___) => _petPlaceholder(pet, isSelected, textColor),
-                                        loadingBuilder: (_, child, progress) {
-                                          if (progress == null) return child;
-                                          return _petPlaceholder(pet, isSelected, textColor);
-                                        },
+                                        loadingBuilder: (_, child, progress) => progress == null ? child : _petPlaceholder(pet, isSelected, textColor),
                                       );
                                     }(),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
-                                // Nombre y especie
-                                Expanded(
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Opacity(
+                                  opacity: (atMax && !isSelected) ? 0.4 : 1.0,
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -808,8 +857,7 @@ class _BookingScreenState extends State<BookingScreen> {
                                         pet['name'] ?? '',
                                         style: TextStyle(
                                           color: isSelected ? GardenColors.primary : textColor,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14, fontWeight: FontWeight.w700,
                                         ),
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -817,9 +865,7 @@ class _BookingScreenState extends State<BookingScreen> {
                                         Text(
                                           pet['breed'] ?? '',
                                           style: TextStyle(
-                                            color: isSelected
-                                                ? GardenColors.primary.withValues(alpha: 0.7)
-                                                : (isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+                                            color: isSelected ? GardenColors.primary.withValues(alpha: 0.7) : subtextColor,
                                             fontSize: 11,
                                           ),
                                           overflow: TextOverflow.ellipsis,
@@ -827,14 +873,25 @@ class _BookingScreenState extends State<BookingScreen> {
                                     ],
                                   ),
                                 ),
-                                if (isSelected)
-                                  const Icon(Icons.check_circle_rounded, color: GardenColors.primary, size: 16),
-                              ],
-                            ),
+                              ),
+                              if (discountLabel != null)
+                                Container(
+                                  margin: const EdgeInsets.only(right: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: GardenColors.success.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(discountLabel, style: const TextStyle(color: GardenColors.success, fontSize: 10, fontWeight: FontWeight.w800)),
+                                ),
+                              isSelected
+                                  ? const Icon(Icons.check_circle_rounded, color: GardenColors.primary, size: 20)
+                                  : Icon(Icons.radio_button_unchecked, color: (atMax && !isSelected) ? borderColor.withValues(alpha: 0.4) : subtextColor, size: 20),
+                            ],
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      );
+                    }).toList(),
                   ),
                 
                 const SizedBox(height: 24),
@@ -1555,7 +1612,7 @@ class _BookingScreenState extends State<BookingScreen> {
                 const SizedBox(height: 24),
 
                 // Resumen Final
-                if (calculatedPrice != null && _selectedPetId != null)
+                if (calculatedPrice != null && _selectedPetIds.isNotEmpty)
                   _buildSummary(calculatedPrice),
               ],
             ),
@@ -1621,16 +1678,20 @@ class _BookingScreenState extends State<BookingScreen> {
     final newStart = int.parse(parts[0]) * 60 + int.parse(parts[1]);
     final dur = durationOverride ?? _selectedDuration;
     final newEnd = newStart + dur + 30; // +30 min buffer entre servicios
-    int overlapCount = 0;
+    // Sum total pets across overlapping bookings (not booking count)
+    int occupiedPets = 0;
     for (final b in _bookedPaseos) {
       if (b['date'] != dateStr) continue;
       final sp = (b['startTime'] as String).split(':');
       final bStart = int.parse(sp[0]) * 60 + int.parse(sp[1]);
       final bEnd = bStart + (b['duration'] as int? ?? 30) + 30;
-      if (newStart < bEnd && newEnd > bStart) overlapCount++;
+      if (newStart < bEnd && newEnd > bStart) {
+        occupiedPets += (b['petCount'] as int? ?? 1);
+      }
     }
-    // Conflict only when overlapping bookings reach the caregiver's max simultaneous capacity
-    return overlapCount >= _caregiverMaxPets;
+    // Conflict when adding selected pets would exceed caregiver's max simultaneous capacity
+    final pendingPets = _selectedPetIds.isNotEmpty ? _selectedPetIds.length : 1;
+    return occupiedPets + pendingPets > _caregiverMaxPets;
   }
 
   /// Tab del toggle "1 día / Varios días"
@@ -1935,15 +1996,17 @@ class _BookingScreenState extends State<BookingScreen> {
       if (slotStartMin + _guarderiaSelectedDuration > slotEndMin) continue;
       for (int t = slotStartMin; t + _guarderiaSelectedDuration <= slotEndMin; t += 30) {
         final newEnd = t + _guarderiaSelectedDuration + 30;
-        int overlapCount = 0;
+        // Sum total pets across overlapping bookings (not booking count)
+        int occupiedPets = 0;
         for (final b in _multiDayRangeBookings) {
           if (b['date'] != dateStr || b['startTime'] == null) continue;
           final bs = (b['startTime'] as String).split(':');
           final bStart = int.parse(bs[0]) * 60 + int.parse(bs[1]);
           final bEnd = bStart + (b['duration'] as int? ?? 30) + 30;
-          if (t < bEnd && newEnd > bStart) overlapCount++;
+          if (t < bEnd && newEnd > bStart) occupiedPets += (b['petCount'] as int? ?? 1);
         }
-        if (overlapCount < _caregiverMaxPets) return false; // Al menos una hora válida disponible
+        final pendingPets = _selectedPetIds.isNotEmpty ? _selectedPetIds.length : 1;
+        if (occupiedPets + pendingPets <= _caregiverMaxPets) return false; // Al menos una hora válida
       }
     }
     return true; // Ninguna hora válida → deshabilitar día
@@ -2823,12 +2886,17 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Widget _buildSummary(double price) {
-    if (_selectedPetId == null || _selectedService == null) return const SizedBox();
+    if (_selectedPetIds.isEmpty || _selectedService == null) return const SizedBox();
     // En modo multi-day, no es necesario _selectedDate
     if (!_isMultiDay && _selectedDate == null) return const SizedBox();
     final isDark = themeNotifier.isDark;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final petName = _pets.firstWhere((p) => p['id'] == _selectedPetId)['name'];
+    // Build pet names list
+    final selectedPets = _selectedPetIds
+        .map((id) => _pets.firstWhere((p) => p['id'] == id, orElse: () => <String, dynamic>{}))
+        .where((p) => p.isNotEmpty)
+        .toList();
+    final petName = selectedPets.map((p) => p['name'] as String).join(', ');
 
     // Texto de fecha para el resumen
     String fechaText;
@@ -2858,7 +2926,14 @@ class _BookingScreenState extends State<BookingScreen> {
         children: [
           Text('Resumen de reserva', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
-          _summaryRow(Icons.pets, 'Mascota', petName),
+          _summaryRow(Icons.pets, selectedPets.length == 1 ? 'Mascota' : 'Mascotas', petName),
+          // Multi-pet discount breakdown
+          if (selectedPets.length >= 2) ...[
+            _summaryRow(Icons.sell_outlined, '2ª mascota', '${selectedPets[1]['name']} (−25%)'),
+          ],
+          if (selectedPets.length >= 3) ...[
+            _summaryRow(Icons.sell_outlined, '3ª mascota', '${selectedPets[2]['name']} (−50%)'),
+          ],
           _summaryRow(Icons.settings, 'Servicio', serviceDisplayName),
           if (_selectedService == 'PASEO')
             _summaryRow(Icons.timer_outlined, 'Duración', '$_selectedDuration min'),
