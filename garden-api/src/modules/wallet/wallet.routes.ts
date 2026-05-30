@@ -316,7 +316,7 @@ router.post('/redeem', authMiddleware, asyncHandler(async (req: Request, res: Re
       await tx.walletTransaction.create({
         data: {
           userId,
-          type: 'REFUND',
+          type: 'GIFT',
           amount,
           balance: newBalance,
           description: `Código de regalo: ${normalizedCode}`,

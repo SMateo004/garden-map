@@ -3110,7 +3110,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       final response = await http.post(
         Uri.parse('$_baseUrl/bookings/${widget.bookingId}/conclude'),
         headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
-        body: jsonEncode({'rating': 5}),
+        body: jsonEncode({}),
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {

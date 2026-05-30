@@ -714,7 +714,7 @@ class _WalletScreenState extends State<WalletScreen> {
   Widget _buildTransactionTile(Map<String, dynamic> t, Color surface, Color textColor, Color subtextColor, Color borderColor) {
     final type = t['type'] as String;
     final amount = t['amount'] as num;
-    final isPositive = type == 'EARNING' || type == 'REFUND';
+    final isPositive = type == 'EARNING' || type == 'REFUND' || type == 'GIFT';
     final isPending = t['status'] == 'PENDING';
 
     IconData icon;
@@ -744,6 +744,10 @@ class _WalletScreenState extends State<WalletScreen> {
       case 'FINE':
         icon = Icons.gavel_rounded;
         color = GardenColors.error;
+        break;
+      case 'GIFT':
+        icon = Icons.card_giftcard_rounded;
+        color = Colors.purple;
         break;
       default:
         icon = Icons.swap_horiz_rounded;
