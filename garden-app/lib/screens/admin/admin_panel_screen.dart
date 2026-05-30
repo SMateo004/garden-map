@@ -2730,7 +2730,15 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   itemBuilder: (context, index) {
                     final w = _withdrawals[index];
                     final user = w['user'] as Map<String, dynamic>;
-                    final profile = user['caregiverProfile'] as Map<String, dynamic>? ?? {};
+                    // Bank info is now on User; caregiverProfile kept as fallback
+                    final cpProfile = user['caregiverProfile'] as Map<String, dynamic>? ?? {};
+                    final profile = <String, dynamic>{
+                      'bankName':    user['bankName']    ?? cpProfile['bankName'],
+                      'bankAccount': user['bankAccount'] ?? cpProfile['bankAccount'],
+                      'bankHolder':  user['bankHolder']  ?? cpProfile['bankHolder'],
+                      'bankType':    user['bankType']    ?? cpProfile['bankType'],
+                      'balance':     user['balance']     ?? cpProfile['balance'],
+                    };
                     final status = w['status'] as String;
                     final isPending = status == 'PENDING';
 

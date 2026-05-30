@@ -284,10 +284,12 @@ export const getWithdrawals = asyncHandler(async (req: Request, res: Response) =
     },
     include: {
       user: {
-        select: { 
-          id: true, firstName: true, lastName: true, email: true,
+        select: {
+          id: true, firstName: true, lastName: true, email: true, role: true,
+          balance: true,
+          bankName: true, bankAccount: true, bankHolder: true, bankType: true,
           caregiverProfile: {
-            select: { bankName: true, bankAccount: true, bankHolder: true, bankType: true, balance: true }
+            select: { bankName: true, bankAccount: true, bankHolder: true, bankType: true }
           }
         }
       }

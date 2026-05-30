@@ -720,28 +720,33 @@ class _WalletScreenState extends State<WalletScreen> {
     IconData icon;
     Color color;
     switch (type) {
-      case 'EARNING': 
-        icon = Icons.monetization_on_rounded; 
-        color = GardenColors.success; 
+      case 'EARNING':
+        icon = Icons.monetization_on_rounded;
+        color = GardenColors.success;
         break;
-      case 'PAYMENT': 
-        icon = Icons.shopping_bag_outlined; 
-        color = GardenColors.error; 
+      case 'PAYMENT':
+      case 'WALLET_PAYMENT': // legacy label
+        icon = Icons.account_balance_wallet_rounded;
+        color = GardenColors.error;
         break;
-      case 'WITHDRAWAL': 
-        icon = Icons.account_balance_rounded; 
-        color = isPending ? GardenColors.warning : Colors.blueAccent; 
+      case 'WITHDRAWAL':
+        icon = Icons.account_balance_rounded;
+        color = isPending ? GardenColors.warning : Colors.blueAccent;
         break;
-      case 'REFUND': 
-        icon = Icons.keyboard_return_rounded; 
-        color = Colors.teal; 
+      case 'REFUND':
+        icon = Icons.keyboard_return_rounded;
+        color = Colors.teal;
         break;
       case 'COMMISSION':
         icon = Icons.percent_rounded;
         color = subtextColor;
         break;
-      default: 
-        icon = Icons.swap_horiz_rounded; 
+      case 'FINE':
+        icon = Icons.gavel_rounded;
+        color = GardenColors.error;
+        break;
+      default:
+        icon = Icons.swap_horiz_rounded;
         color = subtextColor;
     }
 

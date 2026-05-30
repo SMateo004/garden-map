@@ -1081,7 +1081,7 @@ export async function initPayment(
       await tx.walletTransaction.create({
         data: {
           userId: clientId,
-          type: 'WALLET_PAYMENT',
+          type: 'PAYMENT',
           amount: totalAmount,
           balance: newBalance,
           description: `Pago con billetera — reserva ${bookingId.slice(0, 8)}`,
@@ -1134,7 +1134,7 @@ export async function initPayment(
         await tx.walletTransaction.create({
           data: {
             userId: clientId,
-            type: 'WALLET_PAYMENT',
+            type: 'PAYMENT',
             amount: totalAmount,
             balance: newBalance,
             description: `Pago con billetera — reserva ${bookingId.slice(0, 8)}`,
@@ -1167,7 +1167,7 @@ export async function initPayment(
       await tx.walletTransaction.create({
         data: {
           userId: clientId,
-          type: 'WALLET_PAYMENT',
+          type: 'PAYMENT',
           amount: effectiveWalletContribution,
           balance: newBalance,
           description: `Pago parcial con billetera — reserva ${bookingId.slice(0, 8)}`,
