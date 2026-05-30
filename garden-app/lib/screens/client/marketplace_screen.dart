@@ -544,12 +544,26 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     } else if (status == 'CONFIRMED') {
       final walkDate = b['walkDate'] as String?;
       String fechaStr = '';
+      DateTime? serviceDateTime;
       if (walkDate != null) {
         try {
           final d = DateTime.parse(walkDate);
           const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
           fechaStr = '${d.day} ${months[d.month - 1]}';
+          // Build datetime from date + startTime to hide banner when past
+          final st = b['startTime'] as String?;
+          if (st != null && st.isNotEmpty) {
+            final tp = st.split(':');
+            serviceDateTime = DateTime(d.year, d.month, d.day,
+                int.tryParse(tp[0]) ?? 8, int.tryParse(tp.length > 1 ? tp[1] : '0') ?? 0);
+          } else {
+            serviceDateTime = DateTime(d.year, d.month, d.day, 8, 0);
+          }
         } catch (_) {}
+      }
+      // Hide banner once the scheduled time has passed (service should have started)
+      if (serviceDateTime != null && DateTime.now().isAfter(serviceDateTime)) {
+        return const SizedBox.shrink();
       }
       mainText = isPaseo
           ? '$petName pasea${timeStr.isNotEmpty ? ' a las $timeStr' : ''}'

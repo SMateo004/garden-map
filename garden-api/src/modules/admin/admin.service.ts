@@ -1096,6 +1096,7 @@ export async function getReservationDetail(bookingId: string) {
     commissionAmount,
     commissionPercent: 10,
     caregiverPayoutAmount: caregiverPayout,
+    walletPaymentAmount: Number((booking as any).walletPaymentAmount ?? 0),
     paidAt: booking.paidAt?.toISOString() ?? null,
     paymentMethod: (booking as any).paymentMethod ?? null,
     payoutStatus: booking.payoutStatus,

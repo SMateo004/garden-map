@@ -5,40 +5,25 @@ import prisma from '../../config/database.js';
 
 const router = Router();
 
-// GET /api/wallet — obtener saldo e historial del usuario autenticado
+// ──────────────────────────────────────────────────────────────────────────────
+// GET /api/wallet — saldo e historial del usuario autenticado (CLIENT o CAREGIVER)
+// ──────────────────────────────────────────────────────────────────────────────
 router.get('/', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
   const userId = (req as any).user.userId;
-  const role = (req as any).user.role;
 
-  let balance = 0;
-  let bankName: string | null | undefined;
-  let bankAccount: string | null | undefined;
-  let bankHolder: string | null | undefined;
-  let bankType: string | null | undefined;
+  // Unified balance lives on User
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      balance: true,
+      bankName: true,
+      bankAccount: true,
+      bankHolder: true,
+      bankType: true,
+    },
+  });
 
-  if (role === 'CAREGIVER') {
-    const profile = await prisma.caregiverProfile.findUnique({
-      where: { userId },
-      select: {
-        balance: true,
-        bankName: true,
-        bankAccount: true,
-        bankHolder: true,
-        bankType: true,
-      },
-    });
-    balance = Number(profile?.balance ?? 0);
-    bankName = profile?.bankName;
-    bankAccount = profile?.bankAccount;
-    bankHolder = profile?.bankHolder;
-    bankType = profile?.bankType;
-  } else if (role === 'CLIENT') {
-    const profile = await prisma.clientProfile.findUnique({
-      where: { userId },
-      select: { balance: true },
-    });
-    balance = Number(profile?.balance ?? 0);
-  }
+  const balance = Number(user?.balance ?? 0);
 
   // Last 50 transactions for the history list
   const transactions = await prisma.walletTransaction.findMany({
@@ -47,14 +32,14 @@ router.get('/', authMiddleware, asyncHandler(async (req: Request, res: Response)
     take: 50,
   });
 
-  // Aggregate lifetime stats from the DB — never from the truncated take:50 slice.
-  const [earnedAgg, paidAgg, withdrawnAgg, pendingAgg] = await Promise.all([
+  // Aggregate lifetime stats
+  const [earnedAgg, paidAgg, withdrawnAgg, pendingAgg, refundAgg] = await Promise.all([
     prisma.walletTransaction.aggregate({
       where: { userId, type: 'EARNING', status: 'COMPLETED' },
       _sum: { amount: true },
     }),
     prisma.walletTransaction.aggregate({
-      where: { userId, type: 'PAYMENT', status: 'COMPLETED' },
+      where: { userId, type: { in: ['PAYMENT', 'WALLET_PAYMENT'] }, status: 'COMPLETED' },
       _sum: { amount: true },
     }),
     prisma.walletTransaction.aggregate({
@@ -65,15 +50,18 @@ router.get('/', authMiddleware, asyncHandler(async (req: Request, res: Response)
       where: { userId, type: 'WITHDRAWAL', status: { in: ['PENDING', 'PROCESSING'] } },
       _sum: { amount: true },
     }),
+    prisma.walletTransaction.aggregate({
+      where: { userId, type: 'REFUND', status: 'COMPLETED' },
+      _sum: { amount: true },
+    }),
   ]);
 
-  const totalEarned = Number(earnedAgg._sum.amount ?? 0);
-  const totalPaid = Number(paidAgg._sum.amount ?? 0);
+  const totalEarned   = Number(earnedAgg._sum.amount    ?? 0);
+  const totalPaid     = Number(paidAgg._sum.amount      ?? 0);
   const totalWithdrawn = Number(withdrawnAgg._sum.amount ?? 0);
   const pendingWithdrawals = Number(pendingAgg._sum.amount ?? 0);
+  const totalRefunds  = Number(refundAgg._sum.amount    ?? 0);
 
-  // availableBalance = what the caregiver can actually withdraw right now.
-  // Pending withdrawals are still held and must not be double-counted.
   const availableBalance = Math.max(0, balance - pendingWithdrawals);
 
   res.json({
@@ -85,6 +73,7 @@ router.get('/', authMiddleware, asyncHandler(async (req: Request, res: Response)
       totalPaid,
       totalWithdrawn,
       pendingWithdrawals,
+      totalRefunds,
       transactions: transactions.map(t => ({
         id: t.id,
         type: t.type,
@@ -95,21 +84,61 @@ router.get('/', authMiddleware, asyncHandler(async (req: Request, res: Response)
         status: t.status,
         createdAt: t.createdAt.toISOString(),
       })),
-      caregiverBankInfo: role === 'CAREGIVER' ? {
-        bankName,
-        bankAccount,
-        bankHolder,
-        bankType,
+      bankInfo: user?.bankName ? {
+        bankName:    user.bankName,
+        bankAccount: user.bankAccount,
+        bankHolder:  user.bankHolder,
+        bankType:    user.bankType,
       } : null,
     },
   });
 }));
 
-// POST /api/wallet/withdraw — solicitar retiro (solo CAREGIVER)
+// ──────────────────────────────────────────────────────────────────────────────
+// PUT /api/wallet/bank — actualizar datos bancarios (CLIENT o CAREGIVER)
+// ──────────────────────────────────────────────────────────────────────────────
+router.put('/bank', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
+  const userId = (req as any).user.userId;
+  const { bankName, bankAccount, bankHolder, bankType } = req.body;
+
+  if (!bankName || !bankAccount || !bankHolder) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'bankName, bankAccount y bankHolder son obligatorios' },
+    });
+  }
+
+  const validTypes = ['CUENTA_CORRIENTE', 'CUENTA_AHORRO', 'TIGO_MONEY', 'BILLETERA'];
+  if (bankType && !validTypes.includes(bankType)) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'bankType inválido' },
+    });
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { bankName, bankAccount, bankHolder, bankType: bankType ?? 'CUENTA_AHORRO' },
+  });
+
+  // Also keep caregiver_profiles in sync for backward compatibility
+  const role = (req as any).user.role;
+  if (role === 'CAREGIVER') {
+    await prisma.caregiverProfile.updateMany({
+      where: { userId },
+      data: { bankName, bankAccount, bankHolder, bankType: bankType ?? 'CUENTA_AHORRO' },
+    });
+  }
+
+  res.json({ success: true, data: { message: 'Datos bancarios actualizados' } });
+}));
+
+// ──────────────────────────────────────────────────────────────────────────────
+// POST /api/wallet/withdraw — solicitar retiro (CLIENT o CAREGIVER)
+// ──────────────────────────────────────────────────────────────────────────────
 router.post(
   '/withdraw',
   authMiddleware,
-  requireRole('CAREGIVER'),
   asyncHandler(async (req: Request, res: Response) => {
     const userId = (req as any).user.userId;
     const { amount } = req.body;
@@ -135,24 +164,31 @@ router.post(
       });
     }
 
-    // All checks (balance, bank info, duplicate pending) run inside a transaction
-    // so there is no TOCTOU race between the check and the INSERT.
     let transactionId: string;
-    let profileSnapshot: { bankName: string; bankAccount: string; bankHolder: string };
+    let bankSnapshot: { bankName: string; bankAccount: string; bankHolder: string };
 
     try {
       await prisma.$transaction(async (tx) => {
-        const profile = await tx.caregiverProfile.findUnique({
-          where: { userId },
+        const user = await tx.user.findUnique({
+          where: { id: userId },
           select: { balance: true, bankName: true, bankAccount: true, bankHolder: true, bankType: true },
         });
 
-        if (!profile?.bankName || !profile?.bankAccount || !profile?.bankHolder) {
+        if (!user?.bankName || !user?.bankAccount || !user?.bankHolder) {
           throw Object.assign(new Error('NO_BANK_INFO'), { code: 'NO_BANK_INFO' });
         }
 
-        const currentBalance = Number(profile.balance ?? 0);
-        if (parsedAmount > currentBalance) {
+        const currentBalance = Number(user.balance ?? 0);
+
+        // Calculate pending withdrawals to avoid double-spending
+        const pendingAgg = await tx.walletTransaction.aggregate({
+          where: { userId, type: 'WITHDRAWAL', status: { in: ['PENDING', 'PROCESSING'] } },
+          _sum: { amount: true },
+        });
+        const pendingAmount = Number(pendingAgg._sum.amount ?? 0);
+        const availableBalance = Math.max(0, currentBalance - pendingAmount);
+
+        if (parsedAmount > availableBalance) {
           throw Object.assign(new Error('INSUFFICIENT_BALANCE'), { code: 'INSUFFICIENT_BALANCE' });
         }
 
@@ -169,16 +205,16 @@ router.post(
             type: 'WITHDRAWAL',
             amount: parsedAmount,
             balance: currentBalance,
-            description: `Retiro a ${profile.bankName} - ${profile.bankHolder} (${profile.bankAccount})`,
+            description: `Retiro a ${user.bankName} - ${user.bankHolder} (${user.bankAccount})`,
             status: 'PENDING',
           },
         });
 
         transactionId = txRecord.id;
-        profileSnapshot = {
-          bankName: profile.bankName,
-          bankAccount: profile.bankAccount,
-          bankHolder: profile.bankHolder,
+        bankSnapshot = {
+          bankName: user.bankName,
+          bankAccount: user.bankAccount,
+          bankHolder: user.bankHolder,
         };
       });
     } catch (err: any) {
@@ -200,14 +236,14 @@ router.post(
       throw err;
     }
 
-    // Notifications are non-critical — run outside the transaction
+    // Notify admins and the user (non-critical — outside transaction)
     const admins = await prisma.user.findMany({ where: { role: 'ADMIN' } });
     await Promise.all(admins.map(admin =>
       prisma.notification.create({
         data: {
           userId: admin.id,
           title: '💰 Solicitud de retiro',
-          message: `${profileSnapshot!.bankHolder} solicita retirar Bs ${parsedAmount} a ${profileSnapshot!.bankName} (${profileSnapshot!.bankAccount})`,
+          message: `${bankSnapshot!.bankHolder} solicita retirar Bs ${parsedAmount} a ${bankSnapshot!.bankName} (${bankSnapshot!.bankAccount})`,
           type: 'SYSTEM',
         },
       })
@@ -218,7 +254,8 @@ router.post(
         userId,
         title: '✅ Solicitud de retiro recibida',
         message:
-          `Hemos recibido tu solicitud de retiro de Bs ${parsedAmount} a ${profileSnapshot!.bankName} (${profileSnapshot!.bankAccount} — ${profileSnapshot!.bankHolder}).\n\n` +
+          `Hemos recibido tu solicitud de retiro de Bs ${parsedAmount} a ${bankSnapshot!.bankName} ` +
+          `(${bankSnapshot!.bankAccount} — ${bankSnapshot!.bankHolder}).\n\n` +
           `El depósito se realizará en un plazo máximo de 5 días hábiles de forma completamente gratuita.\n\n` +
           `Cuando el depósito sea confirmado, te lo notificaremos aquí. ¡Gracias por confiar en Garden!`,
         type: 'SYSTEM',
@@ -227,15 +264,16 @@ router.post(
 
     res.json({
       success: true,
-      data: { id: transactionId!, message: 'Solicitud enviada. El admin procesará tu retiro.' },
+      data: { id: transactionId!, message: 'Solicitud enviada. Procesaremos tu retiro pronto.' },
     });
   })
 );
 
-// POST /api/wallet/redeem — canjear código de regalo
+// ──────────────────────────────────────────────────────────────────────────────
+// POST /api/wallet/redeem — canjear código de regalo (CLIENT o CAREGIVER)
+// ──────────────────────────────────────────────────────────────────────────────
 router.post('/redeem', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
   const userId = (req as any).user.userId;
-  const role = (req as any).user.role;
   const { code } = req.body;
 
   if (!code || typeof code !== 'string') {
@@ -244,7 +282,6 @@ router.post('/redeem', authMiddleware, asyncHandler(async (req: Request, res: Re
 
   const normalizedCode = code.trim().toUpperCase();
 
-  // Pre-flight check (fast reject before entering the transaction)
   const giftCode = await prisma.giftCode.findUnique({ where: { code: normalizedCode } });
   if (!giftCode || !giftCode.active) {
     return res.status(400).json({ success: false, error: { message: 'Código inválido o expirado' } });
@@ -254,43 +291,22 @@ router.post('/redeem', authMiddleware, asyncHandler(async (req: Request, res: Re
   }
 
   const amount = Number(giftCode.amount);
-
-  // All uniqueness checks are re-validated inside the transaction to prevent race conditions:
-  // two simultaneous requests could both pass the pre-flight and both redeem without this guard.
   let newBalance = 0;
+
   try {
     await prisma.$transaction(async (tx) => {
       const fresh = await tx.giftCode.findUnique({ where: { code: normalizedCode } });
-      if (!fresh || !fresh.active) {
-        throw Object.assign(new Error('INVALID'), { code: 'INVALID' });
-      }
-      if (fresh.expiresAt && fresh.expiresAt < new Date()) {
-        throw Object.assign(new Error('EXPIRED'), { code: 'EXPIRED' });
-      }
-      if (fresh.usedBy.includes(userId)) {
-        throw Object.assign(new Error('ALREADY_USED'), { code: 'ALREADY_USED' });
-      }
-      if (fresh.usedBy.length >= fresh.maxUses) {
-        throw Object.assign(new Error('EXHAUSTED'), { code: 'EXHAUSTED' });
-      }
+      if (!fresh || !fresh.active) throw Object.assign(new Error('INVALID'), { code: 'INVALID' });
+      if (fresh.expiresAt && fresh.expiresAt < new Date()) throw Object.assign(new Error('EXPIRED'), { code: 'EXPIRED' });
+      if (fresh.usedBy.includes(userId)) throw Object.assign(new Error('ALREADY_USED'), { code: 'ALREADY_USED' });
+      if (fresh.usedBy.length >= fresh.maxUses) throw Object.assign(new Error('EXHAUSTED'), { code: 'EXHAUSTED' });
 
-      if (role === 'CAREGIVER') {
-        const updated = await tx.caregiverProfile.update({
-          where: { userId },
-          data: { balance: { increment: amount } },
-          select: { balance: true },
-        });
-        newBalance = Number(updated.balance);
-      } else if (role === 'CLIENT') {
-        const updated = await tx.clientProfile.update({
-          where: { userId },
-          data: { balance: { increment: amount } },
-          select: { balance: true },
-        });
-        newBalance = Number(updated.balance);
-      } else {
-        throw Object.assign(new Error('INVALID_ROLE'), { code: 'INVALID_ROLE' });
-      }
+      const updated = await tx.user.update({
+        where: { id: userId },
+        data: { balance: { increment: amount } },
+        select: { balance: true },
+      });
+      newBalance = Number(updated.balance);
 
       await tx.giftCode.update({
         where: { id: fresh.id },
@@ -314,7 +330,6 @@ router.post('/redeem', authMiddleware, asyncHandler(async (req: Request, res: Re
       EXPIRED: 'Código expirado',
       ALREADY_USED: 'Ya usaste este código',
       EXHAUSTED: 'Código agotado',
-      INVALID_ROLE: 'Tu tipo de cuenta no puede canjear códigos',
     };
     const msg = codeMap[err.code];
     if (msg) return res.status(400).json({ success: false, error: { message: msg } });

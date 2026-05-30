@@ -348,33 +348,29 @@ export const completeWithdrawal = asyncHandler(async (req: Request, res: Respons
         throw Object.assign(new Error('ALREADY_PROCESSED'), { code: 'ALREADY_PROCESSED' });
       }
 
-      const profile = await prismaTx.caregiverProfile.findUnique({
-        where: { userId: tx.userId },
+      const userRecord = await prismaTx.user.findUnique({
+        where: { id: tx.userId },
         select: { balance: true },
       });
-      if (!profile) {
+      if (!userRecord) {
         throw Object.assign(new Error('NO_PROFILE'), { code: 'NO_PROFILE' });
       }
-      if (Number(profile.balance) < Number(tx.amount)) {
+      if (Number(userRecord.balance) < Number(tx.amount)) {
         throw Object.assign(
-          new Error(`Saldo insuficiente. Tiene Bs ${profile.balance}, solicita Bs ${tx.amount}`),
+          new Error(`Saldo insuficiente. Tiene Bs ${userRecord.balance}, solicita Bs ${tx.amount}`),
           { code: 'INSUFFICIENT_BALANCE' }
         );
       }
 
-      await prismaTx.caregiverProfile.update({
-        where: { userId: tx.userId },
-        data: { balance: { decrement: Number(tx.amount) } },
-      });
-
-      const updatedProfile = await prismaTx.caregiverProfile.findUnique({
-        where: { userId: tx.userId },
-        select: { balance: true },
+      const newBalance = Number(userRecord.balance) - Number(tx.amount);
+      await prismaTx.user.update({
+        where: { id: tx.userId },
+        data: { balance: newBalance },
       });
 
       await prismaTx.walletTransaction.update({
         where: { id },
-        data: { status: 'COMPLETED', balance: Number(updatedProfile?.balance ?? 0) },
+        data: { status: 'COMPLETED', balance: newBalance },
       });
 
       await prismaTx.notification.create({

@@ -40,6 +40,14 @@ model User {
   walletTransactions           WalletTransaction[]
   refreshTokens                RefreshToken[]
   passwordResets               PasswordReset[]
+  /// Billetera unificada: saldo disponible para retiro o pago de reservas.
+  /// Única fuente de verdad independientemente del rol (CLIENT, CAREGIVER o ambos).
+  balance                      Decimal                       @default(0) @db.Decimal(10, 2)
+  /// Datos bancarios para retiros (aplica para CLIENT y CAREGIVER).
+  bankName                     String?                       @db.VarChar(100)
+  bankAccount                  String?                       @db.VarChar(50)
+  bankHolder                   String?                       @db.VarChar(100)
+  bankType                     String?                       @db.VarChar(20) // 'CUENTA_CORRIENTE' | 'CUENTA_AHORRO' | 'TIGO_MONEY' | 'BILLETERA'
 
   @@index([email])
   @@index([role])
@@ -168,11 +176,14 @@ model CaregiverProfile {
   reviewChecklist                 Json?              @db.JsonB
   /// true = cuidador profesional registrado con código de admin (omite verificación CI, aprobado automáticamente)
   isProfessional                  Boolean            @default(false)
+  /// Número total de incumplimientos registrados (advertencias + multas).
+  infractionCount                 Int                @default(0)
   availability                    Availability[]
   bookings                        Booking[]          @relation("CaregiverBookings")
   user                            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   reviews                         Review[]
   sugerencias                     SugerenciaPrecio[]
+  infractions                     CaregiverInfraction[]
 
   @@index([status])
   @@index([userId])
@@ -266,12 +277,15 @@ model Booking {
   blockchainFinalizedTxHash String?
   blockchainCancelledTxHash String?
   payoutStatus              String           @default("PENDING")
+  /// Monto cubierto por la billetera del cliente al pagar esta reserva. 0 = no usó billetera.
+  walletPaymentAmount       Decimal          @default(0) @db.Decimal(10, 2)
   updatedAt                 DateTime         @updatedAt
   caregiver                 CaregiverProfile @relation("CaregiverBookings", fields: [caregiverId], references: [id], onDelete: Cascade)
   client                    User             @relation("ClientBookings", fields: [clientId], references: [id], onDelete: Cascade)
   pet                       Pet?             @relation(fields: [petId], references: [id])
   review                    Review?
   dispute                   Dispute?
+  serviceReport             ServiceReport?
   messages                  ChatMessage[]
   meetAndGreet              MeetAndGreet?
   bookingPets               BookingPet[]
@@ -303,6 +317,44 @@ model BookingPet {
   @@index([bookingId])
   @@index([petId])
   @@map("booking_pets")
+}
+
+/// Reporte de incumplimiento del cuidador (servicio no iniciado). Emitido por el cliente.
+/// Flujo: PENDING → REFUNDED (reembolso automático) | DISMISSED (admin revierte).
+model ServiceReport {
+  id           String    @id @default(uuid())
+  bookingId    String    @unique
+  clientId     String    // User.id del dueño
+  reasons      String[]  // motivos seleccionados
+  details      String?   @db.Text
+  status       String    @default("REFUNDED") // 'REFUNDED' | 'DISMISSED'
+  refundAmount Decimal?  @db.Decimal(10, 2)
+  refundedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  booking      Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([bookingId])
+  @@map("service_reports")
+}
+
+/// Registro de advertencias y multas al cuidador por incumplimiento.
+/// Primera vez: WARNING (sin multa). Siguientes: FINE (20% del monto de la reserva).
+model CaregiverInfraction {
+  id            String           @id @default(uuid())
+  caregiverId   String           // CaregiverProfile.id
+  bookingId     String?
+  type          String           // 'WARNING' | 'FINE'
+  fineAmount    Decimal?         @db.Decimal(10, 2) // importe deducido (solo en FINE)
+  bookingAmount Decimal?         @db.Decimal(10, 2) // totalAmount de la reserva involucrada
+  reasons       String[]         // motivos del reporte que generó esto
+  notified      Boolean          @default(false)
+  createdAt     DateTime         @default(now())
+  caregiver     CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+
+  @@index([caregiverId])
+  @@map("caregiver_infractions")
 }
 
 model WalletTransaction {
@@ -359,6 +411,7 @@ model ClientProfile {
   updatedAt  DateTime @updatedAt
   user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   pets               Pet[]
+  /// @deprecated — balance moved to User.balance for unified wallet. Kept for zero-downtime migration.
   balance            Decimal  @default(0) @db.Decimal(10, 2)
   favoriteCaregiverIds String[] @default([])
 

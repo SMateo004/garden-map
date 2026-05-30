@@ -34,7 +34,9 @@ export function auditLog(params: AuditParams): void {
  * month format: "YYYY-MM"
  */
 export async function exportMonthAsTxt(month: string): Promise<string> {
-  const [year, mon] = month.split('-').map(Number);
+  const parts = month.split('-').map(Number);
+  const year = parts[0]!;
+  const mon = parts[1]!;
   const from = new Date(year, mon - 1, 1);
   const to   = new Date(year, mon, 1);
 

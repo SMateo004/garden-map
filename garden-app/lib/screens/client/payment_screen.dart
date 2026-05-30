@@ -35,6 +35,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Timer? _expiryTimer;
   static const _qrTtl = Duration(minutes: 15); // QR expira en 15 min
 
+  // Wallet payment state
+  double _walletBalance = 0.0;
+  bool _walletLoaded = false;
+  bool _useWallet = false;
+  bool _paidWithWallet = false;
+  double _walletContributionUsed = 0.0;
+
   @override
   void initState() {
     super.initState();
@@ -56,13 +63,30 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
 
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/bookings/${widget.bookingId}'),
-        headers: {'Authorization': 'Bearer $_clientToken'},
-      );
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        setState(() => _booking = data['data']);
+      final results = await Future.wait([
+        http.get(
+          Uri.parse('$_baseUrl/bookings/${widget.bookingId}'),
+          headers: {'Authorization': 'Bearer $_clientToken'},
+        ),
+        http.get(
+          Uri.parse('$_baseUrl/wallet'),
+          headers: {'Authorization': 'Bearer $_clientToken'},
+        ),
+      ]);
+
+      final bookingData = jsonDecode(results[0].body);
+      if (bookingData['success'] == true) {
+        setState(() => _booking = bookingData['data']);
+      }
+
+      final walletData = jsonDecode(results[1].body);
+      if (walletData['success'] == true) {
+        setState(() {
+          _walletBalance = double.tryParse(
+            walletData['data']?['balance']?.toString() ?? '0',
+          ) ?? 0.0;
+          _walletLoaded = true;
+        });
       }
     } catch (e) {
       // silencioso
@@ -71,21 +95,56 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
+  double get _totalAmount {
+    final raw = _booking?['totalAmount'] ?? _booking?['totalPrice'];
+    return double.tryParse(raw?.toString() ?? '0') ?? 0.0;
+  }
+
+  bool get _walletCoversAll => _useWallet && _walletBalance >= _totalAmount;
+  double get _walletCoverage => _useWallet ? _walletBalance.clamp(0, _totalAmount) : 0.0;
+  double get _remainingAfterWallet => (_totalAmount - _walletCoverage).clamp(0, double.infinity);
+
   Future<void> _initPayment() async {
     setState(() => _isSubmitting = true);
     try {
+      Map<String, dynamic> body;
+      if (_walletCoversAll) {
+        body = {'method': 'wallet'};
+      } else if (_useWallet && _walletBalance > 0) {
+        body = {'method': 'qr', 'walletContribution': _walletBalance};
+      } else {
+        body = {'method': 'qr'};
+      }
+
       final response = await http.post(
         Uri.parse('$_baseUrl/bookings/${widget.bookingId}/payment'),
         headers: {
           'Authorization': 'Bearer $_clientToken',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({'method': 'qr'}),
+        body: jsonEncode(body),
       );
 
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
-        setState(() => _qrResponse = data['data']);
+        final responseData = data['data'] as Map<String, dynamic>?;
+        // Full wallet payment — booking already moved to WAITING_CAREGIVER_APPROVAL
+        if (responseData?['paidWithWallet'] == true) {
+          if (widget.mgData != null) await _proposeMeetAndGreet();
+          setState(() {
+            _paidWithWallet = true;
+            _walletContributionUsed = double.tryParse(
+                responseData?['walletDeducted']?.toString() ?? '0') ?? _totalAmount;
+            _paymentConfirmed = true;
+          });
+        } else {
+          // QR with optional wallet contribution pre-deducted
+          if (responseData?['walletDeducted'] != null) {
+            _walletContributionUsed = double.tryParse(
+                responseData!['walletDeducted'].toString()) ?? 0.0;
+          }
+          setState(() => _qrResponse = responseData);
+        }
       } else {
         throw Exception(data['message'] ?? 'Error al iniciar pago');
       }
@@ -290,6 +349,28 @@ class _PaymentScreenState extends State<PaymentScreen> {
               const SizedBox(height: 32),
               Text('Este código expira en 15 minutos',
                 style: TextStyle(color: subtextColor, fontSize: 14)),
+              if (_walletContributionUsed > 0) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: GardenColors.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.account_balance_wallet_rounded, color: GardenColors.primary, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Ya se descontó Bs ${_walletContributionUsed.toStringAsFixed(2)} de tu billetera',
+                        style: const TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 48),
               GardenButton(
                 label: 'Ya realicé el pago',
@@ -352,41 +433,172 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
           Text('Método de pago', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: GardenColors.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: GardenColors.primary, width: 2),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 48, height: 48,
-                  decoration: BoxDecoration(
-                    color: GardenColors.primary.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
+
+          // ── Wallet option ─────────────────────────────────────────────────
+          if (_walletLoaded && _walletBalance > 0) ...[
+            GestureDetector(
+              onTap: () => setState(() => _useWallet = !_useWallet),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: _useWallet
+                      ? GardenColors.primary.withValues(alpha: 0.08)
+                      : surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: _useWallet ? GardenColors.primary : borderColor,
+                    width: _useWallet ? 2 : 1,
                   ),
-                  child: const Icon(Icons.qr_code_2_outlined, color: GardenColors.primary, size: 24),
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('QR Bancario', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
-                      Text('Paga con cualquier banco o Tigo Money', style: TextStyle(color: subtextColor, fontSize: 13)),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48, height: 48,
+                      decoration: BoxDecoration(
+                        color: _useWallet
+                            ? GardenColors.primary.withValues(alpha: 0.15)
+                            : borderColor.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.account_balance_wallet_rounded,
+                          color: _useWallet ? GardenColors.primary : subtextColor, size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Billetera Garden',
+                              style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                          Text('Saldo disponible: Bs ${_walletBalance.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                  color: _useWallet ? GardenColors.primary : subtextColor,
+                                  fontSize: 13, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _useWallet,
+                      onChanged: (v) => setState(() => _useWallet = v),
+                      activeColor: GardenColors.primary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Wallet breakdown card
+            if (_useWallet)
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: _walletCoversAll
+                      ? Colors.green.withValues(alpha: 0.07)
+                      : Colors.orange.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _walletCoversAll
+                        ? Colors.green.withValues(alpha: 0.3)
+                        : Colors.orange.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _walletCoversAll ? Icons.check_circle_outline : Icons.info_outline,
+                          size: 16,
+                          color: _walletCoversAll ? Colors.green : Colors.orange,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _walletCoversAll
+                              ? 'Tu billetera cubre el monto total'
+                              : 'Pago combinado: billetera + QR',
+                          style: TextStyle(
+                            color: _walletCoversAll ? Colors.green : Colors.orange,
+                            fontWeight: FontWeight.w700, fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _walletBreakdownRow(
+                      'Desde billetera',
+                      'Bs ${_walletCoverage.toStringAsFixed(2)}',
+                      GardenColors.primary, subtextColor,
+                    ),
+                    if (!_walletCoversAll) ...[
+                      const SizedBox(height: 6),
+                      _walletBreakdownRow(
+                        'Pagar por QR',
+                        'Bs ${_remainingAfterWallet.toStringAsFixed(2)}',
+                        Colors.orange, subtextColor,
+                      ),
                     ],
+                  ],
+                ),
+              ),
+            if (_useWallet) const SizedBox(height: 12),
+          ],
+
+          // ── QR Bancario option ────────────────────────────────────────────
+          if (!_walletCoversAll)
+            AnimatedOpacity(
+              duration: const Duration(milliseconds: 200),
+              opacity: _useWallet && _walletBalance > 0 ? 0.6 : 1.0,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: !_useWallet
+                      ? GardenColors.primary.withValues(alpha: 0.08)
+                      : surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: !_useWallet ? GardenColors.primary : borderColor,
+                    width: !_useWallet ? 2 : 1,
                   ),
                 ),
-                Container(
-                  width: 22, height: 22,
-                  decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
-                  child: const Icon(Icons.check, color: Colors.white, size: 14),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48, height: 48,
+                      decoration: BoxDecoration(
+                        color: GardenColors.primary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.qr_code_2_outlined, color: GardenColors.primary, size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_useWallet ? 'QR Bancario (complemento)' : 'QR Bancario',
+                              style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                          Text(
+                            _useWallet
+                                ? 'Pagarás Bs ${_remainingAfterWallet.toStringAsFixed(2)} por QR'
+                                : 'Paga con cualquier banco o Tigo Money',
+                            style: TextStyle(color: subtextColor, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (!_useWallet)
+                      Container(
+                        width: 22, height: 22,
+                        decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
+                        child: const Icon(Icons.check, color: Colors.white, size: 14),
+                      ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
           const SizedBox(height: 20),
 
           // Nota de seguridad del pago
@@ -440,9 +652,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
           const SizedBox(height: 20),
 
           GardenButton(
-            label: _isSubmitting ? 'Procesando...' : 'Generar QR de pago',
+            label: _isSubmitting
+                ? 'Procesando...'
+                : _walletCoversAll
+                    ? 'Pagar con billetera'
+                    : _useWallet
+                        ? 'Usar billetera + Generar QR'
+                        : 'Generar QR de pago',
             loading: _isSubmitting,
-            icon: Icons.qr_code_2_outlined,
+            icon: _walletCoversAll
+                ? Icons.account_balance_wallet_rounded
+                : Icons.qr_code_2_outlined,
             onPressed: _isSubmitting ? null : _initPayment,
           ),
           const SizedBox(height: 16),
@@ -550,7 +770,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 },
               ),
               const SizedBox(height: 32),
-              Text('¡Pago confirmado!',
+              Text(
+                _paidWithWallet ? '¡Pagado con billetera!' : '¡Pago confirmado!',
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: textColor, letterSpacing: -0.5),
                 textAlign: TextAlign.center,
               ),
@@ -562,13 +783,25 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
                 ),
-                child: const Text('Pago aprobado',
-                  style: TextStyle(color: Colors.green, fontWeight: FontWeight.w700, fontSize: 13),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_paidWithWallet) ...[
+                      const Icon(Icons.account_balance_wallet_rounded, color: Colors.green, size: 14),
+                      const SizedBox(width: 6),
+                    ],
+                    Text(
+                      _paidWithWallet ? 'Deducido de tu billetera' : 'Pago aprobado',
+                      style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w700, fontSize: 13),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 24),
               Text(
-                'Tu pago fue verificado exitosamente. Ahora el cuidador debe aceptar tu reserva.',
+                _paidWithWallet
+                    ? 'Se descontó Bs ${_walletContributionUsed.toStringAsFixed(2)} de tu billetera Garden. Ahora el cuidador debe aceptar tu reserva.'
+                    : 'Tu pago fue verificado exitosamente. Ahora el cuidador debe aceptar tu reserva.',
                 style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6),
                 textAlign: TextAlign.center,
               ),
@@ -622,6 +855,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       Divider(color: borderColor, height: 1),
                       const SizedBox(height: 16),
                       _detailRow('Total Pagado', 'Bs ${_booking!['totalPrice'] ?? _booking!['totalAmount'] ?? ''}', GardenColors.primary, subtextColor, isBoldValue: true),
+                      if (_walletContributionUsed > 0) ...[
+                        const SizedBox(height: 6),
+                        _detailRow('  · Desde billetera', 'Bs ${_walletContributionUsed.toStringAsFixed(2)}', GardenColors.primary.withValues(alpha: 0.7), subtextColor),
+                        if (!_paidWithWallet)
+                          _detailRow('  · Por QR', 'Bs ${(_totalAmount - _walletContributionUsed).toStringAsFixed(2)}', subtextColor, subtextColor),
+                      ],
                       const SizedBox(height: 12),
                       _detailRow('Estado', 'Esperando al cuidador', Colors.green, subtextColor),
                     ],
@@ -830,6 +1069,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _walletBreakdownRow(String label, String value, Color valueColor, Color labelColor) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: TextStyle(color: labelColor, fontSize: 13)),
+        Text(value, style: TextStyle(color: valueColor, fontSize: 13, fontWeight: FontWeight.w700)),
+      ],
     );
   }
 

@@ -214,4 +214,16 @@ router.post(
   bookingController.cancelMG
 );
 
+/**
+ * POST /api/bookings/:id/report
+ * Dueño reporta incumplimiento: cuidador no se presentó / no inició el servicio pasado el tiempo de gracia.
+ * Genera reembolso automático al dueño y warning/multa al cuidador.
+ */
+router.post(
+  '/:id/report',
+  authMiddleware,
+  requireRole('CLIENT'),
+  bookingController.reportBooking
+);
+
 export default router;

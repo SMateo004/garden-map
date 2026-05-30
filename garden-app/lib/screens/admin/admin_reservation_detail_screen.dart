@@ -315,6 +315,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
     final total = (d['totalAmount'] as num?)?.toDouble() ?? 0.0;
     final commission = (d['commissionAmount'] as num?)?.toDouble() ?? 0.0;
     final caregiversPayout = (d['caregiverPayoutAmount'] as num?)?.toDouble() ?? (total - commission);
+    final walletPayment = (d['walletPaymentAmount'] as num?)?.toDouble() ?? 0.0;
     final txs = (d['walletTransactions'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
     return ListView(padding: const EdgeInsets.all(16), children: [
@@ -382,6 +383,13 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
         _dataRow('Método de pago', d['paymentMethod'] as String? ?? 'Manual / QR', textColor, subtextColor),
         _dataRow('Precio por unidad', 'Bs ${(d['pricePerUnit'] as num? ?? 0).toStringAsFixed(2)}', textColor, subtextColor),
         _dataRow('Estado del pago al cuidador', d['payoutStatus'] as String? ?? '—', textColor, subtextColor),
+        if (walletPayment > 0) ...[
+          _dataRow('Pagado con billetera', 'Bs ${walletPayment.toStringAsFixed(2)}', GardenColors.primary, subtextColor),
+          if (walletPayment >= total)
+            _dataRow('Tipo de pago', '100% Billetera Garden', GardenColors.primary, subtextColor)
+          else
+            _dataRow('Pagado por QR', 'Bs ${(total - walletPayment).toStringAsFixed(2)}', textColor, subtextColor),
+        ],
         if (d['refundAmount'] != null) _dataRow('Monto de reembolso', 'Bs ${(d['refundAmount'] as num).toStringAsFixed(2)}', textColor, GardenColors.warning),
         if (d['refundStatus'] != null) _dataRow('Estado reembolso', d['refundStatus'] as String, textColor, subtextColor),
       ])),

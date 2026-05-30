@@ -60,6 +60,8 @@ export interface BookingCreateResult {
   hasDisputePending?: boolean;
   disputeReasons?: string[];
   meetAndGreet?: any;
+  walletPaymentAmount?: number;
+  serviceReport?: any;
 }
 
 export function bookingToResponse(b: any): BookingCreateResult {
@@ -106,6 +108,8 @@ export function bookingToResponse(b: any): BookingCreateResult {
     hasDisputePending: !!(b.dispute && b.dispute.status !== 'RESOLVED'),
     disputeReasons: b.dispute?.clientReasons ?? [],
     meetAndGreet: b.meetAndGreet ?? null,
+    walletPaymentAmount: Number(b.walletPaymentAmount ?? 0),
+    serviceReport: b.serviceReport ?? null,
   };
 
   if (b.caregiver) {

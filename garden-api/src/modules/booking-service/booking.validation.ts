@@ -188,13 +188,26 @@ export const changeDatesBookingBodySchema = z
 
 /** POST /api/bookings/:id/payment — iniciar pago. */
 export const initPaymentBodySchema = z.object({
-  method: z.enum(['qr', 'manual'], {
-    required_error: 'method es requerido (qr | manual)',
-    invalid_type_error: 'method debe ser "qr" o "manual"',
+  method: z.enum(['qr', 'manual', 'wallet'], {
+    required_error: 'method es requerido (qr | manual | wallet)',
+    invalid_type_error: 'method debe ser "qr", "manual" o "wallet"',
   }),
+  /// Monto en Bs a descontar de la billetera antes de generar el QR (0 = sin billetera).
+  walletContribution: z.coerce.number().min(0).optional().default(0),
 });
 
 export type InitPaymentBody = z.infer<typeof initPaymentBodySchema>;
+
+/** POST /api/bookings/:id/report — dueño reporta incumplimiento del cuidador. */
+export const reportBookingBodySchema = z.object({
+  reasons: z
+    .array(z.string().min(1).max(200))
+    .min(1, 'Selecciona al menos un motivo')
+    .max(10),
+  details: z.string().max(1000).optional(),
+});
+
+export type ReportBookingBody = z.infer<typeof reportBookingBodySchema>;
 
 /** POST /api/bookings/:id/cancellation-request — cuidador solicita cancelación. */
 export const cancellationRequestBodySchema = z.object({

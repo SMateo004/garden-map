@@ -535,7 +535,8 @@ export interface CaregiverAvailabilityResponse {
   hospedaje: string[]; // fechas YYYY-MM-DD disponibles para hospedaje
   paseos: Record<string, PaseoSlot[]>; // fecha -> [{slot, enabled, start?, end?}] disponibles
   blockedDates: string[]; // fechas YYYY-MM-DD explícitamente bloqueadas por el cuidador
-  bookedPaseos?: { date: string; startTime: string; duration: number; status: string }[];
+  bookedPaseos?: { date: string; startTime: string; duration: number; status: string; petCount?: number }[];
+  maxPets?: number;
 }
 
 /**

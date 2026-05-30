@@ -172,7 +172,9 @@ export async function createBooking(
 
     // Keep pets in the order the client sent (so petIndex matches the discount order)
     const orderedPets = uniquePetIds.map(id => petsData.find(p => p.id === id)!);
-    const pet = orderedPets[0]; // primary pet (backward compat)
+    const pet = orderedPets[0]!; // primary pet (backward compat) — at least 1 validated above
+    // petCount is used in availability checks below — declare early
+    const petCount = orderedPets.length;
 
     const caregiver = await tx.caregiverProfile.findFirst({
       where: {
@@ -304,7 +306,6 @@ export async function createBooking(
     // Multi-pet discount multipliers (applied to base price per additional pet of the SAME owner):
     // Pet 1: 100%, Pet 2: 75%, Pet 3: 50%
     const petDiscountFactors = [1.0, 0.75, 0.50];
-    const petCount = orderedPets.length;
     // Total multiplier = sum of discount factors for each pet slot used
     const petMultiplier = petDiscountFactors.slice(0, petCount).reduce((a, b) => a + b, 0);
 
@@ -455,9 +456,9 @@ export async function createBooking(
     // No notificamos al cuidador aquí para reservas normales — solo cuando el pago sea confirmado
     // (onBookingWaitingApproval se dispara al pasar a WAITING_CAREGIVER_APPROVAL).
 
-    logger.info('Cliente seleccionó mascota para reserva', {
+    logger.info('Cliente seleccionó mascotas para reserva', {
       userId: clientId,
-      petId: body.petId,
+      petIds: body.petIds,
       bookingId: booking.id,
     });
     logger.info('Booking created', {
@@ -1032,8 +1033,12 @@ export async function cancelMGBooking(bookingId: string, userId: string): Promis
 export async function initPayment(
   bookingId: string,
   clientId: string,
-  method: InitPaymentBody['method']
-): Promise<{ qrId?: string; qrImageUrl?: string; qrExpiresAt?: string; status: string }> {
+  method: InitPaymentBody['method'],
+  walletContribution: number = 0
+): Promise<{
+  qrId?: string; qrImageUrl?: string; qrExpiresAt?: string; status: string;
+  walletDeducted?: number; remainingAmount?: number; paidWithWallet?: boolean;
+}> {
   const cfg = await getBookingSettings();
   return prisma.$transaction(async (tx) => {
     const booking = await tx.booking.findFirst({
@@ -1042,6 +1047,8 @@ export async function initPayment(
         id: true,
         status: true,
         caregiverId: true,
+        totalAmount: true,
+        commissionAmount: true,
       },
     });
     if (!booking) throw new BookingNotFoundError(bookingId);
@@ -1051,6 +1058,148 @@ export async function initPayment(
       );
     }
 
+    const totalAmount = Number(booking.totalAmount);
+
+    // ── PAGO COMPLETO CON BILLETERA ────────────────────────────────────────────
+    if (method === 'wallet') {
+      const user = await tx.user.findUnique({
+        where: { id: clientId },
+        select: { balance: true },
+      });
+      const balance = Number(user?.balance ?? 0);
+      if (balance < totalAmount) {
+        throw new BookingValidationError(
+          `Saldo insuficiente. Tienes Bs ${balance.toFixed(2)} y la reserva cuesta Bs ${totalAmount.toFixed(2)}.`
+        );
+      }
+
+      const newBalance = balance - totalAmount;
+      await tx.user.update({
+        where: { id: clientId },
+        data: { balance: newBalance },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          userId: clientId,
+          type: 'WALLET_PAYMENT',
+          amount: totalAmount,
+          balance: newBalance,
+          description: `Pago con billetera — reserva ${bookingId.slice(0, 8)}`,
+          bookingId,
+          status: 'COMPLETED',
+        },
+      });
+      await tx.booking.update({
+        where: { id: bookingId },
+        data: {
+          status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
+          paidAt: new Date(),
+          walletPaymentAmount: totalAmount,
+        },
+      });
+      logger.info('Pago completo con billetera', { bookingId, clientId, totalAmount, newBalance });
+      return {
+        status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
+        paidWithWallet: true,
+        walletDeducted: totalAmount,
+        remainingAmount: 0,
+      };
+    }
+
+    // ── PAGO QR CON CONTRIBUCIÓN DE BILLETERA ─────────────────────────────────
+    const effectiveWalletContribution = Math.min(
+      Math.max(0, walletContribution),
+      totalAmount
+    );
+
+    if (effectiveWalletContribution > 0) {
+      const user = await tx.user.findUnique({
+        where: { id: clientId },
+        select: { balance: true },
+      });
+      const balance = Number(user?.balance ?? 0);
+      if (balance < effectiveWalletContribution) {
+        throw new BookingValidationError(
+          `Saldo insuficiente para la contribución de billetera. Tienes Bs ${balance.toFixed(2)}.`
+        );
+      }
+
+      // If wallet covers everything, treat as full wallet payment
+      if (effectiveWalletContribution >= totalAmount) {
+        const newBalance = balance - totalAmount;
+        await tx.user.update({
+          where: { id: clientId },
+          data: { balance: newBalance },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            userId: clientId,
+            type: 'WALLET_PAYMENT',
+            amount: totalAmount,
+            balance: newBalance,
+            description: `Pago con billetera — reserva ${bookingId.slice(0, 8)}`,
+            bookingId,
+            status: 'COMPLETED',
+          },
+        });
+        await tx.booking.update({
+          where: { id: bookingId },
+          data: {
+            status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
+            paidAt: new Date(),
+            walletPaymentAmount: totalAmount,
+          },
+        });
+        return {
+          status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
+          paidWithWallet: true,
+          walletDeducted: totalAmount,
+          remainingAmount: 0,
+        };
+      }
+
+      // Partial: deduct wallet portion, generate QR for remainder
+      const newBalance = balance - effectiveWalletContribution;
+      await tx.user.update({
+        where: { id: clientId },
+        data: { balance: newBalance },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          userId: clientId,
+          type: 'WALLET_PAYMENT',
+          amount: effectiveWalletContribution,
+          balance: newBalance,
+          description: `Pago parcial con billetera — reserva ${bookingId.slice(0, 8)}`,
+          bookingId,
+          status: 'COMPLETED',
+        },
+      });
+      await tx.booking.update({
+        where: { id: bookingId },
+        data: { walletPaymentAmount: effectiveWalletContribution },
+      });
+
+      const remainingAmount = Math.round(totalAmount - effectiveWalletContribution);
+      const { qrId, qrImageUrl, qrExpiresAt } = generateQR(bookingId, cfg.QR_VALIDITY_MINUTES_PAYMENT);
+      // Re-use qrId/url/expiry fields; the QR encodes the full bookingId — admin uses the booking total
+      await tx.booking.update({
+        where: { id: bookingId },
+        data: { qrId, qrImageUrl, qrExpiresAt },
+      });
+      logger.info('Pago parcial con billetera + QR', { bookingId, clientId, walletContribution: effectiveWalletContribution, remainingAmount });
+      return {
+        qrId,
+        qrImageUrl,
+        qrExpiresAt: qrExpiresAt.toISOString(),
+        status: BookingStatus.PENDING_PAYMENT,
+        walletDeducted: effectiveWalletContribution,
+        remainingAmount,
+        paidWithWallet: false,
+      };
+    }
+
+    // ── PAGO QR COMPLETO (sin billetera) ──────────────────────────────────────
     if (method === 'qr') {
       const { qrId, qrImageUrl, qrExpiresAt } = generateQR(
         bookingId,
@@ -1069,13 +1218,13 @@ export async function initPayment(
       };
     }
 
-    // Pago manual: generamos un ID de pago para seguimiento
+    // ── PAGO MANUAL ────────────────────────────────────────────────────────────
     const manualPaymentId = `PAY-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
     await tx.booking.update({
       where: { id: bookingId },
-      data: { 
+      data: {
         status: BookingStatus.PAYMENT_PENDING_APPROVAL,
-        qrId: manualPaymentId // Usamos el campo qrId para guardar la referencia de pago manual
+        qrId: manualPaymentId
       },
     });
     await tx.adminNotification.create({
@@ -1091,7 +1240,6 @@ export async function initPayment(
       caregiverId: booking.caregiverId,
       paymentId: manualPaymentId
     });
-    // Notificación admin (MVP: console; futuro: WhatsApp/Email con link a /admin/payments-pending)
     logger.info('[ADMIN] Pago manual pendiente', {
       bookingId: booking.id,
       caregiverId: booking.caregiverId,
@@ -2688,25 +2836,27 @@ export async function confirmReceiptByClient(
     // Calcular el monto a transferir (Total - Comisión)
     const amount = Number(booking.totalAmount) - Number(booking.commissionAmount);
 
-    // Leer balance ANTES del incremento (snapshot correcto para el registro de transacción)
-    const profileBefore = await tx.caregiverProfile.findUnique({
+    // Leer userId del cuidador para acceder a la billetera unificada
+    const caregiverProfile = await tx.caregiverProfile.findUnique({
       where: { id: booking.caregiverId },
-      select: { balance: true, userId: true },
+      select: { userId: true },
     });
-    const balanceBefore = Number(profileBefore?.balance ?? 0);
+    const caregiverUserId = caregiverProfile!.userId;
 
-    // Actualizar balance del cuidador (atómico)
-    await tx.caregiverProfile.update({
-      where: { id: booking.caregiverId },
+    // Actualizar balance unificado del cuidador (atómico)
+    const updatedCaregiverUser = await tx.user.update({
+      where: { id: caregiverUserId },
       data: { balance: { increment: amount } },
+      select: { balance: true },
     });
+    const newCaregiverBalance = Number(updatedCaregiverUser.balance);
 
     await tx.walletTransaction.create({
       data: {
-        userId: profileBefore!.userId,
+        userId: caregiverUserId,
         type: 'EARNING',
         amount: amount,
-        balance: balanceBefore + amount, // nuevo saldo = anterior + ganancia
+        balance: newCaregiverBalance,
         description: `Ganancia por ${booking.serviceType === 'PASEO' ? 'paseo' : booking.serviceType === 'GUARDERIA' ? 'guardería' : 'hospedaje'} - ${booking.petName}`,
         bookingId: booking.id,
         status: 'COMPLETED',
@@ -2728,7 +2878,7 @@ export async function confirmReceiptByClient(
     }
     const updated = await tx.booking.findUnique({ where: { id: bookingId } });
 
-    sendPushToUser(profileBefore!.userId, '¡Pago liberado! 💸', `Recibiste el pago por el servicio de ${booking.petName}. Revisa tu billetera.`).catch(() => {});
+    sendPushToUser(caregiverUserId, '¡Pago liberado! 💸', `Recibiste el pago por el servicio de ${booking.petName}. Revisa tu billetera.`).catch(() => {});
 
     // Create Review natively
     await tx.review.create({
@@ -2795,23 +2945,24 @@ export async function autoReleasePayment(
 
     const amount = Number(booking.totalAmount) - Number(booking.commissionAmount);
 
-    const profileBefore = await tx.caregiverProfile.findUnique({
+    const caregiverProfileAR = await tx.caregiverProfile.findUnique({
       where: { id: booking.caregiverId },
-      select: { balance: true, userId: true },
+      select: { userId: true },
     });
-    const balanceBefore = Number(profileBefore?.balance ?? 0);
+    const caregiverUserIdAR = caregiverProfileAR!.userId;
 
-    await tx.caregiverProfile.update({
-      where: { id: booking.caregiverId },
+    const updatedUserAR = await tx.user.update({
+      where: { id: caregiverUserIdAR },
       data: { balance: { increment: amount } },
+      select: { balance: true },
     });
 
     await tx.walletTransaction.create({
       data: {
-        userId: profileBefore!.userId,
+        userId: caregiverUserIdAR,
         type: 'EARNING',
         amount,
-        balance: balanceBefore + amount,
+        balance: Number(updatedUserAR.balance),
         description: `Auto-liberación tras ${horasVencimiento}h — ${booking.petName} (sin reseña del cliente)`,
         bookingId: booking.id,
         status: 'COMPLETED',
@@ -2824,7 +2975,7 @@ export async function autoReleasePayment(
     });
 
     sendPushToUser(
-      profileBefore!.userId,
+      caregiverUserIdAR,
       '💸 Pago liberado automáticamente',
       `El pago de Bs ${amount.toFixed(2)} por el servicio de ${booking.petName} fue liberado (el cliente no dejó reseña).`
     ).catch(() => {});
@@ -2838,5 +2989,237 @@ export async function autoReleasePayment(
     }
   }).catch(err => {
     logger.error('[AutoRelease] Blockchain finalize failed', { bookingId, err });
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REPORT BOOKING — Dueño reporta que el cuidador no se presentó
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Minutos de gracia tras la hora programada antes de poder reportar. */
+const REPORT_GRACE_PASEO_MIN    = 10;
+const REPORT_GRACE_DEFAULT_MIN  = 30;
+const FINE_PERCENT              = 0.20; // 20 % del totalAmount como multa
+
+/**
+ * Dueño reporta incumplimiento del cuidador (no se presentó/no inició el servicio).
+ *
+ * Flujo:
+ *  1. Valida que la reserva sea CONFIRMED, le pertenezca al cliente y haya pasado el tiempo de gracia.
+ *  2. Crea ServiceReport.
+ *  3. Reembolsa (totalAmount - commissionAmount) a la billetera del dueño.
+ *  4. Cancela la reserva.
+ *  5. Si es la primera infracción del cuidador → WARNING; si tiene más → FINE (20% del totalAmount).
+ *  6. Notifica a ambas partes.
+ */
+export async function reportBooking(
+  bookingId: string,
+  clientId: string,
+  reasons: string[],
+  details?: string
+): Promise<{ refundAmount: number; infractionType: 'WARNING' | 'FINE' }> {
+  return prisma.$transaction(async (tx) => {
+    // ── 1. Fetch booking ────────────────────────────────────────────────────
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, clientId },
+      select: {
+        id: true,
+        status: true,
+        serviceType: true,
+        walkDate: true,
+        startDate: true,
+        startTime: true,
+        totalAmount: true,
+        commissionAmount: true,
+        petName: true,
+        caregiverId: true,
+        caregiver: { select: { id: true, userId: true, infractionCount: true } },
+        serviceReport: { select: { id: true } },
+      },
+    });
+
+    if (!booking) throw new BookingNotFoundError(bookingId);
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new BookingValidationError(
+        'Solo puedes reportar una reserva que esté confirmada y aún no haya iniciado.'
+      );
+    }
+    if (booking.serviceReport) {
+      throw new BookingValidationError('Esta reserva ya tiene un reporte registrado.');
+    }
+
+    // ── 2. Verify grace period has passed ───────────────────────────────────
+    const isPaseo  = booking.serviceType === 'PASEO';
+    const graceMins = isPaseo ? REPORT_GRACE_PASEO_MIN : REPORT_GRACE_DEFAULT_MIN;
+    const dateStr = booking.walkDate
+      ? booking.walkDate.toISOString().split('T')[0]
+      : booking.startDate?.toISOString().split('T')[0];
+
+    if (!dateStr) {
+      throw new BookingValidationError('La reserva no tiene fecha programada.');
+    }
+
+    const dateParts = dateStr.split('-').map(Number);
+    const year = dateParts[0]!;
+    const month = dateParts[1]!;
+    const day = dateParts[2]!;
+    const timeStr = booking.startTime ?? '08:00';
+    const timeParts = timeStr.split(':').map(Number);
+    const hour = timeParts[0] ?? 8;
+    const minute = timeParts[1] ?? 0;
+    const scheduledAt = new Date(year, month - 1, day, hour, minute);
+    const reportAvailableAt = new Date(scheduledAt.getTime() + graceMins * 60_000);
+
+    if (new Date() < reportAvailableAt) {
+      const diffMs = reportAvailableAt.getTime() - Date.now();
+      const diffMins = Math.ceil(diffMs / 60_000);
+      throw new BookingValidationError(
+        `Aún no puedes reportar. El botón estará disponible ${diffMins} min después de la hora programada.`
+      );
+    }
+
+    // ── 3. Calculate refund ─────────────────────────────────────────────────
+    const totalAmount      = Number(booking.totalAmount);
+    const commissionAmount = Number(booking.commissionAmount);
+    const refundAmount     = totalAmount - commissionAmount; // Garden keeps its commission
+
+    // ── 4. Refund to client wallet ──────────────────────────────────────────
+    const updatedClient = await tx.user.update({
+      where: { id: clientId },
+      data: { balance: { increment: refundAmount } },
+      select: { balance: true },
+    });
+    await tx.walletTransaction.create({
+      data: {
+        userId: clientId,
+        type: 'REFUND',
+        amount: refundAmount,
+        balance: Number(updatedClient.balance),
+        description: `Reembolso por incumplimiento del cuidador — reserva ${bookingId.slice(0, 8)}`,
+        bookingId,
+        status: 'COMPLETED',
+      },
+    });
+
+    // ── 5. Cancel booking ────────────────────────────────────────────────────
+    await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: BookingStatus.CANCELLED,
+        cancelledAt: new Date(),
+        cancellationReason: `Reporte del dueño: ${reasons.join(', ')}`,
+        refundAmount: refundAmount,
+        refundStatus: 'PROCESSED' as any,
+      },
+    });
+
+    // ── 6. Create service report ─────────────────────────────────────────────
+    await (tx as any).serviceReport.create({
+      data: {
+        bookingId,
+        clientId,
+        reasons,
+        details,
+        status: 'REFUNDED',
+        refundAmount: refundAmount,
+        refundedAt: new Date(),
+      },
+    });
+
+    // ── 7. Determine warning vs fine ─────────────────────────────────────────
+    const previousInfractions = booking.caregiver.infractionCount;
+    const infractionType: 'WARNING' | 'FINE' = previousInfractions === 0 ? 'WARNING' : 'FINE';
+    let fineAmount: number | undefined;
+
+    if (infractionType === 'FINE') {
+      fineAmount = Math.round(totalAmount * FINE_PERCENT);
+      // Deduct fine from caregiver wallet (floor at 0)
+      const caregiverUser = await tx.user.findUnique({
+        where: { id: booking.caregiver.userId },
+        select: { balance: true },
+      });
+      const caregiverBalance = Number(caregiverUser?.balance ?? 0);
+      const actualFine = Math.min(fineAmount, caregiverBalance); // can't go negative
+      if (actualFine > 0) {
+        const newCaregiverBalance = caregiverBalance - actualFine;
+        await tx.user.update({
+          where: { id: booking.caregiver.userId },
+          data: { balance: newCaregiverBalance },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            userId: booking.caregiver.userId,
+            type: 'FINE',
+            amount: actualFine,
+            balance: newCaregiverBalance,
+            description: `Multa por incumplimiento — reserva ${bookingId.slice(0, 8)} (${FINE_PERCENT * 100}% de Bs ${totalAmount})`,
+            bookingId,
+            status: 'COMPLETED',
+          },
+        });
+        fineAmount = actualFine;
+      }
+    }
+
+    // ── 8. Create infraction record ──────────────────────────────────────────
+    await (tx as any).caregiverInfraction.create({
+      data: {
+        caregiverId: booking.caregiver.id,
+        bookingId,
+        type: infractionType,
+        fineAmount: fineAmount ? fineAmount : null,
+        bookingAmount: totalAmount,
+        reasons,
+      },
+    });
+    await tx.caregiverProfile.update({
+      where: { id: booking.caregiver.id },
+      data: { infractionCount: { increment: 1 } },
+    });
+
+    // ── 9. Notifications ─────────────────────────────────────────────────────
+    // To client: confirm refund
+    await tx.notification.create({
+      data: {
+        userId: clientId,
+        title: '✅ Reembolso procesado',
+        message:
+          `Hemos recibido tu reporte y procesado un reembolso de Bs ${refundAmount} a tu billetera Garden. ` +
+          `El monto ya está disponible. Lamentamos los inconvenientes.`,
+        type: 'REFUND',
+      },
+    });
+
+    // To caregiver: warning or fine
+    const caregiverMsg = infractionType === 'WARNING'
+      ? `⚠️ Has recibido una advertencia por no presentarte al servicio "${booking.petName}" ` +
+        `(reserva ${bookingId.slice(0, 8)}). ` +
+        `Motivos reportados: ${reasons.join(', ')}. ` +
+        `Recuerda que en futuras ocasiones recibirás una multa automática del ${FINE_PERCENT * 100}% del monto de la reserva. ` +
+        `Por favor, comunícate siempre con el cliente ante cualquier imprevisto.`
+      : `🚫 Se ha aplicado una multa de Bs ${fineAmount ?? 0} a tu billetera por no presentarte al servicio ` +
+        `"${booking.petName}" (reserva ${bookingId.slice(0, 8)}). ` +
+        `Motivos: ${reasons.join(', ')}. ` +
+        `Por favor, cumple siempre con tus compromisos o cancela con anticipación.`;
+
+    await tx.notification.create({
+      data: {
+        userId: booking.caregiver.userId,
+        title: infractionType === 'WARNING' ? '⚠️ Advertencia por incumplimiento' : '🚫 Multa por incumplimiento',
+        message: caregiverMsg,
+        type: 'SYSTEM',
+      },
+    });
+
+    logger.info('Booking reported by client', {
+      bookingId,
+      clientId,
+      reasons,
+      refundAmount,
+      infractionType,
+      fineAmount,
+    });
+
+    return { refundAmount, infractionType };
   });
 }

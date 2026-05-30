@@ -163,9 +163,8 @@ class _WalletScreenState extends State<WalletScreen> {
                       ),
                       
                       const SizedBox(height: 24),
-                      // SECCIÓN 2 — Datos bancarios y botón de retiro (solo CAREGIVER)
-                      if (_role == 'CAREGIVER') ...[
-                        Text('Datos de cobro', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+                      // SECCIÓN 2 — Datos bancarios y botón de retiro (todos los roles)
+                      Text('Datos de cobro', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 12),
                         Container(
                           padding: const EdgeInsets.all(16),
@@ -182,24 +181,17 @@ class _WalletScreenState extends State<WalletScreen> {
                                   color: GardenColors.secondary.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: const Text(
-                                  '\uE84F', // account_balance
-                                  style: TextStyle(
-                                    fontFamily: 'MaterialIcons',
-                                    fontSize: 22,
-                                    color: GardenColors.secondary,
-                                  ),
-                                ),
+                                child: const Icon(Icons.account_balance_rounded, color: GardenColors.secondary, size: 22),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
-                                child: _walletData?['caregiverBankInfo']?['bankName'] != null
+                                child: _walletData?['bankInfo']?['bankName'] != null
                                     ? Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text(_walletData!['caregiverBankInfo']!['bankName'] as String,
+                                          Text(_walletData!['bankInfo']!['bankName'] as String,
                                               style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
-                                          Text('${_walletData!['caregiverBankInfo']!['bankHolder']} · ${_walletData!['caregiverBankInfo']!['bankAccount']}',
+                                          Text('${_walletData!['bankInfo']!['bankHolder']} · ${_walletData!['bankInfo']!['bankAccount']}',
                                               style: TextStyle(color: subtextColor, fontSize: 13)),
                                         ],
                                       )
@@ -210,7 +202,7 @@ class _WalletScreenState extends State<WalletScreen> {
                               TextButton(
                                 onPressed: _showBankInfoSheet,
                                 child: Text(
-                                  _walletData?['caregiverBankInfo']?['bankName'] != null ? 'Editar' : 'Configurar',
+                                  _walletData?['bankInfo']?['bankName'] != null ? 'Editar' : 'Configurar',
                                   style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600),
                                 ),
                               ),
@@ -223,8 +215,7 @@ class _WalletScreenState extends State<WalletScreen> {
                           icon: Icons.arrow_upward_rounded,
                           onPressed: () => _showWithdrawSheet(),
                         ),
-                        const SizedBox(height: 32),
-                      ],
+                      const SizedBox(height: 32),
                       // SECCIÓN 3 — Historial de transacciones
                       Text('Historial', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 16),
@@ -262,8 +253,8 @@ class _WalletScreenState extends State<WalletScreen> {
     final amountController = TextEditingController();
     bool isSubmitting = false;
 
-    // Verificar si tiene datos bancarios antes de abrir
-    if (_walletData?['caregiverBankInfo']?['bankName'] == null) {
+    // Verificar si tiene datos bancarios configurados antes de abrir
+    if (_walletData?['bankInfo']?['bankName'] == null) {
       _showBankInfoSheet();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Configura tus datos bancarios antes de retirar')),
@@ -296,7 +287,7 @@ class _WalletScreenState extends State<WalletScreen> {
                   const SizedBox(height: 20),
                   Text('Solicitar retiro', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 12),
-                  Text('Se enviará a: ${_walletData!['caregiverBankInfo']!['bankName']} (${_walletData!['caregiverBankInfo']!['bankAccount']})',
+                  Text('Se enviará a: ${_walletData!['bankInfo']!['bankName']} (${_walletData!['bankInfo']!['bankAccount']})',
                       style: TextStyle(color: subtextColor, fontSize: 12, fontStyle: FontStyle.italic)),
                   const SizedBox(height: 20),
                   // Monto
@@ -338,8 +329,8 @@ class _WalletScreenState extends State<WalletScreen> {
                           title: const Text('¿Confirmar retiro?'),
                           content: Text(
                             'Se solicitará el retiro de Bs ${amount.toStringAsFixed(2)} '
-                            'a la cuenta ${_walletData!['caregiverBankInfo']!['bankName']} '
-                            '(${_walletData!['caregiverBankInfo']!['bankAccount']}). '
+                            'a la cuenta ${_walletData!['bankInfo']!['bankName']} '
+                            '(${_walletData!['bankInfo']!['bankAccount']}). '
                             'El proceso puede tardar 1-3 días hábiles.',
                           ),
                           actions: [
@@ -411,7 +402,7 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   void _showBankInfoSheet() {
-    final bankInfo = _walletData?['caregiverBankInfo'];
+    final bankInfo = _walletData?['bankInfo'];
     final bankAccountController = TextEditingController(text: bankInfo?['bankAccount'] as String? ?? '');
     final bankHolderController = TextEditingController(text: bankInfo?['bankHolder'] as String? ?? '');
     String selectedBankName = bankInfo?['bankName'] as String? ?? '';
@@ -524,8 +515,8 @@ class _WalletScreenState extends State<WalletScreen> {
                       }
                       setSheet(() => isSaving = true);
                       try {
-                        final response = await http.patch(
-                          Uri.parse('$_baseUrl/caregiver/bank-info'),
+                        final response = await http.put(
+                          Uri.parse('$_baseUrl/wallet/bank'),
                           headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
                           body: jsonEncode({
                             'bankName': selectedBankName,

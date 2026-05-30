@@ -16,6 +16,7 @@ import {
   confirmExtensionQrBodySchema,
   requestHospedajeExtensionPaymentBodySchema,
   confirmHospedajeExtensionQrBodySchema,
+  reportBookingBodySchema,
 } from './booking.validation.js';
 import * as bookingService from './booking.service.js';
 
@@ -225,7 +226,7 @@ export const initPayment = asyncHandler(async (req: Request, res: Response) => {
   const bookingId = req.params.id!;
   const clientId = req.user!.userId;
   const body = initPaymentBodySchema.parse(req.body);
-  const result = await bookingService.initPayment(bookingId, clientId, body.method);
+  const result = await bookingService.initPayment(bookingId, clientId, body.method, body.walletContribution ?? 0);
   res.json({ success: true, data: result });
 });
 
@@ -339,4 +340,19 @@ export const reject = asyncHandler(async (req: Request, res: Response) => {
   const body = cancellationRequestBodySchema.parse(req.body); // use the same schema as cancellation
   const booking = await bookingService.rejectBooking(bookingId, caregiverUserId, body.reason);
   res.json({ success: true, data: booking });
+});
+
+/**
+ * POST /api/bookings/:id/report
+ * Dueño reporta que el cuidador no se presentó / no inició el servicio.
+ * Disponible únicamente cuando la reserva está CONFIRMED y ya pasó el tiempo de gracia
+ * (paseo: +10 min, otros: +30 min después de la hora programada).
+ * Acción automática: reembolso al dueño (totalAmount - commissionAmount) + warning/multa al cuidador.
+ */
+export const reportBooking = asyncHandler(async (req: Request, res: Response) => {
+  const bookingId = req.params.id!;
+  const clientId = req.user!.userId;
+  const body = reportBookingBodySchema.parse(req.body);
+  const result = await bookingService.reportBooking(bookingId, clientId, body.reasons, body.details);
+  res.json({ success: true, data: result });
 });
