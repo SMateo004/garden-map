@@ -887,7 +887,7 @@ export async function getCaregiverAvailability(
         AND: [
           {
             OR: [
-              { status: { in: ['CONFIRMED', 'IN_PROGRESS', 'PAYMENT_PENDING_APPROVAL', 'COMPLETED'] } },
+              { status: { in: ['CONFIRMED', 'IN_PROGRESS', 'PAYMENT_PENDING_APPROVAL', 'WAITING_CAREGIVER_APPROVAL', 'PENDING_MG', 'COMPLETED'] } },
               { status: 'PENDING_PAYMENT', createdAt: { gte: expirationDate } }
             ]
           },

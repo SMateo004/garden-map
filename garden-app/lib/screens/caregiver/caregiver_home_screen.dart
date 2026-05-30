@@ -2649,6 +2649,11 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       context.push('/profile');
     } else {
       setState(() => _selectedTab = i);
+      // Refrescar reservas cuando el cuidador navega a Inicio (0) o Reservas (2)
+      // para que reservas canceladas desaparezcan del calendario/lista sin pull-to-refresh.
+      if (i == 0 || i == 2) {
+        _loadBookings();
+      }
     }
   }
 
@@ -3203,7 +3208,11 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
-                      booking['serviceType'] == 'PASEO' ? Icons.directions_walk_outlined : Icons.home_outlined,
+                      booking['serviceType'] == 'PASEO'
+                          ? Icons.directions_walk_outlined
+                          : booking['serviceType'] == 'GUARDERIA'
+                              ? Icons.business_center_outlined
+                              : Icons.home_outlined,
                       color: GardenColors.primary, size: 22,
                     ),
                   ),
@@ -3213,11 +3222,20 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          booking['serviceType'] == 'PASEO' ? 'Paseo' : 'Hospedaje',
+                          booking['serviceType'] == 'PASEO'
+                              ? 'Paseo'
+                              : booking['serviceType'] == 'GUARDERIA'
+                                  ? 'Guardería'
+                                  : 'Hospedaje',
                           style: TextStyle(color: widget.textColor, fontSize: 15, fontWeight: FontWeight.w700),
                         ),
                         Text(
-                          '${booking['petName'] ?? '—'} · ${booking['walkDate'] ?? booking['startDate'] ?? '—'}',
+                          () {
+                            final pet = booking['petName'] ?? '—';
+                            final rawDate = (booking['walkDate'] ?? booking['startDate'] ?? '—').toString().split('T')[0];
+                            final st = (booking['startTime'] ?? '').toString().trim();
+                            return st.isNotEmpty ? '$pet · $rawDate $st' : '$pet · $rawDate';
+                          }(),
                           style: TextStyle(color: widget.subtextColor, fontSize: 13),
                         ),
                       ],

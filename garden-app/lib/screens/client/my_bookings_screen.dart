@@ -823,7 +823,17 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                             ),
                             Text(
                               (isPaseo || isGuarderia)
-                                  ? (booking['timeSlot'] ?? '')
+                                  ? (() {
+                                      final st = (booking['startTime'] ?? '').toString().trim();
+                                      if (st.isNotEmpty) return st;
+                                      // fallback: translate slot name
+                                      switch ((booking['timeSlot'] ?? '').toString()) {
+                                        case 'MANANA': return 'Mañana';
+                                        case 'TARDE':  return 'Tarde';
+                                        case 'NOCHE':  return 'Noche';
+                                        default:       return (booking['timeSlot'] ?? '').toString();
+                                      }
+                                    })()
                                   : '${booking['totalDays'] ?? 0} noches',
                               style: TextStyle(color: subtextColor, fontSize: 11),
                               overflow: TextOverflow.ellipsis,

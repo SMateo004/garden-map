@@ -504,8 +504,8 @@ async function assertHospedajeAvailability(
     );
   }
 
-  // Reservas que bloquean: CONFIRMED, IN_PROGRESS, PAYMENT_PENDING_APPROVAL 
-  // O PENDING_PAYMENT si tiene menos de 15 minutos de antigüedad.
+  // Reservas que bloquean: CONFIRMED, IN_PROGRESS, PAYMENT_PENDING_APPROVAL,
+  // WAITING_CAREGIVER_APPROVAL, PENDING_MG, o PENDING_PAYMENT reciente (<15 min).
   const expirationDate = new Date(Date.now() - 15 * 60 * 1000);
 
   const overlapping = await tx.booking.count({
@@ -513,7 +513,7 @@ async function assertHospedajeAvailability(
       caregiverId,
       OR: [
         {
-          status: { in: [BookingStatus.PAYMENT_PENDING_APPROVAL, BookingStatus.WAITING_CAREGIVER_APPROVAL, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS] },
+          status: { in: [BookingStatus.PAYMENT_PENDING_APPROVAL, BookingStatus.WAITING_CAREGIVER_APPROVAL, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS, BookingStatus.PENDING_MG] },
         },
         {
           status: BookingStatus.PENDING_PAYMENT,
@@ -606,7 +606,7 @@ async function assertPaseoAvailability(
       walkDate: date,
       OR: [
         {
-          status: { in: [BookingStatus.PAYMENT_PENDING_APPROVAL, BookingStatus.WAITING_CAREGIVER_APPROVAL, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS] },
+          status: { in: [BookingStatus.PAYMENT_PENDING_APPROVAL, BookingStatus.WAITING_CAREGIVER_APPROVAL, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS, BookingStatus.PENDING_MG] },
         },
         {
           status: BookingStatus.PENDING_PAYMENT,
