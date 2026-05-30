@@ -1341,6 +1341,273 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       },
     );
   }
+
+  // ─── HELPERS: Report ──────────────────────────────────────────────────────
+
+  /// Returns true when the "Reportar" button should be visible for this booking.
+  /// Grace period: 10 min for PASEO, 30 min for others.
+  bool _canReport(Map<String, dynamic> booking) {
+    if (booking.containsKey('serviceReport') && booking['serviceReport'] != null) {
+      return false; // already reported
+    }
+    final serviceType = booking['serviceType'] as String? ?? '';
+    final isPaseo = serviceType == 'PASEO';
+    final graceMins = isPaseo ? 10 : 30;
+
+    final dateStr = ((booking['walkDate'] ?? booking['startDate']) as String? ?? '').split('T').first;
+    if (dateStr.isEmpty) return false;
+    try {
+      final parts = dateStr.split('-');
+      final timeStr = (booking['startTime'] as String? ?? '08:00');
+      final timeParts = timeStr.split(':');
+      final scheduled = DateTime(
+        int.parse(parts[0]),
+        int.parse(parts[1]),
+        int.parse(parts[2]),
+        int.tryParse(timeParts[0]) ?? 8,
+        int.tryParse(timeParts.length > 1 ? timeParts[1] : '0') ?? 0,
+      );
+      final reportAvailable = scheduled.add(Duration(minutes: graceMins));
+      return DateTime.now().isAfter(reportAvailable);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static const List<String> _reportReasons = [
+    'El cuidador nunca llegó',
+    'El cuidador no se comunicó',
+    'El cuidador llegó tarde sin avisar',
+    'El cuidador me cobró un monto extra',
+    'El cuidador canceló sin aviso previo',
+    'Me sentí inseguro/a con el servicio',
+    'El cuidador no trató bien a mi mascota',
+    'El cuidador no cumplió lo acordado',
+    'Otro motivo',
+  ];
+
+  Future<void> _showReportDialog(Map<String, dynamic> booking) async {
+    final isDark = themeNotifier.isDark;
+    final selectedReasons = <String>{};
+    bool isSubmitting = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Container(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+          decoration: BoxDecoration(
+            color: isDark ? GardenColors.darkSurface : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.only(
+            left: 20, right: 20, top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade400,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: GardenColors.error.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.flag_outlined, color: GardenColors.error, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Reportar incumplimiento',
+                        style: TextStyle(
+                          color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Selecciona todos los motivos que apliquen. Se procesará un reembolso a tu billetera Garden automáticamente.',
+                  style: TextStyle(
+                    color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ..._reportReasons.map((reason) {
+                  final selected = selectedReasons.contains(reason);
+                  return GestureDetector(
+                    onTap: () => setSheetState(() {
+                      if (selected) {
+                        selectedReasons.remove(reason);
+                      } else {
+                        selectedReasons.add(reason);
+                      }
+                    }),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? GardenColors.error.withValues(alpha: 0.08)
+                            : (isDark ? GardenColors.darkBackground : GardenColors.lightBackground),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: selected ? GardenColors.error : (isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
+                          width: selected ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            selected ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+                            color: selected ? GardenColors.error : (isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              reason,
+                              style: TextStyle(
+                                color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
+                                fontSize: 14,
+                                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: GardenColors.warning.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: GardenColors.warning.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.info_outline_rounded, color: GardenColors.warning, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Primera infracción: advertencia al cuidador. '
+                          'Siguientes: multa automática del 20% de la reserva.',
+                          style: TextStyle(
+                            color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: selectedReasons.isEmpty || isSubmitting
+                        ? null
+                        : () async {
+                            setSheetState(() => isSubmitting = true);
+                            try {
+                              final response = await http.post(
+                                Uri.parse('$_baseUrl/bookings/${booking['id']}/report'),
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  'Authorization': 'Bearer $_clientToken',
+                                },
+                                body: jsonEncode({'reasons': selectedReasons.toList()}),
+                              );
+                              final data = jsonDecode(response.body);
+                              if (!mounted) return;
+                              Navigator.pop(ctx);
+                              if (data['success'] == true) {
+                                final refund = (data['data']['refundAmount'] as num?)?.toDouble() ?? 0;
+                                final infrType = data['data']['infractionType'] as String? ?? 'WARNING';
+                                _showSuccess(
+                                  'Reporte enviado',
+                                  'Tu reembolso de Bs ${refund.round()} fue procesado a tu billetera. '
+                                  '${infrType == 'WARNING' ? 'El cuidador recibió una advertencia.' : 'Se aplicó una multa al cuidador.'}',
+                                );
+                                await _loadBookings();
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                  content: Text(data['error']?['message'] ?? 'Error al enviar el reporte'),
+                                  backgroundColor: Colors.red.shade700,
+                                ));
+                              }
+                            } catch (e) {
+                              Navigator.pop(ctx);
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                                content: Text('Error de conexión. Intenta de nuevo.'),
+                                backgroundColor: Colors.red,
+                              ));
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GardenColors.error,
+                      disabledBackgroundColor: GardenColors.error.withValues(alpha: 0.4),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: isSubmitting
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Text('Enviar reporte y solicitar reembolso',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showSuccess(String title, String message) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Row(children: [
+          const Icon(Icons.check_circle_rounded, color: GardenColors.success),
+          const SizedBox(width: 8),
+          Text(title),
+        ]),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _RatingSheet extends StatefulWidget {
@@ -1480,268 +1747,6 @@ class _RatingSheetState extends State<_RatingSheet> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  // ─── HELPERS: Report ──────────────────────────────────────────────────────
-
-  /// Returns true when the "Reportar" button should be visible for this booking.
-  /// Grace period: 10 min for PASEO, 30 min for others.
-  bool _canReport(Map<String, dynamic> booking) {
-    if (booking.containsKey('serviceReport') && booking['serviceReport'] != null) {
-      return false; // already reported
-    }
-    final serviceType = booking['serviceType'] as String? ?? '';
-    final isPaseo = serviceType == 'PASEO';
-    final graceMins = isPaseo ? 10 : 30;
-
-    final dateStr = ((booking['walkDate'] ?? booking['startDate']) as String? ?? '').split('T').first;
-    if (dateStr.isEmpty) return false;
-    try {
-      final parts = dateStr.split('-');
-      final timeStr = (booking['startTime'] as String? ?? '08:00');
-      final timeParts = timeStr.split(':');
-      final scheduled = DateTime(
-        int.parse(parts[0]),
-        int.parse(parts[1]),
-        int.parse(parts[2]),
-        int.tryParse(timeParts[0]) ?? 8,
-        int.tryParse(timeParts.length > 1 ? timeParts[1] : '0') ?? 0,
-      );
-      final reportAvailable = scheduled.add(Duration(minutes: graceMins));
-      return DateTime.now().isAfter(reportAvailable);
-    } catch (_) {
-      return false;
-    }
-  }
-
-  static const List<String> _reportReasons = [
-    'El cuidador nunca llegó',
-    'El cuidador no se comunicó',
-    'El cuidador llegó tarde sin avisar',
-    'El cuidador me cobró un monto extra',
-    'El cuidador canceló sin aviso previo',
-    'Me sentí inseguro/a con el servicio',
-    'El cuidador no trató bien a mi mascota',
-    'El cuidador no cumplió lo acordado',
-    'Otro motivo',
-  ];
-
-  Future<void> _showReportDialog(Map<String, dynamic> booking) async {
-    final isDark = themeNotifier.isDark;
-    final selectedReasons = <String>{};
-    bool isSubmitting = false;
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Container(
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
-          decoration: BoxDecoration(
-            color: isDark ? GardenColors.darkSurface : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: EdgeInsets.only(
-            left: 20, right: 20, top: 20,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Handle bar
-                Center(
-                  child: Container(
-                    width: 40, height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                // Title
-                Row(children: [
-                  const Icon(Icons.flag_rounded, color: GardenColors.error, size: 22),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Reportar incumplimiento',
-                    style: TextStyle(
-                      color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
-                      fontSize: 18, fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ]),
-                const SizedBox(height: 6),
-                Text(
-                  'El cuidador recibirá una advertencia y se procesará un '
-                  'reembolso automático a tu billetera Garden.',
-                  style: TextStyle(
-                    color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  '¿Qué ocurrió? (selecciona uno o más)',
-                  style: TextStyle(
-                    color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
-                    fontSize: 14, fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                ..._reportReasons.map((reason) {
-                  final isSelected = selectedReasons.contains(reason);
-                  return GestureDetector(
-                    onTap: () => setSheetState(() {
-                      if (isSelected) {
-                        selectedReasons.remove(reason);
-                      } else {
-                        selectedReasons.add(reason);
-                      }
-                    }),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? GardenColors.error.withValues(alpha: 0.08)
-                            : (isDark ? GardenColors.darkBackground : GardenColors.lightBackground),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isSelected
-                              ? GardenColors.error.withValues(alpha: 0.5)
-                              : (isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
-                          width: isSelected ? 1.5 : 1,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
-                            color: isSelected ? GardenColors.error : (isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
-                            size: 18,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              reason,
-                              style: TextStyle(
-                                color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
-                                fontSize: 14,
-                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
-                const SizedBox(height: 16),
-                // Info box
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: GardenColors.warning.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: GardenColors.warning.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.info_outline_rounded, color: GardenColors.warning, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Primera infracción: advertencia al cuidador. '
-                          'Siguientes: multa automática del 20% de la reserva.',
-                          style: TextStyle(
-                            color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: selectedReasons.isEmpty || isSubmitting
-                        ? null
-                        : () async {
-                            setSheetState(() => isSubmitting = true);
-                            try {
-                              final response = await http.post(
-                                Uri.parse('$_baseUrl/bookings/${booking['id']}/report'),
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                  'Authorization': 'Bearer $_clientToken',
-                                },
-                                body: jsonEncode({'reasons': selectedReasons.toList()}),
-                              );
-                              final data = jsonDecode(response.body);
-                              if (!mounted) return;
-                              Navigator.pop(ctx);
-                              if (data['success'] == true) {
-                                final refund = (data['data']['refundAmount'] as num?)?.toDouble() ?? 0;
-                                final infrType = data['data']['infractionType'] as String? ?? 'WARNING';
-                                _showSuccess(
-                                  'Reporte enviado',
-                                  'Tu reembolso de Bs ${refund.round()} fue procesado a tu billetera. '
-                                  '${infrType == 'WARNING' ? 'El cuidador recibió una advertencia.' : 'Se aplicó una multa al cuidador.'}',
-                                );
-                                await _loadBookings();
-                              } else {
-                                _showError(data['error']?['message'] ?? 'Error al enviar el reporte');
-                              }
-                            } catch (e) {
-                              Navigator.pop(ctx);
-                              _showError('Error de conexión. Intenta de nuevo.');
-                            }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: GardenColors.error,
-                      disabledBackgroundColor: GardenColors.error.withValues(alpha: 0.4),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    child: isSubmitting
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Text('Enviar reporte y solicitar reembolso',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showSuccess(String title, String message) {
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Row(children: [
-          const Icon(Icons.check_circle_rounded, color: GardenColors.success),
-          const SizedBox(width: 8),
-          Text(title),
-        ]),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Entendido'),
-          ),
-        ],
       ),
     );
   }
