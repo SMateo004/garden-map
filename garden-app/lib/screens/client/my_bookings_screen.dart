@@ -1358,13 +1358,16 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     if (dateStr.isEmpty) return false;
     try {
       final parts = dateStr.split('-');
-      final timeStr = (booking['startTime'] as String? ?? '08:00');
+      // HOSPEDAJE no almacena startTime — el inicio por defecto es mediodía
+      final defaultTime = serviceType == 'HOSPEDAJE' ? '12:00' : '08:00';
+      final timeStr = (booking['startTime'] as String? ?? defaultTime);
       final timeParts = timeStr.split(':');
+      final defaultHour = serviceType == 'HOSPEDAJE' ? 12 : 8;
       final scheduled = DateTime(
         int.parse(parts[0]),
         int.parse(parts[1]),
         int.parse(parts[2]),
-        int.tryParse(timeParts[0]) ?? 8,
+        int.tryParse(timeParts[0]) ?? defaultHour,
         int.tryParse(timeParts.length > 1 ? timeParts[1] : '0') ?? 0,
       );
       final reportAvailable = scheduled.add(Duration(minutes: graceMins));
@@ -1374,20 +1377,39 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     }
   }
 
-  static const List<String> _reportReasons = [
-    'El cuidador nunca llegó',
-    'El cuidador no se comunicó',
-    'El cuidador llegó tarde sin avisar',
-    'El cuidador me cobró un monto extra',
-    'El cuidador canceló sin aviso previo',
-    'Me sentí inseguro/a con el servicio',
-    'El cuidador no trató bien a mi mascota',
-    'El cuidador no cumplió lo acordado',
-    'Otro motivo',
-  ];
+  List<String> _getReportReasons(String serviceType) {
+    if (serviceType == 'HOSPEDAJE') {
+      return [
+        'El cuidador nunca recibió a mi mascota',
+        'El cuidador no se comunicó durante el hospedaje',
+        'El cuidador no envió actualizaciones ni fotos',
+        'El cuidador me cobró un monto extra no acordado',
+        'El cuidador canceló el hospedaje sin aviso previo',
+        'Mi mascota regresó lastimada o enferma',
+        'El cuidador no trató bien a mi mascota',
+        'Las condiciones del alojamiento no eran las prometidas',
+        'El cuidador entregó la mascota en mal estado',
+        'Otro motivo',
+      ];
+    }
+    // PASEO y GUARDERIA comparten los mismos motivos
+    return [
+      'El cuidador nunca llegó',
+      'El cuidador no se comunicó',
+      'El cuidador llegó tarde sin avisar',
+      'El cuidador me cobró un monto extra',
+      'El cuidador canceló sin aviso previo',
+      'Me sentí inseguro/a con el servicio',
+      'El cuidador no trató bien a mi mascota',
+      'El cuidador no cumplió lo acordado',
+      'Otro motivo',
+    ];
+  }
 
   Future<void> _showReportDialog(Map<String, dynamic> booking) async {
     final isDark = themeNotifier.isDark;
+    final serviceType = booking['serviceType'] as String? ?? '';
+    final reportReasons = _getReportReasons(serviceType);
     final selectedReasons = <String>{};
     bool isSubmitting = false;
 
@@ -1452,7 +1474,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                ..._reportReasons.map((reason) {
+                ...reportReasons.map((reason) {
                   final selected = selectedReasons.contains(reason);
                   return GestureDetector(
                     onTap: () => setSheetState(() {

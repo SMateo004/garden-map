@@ -3063,9 +3063,11 @@ export async function reportBooking(
     const year = dateParts[0]!;
     const month = dateParts[1]!;
     const day = dateParts[2]!;
-    const timeStr = booking.startTime ?? '08:00';
+    // HOSPEDAJE no almacena startTime — se usa mediodía como hora de inicio por defecto
+    const defaultTime = booking.serviceType === 'HOSPEDAJE' ? '12:00' : '08:00';
+    const timeStr = booking.startTime ?? defaultTime;
     const timeParts = timeStr.split(':').map(Number);
-    const hour = timeParts[0] ?? 8;
+    const hour = timeParts[0] ?? (booking.serviceType === 'HOSPEDAJE' ? 12 : 8);
     const minute = timeParts[1] ?? 0;
     const scheduledAt = new Date(year, month - 1, day, hour, minute);
     const reportAvailableAt = new Date(scheduledAt.getTime() + graceMins * 60_000);
@@ -3114,7 +3116,7 @@ export async function reportBooking(
     });
 
     // ── 6. Create service report ─────────────────────────────────────────────
-    await (tx as any).serviceReport.create({
+    await tx.serviceReport.create({
       data: {
         bookingId,
         clientId,
@@ -3162,7 +3164,7 @@ export async function reportBooking(
     }
 
     // ── 8. Create infraction record ──────────────────────────────────────────
-    await (tx as any).caregiverInfraction.create({
+    await tx.caregiverInfraction.create({
       data: {
         caregiverId: booking.caregiver.id,
         bookingId,

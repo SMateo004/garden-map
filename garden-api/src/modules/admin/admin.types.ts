@@ -5,6 +5,7 @@ export interface PendingPaymentItem {
   caregiverId: string;
   serviceType: string;
   totalAmount: string;
+  walletPaymentAmount: number;
   petName: string;
   startDate: string | null;
   endDate: string | null;

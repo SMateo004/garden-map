@@ -682,6 +682,7 @@ export async function getPaymentsPending(
     caregiverId: b.caregiverId,
     serviceType: b.serviceType,
     totalAmount: String(b.totalAmount),
+    walletPaymentAmount: Number(b.walletPaymentAmount ?? 0),
     petName: b.petName,
     startDate: b.startDate?.toISOString().slice(0, 10) ?? null,
     endDate: b.endDate?.toISOString().slice(0, 10) ?? null,
@@ -702,10 +703,12 @@ export async function getPaymentsPending(
   };
 }
 
-/** POST /api/admin/bookings/:id/reject-payment — rechazar pago; vuelve a PENDING_PAYMENT y limpia QR. */
+/** POST /api/admin/bookings/:id/reject-payment — rechazar pago; vuelve a PENDING_PAYMENT y limpia QR.
+ *  Si el cliente había usado billetera para cubrir parte del pago, se le reembolsa automáticamente. */
 export async function rejectPayment(bookingId: string, adminId: string): Promise<{ id: string; status: string }> {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
+    select: { id: true, clientId: true, status: true, walletPaymentAmount: true },
   });
   if (!booking) throw new NotFoundError('Reserva no encontrada');
   if (booking.status !== BookingStatus.PAYMENT_PENDING_APPROVAL && booking.status !== BookingStatus.PENDING_PAYMENT) {
@@ -714,24 +717,60 @@ export async function rejectPayment(bookingId: string, adminId: string): Promise
     );
   }
 
-  const updated = await prisma.booking.update({
-    where: { id: bookingId },
-    data: {
-      status: BookingStatus.PENDING_PAYMENT,
-      // Limpiar QR para que el cliente sepa que fue rechazado y deba reiniciar el pago
-      qrId: null,
-      qrImageUrl: null,
-      qrExpiresAt: null,
-    },
+  const walletContrib = Number(booking.walletPaymentAmount ?? 0);
+
+  const updated = await prisma.$transaction(async (tx) => {
+    // 1. Limpiar QR y resetear contribución de billetera
+    const result = await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: BookingStatus.PENDING_PAYMENT,
+        qrId: null,
+        qrImageUrl: null,
+        qrExpiresAt: null,
+        ...(walletContrib > 0 ? { walletPaymentAmount: 0 } : {}),
+      },
+    });
+
+    // 2. Si el cliente había pagado con billetera, reembolsar
+    if (walletContrib > 0) {
+      const updatedUser = await tx.user.update({
+        where: { id: booking.clientId },
+        data: { balance: { increment: walletContrib } },
+        select: { balance: true },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          userId: booking.clientId,
+          type: 'REFUND',
+          amount: walletContrib,
+          balance: Number(updatedUser.balance),
+          description: `Reembolso de billetera — pago rechazado (reserva ${bookingId.slice(0, 8)})`,
+          bookingId,
+          status: 'COMPLETED',
+        },
+      });
+      logger.info('Admin: reembolso de billetera por rechazo de pago', {
+        bookingId,
+        adminId,
+        walletContrib,
+        newBalance: Number(updatedUser.balance),
+      });
+    }
+
+    return result;
   });
 
   // Notificar al cliente (fire-and-forget)
+  const notifMessage = walletContrib > 0
+    ? `Tu pago fue rechazado. Se reembolsaron Bs ${walletContrib.toFixed(2)} a tu billetera Garden. Por favor intenta el pago nuevamente.`
+    : 'Tu pago fue rechazado. Verifica que hayas realizado el pago correctamente e intenta de nuevo, o solicita una revisión manual desde la app.';
+
   prisma.notification.create({
     data: {
       userId: booking.clientId,
       title: 'Pago rechazado',
-      message:
-        'Tu pago fue rechazado. Verifica que hayas realizado el pago correctamente e intenta de nuevo, o solicita una revisión manual desde la app.',
+      message: notifMessage,
       type: 'PAYMENT',
     },
   }).catch((err) => {
