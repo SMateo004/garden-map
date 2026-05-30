@@ -464,7 +464,7 @@ function isDayTypeAllowed(
   return schedule['weekdays'] !== false;
 }
 
-/** Hospedaje: bloquea solo si hay fila explícita isAvailable=false. Sin horarios ni schedule requeridos. */
+/** Hospedaje: bloquea solo si hay fila explícita isAvailable=false o si se supera maxPets simultáneas. */
 async function assertHospedajeAvailability(
   tx: Prisma.TransactionClient,
   caregiverId: string,
@@ -508,9 +508,19 @@ async function assertHospedajeAvailability(
   // WAITING_CAREGIVER_APPROVAL, PENDING_MG, o PENDING_PAYMENT reciente (<15 min).
   const expirationDate = new Date(Date.now() - 15 * 60 * 1000);
 
-  const overlapping = await tx.booking.count({
+  // Fetch maxPets to determine how many simultaneous bookings are allowed
+  const profileForMaxPets = await tx.caregiverProfile.findUnique({
+    where: { id: caregiverId },
+    select: { maxPets: true },
+  });
+  const maxPets = profileForMaxPets?.maxPets ?? 1;
+
+  // For maxPets > 1, we need to check per-day capacity, not just total count.
+  // Find all overlapping bookings and count how many cover each date.
+  const overlappingBookings = await tx.booking.findMany({
     where: {
       caregiverId,
+      serviceType: 'HOSPEDAJE',
       OR: [
         {
           status: { in: [BookingStatus.PAYMENT_PENDING_APPROVAL, BookingStatus.WAITING_CAREGIVER_APPROVAL, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS, BookingStatus.PENDING_MG] },
@@ -523,12 +533,32 @@ async function assertHospedajeAvailability(
       startDate: { lte: end },
       endDate: { gt: start },
     },
+    select: { startDate: true, endDate: true },
   });
-  if (overlapping > 0) {
-    throw new AvailabilityConflictError(
-      'El cuidador ya tiene una reserva que se solapa con las fechas solicitadas. Elige otras fechas.',
-      'startDate'
-    );
+
+  if (overlappingBookings.length >= maxPets) {
+    // Check if any single day within the requested range is at full capacity
+    const dateCounts = new Map<string, number>();
+    for (const b of overlappingBookings) {
+      let d = new Date(b.startDate!);
+      while (d < b.endDate!) {
+        const ds = d.toISOString().slice(0, 10);
+        dateCounts.set(ds, (dateCounts.get(ds) ?? 0) + 1);
+        d.setDate(d.getDate() + 1);
+      }
+    }
+    // Check each requested day
+    let cur = new Date(start);
+    while (cur < end) {
+      const ds = cur.toISOString().slice(0, 10);
+      if ((dateCounts.get(ds) ?? 0) >= maxPets) {
+        throw new AvailabilityConflictError(
+          `El cuidador ya tiene el máximo de ${maxPets} mascota${maxPets > 1 ? 's' : ''} hospedada${maxPets > 1 ? 's' : ''} el ${ds}. Elige otras fechas.`,
+          'startDate'
+        );
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
   }
 }
 
@@ -556,10 +586,11 @@ async function assertPaseoAvailability(
 
   const profile = await tx.caregiverProfile.findUnique({
     where: { id: caregiverId },
-    select: { defaultAvailabilitySchedule: true },
+    select: { defaultAvailabilitySchedule: true, maxPets: true },
   });
   const defaultSchedule = (profile?.defaultAvailabilitySchedule as Record<string, unknown>) ?? {};
   const defaultBlocks = defaultSchedule['paseoTimeBlocks'] as Record<string, boolean> | undefined;
+  const maxPets = profile?.maxPets ?? 1;
 
   const avail = await tx.availability.findUnique({
     where: {
@@ -624,18 +655,20 @@ async function assertPaseoAvailability(
   const isSpecific = !!startTime && startTime !== '';
   logger.info('Check-Paseo-Avail', { walkDate, timeSlot, startTime, isSpecific, foundCount: existingBookings.length });
 
-  // 1. Si hay una reserva legacy en este mismo bloque, bloqueamos CUALQUIER reserva nueva en el bloque
-  if (legacyBookings.length > 0) {
+  // 1. Si las reservas legacy en este bloque ya llenaron la capacidad, bloquear.
+  // Con maxPets>1, se permiten hasta maxPets reservas legacy en el mismo bloque.
+  if (legacyBookings.length >= maxPets) {
     throw new AvailabilityConflictError(
-      `El bloque ${timeSlot} ya tiene una reserva que ocupa todo el horario habilitado para este día.`,
+      `El bloque ${timeSlot} ya tiene ${legacyBookings.length} reserva${legacyBookings.length > 1 ? 's' : ''} que ocupa${legacyBookings.length > 1 ? 'n' : ''} todo el horario (máx. ${maxPets}).`,
       'timeSlot'
     );
   }
 
-  // 2. Si la NUEVA reserva no tiene hora y hay ALGO en el bloque, bloqueamos (legacy mode)
-  if (!isSpecific && existingBookings.some(b => b.timeSlot === timeSlot)) {
+  // 2. Si la NUEVA reserva no tiene hora y ya se llenó la capacidad del bloque, bloqueamos
+  const slotBookingsCount = existingBookings.filter(b => b.timeSlot === timeSlot).length;
+  if (!isSpecific && slotBookingsCount >= maxPets) {
     throw new AvailabilityConflictError(
-      `El bloque ${timeSlot} ya tiene reservas previas. Por favor, selecciona una hora específica para buscar disponibilidad.`,
+      `El bloque ${timeSlot} ya tiene ${slotBookingsCount} reserva${slotBookingsCount > 1 ? 's' : ''} (máx. ${maxPets}). Por favor, selecciona una hora específica para buscar disponibilidad.`,
       'timeSlot'
     );
   }
@@ -675,19 +708,31 @@ async function assertPaseoAvailability(
       }
     }
 
-    // Verificar solapamiento con otras reservas que tengan tiempo específico
+    // Contar cuántas reservas existentes se solapan en tiempo con la nueva.
+    // Solo bloquear cuando ese conteo llega a maxPets.
+    let overlapCount = 0;
+    let overlapExample: { startTime: string; endFormatted: string } | null = null;
     for (const b of timedBookings) {
       const bStart = timeToMins(b.startTime as string);
-      const bDuration = b.duration || 60; // 60 min fallback por seguridad
+      const bDuration = b.duration || 60;
       const bEndWithBuffer = bStart + bDuration + 30;
 
       if (rangesOverlap(requestedStart, requestedEndWithBuffer, bStart, bEndWithBuffer)) {
-        logger.warn('Overlap detected in PASEO booking', { requestedStart, requestedEndWithBuffer, bStart, bEndWithBuffer });
-        throw new AvailabilityConflictError(
-          `Conflicto: El horario solicitado (${startTime}) se solapa con una reserva de ${b.startTime} a ${Math.floor((bStart + bDuration) / 60)}:${String((bStart + bDuration) % 60).padStart(2, '0')} (incluyendo descanso).`,
-          'startTime'
-        );
+        overlapCount++;
+        if (!overlapExample) {
+          overlapExample = {
+            startTime: b.startTime as string,
+            endFormatted: `${Math.floor((bStart + bDuration) / 60)}:${String((bStart + bDuration) % 60).padStart(2, '0')}`,
+          };
+        }
       }
+    }
+    if (overlapCount >= maxPets) {
+      logger.warn('Overlap capacity exceeded in PASEO booking', { requestedStart, overlapCount, maxPets });
+      throw new AvailabilityConflictError(
+        `Conflicto: El horario solicitado (${startTime}) se solapa con ${overlapCount} reserva${overlapCount > 1 ? 's' : ''} existente${overlapCount > 1 ? 's' : ''} (máx. ${maxPets} simultánea${maxPets > 1 ? 's' : ''}).`,
+        'startTime'
+      );
     }
   }
 }

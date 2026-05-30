@@ -659,14 +659,42 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
               _buildSwitchTile('¿Permite mascotas grandes?', _allowsLargePets, (v) => setState(() => _allowsLargePets = v)),
               _buildSwitchTile('¿Permite múltiples mascotas?', _allowsMultiplePets, (v) => setState(() => _allowsMultiplePets = v)),
               const SizedBox(height: 16),
+              Text('Máximo de mascotas simultáneas', style: TextStyle(color: subtextColor, fontSize: 14)),
+              const SizedBox(height: 10),
               Row(
-                children: [
-                  Text('Máximo de mascotas simultáneas:', style: TextStyle(color: subtextColor, fontSize: 14)),
-                  const Spacer(),
-                  IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: _maxPets > 1 ? () => setState(() => _maxPets--) : null),
-                  Text('$_maxPets', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
-                  IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: () => setState(() => _maxPets++)),
-                ],
+                children: [1, 2, 3].map((n) {
+                  final selected = _maxPets == n;
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _maxPets = n),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: selected ? GardenColors.primary.withValues(alpha: 0.12) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: selected ? GardenColors.primary : borderColor,
+                            width: selected ? 2 : 1,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Text('$n', style: TextStyle(
+                              color: selected ? GardenColors.primary : textColor,
+                              fontSize: 22, fontWeight: FontWeight.w800,
+                            )),
+                            Text(n == 1 ? 'mascota' : 'mascotas', style: TextStyle(
+                              color: selected ? GardenColors.primary : subtextColor,
+                              fontSize: 10,
+                            )),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
               const Divider(height: 48),
             ],

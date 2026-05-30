@@ -504,6 +504,35 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                             _policyChip('Mascotas agresivas', _caregiver!['acceptAggressive'] == true),
                           ],
                         ),
+                        // Capacidad simultánea
+                        Builder(builder: (_) {
+                          final maxP = (_caregiver!['maxPets'] as num?)?.toInt() ?? 1;
+                          final label = maxP == 1
+                              ? 'Solo 1 mascota a la vez'
+                              : 'Hasta $maxP mascotas a la vez';
+                          final icon = maxP == 1 ? Icons.pets_outlined : Icons.groups_outlined;
+                          final color = maxP == 1 ? GardenColors.primary : GardenColors.success;
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 14),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: color.withValues(alpha: 0.25)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(icon, color: color, size: 16),
+                                  const SizedBox(width: 8),
+                                  Text(label,
+                                      style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
                         if ((_caregiver!['handleAnxious'] as String? ?? '').isNotEmpty) ...[
                           const SizedBox(height: 14),
                           _infoCard('Mascotas con ansiedad', _caregiver!['handleAnxious'] as String, Icons.psychology_outlined, GardenColors.warning, surface, textColor, subtextColor, borderColor),

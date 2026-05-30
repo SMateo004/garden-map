@@ -74,6 +74,7 @@ class _BookingScreenState extends State<BookingScreen> {
   List<Map<String, dynamic>> _bookedPaseos = []; // reservas activas del cuidador
   bool _loadingSlots = false;
   String? _selectedStartTime; // hora específica dentro del slot, ej: "09:00"
+  int _caregiverMaxPets = 1; // máximo de mascotas simultáneas del cuidador
 
   /// Start date of the booking (first selected date or single-day date)
   DateTime? get _bookingStartDate {
@@ -1620,14 +1621,16 @@ class _BookingScreenState extends State<BookingScreen> {
     final newStart = int.parse(parts[0]) * 60 + int.parse(parts[1]);
     final dur = durationOverride ?? _selectedDuration;
     final newEnd = newStart + dur + 30; // +30 min buffer entre servicios
+    int overlapCount = 0;
     for (final b in _bookedPaseos) {
       if (b['date'] != dateStr) continue;
       final sp = (b['startTime'] as String).split(':');
       final bStart = int.parse(sp[0]) * 60 + int.parse(sp[1]);
       final bEnd = bStart + (b['duration'] as int? ?? 30) + 30;
-      if (newStart < bEnd && newEnd > bStart) return true;
+      if (newStart < bEnd && newEnd > bStart) overlapCount++;
     }
-    return false;
+    // Conflict only when overlapping bookings reach the caregiver's max simultaneous capacity
+    return overlapCount >= _caregiverMaxPets;
   }
 
   /// Tab del toggle "1 día / Varios días"
@@ -1902,6 +1905,7 @@ class _BookingScreenState extends State<BookingScreen> {
             _multiDayRangeBookings = bookingsRaw is List
                 ? bookingsRaw.cast<Map<String, dynamic>>()
                 : [];
+            _caregiverMaxPets = (data['maxPets'] as num?)?.toInt() ?? 1;
           });
         }
       }
@@ -1930,19 +1934,16 @@ class _BookingScreenState extends State<BookingScreen> {
       final slotEndMin = int.parse(ep[0]) * 60 + (ep.length > 1 ? int.parse(ep[1]) : 0);
       if (slotStartMin + _guarderiaSelectedDuration > slotEndMin) continue;
       for (int t = slotStartMin; t + _guarderiaSelectedDuration <= slotEndMin; t += 30) {
-        final h = t ~/ 60;
-        final m = t % 60;
-        final timeStr = '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
-        bool conflicts = false;
+        final newEnd = t + _guarderiaSelectedDuration + 30;
+        int overlapCount = 0;
         for (final b in _multiDayRangeBookings) {
           if (b['date'] != dateStr || b['startTime'] == null) continue;
           final bs = (b['startTime'] as String).split(':');
           final bStart = int.parse(bs[0]) * 60 + int.parse(bs[1]);
           final bEnd = bStart + (b['duration'] as int? ?? 30) + 30;
-          final newEnd = t + _guarderiaSelectedDuration + 30;
-          if (t < bEnd && newEnd > bStart) { conflicts = true; break; }
+          if (t < bEnd && newEnd > bStart) overlapCount++;
         }
-        if (!conflicts) return false; // Hay al menos una hora válida
+        if (overlapCount < _caregiverMaxPets) return false; // Al menos una hora válida disponible
       }
     }
     return true; // Ninguna hora válida → deshabilitar día

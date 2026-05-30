@@ -183,6 +183,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   RangeValues _priceRange = const RangeValues(0, 500);
   double _minRating = 0;
   bool _filterVerifiedOnly = false;
+  int? _filterMinSimultaneous; // null=todos, 1=solo 1, 2=al menos 2, 3=al menos 3
 
   // ── Sort ──
   String _sortBy = 'rating_desc';
@@ -228,6 +229,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     if (_minRating > 0) n++;
     if (_filterVerifiedOnly) n++;
     if (_priceRange.start > 0 || _priceRange.end < 500) n++;
+    if (_filterMinSimultaneous != null) n++;
     return n;
   }
 
@@ -256,6 +258,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     // Verified only (client-side)
     if (_filterVerifiedOnly) {
       list = list.where((c) => c['verified'] == true).toList();
+    }
+
+    // Simultaneous pets filter (client-side)
+    if (_filterMinSimultaneous != null) {
+      list = list.where((c) {
+        final mp = (c['maxPets'] as num?)?.toInt() ?? 1;
+        return mp >= _filterMinSimultaneous!;
+      }).toList();
     }
 
     // Sort
@@ -459,6 +469,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       _priceRange = const RangeValues(0, 500);
       _minRating = 0;
       _filterVerifiedOnly = false;
+      _filterMinSimultaneous = null;
     });
     _loadCaregivers(reset: true);
   }
@@ -1627,6 +1638,23 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   }, textColor, subtextColor),
                   _divider(border),
 
+                  // ── Mascotas simultáneas ──
+                  _sectionTitle('Mascotas simultáneas', textColor),
+                  const SizedBox(height: 4),
+                  Text('Cuidadores que aceptan cuántas mascotas a la vez',
+                      style: TextStyle(color: subtextColor, fontSize: 11)),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6, runSpacing: 6,
+                    children: [
+                      _simultaneousChip(null, 'Cualquiera 🐾', textColor),
+                      _simultaneousChip(1, 'Solo 1 🐕', textColor),
+                      _simultaneousChip(2, 'Mín. 2 🐕🐕', textColor),
+                      _simultaneousChip(3, '3 mascotas 🐕🐕🐕', textColor),
+                    ],
+                  ),
+                  _divider(border),
+
                   // ── Calificación ──
                   _sectionTitle('Calificación mínima', textColor),
                   const SizedBox(height: 10),
@@ -1762,6 +1790,17 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     return GestureDetector(
       onTap: () {
         setState(() => _minRating = selected ? 0 : val);
+        _refreshSheet?.call();
+      },
+      child: _smallChip(label, selected, textColor),
+    );
+  }
+
+  Widget _simultaneousChip(int? val, String label, Color textColor) {
+    final selected = _filterMinSimultaneous == val;
+    return GestureDetector(
+      onTap: () {
+        setState(() => _filterMinSimultaneous = selected ? null : val);
         _refreshSheet?.call();
       },
       child: _smallChip(label, selected, textColor),

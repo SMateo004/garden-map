@@ -267,6 +267,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       acceptSeniors: c.acceptSeniors,
       sizesAccepted: c.sizesAccepted,
       isProfessional: (c as any).isProfessional ?? false,
+      maxPets: c.maxPets ?? 1,
       // Store raw coords in cache; jitter is applied AFTER retrieval so each response
       // gets fresh noise and cached data doesn't leak a static jittered position.
       _addressLat: c.addressLat ?? null,
@@ -572,7 +573,7 @@ export async function getCaregiverAvailability(
           status: CaregiverStatus.APPROVED,
           suspended: false
         },
-        select: { id: true, defaultAvailabilitySchedule: true },
+        select: { id: true, defaultAvailabilitySchedule: true, maxPets: true },
       });
 
     } catch (dbError) {
@@ -918,25 +919,25 @@ export async function getCaregiverAvailability(
       }
     });
 
-    // 6. Filter hospedajeDates (remove dates blocked by active bookings)
-    const blockedHospedajeDates = new Set<string>();
+    // 6. Filter hospedajeDates (remove dates where active booking count >= maxPets)
+    // maxPets=1 → block after 1 booking (original behaviour)
+    // maxPets=2 → allow up to 2 simultaneous hospedaje bookings per day, etc.
+    const caregiverMaxPets = (profile as any)?.maxPets ?? 1;
+    const hospedajeDateBookingCount = new Map<string, number>();
     activeBookings.forEach(b => {
       if (b.serviceType === 'HOSPEDAJE' && b.startDate && b.endDate) {
-        // Normalizamos fechas para comparar strings YYYY-MM-DD
-        let cur = new Date(b.startDate);
-        // Aseguramos que empezamos a contar desde la fecha de inicio del bloque solicitado o la de la reserva, la mayor
-        const rangeStart = startDate > b.startDate ? startDate : b.startDate;
-        const rangeEnd = endDate < b.endDate ? endDate : b.endDate;
-
         let d = new Date(b.startDate);
         while (d < b.endDate) {
-          blockedHospedajeDates.add(d.toISOString().slice(0, 10));
+          const ds = d.toISOString().slice(0, 10);
+          hospedajeDateBookingCount.set(ds, (hospedajeDateBookingCount.get(ds) ?? 0) + 1);
           d.setDate(d.getDate() + 1);
         }
       }
     });
 
-    const finalHospedajeDates = hospedajeDates.filter(d => !blockedHospedajeDates.has(d));
+    const finalHospedajeDates = hospedajeDates.filter(
+      d => (hospedajeDateBookingCount.get(d) ?? 0) < caregiverMaxPets
+    );
 
     // 7. Prepare bookedPaseos for frontend validation/UI
     const bookedPaseos = activeBookings
@@ -963,6 +964,7 @@ export async function getCaregiverAvailability(
       paseos: paseosByDate,
       blockedDates,
       bookedPaseos,
+      maxPets: caregiverMaxPets,
     };
   } catch (err) {
     logger.error('ERROR en getCaregiverAvailability - CATCH BLOCK', {

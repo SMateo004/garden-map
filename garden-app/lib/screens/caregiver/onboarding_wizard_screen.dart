@@ -1717,8 +1717,33 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             Slider(value: _hoursAlone.toDouble(), min: 0, max: 24, divisions: 24, label: '$_hoursAlone hrs', activeColor: kPrimaryColor, onChanged: (val) => setState(() => _hoursAlone = val.toInt())),
             const SizedBox(height: 16),
 
-            const Text('Máximo de mascotas permitidas a la vez', style: TextStyle(color: kTextSecondary)),
-            Slider(value: _maxPets.toDouble(), min: 1, max: 10, divisions: 9, label: '$_maxPets mascotas', activeColor: kPrimaryColor, onChanged: (val) => setState(() => _maxPets = val.toInt())),
+            const Text('Máximo de mascotas simultáneas', style: TextStyle(color: kTextSecondary)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [1, 2, 3].map((n) {
+                final selected = _maxPets == n;
+                return GestureDetector(
+                  onTap: () => setState(() => _maxPets = n),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    width: 72, height: 72,
+                    decoration: BoxDecoration(
+                      color: selected ? kPrimaryColor : Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: selected ? kPrimaryColor : Colors.grey.shade400, width: selected ? 2 : 1),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text('$n', style: TextStyle(color: selected ? Colors.white : Colors.grey.shade700, fontSize: 26, fontWeight: FontWeight.w800)),
+                        Text(n == 1 ? 'mascota' : 'mascotas', style: TextStyle(color: selected ? Colors.white70 : Colors.grey.shade500, fontSize: 10)),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
             const SizedBox(height: 24),
           ],
 

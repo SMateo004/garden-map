@@ -154,7 +154,7 @@ export const registerCaregiverProfileSchema = z.object({
   clientPetsSleep: z.nativeEnum(ClientPetsSleep).optional(),
   hoursAlone: z.number().int().min(0).optional(),
   workFromHome: z.boolean().optional(),
-  maxPets: z.number().int().min(1).optional(),
+  maxPets: z.number().int().min(1).max(3, 'Máximo 3 mascotas simultáneas').optional(),
   oftenOut: z.boolean().optional(),
   typicalDay: z.string().min(MIN_TEXT_DRAFT).optional(),
   photos: z
@@ -232,7 +232,7 @@ export const patchCaregiverProfileSchema = z.object({
   clientPetsSleep: z.nativeEnum(ClientPetsSleep).optional().nullable(),
   hoursAlone: z.number().int().min(0).optional(),
   workFromHome: z.boolean().optional(),
-  maxPets: z.number().int().min(1).optional(),
+  maxPets: z.number().int().min(1).max(3, 'Máximo 3 mascotas simultáneas').optional(),
   oftenOut: z.boolean().optional(),
   typicalDay: z.string().min(MIN_TEXT_DRAFT).optional(),
   photos: z.array(z.string().url()).optional(),
