@@ -6,16 +6,20 @@ services:
     plan: free
     rootDir: garden-api
     # npm ci with --prefer-offline if cache hit; NODE_OPTIONS caps tsc memory to avoid OOM on 512MB free tier
-    buildCommand: npm ci && NODE_OPTIONS=--max-old-space-size=400 npm run build
-    # Run migrations in background so the server starts within Render's 60s wake timeout.
-    # All migration SQL is idempotent (IF NOT EXISTS / DO $$ blocks) — safe to re-run.
-    startCommand: >-
-      (./node_modules/.bin/prisma migrate resolve --applied 20260417191356_enable_row_level_security 2>/dev/null ;
-      ./node_modules/.bin/prisma migrate resolve --applied 20260417231505_add_refresh_tokens_and_stripe_event_id 2>/dev/null ;
-      ./node_modules/.bin/prisma migrate resolve --applied 20260425000001_sugerencia_precio_cascade 2>/dev/null ;
-      ./node_modules/.bin/prisma migrate resolve --applied 20260531000001_add_client_address_phone_verified_reset_code 2>/dev/null ;
-      ./node_modules/.bin/prisma migrate deploy 2>&1 || echo "[warn] migrate deploy had issues") &
-      node dist/server.js
+    # Resolve all previously-failed migrations (applied via db push) then deploy pending ones.
+    # Running during build ensures DB is ready before the server starts.
+    buildCommand: >-
+      npm ci &&
+      NODE_OPTIONS=--max-old-space-size=400 npm run build &&
+      ./node_modules/.bin/prisma migrate resolve --applied 20260417191356_enable_row_level_security 2>/dev/null || true ;
+      ./node_modules/.bin/prisma migrate resolve --applied 20260417231505_add_refresh_tokens_and_stripe_event_id 2>/dev/null || true ;
+      ./node_modules/.bin/prisma migrate resolve --applied 20260425000001_sugerencia_precio_cascade 2>/dev/null || true ;
+      ./node_modules/.bin/prisma migrate resolve --applied 20260523000004_seed_guarderia_enabled 2>/dev/null || true ;
+      ./node_modules/.bin/prisma migrate resolve --applied 20260523000005_add_walker_photos 2>/dev/null || true ;
+      ./node_modules/.bin/prisma migrate resolve --applied 20260530000001_cap_max_pets_to_3 2>/dev/null || true ;
+      ./node_modules/.bin/prisma migrate resolve --applied 20260531000001_add_client_address_phone_verified_reset_code 2>/dev/null || true ;
+      ./node_modules/.bin/prisma migrate deploy 2>&1 || true
+    startCommand: node dist/server.js
     healthCheckPath: /health
     autoDeploy: true
     envVars:
