@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -436,7 +437,7 @@ class _ChatScreenState extends State<ChatScreen> {
       builder: (context, _) {
         return Scaffold(
           backgroundColor: bg,
-          appBar: AppBar(
+          appBar: kIsWeb ? null : AppBar(
             backgroundColor: surface,
             elevation: 0,
             leading: IconButton(
@@ -490,7 +491,37 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           body: !_initialized
             ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
-            : Column(
+            : Center(child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: kIsWeb ? 780.0 : double.infinity),
+                child: Column(
+                  children: [
+                    // Web compact header (replaces AppBar)
+                    if (kIsWeb)
+                      Container(
+                        height: 52,
+                        decoration: BoxDecoration(color: surface, border: Border(bottom: BorderSide(color: borderColor))),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        child: Row(
+                          children: [
+                            IconButton(icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 18), onPressed: () => Navigator.pop(context)),
+                            GardenAvatar(imageUrl: widget.otherPersonPhoto, size: 28, initials: widget.otherPersonName.isNotEmpty ? widget.otherPersonName[0] : 'U'),
+                            const SizedBox(width: 10),
+                            Expanded(child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(widget.otherPersonName, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
+                                Row(children: [
+                                  Container(width: 6, height: 6, decoration: BoxDecoration(color: (_chatService?.connected ?? false) ? GardenColors.success : GardenColors.warning, shape: BoxShape.circle)),
+                                  const SizedBox(width: 4),
+                                  Text((_chatService?.connected ?? false) ? 'En línea' : 'Disponible', style: TextStyle(color: subtextColor, fontSize: 11)),
+                                ]),
+                              ],
+                            )),
+                          ],
+                        ),
+                      ),
+                    Expanded(child: Column(
                 children: [
                   // Banner Meet & Greet (cuando está ACCEPTED)
                   if (widget.meetAndGreetNote != null)
@@ -601,7 +632,10 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
                 ],
-              ),
+              )),
+                  ],
+                ),
+              )),
         );
       },
     );

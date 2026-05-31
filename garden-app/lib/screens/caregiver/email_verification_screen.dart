@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -242,7 +243,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: widget.showAppBar
+      appBar: widget.showAppBar && !kIsWeb
           ? AppBar(
               title: const Text('Verificacion de Email'),
               backgroundColor: bg,
@@ -252,7 +253,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
           : null,
       body: SafeArea(
         child: Center(
-          child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
             child: _showSuccess ? _buildSuccess(textPrimary) : _buildForm(
               isDark: isDark,
@@ -261,6 +264,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
               textSecondary: textSecondary,
               borderColor: borderColor,
             ),
+          ),
           ),
         ),
       ),
@@ -375,8 +379,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
 
         // Verify button
         SizedBox(
-          width: double.infinity,
-          height: 52,
+          width: kIsWeb ? 200 : double.infinity,
+          height: kIsWeb ? 44 : 52,
           child: ElevatedButton(
             onPressed: _isLoading ? null : _verifyCode,
             style: ElevatedButton.styleFrom(
@@ -384,23 +388,13 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
               foregroundColor: Colors.white,
               disabledBackgroundColor: GardenColors.primary.withValues(alpha: 0.4),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(10),
               ),
               elevation: 0,
             ),
             child: _isLoading
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text(
-                    'Verificar',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : Text('Verificar', style: TextStyle(fontSize: kIsWeb ? 14 : 16, fontWeight: FontWeight.w600)),
           ),
         ),
         const SizedBox(height: 20),

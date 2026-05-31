@@ -315,7 +315,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
         return Scaffold(
           backgroundColor: bg,
-          appBar: AppBar(
+          appBar: kIsWeb ? null : AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
             leading: IconButton(
@@ -327,7 +327,27 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 16),
             ),
           ),
-          body: _buildBody(status),
+          body: kIsWeb
+              ? Column(children: [
+                  Container(
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+                      border: Border(bottom: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(children: [
+                      IconButton(icon: Icon(Icons.close_rounded, color: textColor, size: 18), onPressed: () => context.pop()),
+                      const SizedBox(width: 6),
+                      Text(_getAppBarTitle(status), style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
+                    ]),
+                  ),
+                  Expanded(child: Center(child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 860),
+                    child: _buildBody(status),
+                  ))),
+                ])
+              : _buildBody(status),
         );
       },
     );

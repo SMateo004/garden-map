@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -94,7 +95,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
+      appBar: kIsWeb ? null : AppBar(
         backgroundColor: surface,
         elevation: 0,
         leading: IconButton(
@@ -120,9 +121,26 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
         ),
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
+      body: Column(
+        children: [
+          if (kIsWeb)
+            Container(
+              height: 52,
+              decoration: BoxDecoration(color: surface, border: Border(bottom: BorderSide(color: borderColor))),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  IconButton(icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 18), onPressed: () => context.go('/')),
+                  const SizedBox(width: 6),
+                  Text('Conviértete en Cuidador', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+          Expanded(child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
-        child: Column(
+        child: Center(child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: kIsWeb ? 520.0 : double.infinity),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Hero card ──────────────────────────────────────────────
@@ -232,6 +250,9 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
             const SizedBox(height: 32),
           ],
         ),
+        )),
+      )),
+        ],
       ),
     );
   }

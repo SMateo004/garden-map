@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -491,9 +492,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
         final hintColor = isDark ? GardenColors.darkTextHint : GardenColors.lightTextHint;
 
+        final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+        final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
         return Scaffold(
-          backgroundColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
-          appBar: AppBar(
+          backgroundColor: bg,
+          appBar: kIsWeb ? null : AppBar(
             backgroundColor: surface,
             elevation: 0,
             title: Row(
@@ -520,14 +524,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
             ],
           ),
-          body: _isLoading
+          body: Column(
+            children: [
+              if (kIsWeb)
+                Container(
+                  height: 52,
+                  decoration: BoxDecoration(color: surface, border: Border(bottom: BorderSide(color: borderColor))),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    children: [
+                      IconButton(icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 18), onPressed: () => Navigator.pop(context)),
+                      const SizedBox(width: 6),
+                      Text('Mi Perfil', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
+                      const Spacer(),
+                      if (_token.isNotEmpty)
+                        IconButton(icon: Icon(Icons.logout_rounded, color: hintColor, size: 18), onPressed: _logout, tooltip: 'Cerrar sesión'),
+                    ],
+                  ),
+                ),
+              Expanded(child: _isLoading
               ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
-                  child: _token.isEmpty || _userData == null
-                      ? _buildUnauthenticatedState()
-                      : _buildAuthenticatedState(),
-                ),
+                  child: Center(child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: kIsWeb ? 720.0 : double.infinity),
+                    child: _token.isEmpty || _userData == null
+                        ? _buildUnauthenticatedState()
+                        : _buildAuthenticatedState(),
+                  )),
+                )),
+            ],
+          ),
         );
       },
     );

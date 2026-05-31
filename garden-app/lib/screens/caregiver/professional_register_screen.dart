@@ -15,6 +15,7 @@
 
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -1206,7 +1207,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           ),
           child: Scaffold(
             backgroundColor: bg,
-            appBar: AppBar(
+            appBar: kIsWeb ? null : AppBar(
               title: const Text('Registro Profesional'),
               automaticallyImplyLeading: _currentStep > 0,
               bottom: PreferredSize(
@@ -1221,63 +1222,123 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
             ),
             body: Column(
               children: [
-                Container(
-                  color: surface,
-                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Paso ${_currentStep + 1} de $totalSteps',
-                          style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w500)),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: GardenColors.primary.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+                // Web top bar
+                if (kIsWeb)
+                  Container(
+                    decoration: BoxDecoration(color: surface, border: Border(bottom: BorderSide(color: borderColor))),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 620),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                          child: Column(children: [
+                            Row(children: [
+                              if (_currentStep > 0)
+                                GestureDetector(
+                                  onTap: _prevStep,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(8)),
+                                    child: Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: subtextColor),
+                                  ),
+                                )
+                              else
+                                const SizedBox(width: 26),
+                              const SizedBox(width: 8),
+                              Text('Registro Profesional', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
+                              const Spacer(),
+                              Text('Paso ${_currentStep + 1} de $totalSteps', style: TextStyle(color: subtextColor, fontSize: 11)),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+                                child: Text(stepTitles[_currentStep], style: const TextStyle(color: GardenColors.primary, fontSize: 10, fontWeight: FontWeight.w700)),
+                              ),
+                            ]),
+                            const SizedBox(height: 10),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(2),
+                              child: LinearProgressIndicator(
+                                value: (_currentStep + 1) / totalSteps,
+                                backgroundColor: borderColor,
+                                valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
+                                minHeight: 3,
+                              ),
+                            ),
+                          ]),
                         ),
-                        child: Text(stepTitles[_currentStep],
-                            style: const TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w700)),
                       ),
-                    ],
+                    ),
                   ),
-                ),
-                Container(height: 1, color: borderColor),
+
+                // Mobile step indicator
+                if (!kIsWeb) ...[
+                  Container(
+                    color: surface,
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Paso ${_currentStep + 1} de $totalSteps',
+                            style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w500)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: GardenColors.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(stepTitles[_currentStep],
+                              style: const TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(height: 1, color: borderColor),
+                ],
 
                 Expanded(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 250),
-                    child: KeyedSubtree(key: ValueKey(_currentStep), child: stepContent),
-                  ),
+                  child: kIsWeb
+                      ? Center(child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 620),
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 200),
+                            child: KeyedSubtree(key: ValueKey(_currentStep), child: stepContent),
+                          ),
+                        ))
+                      : AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 250),
+                          child: KeyedSubtree(key: ValueKey(_currentStep), child: stepContent),
+                        ),
                 ),
 
                 Container(height: 1, color: borderColor),
                 Container(
                   color: surface,
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-                  child: Row(
-                    children: [
-                      if (_currentStep > 0) ...[
-                        SizedBox(
-                          width: 110,
-                          child: GardenButton(
-                            label: 'Anterior',
-                            outline: true,
-                            height: 48,
-                            onPressed: _prevStep,
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: kIsWeb ? 620 : double.infinity),
+                      child: Row(
+                        children: [
+                          if (_currentStep > 0 && !kIsWeb) ...[
+                            SizedBox(
+                              width: 110,
+                              child: GardenButton(label: 'Anterior', outline: true, height: 48, onPressed: _prevStep),
+                            ),
+                            const SizedBox(width: 12),
+                          ],
+                          Expanded(
+                            child: GardenButton(
+                              label: buttonLabel,
+                              loading: _isLoading,
+                              height: kIsWeb ? 44 : 48,
+                              onPressed: _isLoading ? () {} : _nextStep,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                      ],
-                      Expanded(
-                        child: GardenButton(
-                          label: buttonLabel,
-                          loading: _isLoading,
-                          height: 48,
-                          onPressed: _isLoading ? () {} : _nextStep,
-                        ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
                 SizedBox(height: MediaQuery.of(context).padding.bottom),

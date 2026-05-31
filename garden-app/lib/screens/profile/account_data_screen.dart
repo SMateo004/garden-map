@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -208,16 +209,33 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
+      appBar: kIsWeb ? null : AppBar(
         title: const Text('Accesibilidad y Cuenta'),
         backgroundColor: surface,
         elevation: 0,
       ),
-      body: _isLoading
+      body: Column(
+        children: [
+          if (kIsWeb)
+            Container(
+              height: 52,
+              decoration: BoxDecoration(color: surface, border: Border(bottom: BorderSide(color: borderColor))),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  IconButton(icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 18), onPressed: () => Navigator.pop(context)),
+                  const SizedBox(width: 6),
+                  Text('Accesibilidad y Cuenta', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+          Expanded(child: _isLoading
         ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
         : SingleChildScrollView(
             padding: const EdgeInsets.all(20),
-            child: Column(
+            child: Center(child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: kIsWeb ? 680.0 : double.infinity),
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Account Info Section
@@ -331,7 +349,9 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                 const SizedBox(height: 40),
               ],
             ),
-          ),
+          )))),
+        ],
+      ),
     );
   }
 

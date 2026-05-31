@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -219,128 +220,101 @@ class _CaregiverSetupFlowScreenState extends State<CaregiverSetupFlowScreen> {
           children: [
             // ── Top progress header ────────────────────────────────
             Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
               decoration: BoxDecoration(
                 color: surface,
-                border: Border(
-                  bottom: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
-                ),
+                border: Border(bottom: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
               ),
-              child: Column(
-                children: [
-                  // Step counter
-                  Row(
-                    children: [
-                      // Back button (only visible on steps > 0)
-                      if (_currentStep > 0)
-                        GestureDetector(
-                          onTap: _goBack,
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              Icons.arrow_back_ios_new_rounded,
-                              size: 16,
-                              color: subtextColor,
-                            ),
-                          ),
-                        )
-                      else
-                        const SizedBox(width: 28),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: GardenColors.primary.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          'Paso ${_currentStep + 1} de $_totalSteps',
-                          style: const TextStyle(
-                            color: GardenColors.primary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        _stepLabels[_currentStep],
-                        style: TextStyle(
-                          color: textColor,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // Progress bar
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: (_currentStep + 1) / _totalSteps,
-                      backgroundColor: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
-                      color: GardenColors.primary,
-                      minHeight: 6,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // Step dots
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(_totalSteps, (i) {
-                      final isActive = i == _currentStep;
-                      final isDone = i < _currentStep;
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: kIsWeb ? 700.0 : double.infinity),
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(20, kIsWeb ? 12 : 16, 20, 12),
+                    child: Column(
+                      children: [
+                        Row(
                           children: [
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 250),
-                              width: isActive ? 32 : 28,
-                              height: isActive ? 32 : 28,
+                            if (_currentStep > 0)
+                              GestureDetector(
+                                onTap: _goBack,
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: subtextColor),
+                                ),
+                              )
+                            else
+                              const SizedBox(width: 28),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isDone
-                                    ? GardenColors.success
-                                    : isActive
-                                        ? GardenColors.primary
-                                        : (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.06)),
-                                border: isActive
-                                    ? Border.all(color: GardenColors.primary.withValues(alpha: 0.3), width: 2)
-                                    : null,
+                                color: GardenColors.primary.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(20),
                               ),
-                              child: Icon(
-                                isDone ? Icons.check_rounded : _stepIcons[i],
-                                size: isActive ? 18 : 16,
-                                color: isDone || isActive ? Colors.white : subtextColor,
+                              child: Text(
+                                'Paso ${_currentStep + 1} de $_totalSteps',
+                                style: TextStyle(color: GardenColors.primary, fontSize: kIsWeb ? 11 : 12, fontWeight: FontWeight.w700),
                               ),
                             ),
-                            if (i < _totalSteps - 1) ...[
-                              Container(
-                                width: 24,
-                                height: 2,
-                                color: i < _currentStep
-                                    ? GardenColors.success
-                                    : (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.08)),
-                              ),
-                            ],
+                            const Spacer(),
+                            Text(_stepLabels[_currentStep], style: TextStyle(color: textColor, fontSize: kIsWeb ? 12 : 13, fontWeight: FontWeight.w600)),
                           ],
                         ),
-                      );
-                    }),
+                        const SizedBox(height: 10),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: (_currentStep + 1) / _totalSteps,
+                            backgroundColor: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
+                            color: GardenColors.primary,
+                            minHeight: kIsWeb ? 3 : 6,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(_totalSteps, (i) {
+                            final isActive = i == _currentStep;
+                            final isDone = i < _currentStep;
+                            final sz = kIsWeb ? (isActive ? 26.0 : 22.0) : (isActive ? 32.0 : 28.0);
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  AnimatedContainer(
+                                    duration: const Duration(milliseconds: 250),
+                                    width: sz, height: sz,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: isDone ? GardenColors.success : isActive ? GardenColors.primary : (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.06)),
+                                      border: isActive ? Border.all(color: GardenColors.primary.withValues(alpha: 0.3), width: 2) : null,
+                                    ),
+                                    child: Icon(isDone ? Icons.check_rounded : _stepIcons[i], size: kIsWeb ? 13 : (isActive ? 18 : 16), color: isDone || isActive ? Colors.white : subtextColor),
+                                  ),
+                                  if (i < _totalSteps - 1)
+                                    Container(width: 20, height: 2, color: i < _currentStep ? GardenColors.success : (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.08))),
+                                ],
+                              ),
+                            );
+                          }),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
+                ),
               ),
             ),
 
             // ── Step content ────────────────────────────────────────
-            Expanded(child: _buildStepContent()),
+            Expanded(
+              child: kIsWeb
+                  ? Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 700), child: _buildStepContent()))
+                  : _buildStepContent(),
+            ),
           ],
         ),
       ),
