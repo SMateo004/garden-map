@@ -13,6 +13,7 @@ services:
       (./node_modules/.bin/prisma migrate resolve --applied 20260417191356_enable_row_level_security 2>/dev/null ;
       ./node_modules/.bin/prisma migrate resolve --applied 20260417231505_add_refresh_tokens_and_stripe_event_id 2>/dev/null ;
       ./node_modules/.bin/prisma migrate resolve --applied 20260425000001_sugerencia_precio_cascade 2>/dev/null ;
+      ./node_modules/.bin/prisma migrate resolve --applied 20260531000001_add_client_address_phone_verified_reset_code 2>/dev/null ;
       ./node_modules/.bin/prisma migrate deploy 2>&1 || echo "[warn] migrate deploy had issues") &
       node dist/server.js
     healthCheckPath: /health

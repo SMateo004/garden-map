@@ -26,5 +26,12 @@ CREATE TABLE IF NOT EXISTS "password_reset_codes" (
 
 CREATE INDEX IF NOT EXISTS "password_reset_codes_userId_idx" ON "password_reset_codes"("userId");
 
-ALTER TABLE "password_reset_codes" ADD CONSTRAINT "password_reset_codes_userId_fkey"
-    FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'password_reset_codes_userId_fkey'
+  ) THEN
+    ALTER TABLE "password_reset_codes" ADD CONSTRAINT "password_reset_codes_userId_fkey"
+      FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
