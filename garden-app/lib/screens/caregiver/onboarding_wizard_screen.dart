@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart' as image_picker_pkg;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -1975,7 +1976,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           ),
           child: Scaffold(
             backgroundColor: bg,
-            appBar: AppBar(
+            appBar: kIsWeb ? null : AppBar(
               title: const Text('Crear perfil de cuidador'),
               automaticallyImplyLeading: _currentStep < 5,
               bottom: PreferredSize(
@@ -1990,39 +1991,120 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             ),
             body: Column(
               children: [
-                // Step indicator
-                Container(
-                  color: surface,
-                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Paso ${_currentStep + 1} de 9',
-                          style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w500)),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: GardenColors.primary.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+                // ── Web top bar (replaces AppBar on web) ──────────────────
+                if (kIsWeb) ...[
+                  Container(
+                    decoration: BoxDecoration(
+                      color: surface,
+                      border: Border(bottom: BorderSide(color: borderColor)),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 0),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 640),
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                if (_currentStep > 0)
+                                  IconButton(
+                                    icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 18),
+                                    onPressed: _prevStep,
+                                    tooltip: 'Paso anterior',
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                  ),
+                                if (_currentStep > 0) const SizedBox(width: 8),
+                                Text(
+                                  'Crear perfil de cuidador',
+                                  style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  'Paso ${_currentStep + 1} de 9',
+                                  style: TextStyle(color: subtextColor, fontSize: 12),
+                                ),
+                                const SizedBox(width: 10),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: GardenColors.primary.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    stepTitles[_currentStep],
+                                    style: const TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(2),
+                              child: LinearProgressIndicator(
+                                value: (_currentStep + 1) / 9,
+                                backgroundColor: borderColor,
+                                valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
+                                minHeight: 3,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                          ],
                         ),
-                        child: Text(stepTitles[_currentStep],
-                            style: const TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w700)),
                       ),
-                    ],
+                    ),
                   ),
-                ),
-                Container(height: 1, color: borderColor),
+                ],
+
+                // ── Mobile step indicator ─────────────────────────────────
+                if (!kIsWeb) ...[
+                  Container(
+                    color: surface,
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Paso ${_currentStep + 1} de 9',
+                            style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w500)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: GardenColors.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(stepTitles[_currentStep],
+                              style: const TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(height: 1, color: borderColor),
+                ],
 
                 // Step content
                 Expanded(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 250),
-                    child: KeyedSubtree(
-                      key: ValueKey(_currentStep),
-                      child: steps[_currentStep],
-                    ),
-                  ),
+                  child: kIsWeb
+                      ? Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 640),
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 200),
+                              child: KeyedSubtree(
+                                key: ValueKey(_currentStep),
+                                child: steps[_currentStep],
+                              ),
+                            ),
+                          ),
+                        )
+                      : AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 250),
+                          child: KeyedSubtree(
+                            key: ValueKey(_currentStep),
+                            child: steps[_currentStep],
+                          ),
+                        ),
                 ),
 
                 // Navigation buttons — only for pre-registration steps (0-5)
@@ -2031,29 +2113,34 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                   Container(
                     color: surface,
                     padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-                    child: Row(
-                      children: [
-                        if (_currentStep > 0) ...[
-                          SizedBox(
-                            width: 110,
-                            child: GardenButton(
-                              label: 'Anterior',
-                              outline: true,
-                              height: 48,
-                              onPressed: _prevStep,
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: kIsWeb ? 640 : double.infinity),
+                        child: Row(
+                          children: [
+                            if (_currentStep > 0 && !kIsWeb) ...[
+                              SizedBox(
+                                width: 110,
+                                child: GardenButton(
+                                  label: 'Anterior',
+                                  outline: true,
+                                  height: 48,
+                                  onPressed: _prevStep,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                            ],
+                            Expanded(
+                              child: GardenButton(
+                                label: isRegistrationStep ? 'Crear mi cuenta' : 'Siguiente →',
+                                loading: _isLoading,
+                                height: 48,
+                                onPressed: _isLoading ? () {} : _nextStep,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                        ],
-                        Expanded(
-                          child: GardenButton(
-                            label: isRegistrationStep ? 'Crear mi cuenta' : 'Siguiente →',
-                            loading: _isLoading,
-                            height: 48,
-                            onPressed: _isLoading ? () {} : _nextStep,
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ],

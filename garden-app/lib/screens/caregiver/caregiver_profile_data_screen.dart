@@ -602,6 +602,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       return _buildBody(textColor, subtextColor, surface, borderColor, isDark);
     }
 
+    if (kIsWeb) {
+      return _buildWebScaffold(context, isDark, textColor, subtextColor, surface, borderColor);
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Perfil profesional'),
@@ -623,6 +627,450 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       body: _buildBody(textColor, subtextColor, surface, borderColor, isDark),
     );
   }
+
+  // ── WEB LAYOUT ────────────────────────────────────────────────────────────
+  Widget _buildWebScaffold(
+    BuildContext context,
+    bool isDark,
+    Color textColor,
+    Color subtextColor,
+    Color surface,
+    Color borderColor,
+  ) {
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+
+    return Scaffold(
+      backgroundColor: bg,
+      body: Column(
+        children: [
+          // Top bar
+          Container(
+            height: 56,
+            decoration: BoxDecoration(
+              color: surface,
+              border: Border(bottom: BorderSide(color: borderColor)),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 20),
+                  onPressed: () => Navigator.pop(context),
+                  tooltip: 'Volver',
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Perfil profesional',
+                  style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700),
+                ),
+                const Spacer(),
+                // Completion badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: (_completionPercentage >= 80 ? GardenColors.success : GardenColors.primary).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '$_completionPercentage% completo',
+                    style: TextStyle(
+                      color: _completionPercentage >= 80 ? GardenColors.success : GardenColors.primary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                if (_isSaving)
+                  const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))
+                else
+                  ElevatedButton.icon(
+                    onPressed: _saveAllData,
+                    icon: const Icon(Icons.save_rounded, size: 15),
+                    label: const Text('Guardar cambios', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GardenColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          // Two-column scrollable body
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1100),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // LEFT column — description, services, prices, photos
+                      Expanded(
+                        flex: 55,
+                        child: Column(
+                          children: [
+                            _webSection(surface, borderColor, textColor,
+                              title: 'Sobre ti',
+                              icon: Icons.edit_note_rounded,
+                              child: Column(
+                                children: [
+                                  SizedBox(key: _keyBioDetail, height: 0),
+                                  GardenInput(
+                                    hint: 'Descripción detallada: experiencia, método de cuidado, etc.',
+                                    controller: _bioDetailController,
+                                    maxLines: 5,
+                                    maxLength: 300,
+                                    onChanged: (_) => setState(() {}),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+
+                            _webSection(surface, borderColor, textColor,
+                              title: 'Servicios y precios',
+                              icon: Icons.sell_outlined,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SizedBox(key: _keyServices, height: 0),
+                                  Text('Servicios que ofreces', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 8),
+                                  _buildServiceChips(surface, borderColor),
+                                  if (_selectedServices.contains('PASEO')) ...[
+                                    const SizedBox(height: 16),
+                                    SizedBox(key: _keyPriceWalk, height: 0),
+                                    _webPriceRow(
+                                      icon: Icons.directions_walk_rounded,
+                                      label: 'Paseo 1 hora (Bs)',
+                                      controller: _pricePerWalk60Controller,
+                                      subtextColor: subtextColor,
+                                      textColor: textColor,
+                                      required: true,
+                                    ),
+                                    const SizedBox(height: 10),
+                                    // 30min toggle
+                                    _buildWalk30Toggle(surface, borderColor, textColor, subtextColor),
+                                  ],
+                                  if (_selectedServices.contains('GUARDERIA')) ...[
+                                    const SizedBox(height: 16),
+                                    _webPriceRow(
+                                      icon: Icons.home_work_rounded,
+                                      label: 'Guardería por hora (Bs)',
+                                      controller: _pricePerGuarderiaController,
+                                      subtextColor: subtextColor,
+                                      textColor: textColor,
+                                      required: true,
+                                    ),
+                                  ],
+                                  if (_selectedServices.contains('HOSPEDAJE')) ...[
+                                    const SizedBox(height: 16),
+                                    SizedBox(key: _keyPriceHospedaje, height: 0),
+                                    _webPriceRow(
+                                      icon: Icons.house_rounded,
+                                      label: 'Hospedaje por noche (Bs)',
+                                      controller: _pricePerDayController,
+                                      subtextColor: subtextColor,
+                                      textColor: textColor,
+                                      required: true,
+                                    ),
+                                  ],
+                                  const SizedBox(height: 16),
+                                  Text('Zona de servicio', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 8),
+                                  _buildZoneDropdown(surface, borderColor, textColor),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+
+                            if (_selectedServices.contains('HOSPEDAJE')) ...[
+                              _webSection(surface, borderColor, textColor,
+                                title: 'Tu espacio',
+                                icon: Icons.home_outlined,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SizedBox(key: _keySpaceType, height: 0),
+                                    _buildHomeTypes(surface, borderColor),
+                                    _buildSwitchTile('¿Tiene jardín o patio?', _hasYard, (v) => setState(() => _hasYard = v)),
+                                    _buildSwitchTile('¿Permite mascotas grandes?', _allowsLargePets, (v) => setState(() => _allowsLargePets = v)),
+                                    _buildSwitchTile('¿Permite múltiples mascotas?', _allowsMultiplePets, (v) => setState(() => _allowsMultiplePets = v)),
+                                    const SizedBox(height: 8),
+                                    Text('Máximo de mascotas simultáneas', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [1, 2, 3].map((n) {
+                                        final sel = _maxPets == n;
+                                        return Expanded(
+                                          child: GestureDetector(
+                                            onTap: () => setState(() => _maxPets = n),
+                                            child: AnimatedContainer(
+                                              duration: const Duration(milliseconds: 150),
+                                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                                              padding: const EdgeInsets.symmetric(vertical: 10),
+                                              decoration: BoxDecoration(
+                                                color: sel ? GardenColors.primary.withValues(alpha: 0.12) : Colors.transparent,
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(color: sel ? GardenColors.primary : borderColor, width: sel ? 2 : 1),
+                                              ),
+                                              child: Column(
+                                                children: [
+                                                  Text('$n', style: TextStyle(color: sel ? GardenColors.primary : textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+                                                  Text(n == 1 ? 'mascota' : 'mascotas', style: TextStyle(color: sel ? GardenColors.primary : subtextColor, fontSize: 10)),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                            ],
+
+                            _webSection(surface, borderColor, textColor,
+                              title: 'Fotos de servicio',
+                              icon: Icons.photo_library_outlined,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SizedBox(key: _keyPhotos, height: 0),
+                                  Text(
+                                    'Sube fotos de tu espacio o actividades con mascotas (mín. 2, máx. 6)',
+                                    style: TextStyle(color: subtextColor, fontSize: 12),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _buildPhotoGrid(borderColor),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(width: 16),
+
+                      // RIGHT column — pets, FAQ, experience, policies
+                      Expanded(
+                        flex: 45,
+                        child: Column(
+                          children: [
+                            _webSection(surface, borderColor, textColor,
+                              title: 'Mascotas que aceptas',
+                              icon: Icons.pets_rounded,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SizedBox(key: _keyPetTypes, height: 0),
+                                  Text('Tipos', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    children: _petTypes.map((t) => _filterChip(t, _petTypeLabels[t]!, _acceptedPetTypes, surface, borderColor)).toList(),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  SizedBox(key: _keySizes, height: 0),
+                                  Text('Tamaños aceptados', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 4),
+                                  Column(
+                                    children: _petSizes.map((s) => _buildCheckTile(_petSizeLabels[s]!, _acceptedSizes.contains(s), (v) {
+                                      setState(() { if (v!) { _acceptedSizes.add(s); } else { _acceptedSizes.remove(s); } });
+                                    })).toList(),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+
+                            _webSection(surface, borderColor, textColor,
+                              title: 'Preguntas frecuentes',
+                              icon: Icons.help_outline_rounded,
+                              child: Column(
+                                children: [
+                                  SizedBox(key: _keyFaq, height: 0),
+                                  GardenInput(hint: '¿Qué incluye tu servicio?', controller: _includesController, maxLines: 2),
+                                  const SizedBox(height: 10),
+                                  GardenInput(hint: '¿Qué necesitas del dueño?', controller: _requirementsController, maxLines: 2),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+
+                            _webSection(surface, borderColor, textColor,
+                              title: 'Experiencia profesional',
+                              icon: Icons.workspace_premium_outlined,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SizedBox(key: _keyExperience, height: 0),
+                                  Text('Años cuidando mascotas', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    children: ['0', '1', '2', '3', '4', '5+'].map((y) {
+                                      final sel = _experienceYearsController.text == y;
+                                      return GestureDetector(
+                                        onTap: () => setState(() => _experienceYearsController.text = y),
+                                        child: AnimatedContainer(
+                                          duration: const Duration(milliseconds: 150),
+                                          margin: const EdgeInsets.only(bottom: 6),
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                                          decoration: BoxDecoration(
+                                            color: sel ? GardenColors.primary : surface,
+                                            borderRadius: BorderRadius.circular(20),
+                                            border: Border.all(color: sel ? GardenColors.primary : borderColor),
+                                          ),
+                                          child: Text(y, style: TextStyle(color: sel ? Colors.white : subtextColor, fontWeight: FontWeight.w600, fontSize: 13)),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _sectionField('Describe tu experiencia', _experienceDescController, 'Animales cuidados, formación, etc.', maxLines: 3),
+                                  const SizedBox(height: 10),
+                                  _sectionField('¿Por qué eres cuidador?', _whyCaregiverController, 'Tu motivación', maxLines: 2),
+                                  const SizedBox(height: 10),
+                                  _sectionField('¿Qué te diferencia?', _whatDiffersController, 'Lo que hace especial tu servicio', maxLines: 2),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+
+                            _webSection(surface, borderColor, textColor,
+                              title: 'Políticas y situaciones especiales',
+                              icon: Icons.policy_outlined,
+                              child: Column(
+                                children: [
+                                  SizedBox(key: _keyPolicies, height: 0),
+                                  _acceptSwitch('¿Aceptas mascotas agresivas?', _acceptAggressive, (v) => setState(() => _acceptAggressive = v), textColor, subtextColor, surface, borderColor),
+                                  const SizedBox(height: 8),
+                                  _acceptSwitch('¿Aceptas cachorros?', _acceptPuppies, (v) => setState(() => _acceptPuppies = v), textColor, subtextColor, surface, borderColor),
+                                  const SizedBox(height: 8),
+                                  _acceptSwitch('¿Aceptas mascotas mayores?', _acceptSeniors, (v) => setState(() => _acceptSeniors = v), textColor, subtextColor, surface, borderColor),
+                                  const SizedBox(height: 12),
+                                  SizedBox(key: _keyHandleAnxious, height: 0),
+                                  _sectionField('¿Cómo manejas mascotas ansiosas?', _handleAnxiousController, 'Método para mascotas con ansiedad', maxLines: 3),
+                                  const SizedBox(height: 10),
+                                  SizedBox(key: _keyEmergencyResponse, height: 0),
+                                  _sectionField('¿Cómo respondes ante emergencias?', _emergencyResponseController, 'Protocolo de emergencia veterinaria', maxLines: 3),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _webSection(
+    Color surface, Color borderColor, Color textColor, {
+    required String title,
+    required IconData icon,
+    required Widget child,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: GardenColors.primary),
+              const SizedBox(width: 8),
+              Text(title, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _webPriceRow({
+    required IconData icon,
+    required String label,
+    required TextEditingController controller,
+    required Color subtextColor,
+    required Color textColor,
+    bool required = false,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 15, color: GardenColors.primary),
+        const SizedBox(width: 8),
+        Text(label, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+        if (required) ...[
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+            child: const Text('Obligatorio', style: TextStyle(color: GardenColors.error, fontSize: 9, fontWeight: FontWeight.w700)),
+          ),
+        ],
+        const Spacer(),
+        SizedBox(
+          width: 120,
+          child: GardenInput(hint: 'Bs', controller: controller, keyboardType: TextInputType.number),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWalk30Toggle(Color surface, Color borderColor, Color textColor, Color subtextColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: _offersWalk30 ? GardenColors.primary.withValues(alpha: 0.07) : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _offersWalk30 ? GardenColors.primary.withValues(alpha: 0.35) : borderColor),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.timer_outlined, color: GardenColors.primary, size: 16),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _offersWalk30
+                  ? 'Paseos de 30 min activados — Bs ${((double.tryParse(_pricePerWalk60Controller.text) ?? 0) / 2).round()}'
+                  : 'Ofrecer paseos de 30 min (precio = mitad de 1 hora)',
+              style: TextStyle(color: textColor, fontSize: 12),
+            ),
+          ),
+          Switch(
+            value: _offersWalk30,
+            onChanged: (v) => setState(() => _offersWalk30 = v),
+            activeColor: GardenColors.primary,
+          ),
+        ],
+      ),
+    );
+  }
+  // ── END WEB LAYOUT ───────────────────────────────────────────────────────
 
   Widget _buildBody(Color textColor, Color subtextColor, Color surface, Color borderColor, bool isDark) {
     return SingleChildScrollView(

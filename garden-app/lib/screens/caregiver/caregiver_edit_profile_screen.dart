@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
@@ -298,6 +299,13 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
         final isPaseoOnly = _servicesOffered.length == 1 && _servicesOffered.contains('PASEO');
         final needsWalkerPhotos = isPaseoOnly && _walkerPhotos.isEmpty;
 
+        if (kIsWeb) {
+          return _buildWebScaffold(
+            context, isDark, bg, surface, textColor, subtextColor, borderColor,
+            isPaseoOnly, needsWalkerPhotos,
+          );
+        }
+
         return Scaffold(
           backgroundColor: bg,
           appBar: AppBar(
@@ -413,31 +421,337 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
     );
   }
 
-  Widget _buildWalkerPhotosSection(Color textColor, Color subtextColor, Color borderColor, bool isDark, bool needsCompletion) {
+  // ── WEB LAYOUT ──────────────────────────────────────────────────────────────
+  Widget _buildWebScaffold(
+    BuildContext context,
+    bool isDark,
+    Color bg,
+    Color surface,
+    Color textColor,
+    Color subtextColor,
+    Color borderColor,
+    bool isPaseoOnly,
+    bool needsWalkerPhotos,
+  ) {
+    final firstName = _profile?['user']?['firstName'] as String? ?? _profile?['firstName'] as String? ?? 'Cuidador';
+    final lastName  = _profile?['user']?['lastName']  as String? ?? _profile?['lastName']  as String? ?? '';
+
+    return Scaffold(
+      backgroundColor: bg,
+      body: Column(
+        children: [
+          // ── Top bar ────────────────────────────────────────────────────────
+          Container(
+            height: 56,
+            decoration: BoxDecoration(
+              color: surface,
+              border: Border(bottom: BorderSide(color: borderColor)),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 20),
+                  onPressed: () => Navigator.pop(context),
+                  tooltip: 'Volver',
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  needsWalkerPhotos ? 'Completar perfil' : 'Editar perfil',
+                  style: TextStyle(
+                    color: needsWalkerPhotos ? GardenColors.primary : textColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Spacer(),
+                if (_isSaving)
+                  const SizedBox(
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary),
+                  )
+                else
+                  ElevatedButton.icon(
+                    onPressed: _saveProfile,
+                    icon: const Icon(Icons.save_rounded, size: 15),
+                    label: const Text('Guardar cambios', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GardenColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          // ── Body ───────────────────────────────────────────────────────────
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 940),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // ── Profile header card ────────────────────────
+                            _buildWebProfileHeaderCard(
+                              surface, borderColor, textColor, subtextColor, isDark,
+                              firstName, lastName,
+                            ),
+                            const SizedBox(height: 20),
+
+                            // ── Two-column main content ────────────────────
+                            IntrinsicHeight(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // LEFT — bio + address + walker photos
+                                  Expanded(
+                                    flex: 52,
+                                    child: Column(
+                                      children: [
+                                        _webCard(
+                                          surface, borderColor, textColor,
+                                          title: 'Sobre ti',
+                                          icon: Icons.edit_note_rounded,
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text('Descripción', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                                              const SizedBox(height: 8),
+                                              TextField(
+                                                controller: _bioController,
+                                                maxLines: 4,
+                                                style: TextStyle(color: textColor, fontSize: 13),
+                                                decoration: _inputDecoration('Cuéntanos sobre tu experiencia cuidando mascotas...', isDark),
+                                              ),
+                                              const SizedBox(height: 16),
+                                              Text('Dirección', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                                              const SizedBox(height: 8),
+                                              TextField(
+                                                controller: _addressController,
+                                                style: TextStyle(color: textColor, fontSize: 13),
+                                                decoration: _inputDecoration('Calle, número, barrio...', isDark),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        if (isPaseoOnly) ...[
+                                          const SizedBox(height: 16),
+                                          _webCard(
+                                            surface, borderColor, textColor,
+                                            title: 'Fotos como cuidador',
+                                            icon: Icons.photo_library_rounded,
+                                            badge: needsWalkerPhotos ? 'Incompleto' : null,
+                                            badgeColor: GardenColors.warning,
+                                            child: _buildWalkerPhotosSection(
+                                              textColor, subtextColor, borderColor, isDark, needsWalkerPhotos,
+                                              showHeader: false,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+
+                                  // RIGHT — personal info + bank + status
+                                  Expanded(
+                                    flex: 48,
+                                    child: Column(
+                                      children: [
+                                        _webCard(
+                                          surface, borderColor, textColor,
+                                          title: 'Información personal',
+                                          icon: Icons.person_outline_rounded,
+                                          child: _buildPersonalInfoSection(textColor, subtextColor, isDark),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        _webCard(
+                                          surface, borderColor, textColor,
+                                          title: 'Datos de cobro',
+                                          icon: Icons.account_balance_rounded,
+                                          child: _buildBankSection(textColor, subtextColor, surface, borderColor, isDark, showHeader: false),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        _webCard(
+                                          surface, borderColor, textColor,
+                                          title: 'Estado del perfil',
+                                          icon: Icons.verified_outlined,
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text('Estado actual', style: TextStyle(color: subtextColor, fontSize: 13)),
+                                              _statusBadge(_profile?['status'] ?? ''),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebProfileHeaderCard(
+    Color surface, Color borderColor, Color textColor, Color subtextColor,
+    bool isDark, String firstName, String lastName,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        children: [
+          // Avatar with camera overlay
+          Stack(
+            children: [
+              _newPhotoBytes != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(36),
+                      child: Image.memory(_newPhotoBytes!, width: 72, height: 72, fit: BoxFit.cover),
+                    )
+                  : GardenAvatar(
+                      imageUrl: _profile?['profilePhoto'] as String?,
+                      size: 72,
+                      initials: firstName.isNotEmpty ? firstName[0] : 'C',
+                    ),
+              Positioned(
+                bottom: 0, right: 0,
+                child: GestureDetector(
+                  onTap: _pickProfilePhoto,
+                  child: Container(
+                    width: 24, height: 24,
+                    decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
+                    child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 13),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$firstName $lastName'.trim(),
+                  style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                if (_newPhotoBytes != null)
+                  const Text(
+                    'Nueva foto seleccionada — se guardará al presionar "Guardar cambios"',
+                    style: TextStyle(color: GardenColors.success, fontSize: 11),
+                  )
+                else
+                  Text(
+                    'Haz clic en la cámara para cambiar tu foto de perfil',
+                    style: TextStyle(color: subtextColor, fontSize: 12),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _webCard(
+    Color surface, Color borderColor, Color textColor, {
+    required String title,
+    required IconData icon,
+    required Widget child,
+    String? badge,
+    Color? badgeColor,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 15, color: GardenColors.primary),
+              const SizedBox(width: 8),
+              Text(title, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
+              if (badge != null) ...[
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: (badgeColor ?? GardenColors.warning).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    badge,
+                    style: TextStyle(color: badgeColor ?? GardenColors.warning, fontSize: 10, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+  // ── END WEB LAYOUT ─────────────────────────────────────────────────────────
+
+  Widget _buildWalkerPhotosSection(Color textColor, Color subtextColor, Color borderColor, bool isDark, bool needsCompletion, {bool showHeader = true}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Fotos tuyas como cuidador', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
-                  const SizedBox(height: 2),
-                  Text('Fotos contigo con mascotas o en actividades de paseo (mín. 2)', style: TextStyle(color: subtextColor, fontSize: 12)),
-                ],
+        if (showHeader) ...[
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Fotos tuyas como cuidador', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 2),
+                    Text('Fotos contigo con mascotas o en actividades de paseo (mín. 2)', style: TextStyle(color: subtextColor, fontSize: 12)),
+                  ],
+                ),
               ),
-            ),
-            if (needsCompletion)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: GardenColors.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-                child: const Text('Incompleto', style: TextStyle(color: GardenColors.warning, fontSize: 11, fontWeight: FontWeight.w700)),
-              ),
-          ],
-        ),
-        const SizedBox(height: 14),
+              if (needsCompletion)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: GardenColors.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                  child: const Text('Incompleto', style: TextStyle(color: GardenColors.warning, fontSize: 11, fontWeight: FontWeight.w700)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+        ],
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -502,36 +816,42 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
     );
   }
 
-  Widget _buildBankSection(Color textColor, Color subtextColor, Color surface, Color borderColor, bool isDark) {
+  Widget _buildBankSection(Color textColor, Color subtextColor, Color surface, Color borderColor, bool isDark, {bool showHeader = true}) {
     final surfaceEl = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
     final isWallet = GardenBanks.isDigitalWallet(_selectedBankName);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text('Datos de cobro', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: GardenColors.secondary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
+        if (showHeader) ...[
+          Row(
+            children: [
+              Text('Datos de cobro', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: GardenColors.secondary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.lock_outline_rounded, color: GardenColors.secondary, size: 12),
+                    SizedBox(width: 4),
+                    Text('Solo visible para ti', style: TextStyle(color: GardenColors.secondary, fontSize: 10, fontWeight: FontWeight.w600)),
+                  ],
+                ),
               ),
-              child: const Row(
-                children: [
-                  Icon(Icons.lock_outline_rounded, color: GardenColors.secondary, size: 12),
-                  SizedBox(width: 4),
-                  Text('Solo visible para ti', style: TextStyle(color: GardenColors.secondary, fontSize: 10, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text('Cuenta donde recibirás tus pagos. No es visible para los dueños.', style: TextStyle(color: subtextColor, fontSize: 12)),
-        const SizedBox(height: 16),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text('Cuenta donde recibirás tus pagos. No es visible para los dueños.', style: TextStyle(color: subtextColor, fontSize: 12)),
+          const SizedBox(height: 16),
+        ] else ...[
+          // On web the header is shown in the _webCard title; show only the subtitle
+          Text('Cuenta donde recibirás tus pagos.', style: TextStyle(color: subtextColor, fontSize: 12)),
+          const SizedBox(height: 12),
+        ],
 
         // Selector banco/billetera
         GestureDetector(
