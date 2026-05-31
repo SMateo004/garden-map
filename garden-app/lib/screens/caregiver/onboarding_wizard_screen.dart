@@ -14,7 +14,10 @@ import '../../services/auth_service.dart';
 import 'caregiver_profile_data_screen.dart';
 import 'verification_screen.dart';
 import 'email_verification_screen.dart';
+import 'phone_verification_screen.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/address_map_picker.dart';
+import '../../widgets/address_section.dart';
 
 class OnboardingWizardScreen extends StatefulWidget {
   final String initialEmail;
@@ -52,6 +55,17 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   final _phoneController = TextEditingController();
   final _bioController = TextEditingController();
   final _addressController = TextEditingController();
+
+  // Dirección detallada
+  final _addressStreetController = TextEditingController();
+  final _addressNumberController = TextEditingController();
+  final _addressApartmentController = TextEditingController();
+  final _addressCondominioController = TextEditingController();
+  final _addressReferenceController = TextEditingController();
+  final _addressZoneController = TextEditingController();
+  double? _addressLat;
+  double? _addressLng;
+  bool _isApartment = false;
 
   // Paso 6: Perfil Profesional
   final List<String> _sizesAccepted = [];
@@ -346,11 +360,18 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         return;
       }
 
-      // Step 8: Verificación de email — requiere emailVerified true
+      // Step 8: Verificación de teléfono — requiere phoneVerified true
+      final phoneVerified = profile['phoneVerified'] == true;
+      if (!phoneVerified) {
+        setState(() => _currentStep = 8);
+        return;
+      }
+
+      // Step 9: Verificación de email — requiere emailVerified true
       final emailVerified = profile['emailVerified'] == true;
       final userEmailVerified = (profile['user'] as Map<String, dynamic>?)?['emailVerified'] == true;
       if (!emailVerified && !userEmailVerified) {
-        setState(() => _currentStep = 8);
+        setState(() => _currentStep = 9);
         return;
       }
 
@@ -437,6 +458,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     _phoneController.dispose();
     _bioController.dispose();
     _addressController.dispose();
+    _addressStreetController.dispose();
+    _addressNumberController.dispose();
+    _addressApartmentController.dispose();
+    _addressCondominioController.dispose();
+    _addressReferenceController.dispose();
+    _addressZoneController.dispose();
     _whyCaregiverController.dispose();
     _whatDiffersController.dispose();
     _handleAnxiousController.dispose();
@@ -449,6 +476,20 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
   String _formatDate(DateTime date) {
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+
+  String _buildFullAddress() {
+    final parts = <String>[
+      if (_addressStreetController.text.trim().isNotEmpty) _addressStreetController.text.trim(),
+      if (_addressNumberController.text.trim().isNotEmpty) 'N° ${_addressNumberController.text.trim()}',
+      if (_isApartment && _addressApartmentController.text.trim().isNotEmpty)
+        'Dpto. ${_addressApartmentController.text.trim()}',
+      if (_isApartment && _addressCondominioController.text.trim().isNotEmpty)
+        _addressCondominioController.text.trim(),
+      if (_addressZoneController.text.trim().isNotEmpty) _addressZoneController.text.trim(),
+      'Santa Cruz de la Sierra, Bolivia',
+    ];
+    return parts.join(', ');
   }
 
   void _showStepError(String msg, {GlobalKey? scrollTo}) {
@@ -505,8 +546,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           _showStepError('Falta: Número de teléfono', scrollTo: _keyStep0Phone);
           return false;
         }
-        if (_addressController.text.trim().isEmpty) {
-          _showStepError('Falta: Dirección', scrollTo: _keyStep0Address);
+        if (_addressStreetController.text.trim().isEmpty) {
+          _showStepError('Falta: Calle de tu dirección', scrollTo: _keyStep0Address);
           return false;
         }
         if (_dateOfBirth == null) {
@@ -754,7 +795,21 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           },
           'profile': {
             'bio': _bioController.text.trim(),
-            'address': _addressController.text.trim(),
+            'address': _buildFullAddress(),
+            if (_addressLat != null) 'addressLat': _addressLat,
+            if (_addressLng != null) 'addressLng': _addressLng,
+            if (_addressStreetController.text.trim().isNotEmpty)
+              'addressStreet': _addressStreetController.text.trim(),
+            if (_addressNumberController.text.trim().isNotEmpty)
+              'addressNumber': _addressNumberController.text.trim(),
+            if (_isApartment && _addressApartmentController.text.trim().isNotEmpty)
+              'addressApartment': _addressApartmentController.text.trim(),
+            if (_isApartment && _addressCondominioController.text.trim().isNotEmpty)
+              'addressCondominio': _addressCondominioController.text.trim(),
+            if (_addressReferenceController.text.trim().isNotEmpty)
+              'addressReference': _addressReferenceController.text.trim(),
+            if (_addressZoneController.text.trim().isNotEmpty)
+              'addressZone': _addressZoneController.text.trim(),
           },
         }),
       );
@@ -840,16 +895,18 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       final identityStatus = (profile['identityVerificationStatus'] as String? ?? '').toUpperCase();
       final identityDone = identityStatus == 'VERIFIED' || identityStatus == 'APPROVED';
 
+      final phoneVerified = profile['phoneVerified'] == true;
       final emailVerified = profile['emailVerified'] == true ||
           (profile['user'] as Map?)?['emailVerified'] == true;
 
-      if (identityDone && emailVerified) {
-        // Both done — go to email step which will trigger final submit
-        setState(() => _currentStep = 8);
-      } else if (identityDone) {
-        setState(() => _currentStep = 8);
-      } else {
+      if (!identityDone) {
         setState(() => _currentStep = 7);
+      } else if (!phoneVerified) {
+        setState(() => _currentStep = 8);
+      } else if (!emailVerified) {
+        setState(() => _currentStep = 9);
+      } else {
+        await _completeWizard();
       }
     } catch (_) {
       setState(() => _currentStep = 7);
@@ -872,12 +929,15 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       final status = (profile['identityVerificationStatus'] as String? ?? '').toUpperCase();
 
       if (status == 'VERIFIED' || status == 'APPROVED') {
+        final phoneVerified = profile['phoneVerified'] == true;
         final emailVerified = profile['emailVerified'] == true ||
             (profile['user'] as Map?)?['emailVerified'] == true;
-        if (emailVerified) {
+        if (!phoneVerified) {
+          setState(() => _currentStep = 8);
+        } else if (emailVerified) {
           await _completeWizard();
         } else {
-          setState(() => _currentStep = 8);
+          setState(() => _currentStep = 9);
         }
       } else {
         if (mounted) {
@@ -890,6 +950,30 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       }
     } catch (_) {
       // Network error — stay on step 7
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Step 8 → 9: phone verified, proceed to email verification.
+  Future<void> _onPhoneVerificationComplete() async {
+    setState(() => _isLoading = true);
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/caregiver/my-profile'),
+        headers: {'Authorization': 'Bearer $_authToken'},
+      );
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final profile = body['data'] as Map<String, dynamic>? ?? {};
+      final emailVerified = profile['emailVerified'] == true ||
+          (profile['user'] as Map?)?['emailVerified'] == true;
+      if (emailVerified) {
+        await _completeWizard();
+      } else {
+        setState(() => _currentStep = 9);
+      }
+    } catch (_) {
+      setState(() => _currentStep = 9);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -1036,9 +1120,30 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           ),
           const SizedBox(height: 16),
 
+          // ── Dirección ────────────────────────────────────────────
           SizedBox(key: _keyStep0Address, height: 0),
-          TextFormField(controller: _addressController,
-              style: TextStyle(color: textColor), decoration: _field('Dirección completa', Icons.home_work_outlined)),
+          AddressSection(
+            isDark: isDark,
+            textColor: textColor,
+            subtextColor: subtextColor,
+            borderColor: borderColor,
+            surfaceEl: surfaceEl,
+            streetController: _addressStreetController,
+            numberController: _addressNumberController,
+            apartmentController: _addressApartmentController,
+            condominioController: _addressCondominioController,
+            referenceController: _addressReferenceController,
+            zoneController: _addressZoneController,
+            addressLat: _addressLat,
+            addressLng: _addressLng,
+            isApartment: _isApartment,
+            purposeText: 'Tu dirección es privada. Solo se comparte con dueños de mascotas que aceptes atender.',
+            onMapResult: (result) => setState(() {
+              _addressLat = result.lat;
+              _addressLng = result.lng;
+            }),
+            onApartmentToggle: (val) => setState(() => _isApartment = val),
+          ),
           const SizedBox(height: 16),
 
           // Date of birth
@@ -1878,6 +1983,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         onComplete: _onIdentityVerificationComplete,
       );
     } else if (_currentStep == 8) {
+      postRegStep = PhoneVerificationScreen(
+        showAppBar: false,
+        phoneNumber: _phoneController.text.trim(),
+        onComplete: _onPhoneVerificationComplete,
+      );
+    } else if (_currentStep == 9) {
       postRegStep = EmailVerificationScreen(
         showAppBar: false,
         onComplete: () { _completeWizard(); },
@@ -1895,7 +2006,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       _buildStep7(),   // 5: Foto de perfil
       postRegStep,     // 6: Perfil profesional
       postRegStep,     // 7: Verificación de identidad
-      postRegStep,     // 8: Verificación de email
+      postRegStep,     // 8: Verificación de teléfono
+      postRegStep,     // 9: Verificación de email
     ];
 
     final stepTitles = [
@@ -1907,10 +2019,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       'Tu retrato',
       'Perfil profesional',
       'Verificación ID',
+      'Verificar Teléfono',
       'Verificación Email',
     ];
 
-    // Steps 6-8 are embedded screens that manage their own "Continue" buttons.
+    // Steps 6-9 are embedded screens that manage their own "Continue" buttons.
     // The wizard hides the bottom nav bar for those steps.
     final bool showNavButtons = _currentStep <= 5;
     final bool isRegistrationStep = _currentStep == 0;
@@ -1982,7 +2095,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(4),
                 child: LinearProgressIndicator(
-                  value: (_currentStep + 1) / 9,
+                  value: (_currentStep + 1) / 10,
                   backgroundColor: borderColor,
                   valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
                   minHeight: 4,
@@ -2022,7 +2135,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                                 ),
                                 const Spacer(),
                                 Text(
-                                  'Paso ${_currentStep + 1} de 9',
+                                  'Paso ${_currentStep + 1} de 10',
                                   style: TextStyle(color: subtextColor, fontSize: 12),
                                 ),
                                 const SizedBox(width: 10),
@@ -2043,7 +2156,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                             ClipRRect(
                               borderRadius: BorderRadius.circular(2),
                               child: LinearProgressIndicator(
-                                value: (_currentStep + 1) / 9,
+                                value: (_currentStep + 1) / 10,
                                 backgroundColor: borderColor,
                                 valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
                                 minHeight: 3,
@@ -2065,7 +2178,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Paso ${_currentStep + 1} de 9',
+                        Text('Paso ${_currentStep + 1} de 10',
                             style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w500)),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),

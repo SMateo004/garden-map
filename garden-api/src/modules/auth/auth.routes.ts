@@ -146,4 +146,19 @@ router.get('/validate-reset-token', authController.validateResetToken);
 /** POST /api/auth/reset-password — body: { token, password, confirmPassword }. */
 router.post('/reset-password', passwordResetLimiter, authController.resetPassword);
 
+// ── Password Reset (in-app code flow) ─────────────────────────────────────
+/** POST /api/auth/forgot-password/send-code — body: { email }. Sends 4-digit code via Resend. Always 200. */
+router.post('/forgot-password/send-code', passwordResetLimiter, authController.sendResetCode);
+
+/** POST /api/auth/forgot-password/verify-code — body: { email, code }. Returns tempToken if valid. */
+router.post('/forgot-password/verify-code', passwordResetLimiter, authController.verifyResetCode);
+
+/** POST /api/auth/forgot-password/set-password — body: { tempToken, newPassword }. Sets new password. */
+router.post('/forgot-password/set-password', passwordResetLimiter, authController.setNewPassword);
+
+// ── Phone Verification (Firebase Phone Auth) ──────────────────────────────
+/** POST /api/auth/caregiver/verify-phone — body: { firebaseIdToken }.
+ *  Verifica token de Firebase Phone Auth, confirma teléfono y marca phoneVerified=true. */
+router.post('/caregiver/verify-phone', authMiddleware, authController.verifyCaregiverPhone);
+
 export default router;

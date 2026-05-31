@@ -52,6 +52,17 @@ export interface BookingCreateResult {
     reference: string | null;
     zone: string | null;
   } | null;
+  clientAddress?: {
+    lat: number | null;
+    lng: number | null;
+    street: string | null;
+    number: string | null;
+    apartment: string | null;
+    condominio: string | null;
+    reference: string | null;
+    zone: string | null;
+    full: string | null;
+  } | null;
   ownerRated?: boolean;
   ownerRating?: number | null;
   ownerComment?: string | null;
@@ -137,6 +148,24 @@ export function bookingToResponse(b: any): BookingCreateResult {
       reference: b.caregiver.addressReference ?? null,
       zone: b.caregiver.addressZone ?? null,
     };
+  }
+
+  // Para PASEO: exponer dirección del dueño al cuidador (necesita ir a recoger la mascota)
+  if (b.serviceType === 'PASEO' && ['CONFIRMED','IN_PROGRESS'].includes(b.status)) {
+    const cp = b.client?.clientProfile ?? null;
+    if (cp) {
+      res.clientAddress = {
+        lat: cp.addressLat ?? null,
+        lng: cp.addressLng ?? null,
+        street: cp.addressStreet ?? null,
+        number: cp.addressNumber ?? null,
+        apartment: cp.addressApartment ?? null,
+        condominio: cp.addressCondominio ?? null,
+        reference: cp.addressReference ?? null,
+        zone: cp.addressZone ?? null,
+        full: cp.address ?? null,
+      };
+    }
   }
 
   return res;

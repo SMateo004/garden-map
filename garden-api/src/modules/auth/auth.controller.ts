@@ -41,7 +41,19 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
     if (user.role === 'CLIENT') {
       const clientProfile = await prisma.clientProfile.findUnique({
         where: { userId: user.id },
-        select: { isComplete: true, address: true, bio: true },
+        select: {
+          isComplete: true,
+          address: true,
+          bio: true,
+          addressLat: true,
+          addressLng: true,
+          addressStreet: true,
+          addressNumber: true,
+          addressApartment: true,
+          addressCondominio: true,
+          addressReference: true,
+          addressZone: true,
+        },
       });
       return res.json({
         success: true,
@@ -49,6 +61,14 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
           ...user,
           address: clientProfile?.address ?? null,
           bio: clientProfile?.bio ?? null,
+          addressLat: clientProfile?.addressLat ?? null,
+          addressLng: clientProfile?.addressLng ?? null,
+          addressStreet: clientProfile?.addressStreet ?? null,
+          addressNumber: clientProfile?.addressNumber ?? null,
+          addressApartment: clientProfile?.addressApartment ?? null,
+          addressCondominio: clientProfile?.addressCondominio ?? null,
+          addressReference: clientProfile?.addressReference ?? null,
+          addressZone: clientProfile?.addressZone ?? null,
           clientProfile: clientProfile ? { isComplete: clientProfile.isComplete } : null,
         },
       });
@@ -282,9 +302,16 @@ export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
 /** PATCH /api/auth/me - Actualizar datos personales del usuario. */
 export const patchMe = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { firstName, lastName, phone, city, country, dateOfBirth, address, bio, email } = req.body as {
+  const {
+    firstName, lastName, phone, city, country, dateOfBirth, address, bio, email,
+    addressLat, addressLng, addressStreet, addressNumber, addressApartment,
+    addressCondominio, addressReference, addressZone,
+  } = req.body as {
     firstName?: string; lastName?: string; phone?: string; city?: string; country?: string;
     dateOfBirth?: string; address?: string; bio?: string; email?: string;
+    addressLat?: number; addressLng?: number;
+    addressStreet?: string; addressNumber?: string; addressApartment?: string;
+    addressCondominio?: string; addressReference?: string; addressZone?: string;
   };
   const userData: Record<string, unknown> = {};
   if (firstName && firstName.trim()) userData.firstName = firstName.trim();
@@ -312,6 +339,14 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
   const profileData: Record<string, unknown> = {};
   if (address !== undefined) profileData.address = address?.trim() || null;
   if (bio !== undefined) profileData.bio = bio?.trim() || null;
+  if (addressLat !== undefined) profileData.addressLat = addressLat ?? null;
+  if (addressLng !== undefined) profileData.addressLng = addressLng ?? null;
+  if (addressStreet !== undefined) profileData.addressStreet = addressStreet?.trim() || null;
+  if (addressNumber !== undefined) profileData.addressNumber = addressNumber?.trim() || null;
+  if (addressApartment !== undefined) profileData.addressApartment = addressApartment?.trim() || null;
+  if (addressCondominio !== undefined) profileData.addressCondominio = addressCondominio?.trim() || null;
+  if (addressReference !== undefined) profileData.addressReference = addressReference?.trim() || null;
+  if (addressZone !== undefined) profileData.addressZone = addressZone?.trim() || null;
 
   if (Object.keys(userData).length === 0 && Object.keys(profileData).length === 0) {
     return res.status(400).json({ success: false, error: { code: 'EMPTY_BODY', message: 'Nada que actualizar' } });
@@ -746,4 +781,95 @@ export const registerProfessional = asyncHandler(async (req: Request, res: Respo
   }
   const result = await authService.registerProfessional(body);
   return res.status(201).json({ success: true, data: result });
+});
+
+// ── Phone Verification (Firebase Phone Auth) ──────────────────────────────────
+
+/** POST /api/auth/caregiver/verify-phone — body: { firebaseIdToken }.
+ *  Verifica el token de Firebase Phone Auth, confirma que el número coincide,
+ *  y marca phoneVerified=true en CaregiverProfile. Solo aplica a cuidadores nuevos. */
+export const verifyCaregiverPhone = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const { firebaseIdToken } = req.body ?? {};
+
+  if (!firebaseIdToken || typeof firebaseIdToken !== 'string') {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_TOKEN', message: 'firebaseIdToken es requerido.' } });
+  }
+
+  // Verificar token con Firebase Admin
+  const { default: admin } = await import('firebase-admin');
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+
+  if (!projectId || !privateKey || !clientEmail) {
+    return res.status(503).json({ success: false, error: { code: 'FIREBASE_NOT_CONFIGURED', message: 'Firebase no configurado en el servidor.' } });
+  }
+
+  if (!admin.apps.length) {
+    admin.initializeApp({ credential: admin.credential.cert({ projectId, privateKey, clientEmail } as any) });
+  }
+
+  let decoded: any;
+  try {
+    decoded = await admin.auth().verifyIdToken(firebaseIdToken);
+  } catch {
+    return res.status(401).json({ success: false, error: { code: 'INVALID_FIREBASE_TOKEN', message: 'Token de Firebase inválido o expirado.' } });
+  }
+
+  // El token de Phone Auth incluye `phone_number` (ej: "+59176543210")
+  const firebasePhone = decoded.phone_number as string | undefined;
+  if (!firebasePhone) {
+    return res.status(400).json({ success: false, error: { code: 'NOT_PHONE_TOKEN', message: 'El token no corresponde a verificación de teléfono.' } });
+  }
+
+  // Confirmar que el número verificado coincide con el del usuario (ignorando espacios y prefijo)
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { phone: true } });
+  if (!user) return res.status(404).json({ success: false, error: { code: 'USER_NOT_FOUND', message: 'Usuario no encontrado.' } });
+
+  const normalizePhone = (p: string) => p.replace(/\D/g, '').replace(/^591/, '');
+  if (normalizePhone(firebasePhone) !== normalizePhone(user.phone)) {
+    return res.status(400).json({ success: false, error: { code: 'PHONE_MISMATCH', message: 'El número verificado no coincide con el de tu cuenta.' } });
+  }
+
+  await prisma.caregiverProfile.updateMany({
+    where: { userId },
+    data: { phoneVerified: true },
+  });
+
+  return res.json({ success: true, message: '¡Teléfono verificado correctamente!' });
+});
+
+// ── Password Reset (in-app code flow) ────────────────────────────────────────
+
+import * as passwordResetCodeService from './password-reset-code.service.js';
+
+/** POST /api/auth/forgot-password/send-code — body: { email }. Envía código de 4 dígitos. Siempre 200. */
+export const sendResetCode = asyncHandler(async (req: Request, res: Response) => {
+  const email = req.body?.email;
+  if (!email || typeof email !== 'string') {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_EMAIL', message: 'El correo es requerido.' } });
+  }
+  await passwordResetCodeService.sendResetCode(email);
+  res.json({ success: true, message: 'Si el correo existe, recibirás un código de 4 dígitos en los próximos minutos.' });
+});
+
+/** POST /api/auth/forgot-password/verify-code — body: { email, code }. Retorna tempToken si es válido. */
+export const verifyResetCode = asyncHandler(async (req: Request, res: Response) => {
+  const { email, code } = req.body ?? {};
+  if (!email || !code) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_FIELDS', message: 'Correo y código son requeridos.' } });
+  }
+  const { tempToken } = await passwordResetCodeService.verifyResetCode(email, String(code));
+  res.json({ success: true, data: { tempToken } });
+});
+
+/** POST /api/auth/forgot-password/set-password — body: { tempToken, newPassword }. Cambia la contraseña. */
+export const setNewPassword = asyncHandler(async (req: Request, res: Response) => {
+  const { tempToken, newPassword } = req.body ?? {};
+  if (!tempToken || !newPassword) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_FIELDS', message: 'Token temporal y nueva contraseña son requeridos.' } });
+  }
+  await passwordResetCodeService.setNewPassword(tempToken, newPassword);
+  res.json({ success: true, message: '¡Contraseña actualizada! Ya puedes iniciar sesión.' });
 });

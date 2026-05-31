@@ -40,6 +40,7 @@ model User {
   walletTransactions           WalletTransaction[]
   refreshTokens                RefreshToken[]
   passwordResets               PasswordReset[]
+  passwordResetCodes           PasswordResetCode[]
   /// Billetera unificada: saldo disponible para retiro o pago de reservas.
   /// Única fuente de verdad independientemente del rol (CLIENT, CAREGIVER o ambos).
   balance                      Decimal                       @default(0) @db.Decimal(10, 2)
@@ -155,6 +156,7 @@ model CaregiverProfile {
   identityVerificationScore       Float?
   identityVerificationSubmittedAt DateTime?
   emailVerified                   Boolean            @default(false)
+  phoneVerified                   Boolean            @default(false)
   /// Lifecycle del onboarding visto desde el cuidador: INCOMPLETE | SUBMITTED | UNDER_REVIEW | APPROVED.
   /// Complementa a status (que es la vista del admin). Se actualiza en checkAndAutoSubmitProfile.
   profileStatus                   String?            @default("INCOMPLETE") @db.VarChar(20)
@@ -398,11 +400,19 @@ model Review {
 /// isComplete = true cuando tiene al menos un Pet con name, size y photoUrl (permite crear reservas).
 /// Fotos: petPhoto = URL absoluta Cloudinary (sincronizada con primera mascota); cada Pet.photoUrl también.
 model ClientProfile {
-  id         String   @id @default(uuid())
-  userId     String   @unique
-  address    String?  @db.VarChar(500)
-  phone      String?  @db.VarChar(20)
-  bio        String?
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  address           String?  @db.VarChar(500)
+  addressLat        Float?
+  addressLng        Float?
+  addressStreet     String?  @db.VarChar(200)
+  addressNumber     String?  @db.VarChar(20)
+  addressApartment  String?  @db.VarChar(50)
+  addressCondominio String?  @db.VarChar(100)
+  addressReference  String?  @db.VarChar(200)
+  addressZone       String?  @db.VarChar(100)
+  phone             String?  @db.VarChar(20)
+  bio               String?
   /// URL absoluta Cloudinary de la foto principal de mascota (p. ej. primera mascota).
   petPhoto   String?
   /// true = tiene al menos una mascota completa (name, size, photoUrl); permite reservas.
@@ -856,6 +866,21 @@ model PasswordReset {
   @@index([userId])
   @@index([tokenHash])
   @@map("password_resets")
+}
+
+/// Código de 4 dígitos para recuperación de contraseña en-app (flujo sin link externo).
+model PasswordResetCode {
+  id        String    @id @default(uuid())
+  userId    String
+  codeHash  String    // SHA-256 del código de 4 dígitos
+  expiresAt DateTime
+  attempts  Int       @default(0)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_codes")
 }
 
 /// Refresh tokens opacos para renovación de sesión sin re-login.

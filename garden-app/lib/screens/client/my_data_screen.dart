@@ -7,6 +7,8 @@ import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/address_section.dart';
+import '../../widgets/address_map_picker.dart';
 
 class MyDataScreen extends StatefulWidget {
   const MyDataScreen({super.key});
@@ -32,6 +34,17 @@ class _MyDataScreenState extends State<MyDataScreen> {
   late TextEditingController _bioCtrl;
   DateTime? _dateOfBirth;
 
+  // Dirección detallada
+  late TextEditingController _streetCtrl;
+  late TextEditingController _numberCtrl;
+  late TextEditingController _apartmentCtrl;
+  late TextEditingController _condominioCtrl;
+  late TextEditingController _referenceCtrl;
+  late TextEditingController _zoneCtrl;
+  double? _addressLat;
+  double? _addressLng;
+  bool _isApartment = false;
+
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   @override
@@ -45,6 +58,12 @@ class _MyDataScreenState extends State<MyDataScreen> {
     _countryCtrl = TextEditingController();
     _addressCtrl = TextEditingController();
     _bioCtrl = TextEditingController();
+    _streetCtrl = TextEditingController();
+    _numberCtrl = TextEditingController();
+    _apartmentCtrl = TextEditingController();
+    _condominioCtrl = TextEditingController();
+    _referenceCtrl = TextEditingController();
+    _zoneCtrl = TextEditingController();
     _loadData();
   }
 
@@ -58,6 +77,12 @@ class _MyDataScreenState extends State<MyDataScreen> {
     _countryCtrl.dispose();
     _addressCtrl.dispose();
     _bioCtrl.dispose();
+    _streetCtrl.dispose();
+    _numberCtrl.dispose();
+    _apartmentCtrl.dispose();
+    _condominioCtrl.dispose();
+    _referenceCtrl.dispose();
+    _zoneCtrl.dispose();
     super.dispose();
   }
 
@@ -81,6 +106,15 @@ class _MyDataScreenState extends State<MyDataScreen> {
           _countryCtrl.text = user['country'] as String? ?? '';
           _addressCtrl.text = user['address'] as String? ?? '';
           _bioCtrl.text = user['bio'] as String? ?? '';
+          _streetCtrl.text = user['addressStreet'] as String? ?? '';
+          _numberCtrl.text = user['addressNumber'] as String? ?? '';
+          _apartmentCtrl.text = user['addressApartment'] as String? ?? '';
+          _condominioCtrl.text = user['addressCondominio'] as String? ?? '';
+          _referenceCtrl.text = user['addressReference'] as String? ?? '';
+          _zoneCtrl.text = user['addressZone'] as String? ?? '';
+          _addressLat = (user['addressLat'] as num?)?.toDouble();
+          _addressLng = (user['addressLng'] as num?)?.toDouble();
+          _isApartment = (user['addressApartment'] as String? ?? '').isNotEmpty;
           final dob = user['dateOfBirth'] as String?;
           if (dob != null && dob.isNotEmpty) {
             try { _dateOfBirth = DateTime.parse(dob); } catch (_) {}
@@ -135,6 +169,18 @@ class _MyDataScreenState extends State<MyDataScreen> {
     }
   }
 
+  String _buildFullAddress() {
+    final parts = <String>[
+      if (_streetCtrl.text.trim().isNotEmpty) _streetCtrl.text.trim(),
+      if (_numberCtrl.text.trim().isNotEmpty) 'N° ${_numberCtrl.text.trim()}',
+      if (_isApartment && _apartmentCtrl.text.trim().isNotEmpty) 'Dpto. ${_apartmentCtrl.text.trim()}',
+      if (_isApartment && _condominioCtrl.text.trim().isNotEmpty) _condominioCtrl.text.trim(),
+      if (_zoneCtrl.text.trim().isNotEmpty) _zoneCtrl.text.trim(),
+      'Santa Cruz de la Sierra, Bolivia',
+    ];
+    return parts.isEmpty ? _addressCtrl.text.trim() : parts.join(', ');
+  }
+
   Future<void> _save() async {
     final fn = _firstCtrl.text.trim();
     final ln = _lastCtrl.text.trim();
@@ -152,10 +198,18 @@ class _MyDataScreenState extends State<MyDataScreen> {
         'phone': _phoneCtrl.text.trim(),
         'city': _cityCtrl.text.trim(),
         'country': _countryCtrl.text.trim(),
-        'address': _addressCtrl.text.trim(),
+        'address': _buildFullAddress(),
         'bio': _bioCtrl.text.trim(),
         if (_dateOfBirth != null) 'dateOfBirth': _dateOfBirth!.toIso8601String(),
         if (!emailVerified && _emailCtrl.text.trim().isNotEmpty) 'email': _emailCtrl.text.trim(),
+        if (_addressLat != null) 'addressLat': _addressLat,
+        if (_addressLng != null) 'addressLng': _addressLng,
+        if (_streetCtrl.text.trim().isNotEmpty) 'addressStreet': _streetCtrl.text.trim(),
+        if (_numberCtrl.text.trim().isNotEmpty) 'addressNumber': _numberCtrl.text.trim(),
+        if (_isApartment && _apartmentCtrl.text.trim().isNotEmpty) 'addressApartment': _apartmentCtrl.text.trim(),
+        if (_isApartment && _condominioCtrl.text.trim().isNotEmpty) 'addressCondominio': _condominioCtrl.text.trim(),
+        if (_referenceCtrl.text.trim().isNotEmpty) 'addressReference': _referenceCtrl.text.trim(),
+        if (_zoneCtrl.text.trim().isNotEmpty) 'addressZone': _zoneCtrl.text.trim(),
       };
       final res = await http.patch(
         Uri.parse('$_baseUrl/auth/me'),
@@ -339,9 +393,29 @@ class _MyDataScreenState extends State<MyDataScreen> {
 
             // Address
             Text('Dirección', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 6),
-            TextField(controller: _addressCtrl, style: TextStyle(color: textColor),
-                decoration: fieldDeco('Tu dirección', Icons.home_work_outlined)),
+            const SizedBox(height: 10),
+            AddressSection(
+              isDark: isDark,
+              textColor: textColor,
+              subtextColor: subtextColor,
+              borderColor: borderColor,
+              surfaceEl: surfaceEl,
+              streetController: _streetCtrl,
+              numberController: _numberCtrl,
+              apartmentController: _apartmentCtrl,
+              condominioController: _condominioCtrl,
+              referenceController: _referenceCtrl,
+              zoneController: _zoneCtrl,
+              addressLat: _addressLat,
+              addressLng: _addressLng,
+              isApartment: _isApartment,
+              purposeText: 'Tu dirección se usa para que el cuidador pueda recoger a tu mascota en los paseos. Solo se comparte con el cuidador que acepte tu reserva.',
+              onMapResult: (result) => setState(() {
+                _addressLat = result.lat;
+                _addressLng = result.lng;
+              }),
+              onApartmentToggle: (val) => setState(() => _isApartment = val),
+            ),
             const SizedBox(height: 16),
 
             // Date of birth

@@ -643,6 +643,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   ),
                   const SizedBox(height: 14),
 
+                  // ── Dirección del dueño (PASEO) ──────────────────────────────
+                  if (isPaseo && widget.role == 'CAREGIVER') ...[
+                    _buildClientAddressCard(textColor, subtextColor, surface, borderColor),
+                    const SizedBox(height: 14),
+                  ],
+
                   // ── Meet & Greet (HOSPEDAJE) ─────────────────────────────────
                   if (_booking?['serviceType'] == 'HOSPEDAJE') ...[
                     _buildMeetAndGreetCard(),
@@ -831,6 +837,122 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         ],
       ),
     );
+  }
+
+  Widget _buildClientAddressCard(
+    Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    final clientAddress = _booking?['clientAddress'] as Map<String, dynamic>?;
+    final lat = (clientAddress?['lat'] as num?)?.toDouble();
+    final lng = (clientAddress?['lng'] as num?)?.toDouble();
+    final street = clientAddress?['street'] as String?;
+    final number = clientAddress?['number'] as String?;
+    final zone = clientAddress?['zone'] as String?;
+    final apartment = clientAddress?['apartment'] as String?;
+    final condominio = clientAddress?['condominio'] as String?;
+    final reference = clientAddress?['reference'] as String?;
+    final full = clientAddress?['full'] as String?;
+
+    final displayAddress = [
+      if (street != null && street.isNotEmpty) street,
+      if (number != null && number.isNotEmpty) 'N° $number',
+      if (apartment != null && apartment.isNotEmpty) 'Dpto. $apartment',
+      if (condominio != null && condominio.isNotEmpty) condominio,
+      if (zone != null && zone.isNotEmpty) zone,
+    ].join(', ');
+
+    final addressText = displayAddress.isNotEmpty ? displayAddress : (full ?? 'Dirección no disponible');
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(GardenRadius.lg),
+        border: Border.all(color: borderColor),
+        boxShadow: GardenShadows.card,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.home_pin_outlined, color: GardenColors.primary, size: 18),
+            const SizedBox(width: 8),
+            Text('Dirección del dueño',
+                style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
+          ]),
+          const SizedBox(height: 4),
+          Text(
+            'Aquí debes recoger a ${_booking?['petName'] ?? 'la mascota'} antes del paseo.',
+            style: TextStyle(color: subtextColor, fontSize: 11),
+          ),
+          const SizedBox(height: 12),
+          if (reference != null && reference.isNotEmpty) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, size: 14, color: subtextColor),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(reference,
+                      style: TextStyle(color: subtextColor, fontSize: 12, fontStyle: FontStyle.italic)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+          Row(
+            children: [
+              Icon(Icons.location_on_outlined, size: 16, color: GardenColors.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  addressText,
+                  style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+          if (lat != null && lng != null) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.directions_rounded, size: 18),
+                label: const Text('Navegar al domicilio'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: GardenColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.md)),
+                ),
+                onPressed: () => _launchMaps(lat, lng, addressText),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _launchMaps(double lat, double lng, String label) async {
+    final encoded = Uri.encodeComponent(label);
+    // Intenta Google Maps primero, luego Apple Maps como fallback
+    final urls = [
+      'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng',
+      'maps://?q=$lat,$lng',
+      'geo:$lat,$lng?q=$lat,$lng($encoded)',
+    ];
+    for (final rawUrl in urls) {
+      final uri = Uri.parse(rawUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return;
+      }
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo abrir la aplicación de mapas')),
+      );
+    }
   }
 
   Widget _buildMeetAndGreetCard() {

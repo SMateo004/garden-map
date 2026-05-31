@@ -25,14 +25,20 @@ export async function callClaude(
     const response = await getClient().messages.create({
         model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
         max_tokens: maxTokens,
-        system: systemPrompt,
+        system: [
+            {
+                type: 'text',
+                text: systemPrompt,
+                cache_control: { type: 'ephemeral' },
+            },
+        ],
         messages: [
             {
                 role: 'user',
                 content: userMessage,
             },
         ],
-    });
+    } as any);
 
     const content = response.content[0];
     if (!content || content.type !== 'text') {

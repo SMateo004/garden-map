@@ -41,6 +41,9 @@ import 'screens/onboarding/maintenance_screen.dart';
 import 'screens/caregiver/mobile_verify_screen.dart';
 import 'screens/legal/legal_screen.dart';
 import 'screens/caregiver/professional_register_screen.dart';
+import 'screens/auth/forgot_password_screen.dart';
+import 'screens/auth/forgot_password_code_screen.dart';
+import 'screens/auth/forgot_password_new_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -96,6 +99,9 @@ const _publicPaths = {
   '/splash',
   '/login',
   '/register',
+  '/forgot-password',
+  '/forgot-password/code',
+  '/forgot-password/new',
   '/onboarding',
   '/about',
   '/become-caregiver',
@@ -158,6 +164,22 @@ final GoRouter _router = GoRouter(
       path: '/login',
       name: 'login',
       builder: (context, state) => const LoginScreen(),
+    ),
+    GoRoute(
+      path: '/forgot-password',
+      builder: (context, state) => const ForgotPasswordScreen(),
+    ),
+    GoRoute(
+      path: '/forgot-password/code',
+      builder: (context, state) => ForgotPasswordCodeScreen(
+        email: state.extra as String? ?? '',
+      ),
+    ),
+    GoRoute(
+      path: '/forgot-password/new',
+      builder: (context, state) => ForgotPasswordNewScreen(
+        tempToken: state.extra as String? ?? '',
+      ),
     ),
     GoRoute(
       path: '/register',
