@@ -874,7 +874,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            const Icon(Icons.home_pin_outlined, color: GardenColors.primary, size: 18),
+            const Icon(Icons.location_on_outlined, color: GardenColors.primary, size: 18),
             const SizedBox(width: 8),
             Text('Dirección del dueño',
                 style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
