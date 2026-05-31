@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -203,6 +204,219 @@ class _MyDataScreenState extends State<MyDataScreen> {
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         );
 
+        final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+
+        Widget formContent = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Photo section
+            Center(
+              child: Stack(
+                children: [
+                  GestureDetector(
+                    onTap: _uploadingPhoto ? null : _pickAndUploadPhoto,
+                    child: Container(
+                      width: kIsWeb ? 88 : 100, height: kIsWeb ? 88 : 100,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4), width: 2),
+                      ),
+                      child: _uploadingPhoto
+                          ? Padding(
+                              padding: EdgeInsets.all(kIsWeb ? 26 : 30),
+                              child: const CircularProgressIndicator(color: GardenColors.primary, strokeWidth: 2))
+                          : ClipOval(
+                              child: _pendingPhotoBytes != null
+                                  ? Image.memory(_pendingPhotoBytes!,
+                                      width: kIsWeb ? 88 : 100, height: kIsWeb ? 88 : 100, fit: BoxFit.cover)
+                                  : _userData?['profilePicture'] != null
+                                      ? Image.network(
+                                          fixImageUrl(_userData!['profilePicture'] as String),
+                                          width: kIsWeb ? 88 : 100, height: kIsWeb ? 88 : 100, fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => _avatarFallback(textColor),
+                                        )
+                                      : _avatarFallback(textColor),
+                            ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 0, right: 0,
+                    child: GestureDetector(
+                      onTap: _uploadingPhoto ? null : _pickAndUploadPhoto,
+                      child: Container(
+                        width: 28, height: 28,
+                        decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
+                        child: const Icon(Icons.camera_alt, color: Colors.white, size: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Center(child: Text('Toca para cambiar foto', style: TextStyle(color: subtextColor, fontSize: 12))),
+            const SizedBox(height: 28),
+
+            // Email
+            if (_userData?['email'] != null) ...[
+              Text('Correo electrónico', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              if (_userData?['emailVerified'] == true)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: surfaceEl.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: borderColor.withValues(alpha: 0.5)),
+                  ),
+                  child: Row(children: [
+                    Icon(Icons.email_outlined, color: subtextColor, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(_userData!['email'] as String,
+                      style: TextStyle(color: subtextColor, fontSize: 14))),
+                    const Icon(Icons.verified_outlined, color: GardenColors.success, size: 16),
+                  ]),
+                )
+              else
+                TextField(
+                  controller: _emailCtrl,
+                  style: TextStyle(color: textColor),
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: fieldDeco('Correo electrónico', Icons.email_outlined).copyWith(
+                    suffixIcon: const Tooltip(
+                      message: 'Correo no verificado',
+                      child: Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 18),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 20),
+            ],
+
+            // Name
+            Text('Nombre', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            Row(children: [
+              Expanded(child: TextField(controller: _firstCtrl, style: TextStyle(color: textColor),
+                  decoration: fieldDeco('Nombre *', Icons.person_outline))),
+              const SizedBox(width: 12),
+              Expanded(child: TextField(controller: _lastCtrl, style: TextStyle(color: textColor),
+                  decoration: fieldDeco('Apellido *', Icons.person_outlined))),
+            ]),
+            const SizedBox(height: 16),
+
+            // Phone
+            Text('Teléfono', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            TextField(controller: _phoneCtrl, style: TextStyle(color: textColor),
+                keyboardType: TextInputType.phone,
+                decoration: fieldDeco('Número de teléfono', Icons.phone_outlined)),
+            const SizedBox(height: 16),
+
+            // City + Country side by side on web
+            if (kIsWeb) ...[
+              Text('Ubicación', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              Row(children: [
+                Expanded(child: TextField(controller: _cityCtrl, style: TextStyle(color: textColor),
+                    decoration: fieldDeco('Ciudad', Icons.location_city_outlined))),
+                const SizedBox(width: 12),
+                Expanded(child: TextField(controller: _countryCtrl, style: TextStyle(color: textColor),
+                    decoration: fieldDeco('País', Icons.public_outlined))),
+              ]),
+              const SizedBox(height: 16),
+            ] else ...[
+              Text('Ciudad', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              TextField(controller: _cityCtrl, style: TextStyle(color: textColor),
+                  decoration: fieldDeco('Tu ciudad', Icons.location_city_outlined)),
+              const SizedBox(height: 16),
+              Text('País', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              TextField(controller: _countryCtrl, style: TextStyle(color: textColor),
+                  decoration: fieldDeco('Tu país', Icons.public_outlined)),
+              const SizedBox(height: 16),
+            ],
+
+            // Address
+            Text('Dirección', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            TextField(controller: _addressCtrl, style: TextStyle(color: textColor),
+                decoration: fieldDeco('Tu dirección', Icons.home_work_outlined)),
+            const SizedBox(height: 16),
+
+            // Date of birth
+            Text('Fecha de nacimiento', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _dateOfBirth ?? DateTime(1995),
+                  firstDate: DateTime(1940),
+                  lastDate: DateTime.now().subtract(const Duration(days: 365 * 13)),
+                );
+                if (picked != null) setState(() => _dateOfBirth = picked);
+              },
+              child: Container(
+                height: kIsWeb ? 46 : 52,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: surfaceEl,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Row(children: [
+                  Icon(Icons.cake_outlined, color: subtextColor, size: 20),
+                  const SizedBox(width: 12),
+                  Text(
+                    _dateOfBirth == null
+                        ? 'Seleccionar fecha'
+                        : '${_dateOfBirth!.day.toString().padLeft(2, '0')}/${_dateOfBirth!.month.toString().padLeft(2, '0')}/${_dateOfBirth!.year}',
+                    style: TextStyle(color: _dateOfBirth == null ? subtextColor : textColor, fontSize: 14),
+                  ),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Bio
+            Text('Descripción', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _bioCtrl,
+              maxLines: 3, maxLength: 300,
+              style: TextStyle(color: textColor, fontSize: 14),
+              decoration: fieldDeco('Una breve descripción de ti', Icons.description_outlined).copyWith(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Save button
+            if (kIsWeb)
+              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                SizedBox(
+                  width: 180,
+                  child: GardenButton(
+                    label: _saving ? 'Guardando...' : 'Guardar cambios',
+                    loading: _saving,
+                    onPressed: _save,
+                  ),
+                ),
+              ])
+            else
+              SizedBox(
+                width: double.infinity,
+                child: GardenButton(
+                  label: _saving ? 'Guardando...' : 'Guardar cambios',
+                  loading: _saving,
+                  onPressed: _save,
+                ),
+              ),
+            const SizedBox(height: 24),
+          ],
+        );
+
         return PopScope(
           canPop: false,
           onPopInvokedWithResult: (didPop, _) {
@@ -211,217 +425,48 @@ class _MyDataScreenState extends State<MyDataScreen> {
           },
           child: Scaffold(
           backgroundColor: bg,
-          appBar: AppBar(
+          appBar: kIsWeb ? null : AppBar(
             title: const Text('Mis Datos'),
-            backgroundColor: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+            backgroundColor: surface,
             foregroundColor: textColor,
             elevation: 0,
           ),
-          body: _isLoading
-              ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          body: Column(
+            children: [
+              if (kIsWeb)
+                Container(
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: surface,
+                    border: Border(bottom: BorderSide(color: borderColor)),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
                     children: [
-                      // Photo section
-                      Center(
-                        child: Stack(
-                          children: [
-                            GestureDetector(
-                              onTap: _uploadingPhoto ? null : _pickAndUploadPhoto,
-                              child: Container(
-                                width: 100, height: 100,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4), width: 2),
-                                ),
-                                child: _uploadingPhoto
-                                    ? const Padding(
-                                        padding: EdgeInsets.all(30),
-                                        child: CircularProgressIndicator(color: GardenColors.primary, strokeWidth: 2))
-                                    : ClipOval(
-                                        child: _pendingPhotoBytes != null
-                                            ? Image.memory(
-                                                _pendingPhotoBytes!,
-                                                width: 100, height: 100, fit: BoxFit.cover,
-                                              )
-                                            : _userData?['profilePicture'] != null
-                                                ? Image.network(
-                                                    fixImageUrl(_userData!['profilePicture'] as String),
-                                                    width: 100, height: 100, fit: BoxFit.cover,
-                                                    errorBuilder: (_, __, ___) => _avatarFallback(textColor),
-                                                  )
-                                                : _avatarFallback(textColor),
-                                      ),
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 0, right: 0,
-                              child: GestureDetector(
-                                onTap: _uploadingPhoto ? null : _pickAndUploadPhoto,
-                                child: Container(
-                                  width: 32, height: 32,
-                                  decoration: const BoxDecoration(
-                                    color: GardenColors.primary,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.camera_alt, color: Colors.white, size: 16),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                      IconButton(
+                        icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 18),
+                        onPressed: () => Navigator.of(context).pop(_pendingPhotoBytes != null),
                       ),
-                      const SizedBox(height: 8),
-                      Center(
-                        child: Text('Toca para cambiar foto',
-                          style: TextStyle(color: subtextColor, fontSize: 12))),
-                      const SizedBox(height: 32),
-
-                      // Email
-                      if (_userData?['email'] != null) ...[
-                        Text('Correo electrónico', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 6),
-                        if (_userData?['emailVerified'] == true)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            decoration: BoxDecoration(
-                              color: surfaceEl.withValues(alpha: 0.5),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: borderColor.withValues(alpha: 0.5)),
-                            ),
-                            child: Row(children: [
-                              Icon(Icons.email_outlined, color: subtextColor, size: 20),
-                              const SizedBox(width: 12),
-                              Expanded(child: Text(_userData!['email'] as String,
-                                style: TextStyle(color: subtextColor, fontSize: 14))),
-                              const Icon(Icons.verified_outlined, color: GardenColors.success, size: 16),
-                            ]),
-                          )
-                        else
-                          TextField(
-                            controller: _emailCtrl,
-                            style: TextStyle(color: textColor),
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: fieldDeco('Correo electrónico', Icons.email_outlined).copyWith(
-                              suffixIcon: const Tooltip(
-                                message: 'Correo no verificado',
-                                child: Icon(Icons.warning_amber_rounded, color: GardenColors.warning, size: 18),
-                              ),
-                            ),
-                          ),
-                        const SizedBox(height: 20),
-                      ],
-
-                      // Name
-                      Text('Nombre', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 6),
-                      Row(children: [
-                        Expanded(child: TextField(controller: _firstCtrl,
-                          style: TextStyle(color: textColor),
-                          decoration: fieldDeco('Nombre *', Icons.person_outline))),
-                        const SizedBox(width: 12),
-                        Expanded(child: TextField(controller: _lastCtrl,
-                          style: TextStyle(color: textColor),
-                          decoration: fieldDeco('Apellido *', Icons.person_outlined))),
-                      ]),
-                      const SizedBox(height: 16),
-
-                      // Phone
-                      Text('Teléfono', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 6),
-                      TextField(controller: _phoneCtrl,
-                        style: TextStyle(color: textColor),
-                        keyboardType: TextInputType.phone,
-                        decoration: fieldDeco('Número de teléfono', Icons.phone_outlined)),
-                      const SizedBox(height: 16),
-
-                      // City
-                      Text('Ciudad', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 6),
-                      TextField(controller: _cityCtrl,
-                        style: TextStyle(color: textColor),
-                        decoration: fieldDeco('Tu ciudad', Icons.location_city_outlined)),
-                      const SizedBox(height: 16),
-
-                      // Country
-                      Text('País', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 6),
-                      TextField(controller: _countryCtrl,
-                        style: TextStyle(color: textColor),
-                        decoration: fieldDeco('Tu país', Icons.public_outlined)),
-                      const SizedBox(height: 16),
-
-                      // Address
-                      Text('Dirección', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 6),
-                      TextField(controller: _addressCtrl,
-                        style: TextStyle(color: textColor),
-                        decoration: fieldDeco('Tu dirección', Icons.home_work_outlined)),
-                      const SizedBox(height: 16),
-
-                      // Date of birth
-                      Text('Fecha de nacimiento', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 6),
-                      GestureDetector(
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: _dateOfBirth ?? DateTime(1995),
-                            firstDate: DateTime(1940),
-                            lastDate: DateTime.now().subtract(const Duration(days: 365 * 13)),
-                          );
-                          if (picked != null) setState(() => _dateOfBirth = picked);
-                        },
-                        child: Container(
-                          height: 52,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            color: surfaceEl,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: borderColor),
-                          ),
-                          child: Row(children: [
-                            Icon(Icons.cake_outlined, color: subtextColor, size: 20),
-                            const SizedBox(width: 12),
-                            Text(
-                              _dateOfBirth == null
-                                  ? 'Seleccionar fecha'
-                                  : '${_dateOfBirth!.day.toString().padLeft(2, '0')}/${_dateOfBirth!.month.toString().padLeft(2, '0')}/${_dateOfBirth!.year}',
-                              style: TextStyle(color: _dateOfBirth == null ? subtextColor : textColor, fontSize: 14),
-                            ),
-                          ]),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Bio
-                      Text('Descripción', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: _bioCtrl,
-                        maxLines: 3,
-                        maxLength: 300,
-                        style: TextStyle(color: textColor, fontSize: 14),
-                        decoration: fieldDeco('Una breve descripción de ti', Icons.description_outlined).copyWith(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      SizedBox(
-                        width: double.infinity,
-                        child: GardenButton(
-                          label: _saving ? 'Guardando...' : 'Guardar cambios',
-                          loading: _saving,
-                          onPressed: _save,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
+                      const SizedBox(width: 6),
+                      Text('Mis Datos', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
                     ],
                   ),
                 ),
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+                    : SingleChildScrollView(
+                        padding: EdgeInsets.all(kIsWeb ? 28 : 24),
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(maxWidth: kIsWeb ? 680.0 : double.infinity),
+                            child: formContent,
+                          ),
+                        ),
+                      ),
+              ),
+            ],
+          ),
           ),
         );
       },

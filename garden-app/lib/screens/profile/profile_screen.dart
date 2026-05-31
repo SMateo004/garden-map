@@ -547,10 +547,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
                   child: Center(child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: kIsWeb ? 720.0 : double.infinity),
+                    constraints: BoxConstraints(maxWidth: kIsWeb ? 900.0 : double.infinity),
                     child: _token.isEmpty || _userData == null
                         ? _buildUnauthenticatedState()
-                        : _buildAuthenticatedState(),
+                        : kIsWeb ? _buildWebAuthenticatedState() : _buildAuthenticatedState(),
                   )),
                 )),
             ],
@@ -580,6 +580,355 @@ class _ProfileScreenState extends State<ProfileScreen> {
           GardenButton(label: 'Registrarse', outline: true, onPressed: () => context.push('/register')),
         ],
       ),
+    );
+  }
+
+  // ── Web 2-column layout ──────────────────────────────────────────────────────
+
+  Widget _buildWebAuthenticatedState() {
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final user = _userData!;
+
+    String roleLabel = 'Usuario';
+    Color roleColor = GardenColors.primary;
+    if (_effectiveRole == 'CLIENT') {
+      roleLabel = _role == 'CAREGIVER' ? 'Dueño de mascota (modo temporal)' : 'Dueño de mascota';
+      roleColor = GardenColors.success;
+    } else if (_effectiveRole == 'CAREGIVER') {
+      roleLabel = 'Cuidador';
+      roleColor = GardenColors.primary;
+    } else if (_effectiveRole == 'ADMIN') {
+      roleLabel = 'Administrador';
+      roleColor = GardenColors.info;
+    }
+
+    // ── data for account info card ───────────────────────────────
+    String createdAt = '';
+    try {
+      final dt = DateTime.parse(user['createdAt'] as String? ?? '').toLocal();
+      createdAt = '${dt.day}/${dt.month}/${dt.year}';
+    } catch (_) {}
+    final walletAddress = user['walletAddress'] as String? ??
+        (_caregiverProfile?['walletAddress'] as String?) ?? '';
+    final userId = user['id'] as String? ?? '';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Header card (full width) ────────────────────────────
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                GardenColors.primary.withValues(alpha: 0.07),
+                GardenColors.lime.withValues(alpha: 0.25),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(GardenRadius.xl),
+            border: Border.all(color: GardenColors.primary.withValues(alpha: 0.12)),
+          ),
+          child: Row(
+            children: [
+              GardenAvatar(
+                imageUrl: (_caregiverProfile?['profilePhoto'] as String?)?.isNotEmpty == true
+                    ? _caregiverProfile!['profilePhoto'] as String
+                    : user['profilePicture'] as String?,
+                size: 64,
+                initials: '${user['firstName']} ${user['lastName']}',
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${user['firstName']} ${user['lastName']}',
+                        style: GardenText.h4.copyWith(color: textColor)),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.email_outlined, size: 12, color: subtextColor),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            user['email'] as String? ?? '',
+                            style: GardenText.bodySmall.copyWith(color: subtextColor),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        if (user['emailVerified'] == true)
+                          const Icon(Icons.verified_rounded, size: 14, color: GardenColors.success)
+                        else
+                          GestureDetector(
+                            onTap: _sendVerificationEmail,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: GardenColors.warning.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(GardenRadius.full),
+                                border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4)),
+                              ),
+                              child: const Text('Verificar',
+                                style: TextStyle(color: GardenColors.warning, fontSize: 11, fontWeight: FontWeight.w700)),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: roleColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(GardenRadius.full),
+                        border: Border.all(color: roleColor.withValues(alpha: 0.25)),
+                      ),
+                      child: Text(roleLabel,
+                          style: TextStyle(color: roleColor, fontSize: 12, fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // ── Banner conversión (full width) ──────────────────────
+        if (_role == 'CAREGIVER' && _conversionInProgress) ...[
+          _buildConversionBanner(textColor, subtextColor),
+          const SizedBox(height: 20),
+        ],
+
+        // ── 2-column body ───────────────────────────────────────
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Left: info + theme
+              Expanded(
+                flex: 40,
+                child: Column(
+                  children: [
+                    // Account info card
+                    Container(
+                      decoration: BoxDecoration(
+                        color: surface,
+                        borderRadius: BorderRadius.circular(GardenRadius.md),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+                            child: Row(children: [
+                              const Icon(Icons.info_outline_rounded, color: GardenColors.primary, size: 15),
+                              const SizedBox(width: 8),
+                              Text('Información de cuenta',
+                                  style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w700)),
+                            ]),
+                          ),
+                          Divider(height: 1, color: borderColor),
+                          _infoRow(Icons.calendar_today_outlined, 'Miembro desde',
+                              createdAt.isNotEmpty ? createdAt : 'N/A', textColor, subtextColor),
+                          if (walletAddress.isNotEmpty) ...[
+                            Divider(height: 1, color: borderColor),
+                            _infoRow(Icons.account_balance_wallet_outlined, 'Wallet blockchain',
+                                '${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}',
+                                textColor, subtextColor),
+                          ],
+                          Divider(height: 1, color: borderColor),
+                          _infoRow(Icons.fingerprint_outlined, 'ID de cuenta',
+                              userId.isNotEmpty ? '${userId.substring(0, 8)}...' : 'N/A',
+                              textColor, subtextColor),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Theme selector card
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: surface,
+                        borderRadius: BorderRadius.circular(GardenRadius.md),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            const Icon(Icons.palette_outlined, color: GardenColors.primary, size: 15),
+                            const SizedBox(width: 8),
+                            Text('Apariencia',
+                                style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w700)),
+                          ]),
+                          const SizedBox(height: 12),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
+                              borderRadius: BorderRadius.circular(GardenRadius.md),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: Row(
+                              children: [
+                                _ThemeOptionBtn(icon: Icons.phone_android_rounded, label: 'Sistema',
+                                    selected: themeNotifier.mode == GardenThemeMode.system, isDark: isDark,
+                                    onTap: () => themeNotifier.setMode(GardenThemeMode.system)),
+                                _ThemeOptionDivider(isDark: isDark),
+                                _ThemeOptionBtn(icon: Icons.light_mode_rounded, label: 'Claro',
+                                    selected: themeNotifier.mode == GardenThemeMode.light, isDark: isDark,
+                                    onTap: () => themeNotifier.setMode(GardenThemeMode.light)),
+                                _ThemeOptionDivider(isDark: isDark),
+                                _ThemeOptionBtn(icon: Icons.dark_mode_rounded, label: 'Oscuro',
+                                    selected: themeNotifier.mode == GardenThemeMode.dark, isDark: isDark,
+                                    onTap: () => themeNotifier.setMode(GardenThemeMode.dark)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            themeNotifier.mode == GardenThemeMode.system
+                                ? '📱 Siguiendo la configuración de tu teléfono'
+                                : themeNotifier.mode == GardenThemeMode.dark
+                                    ? '🌙 Modo oscuro activado'
+                                    : '☀️ Modo claro activado',
+                            style: TextStyle(color: subtextColor, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              // Right: navigation tiles
+              Expanded(
+                flex: 60,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Mi cuenta', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
+                    const SizedBox(height: 8),
+                    if (_effectiveRole == 'CLIENT') ...[
+                      _profileTile(icon: Icons.person_outlined, title: 'Mis Datos', onTap: () async {
+                        final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const MyDataScreen()));
+                        if (result == true && mounted) _loadProfile();
+                      }),
+                      _profileTile(icon: Icons.pets, title: 'Mis mascotas', onTap: () => context.push('/my-pets')),
+                      _profileTile(icon: Icons.calendar_today, title: 'Mis reservas', onTap: () => context.push('/my-bookings')),
+                      _profileTile(icon: Icons.favorite_border, title: 'Cuidadores favoritos', onTap: () => context.push('/favorites')),
+                      _profileTile(icon: Icons.star_outline, title: 'Mis calificaciones',
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyRatingsScreen()))),
+                      _profileTile(icon: Icons.account_balance_wallet_outlined, title: 'Mi billetera', onTap: () => context.push('/wallet')),
+                      if (_role == 'CLIENT')
+                        _profileTile(icon: Icons.volunteer_activism_outlined, title: 'Conviérteme en cuidador',
+                            onTap: () => context.push('/become-caregiver')),
+                    ],
+                    if (_effectiveRole == 'CAREGIVER') ...[
+                      _profileTile(icon: Icons.assignment_outlined, title: 'Datos del cuidador',
+                          onTap: () => context.push('/caregiver/profile-data')),
+                      _profileTile(icon: Icons.edit_outlined, title: 'Editar perfil',
+                          onTap: () => context.push('/caregiver/edit-profile')),
+                      _profileTile(icon: Icons.home_outlined, title: 'Mi panel',
+                          onTap: () => context.push('/caregiver/home')),
+                      if (_caregiverProfile?['verified'] != true &&
+                          _caregiverProfile?['verificationStatus'] != 'VERIFIED' &&
+                          _caregiverProfile?['identityVerificationStatus'] != 'VERIFIED')
+                        _profileTile(icon: Icons.verified_user_outlined, title: 'Verificación IA',
+                            onTap: () => context.push('/caregiver/verification')),
+                      _profileTile(icon: Icons.calendar_month, title: 'Mi disponibilidad',
+                          onTap: () => context.push('/caregiver/home')),
+                      _profileTile(icon: Icons.account_balance_wallet_outlined, title: 'Mi billetera',
+                          onTap: () => context.push('/wallet')),
+                    ],
+                    if (_effectiveRole == 'ADMIN') ...[
+                      _profileTile(icon: Icons.admin_panel_settings, title: 'Panel admin',
+                          onTap: () => context.push('/admin')),
+                    ],
+                    const SizedBox(height: 16),
+                    Text('Legal', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
+                    const SizedBox(height: 8),
+                    _profileTile(icon: Icons.gavel_outlined, title: 'Términos y Condiciones',
+                        onTap: () => context.push('/terms')),
+                    _profileTile(icon: Icons.privacy_tip_outlined, title: 'Política de Privacidad',
+                        onTap: () => context.push('/privacy')),
+                    const SizedBox(height: 16),
+                    if (_role == 'CAREGIVER') ...[
+                      Text('Cuenta', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
+                      const SizedBox(height: 8),
+                      _switchRoleTile(textColor),
+                      const SizedBox(height: 16),
+                    ],
+                    Text('Sesión', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
+                    const SizedBox(height: 8),
+                    _profileTile(icon: Icons.notifications_outlined, title: 'Notificaciones',
+                        onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Próximamente')))),
+                    const SizedBox(height: 8),
+                    // Logout button as a tile
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Material(
+                        color: surface,
+                        borderRadius: BorderRadius.circular(GardenRadius.md),
+                        child: InkWell(
+                          onTap: _logout,
+                          borderRadius: BorderRadius.circular(GardenRadius.md),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(GardenRadius.md),
+                              border: Border.all(color: GardenColors.error.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: GardenColors.error.withValues(alpha: 0.09),
+                                    borderRadius: BorderRadius.circular(GardenRadius.sm),
+                                  ),
+                                  child: const Icon(Icons.logout_rounded, color: GardenColors.error, size: 17),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Text('Cerrar sesión',
+                                      style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.w600, fontSize: 14)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Center(
+                      child: GestureDetector(
+                        onTap: _isDeletingAccount ? null : _deleteAccount,
+                        child: _isDeletingAccount
+                            ? const SizedBox(width: 14, height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 1.5, color: GardenColors.error))
+                            : Text('Eliminar cuenta', style: TextStyle(
+                                color: GardenColors.error.withValues(alpha: 0.45),
+                                fontSize: 12, fontWeight: FontWeight.w400,
+                                decoration: TextDecoration.underline,
+                                decorationColor: GardenColors.error.withValues(alpha: 0.3))),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 40),
+      ],
     );
   }
 
