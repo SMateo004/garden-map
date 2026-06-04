@@ -70,7 +70,7 @@ const changePasswordLimiter = rateLimit({
   message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados intentos. Espera 1 hora.' } },
 });
 
-// 3 solicitudes por 15 min — previene abuso del reset de contraseña
+// 3 envíos de código por 15 min — evita spam de emails de reset
 const passwordResetLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 3,
@@ -78,6 +78,16 @@ const passwordResetLimiter = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: false,
   message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados intentos de recuperación. Espera 15 minutos.' } },
+});
+
+// 10 intentos por 15 min — permite verificar/cambiar contraseña sin bloquear en el primer intento
+const passwordResetActionLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados intentos. Espera 15 minutos.' } },
 });
 
 // ── Rutas ────────────────────────────────────────────────────────────────────
@@ -151,10 +161,10 @@ router.post('/reset-password', passwordResetLimiter, authController.resetPasswor
 router.post('/forgot-password/send-code', passwordResetLimiter, authController.sendResetCode);
 
 /** POST /api/auth/forgot-password/verify-code — body: { email, code }. Returns tempToken if valid. */
-router.post('/forgot-password/verify-code', passwordResetLimiter, authController.verifyResetCode);
+router.post('/forgot-password/verify-code', passwordResetActionLimiter, authController.verifyResetCode);
 
 /** POST /api/auth/forgot-password/set-password — body: { tempToken, newPassword }. Sets new password. */
-router.post('/forgot-password/set-password', passwordResetLimiter, authController.setNewPassword);
+router.post('/forgot-password/set-password', passwordResetActionLimiter, authController.setNewPassword);
 
 // ── Phone Verification (Firebase Phone Auth) ──────────────────────────────
 /** POST /api/auth/caregiver/verify-phone — body: { firebaseIdToken }.
