@@ -5,6 +5,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
 import '../../services/social_auth_service.dart';
 import '../legal/legal_screen.dart';
+import '../../widgets/address_section.dart';
 
 class RegisterScreen extends StatefulWidget {
   final String? prefillFirstName;
@@ -25,18 +26,28 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final _firstNameController = TextEditingController();
-  final _lastNameController  = TextEditingController();
-  final _emailController     = TextEditingController();
-  final _passwordController  = TextEditingController();
-  final _phoneController     = TextEditingController();
-  final _addressController   = TextEditingController();
-  final _bioController       = TextEditingController();
-  final _authService         = AuthService();
-  bool _isLoading            = false;
-  bool _obscurePassword      = true;
-  bool _acceptedTerms        = false;
-  String _selectedRole       = 'owner'; // 'owner' o 'caregiver'
+  final _firstNameController      = TextEditingController();
+  final _lastNameController       = TextEditingController();
+  final _emailController          = TextEditingController();
+  final _passwordController       = TextEditingController();
+  final _phoneController          = TextEditingController();
+  final _bioController            = TextEditingController();
+  // Dirección detallada
+  final _addressStreetController    = TextEditingController();
+  final _addressNumberController    = TextEditingController();
+  final _addressApartmentController = TextEditingController();
+  final _addressCondominioController= TextEditingController();
+  final _addressReferenceController = TextEditingController();
+  final _addressZoneController      = TextEditingController();
+  double? _addressLat;
+  double? _addressLng;
+  bool _isApartment               = false;
+
+  final _authService  = AuthService();
+  bool _isLoading     = false;
+  bool _obscurePassword = true;
+  bool _acceptedTerms = false;
+  String _selectedRole = 'owner'; // 'owner' o 'caregiver'
   DateTime? _dateOfBirth;
 
   @override
@@ -55,8 +66,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _phoneController.dispose();
-    _addressController.dispose();
     _bioController.dispose();
+    _addressStreetController.dispose();
+    _addressNumberController.dispose();
+    _addressApartmentController.dispose();
+    _addressCondominioController.dispose();
+    _addressReferenceController.dispose();
+    _addressZoneController.dispose();
     super.dispose();
   }
 
@@ -253,12 +269,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final email     = _emailController.text.trim();
     final password  = _passwordController.text;
     final phone     = _phoneController.text.trim();
-    final address   = _addressController.text.trim();
     final bio       = _bioController.text.trim();
+    final street    = _addressStreetController.text.trim();
 
-    if (firstName.isEmpty || lastName.isEmpty || email.isEmpty || password.isEmpty || phone.isEmpty || address.isEmpty || _dateOfBirth == null || bio.isEmpty) {
+    if (firstName.isEmpty || lastName.isEmpty || email.isEmpty || password.isEmpty || phone.isEmpty || _dateOfBirth == null || bio.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Completa todos los campos')),
+      );
+      return;
+    }
+    if (_addressLat == null || street.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Confirma tu dirección en el mapa')),
       );
       return;
     }
@@ -287,9 +309,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
     try {
       if (_selectedRole == 'owner') {
+        // Construir dirección legible como string de respaldo
+        final addressParts = [
+          if (street.isNotEmpty) street,
+          if (_addressNumberController.text.trim().isNotEmpty) 'N° ${_addressNumberController.text.trim()}',
+          if (_addressZoneController.text.trim().isNotEmpty) _addressZoneController.text.trim(),
+        ];
+        final addressString = addressParts.join(', ');
         await _authService.registerClient(
           firstName: firstName, lastName: lastName, email: email, password: password, phone: phone,
-          address: address, dateOfBirth: _dateOfBirth, bio: bio,
+          address: addressString.isNotEmpty ? addressString : null,
+          dateOfBirth: _dateOfBirth, bio: bio,
+          addressLat: _addressLat,
+          addressLng: _addressLng,
+          addressStreet: street,
+          addressNumber: _addressNumberController.text.trim(),
+          addressApartment: _addressApartmentController.text.trim(),
+          addressCondominio: _addressCondominioController.text.trim(),
+          addressReference: _addressReferenceController.text.trim(),
+          addressZone: _addressZoneController.text.trim(),
         );
         if (!mounted) return;
         if (kIsWeb) {
@@ -582,7 +620,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
             _fieldLabel('Dirección', textColor),
             const SizedBox(height: 8),
-            _textField(controller: _addressController, hint: 'Tu dirección completa', icon: Icons.home_work_outlined, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+            AddressSection(
+              isDark: isDark,
+              textColor: textColor,
+              subtextColor: subtextColor,
+              borderColor: borderColor,
+              surfaceEl: surfaceEl,
+              streetController: _addressStreetController,
+              numberController: _addressNumberController,
+              apartmentController: _addressApartmentController,
+              condominioController: _addressCondominioController,
+              referenceController: _addressReferenceController,
+              zoneController: _addressZoneController,
+              addressLat: _addressLat,
+              addressLng: _addressLng,
+              isApartment: _isApartment,
+              purposeText: 'Tu dirección se usa para que el cuidador pueda llegar a tu hogar.',
+              onMapResult: (result) => setState(() {
+                _addressLat = result.lat;
+                _addressLng = result.lng;
+              }),
+              onApartmentToggle: (val) => setState(() => _isApartment = val),
+            ),
             const SizedBox(height: 20),
 
             _fieldLabel('Fecha de nacimiento', textColor),

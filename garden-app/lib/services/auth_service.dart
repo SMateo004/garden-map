@@ -195,6 +195,14 @@ class AuthService {
     String? address,
     DateTime? dateOfBirth,
     String? bio,
+    double? addressLat,
+    double? addressLng,
+    String? addressStreet,
+    String? addressNumber,
+    String? addressApartment,
+    String? addressCondominio,
+    String? addressReference,
+    String? addressZone,
   }) async {
     final body = {
       'firstName': firstName,
@@ -205,6 +213,14 @@ class AuthService {
       if (address != null && address.isNotEmpty) 'address': address,
       if (dateOfBirth != null) 'dateOfBirth': dateOfBirth.toIso8601String(),
       if (bio != null && bio.isNotEmpty) 'bio': bio,
+      if (addressLat != null) 'addressLat': addressLat,
+      if (addressLng != null) 'addressLng': addressLng,
+      if (addressStreet != null && addressStreet.isNotEmpty) 'addressStreet': addressStreet,
+      if (addressNumber != null && addressNumber.isNotEmpty) 'addressNumber': addressNumber,
+      if (addressApartment != null && addressApartment.isNotEmpty) 'addressApartment': addressApartment,
+      if (addressCondominio != null && addressCondominio.isNotEmpty) 'addressCondominio': addressCondominio,
+      if (addressReference != null && addressReference.isNotEmpty) 'addressReference': addressReference,
+      if (addressZone != null && addressZone.isNotEmpty) 'addressZone': addressZone,
     };
     final http.Response response;
     try {
