@@ -15,10 +15,10 @@ const loginLimiter = rateLimit({
   message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados intentos. Espera 15 minutos e inténtalo de nuevo.' } },
 });
 
-// 3 registros por hora por IP — evita creación masiva de cuentas
+// 30 registros por hora por IP — límite generoso para pruebas/MVP
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 3,
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados intentos de registro. Espera 1 hora.' } },
