@@ -178,6 +178,9 @@ model CaregiverProfile {
   reviewChecklist                 Json?              @db.JsonB
   /// true = cuidador profesional registrado con código de admin (omite verificación CI, aprobado automáticamente)
   isProfessional                  Boolean            @default(false)
+  /// true = sin experiencia previa (experienceYears === 0 al registrarse).
+  /// Se recalcula dinámicamente: si approvedAt >= 1 año, se actualiza a false automáticamente.
+  isAmateur                       Boolean            @default(false)
   /// Número total de incumplimientos registrados (advertencias + multas).
   infractionCount                 Int                @default(0)
   availability                    Availability[]
@@ -186,6 +189,7 @@ model CaregiverProfile {
   reviews                         Review[]
   sugerencias                     SugerenciaPrecio[]
   infractions                     CaregiverInfraction[]
+  trainingProgress                TrainingVideoProgress[]
 
   @@index([status])
   @@index([userId])
@@ -897,6 +901,44 @@ model RefreshToken {
   @@index([userId])
   @@index([tokenHash])
   @@map("refresh_tokens")
+}
+
+/// Video de capacitación subido por el admin. Los cuidadores amateurs DEBEN verlos antes de aceptar el primer servicio.
+model TrainingVideo {
+  id                    String                  @id @default(uuid())
+  title                 String                  @db.VarChar(200)
+  description           String?                 @db.Text
+  videoUrl              String                  @db.VarChar(500) // URL YouTube / Vimeo
+  category              String?                 @db.VarChar(100) // ej: "Seguridad", "Primeros auxilios", "Manejo de mascotas"
+  isRequiredForAmateurs Boolean                 @default(true)
+  isActive              Boolean                 @default(true)
+  order                 Int                     @default(0) // orden de visualización
+  createdBy             String?                 // Admin User.id que lo creó
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  progress              TrainingVideoProgress[]
+
+  @@index([isActive])
+  @@index([isRequiredForAmateurs])
+  @@map("training_videos")
+}
+
+/// Progreso del cuidador en cada video de capacitación.
+/// completedAt != null = el cuidador marcó el video como completado.
+model TrainingVideoProgress {
+  id          String           @id @default(uuid())
+  caregiverId String           // CaregiverProfile.id
+  videoId     String           // TrainingVideo.id
+  completedAt DateTime?        // null = visto pero no completado
+  watchedSecs Int              @default(0) // segundos vistos (actualizado periódicamente)
+  createdAt   DateTime         @default(now())
+  caregiver   CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+  video       TrainingVideo    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([caregiverId, videoId])
+  @@index([caregiverId])
+  @@index([videoId])
+  @@map("training_video_progress")
 }
 
 model VetClinic {

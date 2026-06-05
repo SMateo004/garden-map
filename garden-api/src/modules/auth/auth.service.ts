@@ -242,6 +242,8 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
           emailVerified: false,
           verified: false,
           experienceYears: profileInput.experienceYears ?? null,
+          // isAmateur=true cuando el cuidador declara 0 años de experiencia al registrarse
+          isAmateur: (profileInput.experienceYears ?? -1) === 0,
           ownPets: profileInput.ownPets ?? null,
           currentPetsDetails: (profileInput.currentPetsDetails ?? null) as object,
           caredOthers: profileInput.caredOthers ?? null,
@@ -611,7 +613,15 @@ export async function updateCaregiverProfile(
   if (body.pricePerWalk30 !== undefined) updateData.pricePerWalk30 = body.pricePerWalk30;
   if (body.pricePerWalk60 !== undefined) updateData.pricePerWalk60 = body.pricePerWalk60;
   if (body.rates !== undefined) updateData.rates = body.rates;
-  if (body.experienceYears !== undefined) updateData.experienceYears = body.experienceYears;
+  if (body.experienceYears !== undefined) {
+    updateData.experienceYears = body.experienceYears;
+    // Recalcular isAmateur dinámicamente:
+    // - Si años == 0 → amateur (sin importar approvedAt)
+    // - Si años >= 1 → ya no es amateur
+    // La lógica de "1 año desde approvedAt → dejar de ser amateur" se resuelve
+    // cuando el cuidador edita y coloca >= 1 año, o vía getProfile (ver abajo).
+    updateData.isAmateur = body.experienceYears === 0;
+  }
   if (body.ownPets !== undefined) updateData.ownPets = body.ownPets;
   if (body.currentPetsDetails !== undefined) updateData.currentPetsDetails = body.currentPetsDetails;
   if (body.caredOthers !== undefined) updateData.caredOthers = body.caredOthers;

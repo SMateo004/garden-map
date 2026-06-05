@@ -158,6 +158,19 @@ export async function getMyProfile(userId: string) {
   // Trigger check to ensure flags are up to date before returning
   await checkAndAutoSubmitProfile(userId);
 
+  // Recalcular isAmateur dinámicamente basado en approvedAt.
+  // Si el cuidador fue aprobado hace >= 1 año y aún tiene isAmateur=true → actualizar a false.
+  if ((profile as any).isAmateur && profile.approvedAt) {
+    const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
+    const yearsApproved = (Date.now() - new Date(profile.approvedAt).getTime()) / msPerYear;
+    if (yearsApproved >= 1) {
+      await prisma.caregiverProfile.update({
+        where: { id: profile.id },
+        data: { isAmateur: false } as any,
+      });
+    }
+  }
+
   // Re-fetch to get updated flags
   return prisma.caregiverProfile.findUnique({
     where: { userId },

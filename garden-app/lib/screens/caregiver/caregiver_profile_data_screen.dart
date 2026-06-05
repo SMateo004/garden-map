@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../../theme/garden_theme.dart';
-import '../legal/legal_screen.dart';
 import '../../services/auth_state.dart';
 
 class CaregiverProfileDataScreen extends StatefulWidget {
@@ -33,8 +32,6 @@ class CaregiverProfileDataScreen extends StatefulWidget {
 class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
-  bool _termsAccepted = false;
-  bool _verificationAccepted = false;
   String _caregiverToken = '';
   int _completionPercentage = 0;
 
@@ -42,10 +39,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   final _keyBio = GlobalKey();
   final _keyBioDetail = GlobalKey();
   final _keyAddress = GlobalKey();
-  final _keyServices = GlobalKey();
   final _keySpaceType = GlobalKey();
-  final _keyPriceWalk = GlobalKey();
-  final _keyPriceHospedaje = GlobalKey();
   final _keyPetTypes = GlobalKey();
   final _keySizes = GlobalKey();
   final _keyPhotos = GlobalKey();
@@ -54,7 +48,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   final _keyPolicies = GlobalKey();
   final _keyHandleAnxious = GlobalKey();
   final _keyEmergencyResponse = GlobalKey();
-  final _keyTerms = GlobalKey();
 
   // Controllers
   final _bioController = TextEditingController();
@@ -75,15 +68,30 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   final _whatDiffersController = TextEditingController();
   final _handleAnxiousController = TextEditingController();
   final _emergencyResponseController = TextEditingController();
-  bool? _acceptAggressive;
-  bool? _acceptPuppies;
-  bool? _acceptSeniors;
+  bool _acceptAggressive = false;
+  bool _acceptPuppies = false;
+  bool _acceptSeniors = false;
 
   // Selecciones
-  String _selectedZone = 'EQUIPETROL';
-  List<String> _selectedServices = [];
   List<String> _selectedHomeTypes = [];
-  bool _offersWalk30 = false; // ¿Ofrece paseos de 30 min? (precio = mitad de 60 min)
+
+  // Chips: "Situaciones especiales" — opciones predefinidas
+  static const _anxiousOptions = [
+    'Técnicas de calma y paciencia',
+    'Experiencia con ansiedad de separación',
+    'Ambiente tranquilo y seguro',
+    'Sigo indicaciones del dueño',
+    'Consulto al veterinario si es necesario',
+  ];
+  static const _emergencyOptions = [
+    'Contacto al veterinario inmediatamente',
+    'Notifico al dueño al instante',
+    'Conozco primeros auxilios para mascotas',
+    'Tengo clínica veterinaria de confianza cercana',
+    'Traslado de urgencia si es necesario',
+  ];
+  List<String> _selectedAnxiousOptions = [];
+  List<String> _selectedEmergencyOptions = [];
   bool _hasYard = false;
   bool _allowsLargePets = false;
   bool _allowsMultiplePets = false;
@@ -121,7 +129,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     'GIANT': '🐘 Gigante (+40kg)',
   };
 
-  static const _zones = ['EQUIPETROL', 'URBARI', 'NORTE', 'LAS_PALMAS', 'CENTRO_SAN_MARTIN', 'OTROS'];
+  /// true cuando el cuidador seleccionó 0 años de experiencia.
+  /// Oculta todas las preguntas de follow-up de experiencia y situaciones especiales.
+  bool get _isAmateur =>
+      (int.tryParse(_experienceYearsController.text.replaceAll('+', '')) ?? -1) == 0;
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
@@ -176,12 +187,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     _includesController.text = faq['includes'] ?? '';
     _emergencyController.text = faq['emergency'] ?? '';
     _requirementsController.text = faq['requirements'] ?? '';
-    _selectedZone = profile['zone'] ?? 'EQUIPETROL';
-    _selectedServices = List<String>.from(profile['servicesOffered'] ?? []);
     _selectedHomeTypes = List<String>.from(profile['spaceType'] ?? []);
-    // offersWalk30: true si pricePerWalk30 > 0, o si la API lo devuelve explícitamente
-    _offersWalk30 = (profile['offersWalk30'] as bool?) ??
-        ((profile['pricePerWalk30'] as num?)?.toDouble() ?? 0) > 0;
     _hasYard = profile['hasYard'] ?? false;
     _allowsLargePets = details['allowsLargePets'] ?? false;
     _allowsMultiplePets = details['allowsMultiplePets'] ?? false;
@@ -211,11 +217,19 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     _whatDiffersController.text = profile['whatDiffers'] as String? ?? '';
     _handleAnxiousController.text = profile['handleAnxious'] as String? ?? '';
     _emergencyResponseController.text = profile['emergencyResponse'] as String? ?? '';
-    _acceptAggressive = profile['acceptAggressive'] as bool?;
-    _acceptPuppies = profile['acceptPuppies'] as bool?;
-    _acceptSeniors = profile['acceptSeniors'] as bool?;
-    _termsAccepted = profile['termsAccepted'] == true;
-    _verificationAccepted = profile['verificationAccepted'] == true;
+    _acceptAggressive = profile['acceptAggressive'] as bool? ?? false;
+    _acceptPuppies = profile['acceptPuppies'] as bool? ?? false;
+    _acceptSeniors = profile['acceptSeniors'] as bool? ?? false;
+
+    // Mapear texto guardado a chips predefinidas
+    final anxiousText = profile['handleAnxious'] as String? ?? '';
+    _selectedAnxiousOptions = _anxiousOptions
+        .where((o) => anxiousText.contains(o))
+        .toList();
+    final emergencyText = profile['emergencyResponse'] as String? ?? '';
+    _selectedEmergencyOptions = _emergencyOptions
+        .where((o) => emergencyText.contains(o))
+        .toList();
   }
 
   Future<void> _loadData() async {
@@ -261,36 +275,28 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
   void _computeCompletion() {
     int score = 0;
-    int total = 10;
-    if (_bioController.text.isNotEmpty) score++;
+    const total = 10;
+
     if (_bioDetailController.text.isNotEmpty) score++;
-    if (_addressController.text.isNotEmpty) score++;
-    if (_selectedServices.isNotEmpty) score++;
     if (_selectedHomeTypes.isNotEmpty) score++;
     if (_acceptedPetTypes.isNotEmpty) score++;
     if (_acceptedSizes.isNotEmpty) score++;
-    if (_photos.isNotEmpty) {
-      if (_selectedServices.contains('HOSPEDAJE')) {
-        if (_photos.length >= 4) score++;
-      } else {
-        if (_photos.length >= 2) score++;
-      }
-    }
-    
-    if (_selectedServices.contains('HOSPEDAJE')) {
-      if (_pricePerDayController.text != '0') score++;
-      if (_selectedHomeTypes.isNotEmpty) score++;
-    }
-    
-    if (_selectedServices.contains('PASEO')) {
-      if (_pricePerWalk60Controller.text != '0') score++;
+    if (_photos.length >= 2) score++;
+    if (_includesController.text.isNotEmpty) score++;
+    if (_requirementsController.text.isNotEmpty) score++;
+
+    final expYears = int.tryParse(_experienceYearsController.text.replaceAll('+', '')) ?? -1;
+    if (expYears >= 0) score++; // años seleccionados
+    if (!_isAmateur) {
+      // Preguntas adicionales solo para no-amateurs
+      if (_experienceDescController.text.length >= 10) score++;
+      if (_selectedAnxiousOptions.isNotEmpty && _selectedEmergencyOptions.isNotEmpty) score++;
+    } else {
+      // Amateur: las 2 secciones de follow-up se consideran completadas automáticamente
+      score += 2;
     }
 
-    if (_includesController.text.isNotEmpty) score++;
-    if (_experienceYearsController.text.isNotEmpty && _experienceDescController.text.length >= 20) score++;
-    
-    total = 11;
-    setState(() => _completionPercentage = ((score / total) * 100).round());
+    setState(() => _completionPercentage = ((score / total) * 100).round().clamp(0, 100));
   }
 
   void _showValidationError(String msg, {GlobalKey? scrollTo}) {
@@ -326,40 +332,15 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   }
 
   Future<void> _saveAllData() async {
-    // ── Validación completa de campos obligatorios ──
+    // ── Validación ───────────────────────────────────────────────────────────
     if (_bioDetailController.text.trim().length < 10) {
       return _showValidationError('La descripción detallada debe tener al menos 10 caracteres', scrollTo: _keyBioDetail);
-    }
-    if (_selectedServices.isEmpty) {
-      return _showValidationError('Selecciona al menos un servicio', scrollTo: _keyServices);
-    }
-    if (_selectedServices.contains('HOSPEDAJE') && _selectedHomeTypes.isEmpty) {
-      return _showValidationError('Selecciona al menos un tipo de espacio para hospedaje', scrollTo: _keySpaceType);
     }
     if (_acceptedPetTypes.isEmpty) {
       return _showValidationError('Selecciona al menos un tipo de mascota que aceptas', scrollTo: _keyPetTypes);
     }
     if (_acceptedSizes.isEmpty) {
       return _showValidationError('Selecciona al menos un tamaño de mascota aceptado', scrollTo: _keySizes);
-    }
-
-    if (_selectedServices.contains('PASEO')) {
-      if ((_pricePerWalk60Controller.text.trim().isEmpty) ||
-          (double.tryParse(_pricePerWalk60Controller.text) ?? 0) <= 0) {
-        return _showValidationError('Ingresa el precio del paseo (1 hora)', scrollTo: _keyPriceWalk);
-      }
-    }
-    if (_selectedServices.contains('HOSPEDAJE')) {
-      if ((_pricePerDayController.text.trim().isEmpty) ||
-          (double.tryParse(_pricePerDayController.text) ?? 0) <= 0) {
-        return _showValidationError('Ingresa el precio por noche del hospedaje', scrollTo: _keyPriceHospedaje);
-      }
-    }
-    if (_selectedServices.contains('GUARDERIA')) {
-      if ((_pricePerGuarderiaController.text.trim().isEmpty) ||
-          (double.tryParse(_pricePerGuarderiaController.text) ?? 0) <= 0) {
-        return _showValidationError('Ingresa el precio por hora de guardería');
-      }
     }
 
     // FAQ
@@ -369,80 +350,55 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     if (_requirementsController.text.trim().length < 5) {
       return _showValidationError('Describe los requisitos de tu servicio (sección Preguntas frecuentes)', scrollTo: _keyFaq);
     }
-    // Campos del perfil profesional
+
+    // Años de experiencia — requerido siempre
     final expYearsText = _experienceYearsController.text.trim().replaceAll('+', '');
     if (expYearsText.isEmpty || int.tryParse(expYearsText) == null) {
-      return _showValidationError('Ingresa los años de experiencia', scrollTo: _keyExperience);
-    }
-    if (_experienceDescController.text.trim().length < 5) {
-      return _showValidationError('Describe tu experiencia (mínimo 5 caracteres)', scrollTo: _keyExperience);
-    }
-    if (_whyCaregiverController.text.trim().length < 3) {
-      return _showValidationError('Explica por qué eres cuidador', scrollTo: _keyExperience);
-    }
-    if (_whatDiffersController.text.trim().length < 3) {
-      return _showValidationError('Explica qué te diferencia de otros cuidadores', scrollTo: _keyExperience);
-    }
-    if (_handleAnxiousController.text.trim().length < 3) {
-      return _showValidationError('Describe cómo manejas mascotas ansiosas', scrollTo: _keyHandleAnxious);
-    }
-    if (_emergencyResponseController.text.trim().length < 3) {
-      return _showValidationError('Describe cómo respondes a emergencias médicas', scrollTo: _keyEmergencyResponse);
-    }
-    if (_acceptAggressive == null) {
-      return _showValidationError('Indica si aceptas mascotas agresivas (Sí/No)', scrollTo: _keyPolicies);
-    }
-    if (_acceptPuppies == null) {
-      return _showValidationError('Indica si aceptas cachorros (Sí/No)', scrollTo: _keyPolicies);
-    }
-    if (_acceptSeniors == null) {
-      return _showValidationError('Indica si aceptas mascotas mayores (Sí/No)', scrollTo: _keyPolicies);
+      return _showValidationError('Selecciona los años de experiencia', scrollTo: _keyExperience);
     }
 
-    if (widget.embeddedMode && !_termsAccepted) {
-      return _showValidationError('Debes aceptar los Términos de Servicio y la Política de Privacidad para continuar', scrollTo: _keyTerms);
-    }
-
-    if (widget.embeddedMode && !_verificationAccepted) {
-      return _showValidationError('Debes aceptar las condiciones de verificación de identidad para continuar', scrollTo: _keyTerms);
+    // Preguntas de follow-up: solo requeridas cuando NO es amateur (experienceYears >= 1)
+    if (!_isAmateur) {
+      if (_experienceDescController.text.trim().length < 5) {
+        return _showValidationError('Describe tu experiencia (mínimo 5 caracteres)', scrollTo: _keyExperience);
+      }
+      if (_whyCaregiverController.text.trim().length < 3) {
+        return _showValidationError('Explica por qué eres cuidador', scrollTo: _keyExperience);
+      }
+      if (_whatDiffersController.text.trim().length < 3) {
+        return _showValidationError('Explica qué te diferencia de otros cuidadores', scrollTo: _keyExperience);
+      }
+      if (_selectedAnxiousOptions.isEmpty) {
+        return _showValidationError('Selecciona al menos una opción sobre mascotas ansiosas', scrollTo: _keyHandleAnxious);
+      }
+      if (_selectedEmergencyOptions.isEmpty) {
+        return _showValidationError('Selecciona al menos una opción sobre emergencias', scrollTo: _keyEmergencyResponse);
+      }
     }
 
     setState(() => _isSaving = true);
     try {
-      // Mapping CASA/APARTAMENTO to Enum if only one selected
       String? hType;
       if (_selectedHomeTypes.contains('HOUSE')) {
         hType = 'HOUSE';
-      } else if (_selectedHomeTypes.contains('APARTMENT')) { hType = 'APARTMENT'; }
+      } else if (_selectedHomeTypes.contains('APARTMENT')) {
+        hType = 'APARTMENT';
+      }
 
-      final body = {
+      final expYears = int.tryParse(expYearsText) ?? 0;
+
+      final body = <String, dynamic>{
         'bio': _bioController.text.trim(),
         'bioDetail': _bioDetailController.text.trim(),
-        'zone': _selectedZone,
-        'servicesOffered': _selectedServices,
-        'pricePerDay': (double.tryParse(_pricePerDayController.text) ?? 0).round(),
-        'pricePerWalk60': (double.tryParse(_pricePerWalk60Controller.text) ?? 0).round(),
-        'offersWalk30': _offersWalk30,
-        // pricePerWalk30 se calcula automáticamente: mitad del precio de 60 min
-        'pricePerWalk30': _offersWalk30
-            ? ((double.tryParse(_pricePerWalk60Controller.text) ?? 0) / 2).round()
-            : 0,
-        'pricePerGuarderia': (double.tryParse(_pricePerGuarderiaController.text) ?? 0),
         'homeType': hType,
         'spaceType': _selectedHomeTypes,
         'hasYard': _hasYard,
         'photos': _photos,
-        'experienceYears': int.tryParse(_experienceYearsController.text.replaceAll('+', '')) ?? 0,
-        'experienceDescription': _experienceDescController.text.trim(),
-        'whyCaregiver': _whyCaregiverController.text.trim(),
-        'whatDiffers': _whatDiffersController.text.trim(),
-        'handleAnxious': _handleAnxiousController.text.trim(),
-        'emergencyResponse': _emergencyResponseController.text.trim(),
-        'acceptAggressive': _acceptAggressive ?? false,
-        'acceptPuppies': _acceptPuppies ?? false,
-        'acceptSeniors': _acceptSeniors ?? false,
+        'experienceYears': expYears,
+        'acceptAggressive': _acceptAggressive,
+        'acceptPuppies': _acceptPuppies,
+        'acceptSeniors': _acceptSeniors,
         'sizesAccepted': _acceptedSizes,
-        // Campo clave para el filtro del marketplace — debe coincidir con DB AnimalType enum
         'animalTypes': _acceptedPetTypes,
         'serviceDetails': {
           'allowsLargePets': _allowsLargePets,
@@ -468,6 +424,22 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         },
       };
 
+      // Preguntas de experiencia avanzada: solo si no es amateur
+      if (!_isAmateur) {
+        body['experienceDescription'] = _experienceDescController.text.trim();
+        body['whyCaregiver'] = _whyCaregiverController.text.trim();
+        body['whatDiffers'] = _whatDiffersController.text.trim();
+        body['handleAnxious'] = _selectedAnxiousOptions.join(', ');
+        body['emergencyResponse'] = _selectedEmergencyOptions.join(', ');
+      }
+
+      // En modo embedded (wizard), persistir T&C automáticamente — el usuario ya las aceptó al registrarse.
+      if (widget.embeddedMode) {
+        body['termsAccepted'] = true;
+        body['privacyAccepted'] = true;
+        body['verificationAccepted'] = true;
+      }
+
       final response = await http.patch(
         Uri.parse('$_baseUrl/caregiver/profile'),
         headers: {
@@ -478,24 +450,13 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       );
 
       if (jsonDecode(response.body)['success'] == true) {
-        // If in embedded mode, persist T&C acceptance to the DB
-        if (widget.embeddedMode) {
-          await http.patch(
-            Uri.parse('$_baseUrl/caregiver/profile'),
-            headers: {
-              'Authorization': 'Bearer $_caregiverToken',
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode({
-              'termsAccepted': true,
-              'privacyAccepted': true,
-              'verificationAccepted': true,
-            }),
-          );
-        }
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cambios guardados correctamente'), backgroundColor: GardenColors.success, duration: Duration(seconds: 2)),
+          const SnackBar(
+            content: Text('Cambios guardados correctamente'),
+            backgroundColor: GardenColors.success,
+            duration: Duration(seconds: 2),
+          ),
         );
         _computeCompletion();
         await Future.delayed(const Duration(seconds: 1));
@@ -510,7 +471,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         throw Exception(err);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo guardar: ${e.toString()}'), backgroundColor: GardenColors.error));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo guardar: ${e.toString()}'), backgroundColor: GardenColors.error),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -734,108 +699,21 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                             const SizedBox(height: 14),
 
                             _webSection(surface, borderColor, textColor,
-                              title: 'Servicios y precios',
-                              icon: Icons.sell_outlined,
+                              title: 'Tu espacio',
+                              icon: Icons.home_outlined,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  SizedBox(key: _keyServices, height: 0),
-                                  Text('Servicios que ofreces', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 8),
-                                  _buildServiceChips(surface, borderColor),
-                                  if (_selectedServices.contains('PASEO')) ...[
-                                    const SizedBox(height: 16),
-                                    SizedBox(key: _keyPriceWalk, height: 0),
-                                    _webPriceRow(
-                                      icon: Icons.directions_walk_rounded,
-                                      label: 'Paseo 1 hora (Bs)',
-                                      controller: _pricePerWalk60Controller,
-                                      subtextColor: subtextColor,
-                                      textColor: textColor,
-                                      required: true,
-                                    ),
-                                    const SizedBox(height: 10),
-                                    // 30min toggle
-                                    _buildWalk30Toggle(surface, borderColor, textColor, subtextColor),
-                                  ],
-                                  if (_selectedServices.contains('GUARDERIA')) ...[
-                                    const SizedBox(height: 16),
-                                    _webPriceRow(
-                                      icon: Icons.home_work_rounded,
-                                      label: 'Guardería por hora (Bs)',
-                                      controller: _pricePerGuarderiaController,
-                                      subtextColor: subtextColor,
-                                      textColor: textColor,
-                                      required: true,
-                                    ),
-                                  ],
-                                  if (_selectedServices.contains('HOSPEDAJE')) ...[
-                                    const SizedBox(height: 16),
-                                    SizedBox(key: _keyPriceHospedaje, height: 0),
-                                    _webPriceRow(
-                                      icon: Icons.house_rounded,
-                                      label: 'Hospedaje por noche (Bs)',
-                                      controller: _pricePerDayController,
-                                      subtextColor: subtextColor,
-                                      textColor: textColor,
-                                      required: true,
-                                    ),
-                                  ],
-                                  const SizedBox(height: 16),
-                                  Text('Zona de servicio', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 8),
-                                  _buildZoneDropdown(surface, borderColor, textColor),
+                                  SizedBox(key: _keySpaceType, height: 0),
+                                  _buildHomeTypes(surface, borderColor),
+                                  _buildSwitchTile('¿Tiene jardín o patio?', _hasYard, (v) => setState(() => _hasYard = v)),
+                                  _buildSwitchTile('¿Permite mascotas grandes?', _allowsLargePets, (v) => setState(() => _allowsLargePets = v)),
+                                  _buildSwitchTile('¿Permite múltiples mascotas?', _allowsMultiplePets, (v) => setState(() => _allowsMultiplePets = v)),
                                 ],
                               ),
                             ),
                             const SizedBox(height: 14),
 
-                            if (_selectedServices.contains('HOSPEDAJE')) ...[
-                              _webSection(surface, borderColor, textColor,
-                                title: 'Tu espacio',
-                                icon: Icons.home_outlined,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    SizedBox(key: _keySpaceType, height: 0),
-                                    _buildHomeTypes(surface, borderColor),
-                                    _buildSwitchTile('¿Tiene jardín o patio?', _hasYard, (v) => setState(() => _hasYard = v)),
-                                    _buildSwitchTile('¿Permite mascotas grandes?', _allowsLargePets, (v) => setState(() => _allowsLargePets = v)),
-                                    _buildSwitchTile('¿Permite múltiples mascotas?', _allowsMultiplePets, (v) => setState(() => _allowsMultiplePets = v)),
-                                    const SizedBox(height: 8),
-                                    Text('Máximo de mascotas simultáneas', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [1, 2, 3].map((n) {
-                                        final sel = _maxPets == n;
-                                        return Expanded(
-                                          child: GestureDetector(
-                                            onTap: () => setState(() => _maxPets = n),
-                                            child: AnimatedContainer(
-                                              duration: const Duration(milliseconds: 150),
-                                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                                              padding: const EdgeInsets.symmetric(vertical: 10),
-                                              decoration: BoxDecoration(
-                                                color: sel ? GardenColors.primary.withValues(alpha: 0.12) : Colors.transparent,
-                                                borderRadius: BorderRadius.circular(10),
-                                                border: Border.all(color: sel ? GardenColors.primary : borderColor, width: sel ? 2 : 1),
-                                              ),
-                                              child: Column(
-                                                children: [
-                                                  Text('$n', style: TextStyle(color: sel ? GardenColors.primary : textColor, fontSize: 20, fontWeight: FontWeight.w800)),
-                                                  Text(n == 1 ? 'mascota' : 'mascotas', style: TextStyle(color: sel ? GardenColors.primary : subtextColor, fontSize: 10)),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      }).toList(),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                            ],
 
                             _webSection(surface, borderColor, textColor,
                               title: 'Fotos de servicio',
@@ -934,21 +812,47 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                       );
                                     }).toList(),
                                   ),
-                                  const SizedBox(height: 12),
-                                  _sectionField('Describe tu experiencia', _experienceDescController, 'Animales cuidados, formación, etc.', maxLines: 3),
-                                  const SizedBox(height: 10),
-                                  _sectionField('¿Por qué eres cuidador?', _whyCaregiverController, 'Tu motivación', maxLines: 2),
-                                  const SizedBox(height: 10),
-                                  _sectionField('¿Qué te diferencia?', _whatDiffersController, 'Lo que hace especial tu servicio', maxLines: 2),
+                                  if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
+                                    const SizedBox(height: 12),
+                                    _sectionField('Describe tu experiencia', _experienceDescController, 'Animales cuidados, formación, etc.', maxLines: 3),
+                                    const SizedBox(height: 10),
+                                    _sectionField('¿Por qué eres cuidador?', _whyCaregiverController, 'Tu motivación', maxLines: 2),
+                                    const SizedBox(height: 10),
+                                    _sectionField('¿Qué te diferencia?', _whatDiffersController, 'Lo que hace especial tu servicio', maxLines: 2),
+                                  ],
+                                  if (_isAmateur && _experienceYearsController.text == '0') ...[
+                                    const SizedBox(height: 10),
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: GardenColors.primary.withValues(alpha: 0.07),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.info_outline_rounded, color: GardenColors.primary, size: 16),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'Puedes empezar como cuidador nuevo. Completarás los videos de capacitación antes de tu primer servicio.',
+                                              style: TextStyle(color: textColor, fontSize: 12),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
                             const SizedBox(height: 14),
 
                             _webSection(surface, borderColor, textColor,
-                              title: 'Políticas y situaciones especiales',
+                              title: 'Políticas de mascotas',
                               icon: Icons.policy_outlined,
                               child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   SizedBox(key: _keyPolicies, height: 0),
                                   _acceptSwitch('¿Aceptas mascotas agresivas?', _acceptAggressive, (v) => setState(() => _acceptAggressive = v), textColor, subtextColor, surface, borderColor),
@@ -956,12 +860,18 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                   _acceptSwitch('¿Aceptas cachorros?', _acceptPuppies, (v) => setState(() => _acceptPuppies = v), textColor, subtextColor, surface, borderColor),
                                   const SizedBox(height: 8),
                                   _acceptSwitch('¿Aceptas mascotas mayores?', _acceptSeniors, (v) => setState(() => _acceptSeniors = v), textColor, subtextColor, surface, borderColor),
-                                  const SizedBox(height: 12),
-                                  SizedBox(key: _keyHandleAnxious, height: 0),
-                                  _sectionField('¿Cómo manejas mascotas ansiosas?', _handleAnxiousController, 'Método para mascotas con ansiedad', maxLines: 3),
-                                  const SizedBox(height: 10),
-                                  SizedBox(key: _keyEmergencyResponse, height: 0),
-                                  _sectionField('¿Cómo respondes ante emergencias?', _emergencyResponseController, 'Protocolo de emergencia veterinaria', maxLines: 3),
+                                  if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
+                                    const SizedBox(height: 16),
+                                    SizedBox(key: _keyHandleAnxious, height: 0),
+                                    Text('¿Cómo manejas mascotas ansiosas?', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 8),
+                                    _buildChipsSection(_anxiousOptions, _selectedAnxiousOptions, surface, borderColor),
+                                    const SizedBox(height: 14),
+                                    SizedBox(key: _keyEmergencyResponse, height: 0),
+                                    Text('¿Cómo respondes ante emergencias?', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 8),
+                                    _buildChipsSection(_emergencyOptions, _selectedEmergencyOptions, surface, borderColor),
+                                  ],
                                 ],
                               ),
                             ),
@@ -1011,65 +921,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     );
   }
 
-  Widget _webPriceRow({
-    required IconData icon,
-    required String label,
-    required TextEditingController controller,
-    required Color subtextColor,
-    required Color textColor,
-    bool required = false,
-  }) {
-    return Row(
-      children: [
-        Icon(icon, size: 15, color: GardenColors.primary),
-        const SizedBox(width: 8),
-        Text(label, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-        if (required) ...[
-          const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-            child: const Text('Obligatorio', style: TextStyle(color: GardenColors.error, fontSize: 9, fontWeight: FontWeight.w700)),
-          ),
-        ],
-        const Spacer(),
-        SizedBox(
-          width: 120,
-          child: GardenInput(hint: 'Bs', controller: controller, keyboardType: TextInputType.number),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildWalk30Toggle(Color surface, Color borderColor, Color textColor, Color subtextColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: _offersWalk30 ? GardenColors.primary.withValues(alpha: 0.07) : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _offersWalk30 ? GardenColors.primary.withValues(alpha: 0.35) : borderColor),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.timer_outlined, color: GardenColors.primary, size: 16),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              _offersWalk30
-                  ? 'Paseos de 30 min activados — Bs ${((double.tryParse(_pricePerWalk60Controller.text) ?? 0) / 2).round()}'
-                  : 'Ofrecer paseos de 30 min (precio = mitad de 1 hora)',
-              style: TextStyle(color: textColor, fontSize: 12),
-            ),
-          ),
-          Switch(
-            value: _offersWalk30,
-            onChanged: (v) => setState(() => _offersWalk30 = v),
-            activeColor: GardenColors.primary,
-          ),
-        ],
-      ),
-    );
-  }
   // ── END WEB LAYOUT ───────────────────────────────────────────────────────
 
   Widget _buildBody(Color textColor, Color subtextColor, Color surface, Color borderColor, bool isDark) {
@@ -1097,8 +948,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             SizedBox(key: _keyAddress, height: 0),
             const Divider(height: 48),
 
-            if (_selectedServices.contains('HOSPEDAJE')) ...[
-              // Sección 3 — Tu espacio
+            // Sección — Tu espacio (siempre visible)
+            ...[
               SizedBox(key: _keySpaceType, height: 0),
               _sectionTitle('Tu espacio', textColor),
               _buildHomeTypes(surface, borderColor),
@@ -1147,121 +998,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
               const Divider(height: 48),
             ],
 
-            // Sección 4 — Servicios
-            SizedBox(key: _keyServices, height: 0),
-            _sectionTitle('Servicios que ofreces', textColor),
-            _buildServiceChips(surface, borderColor),
-
-            if (_selectedServices.contains('PASEO')) ...[
-              const SizedBox(height: 24),
-              SizedBox(key: _keyPriceWalk, height: 0),
-              Row(children: [
-                const Icon(Icons.directions_walk_rounded, color: GardenColors.primary, size: 18),
-                const SizedBox(width: 8),
-                Text('Precios de paseo', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(6)),
-                  child: const Text('Obligatorio', style: TextStyle(color: GardenColors.error, fontSize: 10, fontWeight: FontWeight.w700)),
-                ),
-              ]),
-              const SizedBox(height: 10),
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Precio por paseo (1 hora)', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 6),
-                GardenInput(hint: 'Ej: 60 (Bs)', controller: _pricePerWalk60Controller, keyboardType: TextInputType.number),
-              ]),
-              const SizedBox(height: 16),
-              // Toggle paseos de 30 minutos
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: _offersWalk30
-                      ? GardenColors.primary.withValues(alpha: 0.07)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _offersWalk30
-                        ? GardenColors.primary.withValues(alpha: 0.35)
-                        : borderColor,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.timer_outlined, color: GardenColors.primary, size: 20),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Ofrecer paseos de 30 min',
-                              style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
-                          Text(
-                            _offersWalk30
-                                ? 'Precio: Bs ${((double.tryParse(_pricePerWalk60Controller.text) ?? 0) / 2).round()} (mitad de 1 hora)'
-                                : 'El precio se calcula automáticamente como la mitad del paseo de 1 hora',
-                            style: TextStyle(color: subtextColor, fontSize: 11),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: _offersWalk30,
-                      onChanged: (v) => setState(() => _offersWalk30 = v),
-                      activeColor: GardenColors.primary,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-
-            if (_selectedServices.contains('GUARDERIA')) ...[
-              const SizedBox(height: 24),
-              Row(children: [
-                const Icon(Icons.home_work_rounded, color: GardenColors.primary, size: 18),
-                const SizedBox(width: 8),
-                Text('Precio de guardería', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
-              ]),
-              const SizedBox(height: 10),
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Precio por hora de guardería', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 4),
-                Text('Recomendado: igual al precio de paseo/hora', style: TextStyle(color: subtextColor, fontSize: 11)),
-                const SizedBox(height: 6),
-                Row(children: [
-                  Expanded(child: GardenInput(hint: 'Ej: 60 (Bs/hora)', controller: _pricePerGuarderiaController, keyboardType: TextInputType.number)),
-                  const Expanded(child: SizedBox()),
-                ]),
-              ]),
-            ],
-
-            if (_selectedServices.contains('HOSPEDAJE')) ...[
-              const SizedBox(height: 24),
-              SizedBox(key: _keyPriceHospedaje, height: 0),
-              Row(children: [
-                const Icon(Icons.house_rounded, color: GardenColors.primary, size: 18),
-                const SizedBox(width: 8),
-                Text('Precio de hospedaje', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(6)),
-                  child: const Text('Obligatorio', style: TextStyle(color: GardenColors.error, fontSize: 10, fontWeight: FontWeight.w700)),
-                ),
-              ]),
-              const SizedBox(height: 10),
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Precio por noche (la mascota duerme en tu casa)', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 6),
-                Row(children: [
-                  Expanded(child: GardenInput(hint: 'Ej: 120 (Bs)', controller: _pricePerDayController, keyboardType: TextInputType.number)),
-                  const Expanded(child: SizedBox()),
-                ]),
-              ]),
-            ],
-            const SizedBox(height: 16),
-            _buildZoneDropdown(surface, borderColor, textColor),
             const Divider(height: 48),
 
             // Sección 5 — Tipos de mascotas
@@ -1297,19 +1033,20 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
             const Divider(height: 48),
 
-            // Sección EXTRA — Experiencia detallada
+            // Sección — Experiencia profesional
             SizedBox(key: _keyExperience, height: 0),
             _sectionTitle('Tu experiencia profesional', textColor),
             Text('Años cuidando mascotas', style: TextStyle(color: subtextColor, fontSize: 13)),
             const SizedBox(height: 8),
-            Row(
+            Wrap(
+              spacing: 8,
               children: [
                 for (final years in ['0', '1', '2', '3', '4', '5+'])
                   GestureDetector(
                     onTap: () => setState(() => _experienceYearsController.text = years),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
-                      margin: const EdgeInsets.only(right: 8),
+                      margin: const EdgeInsets.only(bottom: 4),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
                         color: _experienceYearsController.text == years ? GardenColors.primary : surface,
@@ -1327,19 +1064,47 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                   ),
               ],
             ),
-            const SizedBox(height: 16),
-            _sectionField('Describe tu experiencia', _experienceDescController,
-              'Cuéntanos sobre los animales que has cuidado, tu formación, etc.', maxLines: 4),
-            const SizedBox(height: 16),
-            _sectionField('¿Por qué eres cuidador?', _whyCaregiverController,
-              'Tu motivación para cuidar mascotas', maxLines: 3),
-            const SizedBox(height: 16),
-            _sectionField('¿Qué te diferencia?', _whatDiffersController,
-              'Lo que hace especial tu servicio', maxLines: 3),
+
+            // Follow-up: solo cuando experienceYears >= 1
+            if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _sectionField('Describe tu experiencia', _experienceDescController,
+                'Cuéntanos sobre los animales que has cuidado, tu formación, etc.', maxLines: 4),
+              const SizedBox(height: 16),
+              _sectionField('¿Por qué eres cuidador?', _whyCaregiverController,
+                'Tu motivación para cuidar mascotas', maxLines: 3),
+              const SizedBox(height: 16),
+              _sectionField('¿Qué te diferencia?', _whatDiffersController,
+                'Lo que hace especial tu servicio', maxLines: 3),
+            ],
+
+            if (_isAmateur && _experienceYearsController.text == '0') ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: GardenColors.primary.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline_rounded, color: GardenColors.primary, size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '¡Sin problema! Puedes empezar como cuidador nuevo. Deberás completar los videos de capacitación antes de tu primer servicio.',
+                        style: TextStyle(color: textColor, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             const Divider(height: 48),
 
-            // Sección EXTRA — Mascotas que aceptas
+            // Políticas de mascotas — siempre visibles (No/Sí desde el inicio)
             SizedBox(key: _keyPolicies, height: 0),
             _sectionTitle('Políticas de mascotas', textColor),
             _acceptSwitch('¿Aceptas mascotas agresivas?', _acceptAggressive, (val) => setState(() => _acceptAggressive = val), textColor, subtextColor, surface, borderColor),
@@ -1348,26 +1113,22 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             const SizedBox(height: 8),
             _acceptSwitch('¿Aceptas mascotas mayores?', _acceptSeniors, (val) => setState(() => _acceptSeniors = val), textColor, subtextColor, surface, borderColor),
 
-            const Divider(height: 48),
-
-            // Sección EXTRA — Situaciones especiales
-            _sectionTitle('Situaciones especiales', textColor),
-            SizedBox(key: _keyHandleAnxious, height: 0),
-            _sectionField('¿Cómo manejas mascotas ansiosas?', _handleAnxiousController,
-              'Describe tu método para mascotas con ansiedad o estrés', maxLines: 3),
-            const SizedBox(height: 16),
-            SizedBox(key: _keyEmergencyResponse, height: 0),
-            _sectionField('¿Cómo respondes ante emergencias?', _emergencyResponseController,
-              'Protocolo ante una situación de emergencia veterinaria', maxLines: 3),
-
-            const Divider(height: 48),
-
-            if (widget.embeddedMode) ...[
-              // T&C acceptance — only shown in embedded (wizard) mode
-              SizedBox(key: _keyTerms, height: 0),
-              _buildTermsSection(),
-              const SizedBox(height: 24),
+            // Situaciones especiales — solo para no-amateurs
+            if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
+              const Divider(height: 48),
+              _sectionTitle('Situaciones especiales', textColor),
+              SizedBox(key: _keyHandleAnxious, height: 0),
+              Text('¿Cómo manejas mascotas ansiosas?', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 10),
+              _buildChipsSection(_anxiousOptions, _selectedAnxiousOptions, surface, borderColor),
+              const SizedBox(height: 20),
+              SizedBox(key: _keyEmergencyResponse, height: 0),
+              Text('¿Cómo respondes ante emergencias?', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 10),
+              _buildChipsSection(_emergencyOptions, _selectedEmergencyOptions, surface, borderColor),
             ],
+
+            const Divider(height: 48),
 
             if (widget.embeddedMode) ...[
               SizedBox(
@@ -1385,6 +1146,14 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                   child: _isSaving
                       ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Text('Guardar y continuar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Center(
+                child: Text(
+                  'Al continuar aceptas los Términos de Servicio y Política de Privacidad de GARDEN',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: subtextColor, fontSize: 11),
                 ),
               ),
             ],
@@ -1427,22 +1196,30 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     );
   }
 
-  Widget _acceptSwitch(String label, bool? value, Function(bool) onChanged, Color textColor, Color subtextColor, Color surface, Color borderColor) {
+  Widget _acceptSwitch(String label, bool value, Function(bool) onChanged, Color textColor, Color subtextColor, Color surface, Color borderColor) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: surface,
+        color: value ? GardenColors.primary.withValues(alpha: 0.06) : surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor),
+        border: Border.all(
+          color: value ? GardenColors.primary.withValues(alpha: 0.35) : borderColor,
+        ),
       ),
       child: Row(
         children: [
           Expanded(child: Text(label, style: TextStyle(color: textColor, fontSize: 14))),
-          if (value == null)
-            Text('Sin definir', style: TextStyle(color: subtextColor, fontSize: 12)),
-          const SizedBox(width: 8),
+          Text(
+            value ? 'Sí' : 'No',
+            style: TextStyle(
+              color: value ? GardenColors.primary : subtextColor,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 4),
           Switch(
-            value: value ?? false,
+            value: value,
             activeColor: GardenColors.primary,
             onChanged: (v) => onChanged(v),
           ),
@@ -1520,17 +1297,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     );
   }
 
-  Widget _buildServiceChips(Color surface, Color border) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: ['PASEO', 'HOSPEDAJE', 'GUARDERIA'].map((s) {
-        final label = s == 'PASEO' ? '🦮 Paseo' : s == 'GUARDERIA' ? '🏡 Guardería' : '🏠 Hospedaje';
-        return _filterChip(s, label, _selectedServices, surface, border);
-      }).toList(),
-    );
-  }
-
   Widget _filterChip(String value, String label, List<String> list, Color surface, Color border) {
     final isSelected = list.contains(value);
     return FilterChip(
@@ -1553,30 +1319,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     );
   }
 
-  Widget _slotChip(String label, bool value, Function(bool) onChanged, Color surface, Color border) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => onChanged(!value),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: value ? GardenColors.primary.withValues(alpha: 0.1) : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: value ? GardenColors.primary : border),
-          ),
-          child: Column(
-            children: [
-              Icon(label == 'Mañana' ? Icons.wb_sunny_outlined : label == 'Tarde' ? Icons.wb_cloudy_outlined : Icons.nights_stay_outlined,
-                  color: value ? GardenColors.primary : GardenColors.textSecondary, size: 20),
-              const SizedBox(height: 4),
-              Text(label, style: TextStyle(color: value ? GardenColors.primary : GardenColors.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildSwitchTile(String title, bool value, Function(bool) onChanged) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
@@ -1593,6 +1335,55 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       onChanged: onChanged,
       activeColor: GardenColors.primary,
       controlAffinity: ListTileControlAffinity.trailing,
+    );
+  }
+
+  /// Chips de selección múltiple para "Situaciones especiales".
+  Widget _buildChipsSection(List<String> options, List<String> selected, Color surface, Color border) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: options.map((opt) {
+        final isSel = selected.contains(opt);
+        return GestureDetector(
+          onTap: () => setState(() {
+            if (isSel) {
+              selected.remove(opt);
+            } else {
+              selected.add(opt);
+            }
+          }),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: isSel ? GardenColors.primary.withValues(alpha: 0.12) : surface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isSel ? GardenColors.primary : border,
+                width: isSel ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isSel) ...[
+                  const Icon(Icons.check_rounded, color: GardenColors.primary, size: 14),
+                  const SizedBox(width: 4),
+                ],
+                Text(
+                  opt,
+                  style: TextStyle(
+                    color: isSel ? GardenColors.primary : GardenColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: isSel ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -1643,100 +1434,5 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     );
   }
 
-  Widget _buildZoneDropdown(Color surface, Color borderColor, Color textColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor)),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _selectedZone,
-          isExpanded: true,
-          dropdownColor: surface,
-          items: _zones.map((z) => DropdownMenuItem(value: z, child: Text(z.replaceAll('_', ' '), style: TextStyle(color: textColor)))).toList(),
-          onChanged: (val) { if (val != null) setState(() => _selectedZone = val); },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTermsSection() {
-    final isDark = themeNotifier.isDark;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final surface = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
-    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: _termsAccepted ? GardenColors.primary.withValues(alpha: 0.5) : borderColor,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-            child: Text(
-              'Términos y condiciones',
-              style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w800),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              'Para continuar con el proceso de registro como cuidador, debes aceptar nuestros términos.',
-              style: TextStyle(color: subtextColor, fontSize: 13),
-            ),
-          ),
-          const SizedBox(height: 8),
-          CheckboxListTile(
-            value: _termsAccepted,
-            onChanged: (val) => setState(() => _termsAccepted = val ?? false),
-            activeColor: GardenColors.primary,
-            controlAffinity: ListTileControlAffinity.leading,
-            title: const Text(
-              'He leído y acepto los Términos de Servicio y la Política de Privacidad de GARDEN',
-              style: TextStyle(fontSize: 13),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 56, bottom: 8),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TermsOfServiceScreen())),
-                  child: const Text(
-                    'Términos de Servicio',
-                    style: TextStyle(color: GardenColors.primary, fontSize: 12, decoration: TextDecoration.underline),
-                  ),
-                ),
-                Text('  •  ', style: TextStyle(color: subtextColor, fontSize: 12)),
-                GestureDetector(
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen())),
-                  child: const Text(
-                    'Política de Privacidad',
-                    style: TextStyle(color: GardenColors.primary, fontSize: 12, decoration: TextDecoration.underline),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          CheckboxListTile(
-            value: _verificationAccepted,
-            onChanged: (val) => setState(() => _verificationAccepted = val ?? false),
-            activeColor: GardenColors.primary,
-            controlAffinity: ListTileControlAffinity.leading,
-            title: const Text(
-              'Acepto las condiciones de verificación de identidad de GARDEN',
-              style: TextStyle(fontSize: 13),
-            ),
-          ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    );
-  }
 }
+
