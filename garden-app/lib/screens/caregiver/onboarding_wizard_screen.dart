@@ -321,34 +321,27 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       }
 
       // Step 6: Professional profile (CaregiverProfileDataScreen)
+      // termsAccepted se auto-guarda en true al completar el paso 6 en modo
+      // embedded, lo usamos como señal definitiva de "paso 6 guardado".
+      final termsAccepted = profile['termsAccepted'] == true;
       final bio = (profile['bio'] as String? ?? '').trim();
-      final bioDetail = (profile['bioDetail'] as String? ?? '').trim();
-      final experienceDesc = (profile['experienceDescription'] as String? ?? '').trim();
-      final whyCaregiver = (profile['whyCaregiver'] as String? ?? '').trim();
-      final whatDiffers = (profile['whatDiffers'] as String? ?? '').trim();
-      final handleAnxious = (profile['handleAnxious'] as String? ?? '').trim();
-      final emergencyResponse = (profile['emergencyResponse'] as String? ?? '').trim();
       final sizesAccepted = (profile['sizesAccepted'] as List?) ?? [];
       final animalTypes = (profile['animalTypes'] as List?) ?? [];
+      final isAmateur = profile['isAmateur'] == true;
 
-      final profileComplete = bio.length >= 10 &&
-          bioDetail.length >= 3 &&
-          experienceDesc.length >= 5 &&
-          whyCaregiver.length >= 3 &&
-          whatDiffers.length >= 3 &&
-          handleAnxious.isNotEmpty &&
-          emergencyResponse.isNotEmpty &&
+      // Para no-amateurs se exigen campos de experiencia mínimos.
+      final experienceOk = isAmateur || (
+        (profile['experienceDescription'] as String? ?? '').trim().length >= 3 &&
+        (profile['whyCaregiver'] as String? ?? '').trim().length >= 3
+      );
+
+      final step6Complete = termsAccepted &&
+          bio.length >= 10 &&
           sizesAccepted.isNotEmpty &&
-          animalTypes.isNotEmpty;
+          animalTypes.isNotEmpty &&
+          experienceOk;
 
-      if (!profileComplete) {
-        setState(() => _currentStep = 6);
-        return;
-      }
-
-      // Step 7 sub-check: T&C acceptance (persisted in DB)
-      final termsAccepted = profile['termsAccepted'] == true;
-      if (!termsAccepted) {
+      if (!step6Complete) {
         setState(() => _currentStep = 6);
         return;
       }
