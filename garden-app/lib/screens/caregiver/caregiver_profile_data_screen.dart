@@ -18,11 +18,17 @@ class CaregiverProfileDataScreen extends StatefulWidget {
   /// the API is called in the background to refresh with the latest values.
   final Map<String, dynamic>? initialProfile;
 
+  /// Services the caregiver selected during the wizard (e.g. ['HOSPEDAJE', 'PASEO']).
+  /// Used to conditionally show the "Tu espacio" section only when the
+  /// caregiver offers HOSPEDAJE or GUARDERIA.
+  final List<String> servicesOffered;
+
   const CaregiverProfileDataScreen({
     super.key,
     this.embeddedMode = false,
     this.onSaveComplete,
     this.initialProfile,
+    this.servicesOffered = const [],
   });
 
   @override
@@ -948,8 +954,9 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             SizedBox(key: _keyAddress, height: 0),
             const Divider(height: 48),
 
-            // Sección — Tu espacio (siempre visible)
-            ...[
+            // Sección — Tu espacio (solo para HOSPEDAJE o GUARDERIA)
+            if (widget.servicesOffered.contains('HOSPEDAJE') ||
+                widget.servicesOffered.contains('GUARDERIA')) ...[
               SizedBox(key: _keySpaceType, height: 0),
               _sectionTitle('Tu espacio', textColor),
               _buildHomeTypes(surface, borderColor),
@@ -957,47 +964,47 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
               _buildSwitchTile('¿Tiene jardín o patio?', _hasYard, (v) => setState(() => _hasYard = v)),
               _buildSwitchTile('¿Permite mascotas grandes?', _allowsLargePets, (v) => setState(() => _allowsLargePets = v)),
               _buildSwitchTile('¿Permite múltiples mascotas?', _allowsMultiplePets, (v) => setState(() => _allowsMultiplePets = v)),
-              const SizedBox(height: 16),
-              Text('Máximo de mascotas simultáneas', style: TextStyle(color: subtextColor, fontSize: 14)),
-              const SizedBox(height: 10),
-              Row(
-                children: [1, 2, 3].map((n) {
-                  final selected = _maxPets == n;
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _maxPets = n),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: selected ? GardenColors.primary.withValues(alpha: 0.12) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: selected ? GardenColors.primary : borderColor,
-                            width: selected ? 2 : 1,
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Text('$n', style: TextStyle(
-                              color: selected ? GardenColors.primary : textColor,
-                              fontSize: 22, fontWeight: FontWeight.w800,
-                            )),
-                            Text(n == 1 ? 'mascota' : 'mascotas', style: TextStyle(
-                              color: selected ? GardenColors.primary : subtextColor,
-                              fontSize: 10,
-                            )),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
               const Divider(height: 48),
             ],
 
+            // Máximo de mascotas simultáneas — siempre visible
+            Text('Máximo de mascotas simultáneas', style: TextStyle(color: subtextColor, fontSize: 14)),
+            const SizedBox(height: 10),
+            Row(
+              children: [1, 2, 3].map((n) {
+                final selected = _maxPets == n;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _maxPets = n),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: selected ? GardenColors.primary.withValues(alpha: 0.12) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: selected ? GardenColors.primary : borderColor,
+                          width: selected ? 2 : 1,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Text('$n', style: TextStyle(
+                            color: selected ? GardenColors.primary : textColor,
+                            fontSize: 22, fontWeight: FontWeight.w800,
+                          )),
+                          Text(n == 1 ? 'mascota' : 'mascotas', style: TextStyle(
+                            color: selected ? GardenColors.primary : subtextColor,
+                            fontSize: 10,
+                          )),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
             const Divider(height: 48),
 
             // Sección 5 — Tipos de mascotas

@@ -2000,6 +2000,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       postRegStep = CaregiverProfileDataScreen(
         embeddedMode: true,
         onSaveComplete: _afterStep6Save,
+        servicesOffered: _servicesOffered,
       );
     } else if (_currentStep == 7) {
       postRegStep = VerificationScreen(
