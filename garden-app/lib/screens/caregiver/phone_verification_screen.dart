@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -48,6 +48,12 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
   @override
   void initState() {
     super.initState();
+    if (kDebugMode && !kIsWeb) {
+      // En simulador iOS no hay APNs, Firebase no puede verificar la identidad
+      // de la app y lanza missing-client-identifier. Esta flag desactiva esa
+      // verificación solo en builds de debug. No afecta producción.
+      FirebaseAuth.instance.setSettings(appVerificationDisabledForTesting: true);
+    }
     if (!kIsWeb) {
       _sendCode();
     }
