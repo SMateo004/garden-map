@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
@@ -76,33 +77,38 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     if (_isSending) return;
     setState(() { _isSending = true; _errorMessage = null; });
     try {
-      await FirebaseAuth.instance.verifyPhoneNumber(
-        phoneNumber: _fullPhone,
-        timeout: const Duration(seconds: 60),
-        verificationCompleted: (PhoneAuthCredential credential) async {
-          // Auto-retrieval on Android
-          await _verifyWithCredential(credential);
-        },
-        verificationFailed: (FirebaseAuthException e) {
-          if (!mounted) return;
-          setState(() {
-            _isSending = false;
-            _errorMessage = _mapFirebaseError(e.code);
-          });
-        },
-        codeSent: (String verificationId, int? resendToken) {
-          if (!mounted) return;
-          setState(() {
+      // Firebase Auth iOS 11.x tiene una aserción que requiere main thread.
+      // scheduleTask garantiza ejecución en el frame del scheduler (main thread).
+      await SchedulerBinding.instance.scheduleTask<Future<void>>(
+        () => FirebaseAuth.instance.verifyPhoneNumber(
+          phoneNumber: _fullPhone,
+          timeout: const Duration(seconds: 60),
+          verificationCompleted: (PhoneAuthCredential credential) async {
+            // Auto-retrieval on Android
+            await _verifyWithCredential(credential);
+          },
+          verificationFailed: (FirebaseAuthException e) {
+            if (!mounted) return;
+            setState(() {
+              _isSending = false;
+              _errorMessage = _mapFirebaseError(e.code);
+            });
+          },
+          codeSent: (String verificationId, int? resendToken) {
+            if (!mounted) return;
+            setState(() {
+              _verificationId = verificationId;
+              _codeSent = true;
+              _isSending = false;
+            });
+            _startResendCooldown();
+          },
+          codeAutoRetrievalTimeout: (String verificationId) {
+            if (!mounted) return;
             _verificationId = verificationId;
-            _codeSent = true;
-            _isSending = false;
-          });
-          _startResendCooldown();
-        },
-        codeAutoRetrievalTimeout: (String verificationId) {
-          if (!mounted) return;
-          _verificationId = verificationId;
-        },
+          },
+        ),
+        Priority.touch,
       );
     } catch (e) {
       if (mounted) {
