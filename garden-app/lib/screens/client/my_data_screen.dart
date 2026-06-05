@@ -40,7 +40,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
   late TextEditingController _apartmentCtrl;
   late TextEditingController _condominioCtrl;
   late TextEditingController _referenceCtrl;
-  late TextEditingController _zoneCtrl;
+  String? _addressZone;
   double? _addressLat;
   double? _addressLng;
   bool _isApartment = false;
@@ -63,7 +63,6 @@ class _MyDataScreenState extends State<MyDataScreen> {
     _apartmentCtrl = TextEditingController();
     _condominioCtrl = TextEditingController();
     _referenceCtrl = TextEditingController();
-    _zoneCtrl = TextEditingController();
     _loadData();
   }
 
@@ -82,7 +81,6 @@ class _MyDataScreenState extends State<MyDataScreen> {
     _apartmentCtrl.dispose();
     _condominioCtrl.dispose();
     _referenceCtrl.dispose();
-    _zoneCtrl.dispose();
     super.dispose();
   }
 
@@ -111,7 +109,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
           _apartmentCtrl.text = user['addressApartment'] as String? ?? '';
           _condominioCtrl.text = user['addressCondominio'] as String? ?? '';
           _referenceCtrl.text = user['addressReference'] as String? ?? '';
-          _zoneCtrl.text = user['addressZone'] as String? ?? '';
+          _addressZone = user['addressZone'] as String?;
           _addressLat = (user['addressLat'] as num?)?.toDouble();
           _addressLng = (user['addressLng'] as num?)?.toDouble();
           _isApartment = (user['addressApartment'] as String? ?? '').isNotEmpty;
@@ -175,7 +173,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
       if (_numberCtrl.text.trim().isNotEmpty) 'N° ${_numberCtrl.text.trim()}',
       if (_isApartment && _apartmentCtrl.text.trim().isNotEmpty) 'Dpto. ${_apartmentCtrl.text.trim()}',
       if (_isApartment && _condominioCtrl.text.trim().isNotEmpty) _condominioCtrl.text.trim(),
-      if (_zoneCtrl.text.trim().isNotEmpty) _zoneCtrl.text.trim(),
+      if (_addressZone != null) _addressZone!,
       'Santa Cruz de la Sierra, Bolivia',
     ];
     return parts.isEmpty ? _addressCtrl.text.trim() : parts.join(', ');
@@ -209,7 +207,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
         if (_isApartment && _apartmentCtrl.text.trim().isNotEmpty) 'addressApartment': _apartmentCtrl.text.trim(),
         if (_isApartment && _condominioCtrl.text.trim().isNotEmpty) 'addressCondominio': _condominioCtrl.text.trim(),
         if (_referenceCtrl.text.trim().isNotEmpty) 'addressReference': _referenceCtrl.text.trim(),
-        if (_zoneCtrl.text.trim().isNotEmpty) 'addressZone': _zoneCtrl.text.trim(),
+        if (_addressZone != null) 'addressZone': _addressZone,
       };
       final res = await http.patch(
         Uri.parse('$_baseUrl/auth/me'),
@@ -405,7 +403,8 @@ class _MyDataScreenState extends State<MyDataScreen> {
               apartmentController: _apartmentCtrl,
               condominioController: _condominioCtrl,
               referenceController: _referenceCtrl,
-              zoneController: _zoneCtrl,
+              selectedZone: _addressZone,
+              onZoneChanged: (val) => setState(() => _addressZone = val),
               addressLat: _addressLat,
               addressLng: _addressLng,
               isApartment: _isApartment,
