@@ -49,6 +49,8 @@ model User {
   bankAccount                  String?                       @db.VarChar(50)
   bankHolder                   String?                       @db.VarChar(100)
   bankType                     String?                       @db.VarChar(20) // 'CUENTA_CORRIENTE' | 'CUENTA_AHORRO' | 'TIGO_MONEY' | 'BILLETERA'
+  phoneOtp                     String?                       @db.VarChar(6)
+  phoneOtpExpiresAt            DateTime?
 
   @@index([email])
   @@index([role])

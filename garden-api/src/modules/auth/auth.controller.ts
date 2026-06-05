@@ -816,59 +816,90 @@ export const registerProfessional = asyncHandler(async (req: Request, res: Respo
   return res.status(201).json({ success: true, data: result });
 });
 
-// ── Phone Verification (Firebase Phone Auth) ──────────────────────────────────
+// ── Phone Verification (Twilio SMS OTP) ──────────────────────────────────────
 
-/** POST /api/auth/caregiver/verify-phone — body: { firebaseIdToken }.
- *  Verifica el token de Firebase Phone Auth, confirma que el número coincide,
- *  y marca phoneVerified=true en CaregiverProfile. Solo aplica a cuidadores nuevos. */
+function generateOtp(): string {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+/** POST /api/auth/caregiver/send-phone-otp
+ *  Envía un código OTP de 6 dígitos por SMS al teléfono registrado del usuario. */
+export const sendCaregiverPhoneOtp = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+
+  const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER } = await import('../../config/env.js').then(m => m.env);
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_FROM_NUMBER) {
+    return res.status(503).json({ success: false, error: { code: 'SMS_NOT_CONFIGURED', message: 'El servicio de SMS no está configurado.' } });
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { phone: true } });
+  if (!user || !user.phone) {
+    return res.status(400).json({ success: false, error: { code: 'NO_PHONE', message: 'No hay número de teléfono registrado en tu cuenta.' } });
+  }
+
+  const otp = generateOtp();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutos
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { phoneOtp: otp, phoneOtpExpiresAt: expiresAt },
+  });
+
+  const { default: twilio } = await import('twilio');
+  const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+  const toPhone = user.phone.startsWith('+') ? user.phone : `+591${user.phone}`;
+
+  try {
+    await client.messages.create({
+      body: `Tu código de verificación de Garden es: ${otp}. Válido por 10 minutos.`,
+      from: TWILIO_FROM_NUMBER,
+      to: toPhone,
+    });
+  } catch (err) {
+    logger.error(String(err), 'Twilio SMS error');
+    return res.status(502).json({ success: false, error: { code: 'SMS_SEND_FAILED', message: 'No se pudo enviar el SMS. Intenta de nuevo.' } });
+  }
+
+  return res.json({ success: true, message: `Código enviado a ${toPhone}.` });
+});
+
+/** POST /api/auth/caregiver/verify-phone — body: { code }
+ *  Verifica el OTP, marca phoneVerified=true y limpia el código. */
 export const verifyCaregiverPhone = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { firebaseIdToken } = req.body ?? {};
+  const { code } = req.body ?? {};
 
-  if (!firebaseIdToken || typeof firebaseIdToken !== 'string') {
-    return res.status(400).json({ success: false, error: { code: 'MISSING_TOKEN', message: 'firebaseIdToken es requerido.' } });
+  if (!code || typeof code !== 'string' || !/^\d{6}$/.test(code)) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_CODE', message: 'El código debe ser de 6 dígitos.' } });
   }
 
-  // Verificar token con Firebase Admin
-  const { default: admin } = await import('firebase-admin');
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-
-  if (!projectId || !privateKey || !clientEmail) {
-    return res.status(503).json({ success: false, error: { code: 'FIREBASE_NOT_CONFIGURED', message: 'Firebase no configurado en el servidor.' } });
-  }
-
-  if (!admin.apps.length) {
-    admin.initializeApp({ credential: admin.credential.cert({ projectId, privateKey, clientEmail } as any) });
-  }
-
-  let decoded: any;
-  try {
-    decoded = await admin.auth().verifyIdToken(firebaseIdToken);
-  } catch {
-    return res.status(401).json({ success: false, error: { code: 'INVALID_FIREBASE_TOKEN', message: 'Token de Firebase inválido o expirado.' } });
-  }
-
-  // El token de Phone Auth incluye `phone_number` (ej: "+59176543210")
-  const firebasePhone = decoded.phone_number as string | undefined;
-  if (!firebasePhone) {
-    return res.status(400).json({ success: false, error: { code: 'NOT_PHONE_TOKEN', message: 'El token no corresponde a verificación de teléfono.' } });
-  }
-
-  // Confirmar que el número verificado coincide con el del usuario (ignorando espacios y prefijo)
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { phone: true } });
-  if (!user) return res.status(404).json({ success: false, error: { code: 'USER_NOT_FOUND', message: 'Usuario no encontrado.' } });
-
-  const normalizePhone = (p: string) => p.replace(/\D/g, '').replace(/^591/, '');
-  if (normalizePhone(firebasePhone) !== normalizePhone(user.phone)) {
-    return res.status(400).json({ success: false, error: { code: 'PHONE_MISMATCH', message: 'El número verificado no coincide con el de tu cuenta.' } });
-  }
-
-  await prisma.caregiverProfile.updateMany({
-    where: { userId },
-    data: { phoneVerified: true },
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { phoneOtp: true, phoneOtpExpiresAt: true },
   });
+
+  if (!user || !user.phoneOtp || !user.phoneOtpExpiresAt) {
+    return res.status(400).json({ success: false, error: { code: 'NO_OTP', message: 'No hay código activo. Solicita uno nuevo.' } });
+  }
+
+  if (new Date() > user.phoneOtpExpiresAt) {
+    return res.status(400).json({ success: false, error: { code: 'OTP_EXPIRED', message: 'El código expiró. Solicita uno nuevo.' } });
+  }
+
+  if (user.phoneOtp !== code) {
+    return res.status(400).json({ success: false, error: { code: 'WRONG_CODE', message: 'Código incorrecto. Revisa el SMS e intenta de nuevo.' } });
+  }
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: userId },
+      data: { phoneOtp: null, phoneOtpExpiresAt: null },
+    }),
+    prisma.caregiverProfile.updateMany({
+      where: { userId },
+      data: { phoneVerified: true },
+    }),
+  ]);
 
   return res.json({ success: true, message: '¡Teléfono verificado correctamente!' });
 });

@@ -48,6 +48,10 @@ const envSchema = z.object({
   BLOCKCHAIN_ENABLED: z.string().transform(v => v === 'true').default('false'),
   // AI Agent (Anthropic — required when BLOCKCHAIN_ENABLED or dispute resolution is active)
   ANTHROPIC_API_KEY: z.string().optional(),
+  // Twilio (SMS OTP para verificación de teléfono)
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_FROM_NUMBER: z.string().optional(),
 })
 .refine(
   data => data.NODE_ENV !== 'production' || !!data.ANTHROPIC_API_KEY,

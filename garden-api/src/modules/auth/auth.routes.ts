@@ -166,9 +166,11 @@ router.post('/forgot-password/verify-code', passwordResetActionLimiter, authCont
 /** POST /api/auth/forgot-password/set-password — body: { tempToken, newPassword }. Sets new password. */
 router.post('/forgot-password/set-password', passwordResetActionLimiter, authController.setNewPassword);
 
-// ── Phone Verification (Firebase Phone Auth) ──────────────────────────────
-/** POST /api/auth/caregiver/verify-phone — body: { firebaseIdToken }.
- *  Verifica token de Firebase Phone Auth, confirma teléfono y marca phoneVerified=true. */
+// ── Phone Verification (Twilio SMS OTP) ──────────────────────────────────────
+/** POST /api/auth/caregiver/send-phone-otp — Envía OTP de 6 dígitos al teléfono del usuario. */
+router.post('/caregiver/send-phone-otp', authMiddleware, authController.sendCaregiverPhoneOtp);
+
+/** POST /api/auth/caregiver/verify-phone — body: { code }. Verifica OTP y marca phoneVerified=true. */
 router.post('/caregiver/verify-phone', authMiddleware, authController.verifyCaregiverPhone);
 
 export default router;

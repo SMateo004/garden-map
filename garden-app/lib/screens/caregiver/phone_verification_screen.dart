@@ -1,10 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
@@ -38,7 +36,6 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
   bool _codeSent = false;
   bool _isLoading = false;
   bool _isSending = false;
-  String? _verificationId;
   String? _errorMessage;
   int _resendCooldown = 0;
   Timer? _cooldownTimer;
@@ -48,15 +45,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
   @override
   void initState() {
     super.initState();
-    if (kDebugMode && !kIsWeb) {
-      // En simulador iOS no hay APNs, Firebase no puede verificar la identidad
-      // de la app y lanza missing-client-identifier. Esta flag desactiva esa
-      // verificación solo en builds de debug. No afecta producción.
-      FirebaseAuth.instance.setSettings(appVerificationDisabledForTesting: true);
-    }
-    if (!kIsWeb) {
-      _sendCode();
-    }
+    _sendCode();
   }
 
   @override
@@ -83,60 +72,30 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     if (_isSending) return;
     setState(() { _isSending = true; _errorMessage = null; });
     try {
-      // Firebase Auth iOS 11.x tiene una aserción que requiere main thread.
-      // scheduleTask garantiza ejecución en el frame del scheduler (main thread).
-      await SchedulerBinding.instance.scheduleTask<Future<void>>(
-        () => FirebaseAuth.instance.verifyPhoneNumber(
-          phoneNumber: _fullPhone,
-          timeout: const Duration(seconds: 60),
-          verificationCompleted: (PhoneAuthCredential credential) async {
-            // Auto-retrieval on Android
-            await _verifyWithCredential(credential);
-          },
-          verificationFailed: (FirebaseAuthException e) {
-            if (!mounted) return;
-            setState(() {
-              _isSending = false;
-              _errorMessage = _mapFirebaseError(e.code);
-            });
-          },
-          codeSent: (String verificationId, int? resendToken) {
-            if (!mounted) return;
-            setState(() {
-              _verificationId = verificationId;
-              _codeSent = true;
-              _isSending = false;
-            });
-            _startResendCooldown();
-          },
-          codeAutoRetrievalTimeout: (String verificationId) {
-            if (!mounted) return;
-            _verificationId = verificationId;
-          },
-        ),
-        Priority.touch,
+      final token = AuthState.token;
+      final res = await http.post(
+        Uri.parse('$_baseUrl/auth/caregiver/send-phone-otp'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
       );
-    } catch (e) {
+      if (!mounted) return;
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (data['success'] == true) {
+        setState(() { _codeSent = true; _isSending = false; });
+        _startResendCooldown();
+      } else {
+        final msg = data['error']?['message'] as String? ?? 'No se pudo enviar el código.';
+        setState(() { _isSending = false; _errorMessage = msg; });
+      }
+    } catch (_) {
       if (mounted) {
         setState(() {
           _isSending = false;
-          _errorMessage = 'No se pudo enviar el código. Verifica el número e intenta de nuevo.';
+          _errorMessage = 'Error de conexión. Verifica tu internet e intenta de nuevo.';
         });
       }
-    }
-  }
-
-  Future<void> _verifyWithCredential(PhoneAuthCredential credential) async {
-    setState(() { _isLoading = true; _errorMessage = null; });
-    try {
-      final result = await FirebaseAuth.instance.signInWithCredential(credential);
-      final idToken = await result.user?.getIdToken();
-      if (idToken == null) throw Exception('No se pudo obtener el token de Firebase.');
-      await _confirmWithBackend(idToken);
-    } on FirebaseAuthException catch (e) {
-      if (mounted) setState(() { _isLoading = false; _errorMessage = _mapFirebaseError(e.code); });
-    } catch (e) {
-      if (mounted) setState(() { _isLoading = false; _errorMessage = e.toString().replaceFirst('Exception: ', ''); });
     }
   }
 
@@ -146,18 +105,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
       setState(() => _errorMessage = 'Ingresa el código de 6 dígitos completo.');
       return;
     }
-    if (_verificationId == null) {
-      setState(() => _errorMessage = 'No hay código activo. Reenvía el código.');
-      return;
-    }
-    final credential = PhoneAuthProvider.credential(
-      verificationId: _verificationId!,
-      smsCode: code,
-    );
-    await _verifyWithCredential(credential);
-  }
-
-  Future<void> _confirmWithBackend(String idToken) async {
+    setState(() { _isLoading = true; _errorMessage = null; });
     try {
       final token = AuthState.token;
       final res = await http.post(
@@ -166,37 +114,24 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode({'firebaseIdToken': idToken}),
+        body: jsonEncode({'code': code}),
       );
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
       if (!mounted) return;
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
       if (data['success'] == true) {
         setState(() => _isLoading = false);
         widget.onComplete?.call();
       } else {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = data['error']?['message'] as String? ?? 'Error al verificar el teléfono.';
-        });
+        final msg = data['error']?['message'] as String? ?? 'Código incorrecto. Intenta de nuevo.';
+        setState(() { _isLoading = false; _errorMessage = msg; });
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         setState(() {
           _isLoading = false;
           _errorMessage = 'Error de conexión. Intenta de nuevo.';
         });
       }
-    }
-  }
-
-  String _mapFirebaseError(String code) {
-    switch (code) {
-      case 'invalid-phone-number': return 'Número de teléfono inválido. Verifica que sea correcto.';
-      case 'too-many-requests': return 'Demasiados intentos. Espera unos minutos e intenta de nuevo.';
-      case 'invalid-verification-code': return 'Código incorrecto. Revisa el SMS e intenta de nuevo.';
-      case 'session-expired': return 'El código expiró. Reenvía un nuevo código.';
-      case 'quota-exceeded': return 'Límite de SMS alcanzado. Intenta más tarde.';
-      default: return 'Error: $code. Intenta de nuevo.';
     }
   }
 
@@ -252,7 +187,6 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
               ],
 
               if (_codeSent) ...[
-                // 6-digit OTP input
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: List.generate(6, (i) {
