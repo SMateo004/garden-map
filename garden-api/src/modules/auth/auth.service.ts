@@ -187,90 +187,123 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
       ? new Date(userInput.dateOfBirth as string)
       : undefined;
 
-  const result = await prisma.$transaction(async (tx) => {
-    const user = await tx.user.create({
-      data: {
-        email,
-        passwordHash,
-        role: UserRole.CAREGIVER,
-        firstName: userInput.firstName.trim(),
-        lastName: userInput.lastName.trim(),
-        phone: userInput.phone.trim(),
-        dateOfBirth: dateOfBirth ?? undefined,
-        country: userInput.country.trim(),
-        city: userInput.city.trim(),
-        isOver18: userInput.isOver18 === true,
-      },
-    });
+  const profileAddr = profileInput as {
+    addressLat?: number; addressLng?: number;
+    addressStreet?: string; addressNumber?: string; addressApartment?: string;
+    addressCondominio?: string; addressReference?: string; addressZone?: string;
+  };
 
-    const profile = await tx.caregiverProfile.create({
-      data: {
-        userId: user.id,
-        bio: profileInput.bio ?? null,
-        zone: profileInput.zone ?? null,
-        spaceType: Array.isArray(profileInput.spaceType) ? profileInput.spaceType : (profileInput.spaceType ? [profileInput.spaceType] : []),
-        address: profileInput.address ?? null,
-        photos: ensureAbsoluteUrls(profileInput.photos ?? []),
-        servicesOffered: profileInput.servicesOffered ?? [],
-        serviceAvailability: (profileInput.serviceAvailability ?? null) as object,
-        pricePerDay: profileInput.pricePerDay ?? null,
-        pricePerWalk30: profileInput.pricePerWalk30 ?? null,
-        pricePerWalk60: profileInput.pricePerWalk60 ?? null,
-        rates: (profileInput.rates ?? null) as object,
-        status: CaregiverStatus.DRAFT,
-        verificationStatus: VerificationStatus.PENDING_REVIEW,
-        onboardingStatus: { step: 1, completed: [false, false, false, false, false] } as object,
-        identityVerificationStatus: 'PENDING',
-        identityVerificationToken: randomBytes(32).toString('hex'),
-        emailVerified: false,
-        verified: false,
-        experienceYears: profileInput.experienceYears ?? null,
-        ownPets: profileInput.ownPets ?? null,
-        currentPetsDetails: (profileInput.currentPetsDetails ?? null) as object,
-        caredOthers: profileInput.caredOthers ?? null,
-        animalTypes: profileInput.animalTypes ?? [],
-        experienceDescription: profileInput.experienceDescription ?? null,
-        whyCaregiver: profileInput.whyCaregiver ?? null,
-        whatDiffers: profileInput.whatDiffers ?? null,
-        handleAnxious: profileInput.handleAnxious ?? null,
-        emergencyResponse: profileInput.emergencyResponse ?? null,
-        acceptAggressive: profileInput.acceptAggressive ?? null,
-        acceptMedication: profileInput.acceptMedication ?? [],
-        acceptPuppies: profileInput.acceptPuppies ?? null,
-        acceptSeniors: profileInput.acceptSeniors ?? null,
-        sizesAccepted: profileInput.sizesAccepted ?? [],
-        noAcceptBreeds: profileInput.noAcceptBreeds ?? null,
-        breedsWhy: profileInput.breedsWhy ?? null,
-        homeType: profileInput.homeType ?? null,
-        ownHome: profileInput.ownHome ?? null,
-        hasYard: profileInput.hasYard ?? null,
-        yardFenced: profileInput.yardFenced ?? null,
-        hasChildren: profileInput.hasChildren ?? null,
-        hasOtherPets: profileInput.hasOtherPets ?? null,
-        petsSleep: profileInput.petsSleep ?? null,
-        clientPetsSleep: profileInput.clientPetsSleep ?? null,
-        hoursAlone: profileInput.hoursAlone ?? null,
-        workFromHome: profileInput.workFromHome ?? null,
-        maxPets: profileInput.maxPets ?? null,
-        oftenOut: profileInput.oftenOut ?? null,
-        typicalDay: profileInput.typicalDay ?? null,
-        profilePhoto: ensureAbsoluteUrl(profileInput.profilePhoto) ?? null,
-        ciAnversoUrl: ensureAbsoluteUrl(profileInput.ciAnversoUrl) ?? null,
-        ciReversoUrl: ensureAbsoluteUrl(profileInput.ciReversoUrl) ?? null,
-        ciNumber: profileInput.ciNumber ?? null,
-        defaultAvailabilitySchedule: {
-          hospedajeDefault: true,
-          paseoTimeBlocks: {
-            morning: { enabled: true, start: '08:00', end: '11:00' },
-            afternoon: { enabled: true, start: '13:00', end: '17:00' },
-            night: { enabled: true, start: '19:00', end: '22:00' }
-          }
+  let result: { user: Awaited<ReturnType<typeof prisma.user.create>>; profile: Awaited<ReturnType<typeof prisma.caregiverProfile.create>> };
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email,
+          passwordHash,
+          role: UserRole.CAREGIVER,
+          firstName: userInput.firstName.trim(),
+          lastName: userInput.lastName.trim(),
+          phone: userInput.phone.trim(),
+          dateOfBirth: dateOfBirth ?? undefined,
+          country: userInput.country.trim(),
+          city: userInput.city.trim(),
+          isOver18: userInput.isOver18 === true,
         },
-      },
-    });
+      });
 
-    return { user, profile };
-  });
+      const profile = await tx.caregiverProfile.create({
+        data: {
+          userId: user.id,
+          bio: profileInput.bio ?? null,
+          zone: profileInput.zone ?? null,
+          spaceType: Array.isArray(profileInput.spaceType) ? profileInput.spaceType : (profileInput.spaceType ? [profileInput.spaceType] : []),
+          address: profileInput.address ?? null,
+          ...(profileAddr.addressLat != null ? { addressLat: profileAddr.addressLat } : {}),
+          ...(profileAddr.addressLng != null ? { addressLng: profileAddr.addressLng } : {}),
+          ...(profileAddr.addressStreet ? { addressStreet: profileAddr.addressStreet } : {}),
+          ...(profileAddr.addressNumber ? { addressNumber: profileAddr.addressNumber } : {}),
+          ...(profileAddr.addressApartment ? { addressApartment: profileAddr.addressApartment } : {}),
+          ...(profileAddr.addressCondominio ? { addressCondominio: profileAddr.addressCondominio } : {}),
+          ...(profileAddr.addressReference ? { addressReference: profileAddr.addressReference } : {}),
+          ...(profileAddr.addressZone ? { addressZone: profileAddr.addressZone } : {}),
+          photos: ensureAbsoluteUrls(profileInput.photos ?? []),
+          servicesOffered: profileInput.servicesOffered ?? [],
+          serviceAvailability: (profileInput.serviceAvailability ?? null) as object,
+          pricePerDay: profileInput.pricePerDay ?? null,
+          pricePerWalk30: profileInput.pricePerWalk30 ?? null,
+          pricePerWalk60: profileInput.pricePerWalk60 ?? null,
+          rates: (profileInput.rates ?? null) as object,
+          status: CaregiverStatus.DRAFT,
+          verificationStatus: VerificationStatus.PENDING_REVIEW,
+          onboardingStatus: { step: 1, completed: [false, false, false, false, false] } as object,
+          identityVerificationStatus: 'PENDING',
+          identityVerificationToken: randomBytes(32).toString('hex'),
+          emailVerified: false,
+          verified: false,
+          experienceYears: profileInput.experienceYears ?? null,
+          ownPets: profileInput.ownPets ?? null,
+          currentPetsDetails: (profileInput.currentPetsDetails ?? null) as object,
+          caredOthers: profileInput.caredOthers ?? null,
+          animalTypes: profileInput.animalTypes ?? [],
+          experienceDescription: profileInput.experienceDescription ?? null,
+          whyCaregiver: profileInput.whyCaregiver ?? null,
+          whatDiffers: profileInput.whatDiffers ?? null,
+          handleAnxious: profileInput.handleAnxious ?? null,
+          emergencyResponse: profileInput.emergencyResponse ?? null,
+          acceptAggressive: profileInput.acceptAggressive ?? null,
+          acceptMedication: profileInput.acceptMedication ?? [],
+          acceptPuppies: profileInput.acceptPuppies ?? null,
+          acceptSeniors: profileInput.acceptSeniors ?? null,
+          sizesAccepted: profileInput.sizesAccepted ?? [],
+          noAcceptBreeds: profileInput.noAcceptBreeds ?? null,
+          breedsWhy: profileInput.breedsWhy ?? null,
+          homeType: profileInput.homeType ?? null,
+          ownHome: profileInput.ownHome ?? null,
+          hasYard: profileInput.hasYard ?? null,
+          yardFenced: profileInput.yardFenced ?? null,
+          hasChildren: profileInput.hasChildren ?? null,
+          hasOtherPets: profileInput.hasOtherPets ?? null,
+          petsSleep: profileInput.petsSleep ?? null,
+          clientPetsSleep: profileInput.clientPetsSleep ?? null,
+          hoursAlone: profileInput.hoursAlone ?? null,
+          workFromHome: profileInput.workFromHome ?? null,
+          maxPets: profileInput.maxPets ?? null,
+          oftenOut: profileInput.oftenOut ?? null,
+          typicalDay: profileInput.typicalDay ?? null,
+          profilePhoto: ensureAbsoluteUrl(profileInput.profilePhoto) ?? null,
+          ciAnversoUrl: ensureAbsoluteUrl(profileInput.ciAnversoUrl) ?? null,
+          ciReversoUrl: ensureAbsoluteUrl(profileInput.ciReversoUrl) ?? null,
+          ciNumber: profileInput.ciNumber ?? null,
+          defaultAvailabilitySchedule: {
+            hospedajeDefault: true,
+            paseoTimeBlocks: {
+              morning: { enabled: true, start: '08:00', end: '11:00' },
+              afternoon: { enabled: true, start: '13:00', end: '17:00' },
+              night: { enabled: true, start: '19:00', end: '22:00' }
+            }
+          },
+        },
+      });
+
+      return { user, profile };
+    });
+  } catch (error: unknown) {
+    const err = error as { code?: string; meta?: { target?: unknown }; message?: string; stack?: string };
+    logger.error('Fallo al crear User+CaregiverProfile (transacción revocada automáticamente)', {
+      code: err.code,
+      meta: err.meta,
+      message: err.message,
+      stack: err.stack,
+      input: { email: userInput.email, phone: userInput.phone, firstName: userInput.firstName, lastName: userInput.lastName },
+    });
+    if (err.code === 'P2002') {
+      const target = Array.isArray(err.meta?.target) ? (err.meta!.target as string[]) : [];
+      if (target.includes('email')) throw new ConflictError('El email ya está registrado', 'EMAIL_EXISTS', 'email');
+      if (target.includes('phone')) throw new ConflictError('El teléfono ya está registrado', 'PHONE_EXISTS', 'phone');
+      throw new ConflictError('El email o teléfono ya está registrado', 'UNIQUE_VIOLATION');
+    }
+    throw error;
+  }
 
   // Sincronizar Caregiver en Blockchain (asíncrono)
   blockchainService.syncProfileOnChain(

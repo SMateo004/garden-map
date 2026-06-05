@@ -181,6 +181,7 @@ export const registerCaregiver = asyncHandler(async (req: Request, res: Response
       profileId: result.profileId,
       verificationStatus: result.verificationStatus,
       accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
       expiresIn: result.expiresIn,
     },
   });

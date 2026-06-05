@@ -165,6 +165,15 @@ export const registerCaregiverProfileSchema = z.object({
   ciReversoUrl: z.string().url().optional(),
   ciNumber: z.string().max(50).optional(),
   profilePhoto: z.string().url().optional(),
+  /** Campos de dirección detallada del cuidador */
+  addressLat: z.number().optional(),
+  addressLng: z.number().optional(),
+  addressStreet: z.string().max(200).optional().transform((v) => v?.trim() || undefined),
+  addressNumber: z.string().max(20).optional().transform((v) => v?.trim() || undefined),
+  addressApartment: z.string().max(50).optional().transform((v) => v?.trim() || undefined),
+  addressCondominio: z.string().max(100).optional().transform((v) => v?.trim() || undefined),
+  addressReference: z.string().max(200).optional().transform((v) => v?.trim() || undefined),
+  addressZone: z.string().max(100).optional().transform((v) => v?.trim() || undefined),
 });
 
 export const registerCaregiverSchema = z
