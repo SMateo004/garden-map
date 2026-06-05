@@ -62,7 +62,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   final _addressApartmentController = TextEditingController();
   final _addressCondominioController = TextEditingController();
   final _addressReferenceController = TextEditingController();
-  final _addressZoneController = TextEditingController();
+  String? _addressZone;      // zona seleccionada del dropdown
   double? _addressLat;
   double? _addressLng;
   bool _isApartment = false;
@@ -463,7 +463,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     _addressApartmentController.dispose();
     _addressCondominioController.dispose();
     _addressReferenceController.dispose();
-    _addressZoneController.dispose();
     _whyCaregiverController.dispose();
     _whatDiffersController.dispose();
     _handleAnxiousController.dispose();
@@ -486,7 +485,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         'Dpto. ${_addressApartmentController.text.trim()}',
       if (_isApartment && _addressCondominioController.text.trim().isNotEmpty)
         _addressCondominioController.text.trim(),
-      if (_addressZoneController.text.trim().isNotEmpty) _addressZoneController.text.trim(),
+      if (_addressZone != null) _addressZone!,
       'Santa Cruz de la Sierra, Bolivia',
     ];
     return parts.join(', ');
@@ -548,6 +547,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         }
         if (_addressStreetController.text.trim().isEmpty) {
           _showStepError('Falta: Calle de tu dirección', scrollTo: _keyStep0Address);
+          return false;
+        }
+        if (_addressZone == null) {
+          _showStepError('Selecciona tu zona / barrio', scrollTo: _keyStep0Address);
           return false;
         }
         if (_dateOfBirth == null) {
@@ -808,8 +811,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               'addressCondominio': _addressCondominioController.text.trim(),
             if (_addressReferenceController.text.trim().isNotEmpty)
               'addressReference': _addressReferenceController.text.trim(),
-            if (_addressZoneController.text.trim().isNotEmpty)
-              'addressZone': _addressZoneController.text.trim(),
+            if (_addressZone != null) 'addressZone': _addressZone,
           },
         }),
       );
@@ -1133,7 +1135,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             apartmentController: _addressApartmentController,
             condominioController: _addressCondominioController,
             referenceController: _addressReferenceController,
-            zoneController: _addressZoneController,
+            selectedZone: _addressZone,
+            onZoneChanged: (val) => setState(() => _addressZone = val),
             addressLat: _addressLat,
             addressLng: _addressLng,
             isApartment: _isApartment,

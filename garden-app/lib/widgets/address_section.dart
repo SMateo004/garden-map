@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import '../constants/zones.dart';
 import 'address_map_picker.dart';
 
 /// Sección de dirección reutilizable: abre el mapa picker primero,
-/// luego muestra los campos de texto detallados.
-/// Usada en el wizard del cuidador y en el perfil del dueño de mascota.
+/// luego muestra los campos de texto detallados y un selector de zona.
+/// Usada en el wizard del cuidador y en el registro del dueño de mascota.
 class AddressSection extends StatelessWidget {
   final bool isDark;
   final Color textColor;
@@ -15,7 +17,9 @@ class AddressSection extends StatelessWidget {
   final TextEditingController apartmentController;
   final TextEditingController condominioController;
   final TextEditingController referenceController;
-  final TextEditingController zoneController;
+  // Zona como dropdown — reemplaza zoneController
+  final String? selectedZone;
+  final void Function(String?) onZoneChanged;
   final double? addressLat;
   final double? addressLng;
   final bool isApartment;
@@ -35,7 +39,8 @@ class AddressSection extends StatelessWidget {
     required this.apartmentController,
     required this.condominioController,
     required this.referenceController,
-    required this.zoneController,
+    required this.selectedZone,
+    required this.onZoneChanged,
     this.addressLat,
     this.addressLng,
     required this.isApartment,
@@ -140,11 +145,17 @@ class AddressSection extends StatelessWidget {
         ]),
         const SizedBox(height: 12),
 
-        TextFormField(
-          controller: zoneController,
-          style: TextStyle(color: textColor),
-          decoration: _field('Zona / Barrio (ej: Equipetrol)', Icons.map_outlined),
+        // ── Zona / Barrio — dropdown ──────────────────────────────
+        _ZoneDropdownWithMap(
+          isDark: isDark,
+          textColor: textColor,
+          subtextColor: subtextColor,
+          borderColor: borderColor,
+          surfaceEl: surfaceEl,
+          selectedZone: selectedZone,
+          onZoneChanged: onZoneChanged,
         ),
+
         const SizedBox(height: 12),
 
         // Checkbox departamento
@@ -208,6 +219,223 @@ class AddressSection extends StatelessWidget {
             Icons.place_outlined,
           ),
         ),
+      ],
+    );
+  }
+}
+
+// ── Dropdown de zona + mapa referencial desplegable ───────────────────────────
+
+class _ZoneDropdownWithMap extends StatefulWidget {
+  final bool isDark;
+  final Color textColor;
+  final Color subtextColor;
+  final Color borderColor;
+  final Color surfaceEl;
+  final String? selectedZone;
+  final void Function(String?) onZoneChanged;
+
+  const _ZoneDropdownWithMap({
+    required this.isDark,
+    required this.textColor,
+    required this.subtextColor,
+    required this.borderColor,
+    required this.surfaceEl,
+    required this.selectedZone,
+    required this.onZoneChanged,
+  });
+
+  @override
+  State<_ZoneDropdownWithMap> createState() => _ZoneDropdownWithMapState();
+}
+
+class _ZoneDropdownWithMapState extends State<_ZoneDropdownWithMap> {
+  bool _showMap = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final zoneColor = widget.selectedZone != null
+        ? (kZoneColors[widget.selectedZone] ?? const Color(0xFF16a34a))
+        : Colors.grey.shade400;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Dropdown ─────────────────────────────────────────────
+        Container(
+          decoration: BoxDecoration(
+            color: widget.surfaceEl,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: widget.selectedZone != null ? zoneColor : widget.borderColor,
+              width: widget.selectedZone != null ? 1.5 : 1.0,
+            ),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: widget.selectedZone,
+              isExpanded: true,
+              icon: const Icon(Icons.keyboard_arrow_down_rounded),
+              dropdownColor: widget.isDark ? const Color(0xFF1E1E2E) : Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+              hint: Row(children: [
+                Icon(Icons.map_outlined, color: widget.subtextColor, size: 20),
+                const SizedBox(width: 10),
+                Text('Selecciona tu zona / barrio',
+                    style: TextStyle(color: widget.subtextColor, fontSize: 14)),
+              ]),
+              items: kZoneLabels.entries.map((e) {
+                final color = kZoneColors[e.key] ?? const Color(0xFF16a34a);
+                return DropdownMenuItem(
+                  value: e.key,
+                  child: Row(children: [
+                    Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(e.value,
+                        style: TextStyle(color: widget.textColor, fontSize: 14)),
+                  ]),
+                );
+              }).toList(),
+              selectedItemBuilder: (_) => kZoneLabels.entries.map((e) {
+                final color = kZoneColors[e.key] ?? const Color(0xFF16a34a);
+                return Row(children: [
+                  Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(e.value,
+                      style: TextStyle(color: widget.textColor, fontSize: 14, fontWeight: FontWeight.w600)),
+                ]);
+              }).toList(),
+              onChanged: widget.onZoneChanged,
+            ),
+          ),
+        ),
+
+        // ── Botón mostrar/ocultar mapa referencial ────────────────
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () => setState(() => _showMap = !_showMap),
+          child: Row(children: [
+            Icon(
+              _showMap ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+              color: widget.subtextColor,
+              size: 18,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              _showMap ? 'Ocultar mapa de zonas' : '¿No sé a qué zona pertenezco? Ver mapa',
+              style: TextStyle(
+                color: const Color(0xFF2196F3),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ]),
+        ),
+
+        // ── Mapa referencial (desplegable) ────────────────────────
+        if (_showMap) ...[
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              height: 260,
+              child: _ZoneReferenceMap(
+                isDark: widget.isDark,
+                selectedZone: widget.selectedZone,
+                surfaceEl: widget.surfaceEl,
+                textColor: widget.textColor,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// ── Mapa referencial estático con polígonos de zonas ─────────────────────────
+
+class _ZoneReferenceMap extends StatelessWidget {
+  final bool isDark;
+  final String? selectedZone;
+  final Color surfaceEl;
+  final Color textColor;
+
+  const _ZoneReferenceMap({
+    required this.isDark,
+    required this.selectedZone,
+    required this.surfaceEl,
+    required this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final polygons = kZonePolygons.entries.map((e) {
+      final color = kZoneColors[e.key] ?? const Color(0xFF4CAF50);
+      final isSelected = selectedZone == e.key;
+      return Polygon(
+        points: e.value,
+        color: color.withValues(alpha: isSelected ? 0.35 : 0.15),
+        borderColor: color.withValues(alpha: isSelected ? 0.9 : 0.5),
+        borderStrokeWidth: isSelected ? 2.5 : 1.5,
+      );
+    }).toList();
+
+    final markers = kZoneCenters.entries.map((e) {
+      final color = kZoneColors[e.key] ?? const Color(0xFF4CAF50);
+      final label = kZoneLabels[e.key] ?? e.key;
+      final isSelected = selectedZone == e.key;
+      return Marker(
+        point: e.value,
+        width: 110,
+        height: 28,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          decoration: BoxDecoration(
+            color: isSelected ? color : surfaceEl,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: color, width: isSelected ? 0 : 1.5),
+            boxShadow: [
+              BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 4, offset: const Offset(0, 1)),
+            ],
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isSelected ? Colors.white : color,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      );
+    }).toList();
+
+    return FlutterMap(
+      options: const MapOptions(
+        initialCenter: kSantaCruzCenter,
+        initialZoom: kZoneMapDefaultZoom,
+        interactionOptions: InteractionOptions(flags: InteractiveFlag.none),
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.garden.app',
+        ),
+        PolygonLayer(polygons: polygons),
+        MarkerLayer(markers: markers),
       ],
     );
   }

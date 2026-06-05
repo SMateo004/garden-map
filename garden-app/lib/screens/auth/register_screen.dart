@@ -38,7 +38,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _addressApartmentController = TextEditingController();
   final _addressCondominioController= TextEditingController();
   final _addressReferenceController = TextEditingController();
-  final _addressZoneController      = TextEditingController();
+  String? _addressZone;
   double? _addressLat;
   double? _addressLng;
   bool _isApartment               = false;
@@ -72,7 +72,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _addressApartmentController.dispose();
     _addressCondominioController.dispose();
     _addressReferenceController.dispose();
-    _addressZoneController.dispose();
     super.dispose();
   }
 
@@ -284,6 +283,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
       return;
     }
+    if (_addressZone == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecciona tu zona / barrio')),
+      );
+      return;
+    }
     if (password.length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('La contraseña debe tener al menos 8 caracteres')),
@@ -313,7 +318,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         final addressParts = [
           if (street.isNotEmpty) street,
           if (_addressNumberController.text.trim().isNotEmpty) 'N° ${_addressNumberController.text.trim()}',
-          if (_addressZoneController.text.trim().isNotEmpty) _addressZoneController.text.trim(),
+          if (_addressZone != null) _addressZone!,
         ];
         final addressString = addressParts.join(', ');
         await _authService.registerClient(
@@ -327,7 +332,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           addressApartment: _addressApartmentController.text.trim(),
           addressCondominio: _addressCondominioController.text.trim(),
           addressReference: _addressReferenceController.text.trim(),
-          addressZone: _addressZoneController.text.trim(),
+          addressZone: _addressZone,
         );
         if (!mounted) return;
         if (kIsWeb) {
@@ -631,7 +636,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
               apartmentController: _addressApartmentController,
               condominioController: _addressCondominioController,
               referenceController: _addressReferenceController,
-              zoneController: _addressZoneController,
+              selectedZone: _addressZone,
+              onZoneChanged: (val) => setState(() => _addressZone = val),
               addressLat: _addressLat,
               addressLng: _addressLng,
               isApartment: _isApartment,
