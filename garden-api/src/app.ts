@@ -32,6 +32,12 @@ import appHealthRoutes from './modules/app-health/app-health.routes.js';
 
 const app = express();
 
+// ── Trust proxy (Render / Heroku / Fly.io sit behind a load balancer) ─────
+// Without this, express-rate-limit can't read X-Forwarded-For and throws
+// ERR_ERL_UNEXPECTED_X_FORWARDED_FOR on every request behind the proxy.
+// '1' = trust the first hop (the Render edge node).
+app.set('trust proxy', 1);
+
 // ── Security headers (helmet 7) ──────────────────────────────────────────
 app.use(helmet({
   // CSP: esta API solo devuelve JSON — no necesita política de scripts/estilos.

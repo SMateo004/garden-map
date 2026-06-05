@@ -227,6 +227,7 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
           ...(profileAddr.addressReference ? { addressReference: profileAddr.addressReference } : {}),
           ...(profileAddr.addressZone ? { addressZone: profileAddr.addressZone } : {}),
           photos: ensureAbsoluteUrls(profileInput.photos ?? []),
+          walkerPhotos: [],
           servicesOffered: profileInput.servicesOffered ?? [],
           serviceAvailability: (profileInput.serviceAvailability ?? null) as object,
           pricePerDay: profileInput.pricePerDay ?? null,
