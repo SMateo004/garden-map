@@ -74,20 +74,42 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
       });
     }
 
-    // Para CAREGIVER, el profilePicture principal puede estar en CaregiverProfile.profilePhoto
+    // Para CAREGIVER, incluir dirección detallada + profilePhoto
     if (user.role === 'CAREGIVER') {
       const caregiverProfile = await prisma.caregiverProfile.findUnique({
         where: { userId: user.id },
-        select: { profilePhoto: true },
+        select: {
+          profilePhoto: true,
+          address: true,
+          bio: true,
+          addressLat: true,
+          addressLng: true,
+          addressStreet: true,
+          addressNumber: true,
+          addressApartment: true,
+          addressCondominio: true,
+          addressReference: true,
+          addressZone: true,
+        },
       });
-      // Priorizar profilePhoto si existe y user.profilePicture es null
       const effectivePhoto = user.profilePicture || caregiverProfile?.profilePhoto;
       return res.json({
         success: true,
-        data: { 
-          ...user, 
+        data: {
+          ...user,
           profilePicture: effectivePhoto,
-          caregiverProfile: caregiverProfile ? { profilePhoto: caregiverProfile.profilePhoto } : null 
+          // Exponer campos de dirección al mismo nivel que el cliente
+          address: caregiverProfile?.address ?? null,
+          bio: caregiverProfile?.bio ?? null,
+          addressLat: caregiverProfile?.addressLat ?? null,
+          addressLng: caregiverProfile?.addressLng ?? null,
+          addressStreet: caregiverProfile?.addressStreet ?? null,
+          addressNumber: caregiverProfile?.addressNumber ?? null,
+          addressApartment: caregiverProfile?.addressApartment ?? null,
+          addressCondominio: caregiverProfile?.addressCondominio ?? null,
+          addressReference: caregiverProfile?.addressReference ?? null,
+          addressZone: caregiverProfile?.addressZone ?? null,
+          caregiverProfile: caregiverProfile ? { profilePhoto: caregiverProfile.profilePhoto } : null,
         },
       });
     }
@@ -357,11 +379,21 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
     updated = await prisma.user.update({ where: { id: userId }, data: userData });
   }
   if (Object.keys(profileData).length > 0) {
-    await prisma.clientProfile.upsert({
-      where: { userId },
-      update: profileData,
-      create: { userId, ...profileData },
-    });
+    // Guardar en el perfil correspondiente según el rol
+    const userRole = (req as any).user?.role;
+    if (userRole === 'CAREGIVER') {
+      await prisma.caregiverProfile.upsert({
+        where: { userId },
+        update: profileData,
+        create: { userId, ...profileData },
+      });
+    } else {
+      await prisma.clientProfile.upsert({
+        where: { userId },
+        update: profileData,
+        create: { userId, ...profileData },
+      });
+    }
   }
 
   const freshUser = await prisma.user.findUnique({

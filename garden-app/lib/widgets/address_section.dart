@@ -251,6 +251,28 @@ class _ZoneDropdownWithMap extends StatefulWidget {
 
 class _ZoneDropdownWithMapState extends State<_ZoneDropdownWithMap> {
   bool _showMap = false;
+  final MapController _mapController = MapController();
+
+  @override
+  void didUpdateWidget(_ZoneDropdownWithMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Cuando cambia la zona seleccionada, mover el mapa a esa zona
+    if (_showMap && widget.selectedZone != oldWidget.selectedZone && widget.selectedZone != null) {
+      final center = kZoneCenters[widget.selectedZone];
+      final zoom = kZoneZooms[widget.selectedZone] ?? kZoneMapDefaultZoom;
+      if (center != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _mapController.move(center, zoom);
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -355,6 +377,7 @@ class _ZoneDropdownWithMapState extends State<_ZoneDropdownWithMap> {
                 selectedZone: widget.selectedZone,
                 surfaceEl: widget.surfaceEl,
                 textColor: widget.textColor,
+                mapController: _mapController,
               ),
             ),
           ),
@@ -371,12 +394,14 @@ class _ZoneReferenceMap extends StatelessWidget {
   final String? selectedZone;
   final Color surfaceEl;
   final Color textColor;
+  final MapController mapController;
 
   const _ZoneReferenceMap({
     required this.isDark,
     required this.selectedZone,
     required this.surfaceEl,
     required this.textColor,
+    required this.mapController,
   });
 
   @override
@@ -424,10 +449,14 @@ class _ZoneReferenceMap extends StatelessWidget {
     }).toList();
 
     return FlutterMap(
+      mapController: mapController,
       options: const MapOptions(
         initialCenter: kSantaCruzCenter,
         initialZoom: kZoneMapDefaultZoom,
-        interactionOptions: InteractionOptions(flags: InteractiveFlag.none),
+        // Permite pan y zoom pero no rotación
+        interactionOptions: InteractionOptions(
+          flags: InteractiveFlag.drag | InteractiveFlag.pinchZoom | InteractiveFlag.doubleTapZoom,
+        ),
       ),
       children: [
         TileLayer(
