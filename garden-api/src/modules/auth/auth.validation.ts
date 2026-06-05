@@ -253,6 +253,15 @@ export const registerClientSchema = z.object({
     .refine((d) => !isNaN(d.getTime()), 'Fecha de nacimiento inválida')
     .optional(),
   bio: z.string().max(500, 'Máximo 500 caracteres').optional().transform((v) => (v && v.trim() ? v.trim() : undefined)),
+  /** Campos de dirección detallada */
+  addressLat: z.number().optional(),
+  addressLng: z.number().optional(),
+  addressStreet: z.string().max(200).optional().transform((v) => v?.trim() || undefined),
+  addressNumber: z.string().max(20).optional().transform((v) => v?.trim() || undefined),
+  addressApartment: z.string().max(50).optional().transform((v) => v?.trim() || undefined),
+  addressCondominio: z.string().max(100).optional().transform((v) => v?.trim() || undefined),
+  addressReference: z.string().max(200).optional().transform((v) => v?.trim() || undefined),
+  addressZone: z.string().max(100).optional().transform((v) => v?.trim() || undefined),
   /** Código de invitación beta. Solo requerido cuando betaInviteRequired=true en AppSettings. */
   inviteCode: z.string().max(64).optional(),
 });

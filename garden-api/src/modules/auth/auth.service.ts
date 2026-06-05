@@ -416,6 +416,11 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
     const result = await prisma.$transaction(async (tx) => {
       const created = await tx.user.create({ data: userData });
       logger.info('User creado (tx)', { id: created.id, email: created.email });
+      const bodyAddr = body as {
+        addressLat?: number; addressLng?: number;
+        addressStreet?: string; addressNumber?: string; addressApartment?: string;
+        addressCondominio?: string; addressReference?: string; addressZone?: string;
+      };
       const prof = await tx.clientProfile.create({
         data: {
           userId: created.id,
@@ -425,6 +430,14 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
           phone: body.phone.trim(),
           isComplete: false,
           ...(bodyExt.bio ? { bio: bodyExt.bio } : {}),
+          ...(bodyAddr.addressLat != null ? { addressLat: bodyAddr.addressLat } : {}),
+          ...(bodyAddr.addressLng != null ? { addressLng: bodyAddr.addressLng } : {}),
+          ...(bodyAddr.addressStreet ? { addressStreet: bodyAddr.addressStreet } : {}),
+          ...(bodyAddr.addressNumber ? { addressNumber: bodyAddr.addressNumber } : {}),
+          ...(bodyAddr.addressApartment ? { addressApartment: bodyAddr.addressApartment } : {}),
+          ...(bodyAddr.addressCondominio ? { addressCondominio: bodyAddr.addressCondominio } : {}),
+          ...(bodyAddr.addressReference ? { addressReference: bodyAddr.addressReference } : {}),
+          ...(bodyAddr.addressZone ? { addressZone: bodyAddr.addressZone } : {}),
         },
       });
       logger.info('ClientProfile creado (tx)', { id: prof.id });
