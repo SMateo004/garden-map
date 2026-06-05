@@ -281,6 +281,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       // Pre-populate all wizard state variables from the saved profile
       _populateStateFromProfile(profile);
 
+      // Rellenar teléfono desde el objeto user del perfil (necesario en paso 8)
+      final userNode = profile['user'] as Map<String, dynamic>?;
+      final savedPhone = (userNode?['phone'] as String? ?? '').trim();
+      if (savedPhone.isNotEmpty && _phoneController.text.isEmpty) {
+        setState(() => _phoneController.text = savedPhone);
+      }
+
       // Step 1: Services & zone
       final zone = profile['zone'];
       final servicesOffered = (profile['servicesOffered'] as List?) ?? [];
