@@ -1205,8 +1205,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             decoration: InputDecoration(
               hintText: 'Describe tu experiencia con animales (mínimo 50 caracteres)',
               prefixIcon: Padding(
-                padding: const EdgeInsets.only(bottom: 60),
-                child: Icon(Icons.description_outlined, color: subtextColor, size: 20),
+                padding: const EdgeInsets.only(top: 14),
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: Icon(Icons.description_outlined, color: subtextColor, size: 20),
+                ),
               ),
               alignLabelWithHint: true,
             ),
@@ -1388,7 +1391,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           _loadPriceStats();
         },
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
           decoration: BoxDecoration(
             color: selected ? GardenColors.primary.withValues(alpha: 0.12) : surfaceEl,
             borderRadius: BorderRadius.circular(14),
@@ -1400,12 +1403,18 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(emoji, style: const TextStyle(fontSize: 36)),
-              const SizedBox(height: 10),
-              Text(label, style: TextStyle(
-                color: selected ? GardenColors.primary : textColor,
-                fontWeight: FontWeight.w700, fontSize: 15,
-              )),
+              Text(emoji, style: const TextStyle(fontSize: 26)),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? GardenColors.primary : textColor,
+                  fontWeight: FontWeight.w700, fontSize: 13,
+                ),
+              ),
             ],
           ),
         ),
@@ -1461,17 +1470,21 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 child: GestureDetector(
                   onTap: () => setState(() => _homeType = 'HOUSE'),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                     decoration: BoxDecoration(
                       color: _homeType == 'HOUSE' ? GardenColors.primary : surfaceEl,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: _homeType == 'HOUSE' ? GardenColors.primary : borderColor),
                     ),
                     alignment: Alignment.center,
-                    child: Text('Casa 🏡', style: TextStyle(
-                      color: _homeType == 'HOUSE' ? Colors.white : textColor,
-                      fontWeight: _homeType == 'HOUSE' ? FontWeight.bold : FontWeight.normal,
-                    )),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('Casa 🏡', style: TextStyle(
+                        color: _homeType == 'HOUSE' ? Colors.white : textColor,
+                        fontWeight: _homeType == 'HOUSE' ? FontWeight.bold : FontWeight.normal,
+                        fontSize: 14,
+                      )),
+                    ),
                   ),
                 ),
               ),
@@ -1480,17 +1493,21 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 child: GestureDetector(
                   onTap: () => setState(() => _homeType = 'APARTMENT'),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                     decoration: BoxDecoration(
                       color: _homeType == 'APARTMENT' ? GardenColors.primary : surfaceEl,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: _homeType == 'APARTMENT' ? GardenColors.primary : borderColor),
                     ),
                     alignment: Alignment.center,
-                    child: Text('Departamento 🏢', style: TextStyle(
-                      color: _homeType == 'APARTMENT' ? Colors.white : textColor,
-                      fontWeight: _homeType == 'APARTMENT' ? FontWeight.bold : FontWeight.normal,
-                    )),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('Departamento 🏢', style: TextStyle(
+                        color: _homeType == 'APARTMENT' ? Colors.white : textColor,
+                        fontWeight: _homeType == 'APARTMENT' ? FontWeight.bold : FontWeight.normal,
+                        fontSize: 14,
+                      )),
+                    ),
                   ),
                 ),
               ),
@@ -1573,7 +1590,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 selectedColor: GardenColors.primary.withValues(alpha: 0.14),
                 checkmarkColor: GardenColors.primary,
                 side: BorderSide(color: selected ? GardenColors.primary.withValues(alpha: 0.5) : borderColor),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               );
             }).toList(),
           ),
@@ -1590,6 +1607,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     required double value,
     required ValueChanged<double> onChanged,
   }) {
+    final isDark = themeNotifier.isDark;
+    final cardBg = isDark ? const Color(0xFF1C2A1A) : const Color(0xFF2A3D1A);
+
     const double sliderMin = 50.0;
     const double sliderMax = 290.0;
     final double sv = value.clamp(sliderMin, sliderMax);
@@ -1601,37 +1621,38 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       decoration: BoxDecoration(
-        color: const Color(0xFF1C2A1A),
-        borderRadius: BorderRadius.circular(20),
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4)),
       ),
       child: Column(children: [
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(emoji, style: const TextStyle(fontSize: 22)),
+          Text(emoji, style: const TextStyle(fontSize: 20)),
           const SizedBox(width: 8),
           Text(titulo, style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w700)),
         ]),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
           children: [
-            const Text('Bs ', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white70)),
-            Text(sv.toStringAsFixed(0), style: const TextStyle(fontSize: 64, fontWeight: FontWeight.bold, color: Colors.white)),
+            const Text('Bs ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70)),
+            Text(sv.toStringAsFixed(0), style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.white, height: 1.1)),
           ],
         ),
-        Text(unidad, style: const TextStyle(color: Colors.white60, fontSize: 13)),
+        const SizedBox(height: 2),
+        Text(unidad, style: const TextStyle(color: Colors.white60, fontSize: 12)),
         const SizedBox(height: 10),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           decoration: BoxDecoration(color: posicionColor, borderRadius: BorderRadius.circular(20)),
           child: Text(posicion, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold,
               color: posicion == 'PREMIUM' ? Colors.black : Colors.white)),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         Slider(
           value: sv, min: sliderMin, max: sliderMax, divisions: 48,
           activeColor: GardenColors.primary, inactiveColor: Colors.white24, thumbColor: Colors.white,
@@ -1666,11 +1687,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               borderRadius: BorderRadius.circular(16),
             ),
             child: const Row(children: [
-              Icon(Icons.payments_outlined, color: Colors.white, size: 36),
-              SizedBox(width: 16),
+              Icon(Icons.payments_outlined, color: Colors.white, size: 28),
+              SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Elige tus precios', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white)),
-                SizedBox(height: 4),
+                Text('Elige tus precios', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+                SizedBox(height: 3),
                 Text('Ajusta la barra para fijar tu tarifa. Puedes cambiarlo después.',
                     style: TextStyle(fontSize: 12, color: Colors.white70)),
               ])),
