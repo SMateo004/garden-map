@@ -94,10 +94,20 @@
 		<string>Garden</string>
 		<key>CFBundleURLTypes</key>
 		<array>
+			<!-- Facebook Login -->
 			<dict>
 				<key>CFBundleURLSchemes</key>
 				<array>
 					<string>fb1517506836633363</string>
+				</array>
+			</dict>
+			<!-- Firebase / Google Sign-In — requerido para reCAPTCHA en simulador
+			     y para el flujo de verificación de teléfono de Firebase Auth.
+			     Valor = REVERSED_CLIENT_ID de GoogleService-Info.plist -->
+			<dict>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>com.googleusercontent.apps.1067635397531-kf2csers9d0veh5s4ioeiitemlg5rigf</string>
 				</array>
 			</dict>
 		</array>
