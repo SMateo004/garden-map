@@ -394,20 +394,17 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
       bio: 'descripción del perfil (paso 1)',
       zone: 'zona de servicio (paso 2)',
       servicesOffered: 'servicios ofrecidos (paso 2)',
-      photos: 'fotos del lugar (paso 4)',
+      photos: 'fotos del lugar (paso 4) — mínimo 4 fotos',
       profilePhoto: 'foto de perfil (paso 6)',
       identityVerified: 'verificación de identidad (paso 8)',
-      emailVerified: 'verificación de email (paso 9)',
+      emailVerified: 'verificación de email (paso 10)',
       experienceYears: 'años de experiencia (paso 7)',
       experienceDescription: 'descripción de experiencia (paso 7)',
       whyCaregiver: 'motivación como cuidador (paso 7)',
       whatDiffers: 'qué te diferencia (paso 7)',
       handleAnxious: 'manejo de mascotas ansiosas (paso 7)',
       emergencyResponse: 'respuesta a emergencias (paso 7)',
-      acceptAggressive: 'mascotas agresivas (paso 7)',
-      acceptPuppies: 'cachorros (paso 7)',
-      acceptSeniors: 'mascotas mayores (paso 7)',
-      sizesAccepted: 'tamaños aceptados (paso 7)',
+      sizesAccepted: 'tamaños de mascotas aceptados (paso 7)',
     };
     const labels = missing.map(f => fieldLabels[f] ?? f);
     const message = `Faltan completar: ${labels.join(', ')}`;

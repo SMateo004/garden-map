@@ -120,10 +120,13 @@ export function getMissingRequiredFieldsForSubmit(profile: any): RequiredSubmitF
   const services = Array.isArray(profile.servicesOffered) ? profile.servicesOffered : [];
   if (services.length < 1) missing.push('servicesOffered');
 
+  // Fotos: solo PASEO no necesita fotos (el cuidador es ambulante); otros servicios sí.
   const onlyPaseo = services.length === 1 && services.includes(ServiceType.PASEO);
-  const minPhotosRequired = onlyPaseo ? 2 : 4;
-  const photos = Array.isArray(profile.photos) ? profile.photos : [];
-  if (photos.length < minPhotosRequired) missing.push('photos');
+  if (!onlyPaseo) {
+    const minPhotosRequired = 4;
+    const photos = Array.isArray(profile.photos) ? profile.photos : [];
+    if (photos.length < minPhotosRequired) missing.push('photos');
+  }
 
   if (!profile.profilePhoto) missing.push('profilePhoto');
 
@@ -131,17 +134,19 @@ export function getMissingRequiredFieldsForSubmit(profile: any): RequiredSubmitF
   if (profile.identityVerificationStatus !== 'VERIFIED') missing.push('identityVerified');
   if (profile.emailVerified !== true && profile.user?.emailVerified !== true) missing.push('emailVerified');
 
-  // Paso 7 (Perfil profesional): validate existence only — length/format enforced by the screen itself
+  // Paso 6 (Perfil profesional)
   if (profile.experienceYears === null || profile.experienceYears === undefined) missing.push('experienceYears');
-  if (!profile.experienceDescription || profile.experienceDescription.trim().length < 5) missing.push('experienceDescription');
-  if (!profile.whyCaregiver || profile.whyCaregiver.trim().length < 3) missing.push('whyCaregiver');
-  if (!profile.whatDiffers || profile.whatDiffers.trim().length < 3) missing.push('whatDiffers');
-  if (!profile.handleAnxious || profile.handleAnxious.trim().length < 3) missing.push('handleAnxious');
-  if (!profile.emergencyResponse || profile.emergencyResponse.trim().length < 3) missing.push('emergencyResponse');
-  if (profile.acceptAggressive === null || profile.acceptAggressive === undefined) missing.push('acceptAggressive');
-  if (profile.acceptPuppies === null || profile.acceptPuppies === undefined) missing.push('acceptPuppies');
-  if (profile.acceptSeniors === null || profile.acceptSeniors === undefined) missing.push('acceptSeniors');
   if (!Array.isArray(profile.sizesAccepted) || profile.sizesAccepted.length === 0) missing.push('sizesAccepted');
+
+  // Campos de experiencia: solo requeridos si NO es amateur (experienceYears > 0)
+  const isAmateur = profile.isAmateur === true || profile.experienceYears === 0;
+  if (!isAmateur) {
+    if (!profile.experienceDescription || profile.experienceDescription.trim().length < 5) missing.push('experienceDescription');
+    if (!profile.whyCaregiver || profile.whyCaregiver.trim().length < 3) missing.push('whyCaregiver');
+    if (!profile.whatDiffers || profile.whatDiffers.trim().length < 3) missing.push('whatDiffers');
+    if (!profile.handleAnxious || profile.handleAnxious.trim().length < 3) missing.push('handleAnxious');
+    if (!profile.emergencyResponse || profile.emergencyResponse.trim().length < 3) missing.push('emergencyResponse');
+  }
 
   return missing;
 }
