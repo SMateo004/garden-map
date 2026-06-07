@@ -238,6 +238,8 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.verificationAccepted !== undefined) updateData.verificationAccepted = body.verificationAccepted;
   if (body.photos !== undefined) updateData.photos = ensureAbsoluteUrls(body.photos);
   if ((body as any).walkerPhotos !== undefined) (updateData as any).walkerPhotos = ensureAbsoluteUrls((body as any).walkerPhotos);
+  if ((body as any).caregiverPhotos !== undefined) (updateData as any).caregiverPhotos = ensureAbsoluteUrls((body as any).caregiverPhotos);
+  if ((body as any).placePhotos !== undefined) (updateData as any).placePhotos = (body as any).placePhotos;
   if (body.profilePhoto !== undefined) updateData.profilePhoto = ensureAbsoluteUrl(body.profilePhoto) ?? null;
   if (body.experienceYears !== undefined) updateData.experienceYears = body.experienceYears;
   if (body.ownPets !== undefined) updateData.ownPets = body.ownPets;
@@ -394,7 +396,10 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
       bio: 'descripción del perfil (paso 1)',
       zone: 'zona de servicio (paso 2)',
       servicesOffered: 'servicios ofrecidos (paso 2)',
-      photos: 'fotos del lugar (paso 4) — mínimo 4 fotos',
+      photos: 'fotos del cuidador en acción (paso 4) — mínimo 2',
+      placePhotoSala: 'foto de sala/área principal (paso 4)',
+      placePhotoDescanso: 'foto de zona de descanso (paso 4)',
+      placePhotoAlimentacion: 'foto de área de alimentación (paso 4)',
       profilePhoto: 'foto de perfil (paso 6)',
       identityVerified: 'verificación de identidad (paso 8)',
       emailVerified: 'verificación de email (paso 10)',

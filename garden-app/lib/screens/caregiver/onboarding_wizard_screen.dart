@@ -80,10 +80,17 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   ({Uint8List bytes, String name, String mimeType})? _localProfilePhoto;
   DateTime? _dateOfBirth;
 
-  // Paso 2: Fotos del hogar
-  List<String> _photoUrls = [];       // URLs confirmadas en el servidor
-  List<({Uint8List bytes, String name, String mimeType})> _localPhotos = [];  // fotos en memoria, sin blob URLs
-  bool _uploadingPhotos = false;
+  // Paso 4: Fotos
+  // — Fotos del cuidador en acción (todos los servicios, mín 2, máx 6)
+  List<String> _caregiverPhotoUrls = [];
+  List<({Uint8List bytes, String name, String mimeType})> _localCaregiverPhotos = [];
+  bool _uploadingCaregiverPhotos = false;
+  // — Fotos del lugar por sección (solo HOSPEDAJE/GUARDERÍA)
+  Map<String, List<String>> _placePhotoUrls = {};
+  Map<String, List<({Uint8List bytes, String name, String mimeType})>> _localPlacePhotos = {};
+  bool _uploadingPlacePhotos = false;
+  // legacy — conservado para compatibilidad con _populateStateFromProfile
+  List<String> _photoUrls = [];
 
   // Paso 3: Tipo de servicio y zona
   final List<String> _servicesOffered = [];
@@ -254,14 +261,21 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         ..clear()
         ..addAll(times);
 
-      // Step 3: Photos — restore confirmed URLs (shown with green checkmark in grid)
-      _photoUrls = List<String>.from(profile['photos'] ?? []);
+      // Step 4: Photos — restore confirmed URLs
+      _photoUrls = List<String>.from(profile['photos'] ?? []); // legacy
+      _caregiverPhotoUrls = List<String>.from(profile['caregiverPhotos'] ?? []);
+      final rawPlace = profile['placePhotos'] as Map<String, dynamic>?;
+      if (rawPlace != null) {
+        _placePhotoUrls = rawPlace.map((k, v) => MapEntry(k, List<String>.from(v as List? ?? [])));
+      }
 
       // Step 4: Price (separate for each service)
-      final pDay = ((profile['pricePerDay'] ?? 0) as num).toDouble();
-      final pWalk = ((profile['pricePerWalk60'] ?? 0) as num).toDouble();
-      _precioHospedaje = pDay > 0 ? pDay : 90.0;
-      _precioPaseo = pWalk > 0 ? pWalk : 90.0;
+      final pDay  = ((profile['pricePerDay']       ?? 0) as num).toDouble();
+      final pWalk = ((profile['pricePerWalk60']     ?? 0) as num).toDouble();
+      final pGuar = ((profile['pricePerGuarderia']  ?? 0) as num).toDouble();
+      _precioHospedaje = pDay  > 0 ? pDay  : 90.0;
+      _precioPaseo     = pWalk > 0 ? pWalk : 60.0;
+      _precioGuarderia = pGuar > 0 ? pGuar : 50.0;
 
       // Step 5: Profile photo
       _profilePhotoUrl = profile['profilePhoto'] as String?;
@@ -583,25 +597,35 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         }
         return true;
       case 3:
-        final isPaseoOnly = _servicesOffered.length == 1 && _servicesOffered.contains('PASEO');
-        if (isPaseoOnly) return true;
-        final minFotos = _servicesOffered.contains('HOSPEDAJE') ? 4 : 2;
-        if (_photoUrls.length < minFotos) {
-          _showStepError('Sube al menos $minFotos fotos para continuar');
+        // Fotos del cuidador: obligatorio para todos los servicios (mín 2)
+        if (_caregiverPhotoUrls.length + _localCaregiverPhotos.length < 2) {
+          _showStepError('Sube al menos 2 fotos tuyas en acción para continuar');
           return false;
+        }
+        // Fotos del lugar: solo HOSPEDAJE/GUARDERÍA, secciones requeridas
+        final needsPlace = _servicesOffered.contains('HOSPEDAJE') || _servicesOffered.contains('GUARDERIA');
+        if (needsPlace) {
+          for (final sec in ['sala', 'descanso', 'alimentacion']) {
+            final total = (_placePhotoUrls[sec]?.length ?? 0) + (_localPlacePhotos[sec]?.length ?? 0);
+            if (total < 1) {
+              final labels = {'sala': 'Sala / Área principal', 'descanso': 'Zona de descanso', 'alimentacion': 'Área de alimentación'};
+              _showStepError('Agrega al menos 1 foto de: ${labels[sec]}');
+              return false;
+            }
+          }
         }
         return true;
       case 4:
-        if (_servicesOffered.contains('HOSPEDAJE') && _precioHospedaje <= 0) {
-          _showStepError('Por favor, selecciona un precio para Hospedaje');
+        if (_servicesOffered.contains('HOSPEDAJE') && _precioHospedaje < 10) {
+          _showStepError('El precio mínimo de Hospedaje es Bs 10');
           return false;
         }
-        if (_servicesOffered.contains('PASEO') && _precioPaseo <= 0) {
-          _showStepError('Por favor, selecciona un precio para Paseo');
+        if (_servicesOffered.contains('PASEO') && _precioPaseo < 10) {
+          _showStepError('El precio mínimo de Paseo es Bs 10');
           return false;
         }
-        if (_servicesOffered.contains('GUARDERIA') && _precioGuarderia <= 0) {
-          _showStepError('Por favor, selecciona un precio para Guardería');
+        if (_servicesOffered.contains('GUARDERIA') && _precioGuarderia < 10) {
+          _showStepError('El precio mínimo de Guardería es Bs 10');
           return false;
         }
         return true;
@@ -674,44 +698,27 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         },
       });
       setState(() { _isLoading = false; _currentStep++; });
-      // Auto-skip step 3 for PASEO-only caregivers
-      if (_currentStep == 3 && _servicesOffered.length == 1 && _servicesOffered.contains('PASEO')) {
-        setState(() => _currentStep++);
-      }
       return;
     }
 
-    // Step 3: Fotos → skipped for PASEO-only caregivers
+    // Step 3: Fotos del cuidador (+ fotos del lugar para HOSPEDAJE/GUARDERÍA)
     if (_currentStep == 3) {
-      final isPaseoOnly = _servicesOffered.length == 1 && _servicesOffered.contains('PASEO');
-      if (isPaseoOnly) {
-        setState(() => _currentStep++);
-        return;
-      }
-      final minFotos = _servicesOffered.contains('HOSPEDAJE') ? 4 : 2;
-      final total = _localPhotos.length + _photoUrls.length;
-      if (total == 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sube al menos $minFotos fotos para continuar')),
-        );
-        return;
-      }
-      if (_localPhotos.isNotEmpty) {
-        try {
-          await _uploadAllPhotos();
-        } catch (_) {
-          return;
-        }
-      }
-      if (_photoUrls.length < minFotos) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Necesitas al menos $minFotos fotos')),
-        );
-        return;
-      }
+      if (!_validateCurrentStep()) return;
       setState(() => _isLoading = true);
-      await _patchProfile({'photos': _photoUrls});
+      try {
+        // Subir fotos del cuidador pendientes
+        if (_localCaregiverPhotos.isNotEmpty) await _uploadPendingCaregiverPhotos();
+        // Subir fotos del lugar pendientes (todas las secciones)
+        if (_localPlacePhotos.values.any((l) => l.isNotEmpty)) await _uploadPendingPlacePhotos();
+        // Persistir en perfil
+        await _patchProfile({
+          'caregiverPhotos': _caregiverPhotoUrls,
+          if (_placePhotoUrls.isNotEmpty) 'placePhotos': _placePhotoUrls,
+        });
+      } catch (_) {
+        setState(() => _isLoading = false);
+        return;
+      }
       setState(() { _isLoading = false; _currentStep++; });
       return;
     }
@@ -987,81 +994,103 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     }
   }
 
-  Future<void> _pickAndUploadPhoto() async {
-    final isHospedaje = _servicesOffered.contains('HOSPEDAJE');
-    final maxFotos = isHospedaje ? 6 : 4;
-    if (_localPhotos.length + _photoUrls.length >= maxFotos) return;
+  static const _apiUrl = String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
+  /// Agrega foto al buffer local del cuidador (máx 6)
+  Future<void> _pickCaregiverPhoto() async {
+    if (_caregiverPhotoUrls.length + _localCaregiverPhotos.length >= 6) return;
     final picked = await image_picker_pkg.ImagePicker()
         .pickImage(source: image_picker_pkg.ImageSource.gallery, imageQuality: 85);
     if (picked == null || !mounted) return;
-
     try {
       final bytes = await picked.readAsBytes();
-      final name = picked.name.isEmpty
-          ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg'
-          : picked.name;
-      final mimeType = picked.mimeType ?? 'image/jpeg';
-      setState(() {
-        _localPhotos.add((bytes: bytes, name: name, mimeType: mimeType));
-      });
+      final name = picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
+      setState(() => _localCaregiverPhotos.add((bytes: bytes, name: name, mimeType: picked.mimeType ?? 'image/jpeg')));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error leyendo imagen: $e'), backgroundColor: Colors.red.shade700));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red.shade700));
     }
   }
 
-  Future<void> _uploadAllPhotos() async {
-    if (_localPhotos.isEmpty) return;
-    setState(() => _uploadingPhotos = true);
+  /// Sube fotos del cuidador pendientes al backend (una a una)
+  Future<void> _uploadPendingCaregiverPhotos() async {
+    setState(() => _uploadingCaregiverPhotos = true);
+    final token = AuthState.token;
+    final newUrls = <String>[];
     try {
-      final uri = Uri.parse(
-        '${const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api')}/upload/registration-photos',
-      );
-      final request = http.MultipartRequest('POST', uri);
-      for (final photo in _localPhotos) {
-        // bytes ya están en memoria — sin blob URL, sin fetch
-        final bytes = photo.bytes;
-        final fileName = photo.name.isEmpty
-            ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg'
-            : photo.name;
-        String mimeType = photo.mimeType;
-        if (mimeType == 'image/jpg' || mimeType.isEmpty) mimeType = 'image/jpeg';
-        if (fileName.toLowerCase().endsWith('.jpg')) mimeType = 'image/jpeg';
-        if (fileName.toLowerCase().endsWith('.png')) mimeType = 'image/png';
-
-        request.files.add(http.MultipartFile.fromBytes(
-          'photos', bytes, filename: fileName, contentType: MediaType.parse(mimeType),
-        ));
+      for (final photo in List.from(_localCaregiverPhotos)) {
+        final request = http.MultipartRequest('POST', Uri.parse('$_apiUrl/caregiver/profile/caregiver-photo'));
+        request.headers['Authorization'] = 'Bearer $token';
+        String mime = photo.mimeType;
+        if (mime == 'image/jpg' || mime.isEmpty) mime = 'image/jpeg';
+        request.files.add(http.MultipartFile.fromBytes('caregiverPhoto', photo.bytes, filename: photo.name, contentType: MediaType.parse(mime)));
+        final res = await http.Response.fromStream(await request.send());
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        if (data['success'] == true) {
+          newUrls.add(data['data']['photoUrl'] as String);
+        } else {
+          throw Exception(data['error']?['message'] ?? 'Error al subir foto');
+        }
       }
-      final streamed = await request.send();
-      final response = await http.Response.fromStream(streamed);
-      final data = jsonDecode(response.body);
-      if (response.statusCode == 200 && data['success'] == true) {
-        final raw = data['data']['urls'];
-        final urls = raw is List ? raw.cast<String>() : [raw.toString()];
-        setState(() {
-          _photoUrls = urls;
-          _localPhotos = [];
-        });
-      } else {
-        // ignore: avoid_print
-        print('ERROR UPLOAD BODY: ${response.body}');
-        throw Exception(data['message'] ?? data['error']?['message'] ?? 'Error al subir fotos: ${response.body}');
-      }
+      setState(() { _caregiverPhotoUrls.addAll(newUrls); _localCaregiverPhotos.clear(); });
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString().replaceFirst('Exception: ', '')}'),
-          backgroundColor: Colors.red.shade700,
-        ),
-      );
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error subiendo foto: $e'), backgroundColor: Colors.red.shade700));
       rethrow;
     } finally {
-      if (mounted) setState(() => _uploadingPhotos = false);
+      if (mounted) setState(() => _uploadingCaregiverPhotos = false);
+    }
+  }
+
+  /// Agrega foto al buffer local de una sección del lugar (máx 3)
+  Future<void> _pickPlacePhoto(String section) async {
+    final current = (_placePhotoUrls[section]?.length ?? 0) + (_localPlacePhotos[section]?.length ?? 0);
+    if (current >= 3) return;
+    final picked = await image_picker_pkg.ImagePicker()
+        .pickImage(source: image_picker_pkg.ImageSource.gallery, imageQuality: 85);
+    if (picked == null || !mounted) return;
+    try {
+      final bytes = await picked.readAsBytes();
+      final name = picked.name.isEmpty ? 'place_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
+      setState(() {
+        _localPlacePhotos[section] = [...(_localPlacePhotos[section] ?? []), (bytes: bytes, name: name, mimeType: picked.mimeType ?? 'image/jpeg')];
+      });
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red.shade700));
+    }
+  }
+
+  /// Sube todas las fotos de lugar pendientes al backend
+  Future<void> _uploadPendingPlacePhotos() async {
+    setState(() => _uploadingPlacePhotos = true);
+    final token = AuthState.token;
+    try {
+      for (final entry in _localPlacePhotos.entries) {
+        final section = entry.key;
+        final newUrls = <String>[];
+        for (final photo in List.from(entry.value)) {
+          final request = http.MultipartRequest('POST', Uri.parse('$_apiUrl/caregiver/profile/place-photo'));
+          request.headers['Authorization'] = 'Bearer $token';
+          request.fields['section'] = section;
+          String mime = photo.mimeType;
+          if (mime == 'image/jpg' || mime.isEmpty) mime = 'image/jpeg';
+          request.files.add(http.MultipartFile.fromBytes('placePhoto', photo.bytes, filename: photo.name, contentType: MediaType.parse(mime)));
+          final res = await http.Response.fromStream(await request.send());
+          final data = jsonDecode(res.body) as Map<String, dynamic>;
+          if (data['success'] == true) {
+            newUrls.add(data['data']['photoUrl'] as String);
+          } else {
+            throw Exception(data['error']?['message'] ?? 'Error al subir foto de sección');
+          }
+        }
+        setState(() {
+          _placePhotoUrls[section] = [...(_placePhotoUrls[section] ?? []), ...newUrls];
+          _localPlacePhotos[section] = [];
+        });
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error subiendo foto: $e'), backgroundColor: Colors.red.shade700));
+      rethrow;
+    } finally {
+      if (mounted) setState(() => _uploadingPlacePhotos = false);
     }
   }
 
@@ -1226,142 +1255,321 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     final subtextColor = isDark ? GardenColors.darkTextSecondary  : GardenColors.lightTextSecondary;
     final borderColor  = isDark ? GardenColors.darkBorder         : GardenColors.lightBorder;
     final surfaceEl    = isDark ? GardenColors.darkSurfaceElevated: GardenColors.lightSurfaceElevated;
+    final surface      = isDark ? GardenColors.darkSurface        : GardenColors.lightSurface;
 
-    final isHospedaje = _servicesOffered.contains('HOSPEDAJE');
-    final titulo = isHospedaje ? 'Fotos de tu espacio' : 'Fotos tuyas como cuidador';
-    final subtitulo = isHospedaje
-        ? 'Los dueños quieren ver dónde estará su mascota (mínimo 4 fotos)'
-        : 'Muéstrate con mascotas o en actividades de paseo (mínimo 2 fotos)';
-    final minFotos = isHospedaje ? 4 : 2;
-    final maxFotos = isHospedaje ? 6 : 4;
-    final total = _photoUrls.length + _localPhotos.length;
+    final needsPlace = _servicesOffered.contains('HOSPEDAJE') || _servicesOffered.contains('GUARDERIA');
+    final totalCaregiver = _caregiverPhotoUrls.length + _localCaregiverPhotos.length;
+
+    // Secciones del lugar con metadata
+    final placeSections = [
+      (key: 'sala',         emoji: '🛋️',  label: 'Sala / Área principal',   required: true),
+      (key: 'descanso',     emoji: '🛏️',  label: 'Zona de descanso',         required: true),
+      (key: 'alimentacion', emoji: '🍽️',  label: 'Área de alimentación',     required: true),
+      (key: 'jardin',       emoji: '🌿',  label: 'Jardín / Patio',           required: false),
+      (key: 'juego',        emoji: '🎾',  label: 'Área de juego',            required: false),
+    ];
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(titulo, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
-          const SizedBox(height: 4),
-          Text(subtitulo, style: TextStyle(fontSize: 14, color: subtextColor)),
-          const SizedBox(height: 16),
 
-          // Barra de progreso de subida
-          if (_uploadingPhotos) ...[
-            Text('Subiendo fotos...', style: TextStyle(color: GardenColors.primary, fontSize: 12)),
-            const SizedBox(height: 6),
-            LinearProgressIndicator(
-              backgroundColor: borderColor,
-              valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
+          // ── Header ────────────────────────────────────────────────
+          Text('Tus fotos', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
+          const SizedBox(height: 6),
+          Text(
+            'Los dueños de mascotas quieren conocerte. Muéstrate en acción — estas fotos son lo primero que verán en tu perfil.',
+            style: TextStyle(fontSize: 14, color: subtextColor, height: 1.5),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── Sección: Fotos del cuidador ───────────────────────────
+          _buildPhotoSectionHeader(
+            emoji: '📸',
+            title: 'Fotos tuyas en acción',
+            subtitle: 'Paseando, jugando, cuidando mascotas — muéstrate como cuidador (mínimo 2, máximo 6)',
+            isRequired: true,
+            textColor: textColor,
+            subtextColor: subtextColor,
+          ),
+          const SizedBox(height: 12),
+
+          if (_uploadingCaregiverPhotos) _buildUploadingBar(borderColor),
+
+          _buildPhotoGrid(
+            uploaded: _caregiverPhotoUrls,
+            local: _localCaregiverPhotos,
+            maxPhotos: 6,
+            onAdd: _uploadingCaregiverPhotos || _isLoading ? null : _pickCaregiverPhoto,
+            onRemoveUploaded: (url) => setState(() => _caregiverPhotoUrls.remove(url)),
+            onRemoveLocal: (i) => setState(() => _localCaregiverPhotos.removeAt(i)),
+            surfaceEl: surfaceEl,
+            subtextColor: subtextColor,
+          ),
+          const SizedBox(height: 6),
+          _buildPhotoCount(totalCaregiver, 6, 2, _localCaregiverPhotos.isNotEmpty, subtextColor),
+
+          if (needsPlace) ...[
+            const SizedBox(height: 32),
+            const Divider(),
+            const SizedBox(height: 20),
+
+            // ── Sección: Fotos del hogar ──────────────────────────
+            _buildPhotoSectionHeader(
+              emoji: '🏠',
+              title: 'Fotos de tu espacio',
+              subtitle: 'Muestra los lugares donde estarán las mascotas. Mínimo 1 foto por sección obligatoria.',
+              isRequired: true,
+              textColor: textColor,
+              subtextColor: subtextColor,
             ),
-            const SizedBox(height: 16),
-          ],
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: GardenColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.info_outline, color: GardenColors.primary, size: 15),
+                const SizedBox(width: 8),
+                Expanded(child: Text(
+                  'Estas fotos se mostrarán al final de tu perfil, organizadas por sección.',
+                  style: TextStyle(fontSize: 12, color: subtextColor, height: 1.4),
+                )),
+              ]),
+            ),
+            const SizedBox(height: 20),
 
-          GridView.count(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            children: List.generate(maxFotos, (index) {
-              // Celda con foto ya subida al servidor (URL confirmada)
-              if (index < _photoUrls.length) {
-                return Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.network(fixImageUrl(_photoUrls[index]), fit: BoxFit.cover),
-                    ),
-                    Positioned(
-                      top: 8, right: 8,
-                      child: Container(
-                        decoration: const BoxDecoration(color: GardenColors.success, shape: BoxShape.circle),
-                        padding: const EdgeInsets.all(4),
-                        child: const Icon(Icons.check, color: Colors.white, size: 14),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 8, right: 8,
-                      child: GestureDetector(
-                        onTap: () => setState(() => _photoUrls.removeAt(index)),
-                        child: Container(
-                          decoration: BoxDecoration(color: Colors.red.shade700, shape: BoxShape.circle),
-                          padding: const EdgeInsets.all(4),
-                          child: const Icon(Icons.close, color: Colors.white, size: 14),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              }
+            if (_uploadingPlacePhotos) _buildUploadingBar(borderColor),
 
-              // Celda con foto local pendiente de subir (bytes ya en memoria)
-              final localIndex = index - _photoUrls.length;
-              if (localIndex >= 0 && localIndex < _localPhotos.length) {
-                final photo = _localPhotos[localIndex];
-                return Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.memory(photo.bytes, fit: BoxFit.cover),
-                    ),
-                    Positioned(
-                      top: 8, right: 8,
-                      child: Container(
-                        decoration: BoxDecoration(color: Colors.orange.shade700, shape: BoxShape.circle),
-                        padding: const EdgeInsets.all(4),
-                        child: const Icon(Icons.cloud_upload_outlined, color: Colors.white, size: 14),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 8, right: 8,
-                      child: GestureDetector(
-                        onTap: () => setState(() => _localPhotos.removeAt(localIndex)),
-                        child: Container(
-                          decoration: BoxDecoration(color: Colors.red.shade700, shape: BoxShape.circle),
-                          padding: const EdgeInsets.all(4),
-                          child: const Icon(Icons.close, color: Colors.white, size: 14),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              }
-
-              // Celda vacía — botón para añadir
-              return GestureDetector(
-                onTap: (_isLoading || _uploadingPhotos) ? null : _pickAndUploadPhoto,
+            ...placeSections.map((sec) {
+              final uploaded = _placePhotoUrls[sec.key] ?? [];
+              final local = _localPlacePhotos[sec.key] ?? [];
+              final total = uploaded.length + local.length;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 20),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: surfaceEl,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+                    color: surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: borderColor),
                   ),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.add_photo_alternate_outlined, color: GardenColors.primary, size: 40),
-                      const SizedBox(height: 8),
-                      Text('Añadir foto', style: TextStyle(color: subtextColor, fontSize: 12)),
+                      // Header de sección
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+                        child: Row(children: [
+                          Text(sec.emoji, style: const TextStyle(fontSize: 20)),
+                          const SizedBox(width: 10),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Row(children: [
+                              Text(sec.label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: textColor)),
+                              if (sec.required) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+                                  child: const Text('Obligatorio', style: TextStyle(fontSize: 10, color: GardenColors.primary, fontWeight: FontWeight.w600)),
+                                ),
+                              ] else ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(20)),
+                                  child: Text('Opcional', style: TextStyle(fontSize: 10, color: subtextColor)),
+                                ),
+                              ],
+                            ]),
+                            const SizedBox(height: 2),
+                            Text('$total / 3 fotos', style: TextStyle(fontSize: 11, color: subtextColor)),
+                          ])),
+                        ]),
+                      ),
+                      const SizedBox(height: 10),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                        child: _buildPlaceSectionGrid(
+                          section: sec.key,
+                          uploaded: uploaded,
+                          local: local,
+                          surfaceEl: surfaceEl,
+                          subtextColor: subtextColor,
+                          borderColor: borderColor,
+                        ),
+                      ),
                     ],
                   ),
                 ),
               );
             }),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '$total/$maxFotos fotos · Mínimo $minFotos${_localPhotos.isNotEmpty ? " (${_localPhotos.length} pendientes de subir)" : ""}',
-            style: TextStyle(
-              color: _localPhotos.isNotEmpty ? Colors.orange.shade400 : subtextColor,
-              fontSize: 12,
-            ),
-          ),
+          ],
         ],
       ),
     );
+  }
+
+  Widget _buildPhotoSectionHeader({
+    required String emoji, required String title, required String subtitle,
+    required bool isRequired, required Color textColor, required Color subtextColor,
+  }) {
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(emoji, style: const TextStyle(fontSize: 22)),
+      const SizedBox(width: 10),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: textColor)),
+          if (isRequired) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+              child: const Text('Obligatorio', style: TextStyle(fontSize: 11, color: GardenColors.primary, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ]),
+        const SizedBox(height: 3),
+        Text(subtitle, style: TextStyle(fontSize: 12, color: subtextColor, height: 1.4)),
+      ])),
+    ]);
+  }
+
+  Widget _buildUploadingBar(Color borderColor) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(children: [
+        const Text('Subiendo fotos...', style: TextStyle(color: GardenColors.primary, fontSize: 12)),
+        const SizedBox(height: 4),
+        LinearProgressIndicator(backgroundColor: borderColor, valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary)),
+      ]),
+    );
+  }
+
+  Widget _buildPhotoCount(int total, int max, int min, bool hasPending, Color subtextColor) {
+    return Text(
+      '$total/$max fotos · Mínimo $min${hasPending ? " · pendientes de subir" : ""}',
+      style: TextStyle(color: hasPending ? Colors.orange.shade400 : subtextColor, fontSize: 12),
+    );
+  }
+
+  Widget _buildPhotoGrid({
+    required List<String> uploaded,
+    required List<({Uint8List bytes, String name, String mimeType})> local,
+    required int maxPhotos,
+    required VoidCallback? onAdd,
+    required void Function(String url) onRemoveUploaded,
+    required void Function(int i) onRemoveLocal,
+    required Color surfaceEl,
+    required Color subtextColor,
+  }) {
+    return GridView.count(
+      crossAxisCount: 3,
+      crossAxisSpacing: 8,
+      mainAxisSpacing: 8,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      childAspectRatio: 1,
+      children: [
+        ...uploaded.asMap().entries.map((e) => _photoCell(
+          child: Image.network(fixImageUrl(e.value), fit: BoxFit.cover),
+          badge: const Icon(Icons.check, color: Colors.white, size: 12),
+          badgeColor: GardenColors.success,
+          onRemove: () => onRemoveUploaded(e.value),
+        )),
+        ...local.asMap().entries.map((e) => _photoCell(
+          child: Image.memory(e.value.bytes, fit: BoxFit.cover),
+          badge: const Icon(Icons.cloud_upload_outlined, color: Colors.white, size: 12),
+          badgeColor: Colors.orange.shade700,
+          onRemove: () => onRemoveLocal(e.key),
+        )),
+        if (uploaded.length + local.length < maxPhotos)
+          GestureDetector(
+            onTap: onAdd,
+            child: Container(
+              decoration: BoxDecoration(
+                color: surfaceEl,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+              ),
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Icon(Icons.add_photo_alternate_outlined, color: GardenColors.primary, size: 28),
+                const SizedBox(height: 4),
+                Text('Añadir', style: TextStyle(color: subtextColor, fontSize: 10)),
+              ]),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildPlaceSectionGrid({
+    required String section,
+    required List<String> uploaded,
+    required List<({Uint8List bytes, String name, String mimeType})> local,
+    required Color surfaceEl,
+    required Color subtextColor,
+    required Color borderColor,
+  }) {
+    return Row(children: [
+      ...uploaded.asMap().entries.map((e) => Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: SizedBox(width: 72, height: 72, child: _photoCell(
+          child: Image.network(fixImageUrl(e.value), fit: BoxFit.cover),
+          badge: const Icon(Icons.check, color: Colors.white, size: 11),
+          badgeColor: GardenColors.success,
+          onRemove: () => setState(() => _placePhotoUrls[section]?.remove(e.value)),
+        )),
+      )),
+      ...local.asMap().entries.map((e) => Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: SizedBox(width: 72, height: 72, child: _photoCell(
+          child: Image.memory(e.value.bytes, fit: BoxFit.cover),
+          badge: const Icon(Icons.cloud_upload_outlined, color: Colors.white, size: 11),
+          badgeColor: Colors.orange.shade700,
+          onRemove: () => setState(() { final l = _localPlacePhotos[section]; l?.removeAt(e.key); }),
+        )),
+      )),
+      if (uploaded.length + local.length < 3)
+        SizedBox(width: 72, height: 72, child: GestureDetector(
+          onTap: _uploadingPlacePhotos || _isLoading ? null : () => _pickPlacePhoto(section),
+          child: Container(
+            decoration: BoxDecoration(
+              color: surfaceEl,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+            ),
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.add_a_photo_outlined, color: GardenColors.primary, size: 22),
+              const SizedBox(height: 3),
+              Text('Foto', style: TextStyle(color: subtextColor, fontSize: 9)),
+            ]),
+          ),
+        )),
+    ]);
+  }
+
+  Widget _photoCell({required Widget child, required Widget badge, required Color badgeColor, required VoidCallback onRemove}) {
+    return Stack(fit: StackFit.expand, children: [
+      ClipRRect(borderRadius: BorderRadius.circular(10), child: child),
+      Positioned(top: 4, left: 4, child: Container(
+        decoration: BoxDecoration(color: badgeColor, shape: BoxShape.circle),
+        padding: const EdgeInsets.all(3),
+        child: badge,
+      )),
+      Positioned(top: 4, right: 4, child: GestureDetector(
+        onTap: onRemove,
+        child: Container(
+          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.6), shape: BoxShape.circle),
+          padding: const EdgeInsets.all(3),
+          child: const Icon(Icons.close, color: Colors.white, size: 11),
+        ),
+      )),
+    ]);
   }
 
   // ── PASO 3: Servicios y zona ──────────────────────────────
@@ -1606,15 +1814,16 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     required String emoji,
     required double value,
     required ValueChanged<double> onChanged,
+    String? infoNote,
   }) {
     final isDark = themeNotifier.isDark;
     final cardBg = isDark ? const Color(0xFF1C2A1A) : const Color(0xFF2A3D1A);
 
-    const double sliderMin = 50.0;
-    const double sliderMax = 290.0;
+    const double sliderMin = 10.0;
+    const double sliderMax = 400.0;
     final double sv = value.clamp(sliderMin, sliderMax);
     final double ratio = (sv - sliderMin) / (sliderMax - sliderMin);
-    final String posicion = ratio < 0.33 ? 'ECONÓMICO' : ratio < 0.66 ? 'ESTÁNDAR' : 'PREMIUM';
+    final String posicion = ratio < 0.25 ? 'ECONÓMICO' : ratio < 0.6 ? 'ESTÁNDAR' : 'PREMIUM';
     final Color posicionColor = posicion == 'ECONÓMICO'
         ? const Color(0xFF2196F3)
         : posicion == 'PREMIUM' ? const Color(0xFFFFD700) : const Color(0xFF4CAF50);
@@ -1645,6 +1854,17 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         ),
         const SizedBox(height: 2),
         Text(unidad, style: const TextStyle(color: Colors.white60, fontSize: 12)),
+        if (infoNote != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(infoNote, style: const TextStyle(color: Colors.white70, fontSize: 11), textAlign: TextAlign.center),
+          ),
+        ],
         const SizedBox(height: 10),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
@@ -1654,60 +1874,54 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         ),
         const SizedBox(height: 16),
         Slider(
-          value: sv, min: sliderMin, max: sliderMax, divisions: 48,
+          value: sv, min: sliderMin, max: sliderMax, divisions: 78,
           activeColor: GardenColors.primary, inactiveColor: Colors.white24, thumbColor: Colors.white,
           label: 'Bs ${sv.toStringAsFixed(0)}',
           onChanged: onChanged,
         ),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          const Text('Bs 50', style: TextStyle(color: Colors.white54, fontSize: 11)),
-          const Text('Bs 290', style: TextStyle(color: Colors.white54, fontSize: 11)),
+          const Text('Bs 10', style: TextStyle(color: Colors.white54, fontSize: 11)),
+          const Text('Bs 400', style: TextStyle(color: Colors.white54, fontSize: 11)),
         ]),
       ]),
     );
   }
 
   Widget _buildStep5() {
+    final isDark = themeNotifier.isDark;
+    final textColor    = isDark ? GardenColors.darkTextPrimary   : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
     final offersHospedaje = _servicesOffered.contains('HOSPEDAJE');
-    final offersPaseo = _servicesOffered.contains('PASEO');
+    final offersPaseo     = _servicesOffered.contains('PASEO');
     final offersGuarderia = _servicesOffered.contains('GUARDERIA');
+    final serviceCount    = [offersHospedaje, offersPaseo, offersGuarderia].where((b) => b).length;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [GardenColors.primary, Color(0xFF4A5E28)],
-                begin: Alignment.topLeft, end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Row(children: [
-              Icon(Icons.payments_outlined, color: Colors.white, size: 28),
-              SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Elige tus precios', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
-                SizedBox(height: 3),
-                Text('Ajusta la barra para fijar tu tarifa. Puedes cambiarlo después.',
-                    style: TextStyle(fontSize: 12, color: Colors.white70)),
-              ])),
-            ]),
+          // Header
+          Text('Tus tarifas', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
+          const SizedBox(height: 6),
+          Text(
+            serviceCount > 1
+                ? 'Fija un precio para cada servicio que ofreces. Puedes ajustarlos cuando quieras.'
+                : 'Fija tu tarifa. Puedes ajustarla cuando quieras.',
+            style: TextStyle(fontSize: 14, color: subtextColor, height: 1.5),
           ),
+          const SizedBox(height: 6),
+          Row(children: [
+            const Icon(Icons.info_outline, color: GardenColors.primary, size: 14),
+            const SizedBox(width: 6),
+            Expanded(child: Text('Precio mínimo: Bs 10', style: TextStyle(fontSize: 12, color: subtextColor))),
+          ]),
           const SizedBox(height: 24),
 
           if (offersHospedaje) ...[
-            _buildPriceCard(
-              titulo: 'Hospedaje',
-              unidad: '/ noche',
-              emoji: '🏠',
-              value: _precioHospedaje,
-              onChanged: (v) => setState(() => _precioHospedaje = v),
-            ),
-            if (offersPaseo || offersGuarderia) const SizedBox(height: 20),
+            _buildPriceCard(titulo: 'Hospedaje', unidad: '/ noche', emoji: '🏠', value: _precioHospedaje, onChanged: (v) => setState(() => _precioHospedaje = v)),
+            const SizedBox(height: 20),
           ],
           if (offersPaseo) ...[
             _buildPriceCard(
@@ -1716,17 +1930,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               emoji: '🦮',
               value: _precioPaseo,
               onChanged: (v) => setState(() => _precioPaseo = v),
+              infoNote: '30 min = Bs ${(_precioPaseo / 2).toStringAsFixed(0)} · Este precio aparecerá en tu perfil',
             ),
-            if (offersGuarderia) const SizedBox(height: 20),
+            const SizedBox(height: 20),
           ],
-          if (offersGuarderia)
-            _buildPriceCard(
-              titulo: 'Guardería',
-              unidad: '/ hora',
-              emoji: '🏡',
-              value: _precioGuarderia,
-              onChanged: (v) => setState(() => _precioGuarderia = v),
-            ),
+          if (offersGuarderia) ...[
+            _buildPriceCard(titulo: 'Guardería', unidad: '/ día', emoji: '🏡', value: _precioGuarderia, onChanged: (v) => setState(() => _precioGuarderia = v)),
+          ],
         ],
       ),
     );

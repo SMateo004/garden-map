@@ -90,7 +90,10 @@ const REQUIRED_FIELDS_FOR_SUBMIT = [
   'bio',
   'zone',
   'servicesOffered',
-  'photos',
+  'photos',           // caregiverPhotos mín 2
+  'placePhotoSala',   // solo HOSPEDAJE/GUARDERÍA
+  'placePhotoDescanso',
+  'placePhotoAlimentacion',
   'profilePhoto',
   'termsAccepted',
   'privacyAccepted',
@@ -103,9 +106,6 @@ const REQUIRED_FIELDS_FOR_SUBMIT = [
   'whatDiffers',
   'handleAnxious',
   'emergencyResponse',
-  'acceptAggressive',
-  'acceptPuppies',
-  'acceptSeniors',
   'sizesAccepted',
 ] as const;
 
@@ -120,12 +120,17 @@ export function getMissingRequiredFieldsForSubmit(profile: any): RequiredSubmitF
   const services = Array.isArray(profile.servicesOffered) ? profile.servicesOffered : [];
   if (services.length < 1) missing.push('servicesOffered');
 
-  // Fotos: solo PASEO no necesita fotos (el cuidador es ambulante); otros servicios sí.
-  const onlyPaseo = services.length === 1 && services.includes(ServiceType.PASEO);
-  if (!onlyPaseo) {
-    const minPhotosRequired = 4;
-    const photos = Array.isArray(profile.photos) ? profile.photos : [];
-    if (photos.length < minPhotosRequired) missing.push('photos');
+  // Fotos del cuidador en acción — obligatorio para TODOS los servicios (mín 2)
+  const caregiverPhotos = Array.isArray(profile.caregiverPhotos) ? profile.caregiverPhotos : [];
+  if (caregiverPhotos.length < 2) missing.push('photos');
+
+  // Fotos del hogar por sección — solo HOSPEDAJE o GUARDERÍA
+  const needsPlacePhotos = services.includes(ServiceType.HOSPEDAJE) || services.includes(ServiceType.GUARDERIA);
+  if (needsPlacePhotos) {
+    const placePhotos = (profile.placePhotos ?? {}) as Record<string, string[]>;
+    if (!placePhotos['sala'] || placePhotos['sala'].length < 1) missing.push('placePhotoSala');
+    if (!placePhotos['descanso'] || placePhotos['descanso'].length < 1) missing.push('placePhotoDescanso');
+    if (!placePhotos['alimentacion'] || placePhotos['alimentacion'].length < 1) missing.push('placePhotoAlimentacion');
   }
 
   if (!profile.profilePhoto) missing.push('profilePhoto');

@@ -56,8 +56,103 @@ router.patch('/bank-info', authMiddleware, requireRole('CAREGIVER'),
   })
 );
 
-router.post('/profile/service-photo', authMiddleware, requireRole('CAREGIVER'),
-  upload.single('servicePhoto'),
+// ── Caregiver action photos (fotos del cuidador en acción — todos los servicios) ──────────────
+
+const PLACE_PHOTO_SECTIONS = ['sala', 'descanso', 'alimentacion', 'jardin', 'juego'] as const;
+type PlacePhotoSection = typeof PLACE_PHOTO_SECTIONS[number];
+
+/** POST /profile/caregiver-photo — sube una foto del cuidador en acción. Máx 6. */
+router.post('/profile/caregiver-photo', upload.single('caregiverPhoto'),
+  asyncHandler(async (req, res) => {
+    const userId = (req as any).user.userId;
+    const file = req.file;
+    if (!file) return res.status(400).json({ success: false, error: { message: 'No se proporcionó foto' } });
+    if (!file.mimetype.startsWith('image/')) return res.status(400).json({ success: false, error: { message: 'Solo se permiten imágenes (JPG/PNG)' } });
+
+    const profile = await prisma.caregiverProfile.findFirst({ where: { userId }, select: { caregiverPhotos: true } });
+    if (!profile) return res.status(404).json({ success: false, error: { message: 'Perfil no encontrado' } });
+    if ((profile.caregiverPhotos?.length ?? 0) >= 6) {
+      return res.status(400).json({ success: false, error: { message: 'Máximo 6 fotos de cuidador permitidas' } });
+    }
+
+    const photoUrl = await uploadImage(file.buffer, { folder: 'caregivers', name: `caregiver_${userId}_${Date.now()}` });
+    const updated = await prisma.caregiverProfile.update({
+      where: { userId },
+      data: { caregiverPhotos: { push: photoUrl } },
+      select: { caregiverPhotos: true },
+    });
+    res.json({ success: true, data: { photoUrl, total: updated.caregiverPhotos.length } });
+  })
+);
+
+/** DELETE /profile/caregiver-photo — elimina una foto del cuidador. Body: { photoUrl } */
+router.delete('/profile/caregiver-photo',
+  asyncHandler(async (req, res) => {
+    const userId = (req as any).user.userId;
+    const { photoUrl } = req.body as { photoUrl: string };
+    if (!photoUrl) return res.status(400).json({ success: false, error: { message: 'photoUrl requerido' } });
+    const profile = await prisma.caregiverProfile.findFirst({ where: { userId }, select: { caregiverPhotos: true } });
+    if (!profile) return res.status(404).json({ success: false, error: { message: 'Perfil no encontrado' } });
+    await prisma.caregiverProfile.update({
+      where: { userId },
+      data: { caregiverPhotos: { set: profile.caregiverPhotos.filter(p => p !== photoUrl) } },
+    });
+    res.json({ success: true });
+  })
+);
+
+// ── Place photos por sección (solo HOSPEDAJE/GUARDERÍA) ───────────────────────────────────────
+
+/** POST /profile/place-photo — sube una foto de una sección del hogar. Body field: section. Máx 3 por sección. */
+router.post('/profile/place-photo', upload.single('placePhoto'),
+  asyncHandler(async (req, res) => {
+    const userId = (req as any).user.userId;
+    const file = req.file;
+    const section = req.body?.section as string;
+
+    if (!file) return res.status(400).json({ success: false, error: { message: 'No se proporcionó foto' } });
+    if (!file.mimetype.startsWith('image/')) return res.status(400).json({ success: false, error: { message: 'Solo se permiten imágenes (JPG/PNG)' } });
+    if (!PLACE_PHOTO_SECTIONS.includes(section as PlacePhotoSection)) {
+      return res.status(400).json({ success: false, error: { message: `Sección inválida. Debe ser: ${PLACE_PHOTO_SECTIONS.join(', ')}` } });
+    }
+
+    const profile = await prisma.caregiverProfile.findFirst({ where: { userId }, select: { placePhotos: true } });
+    if (!profile) return res.status(404).json({ success: false, error: { message: 'Perfil no encontrado' } });
+
+    const current = (profile.placePhotos ?? {}) as Record<string, string[]>;
+    const sectionPhotos = current[section] ?? [];
+    if (sectionPhotos.length >= 3) {
+      return res.status(400).json({ success: false, error: { message: 'Máximo 3 fotos por sección' } });
+    }
+
+    const photoUrl = await uploadImage(file.buffer, { folder: 'caregivers/place', name: `place_${section}_${userId}_${Date.now()}` });
+    const updated = { ...current, [section]: [...sectionPhotos, photoUrl] };
+    await prisma.caregiverProfile.update({ where: { userId }, data: { placePhotos: updated } });
+
+    res.json({ success: true, data: { photoUrl, section, total: (updated[section] ?? []).length } });
+  })
+);
+
+/** DELETE /profile/place-photo — elimina una foto de sección. Body: { section, photoUrl } */
+router.delete('/profile/place-photo',
+  asyncHandler(async (req, res) => {
+    const userId = (req as any).user.userId;
+    const { section, photoUrl } = req.body as { section: string; photoUrl: string };
+    if (!section || !photoUrl) return res.status(400).json({ success: false, error: { message: 'section y photoUrl requeridos' } });
+
+    const profile = await prisma.caregiverProfile.findFirst({ where: { userId }, select: { placePhotos: true } });
+    if (!profile) return res.status(404).json({ success: false, error: { message: 'Perfil no encontrado' } });
+
+    const current = (profile.placePhotos ?? {}) as Record<string, string[]>;
+    const updated = { ...current, [section]: (current[section] ?? []).filter((p: string) => p !== photoUrl) };
+    await prisma.caregiverProfile.update({ where: { userId }, data: { placePhotos: updated } });
+
+    res.json({ success: true });
+  })
+);
+
+// ── (legacy) service-photo ────────────────────────────────────────────────────────────────────
+router.post('/profile/service-photo', upload.single('servicePhoto'),
   asyncHandler(async (req, res) => {
     const userId = (req as any).user.userId;
     const file = req.file;
