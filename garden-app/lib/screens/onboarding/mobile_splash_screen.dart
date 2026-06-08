@@ -103,8 +103,8 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
     debugPrint('[SPLASH] token=${token.isEmpty ? "VACÍO" : "presente"} role=$role');
 
     if (token.isEmpty) {
-      debugPrint('[SPLASH] → /login');
-      if (mounted) context.go('/login');
+      debugPrint('[SPLASH] → /service-selector (guest)');
+      if (mounted) context.go('/service-selector');
       return;
     }
     if (role == 'ADMIN') {

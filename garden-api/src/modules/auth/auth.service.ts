@@ -804,6 +804,124 @@ export async function registerProfessional(body: RegisterProfessionalBody): Prom
   };
 }
 
+// ── Company Registration ──────────────────────────────────────────────────────
+
+export async function validateCompanyCode(code: string): Promise<boolean> {
+  const stored = await getStringSetting('companyRegistrationCode', '');
+  if (!stored || stored.trim() === '') return false;
+  return code.trim() === stored.trim();
+}
+
+export interface RegisterCompanyBody {
+  code: string;
+  companyName: string;
+  businessType: string;
+  email: string;
+  password: string;
+  phone: string;
+  bio?: string;
+  zone?: string;
+  address?: string;
+  lat?: number;
+  lng?: number;
+  services?: string[];
+}
+
+/**
+ * Registro de empresa (hotel, hostal, guardería, etc.).
+ * Requiere code == AppSettings.companyRegistrationCode.
+ * Crea usuario CAREGIVER + CaregiverProfile con isCompany=true, isProfessional=true.
+ * Status queda APPROVED; verified=false hasta completar phone+email verification.
+ */
+export async function registerCompany(body: RegisterCompanyBody): Promise<RegisterCaregiverResult> {
+  const valid = await validateCompanyCode(body.code);
+  if (!valid) {
+    throw new BadRequestError('Código de registro de empresa inválido.', 'INVALID_COMPANY_CODE');
+  }
+
+  const [existingEmail, existingPhone] = await Promise.all([
+    prisma.user.findUnique({ where: { email: body.email.toLowerCase() } }),
+    prisma.user.findUnique({ where: { phone: body.phone } }),
+  ]);
+  if (existingEmail) throw new ConflictError('Ya existe una cuenta con este email', 'EMAIL_EXISTS', 'email');
+  if (existingPhone) throw new ConflictError('Ya existe una cuenta con este teléfono', 'PHONE_EXISTS', 'phone');
+
+  const passwordHash = await hashPassword(body.password);
+  const email = body.email.toLowerCase().trim();
+  const now = new Date();
+
+  const result = await prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        email,
+        passwordHash,
+        role: UserRole.CAREGIVER,
+        firstName: body.companyName.trim(),
+        lastName: '-',
+        phone: body.phone.trim(),
+        country: 'Bolivia',
+        city: 'Santa Cruz de la Sierra',
+        isOver18: true,
+        emailVerified: false,
+      },
+    });
+
+    const profile = await tx.caregiverProfile.create({
+      data: {
+        userId: user.id,
+        bio: body.bio ?? null,
+        zone: body.zone as any ?? null,
+        address: body.address ?? null,
+        servicesOffered: (body.services ?? []) as any[],
+        status: CaregiverStatus.APPROVED,
+        verified: false,            // set to true after phone+email verified
+        verifiedAt: null,
+        approvedAt: now,
+        identityVerificationStatus: 'VERIFIED', // companies skip CI
+        identityVerificationToken: randomBytes(32).toString('hex'),
+        emailVerified: false,
+        phoneVerified: false,
+        isProfessional: true,
+        isCompany: true,
+        companyName: body.companyName.trim(),
+        businessType: body.businessType.trim(),
+        defaultAvailabilitySchedule: {
+          hospedajeDefault: true,
+          paseoTimeBlocks: {
+            morning: { enabled: true, start: '08:00', end: '11:00' },
+            afternoon: { enabled: true, start: '13:00', end: '17:00' },
+            night: { enabled: true, start: '19:00', end: '22:00' },
+          },
+        },
+      },
+    });
+
+    return { user, profile };
+  });
+
+  const payload: JwtPayload = { userId: result.user.id, role: result.user.role };
+  const { token: accessToken, expiresIn } = signAccessToken(payload);
+  const refreshToken = await createRefreshToken(result.user.id);
+
+  track(result.user.id, 'user_registered', { role: 'CAREGIVER', company: true, email: result.user.email });
+
+  return {
+    user: {
+      id: result.user.id,
+      email: result.user.email,
+      role: result.user.role,
+      firstName: result.user.firstName,
+      lastName: result.user.lastName,
+      profilePicture: result.user.profilePicture,
+    },
+    profileId: result.profile.id,
+    verificationStatus: result.profile.verificationStatus,
+    accessToken,
+    refreshToken,
+    expiresIn,
+  };
+}
+
 // ── Switch Role ───────────────────────────────────────────────────────────────
 
 export interface SwitchRoleResult {

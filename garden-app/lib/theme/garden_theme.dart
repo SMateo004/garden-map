@@ -997,6 +997,7 @@ class GardenInput extends StatelessWidget {
   final int? maxLength;
   final String? Function(String?)? validator;
   final void Function(String)? onChanged;
+  final Widget? suffixIcon;
 
   const GardenInput({
     super.key,
@@ -1009,6 +1010,7 @@ class GardenInput extends StatelessWidget {
     this.maxLength,
     this.validator,
     this.onChanged,
+    this.suffixIcon,
   });
 
   @override
@@ -1036,6 +1038,7 @@ class GardenInput extends StatelessWidget {
         prefixIcon: prefixIcon != null
             ? Icon(prefixIcon, color: textCol, size: 20)
             : null,
+        suffixIcon: suffixIcon,
         filled: true,
         fillColor: surfaceEl,
         border: OutlineInputBorder(

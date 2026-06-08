@@ -220,5 +220,19 @@ export async function verifyCode(userId: string, code: string): Promise<{ succes
     // No relanzar — el email ya quedó verificado correctamente
   }
 
+  // Companies: if both email + phone are verified → set verified=true (appears in marketplace)
+  try {
+    const profile = await prisma.caregiverProfile.findUnique({
+      where: { userId },
+      select: { isCompany: true, phoneVerified: true },
+    });
+    if ((profile as any)?.isCompany && (profile as any)?.phoneVerified) {
+      await prisma.caregiverProfile.updateMany({
+        where: { userId },
+        data: { verified: true, verifiedAt: new Date() },
+      });
+    }
+  } catch (_) {}
+
   return { success: true, message: '¡Email verificado correctamente!' };
 }

@@ -29,6 +29,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _navigateAfterLogin(String role, {String? activeRole}) {
     FcmService.registerAfterLogin();
+    // Check if we came from a guest tap on a caregiver profile
+    final extra = GoRouterState.of(context).extra;
+    if (extra is Map<String, dynamic> && extra.containsKey('returnTo')) {
+      final returnTo = extra['returnTo'] as String;
+      final caregiverData = extra['caregiverData'];
+      // go() establishes service-selector as the base, then push() puts
+      // the caregiver profile on top so the back button returns to it.
+      context.go('/service-selector');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.push(returnTo, extra: caregiverData);
+      });
+      return;
+    }
     // Use activeRole if it overrides the permanent role (e.g. CAREGIVER switched to CLIENT)
     final effectiveRole = (activeRole != null && activeRole.isNotEmpty) ? activeRole : role;
     if (effectiveRole == 'ADMIN') {

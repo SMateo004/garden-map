@@ -23,12 +23,17 @@ class CaregiverProfileDataScreen extends StatefulWidget {
   /// caregiver offers HOSPEDAJE or GUARDERIA.
   final List<String> servicesOffered;
 
+  /// When true, adapts all labels and questions for a company (hotel/hostal/guardería)
+  /// instead of an individual caregiver.
+  final bool isCompany;
+
   const CaregiverProfileDataScreen({
     super.key,
     this.embeddedMode = false,
     this.onSaveComplete,
     this.initialProfile,
     this.servicesOffered = const [],
+    this.isCompany = false,
   });
 
   @override
@@ -113,6 +118,23 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   List<String> _photos = [];
   final List<Uint8List?> _localPhotoData = [];
 
+  // New photo fields (paso 4 model)
+  List<String> _caregiverPhotoUrls = [];
+  Map<String, List<String>> _placePhotoUrls = {};
+  bool _uploadingCaregiverPhoto = false;
+  bool _uploadingPlacePhoto = false;
+
+  // Services from API (used when widget.servicesOffered is empty)
+  List<String> _apiServicesOffered = [];
+
+  static const _placeSections = [
+    ('sala',         '🛋️ Sala / Área principal',  true),
+    ('descanso',     '🛏️ Zona de descanso',        true),
+    ('alimentacion', '🍽️ Área de alimentación',    true),
+    ('jardin',       '🌿 Jardín / Patio',           false),
+    ('juego',        '🎾 Área de juego',            false),
+  ];
+
   static const _homeTypes = ['HOUSE', 'APARTMENT', 'FINCA', 'LOCAL'];
   static const _homeTypeLabels = {
     'HOUSE': '🏠 Casa',
@@ -139,6 +161,31 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   /// Oculta todas las preguntas de follow-up de experiencia y situaciones especiales.
   bool get _isAmateur =>
       (int.tryParse(_experienceYearsController.text.replaceAll('+', '')) ?? -1) == 0;
+
+  List<String> get _effectiveServices =>
+      widget.servicesOffered.isNotEmpty ? widget.servicesOffered : _apiServicesOffered;
+
+  bool get _needsSpaceSection =>
+      _effectiveServices.contains('HOSPEDAJE') || _effectiveServices.contains('GUARDERIA');
+
+  bool get _needsPlacePhotos => _needsSpaceSection;
+
+  // ── Company-aware label helpers ──────────────────────────────────────────
+  bool get _ic => widget.isCompany;
+  String get _lAboutTitle     => _ic ? 'Sobre la empresa'               : 'Sobre ti como cuidador';
+  String get _lExpTitle       => _ic ? 'Historia de la empresa'         : 'Tu experiencia profesional';
+  String get _lYearsLabel     => _ic ? 'Años de operación'              : 'Años cuidando mascotas';
+  String get _lExpDesc        => _ic ? 'Describe los servicios de tu empresa' : 'Describe tu experiencia';
+  String get _lExpDescHint    => _ic ? 'Historia, especialidades, certificaciones, etc.' : 'Animales cuidados, formación, etc.';
+  String get _lWhyLabel       => _ic ? '¿Por qué eligieron el cuidado de mascotas?' : '¿Por qué eres cuidador?';
+  String get _lWhyHint        => _ic ? 'La misión de la empresa'        : 'Tu motivación';
+  String get _lDiffersLabel   => _ic ? '¿Qué diferencia a tu empresa?' : '¿Qué te diferencia?';
+  String get _lDiffersHint    => _ic ? 'Valor diferencial del negocio'  : 'Lo que hace especial tu servicio';
+  String get _lPoliciesTitle  => _ic ? 'Políticas de la empresa'        : 'Políticas de mascotas';
+  String get _lSituTitle      => _ic ? 'Protocolos y situaciones especiales' : 'Situaciones especiales';
+  String get _lAnxious        => _ic ? '¿Cómo manejan mascotas con necesidades especiales?' : '¿Cómo manejas mascotas ansiosas?';
+  String get _lEmergency      => _ic ? '¿Cuáles son sus protocolos de emergencia?'          : '¿Cómo respondes ante emergencias?';
+  String get _lBioHint        => _ic ? 'Descripción detallada: historia de la empresa, enfoque, servicios, etc.' : 'Biografía detallada: experiencia, método de cuidado, etc.';
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
@@ -215,6 +262,15 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     _localPhotoData
       ..clear()
       ..addAll(List.filled(_photos.length, null));
+
+    _apiServicesOffered = List<String>.from(profile['servicesOffered'] ?? []);
+    _caregiverPhotoUrls = List<String>.from(profile['caregiverPhotos'] ?? []);
+    final rawPlace = profile['placePhotos'];
+    if (rawPlace is Map) {
+      _placePhotoUrls = rawPlace.map((k, v) => MapEntry(k as String, List<String>.from(v ?? [])));
+    } else {
+      _placePhotoUrls = {};
+    }
 
     _experienceYearsController.text = (profile['experienceYears'] ?? '').toString();
     if (_experienceYearsController.text == '5') _experienceYearsController.text = '5+';
@@ -551,6 +607,95 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     });
   }
 
+  Future<void> _addCaregiverPhoto() async {
+    if (_caregiverPhotoUrls.length >= 6) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Máximo 6 fotos permitidas')));
+      return;
+    }
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: kIsWeb ? null : 85);
+    if (picked == null) return;
+    final bytes = Uint8List.fromList(await picked.readAsBytes());
+    final fileName = picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
+    setState(() => _uploadingCaregiverPhoto = true);
+    try {
+      final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/caregiver/profile/caregiver-photo'));
+      request.headers['Authorization'] = 'Bearer $_caregiverToken';
+      request.files.add(http.MultipartFile.fromBytes('caregiverPhoto', bytes, filename: fileName, contentType: MediaType('image', 'jpeg')));
+      final resp = await request.send();
+      final data = jsonDecode(await resp.stream.bytesToString());
+      if (!mounted) return;
+      if (data['success'] == true) {
+        setState(() => _caregiverPhotoUrls.add(data['data']['photoUrl'] as String));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error']?['message'] ?? 'Error al subir foto'), backgroundColor: GardenColors.error));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: GardenColors.error));
+    } finally {
+      if (mounted) setState(() => _uploadingCaregiverPhoto = false);
+    }
+  }
+
+  Future<void> _deleteCaregiverPhoto(int index) async {
+    final url = _caregiverPhotoUrls[index];
+    setState(() => _caregiverPhotoUrls.removeAt(index));
+    try {
+      await http.delete(
+        Uri.parse('$_baseUrl/caregiver/profile/caregiver-photo'),
+        headers: {'Authorization': 'Bearer $_caregiverToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'photoUrl': url}),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _addPlacePhoto(String section) async {
+    final current = _placePhotoUrls[section] ?? [];
+    if (current.length >= 3) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Máximo 3 fotos por sección')));
+      return;
+    }
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: kIsWeb ? null : 85);
+    if (picked == null) return;
+    final bytes = Uint8List.fromList(await picked.readAsBytes());
+    final fileName = picked.name.isEmpty ? 'place_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
+    setState(() => _uploadingPlacePhoto = true);
+    try {
+      final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/caregiver/profile/place-photo'));
+      request.headers['Authorization'] = 'Bearer $_caregiverToken';
+      request.fields['section'] = section;
+      request.files.add(http.MultipartFile.fromBytes('placePhoto', bytes, filename: fileName, contentType: MediaType('image', 'jpeg')));
+      final resp = await request.send();
+      final data = jsonDecode(await resp.stream.bytesToString());
+      if (!mounted) return;
+      if (data['success'] == true) {
+        setState(() {
+          _placePhotoUrls[section] = List<String>.from(_placePhotoUrls[section] ?? [])..add(data['data']['photoUrl'] as String);
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error']?['message'] ?? 'Error al subir foto'), backgroundColor: GardenColors.error));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: GardenColors.error));
+    } finally {
+      if (mounted) setState(() => _uploadingPlacePhoto = false);
+    }
+  }
+
+  Future<void> _deletePlacePhoto(String section, int index) async {
+    final url = (_placePhotoUrls[section] ?? [])[index];
+    setState(() {
+      final updated = List<String>.from(_placePhotoUrls[section] ?? [])..removeAt(index);
+      _placePhotoUrls[section] = updated;
+    });
+    try {
+      await http.delete(
+        Uri.parse('$_baseUrl/caregiver/profile/place-photo'),
+        headers: {'Authorization': 'Bearer $_caregiverToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'section': section, 'photoUrl': url}),
+      );
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -704,39 +849,70 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                             ),
                             const SizedBox(height: 14),
 
-                            _webSection(surface, borderColor, textColor,
-                              title: 'Tu espacio',
-                              icon: Icons.home_outlined,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  SizedBox(key: _keySpaceType, height: 0),
-                                  _buildHomeTypes(surface, borderColor),
-                                  _buildSwitchTile('¿Tiene jardín o patio?', _hasYard, (v) => setState(() => _hasYard = v)),
-                                  _buildSwitchTile('¿Permite mascotas grandes?', _allowsLargePets, (v) => setState(() => _allowsLargePets = v)),
-                                  _buildSwitchTile('¿Permite múltiples mascotas?', _allowsMultiplePets, (v) => setState(() => _allowsMultiplePets = v)),
-                                ],
+                            if (_needsSpaceSection) ...[
+                              _webSection(surface, borderColor, textColor,
+                                title: 'Tu espacio',
+                                icon: Icons.home_outlined,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SizedBox(key: _keySpaceType, height: 0),
+                                    _buildHomeTypes(surface, borderColor),
+                                    _buildSwitchTile('¿Tiene jardín o patio?', _hasYard, (v) => setState(() => _hasYard = v)),
+                                    _buildSwitchTile('¿Permite mascotas grandes?', _allowsLargePets, (v) => setState(() => _allowsLargePets = v)),
+                                    _buildSwitchTile('¿Permite múltiples mascotas?', _allowsMultiplePets, (v) => setState(() => _allowsMultiplePets = v)),
+                                  ],
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 14),
-
+                              const SizedBox(height: 14),
+                            ],
 
                             _webSection(surface, borderColor, textColor,
-                              title: 'Fotos de servicio',
+                              title: 'Fotos del cuidador',
                               icon: Icons.photo_library_outlined,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   SizedBox(key: _keyPhotos, height: 0),
                                   Text(
-                                    'Sube fotos de tu espacio o actividades con mascotas (mín. 2, máx. 6)',
+                                    'Fotos tuyas en acción con mascotas (mín. 2, máx. 6)',
                                     style: TextStyle(color: subtextColor, fontSize: 12),
                                   ),
                                   const SizedBox(height: 12),
-                                  _buildPhotoGrid(borderColor),
+                                  if (_uploadingCaregiverPhoto)
+                                    const Padding(
+                                      padding: EdgeInsets.only(bottom: 8),
+                                      child: LinearProgressIndicator(color: GardenColors.primary),
+                                    ),
+                                  _buildCaregiverPhotoGrid(borderColor),
                                 ],
                               ),
                             ),
+
+                            if (_needsPlacePhotos) ...[
+                              const SizedBox(height: 14),
+                              _webSection(surface, borderColor, textColor,
+                                title: 'Fotos del lugar',
+                                icon: Icons.home_work_outlined,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Muestra el espacio donde se brindará el servicio',
+                                      style: TextStyle(color: subtextColor, fontSize: 12),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    if (_uploadingPlacePhoto)
+                                      const Padding(
+                                        padding: EdgeInsets.only(bottom: 8),
+                                        child: LinearProgressIndicator(color: GardenColors.primary),
+                                      ),
+                                    for (final (key, label, required) in _placeSections)
+                                      _buildPlaceSectionBlock(key, label, required, borderColor, textColor, subtextColor),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -790,13 +966,13 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                             const SizedBox(height: 14),
 
                             _webSection(surface, borderColor, textColor,
-                              title: 'Experiencia profesional',
+                              title: _lExpTitle,
                               icon: Icons.workspace_premium_outlined,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   SizedBox(key: _keyExperience, height: 0),
-                                  Text('Años cuidando mascotas', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                                  Text(_lYearsLabel, style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
                                   const SizedBox(height: 8),
                                   Wrap(
                                     spacing: 8,
@@ -820,11 +996,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                   ),
                                   if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
                                     const SizedBox(height: 12),
-                                    _sectionField('Describe tu experiencia', _experienceDescController, 'Animales cuidados, formación, etc.', maxLines: 3),
+                                    _sectionField(_lExpDesc, _experienceDescController, _lExpDescHint, maxLines: 3),
                                     const SizedBox(height: 10),
-                                    _sectionField('¿Por qué eres cuidador?', _whyCaregiverController, 'Tu motivación', maxLines: 2),
+                                    _sectionField(_lWhyLabel, _whyCaregiverController, _lWhyHint, maxLines: 2),
                                     const SizedBox(height: 10),
-                                    _sectionField('¿Qué te diferencia?', _whatDiffersController, 'Lo que hace especial tu servicio', maxLines: 2),
+                                    _sectionField(_lDiffersLabel, _whatDiffersController, _lDiffersHint, maxLines: 2),
                                   ],
                                   if (_isAmateur && _experienceYearsController.text == '0') ...[
                                     const SizedBox(height: 10),
@@ -855,7 +1031,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                             const SizedBox(height: 14),
 
                             _webSection(surface, borderColor, textColor,
-                              title: 'Políticas de mascotas',
+                              title: _lPoliciesTitle,
                               icon: Icons.policy_outlined,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -869,12 +1045,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                   if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
                                     const SizedBox(height: 16),
                                     SizedBox(key: _keyHandleAnxious, height: 0),
-                                    Text('¿Cómo manejas mascotas ansiosas?', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                                    Text(_lAnxious, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
                                     const SizedBox(height: 8),
                                     _buildChipsSection(_anxiousOptions, _selectedAnxiousOptions, surface, borderColor),
                                     const SizedBox(height: 14),
                                     SizedBox(key: _keyEmergencyResponse, height: 0),
-                                    Text('¿Cómo respondes ante emergencias?', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                                    Text(_lEmergency, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
                                     const SizedBox(height: 8),
                                     _buildChipsSection(_emergencyOptions, _selectedEmergencyOptions, surface, borderColor),
                                   ],
@@ -940,10 +1116,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
             // Sección 2 — Sobre ti
             SizedBox(key: _keyBio, height: 0),
-            _sectionTitle('Sobre ti como cuidador', textColor),
+            _sectionTitle(_lAboutTitle, textColor),
             SizedBox(key: _keyBioDetail, height: 0),
             GardenInput(
-              hint: 'Biografía detallada: experiencia, método de cuidado, etc.',
+              hint: _lBioHint,
               controller: _bioDetailController,
               maxLines: 6,
               maxLength: 300,
@@ -955,8 +1131,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             const Divider(height: 48),
 
             // Sección — Tu espacio (solo para HOSPEDAJE o GUARDERIA)
-            if (widget.servicesOffered.contains('HOSPEDAJE') ||
-                widget.servicesOffered.contains('GUARDERIA')) ...[
+            if (_needsSpaceSection) ...[
               SizedBox(key: _keySpaceType, height: 0),
               _sectionTitle('Tu espacio', textColor),
               _buildHomeTypes(surface, borderColor),
@@ -1030,6 +1205,41 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             ),
             const Divider(height: 48),
 
+            // Sección — Fotos del cuidador (todos los servicios, mín 2 máx 6)
+            SizedBox(key: _keyPhotos, height: 0),
+            _sectionTitle('Fotos del cuidador', textColor),
+            Text(
+              'Sube fotos tuyas en acción con mascotas (mín. 2, máx. 6)',
+              style: TextStyle(color: subtextColor, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            if (_uploadingCaregiverPhoto)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: LinearProgressIndicator(color: GardenColors.primary),
+              ),
+            _buildCaregiverPhotoGrid(borderColor),
+
+            // Sección — Fotos del lugar (solo HOSPEDAJE / GUARDERÍA)
+            if (_needsPlacePhotos) ...[
+              const SizedBox(height: 28),
+              _sectionTitle('Fotos del lugar', textColor),
+              Text(
+                'Muestra el espacio donde se brindará el servicio',
+                style: TextStyle(color: subtextColor, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              if (_uploadingPlacePhoto)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: LinearProgressIndicator(color: GardenColors.primary),
+                ),
+              for (final (key, label, required) in _placeSections)
+                _buildPlaceSectionBlock(key, label, required, borderColor, textColor, subtextColor),
+            ],
+
+            const Divider(height: 48),
+
             // Sección 8 — FAQ
             SizedBox(key: _keyFaq, height: 0),
             _sectionTitle('Preguntas frecuentes', textColor),
@@ -1042,8 +1252,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
             // Sección — Experiencia profesional
             SizedBox(key: _keyExperience, height: 0),
-            _sectionTitle('Tu experiencia profesional', textColor),
-            Text('Años cuidando mascotas', style: TextStyle(color: subtextColor, fontSize: 13)),
+            _sectionTitle(_lExpTitle, textColor),
+            Text(_lYearsLabel, style: TextStyle(color: subtextColor, fontSize: 13)),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -1075,14 +1285,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             // Follow-up: solo cuando experienceYears >= 1
             if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
               const SizedBox(height: 16),
-              _sectionField('Describe tu experiencia', _experienceDescController,
-                'Cuéntanos sobre los animales que has cuidado, tu formación, etc.', maxLines: 4),
+              _sectionField(_lExpDesc, _experienceDescController, _lExpDescHint, maxLines: 4),
               const SizedBox(height: 16),
-              _sectionField('¿Por qué eres cuidador?', _whyCaregiverController,
-                'Tu motivación para cuidar mascotas', maxLines: 3),
+              _sectionField(_lWhyLabel, _whyCaregiverController, _lWhyHint, maxLines: 3),
               const SizedBox(height: 16),
-              _sectionField('¿Qué te diferencia?', _whatDiffersController,
-                'Lo que hace especial tu servicio', maxLines: 3),
+              _sectionField(_lDiffersLabel, _whatDiffersController, _lDiffersHint, maxLines: 3),
             ],
 
             if (_isAmateur && _experienceYearsController.text == '0') ...[
@@ -1113,7 +1320,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
             // Políticas de mascotas — siempre visibles (No/Sí desde el inicio)
             SizedBox(key: _keyPolicies, height: 0),
-            _sectionTitle('Políticas de mascotas', textColor),
+            _sectionTitle(_lPoliciesTitle, textColor),
             _acceptSwitch('¿Aceptas mascotas agresivas?', _acceptAggressive, (val) => setState(() => _acceptAggressive = val), textColor, subtextColor, surface, borderColor),
             const SizedBox(height: 8),
             _acceptSwitch('¿Aceptas cachorros?', _acceptPuppies, (val) => setState(() => _acceptPuppies = val), textColor, subtextColor, surface, borderColor),
@@ -1123,14 +1330,14 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             // Situaciones especiales — solo para no-amateurs
             if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
               const Divider(height: 48),
-              _sectionTitle('Situaciones especiales', textColor),
+              _sectionTitle(_lSituTitle, textColor),
               SizedBox(key: _keyHandleAnxious, height: 0),
-              Text('¿Cómo manejas mascotas ansiosas?', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
+              Text(_lAnxious, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
               _buildChipsSection(_anxiousOptions, _selectedAnxiousOptions, surface, borderColor),
               const SizedBox(height: 20),
               SizedBox(key: _keyEmergencyResponse, height: 0),
-              Text('¿Cómo respondes ante emergencias?', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
+              Text(_lEmergency, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
               _buildChipsSection(_emergencyOptions, _selectedEmergencyOptions, surface, borderColor),
             ],
@@ -1391,6 +1598,124 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
           ),
         );
       }).toList(),
+    );
+  }
+
+  Widget _buildCaregiverPhotoGrid(Color borderColor) {
+    final count = _caregiverPhotoUrls.length;
+    final showAdd = count < 6;
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, crossAxisSpacing: 10, mainAxisSpacing: 10),
+      itemCount: showAdd ? count + 1 : count,
+      itemBuilder: (context, index) {
+        if (index == count && showAdd) {
+          return GestureDetector(
+            onTap: _addCaregiverPhoto,
+            child: Container(
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4), style: BorderStyle.solid)),
+              child: const Icon(Icons.add_a_photo_outlined, color: GardenColors.primary),
+            ),
+          );
+        }
+        return Stack(
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                image: DecorationImage(image: NetworkImage(_caregiverPhotoUrls[index]), fit: BoxFit.cover),
+              ),
+            ),
+            Positioned(
+              right: 5, top: 5,
+              child: GestureDetector(
+                onTap: () => _deleteCaregiverPhoto(index),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                  child: const Icon(Icons.close, color: Colors.white, size: 14),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildPlaceSectionBlock(String key, String label, bool required, Color borderColor, Color textColor, Color subtextColor) {
+    final photos = _placePhotoUrls[key] ?? [];
+    final canAdd = photos.length < 3;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(label, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
+              const SizedBox(width: 6),
+              Text(
+                required ? 'obligatorio' : 'opcional',
+                style: TextStyle(
+                  color: required ? GardenColors.error : GardenColors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (int i = 0; i < photos.length; i++)
+                SizedBox(
+                  width: 80, height: 80,
+                  child: Stack(
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          image: DecorationImage(image: NetworkImage(photos[i]), fit: BoxFit.cover),
+                        ),
+                      ),
+                      Positioned(
+                        right: 3, top: 3,
+                        child: GestureDetector(
+                          onTap: () => _deletePlacePhoto(key, i),
+                          child: Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                            child: const Icon(Icons.close, color: Colors.white, size: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (canAdd)
+                GestureDetector(
+                  onTap: () => _addPlacePhoto(key),
+                  child: Container(
+                    width: 80, height: 80,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: required && photos.isEmpty ? GardenColors.error.withValues(alpha: 0.5) : borderColor),
+                    ),
+                    child: Icon(
+                      Icons.add_photo_alternate_outlined,
+                      color: required && photos.isEmpty ? GardenColors.error : GardenColors.primary,
+                      size: 28,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 

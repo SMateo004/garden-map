@@ -95,7 +95,7 @@ class _MobileOnboardingScreenState extends State<MobileOnboardingScreen>
   Future<void> _finish() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('mobile_onboarding_seen', true);
-    if (mounted) context.go('/login');
+    if (mounted) context.go('/service-selector');
   }
 
   void _next() {

@@ -148,6 +148,12 @@ router.post('/validate-professional-code', authController.validateProfessionalCo
 /** POST /api/auth/register-professional — registro profesional con código de admin. */
 router.post('/register-professional', registerLimiter, authController.registerProfessional);
 
+/** POST /api/auth/validate-company-code — verifica código de empresa sin crear cuenta. */
+router.post('/validate-company-code', authController.validateCompanyCode);
+
+/** POST /api/auth/register-company — registro de empresa (hotel/hostal/guardería) con código de admin. */
+router.post('/register-company', registerLimiter, authController.registerCompany);
+
 router.post('/forgot-password', passwordResetLimiter, authController.forgotPassword);
 
 /** GET /api/auth/validate-reset-token?token=<raw> — validates token before showing reset form. */

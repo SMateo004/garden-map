@@ -370,6 +370,10 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                     title: 'Código cuidador profesional', subtitle: 'Código para registro de cuidadores profesionales',
                     settingKey: 'professionalRegistrationCode', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
+                  _buildStringTile(icon: Icons.business_rounded, iconColor: Colors.teal,
+                    title: 'Código registro de empresas', subtitle: 'Código para hoteles, hostales, guarderías, etc.',
+                    settingKey: 'companyRegistrationCode', surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
                 ]),
                 const SizedBox(height: 16),
 

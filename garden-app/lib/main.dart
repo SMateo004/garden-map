@@ -41,6 +41,7 @@ import 'screens/onboarding/maintenance_screen.dart';
 import 'screens/caregiver/mobile_verify_screen.dart';
 import 'screens/legal/legal_screen.dart';
 import 'screens/caregiver/professional_register_screen.dart';
+import 'screens/caregiver/company_register_screen.dart';
 import 'screens/auth/forgot_password_screen.dart';
 import 'screens/auth/forgot_password_code_screen.dart';
 import 'screens/auth/forgot_password_new_screen.dart';
@@ -110,7 +111,10 @@ const _publicPaths = {
   '/terms',
   '/sign-in/profesional',
   '/caregiver/onboarding',
+  '/caregiver/onboarding-profesional',
   '/client-welcome',
+  '/service-selector', // accesible sin login (modo guest)
+  '/marketplace',      // accesible sin login (modo guest)
 };
 
 // ── Router ─────────────────────────────────────────────────
@@ -459,6 +463,11 @@ final GoRouter _router = GoRouter(
       path: '/sign-in/profesional',
       name: 'professionalRegister',
       builder: (context, state) => const ProfessionalRegisterScreen(),
+    ),
+    GoRoute(
+      path: '/caregiver/onboarding-profesional',
+      name: 'companyRegister',
+      builder: (context, state) => const CompanyRegisterScreen(),
     ),
   ],
 );

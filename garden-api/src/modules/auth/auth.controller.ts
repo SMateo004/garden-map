@@ -816,6 +816,32 @@ export const registerProfessional = asyncHandler(async (req: Request, res: Respo
   return res.status(201).json({ success: true, data: result });
 });
 
+/** POST /api/auth/validate-company-code — verifica código de empresa sin crear nada. */
+export const validateCompanyCode = asyncHandler(async (req: Request, res: Response) => {
+  const { code } = req.body ?? {};
+  if (!code || typeof code !== 'string') {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_CODE', message: 'Código requerido.' } });
+  }
+  const valid = await authService.validateCompanyCode(code);
+  if (!valid) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_COMPANY_CODE', message: 'Código de registro de empresa inválido.' } });
+  }
+  return res.json({ success: true, data: { valid: true } });
+});
+
+/** POST /api/auth/register-company — registro de empresa con código de admin. */
+export const registerCompany = asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body ?? {};
+  if (!body.code || typeof body.code !== 'string') {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_CODE', message: 'Código de registro requerido.' } });
+  }
+  if (!body.companyName || !body.email || !body.password || !body.phone) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_FIELDS', message: 'Faltan campos obligatorios (nombre empresa, email, contraseña, teléfono).' } });
+  }
+  const result = await authService.registerCompany(body);
+  return res.status(201).json({ success: true, data: result });
+});
+
 // ── Phone Verification (Twilio Verify) ───────────────────────────────────────
 
 /** POST /api/auth/caregiver/send-phone-otp
@@ -892,6 +918,20 @@ export const verifyCaregiverPhone = asyncHandler(async (req: Request, res: Respo
     where: { userId },
     data: { phoneVerified: true },
   });
+
+  // Companies: if both phone + email are verified → set verified=true (appears in marketplace)
+  try {
+    const profile = await prisma.caregiverProfile.findUnique({
+      where: { userId: userId },
+      select: { isCompany: true, emailVerified: true },
+    } as any);
+    if ((profile as any)?.isCompany && (profile as any)?.emailVerified) {
+      await prisma.caregiverProfile.updateMany({
+        where: { userId },
+        data: { verified: true, verifiedAt: new Date() } as any,
+      });
+    }
+  } catch (_) {}
 
   return res.json({ success: true, message: '¡Teléfono verificado correctamente!' });
 });

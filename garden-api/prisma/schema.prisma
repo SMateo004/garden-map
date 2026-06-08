@@ -182,6 +182,12 @@ model CaregiverProfile {
   reviewChecklist                 Json?              @db.JsonB
   /// true = cuidador profesional registrado con código de admin (omite verificación CI, aprobado automáticamente)
   isProfessional                  Boolean            @default(false)
+  /// true = empresa (hotel, hostal, guardería, etc.) registrada con código de empresa
+  isCompany                       Boolean            @default(false)
+  /// Nombre comercial de la empresa (solo cuando isCompany=true)
+  companyName                     String?            @db.VarChar(200)
+  /// Tipo de negocio: HOTEL | HOSTAL | GUARDERIA | PET_HOTEL | OTHER
+  businessType                    String?            @db.VarChar(50)
   /// true = sin experiencia previa (experienceYears === 0 al registrarse).
   /// Se recalcula dinámicamente: si approvedAt >= 1 año, se actualiza a false automáticamente.
   isAmateur                       Boolean            @default(false)

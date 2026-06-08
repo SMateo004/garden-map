@@ -1831,19 +1831,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     if (_selectedService == 'hospedaje') {
       if (hasDayPrice) prices.add(('Bs $priceDay', '/noche'));
     } else if (_selectedService == 'paseo') {
-      if (hasWalk30Price) {
-        prices.add(('Bs $priceWalk30', '30 min'));
-      } else if (hasWalk60Price) {
-        prices.add(('Bs $priceWalk60', '1 hora'));
-      }
+      if (hasWalk30Price) prices.add(('Bs $priceWalk30', '30 min'));
     } else if (_selectedService == 'guarderia') {
       if (hasGuarderiaPrice) prices.add(('Bs $priceGuarderia', '/hora 🏡'));
     } else {
       // 'todos' — show only prices for services the caregiver actually offers
       if (hasWalk30Price) {
         prices.add(('Bs $priceWalk30', '30 min 🦮'));
-      } else if (hasWalk60Price) {
-        prices.add(('Bs $priceWalk60', '1 hora 🦮'));
       }
       if (hasDayPrice) {
         prices.add(('Bs $priceDay', '/noche 🏠'));
@@ -1854,7 +1848,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     }
 
     return GestureDetector(
-      onTap: () => context.push('/caregiver/${caregiver['id']}', extra: caregiver),
+      onTap: () {
+        if (!AuthState.hasSession) {
+          context.push('/login', extra: {
+            'returnTo': '/caregiver/${caregiver['id']}',
+            'caregiverData': caregiver,
+          });
+        } else {
+          context.push('/caregiver/${caregiver['id']}', extra: caregiver);
+        }
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(

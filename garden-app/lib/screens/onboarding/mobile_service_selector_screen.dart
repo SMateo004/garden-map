@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../services/auth_state.dart';
 
 class MobileServiceSelectorScreen extends StatefulWidget {
   const MobileServiceSelectorScreen({super.key});
@@ -121,6 +122,7 @@ class _MobileServiceSelectorScreenState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -144,13 +146,45 @@ class _MobileServiceSelectorScreenState
                                 ],
                               ),
                             ),
+                            if (!AuthState.hasSession)
+                              Row(
+                                children: [
+                                  TextButton(
+                                    onPressed: () => context.push('/login'),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: GardenColors.primary,
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: const Text('Iniciar sesión',
+                                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  ElevatedButton(
+                                    onPressed: () => context.push('/register'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: GardenColors.primary,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(20)),
+                                      textStyle: const TextStyle(
+                                          fontSize: 13, fontWeight: FontWeight.w600),
+                                    ),
+                                    child: const Text('Registrarse'),
+                                  ),
+                                ],
+                              ),
                           ],
                         ),
                         const SizedBox(height: 20),
                         Text(
-                          _userName != null
-                              ? '¡Hola, $_userName! 👋'
-                              : '¡Bienvenido! 👋',
+                          AuthState.hasSession
+                              ? (_userName != null ? '¡Hola, $_userName! 👋' : '¡Bienvenido! 👋')
+                              : 'Hola 👋\nQue gusto verte por aqui',
                           style: TextStyle(
                             color: textColor,
                             fontSize: 28,

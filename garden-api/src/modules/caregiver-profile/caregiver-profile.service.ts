@@ -229,8 +229,14 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.servicesOffered !== undefined) updateData.servicesOffered = body.servicesOffered;
   if (body.serviceAvailability !== undefined) updateData.serviceAvailability = body.serviceAvailability;
   if (body.pricePerDay !== undefined) updateData.pricePerDay = body.pricePerDay;
+  if (body.pricePerWalk60 !== undefined) {
+    updateData.pricePerWalk60 = body.pricePerWalk60;
+    // Always derive 30-min price as half of 60-min so it's never missing
+    if (body.pricePerWalk30 === undefined) {
+      updateData.pricePerWalk30 = Math.round((body.pricePerWalk60 as number) / 2);
+    }
+  }
   if (body.pricePerWalk30 !== undefined) updateData.pricePerWalk30 = body.pricePerWalk30;
-  if (body.pricePerWalk60 !== undefined) updateData.pricePerWalk60 = body.pricePerWalk60;
   if ((body as any).pricePerGuarderia !== undefined) (updateData as any).pricePerGuarderia = (body as any).pricePerGuarderia;
   if (body.rates !== undefined) updateData.rates = body.rates;
   if (body.termsAccepted !== undefined) updateData.termsAccepted = body.termsAccepted;

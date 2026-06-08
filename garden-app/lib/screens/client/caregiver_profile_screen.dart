@@ -607,8 +607,8 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                                 final String emoji;
                                 final String label;
                                 if (isWalk) {
-                                  price = pricePerWalk30 ?? pricePerWalk60;
-                                  unit = pricePerWalk30 != null ? '/ 30 min' : '/ hora';
+                                  price = pricePerWalk30;
+                                  unit = '/ 30 min';
                                   emoji = '🦮';
                                   label = 'Paseo';
                                 } else if (isGuarderia) {
@@ -821,7 +821,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         final String sLabel = isWalk ? 'Paseo' : isGuarderia ? 'Guardería' : 'Hospedaje';
                         final String sPrice;
                         if (isWalk) {
-                          sPrice = 'Bs ${pricePerWalk30 ?? pricePerWalk60 ?? '—'} / ${pricePerWalk30 != null ? '30 min' : '1 hora'}';
+                          sPrice = 'Bs ${pricePerWalk30 ?? '—'} / 30 min';
                         } else if (isGuarderia) {
                           final pg = _caregiver?['pricePerGuarderia'];
                           sPrice = 'Bs ${pg ?? '—'} / hora';
