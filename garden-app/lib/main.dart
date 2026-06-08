@@ -375,6 +375,11 @@ final GoRouter _router = GoRouter(
       builder: (context, state) => const CaregiverProfileDataScreen(),
     ),
     GoRoute(
+      path: '/caregiver/onboarding-profesional',
+      name: 'companyRegister',
+      builder: (context, state) => const CompanyRegisterScreen(),
+    ),
+    GoRoute(
       path: '/caregiver/:id',
       name: 'caregiverProfile',
       builder: (context, state) => CaregiverProfileScreen(
@@ -463,11 +468,6 @@ final GoRouter _router = GoRouter(
       path: '/sign-in/profesional',
       name: 'professionalRegister',
       builder: (context, state) => const ProfessionalRegisterScreen(),
-    ),
-    GoRoute(
-      path: '/caregiver/onboarding-profesional',
-      name: 'companyRegister',
-      builder: (context, state) => const CompanyRegisterScreen(),
     ),
   ],
 );
