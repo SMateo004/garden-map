@@ -112,8 +112,9 @@ export const ALLOWED_SETTING_KEYS = [
   'paseoRefund50Horas',
   // Zonas bloqueadas (JSON array)
   'blockedZones',
-  // Registro profesional
+  // Registro profesional y empresas
   'professionalRegistrationCode',
+  'companyRegistrationCode',
 ] as const;
 
 export type AllowedSettingKey = typeof ALLOWED_SETTING_KEYS[number];
