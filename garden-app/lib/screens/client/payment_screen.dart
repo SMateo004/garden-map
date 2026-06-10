@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../utils/qr_saver.dart';
 
 class PaymentScreen extends StatefulWidget {
   final String bookingId;
@@ -27,13 +30,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _isSubmitting = false;
 
   // Payment confirmation state
-  bool _waitingConfirmation = false;
   bool _paymentConfirmed = false;
   bool _paymentRejected = false;
   bool _qrExpired = false;
+  bool _isCheckingNow = false; // feedback when user presses the button
+  bool _isSavingQr = false;
+
   Timer? _pollTimer;
   Timer? _expiryTimer;
-  static const _qrTtl = Duration(minutes: 15); // QR expira en 15 min
+  static const _qrTtl = Duration(minutes: 15);
+
+  // QR capture key for "Guardar QR"
+  final GlobalKey _qrBoundaryKey = GlobalKey();
 
   // Wallet payment state
   double _walletBalance = 0.0;
@@ -54,46 +62,70 @@ class _PaymentScreenState extends State<PaymentScreen> {
     super.dispose();
   }
 
+  // ── Data loading ────────────────────────────────────────────────────────────
+
   Future<void> _loadData() async {
     _clientToken = AuthState.token;
     if (_clientToken.isEmpty) {
-      // Sin sesión — redirigir a login (nunca hardcodear tokens en código)
       if (mounted) context.go('/login');
       return;
     }
 
     try {
       final results = await Future.wait([
-        http.get(
-          Uri.parse('$_baseUrl/bookings/${widget.bookingId}'),
-          headers: {'Authorization': 'Bearer $_clientToken'},
-        ),
-        http.get(
-          Uri.parse('$_baseUrl/wallet'),
-          headers: {'Authorization': 'Bearer $_clientToken'},
-        ),
+        http.get(Uri.parse('$_baseUrl/bookings/${widget.bookingId}'),
+            headers: {'Authorization': 'Bearer $_clientToken'}),
+        http.get(Uri.parse('$_baseUrl/wallet'),
+            headers: {'Authorization': 'Bearer $_clientToken'}),
       ]);
 
       final bookingData = jsonDecode(results[0].body);
       if (bookingData['success'] == true) {
-        setState(() => _booking = bookingData['data']);
+        final bk = bookingData['data'] as Map<String, dynamic>;
+        setState(() => _booking = bk);
+
+        // ── Restore active QR if within 15-min window ────────────────────────
+        final status = bk['status'] as String?;
+        final existingQrId = bk['qrId'];
+        final qrExpiresAtStr = bk['qrExpiresAt'];
+
+        if (status == 'PENDING_PAYMENT' &&
+            existingQrId != null &&
+            qrExpiresAtStr != null) {
+          final expiry = DateTime.tryParse(qrExpiresAtStr.toString());
+          if (expiry != null) {
+            final remaining = expiry.difference(DateTime.now());
+            if (remaining.isNegative) {
+              // QR already expired — cancel and show expired screen
+              _cancelBooking();
+              setState(() => _qrExpired = true);
+            } else {
+              // QR still valid — restore it and resume polling
+              _walletContributionUsed =
+                  double.tryParse(bk['walletPaymentAmount']?.toString() ?? '0') ?? 0.0;
+              setState(() => _qrResponse = {'qrId': existingQrId});
+              _startPollingWithRemainingTime(remaining);
+            }
+          }
+        }
       }
 
       final walletData = jsonDecode(results[1].body);
       if (walletData['success'] == true) {
         setState(() {
-          _walletBalance = double.tryParse(
-            walletData['data']?['balance']?.toString() ?? '0',
-          ) ?? 0.0;
+          _walletBalance =
+              double.tryParse(walletData['data']?['balance']?.toString() ?? '0') ?? 0.0;
           _walletLoaded = true;
         });
       }
-    } catch (e) {
+    } catch (_) {
       // silencioso
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  // ── Computed ────────────────────────────────────────────────────────────────
 
   double get _totalAmount {
     final raw = _booking?['totalAmount'] ?? _booking?['totalPrice'];
@@ -103,6 +135,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool get _walletCoversAll => _useWallet && _walletBalance >= _totalAmount;
   double get _walletCoverage => _useWallet ? _walletBalance.clamp(0, _totalAmount) : 0.0;
   double get _remainingAfterWallet => (_totalAmount - _walletCoverage).clamp(0, double.infinity);
+
+  // ── Payment ─────────────────────────────────────────────────────────────────
 
   Future<void> _initPayment() async {
     setState(() => _isSubmitting = true);
@@ -118,32 +152,29 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
       final response = await http.post(
         Uri.parse('$_baseUrl/bookings/${widget.bookingId}/payment'),
-        headers: {
-          'Authorization': 'Bearer $_clientToken',
-          'Content-Type': 'application/json',
-        },
+        headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
         body: jsonEncode(body),
       );
 
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         final responseData = data['data'] as Map<String, dynamic>?;
-        // Full wallet payment — booking already moved to WAITING_CAREGIVER_APPROVAL
         if (responseData?['paidWithWallet'] == true) {
           if (widget.mgData != null) await _proposeMeetAndGreet();
           setState(() {
             _paidWithWallet = true;
-            _walletContributionUsed = double.tryParse(
-                responseData?['walletDeducted']?.toString() ?? '0') ?? _totalAmount;
+            _walletContributionUsed =
+                double.tryParse(responseData?['walletDeducted']?.toString() ?? '0') ?? _totalAmount;
             _paymentConfirmed = true;
           });
         } else {
-          // QR with optional wallet contribution pre-deducted
           if (responseData?['walletDeducted'] != null) {
-            _walletContributionUsed = double.tryParse(
-                responseData!['walletDeducted'].toString()) ?? 0.0;
+            _walletContributionUsed =
+                double.tryParse(responseData!['walletDeducted'].toString()) ?? 0.0;
           }
           setState(() => _qrResponse = responseData);
+          // Auto-start polling as soon as QR is shown
+          _startPolling();
         }
       } else {
         throw Exception(data['message'] ?? 'Error al iniciar pago');
@@ -159,15 +190,20 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
+  // ── Polling ─────────────────────────────────────────────────────────────────
+
+  /// Starts polling for a freshly generated QR (full 15-min window).
   void _startPolling() {
-    _checkPaymentStatus();
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => _checkPaymentStatus());
-    // QR expira a los 15 min — detener polling y mostrar aviso
-    _expiryTimer = Timer(_qrTtl, () {
-      if (!mounted || _paymentConfirmed) return;
-      _stopPolling();
-      setState(() => _qrExpired = true);
-    });
+    _checkPaymentStatus(); // Immediate check
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _checkPaymentStatus());
+    _expiryTimer = Timer(_qrTtl, _onQrExpired);
+  }
+
+  /// Starts polling for a restored QR with [remaining] time left.
+  void _startPollingWithRemainingTime(Duration remaining) {
+    _checkPaymentStatus(); // Immediate check on restore
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _checkPaymentStatus());
+    _expiryTimer = Timer(remaining, _onQrExpired);
   }
 
   void _stopPolling() {
@@ -175,6 +211,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
     _pollTimer = null;
     _expiryTimer?.cancel();
     _expiryTimer = null;
+  }
+
+  Future<void> _onQrExpired() async {
+    if (!mounted || _paymentConfirmed) return;
+    _stopPolling();
+    await _cancelBooking();
+    if (mounted) setState(() => _qrExpired = true);
   }
 
   Future<void> _checkPaymentStatus() async {
@@ -192,9 +235,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
         if (status == 'WAITING_CAREGIVER_APPROVAL' || status == 'CONFIRMED') {
           _stopPolling();
-          if (widget.mgData != null) {
-            await _proposeMeetAndGreet();
-          }
+          if (widget.mgData != null) await _proposeMeetAndGreet();
           setState(() {
             _booking = bookingData;
             _paymentConfirmed = true;
@@ -202,7 +243,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         } else if (status == 'CANCELLED') {
           _stopPolling();
           setState(() => _paymentRejected = true);
-        } else if (status == 'PENDING_PAYMENT' && qrId == null && _waitingConfirmation) {
+        } else if (status == 'PENDING_PAYMENT' && qrId == null && _qrResponse != null) {
           // Admin rechazó el pago — limpió el QR y volvió a PENDING_PAYMENT
           _stopPolling();
           setState(() => _paymentRejected = true);
@@ -211,43 +252,129 @@ class _PaymentScreenState extends State<PaymentScreen> {
     } catch (_) {}
   }
 
-  Future<void> _proposeMeetAndGreet() async {
-    debugPrint('[MG] _proposeMeetAndGreet() called, bookingId=${widget.bookingId}');
-    debugPrint('[MG] mgData=${widget.mgData}');
-    debugPrint('[MG] token present: ${_clientToken.isNotEmpty}');
+  // ── Cancel booking ──────────────────────────────────────────────────────────
+
+  Future<void> _cancelBooking() async {
     try {
-      final url = '$_baseUrl/meet-and-greet/${widget.bookingId}/propose';
-      debugPrint('[MG] POST $url');
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {
-          'Authorization': 'Bearer $_clientToken',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(widget.mgData),
+      await http.post(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/cancel'),
+        headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'reason': 'QR de pago expirado o cancelado por el usuario'}),
       );
-      debugPrint('[MG] Response status: ${response.statusCode}');
-      debugPrint('[MG] Response body: ${response.body}');
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        debugPrint('[MG] Propose SUCCESS — M&G created');
-      } else {
-        final errMsg = data['error']?['message'] ?? data['message'] ?? 'Error desconocido';
-        debugPrint('[MG] propose FAILED: $errMsg');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Meet & Greet: $errMsg'),
-              backgroundColor: Colors.orange.shade700,
-              duration: const Duration(seconds: 5),
+    } catch (_) {}
+  }
+
+  // ── Back navigation ─────────────────────────────────────────────────────────
+
+  /// Called when user presses back while the QR is visible.
+  /// Shows a confirmation dialog; on confirm cancels the booking and pops.
+  Future<void> _handleBack() async {
+    if (_qrResponse != null && !_paymentConfirmed) {
+      final isDark = themeNotifier.isDark;
+      final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+      final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+      final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+      final confirm = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('¿Crear nueva reserva?',
+              style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 18)),
+          content: Text(
+            'Si vuelves, la reserva actual se cancelará y deberás crear una nueva con los términos que elijas.',
+            style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('No, seguir pagando',
+                  style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700)),
             ),
-          );
-        }
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: TextButton.styleFrom(foregroundColor: GardenColors.error),
+              child: const Text('Sí, cancelar reserva', style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm == true && mounted) {
+        _stopPolling();
+        await _cancelBooking();
+        if (mounted) context.pop();
       }
-    } catch (e) {
-      debugPrint('[MG] propose exception: $e');
+    } else {
+      if (mounted) context.pop();
     }
   }
+
+  // ── Save QR ─────────────────────────────────────────────────────────────────
+
+  Future<void> _saveQr() async {
+    setState(() => _isSavingQr = true);
+    try {
+      final boundary =
+          _qrBoundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return;
+
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+
+      final bytes = byteData.buffer.asUint8List();
+      await saveQrBytes(bytes, 'qr_pago_garden.png');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✓ QR guardado correctamente'),
+            backgroundColor: GardenColors.success,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al guardar el QR: $e'),
+            backgroundColor: GardenColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingQr = false);
+    }
+  }
+
+  // ── Meet & Greet ────────────────────────────────────────────────────────────
+
+  Future<void> _proposeMeetAndGreet() async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/meet-and-greet/${widget.bookingId}/propose'),
+        headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
+        body: jsonEncode(widget.mgData),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] != true && mounted) {
+        final errMsg = data['error']?['message'] ?? data['message'] ?? 'Error desconocido';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Meet & Greet: $errMsg'),
+            backgroundColor: Colors.orange.shade700,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (_) {}
+  }
+
+  // ── Build ────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -269,41 +396,165 @@ class _PaymentScreenState extends State<PaymentScreen> {
         if (_paymentConfirmed) return _buildSuccessScreen();
         if (_paymentRejected) return _buildRejectionScreen();
         if (_qrExpired) return _buildExpiredScreen();
-        if (_waitingConfirmation) return _buildWaitingScreen();
 
-        return Scaffold(
-          backgroundColor: bg,
-          appBar: AppBar(
-            title: Text('Confirmar pago', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 18)),
-            backgroundColor: surface,
-            elevation: 0,
-            leading: IconButton(
-              icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 20),
-              onPressed: () => context.pop(),
+        // Intercept back ONLY when QR is being shown
+        return PopScope(
+          canPop: _qrResponse == null,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop && _qrResponse != null) _handleBack();
+          },
+          child: Scaffold(
+            backgroundColor: bg,
+            appBar: AppBar(
+              title: Text(
+                'Confirmar pago',
+                style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 18),
+              ),
+              backgroundColor: surface,
+              elevation: 0,
+              leading: IconButton(
+                icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 20),
+                onPressed: _qrResponse != null ? _handleBack : () => context.pop(),
+              ),
             ),
+            body: _buildPaymentBody(),
           ),
-          body: _buildPaymentBody(),
         );
       },
     );
   }
 
-  Widget _securityRow(IconData icon, String text, Color textColor, Color subtextColor) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 14, color: subtextColor),
-        const SizedBox(width: 8),
-        Expanded(child: Text(text, style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4))),
-      ],
+  // ── QR view ─────────────────────────────────────────────────────────────────
+
+  Widget _buildQrView(Color textColor, Color subtextColor) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          children: [
+            Text(
+              'Escanea para pagar',
+              style: TextStyle(
+                  color: textColor, fontWeight: FontWeight.w900, fontSize: 24, letterSpacing: -0.5),
+            ),
+            const SizedBox(height: 32),
+
+            // ── QR image (wrapped for screenshot capture) ──────────────────
+            RepaintBoundary(
+              key: _qrBoundaryKey,
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10)),
+                  ],
+                ),
+                child: QrImageView(
+                  data: (_qrResponse!['qrId'] as String? ?? widget.bookingId),
+                  version: QrVersions.auto,
+                  size: 250,
+                  eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Color(0xFF1A1A1A)),
+                  dataModuleStyle: const QrDataModuleStyle(
+                      dataModuleShape: QrDataModuleShape.square, color: Color(0xFF1A1A1A)),
+                  errorCorrectionLevel: QrErrorCorrectLevel.M,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // ── Guardar QR ─────────────────────────────────────────────────
+            TextButton.icon(
+              onPressed: _isSavingQr ? null : _saveQr,
+              icon: _isSavingQr
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary),
+                    )
+                  : const Icon(Icons.download_rounded, size: 16, color: GardenColors.primary),
+              label: Text(
+                _isSavingQr ? 'Guardando...' : 'Guardar QR',
+                style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            Text('Este código expira en 15 minutos',
+                style: TextStyle(color: subtextColor, fontSize: 14)),
+
+            if (_walletContributionUsed > 0) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: GardenColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.account_balance_wallet_rounded,
+                        color: GardenColors.primary, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Ya se descontó Bs ${_walletContributionUsed.toStringAsFixed(2)} de tu billetera',
+                      style: const TextStyle(
+                          color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 48),
+
+            // ── "Ya realicé el pago" — immediate check ─────────────────────
+            GardenButton(
+              label: _isCheckingNow ? 'Verificando...' : 'Ya realicé el pago',
+              loading: _isCheckingNow,
+              onPressed: _isCheckingNow
+                  ? null
+                  : () async {
+                      setState(() => _isCheckingNow = true);
+                      await _checkPaymentStatus();
+                      if (mounted) setState(() => _isCheckingNow = false);
+                    },
+            ),
+
+            const SizedBox(height: 16),
+
+            // "Volver" goes back to payment method selector (no booking cancel)
+            TextButton(
+              onPressed: () {
+                _stopPolling();
+                setState(() => _qrResponse = null);
+              },
+              child: Text('Cambiar método de pago', style: TextStyle(color: subtextColor)),
+            ),
+          ],
+        ),
+      ),
     );
   }
+
+  // ── Payment body ─────────────────────────────────────────────────────────────
 
   Widget _buildPaymentBody() {
     if (_booking == null) {
       return Center(
         child: Text('Reserva no encontrada',
-          style: TextStyle(color: themeNotifier.isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary)),
+            style: TextStyle(
+                color: themeNotifier.isDark
+                    ? GardenColors.darkTextPrimary
+                    : GardenColors.lightTextPrimary)),
       );
     }
 
@@ -314,80 +565,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
     if (_qrResponse != null) {
-      return Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            children: [
-              Text('Escanea para pagar',
-                style: TextStyle(color: textColor, fontWeight: FontWeight.w900, fontSize: 24, letterSpacing: -0.5)),
-              const SizedBox(height: 32),
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, 10)),
-                  ],
-                ),
-                child: QrImageView(
-                  data: (_qrResponse!['qrId'] as String? ?? widget.bookingId),
-                  version: QrVersions.auto,
-                  size: 250,
-                  eyeStyle: const QrEyeStyle(
-                    eyeShape: QrEyeShape.square,
-                    color: Color(0xFF1A1A1A),
-                  ),
-                  dataModuleStyle: const QrDataModuleStyle(
-                    dataModuleShape: QrDataModuleShape.square,
-                    color: Color(0xFF1A1A1A),
-                  ),
-                  errorCorrectionLevel: QrErrorCorrectLevel.M,
-                ),
-              ),
-              const SizedBox(height: 32),
-              Text('Este código expira en 15 minutos',
-                style: TextStyle(color: subtextColor, fontSize: 14)),
-              if (_walletContributionUsed > 0) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: GardenColors.primary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.account_balance_wallet_rounded, color: GardenColors.primary, size: 16),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Ya se descontó Bs ${_walletContributionUsed.toStringAsFixed(2)} de tu billetera',
-                        style: const TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-              const SizedBox(height: 48),
-              GardenButton(
-                label: 'Ya realicé el pago',
-                onPressed: () {
-                  setState(() => _waitingConfirmation = true);
-                  _startPolling();
-                },
-              ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () => setState(() => _qrResponse = null),
-                child: Text('Volver', style: TextStyle(color: subtextColor)),
-              ),
-            ],
-          ),
-        ),
-      );
+      return _buildQrView(textColor, subtextColor);
     }
 
     return SingleChildScrollView(
@@ -395,7 +573,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Resumen', style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800)),
+          Text('Resumen',
+              style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800)),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(16),
@@ -406,24 +585,30 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
             child: Column(
               children: [
-                _summaryRow(Icons.pets_outlined, 'Mascota', _booking!['petName'] ?? '—', textColor, subtextColor),
+                _summaryRow(Icons.pets_outlined, 'Mascota', _booking!['petName'] ?? '—',
+                    textColor, subtextColor),
                 const SizedBox(height: 10),
                 _summaryRow(
-                  _booking!['serviceType'] == 'PASEO' ? Icons.directions_walk_outlined : Icons.home_outlined,
+                  _booking!['serviceType'] == 'PASEO'
+                      ? Icons.directions_walk_outlined
+                      : Icons.home_outlined,
                   'Servicio',
                   _booking!['serviceType'] == 'PASEO' ? 'Paseo' : 'Hospedaje',
-                  textColor, subtextColor,
+                  textColor,
+                  subtextColor,
                 ),
                 const SizedBox(height: 10),
                 _summaryRow(Icons.calendar_today_outlined, 'Fecha',
-                  _booking!['walkDate'] ?? _booking!['startDate'] ?? '—', textColor, subtextColor),
+                    _booking!['walkDate'] ?? _booking!['startDate'] ?? '—', textColor, subtextColor),
                 Divider(height: 24, color: borderColor),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Total a pagar', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+                    Text('Total a pagar',
+                        style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
                     Text('Bs ${_booking!['totalAmount'] ?? _booking!['totalPrice'] ?? '—'}',
-                      style: const TextStyle(color: GardenColors.primary, fontSize: 24, fontWeight: FontWeight.w900)),
+                        style: const TextStyle(
+                            color: GardenColors.primary, fontSize: 24, fontWeight: FontWeight.w900)),
                   ],
                 ),
               ],
@@ -431,10 +616,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ),
           const SizedBox(height: 28),
 
-          Text('Método de pago', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+          Text('Método de pago',
+              style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
 
-          // ── Wallet option ─────────────────────────────────────────────────
+          // ── Wallet option ────────────────────────────────────────────────
           if (_walletLoaded && _walletBalance > 0) ...[
             GestureDetector(
               onTap: () => setState(() => _useWallet = !_useWallet),
@@ -442,9 +628,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: _useWallet
-                      ? GardenColors.primary.withValues(alpha: 0.08)
-                      : surface,
+                  color: _useWallet ? GardenColors.primary.withValues(alpha: 0.08) : surface,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
                     color: _useWallet ? GardenColors.primary : borderColor,
@@ -454,7 +638,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 child: Row(
                   children: [
                     Container(
-                      width: 48, height: 48,
+                      width: 48,
+                      height: 48,
                       decoration: BoxDecoration(
                         color: _useWallet
                             ? GardenColors.primary.withValues(alpha: 0.15)
@@ -470,11 +655,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Billetera Garden',
-                              style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                              style: TextStyle(
+                                  color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
                           Text('Saldo disponible: Bs ${_walletBalance.toStringAsFixed(2)}',
                               style: TextStyle(
                                   color: _useWallet ? GardenColors.primary : subtextColor,
-                                  fontSize: 13, fontWeight: FontWeight.w600)),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600)),
                         ],
                       ),
                     ),
@@ -489,7 +676,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
             const SizedBox(height: 12),
 
-            // Wallet breakdown card
             if (_useWallet)
               AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
@@ -521,24 +707,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
                               : 'Pago combinado: billetera + QR',
                           style: TextStyle(
                             color: _walletCoversAll ? Colors.green : Colors.orange,
-                            fontWeight: FontWeight.w700, fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 10),
-                    _walletBreakdownRow(
-                      'Desde billetera',
-                      'Bs ${_walletCoverage.toStringAsFixed(2)}',
-                      GardenColors.primary, subtextColor,
-                    ),
+                    _walletBreakdownRow('Desde billetera', 'Bs ${_walletCoverage.toStringAsFixed(2)}',
+                        GardenColors.primary, subtextColor),
                     if (!_walletCoversAll) ...[
                       const SizedBox(height: 6),
-                      _walletBreakdownRow(
-                        'Pagar por QR',
-                        'Bs ${_remainingAfterWallet.toStringAsFixed(2)}',
-                        Colors.orange, subtextColor,
-                      ),
+                      _walletBreakdownRow('Pagar por QR',
+                          'Bs ${_remainingAfterWallet.toStringAsFixed(2)}', Colors.orange, subtextColor),
                     ],
                   ],
                 ),
@@ -546,7 +727,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             if (_useWallet) const SizedBox(height: 12),
           ],
 
-          // ── QR Bancario option ────────────────────────────────────────────
+          // ── QR Bancario option ───────────────────────────────────────────
           if (!_walletCoversAll)
             AnimatedOpacity(
               duration: const Duration(milliseconds: 200),
@@ -554,9 +735,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: !_useWallet
-                      ? GardenColors.primary.withValues(alpha: 0.08)
-                      : surface,
+                  color: !_useWallet ? GardenColors.primary.withValues(alpha: 0.08) : surface,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
                     color: !_useWallet ? GardenColors.primary : borderColor,
@@ -566,7 +745,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 child: Row(
                   children: [
                     Container(
-                      width: 48, height: 48,
+                      width: 48,
+                      height: 48,
                       decoration: BoxDecoration(
                         color: GardenColors.primary.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
@@ -579,7 +759,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(_useWallet ? 'QR Bancario (complemento)' : 'QR Bancario',
-                              style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                              style: TextStyle(
+                                  color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
                           Text(
                             _useWallet
                                 ? 'Pagarás Bs ${_remainingAfterWallet.toStringAsFixed(2)} por QR'
@@ -591,8 +772,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     ),
                     if (!_useWallet)
                       Container(
-                        width: 22, height: 22,
-                        decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
+                        width: 22,
+                        height: 22,
+                        decoration: const BoxDecoration(
+                            color: GardenColors.primary, shape: BoxShape.circle),
                         child: const Icon(Icons.check, color: Colors.white, size: 14),
                       ),
                   ],
@@ -601,7 +784,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
           const SizedBox(height: 20),
 
-          // Nota de seguridad del pago
+          // ── Security note ────────────────────────────────────────────────
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -619,33 +802,31 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         color: GardenColors.success.withValues(alpha: 0.12),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.lock_outline_rounded, color: GardenColors.success, size: 18),
+                      child: const Icon(Icons.lock_outline_rounded,
+                          color: GardenColors.success, size: 18),
                     ),
                     const SizedBox(width: 10),
-                    Expanded(
+                    const Expanded(
                       child: Text('Tu pago está protegido',
-                          style: TextStyle(color: GardenColors.success, fontWeight: FontWeight.w800, fontSize: 14)),
+                          style: TextStyle(
+                              color: GardenColors.success,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                _securityRow(
-                  Icons.schedule_rounded,
-                  'El cuidador recibe el pago únicamente cuando el servicio es completado.',
-                  textColor, subtextColor,
-                ),
+                _securityRow(Icons.schedule_rounded,
+                    'El cuidador recibe el pago únicamente cuando el servicio es completado.',
+                    textColor, subtextColor),
                 const SizedBox(height: 8),
-                _securityRow(
-                  Icons.account_balance_wallet_outlined,
-                  'Si el servicio no se concreta, el monto es devuelto íntegro a tu billetera Garden.',
-                  textColor, subtextColor,
-                ),
+                _securityRow(Icons.account_balance_wallet_outlined,
+                    'Si el servicio no se concreta, el monto es devuelto íntegro a tu billetera Garden.',
+                    textColor, subtextColor),
                 const SizedBox(height: 8),
-                _securityRow(
-                  Icons.verified_user_outlined,
-                  'Garden custodia el dinero hasta confirmar que todo salió bien.',
-                  textColor, subtextColor,
-                ),
+                _securityRow(Icons.verified_user_outlined,
+                    'Garden custodia el dinero hasta confirmar que todo salió bien.',
+                    textColor, subtextColor),
               ],
             ),
           ),
@@ -673,7 +854,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               Icon(Icons.shield_outlined, size: 14, color: subtextColor),
               const SizedBox(width: 6),
               Text('Pago protegido con escrow blockchain',
-                style: TextStyle(color: subtextColor, fontSize: 12)),
+                  style: TextStyle(color: subtextColor, fontSize: 12)),
             ],
           ),
         ],
@@ -681,58 +862,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  Widget _buildWaitingScreen() {
-    final isDark = themeNotifier.isDark;
-    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-
-    return Scaffold(
-      backgroundColor: bg,
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: 80,
-                  height: 80,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 5,
-                    color: GardenColors.primary,
-                    backgroundColor: GardenColors.primary.withValues(alpha: 0.15),
-                  ),
-                ),
-                const SizedBox(height: 40),
-                Text('Verificando pago...',
-                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: textColor, letterSpacing: -0.5),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                Text('Estamos confirmando tu pago con el banco.\nEsto puede tardar unos segundos.',
-                  style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 48),
-                TextButton(
-                  onPressed: () {
-                    _stopPolling();
-                    setState(() {
-                      _waitingConfirmation = false;
-                      _qrResponse = null;
-                    });
-                  },
-                  child: Text('Cancelar', style: TextStyle(color: subtextColor, fontSize: 14)),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  // ── Success screen ──────────────────────────────────────────────────────────
 
   Widget _buildSuccessScreen() {
     final isDark = themeNotifier.isDark;
@@ -753,26 +883,25 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 tween: Tween(begin: 0.0, end: 1.0),
                 duration: const Duration(milliseconds: 800),
                 curve: Curves.elasticOut,
-                builder: (context, value, child) {
-                  return Transform.scale(
-                    scale: value,
-                    child: Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        color: Colors.green.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.green.withValues(alpha: 0.5), width: 4),
-                      ),
-                      child: const Icon(Icons.check_rounded, color: Colors.green, size: 50),
+                builder: (context, value, child) => Transform.scale(
+                  scale: value,
+                  child: Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: Colors.green.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.green.withValues(alpha: 0.5), width: 4),
                     ),
-                  );
-                },
+                    child: const Icon(Icons.check_rounded, color: Colors.green, size: 50),
+                  ),
+                ),
               ),
               const SizedBox(height: 32),
               Text(
                 _paidWithWallet ? '¡Pagado con billetera!' : '¡Pago confirmado!',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: textColor, letterSpacing: -0.5),
+                style: TextStyle(
+                    fontSize: 28, fontWeight: FontWeight.w900, color: textColor, letterSpacing: -0.5),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
@@ -792,7 +921,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     ],
                     Text(
                       _paidWithWallet ? 'Deducido de tu billetera' : 'Pago aprobado',
-                      style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w700, fontSize: 13),
+                      style: const TextStyle(
+                          color: Colors.green, fontWeight: FontWeight.w700, fontSize: 13),
                     ),
                   ],
                 ),
@@ -814,7 +944,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: borderColor),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05), blurRadius: 10, offset: const Offset(0, 4)),
+                      BoxShadow(
+                          color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4)),
                     ],
                   ),
                   child: Column(
@@ -824,12 +957,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
                           CircleAvatar(
                             radius: 20,
                             backgroundImage: _booking!['caregiverPhoto'] != null
-                              ? NetworkImage(_booking!['caregiverPhoto'])
-                              : null,
+                                ? NetworkImage(_booking!['caregiverPhoto'])
+                                : null,
                             backgroundColor: GardenColors.primary.withValues(alpha: 0.2),
                             child: _booking!['caregiverPhoto'] == null
-                              ? const Icon(Icons.person, color: GardenColors.primary)
-                              : null,
+                                ? const Icon(Icons.person, color: GardenColors.primary)
+                                : null,
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -837,7 +970,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text('Cuidador', style: TextStyle(color: subtextColor, fontSize: 12)),
-                                Text(_booking!['caregiverName'] ?? '—', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                                Text(_booking!['caregiverName'] ?? '—',
+                                    style: TextStyle(
+                                        color: textColor,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15)),
                               ],
                             ),
                           ),
@@ -848,18 +985,29 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       const SizedBox(height: 16),
                       _detailRow('Mascota', _booking!['petName'] ?? '—', textColor, subtextColor),
                       const SizedBox(height: 12),
-                      _detailRow('Fecha', _booking!['walkDate'] ?? _booking!['startDate'] ?? '—', textColor, subtextColor),
+                      _detailRow('Fecha',
+                          _booking!['walkDate'] ?? _booking!['startDate'] ?? '—', textColor, subtextColor),
                       const SizedBox(height: 12),
-                      _detailRow('Servicio', _booking!['serviceType'] == 'PASEO' ? 'Paseo' : 'Hospedaje', textColor, subtextColor),
+                      _detailRow('Servicio',
+                          _booking!['serviceType'] == 'PASEO' ? 'Paseo' : 'Hospedaje', textColor, subtextColor),
                       const SizedBox(height: 16),
                       Divider(color: borderColor, height: 1),
                       const SizedBox(height: 16),
-                      _detailRow('Total Pagado', 'Bs ${_booking!['totalPrice'] ?? _booking!['totalAmount'] ?? ''}', GardenColors.primary, subtextColor, isBoldValue: true),
+                      _detailRow('Total Pagado',
+                          'Bs ${_booking!['totalPrice'] ?? _booking!['totalAmount'] ?? ''}',
+                          GardenColors.primary, subtextColor,
+                          isBoldValue: true),
                       if (_walletContributionUsed > 0) ...[
                         const SizedBox(height: 6),
-                        _detailRow('  · Desde billetera', 'Bs ${_walletContributionUsed.toStringAsFixed(2)}', GardenColors.primary.withValues(alpha: 0.7), subtextColor),
+                        _detailRow('  · Desde billetera',
+                            'Bs ${_walletContributionUsed.toStringAsFixed(2)}',
+                            GardenColors.primary.withValues(alpha: 0.7), subtextColor),
                         if (!_paidWithWallet)
-                          _detailRow('  · Por QR', 'Bs ${(_totalAmount - _walletContributionUsed).toStringAsFixed(2)}', subtextColor, subtextColor),
+                          _detailRow(
+                              '  · Por QR',
+                              'Bs ${(_totalAmount - _walletContributionUsed).toStringAsFixed(2)}',
+                              subtextColor,
+                              subtextColor),
                       ],
                       const SizedBox(height: 12),
                       _detailRow('Estado', 'Esperando al cuidador', Colors.green, subtextColor),
@@ -877,7 +1025,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Próximos pasos:', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
+                    Text('Próximos pasos:',
+                        style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
                     const SizedBox(height: 16),
                     _stepRow('1', 'Pago verificado ✓', Colors.green, textColor),
                     const SizedBox(height: 12),
@@ -905,76 +1054,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  void _showManualReviewDialog() {
-    final isDark = themeNotifier.isDark;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => Container(
-        padding: EdgeInsets.only(
-          left: 24, right: 24, top: 24,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 40,
-        ),
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40, height: 4,
-                decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(2)),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text('Solicitar revisión manual', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 16),
-            Text(
-              'Si realizaste el pago y fue rechazado por error, nuestro equipo puede revisarlo manualmente.',
-              style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
-            ),
-            const SizedBox(height: 20),
-            _reviewStep(Icons.screenshot_outlined, 'Toma una captura de tu comprobante bancario', subtextColor, textColor),
-            const SizedBox(height: 12),
-            _reviewStep(Icons.email_outlined, 'Envíala a soporte@garden.bo', subtextColor, textColor),
-            _reviewStep(Icons.tag_outlined, 'Incluye el ID de tu reserva: ${widget.bookingId.substring(0, 8).toUpperCase()}', subtextColor, textColor),
-            const SizedBox(height: 12),
-            _reviewStep(Icons.schedule_outlined, 'Nuestro equipo lo revisará en 24 horas', subtextColor, textColor),
-            const SizedBox(height: 28),
-            SizedBox(
-              width: double.infinity,
-              child: GardenButton(
-                label: 'Entendido',
-                onPressed: () => Navigator.pop(ctx),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _reviewStep(IconData icon, String text, Color subtextColor, Color textColor) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: GardenColors.primary),
-          const SizedBox(width: 12),
-          Expanded(child: Text(text, style: TextStyle(color: textColor, fontSize: 14, height: 1.4))),
-        ],
-      ),
-    );
-  }
+  // ── Rejection screen ─────────────────────────────────────────────────────────
 
   Widget _buildRejectionScreen() {
     final isDark = themeNotifier.isDark;
@@ -1001,9 +1081,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ),
               const SizedBox(height: 28),
               Text('Pago rechazado',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: textColor, letterSpacing: -0.5),
-                textAlign: TextAlign.center,
-              ),
+                  style: TextStyle(
+                      fontSize: 28, fontWeight: FontWeight.w900, color: textColor, letterSpacing: -0.5),
+                  textAlign: TextAlign.center),
               const SizedBox(height: 16),
               Text(
                 'No pudimos confirmar tu pago. Por favor verifica que hayas realizado la transferencia correctamente y vuelve a intentarlo.',
@@ -1024,12 +1104,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     Row(children: [
                       const Icon(Icons.info_outline, size: 16, color: Colors.orange),
                       const SizedBox(width: 8),
-                      Text('¿Qué puedes hacer?', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+                      Text('¿Qué puedes hacer?',
+                          style: TextStyle(
+                              color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
                     ]),
                     const SizedBox(height: 10),
-                    Text('• Verifica que el pago haya sido exitoso en tu app bancaria.', style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5)),
-                    Text('• Si el pago fue exitoso, genera un nuevo QR y repite el proceso.', style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5)),
-                    Text('• Si el problema persiste, solicita una revisión manual.', style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5)),
+                    Text('• Verifica que el pago haya sido exitoso en tu app bancaria.',
+                        style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5)),
+                    Text('• Si el pago fue exitoso, genera un nuevo QR y repite el proceso.',
+                        style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5)),
+                    Text('• Si el problema persiste, solicita una revisión manual.',
+                        style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5)),
                   ],
                 ),
               ),
@@ -1037,20 +1122,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
               GardenButton(
                 label: 'Volver a pagar',
                 icon: Icons.qr_code_2_outlined,
-                onPressed: () {
-                  setState(() {
-                    _waitingConfirmation = false;
-                    _paymentRejected = false;
-                    _qrResponse = null;
-                  });
-                },
+                onPressed: () => setState(() {
+                  _paymentRejected = false;
+                  _qrResponse = null;
+                }),
               ),
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   icon: const Icon(Icons.support_agent_outlined, size: 18),
-                  label: const Text('Solicitar revisión manual', style: TextStyle(fontWeight: FontWeight.w600)),
+                  label: const Text('Solicitar revisión manual',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     side: BorderSide(color: borderColor),
@@ -1072,53 +1155,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  Widget _walletBreakdownRow(String label, String value, Color valueColor, Color labelColor) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: TextStyle(color: labelColor, fontSize: 13)),
-        Text(value, style: TextStyle(color: valueColor, fontSize: 13, fontWeight: FontWeight.w700)),
-      ],
-    );
-  }
+  // ── Expired screen ───────────────────────────────────────────────────────────
 
-  Widget _summaryRow(IconData icon, String label, String value, Color textColor, Color subtextColor) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: subtextColor),
-        const SizedBox(width: 10),
-        Text(label, style: TextStyle(color: subtextColor, fontSize: 14)),
-        const Spacer(),
-        Text(value, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
-      ],
-    );
-  }
-
-  Widget _detailRow(String label, String value, Color valueColor, Color labelColor, {bool isBoldValue = false}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: TextStyle(color: labelColor, fontSize: 14)),
-        Text(value, style: TextStyle(color: valueColor, fontWeight: isBoldValue ? FontWeight.w900 : FontWeight.w700, fontSize: 14)),
-      ],
-    );
-  }
-
-  Widget _stepRow(String number, String text, Color color, Color textColor) {
-    return Row(
-      children: [
-        Container(
-          width: 28, height: 28,
-          decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
-          child: Center(child: Text(number, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w800))),
-        ),
-        const SizedBox(width: 16),
-        Expanded(child: Text(text, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w500))),
-      ],
-    );
-  }
-
-  // ── QR EXPIRADO ───────────────────────────────────────────────────────────
   Widget _buildExpiredScreen() {
     final isDark = themeNotifier.isDark;
     final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
@@ -1144,22 +1182,20 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   child: const Icon(Icons.timer_off_outlined, color: GardenColors.warning, size: 46),
                 ),
                 const SizedBox(height: 28),
-                Text('QR vencido', style: TextStyle(color: textColor, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                Text('QR vencido',
+                    style: TextStyle(
+                        color: textColor, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
                 const SizedBox(height: 12),
                 Text(
-                  'El código QR expiró a los 15 minutos. Si realizaste el pago antes de que venciera, espera unos segundos y vuelve a verificar. Si no pagaste, genera un nuevo QR.',
+                  'El código QR expiró a los 15 minutos y la reserva fue cancelada. Si realizaste el pago antes de que venciera, espera unos segundos y vuelve a verificar. Si no pagaste, crea una nueva reserva.',
                   style: TextStyle(color: subtextColor, fontSize: 14, height: 1.6),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 36),
                 GardenButton(
-                  label: 'Generar nuevo QR',
-                  icon: Icons.qr_code_2_outlined,
-                  onPressed: () => setState(() {
-                    _qrExpired = false;
-                    _qrResponse = null;
-                    _waitingConfirmation = false;
-                  }),
+                  label: 'Volver al marketplace',
+                  icon: Icons.search_rounded,
+                  onPressed: () => context.go('/marketplace'),
                 ),
                 const SizedBox(height: 12),
                 TextButton(
@@ -1173,4 +1209,152 @@ class _PaymentScreenState extends State<PaymentScreen> {
       ),
     );
   }
+
+  // ── Manual review dialog ────────────────────────────────────────────────────
+
+  void _showManualReviewDialog() {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        padding: EdgeInsets.only(
+          left: 24, right: 24, top: 24,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 40,
+        ),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                    color: Colors.grey.shade400, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text('Solicitar revisión manual',
+                style:
+                    TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 16),
+            Text(
+              'Si realizaste el pago y fue rechazado por error, nuestro equipo puede revisarlo manualmente.',
+              style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
+            ),
+            const SizedBox(height: 20),
+            _reviewStep(Icons.screenshot_outlined,
+                'Toma una captura de tu comprobante bancario', subtextColor, textColor),
+            const SizedBox(height: 12),
+            _reviewStep(Icons.email_outlined, 'Envíala a soporte@garden.bo', subtextColor, textColor),
+            _reviewStep(Icons.tag_outlined,
+                'Incluye el ID de tu reserva: ${widget.bookingId.substring(0, 8).toUpperCase()}',
+                subtextColor, textColor),
+            const SizedBox(height: 12),
+            _reviewStep(Icons.schedule_outlined, 'Nuestro equipo lo revisará en 24 horas',
+                subtextColor, textColor),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              child: GardenButton(label: 'Entendido', onPressed: () => Navigator.pop(ctx)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Small widgets ────────────────────────────────────────────────────────────
+
+  Widget _securityRow(IconData icon, String text, Color textColor, Color subtextColor) =>
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: subtextColor),
+          const SizedBox(width: 8),
+          Expanded(
+              child: Text(text,
+                  style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4))),
+        ],
+      );
+
+  Widget _reviewStep(IconData icon, String text, Color subtextColor, Color textColor) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 18, color: GardenColors.primary),
+            const SizedBox(width: 12),
+            Expanded(
+                child: Text(text, style: TextStyle(color: textColor, fontSize: 14, height: 1.4))),
+          ],
+        ),
+      );
+
+  Widget _walletBreakdownRow(
+          String label, String value, Color valueColor, Color labelColor) =>
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: labelColor, fontSize: 13)),
+          Text(value,
+              style: TextStyle(color: valueColor, fontSize: 13, fontWeight: FontWeight.w700)),
+        ],
+      );
+
+  Widget _summaryRow(IconData icon, String label, String value, Color textColor,
+          Color subtextColor) =>
+      Row(
+        children: [
+          Icon(icon, size: 16, color: subtextColor),
+          const SizedBox(width: 10),
+          Text(label, style: TextStyle(color: subtextColor, fontSize: 14)),
+          const Spacer(),
+          Text(value,
+              style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
+        ],
+      );
+
+  Widget _detailRow(String label, String value, Color valueColor, Color labelColor,
+          {bool isBoldValue = false}) =>
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: labelColor, fontSize: 14)),
+          Text(value,
+              style: TextStyle(
+                  color: valueColor,
+                  fontWeight: isBoldValue ? FontWeight.w900 : FontWeight.w700,
+                  fontSize: 14)),
+        ],
+      );
+
+  Widget _stepRow(String number, String text, Color color, Color textColor) =>
+      Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration:
+                BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
+            child: Center(
+                child: Text(number,
+                    style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w800))),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+              child: Text(text,
+                  style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w500))),
+        ],
+      );
 }

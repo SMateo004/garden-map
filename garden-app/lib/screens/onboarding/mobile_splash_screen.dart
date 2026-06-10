@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -136,6 +135,22 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
         if (data['success'] == true) {
           final bookings =
               (data['data'] as List).cast<Map<String, dynamic>>();
+
+          // Check for PENDING_PAYMENT booking with valid QR first
+          final pendingPayment = bookings.where((b) {
+            if (b['status'] != 'PENDING_PAYMENT') return false;
+            final qrId = b['qrId'];
+            final qrExpiresAtStr = b['qrExpiresAt'];
+            if (qrId == null || qrExpiresAtStr == null) return false;
+            final expiry = DateTime.tryParse(qrExpiresAtStr.toString());
+            return expiry != null && expiry.isAfter(DateTime.now());
+          }).firstOrNull;
+          if (pendingPayment != null && mounted) {
+            debugPrint('[SPLASH] → /payment/${pendingPayment['id']} (QR activo)');
+            context.go('/payment/${pendingPayment['id']}');
+            return;
+          }
+
           final active =
               bookings.where((b) => b['status'] == 'IN_PROGRESS').firstOrNull;
           if (active != null && mounted) {
