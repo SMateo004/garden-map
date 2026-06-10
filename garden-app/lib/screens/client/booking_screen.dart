@@ -187,9 +187,7 @@ class _BookingScreenState extends State<BookingScreen> {
             _selectedPetIds = [_pets.first['id'] as String];
           } else {
              WidgetsBinding.instance.addPostFrameCallback((_) {
-               ScaffoldMessenger.of(context).showSnackBar(
-                 const SnackBar(content: Text('Primero agrega una mascota en tu perfil')),
-               );
+               if (mounted) GardenSnackBar.warning(context, 'Primero agrega una mascota en tu perfil');
              });
           }
         }
@@ -477,11 +475,7 @@ class _BookingScreenState extends State<BookingScreen> {
     }
   }
 
-  void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: GardenColors.error),
-    );
-  }
+  void _showError(String msg) => GardenSnackBar.error(context, msg);
 
   String formatDate(DateTime date) {
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
@@ -2562,11 +2556,7 @@ class _BookingScreenState extends State<BookingScreen> {
                     : now.add(const Duration(days: 60));
                 // If lastDate is before today there's nothing to pick
                 if (lastDate.isBefore(now)) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('El M&G debe ser antes de la fecha de reserva. Selecciona primero la fecha del servicio.'),
-                    ),
-                  );
+                  GardenSnackBar.warning(context, 'El M&G debe ser antes de la fecha de reserva. Selecciona primero la fecha del servicio.');
                   return;
                 }
                 final initialDate = (_mgDate != null && _mgDate!.isBefore(lastDate) && !_mgDate!.isBefore(now))

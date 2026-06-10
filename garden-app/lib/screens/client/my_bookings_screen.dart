@@ -222,22 +222,16 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       if (data['success'] == true) {
         await _loadBookings();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Reserva cancelada sin costo'), backgroundColor: Colors.orange),
-          );
+          GardenSnackBar.warning(context, 'Reserva cancelada sin costo');
         }
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(data['error']?['message'] ?? 'Error al cancelar'), backgroundColor: Colors.red.shade700),
-          );
+          GardenSnackBar.error(context, data['error']?['message'] ?? 'Error al cancelar');
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red.shade700),
-        );
+        GardenSnackBar.error(context, 'Error: $e');
       }
     }
   }
@@ -316,11 +310,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
         throw Exception(data['error']?['message'] ?? 'Error al continuar con el pago');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: Colors.red.shade700),
-        );
-      }
+      if (mounted) GardenSnackBar.error(context, e.toString().replaceFirst('Exception: ', ''));
     }
   }
 
@@ -340,19 +330,13 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         await _loadBookings();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Reserva cancelada'), backgroundColor: Colors.orange),
-          );
-        }
+        if (mounted) GardenSnackBar.warning(context, 'Reserva cancelada');
       } else {
         throw Exception(data['error']?['message'] ?? 'Error');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
-        );
+        GardenSnackBar.error(context, e.toString());
       }
     }
   }
@@ -488,23 +472,12 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         await _loadBookings();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ Paseo ampliado $additionalMinutes min · Cuidador notificado'),
-              backgroundColor: GardenColors.success,
-            ),
-          );
-        }
+        if (mounted) GardenSnackBar.success(context, 'Paseo ampliado $additionalMinutes min · Cuidador notificado');
       } else {
         throw Exception(data['error']?['message'] ?? data['message'] ?? 'Error al ampliar');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
-        );
-      }
+      if (mounted) GardenSnackBar.error(context, e.toString());
     }
   }
 
@@ -1628,17 +1601,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                                 );
                                 await _loadBookings();
                               } else {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                  content: Text(data['error']?['message'] ?? 'Error al enviar el reporte'),
-                                  backgroundColor: Colors.red.shade700,
-                                ));
+                                GardenSnackBar.error(context, data['error']?['message'] ?? 'Error al enviar el reporte');
                               }
                             } catch (e) {
                               Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                                content: Text('Error de conexión. Intenta de nuevo.'),
-                                backgroundColor: Colors.red,
-                              ));
+                              GardenSnackBar.error(context, 'Error de conexión. Intenta de nuevo.');
                             }
                           },
                     style: ElevatedButton.styleFrom(
@@ -1731,9 +1698,7 @@ class _RatingSheetState extends State<_RatingSheet> {
             extra: {'role': 'CLIENT'},
           );
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('¡Gracias por tu calificación!'), backgroundColor: GardenColors.success),
-          );
+          GardenSnackBar.success(context, '¡Gracias por tu calificación!');
         }
       }
     } catch (e) {

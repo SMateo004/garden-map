@@ -79,12 +79,10 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       );
       if (jsonDecode(res.body)['success'] == true) {
         await _load();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$petName eliminado'), backgroundColor: GardenColors.success));
+        if (mounted) GardenSnackBar.success(context, '$petName eliminado');
       }
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error al eliminar'), backgroundColor: GardenColors.error));
+      if (mounted) GardenSnackBar.error(context, 'Error al eliminar');
     }
   }
 
@@ -495,9 +493,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
       final url = await _uploadFile(img.bytes, img.name);
       if (url != null) setState(() => _photoUrl = url);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(e.toString().replaceFirst('Exception: ', '')),
-        backgroundColor: GardenColors.error));
+      if (mounted) GardenSnackBar.error(context, e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _uploadingPhoto = false);
     }
@@ -505,8 +501,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
 
   Future<void> _pickExtraPhoto() async {
     if (_extraPhotos.length >= 4) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Máximo 4 fotos adicionales'), backgroundColor: GardenColors.warning));
+      GardenSnackBar.warning(context, 'Máximo 4 fotos adicionales');
       return;
     }
     final img = await _pickImageBytes(quality: 80);
@@ -516,9 +511,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
       final url = await _uploadFile(img.bytes, img.name);
       if (url != null) setState(() => _extraPhotos = [..._extraPhotos, url]);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(e.toString().replaceFirst('Exception: ', '')),
-        backgroundColor: GardenColors.error));
+      if (mounted) GardenSnackBar.error(context, e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _uploadingExtra = false);
     }
@@ -526,8 +519,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
 
   Future<void> _pickVaccinePhoto() async {
     if (_vaccinePhotos.length >= 4) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Máximo 4 fotos de vacunas'), backgroundColor: GardenColors.warning));
+      GardenSnackBar.warning(context, 'Máximo 4 fotos de vacunas');
       return;
     }
     final img = await _pickImageBytes(quality: 80);
@@ -537,9 +529,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
       final url = await _uploadFile(img.bytes, img.name);
       if (url != null) setState(() => _vaccinePhotos = [..._vaccinePhotos, url]);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(e.toString().replaceFirst('Exception: ', '')),
-        backgroundColor: GardenColors.error));
+      if (mounted) GardenSnackBar.error(context, e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _uploadingVaccine = false);
     }
@@ -547,8 +537,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
 
   Future<void> _pickDocument() async {
     if (_documents.length >= 4) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Máximo 4 documentos'), backgroundColor: GardenColors.warning));
+      GardenSnackBar.warning(context, 'Máximo 4 documentos');
       return;
     }
     final img = await _pickImageBytes(quality: 90);
@@ -558,9 +547,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
       final url = await _uploadFile(img.bytes, img.name);
       if (url != null) setState(() => _documents = [..._documents, url]);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(e.toString().replaceFirst('Exception: ', '')),
-        backgroundColor: GardenColors.error));
+      if (mounted) GardenSnackBar.error(context, e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _uploadingDocument = false);
     }
@@ -607,18 +594,14 @@ class _PetFormSheetState extends State<_PetFormSheet> {
       if (data['success'] == true) {
         widget.onSaved();
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(_isEditing ? '✅ Mascota actualizada' : '✅ Mascota agregada'),
-          backgroundColor: GardenColors.success));
+        GardenSnackBar.success(context, _isEditing ? 'Mascota actualizada' : 'Mascota agregada');
       } else {
         throw Exception(data['error']?['message'] ?? 'Error al guardar');
       }
     } catch (e) {
       if (mounted) {
         setState(() => _saving = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: GardenColors.error));
+        GardenSnackBar.error(context, e.toString().replaceFirst('Exception: ', ''));
       }
     }
   }

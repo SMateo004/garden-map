@@ -1343,10 +1343,18 @@ ThemeData gardenTheme({bool dark = false}) {
       color: GardenColors.primary,
     ),
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: dark ? GardenColors.darkSurfaceElevated : GardenColors.primaryDark,
-      contentTextStyle: GoogleFonts.nunito(color: Colors.white, fontWeight: FontWeight.w500),
+      // Use a near-black so the default snackbar is always readable in both modes
+      backgroundColor: const Color(0xFF1A2210),
+      contentTextStyle: GoogleFonts.nunito(
+        color: Colors.white,
+        fontWeight: FontWeight.w600,
+        fontSize: 14,
+      ),
       shape: RoundedRectangleBorder(borderRadius: GardenRadius.md_),
       behavior: SnackBarBehavior.floating,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      elevation: 8,
+      actionTextColor: GardenColors.lime,
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: Colors.transparent,
@@ -1356,4 +1364,89 @@ ThemeData gardenTheme({bool dark = false}) {
       shape: RoundedRectangleBorder(borderRadius: GardenRadius.xl_),
     ),
   );
+}
+
+// ── GARDEN SNACKBAR ──────────────────────────────────────────────────────────
+// Typed snackbar helper. Use instead of raw SnackBar(...) to get consistent
+// icons, colours, and typography across the app.
+//
+// Usage:
+//   GardenSnackBar.success(context, '✅ Mascota guardada');
+//   GardenSnackBar.error(context, 'No se pudo conectar');
+//   GardenSnackBar.warning(context, 'Debes agregar al menos una mascota');
+//   GardenSnackBar.info(context, 'Tu reserva está pendiente de pago');
+
+enum _GSnackType { success, error, warning, info }
+
+class GardenSnackBar {
+  GardenSnackBar._();
+
+  static void success(BuildContext context, String message, {Duration? duration}) =>
+      _show(context, message, _GSnackType.success, duration: duration);
+
+  static void error(BuildContext context, String message, {Duration? duration}) =>
+      _show(context, message, _GSnackType.error, duration: duration);
+
+  static void warning(BuildContext context, String message, {Duration? duration}) =>
+      _show(context, message, _GSnackType.warning, duration: duration);
+
+  static void info(BuildContext context, String message, {Duration? duration}) =>
+      _show(context, message, _GSnackType.info, duration: duration);
+
+  static void _show(
+    BuildContext context,
+    String message,
+    _GSnackType type, {
+    Duration? duration,
+  }) {
+    final Color bg;
+    final IconData icon;
+    switch (type) {
+      case _GSnackType.success:
+        bg   = const Color(0xFF2D6A35); // rich green
+        icon = Icons.check_circle_rounded;
+        break;
+      case _GSnackType.error:
+        bg   = const Color(0xFFC0392B); // strong red
+        icon = Icons.error_rounded;
+        break;
+      case _GSnackType.warning:
+        bg   = const Color(0xFFB45309); // amber-brown
+        icon = Icons.warning_rounded;
+        break;
+      case _GSnackType.info:
+        bg   = const Color(0xFF1A2210); // near-black (default)
+        icon = Icons.info_rounded;
+        break;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(icon, color: Colors.white, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  message,
+                  style: GoogleFonts.nunito(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: bg,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          elevation: 8,
+          duration: duration ?? const Duration(seconds: 3),
+        ),
+      );
+  }
 }
