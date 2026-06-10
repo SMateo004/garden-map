@@ -92,7 +92,14 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       debugPrint('MY_BOOKINGS: Response ${response.statusCode}: ${response.body}');
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
-        if (mounted) setState(() => _bookings = (data['data'] as List).cast<Map<String, dynamic>>());
+        final loaded = (data['data'] as List).cast<Map<String, dynamic>>();
+        if (mounted) setState(() => _bookings = loaded);
+        // Silently cancel any PENDING_PAYMENT bookings whose QR already expired
+        for (final b in loaded) {
+          if (_isQrExpired(b)) {
+            _cancelExpiredBooking(b['id'] as String);
+          }
+        }
         _checkMGDecisionNeeded();
         // Schedule highlight clear after 5 seconds on first load
         if (_highlightBookingId != null) {
@@ -235,21 +242,57 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     }
   }
 
+  /// Returns true if this booking is PENDING_PAYMENT and its QR has already expired.
+  /// These should be hidden from the list and cancelled in the background.
+  bool _isQrExpired(Map<String, dynamic> b) {
+    if (b['status'] != 'PENDING_PAYMENT') return false;
+    final qrId = b['qrId'];
+    final qrExpiresAtStr = b['qrExpiresAt'];
+    if (qrId == null || qrExpiresAtStr == null) return false;
+    final expiry = DateTime.tryParse(qrExpiresAtStr.toString());
+    return expiry != null && expiry.isBefore(DateTime.now());
+  }
+
+  /// Returns true if the booking has an active (not yet expired) QR.
+  bool _hasActiveQr(Map<String, dynamic> b) {
+    if (b['status'] != 'PENDING_PAYMENT') return false;
+    final qrId = b['qrId'];
+    final qrExpiresAtStr = b['qrExpiresAt'];
+    if (qrId == null || qrExpiresAtStr == null) return false;
+    final expiry = DateTime.tryParse(qrExpiresAtStr.toString());
+    return expiry != null && expiry.isAfter(DateTime.now());
+  }
+
+  Future<void> _cancelExpiredBooking(String bookingId) async {
+    try {
+      await http.post(
+        Uri.parse('$_baseUrl/bookings/$bookingId/cancel'),
+        headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'reason': 'QR de pago expirado'}),
+      );
+      debugPrint('MY_BOOKINGS: auto-cancelled expired booking $bookingId');
+    } catch (e) {
+      debugPrint('MY_BOOKINGS: failed to auto-cancel $bookingId: $e');
+    }
+  }
+
   List<Map<String, dynamic>> get _filteredBookings {
-    if (_selectedFilter == 'todas') return _bookings;
+    // Hide bookings whose QR has expired — they are cancelled in the background
+    final visible = _bookings.where((b) => !_isQrExpired(b)).toList();
+    if (_selectedFilter == 'todas') return visible;
     if (_selectedFilter == 'activas') {
-      return _bookings.where((b) => [
+      return visible.where((b) => [
         'PENDING_MG', 'PENDING_PAYMENT', 'PAYMENT_PENDING_APPROVAL',
         'WAITING_CAREGIVER_APPROVAL', 'CONFIRMED', 'IN_PROGRESS'
       ].contains(b['status'])).toList();
     }
     if (_selectedFilter == 'completadas') {
-      return _bookings.where((b) => b['status'] == 'COMPLETED').toList();
+      return visible.where((b) => b['status'] == 'COMPLETED').toList();
     }
     if (_selectedFilter == 'canceladas') {
-      return _bookings.where((b) => ['CANCELLED', 'REJECTED_BY_CAREGIVER'].contains(b['status'])).toList();
+      return visible.where((b) => ['CANCELLED', 'REJECTED_BY_CAREGIVER'].contains(b['status'])).toList();
     }
-    return _bookings;
+    return visible;
   }
 
   Future<void> _proceedToPayment(String bookingId) async {
@@ -764,9 +807,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                   ),
                   if (status == 'PENDING_PAYMENT')
                     GardenButton(
-                      label: 'Pagar',
+                      label: _hasActiveQr(booking) ? 'Ver QR' : 'Pagar',
                       height: 36,
-                      width: 80,
+                      width: _hasActiveQr(booking) ? 90 : 80,
                       onPressed: () => context.push('/payment/${booking['id']}'),
                     ),
                 ],
