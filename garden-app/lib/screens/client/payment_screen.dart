@@ -305,10 +305,22 @@ class _PaymentScreenState extends State<PaymentScreen> {
       if (confirm == true && mounted) {
         _stopPolling();
         await _cancelBooking();
-        if (mounted) context.pop();
+        if (mounted) {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/service-selector');
+          }
+        }
       }
     } else {
-      if (mounted) context.pop();
+      if (mounted) {
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go('/service-selector');
+        }
+      }
     }
   }
 
