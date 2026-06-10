@@ -242,17 +242,6 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     }
   }
 
-  /// Returns true if this booking is PENDING_PAYMENT and its QR has already expired.
-  /// These should be hidden from the list and cancelled in the background.
-  bool _isQrExpired(Map<String, dynamic> b) {
-    if (b['status'] != 'PENDING_PAYMENT') return false;
-    final qrId = b['qrId'];
-    final qrExpiresAtStr = b['qrExpiresAt'];
-    if (qrId == null || qrExpiresAtStr == null) return false;
-    final expiry = DateTime.tryParse(qrExpiresAtStr.toString());
-    return expiry != null && expiry.isBefore(DateTime.now());
-  }
-
   /// Returns true if the booking has an active (not yet expired) QR.
   bool _hasActiveQr(Map<String, dynamic> b) {
     if (b['status'] != 'PENDING_PAYMENT') return false;
@@ -261,6 +250,24 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     if (qrId == null || qrExpiresAtStr == null) return false;
     final expiry = DateTime.tryParse(qrExpiresAtStr.toString());
     return expiry != null && expiry.isAfter(DateTime.now());
+  }
+
+  /// A PENDING_PAYMENT booking is only meaningful (and visible) when it has
+  /// an active QR. Without a QR the slot should not be considered reserved.
+  /// A PENDING_PAYMENT with an expired QR should also be hidden (and cancelled).
+  bool _shouldShowBooking(Map<String, dynamic> b) {
+    if (b['status'] != 'PENDING_PAYMENT') return true;
+    return _hasActiveQr(b);
+  }
+
+  /// Returns true if this PENDING_PAYMENT booking has a QR that already expired.
+  bool _isQrExpired(Map<String, dynamic> b) {
+    if (b['status'] != 'PENDING_PAYMENT') return false;
+    final qrId = b['qrId'];
+    final qrExpiresAtStr = b['qrExpiresAt'];
+    if (qrId == null || qrExpiresAtStr == null) return false;
+    final expiry = DateTime.tryParse(qrExpiresAtStr.toString());
+    return expiry != null && expiry.isBefore(DateTime.now());
   }
 
   Future<void> _cancelExpiredBooking(String bookingId) async {
@@ -277,8 +284,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   }
 
   List<Map<String, dynamic>> get _filteredBookings {
-    // Hide bookings whose QR has expired — they are cancelled in the background
-    final visible = _bookings.where((b) => !_isQrExpired(b)).toList();
+    // Only show PENDING_PAYMENT bookings that have an active QR;
+    // hide those without QR or with an expired one.
+    final visible = _bookings.where(_shouldShowBooking).toList();
     if (_selectedFilter == 'todas') return visible;
     if (_selectedFilter == 'activas') {
       return visible.where((b) => [
