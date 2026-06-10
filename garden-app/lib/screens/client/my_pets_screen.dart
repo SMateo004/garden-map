@@ -718,10 +718,27 @@ class _PetFormSheetState extends State<_PetFormSheet> {
             // Handle
             Center(child: Container(width: 40, height: 4,
               decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: Icon(Icons.arrow_back_ios_new_rounded, color: subtextColor, size: 20),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      _isEditing ? 'Editar Mascota' : 'Nueva Mascota',
+                      style: TextStyle(color: textColor, fontSize: 19, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 36), // balance visual
+              ],
+            ),
             const SizedBox(height: 16),
-            Center(child: Text(_isEditing ? 'Editar Mascota' : 'Nueva Mascota',
-              style: TextStyle(color: textColor, fontSize: 19, fontWeight: FontWeight.w800))),
-            const SizedBox(height: 20),
 
             // ── Foto principal ──────────────────────────────────────────
             Center(
