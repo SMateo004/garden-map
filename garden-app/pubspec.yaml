@@ -58,6 +58,7 @@ dependencies:
   font_awesome_flutter: ^10.8.0
   flutter_secure_storage: ^9.2.4
   path_provider: ^2.1.4
+  audioplayers: ^6.0.0
 
 dev_dependencies:
   flutter_test:
@@ -80,6 +81,7 @@ flutter:
     - assets/images/
     - assets/images/pets/
     - assets/images/team/
+    - assets/sounds/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

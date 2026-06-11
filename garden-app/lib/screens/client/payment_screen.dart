@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
@@ -167,6 +168,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 double.tryParse(responseData?['walletDeducted']?.toString() ?? '0') ?? _totalAmount;
             _paymentConfirmed = true;
           });
+          _showPaymentSuccessOverlay();
         } else {
           if (responseData?['walletDeducted'] != null) {
             _walletContributionUsed =
@@ -240,6 +242,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             _booking = bookingData;
             _paymentConfirmed = true;
           });
+          _showPaymentSuccessOverlay();
         } else if (status == 'CANCELLED') {
           _stopPolling();
           setState(() => _paymentRejected = true);
@@ -322,6 +325,29 @@ class _PaymentScreenState extends State<PaymentScreen> {
         }
       }
     }
+  }
+
+  // ── Payment success overlay ─────────────────────────────────────────────────
+
+  Future<void> _showPaymentSuccessOverlay() async {
+    try {
+      final player = AudioPlayer();
+      await player.play(AssetSource('sounds/payment_success.mp3'));
+      player.onPlayerComplete.first.then((_) => player.dispose());
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.88),
+      builder: (_) => const _PaymentSuccessOverlay(),
+    );
+
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    });
   }
 
   // ── Save QR ─────────────────────────────────────────────────────────────────
@@ -1369,4 +1395,90 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w500))),
         ],
       );
+}
+
+// ── Payment success overlay ──────────────────────────────────────────────────
+
+class _PaymentSuccessOverlay extends StatefulWidget {
+  const _PaymentSuccessOverlay();
+
+  @override
+  State<_PaymentSuccessOverlay> createState() => _PaymentSuccessOverlayState();
+}
+
+class _PaymentSuccessOverlayState extends State<_PaymentSuccessOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+  late final Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 650));
+    _scale = Tween<double>(begin: 0.0, end: 1.0)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut));
+    _fade = Tween<double>(begin: 0.0, end: 1.0)
+        .animate(CurvedAnimation(parent: _ctrl, curve: const Interval(0.0, 0.4)));
+    _ctrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Center(
+        child: FadeTransition(
+          opacity: _fade,
+          child: ScaleTransition(
+            scale: _scale,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset(
+                  'assets/images/logo-white.png',
+                  height: 52,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
+                const SizedBox(height: 36),
+                Container(
+                  width: 130,
+                  height: 130,
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.green, width: 5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.green.withValues(alpha: 0.35),
+                        blurRadius: 40,
+                        spreadRadius: 8,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.check_rounded, color: Colors.green, size: 72),
+                ),
+                const SizedBox(height: 28),
+                const Text(
+                  '¡Pago confirmado!',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
