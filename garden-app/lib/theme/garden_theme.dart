@@ -1357,11 +1357,29 @@ ThemeData gardenTheme({bool dark = false}) {
       actionTextColor: GardenColors.lime,
     ),
     dialogTheme: DialogThemeData(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      shadowColor: Colors.transparent,
+      // Solid surface so plain AlertDialogs are always readable.
+      // GardenGlassDialog is unaffected — it sets backgroundColor: transparent
+      // directly on its Dialog widget, overriding the theme.
+      backgroundColor: dark ? GardenColors.darkSurface : GardenColors.lightSurface,
+      elevation: 8,
+      shadowColor: Colors.black.withValues(alpha: 0.18),
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: GardenRadius.xl_),
+      titleTextStyle: GoogleFonts.nunito(
+        color: dark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
+        fontSize: 18,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.18,
+        height: 1.30,
+        decoration: TextDecoration.none,
+      ),
+      contentTextStyle: GoogleFonts.nunito(
+        color: dark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary,
+        fontSize: 14,
+        fontWeight: FontWeight.w400,
+        height: 1.55,
+        decoration: TextDecoration.none,
+      ),
     ),
   );
 }
