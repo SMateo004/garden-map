@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_empty_state.dart';
 import '../../services/auth_state.dart';
 
 class FavoritesScreen extends StatefulWidget {
@@ -87,7 +88,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
           : _favorites.isEmpty
-              ? _buildEmptyState(textColor, subtextColor)
+              ? _buildEmptyState()
               : RefreshIndicator(
                   onRefresh: _loadFavorites,
                   color: GardenColors.primary,
@@ -283,42 +284,13 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
   }
 
-  Widget _buildEmptyState(Color textColor, Color subtextColor) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                color: GardenColors.primary.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.favorite_border, size: 48, color: GardenColors.primary),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Aún no tienes favoritos',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: textColor),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Guarda a los cuidadores que más te gusten\ntocando el ❤️ en su perfil para encontrarlos\nfácilmente en tu próxima reserva.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: subtextColor, fontSize: 14, height: 1.6),
-            ),
-            const SizedBox(height: 36),
-            GardenButton(
-              label: 'Explorar cuidadores',
-              icon: Icons.search,
-              onPressed: () => context.go('/marketplace'),
-            ),
-          ],
-        ),
-      ),
+  Widget _buildEmptyState() {
+    return GardenEmptyState(
+      type: GardenEmptyType.caregivers,
+      title: 'Aún no tienes favoritos',
+      subtitle: 'Guarda a los cuidadores que más te gusten tocando el ❤️ en su perfil.',
+      ctaLabel: 'Explorar cuidadores',
+      onCta: () => context.go('/marketplace'),
     );
   }
 }

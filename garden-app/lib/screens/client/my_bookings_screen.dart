@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_empty_state.dart';
 import '../../widgets/notification_bell.dart';
 import '../service/meet_and_greet_screen.dart';
 import '../chat/chat_screen.dart';
@@ -1234,48 +1235,36 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   }
 
   Widget _buildEmptyState(bool isDark) {
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 96,
-              height: 96,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [GardenColors.lime, GardenColors.lime.withValues(alpha: 0.4)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.calendar_today_outlined, size: 44, color: GardenColors.primary),
-            ),
-            const SizedBox(height: 24),
-            Text('Sin reservas aún', style: GardenText.h4.copyWith(color: textColor)),
-            const SizedBox(height: 8),
-            Text(
-              '¡Encuentra al cuidador perfecto para tu mascota!',
-              style: GardenText.bodyMedium.copyWith(color: subtextColor),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 28),
-            SizedBox(
-              width: 220,
-              child: GardenButton(
-                label: 'Buscar cuidadores',
-                icon: Icons.search_rounded,
-                onPressed: () => context.go('/marketplace'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    switch (_selectedFilter) {
+      case 'completadas':
+        return GardenEmptyState(
+          type: GardenEmptyType.bookings,
+          title: 'Sin reservas completadas',
+          subtitle: 'Los servicios que hayas finalizado aparecerán aquí.',
+        );
+      case 'canceladas':
+        return GardenEmptyState(
+          type: GardenEmptyType.bookings,
+          title: 'Sin reservas canceladas',
+          subtitle: 'Aquí verás las reservas que hayas cancelado.',
+        );
+      case 'activas':
+        return GardenEmptyState(
+          type: GardenEmptyType.bookings,
+          title: 'No tienes reservas activas',
+          subtitle: '¿Buscas al cuidador perfecto para tu mascota?',
+          ctaLabel: 'Buscar cuidadores',
+          onCta: () => context.go('/marketplace'),
+        );
+      default:
+        return GardenEmptyState(
+          type: GardenEmptyType.bookings,
+          title: 'Sin reservas aún',
+          subtitle: '¡Encuentra al cuidador perfecto para tu mascota!',
+          ctaLabel: 'Buscar cuidadores',
+          onCta: () => context.go('/marketplace'),
+        );
+    }
   }
 
   @override

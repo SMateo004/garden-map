@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../constants/zones.dart';
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_logo_loader.dart';
 import '../../widgets/notification_bell.dart';
 import '../../services/auth_state.dart';
@@ -1762,22 +1763,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       );
     }
     if (displayed.isEmpty && !_isLoading) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.search_off_rounded,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.2), size: 70),
-            const SizedBox(height: 16),
-            Text('Sin resultados', style: GardenText.headingMedium),
-            const SizedBox(height: 8),
-            Text('Intenta cambiar los filtros', style: GardenText.bodySmall),
-            if (_activeFilterCount > 0) ...[
-              const SizedBox(height: 20),
-              GardenButton(label: 'Limpiar filtros', onPressed: _clearAllFilters, width: 160),
-            ],
-          ],
-        ),
+      return GardenEmptyState(
+        type: GardenEmptyType.caregivers,
+        title: 'Sin cuidadores disponibles',
+        subtitle: _activeFilterCount > 0
+            ? 'Ningún cuidador coincide con los filtros aplicados.'
+            : 'No hay cuidadores disponibles en este momento.',
+        ctaLabel: _activeFilterCount > 0 ? 'Limpiar filtros' : null,
+        onCta: _activeFilterCount > 0 ? _clearAllFilters : null,
       );
     }
 

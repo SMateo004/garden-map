@@ -7,6 +7,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../theme/garden_theme.dart';
 import '../../utils/web_file_picker.dart';
+import '../../widgets/garden_empty_state.dart';
 import '../../services/auth_state.dart';
 
 class MyPetsScreen extends StatefulWidget {
@@ -206,37 +207,12 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
   }
 
   Widget _buildEmpty(Color textColor, Color subtextColor) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Container(
-            width: 96,
-            height: 96,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [GardenColors.lime, GardenColors.lime.withValues(alpha: 0.4)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.pets_rounded, size: 44, color: GardenColors.primary),
-          ),
-          const SizedBox(height: 24),
-          Text('Aún no tienes mascotas', style: GardenText.h4.copyWith(color: textColor)),
-          const SizedBox(height: 8),
-          Text('Agrega a tus peludos y gestiona su información',
-            style: GardenText.bodyMedium.copyWith(color: subtextColor),
-            textAlign: TextAlign.center),
-          const SizedBox(height: 28),
-          GardenButton(
-            label: 'Agregar mascota',
-            icon: Icons.add_rounded,
-            onPressed: () => _showPetForm(),
-          ),
-        ]),
-      ),
+    return GardenEmptyState(
+      type: GardenEmptyType.pets,
+      title: 'Aún no tienes mascotas',
+      subtitle: 'Agrega a tus peludos y gestiona su información aquí.',
+      ctaLabel: 'Agregar mascota',
+      onCta: () => _showPetForm(),
     );
   }
 }
