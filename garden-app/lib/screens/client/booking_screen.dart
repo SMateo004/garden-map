@@ -86,6 +86,14 @@ class _BookingScreenState extends State<BookingScreen> {
     return _selectedDate;
   }
 
+  /// True once the user has picked at least a service date (M&G can only be
+  /// configured after this, since it must be scheduled before the service).
+  bool get _hasServiceDateSelected {
+    if (_selectedService == null) return false;
+    if (_selectedService == 'PASEO' && _isMultiDay) return _selectedDates.isNotEmpty;
+    return _bookingStartDate != null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -985,6 +993,7 @@ class _BookingScreenState extends State<BookingScreen> {
                                 _availableSlots = [];
                                 _selectedTimeSlot = null;
                                 _selectedStartTime = null;
+                                _includeMG = false; _mgDate = null;
                               });
                             }),
                             _buildDayModeTab('Varios días', _isMultiDay, () {
@@ -995,6 +1004,7 @@ class _BookingScreenState extends State<BookingScreen> {
                                 _selectedStartTime = null;
                                 _availableSlots = [];
                                 _bookedPaseos = [];        // clear stale conflict data
+                                _includeMG = false; _mgDate = null;
                               });
                               // Datos ya cargados en init; recargar solo si falta
                               if (_multiDaySlotsByDate.isEmpty) _loadMultiDayData();
@@ -1256,6 +1266,7 @@ class _BookingScreenState extends State<BookingScreen> {
                             _selectedDate = null;
                             _selectedTimeSlot = null;
                             _selectedStartTime = null;
+                            _includeMG = false; _mgDate = null;
                           }),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 180),
@@ -2456,13 +2467,22 @@ class _BookingScreenState extends State<BookingScreen> {
   Widget _buildMeetAndGreetSection(Color surface, Color textColor, Color subtextColor, Color borderColor) {
     final isDark = themeNotifier.isDark;
     final bookingStart = _bookingStartDate;
+    final locked = !_hasServiceDateSelected;
 
-    return Container(
+    // Locked colours — muted when no service date is picked yet
+    final lockedBorder = isDark
+        ? GardenColors.darkBorder.withValues(alpha: 0.5)
+        : GardenColors.lightBorder.withValues(alpha: 0.6);
+    final lockedText = subtextColor.withValues(alpha: 0.5);
+
+    return Opacity(
+      opacity: locked ? 0.55 : 1.0,
+      child: Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor),
+        border: Border.all(color: locked ? lockedBorder : borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2470,26 +2490,59 @@ class _BookingScreenState extends State<BookingScreen> {
           // ── Header row ─────────────────────────────────────────────────
           Row(
             children: [
-              const Text('🐾', style: TextStyle(fontSize: 20)),
+              Text('🐾', style: TextStyle(fontSize: 20, color: locked ? Colors.grey : null)),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Meet & Greet',
-                        style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 15)),
-                    Text('Conoce al cuidador antes del servicio',
-                        style: TextStyle(color: subtextColor, fontSize: 12)),
+                        style: TextStyle(
+                            color: locked ? lockedText : textColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15)),
+                    Text(
+                      locked
+                          ? 'Selecciona primero la fecha del servicio'
+                          : 'Conoce al cuidador antes del servicio',
+                      style: TextStyle(color: lockedText, fontSize: 12),
+                    ),
                   ],
                 ),
               ),
               Switch(
                 value: _includeMG,
-                onChanged: (v) => setState(() => _includeMG = v),
+                onChanged: locked ? null : (v) => setState(() => _includeMG = v),
                 activeColor: GardenColors.primary,
               ),
             ],
           ),
+
+          // Locked hint banner
+          if (locked) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: (isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated)
+                    .withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: lockedBorder),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.lock_outline_rounded, size: 14, color: lockedText),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Disponible una vez que elijas la fecha del servicio.',
+                      style: TextStyle(color: lockedText, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           if (_includeMG) ...[
             const SizedBox(height: 14),
@@ -2872,7 +2925,8 @@ class _BookingScreenState extends State<BookingScreen> {
           ],
         ],
       ),
-    );
+    ), // Container
+    ); // Opacity
   }
 
   Widget _buildSummary(double price) {
