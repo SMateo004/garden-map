@@ -894,12 +894,31 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                   ],
                 ),
               ),
-              Text(
-                'Bs ${total.toStringAsFixed(0)}',
-                style: const TextStyle(
-                    color: GardenColors.primary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'Bs ${total.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                        color: GardenColors.primary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12),
+                  ),
+                  if (b['caregiverRated'] == true && b['caregiverRating'] != null)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.star_rounded, color: GardenColors.star, size: 11),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${b['caregiverRating']}',
+                          style: const TextStyle(color: GardenColors.star, fontSize: 11, fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    )
+                  else if (status == 'COMPLETED')
+                    Text('sin calificar', style: TextStyle(color: subtextColor, fontSize: 10)),
+                ],
               ),
             ],
           ),
@@ -918,6 +937,8 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
         (_data!['clientProfile']?['pets'] as List?)?.length ?? 0;
     final completionRate =
         totalBookings > 0 ? (completed / totalBookings * 100) : 0.0;
+    final avgCaregiverRating = (stats['avgCaregiverRating'] as num?)?.toDouble();
+    final caregiverRatingsCount = stats['caregiverRatingsCount'] as int? ?? 0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -955,6 +976,62 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                       textColor: textColor, subtextColor: subtextColor,
                       borderColor: borderColor)),
             ],
+          ),
+          const SizedBox(height: 10),
+          // Caregiver rating of this owner
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: GardenColors.star.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: GardenColors.star.withValues(alpha: 0.25)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: GardenColors.star.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.star_rounded, color: GardenColors.star, size: 22),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Reputación como dueño',
+                          style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
+                      Text(
+                        caregiverRatingsCount > 0
+                            ? 'Calificado por cuidadores $caregiverRatingsCount ${caregiverRatingsCount == 1 ? 'vez' : 'veces'}'
+                            : 'Aún sin calificaciones de cuidadores',
+                        style: TextStyle(color: subtextColor, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                if (avgCaregiverRating != null)
+                  Column(
+                    children: [
+                      Text(
+                        avgCaregiverRating.toStringAsFixed(1),
+                        style: const TextStyle(color: GardenColors.star, fontSize: 24, fontWeight: FontWeight.w900),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(5, (i) => Icon(
+                          i < avgCaregiverRating.round() ? Icons.star_rounded : Icons.star_outline_rounded,
+                          color: GardenColors.star, size: 12,
+                        )),
+                      ),
+                    ],
+                  )
+                else
+                  Text('—', style: TextStyle(color: subtextColor, fontSize: 20, fontWeight: FontWeight.w700)),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           // Completion rate bar

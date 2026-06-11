@@ -1849,6 +1849,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final status = booking['status'] as String? ?? '';
     final bookingId = booking['id'] as String? ?? '';
     final canOpen = status == 'CONFIRMED' || status == 'IN_PROGRESS';
+    final needsOwnerRating = status == 'COMPLETED' && booking['caregiverRated'] != true;
+
     return GestureDetector(
       onTap: canOpen && bookingId.isNotEmpty
           ? () => Navigator.push(
@@ -1860,37 +1862,95 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           : null,
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: borderColor),
+          border: Border.all(
+            color: needsOwnerRating ? GardenColors.star.withValues(alpha: 0.6) : borderColor,
+            width: needsOwnerRating ? 1.5 : 1,
+          ),
         ),
-        child: Row(
+        child: Column(
           children: [
-            bookingStatusBadge(status),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
                 children: [
-                  Text(booking['petName'] as String? ?? 'Mascota', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
-                  Text(booking['serviceType'] as String? ?? '', style: TextStyle(color: subtextColor, fontSize: 12)),
+                  bookingStatusBadge(status),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(booking['petName'] as String? ?? 'Mascota', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
+                        Text(booking['serviceType'] as String? ?? '', style: TextStyle(color: subtextColor, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Bs ${_caregiverNet(booking)}', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 15)),
+                      if (canOpen) ...[
+                        const SizedBox(width: 6),
+                        const Icon(Icons.chevron_right_rounded, color: GardenColors.primary, size: 18),
+                      ],
+                    ],
+                  ),
                 ],
               ),
             ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Bs ${_caregiverNet(booking)}', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 15)),
-                if (canOpen) ...[
-                  const SizedBox(width: 6),
-                  const Icon(Icons.chevron_right_rounded, color: GardenColors.primary, size: 18),
-                ],
-              ],
-            ),
+            if (needsOwnerRating)
+              _buildRateOwnerBanner(booking, subtextColor),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildRateOwnerBanner(Map<String, dynamic> booking, Color subtextColor) {
+    return GestureDetector(
+      onTap: () => _showRateOwnerSheet(booking),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: GardenColors.star.withValues(alpha: 0.08),
+          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(11)),
+          border: Border(top: BorderSide(color: GardenColors.star.withValues(alpha: 0.25))),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.star_outline_rounded, color: GardenColors.star, size: 16),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Califica al dueño de ${booking['petName'] ?? 'la mascota'}',
+                style: const TextStyle(color: GardenColors.star, fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: GardenColors.star, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showRateOwnerSheet(Map<String, dynamic> booking) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _RateOwnerSheet(
+        booking: booking,
+        token: _caregiverToken,
+        baseUrl: _baseUrl,
+        onSubmitted: () {
+          setState(() {
+            final idx = _bookings.indexWhere((b) => b['id'] == booking['id']);
+            if (idx != -1) _bookings[idx] = {..._bookings[idx], 'caregiverRated': true};
+          });
+        },
       ),
     );
   }
@@ -3986,4 +4046,172 @@ String _caregiverNetAmount(Map<String, dynamic> booking) {
   final commission = double.tryParse(booking['commissionAmount']?.toString() ?? '0') ?? 0;
   final net = total - commission;
   return net > 0 ? net.toStringAsFixed(0) : (total > 0 ? total.toStringAsFixed(0) : '—');
+}
+
+// ── Rate Owner Bottom Sheet ───────────────────────────────────────────────────
+
+class _RateOwnerSheet extends StatefulWidget {
+  final Map<String, dynamic> booking;
+  final String token;
+  final String baseUrl;
+  final VoidCallback onSubmitted;
+
+  const _RateOwnerSheet({
+    required this.booking,
+    required this.token,
+    required this.baseUrl,
+    required this.onSubmitted,
+  });
+
+  @override
+  State<_RateOwnerSheet> createState() => _RateOwnerSheetState();
+}
+
+class _RateOwnerSheetState extends State<_RateOwnerSheet> {
+  int _rating = 0;
+  final _commentCtrl = TextEditingController();
+  bool _isSubmitting = false;
+
+  static const _labels = ['', 'Pésimo', 'Malo', 'Regular', 'Bueno', '¡Excelente!'];
+
+  @override
+  void dispose() {
+    _commentCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_rating == 0) return;
+    setState(() => _isSubmitting = true);
+    try {
+      final res = await http.post(
+        Uri.parse('${widget.baseUrl}/bookings/${widget.booking['id']}/rate-owner'),
+        headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+        body: jsonEncode({'rating': _rating, 'comment': _commentCtrl.text.trim()}),
+      );
+      final data = jsonDecode(res.body);
+      if (!mounted) return;
+      if (data['success'] == true) {
+        Navigator.pop(context);
+        widget.onSubmitted();
+        GardenSnackBar.success(context, '¡Calificación enviada!');
+      } else {
+        throw Exception(data['error']?['message'] ?? data['message'] ?? 'Error al enviar');
+      }
+    } catch (e) {
+      if (mounted) GardenSnackBar.error(context, e.toString());
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final clientName = widget.booking['clientName'] as String?
+        ?? '${widget.booking['client']?['firstName'] ?? ''} ${widget.booking['client']?['lastName'] ?? ''}'.trim();
+    final petName = widget.booking['petName'] as String? ?? 'la mascota';
+
+    return Container(
+      padding: EdgeInsets.only(
+        left: 24, right: 24, top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 32,
+      ),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Califica al dueño',
+            style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            clientName.isNotEmpty ? '$clientName · $petName' : petName,
+            style: TextStyle(color: subtextColor, fontSize: 13),
+          ),
+          const SizedBox(height: 24),
+
+          // Stars
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(5, (i) {
+              final v = i + 1;
+              return GestureDetector(
+                onTap: () => setState(() => _rating = v),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Icon(
+                    v <= _rating ? Icons.star_rounded : Icons.star_outline_rounded,
+                    color: GardenColors.star,
+                    size: 44,
+                  ),
+                ),
+              );
+            }),
+          ),
+
+          if (_rating > 0) ...[
+            const SizedBox(height: 8),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: Text(
+                _labels[_rating],
+                key: ValueKey(_rating),
+                style: TextStyle(
+                  color: _rating >= 4 ? GardenColors.success : _rating >= 3 ? GardenColors.warning : GardenColors.error,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 20),
+
+          // Comment
+          TextField(
+            controller: _commentCtrl,
+            maxLines: 3,
+            maxLength: 500,
+            style: TextStyle(color: textColor, fontSize: 14),
+            decoration: InputDecoration(
+              hintText: 'Comentario (opcional) — solo lo ve el admin',
+              hintStyle: TextStyle(color: subtextColor, fontSize: 13),
+              filled: true,
+              fillColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary)),
+              counterStyle: TextStyle(color: subtextColor, fontSize: 11),
+              contentPadding: const EdgeInsets.all(12),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          GardenButton(
+            label: _isSubmitting ? 'Enviando...' : 'Enviar calificación',
+            loading: _isSubmitting,
+            icon: Icons.star_rounded,
+            onPressed: _rating > 0 && !_isSubmitting ? _submit : null,
+          ),
+        ],
+      ),
+    );
+  }
 }

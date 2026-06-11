@@ -196,6 +196,15 @@ router.post(
   serviceExecutionController.confirmReceipt
 );
 
+/** CAREGIVER ACTIONS */
+
+router.post(
+  '/:id/rate-owner',
+  authMiddleware,
+  requireRole('CAREGIVER'),
+  serviceExecutionController.rateOwner
+);
+
 /**
  * POST /api/bookings/:id/proceed-to-payment
  * Transitions a PENDING_MG booking to PENDING_PAYMENT after the M&G date has passed.

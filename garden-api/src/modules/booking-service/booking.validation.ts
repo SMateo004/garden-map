@@ -301,6 +301,17 @@ export const confirmReceiptBodySchema = z.object({
 });
 export type ConfirmReceiptBody = z.infer<typeof confirmReceiptBodySchema>;
 
+/** POST /api/bookings/:id/rate-owner — cuidador califica al dueño de mascota. */
+export const rateOwnerBodySchema = z.object({
+  rating: z
+    .number({ invalid_type_error: 'rating debe ser un número' })
+    .int('rating debe ser un entero')
+    .min(1, 'rating mínimo es 1')
+    .max(5, 'rating máximo es 5'),
+  comment: z.string().max(1000, 'El comentario no puede superar 1000 caracteres').optional(),
+});
+export type RateOwnerBody = z.infer<typeof rateOwnerBodySchema>;
+
 /** POST /api/bookings/:id/event — cuidador registra evento durante el servicio. */
 export const addEventBodySchema = z.object({
   type: z.enum(

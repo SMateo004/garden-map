@@ -1762,16 +1762,26 @@ export async function getOwnerDetail(userId: string) {
       id: b.id,
       status: b.status,
       serviceType: b.serviceType,
-      totalPrice: Number(b.totalAmount ?? 0),
-      walkDate: b.walkDate?.toISOString() ?? null,
+      totalPrice: Number((b as any).totalAmount ?? 0),
+      walkDate: (b as any).walkDate?.toISOString() ?? null,
       createdAt: b.createdAt.toISOString(),
       caregiverName: b.caregiver?.user ? `${(b.caregiver.user as any).firstName} ${(b.caregiver.user as any).lastName}` : null,
       petName: b.pet?.name ?? null,
+      caregiverRated: (b as any).caregiverRated ?? false,
+      caregiverRating: (b as any).caregiverRating ?? null,
+      caregiverComment: (b as any).caregiverComment ?? null,
     })),
     stats: {
       totalBookings: bookings.length,
       completedBookings: completed.length,
       totalSpent,
+      avgCaregiverRating: (() => {
+        const rated = bookings.filter((b) => (b as any).caregiverRating != null);
+        if (rated.length === 0) return null;
+        const sum = rated.reduce((acc, b) => acc + Number((b as any).caregiverRating), 0);
+        return Math.round((sum / rated.length) * 10) / 10;
+      })(),
+      caregiverRatingsCount: bookings.filter((b) => (b as any).caregiverRated).length,
     },
   };
 }

@@ -3329,3 +3329,49 @@ export async function reportBooking(
     return { refundAmount, infractionType };
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Caregiver rates the owner (client) after service completion
+// ─────────────────────────────────────────────────────────────────────────────
+export async function rateOwner(
+  bookingId: string,
+  caregiverUserId: string,
+  rating: number,
+  comment?: string
+): Promise<BookingCreateResult> {
+  const ratingNum = Number(rating);
+  if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+    throw new BadRequestError('La calificación debe ser un número entero entre 1 y 5', 'INVALID_RATING');
+  }
+  if (comment && comment.length > 1000) {
+    throw new BadRequestError('El comentario no puede superar 1000 caracteres');
+  }
+
+  const caregiverProfile = await prisma.caregiverProfile.findFirst({
+    where: { user: { id: caregiverUserId } },
+    select: { id: true },
+  });
+  if (!caregiverProfile) throw new BadRequestError('Perfil de cuidador no encontrado');
+
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, caregiverId: caregiverProfile.id },
+  });
+  if (!booking) throw new BookingNotFoundError(bookingId);
+  if (booking.status !== BookingStatus.COMPLETED) {
+    throw new BadRequestError('El servicio debe estar completado para calificar al dueño');
+  }
+  if (booking.caregiverRated) {
+    throw new BadRequestError('Ya calificaste a este dueño para esta reserva');
+  }
+
+  const updated = await prisma.booking.update({
+    where: { id: bookingId },
+    data: {
+      caregiverRated: true,
+      caregiverRating: ratingNum,
+      caregiverComment: comment ?? null,
+    },
+  });
+
+  return bookingToResponse(updated);
+}
