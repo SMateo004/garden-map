@@ -18,7 +18,8 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen>
+    with SingleTickerProviderStateMixin {
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
   bool _isDeletingAccount = false;
@@ -30,15 +31,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _activeRole = '';
   Map<String, dynamic>? _caregiverProfile;
 
+  // Pulsing animation for incomplete profile tiles
+  late final AnimationController _pulseCtrl;
+  late final Animation<double> _pulseAnim;
+
   /// Rol efectivo: activeRole si está activo, si no el rol permanente.
   String get _effectiveRole => _activeRole.isNotEmpty ? _activeRole : _role;
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
+  // ── Completeness checks ────────────────────────────────────────────────────
+
+  /// True when the CLIENT's core data is missing at least one required field.
+  bool get _isClientDataIncomplete {
+    final u = _userData;
+    if (u == null) return false;
+    return (u['firstName'] as String? ?? '').trim().isEmpty ||
+        (u['lastName'] as String? ?? '').trim().isEmpty ||
+        (u['phone'] as String? ?? '').trim().isEmpty ||
+        (u['addressStreet'] as String? ?? '').trim().isEmpty;
+  }
+
+  /// True when the CAREGIVER profile is missing key info (bio).
+  bool get _isCaregiverDataIncomplete {
+    final p = _caregiverProfile;
+    if (p == null) return false;
+    return (p['bio'] as String? ?? '').trim().isEmpty;
+  }
+
   @override
   void initState() {
     super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat(reverse: true);
+    _pulseAnim = CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut);
     _loadInitialData();
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadInitialData() async {
@@ -383,12 +418,92 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required IconData icon,
     required String title,
     required VoidCallback onTap,
+    bool highlight = false,
   }) {
     final isDark = themeNotifier.isDark;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final hintColor = isDark ? GardenColors.darkTextHint : GardenColors.lightTextHint;
+
+    if (highlight) {
+      return AnimatedBuilder(
+        animation: _pulseAnim,
+        builder: (context, _) {
+          final t = _pulseAnim.value;
+          final pulseBorder = Color.lerp(
+            const Color(0xFFD97706), // amber base
+            const Color(0xFFF59E0B), // amber bright
+            t,
+          )!;
+          final glowAlpha = 0.18 + 0.22 * t;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Material(
+              color: surface,
+              borderRadius: BorderRadius.circular(GardenRadius.md),
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(GardenRadius.md),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(GardenRadius.md),
+                    border: Border.all(color: pulseBorder, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: pulseBorder.withValues(alpha: glowAlpha),
+                        blurRadius: 10 + 8 * t,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD97706).withValues(alpha: 0.12 + 0.06 * t),
+                          borderRadius: BorderRadius.circular(GardenRadius.sm),
+                        ),
+                        child: Icon(icon, color: const Color(0xFFD97706), size: 17),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(title,
+                                style: TextStyle(
+                                    color: textColor,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14)),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Completa tu perfil',
+                              style: TextStyle(
+                                color: const Color(0xFFD97706).withValues(alpha: 0.85 + 0.15 * t),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right_rounded,
+                          color: const Color(0xFFD97706), size: 18),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    // Normal tile
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
@@ -416,7 +531,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(width: 14),
                 Expanded(
                   child: Text(title,
-                      style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
+                      style: TextStyle(
+                          color: textColor,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14)),
                 ),
                 Icon(Icons.chevron_right_rounded, color: hintColor, size: 18),
               ],
@@ -817,7 +935,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Text('Mi cuenta', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
                     const SizedBox(height: 8),
                     if (_effectiveRole == 'CLIENT') ...[
-                      _profileTile(icon: Icons.person_outlined, title: 'Mis Datos', onTap: () async {
+                      _profileTile(icon: Icons.person_outlined, title: 'Mis Datos', highlight: _isClientDataIncomplete, onTap: () async {
                         final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const MyDataScreen()));
                         if (result == true && mounted) _loadProfile();
                       }),
@@ -833,6 +951,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                     if (_effectiveRole == 'CAREGIVER') ...[
                       _profileTile(icon: Icons.assignment_outlined, title: 'Datos del cuidador',
+                          highlight: _isCaregiverDataIncomplete,
                           onTap: () => context.push('/caregiver/profile-data')),
                       _profileTile(icon: Icons.edit_outlined, title: 'Editar perfil',
                           onTap: () => context.push('/caregiver/edit-profile')),
@@ -1045,7 +1164,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 10),
         
         if (_effectiveRole == 'CLIENT') ...[
-          _profileTile(icon: Icons.person_outlined, title: 'Mis Datos', onTap: () async {
+          _profileTile(icon: Icons.person_outlined, title: 'Mis Datos', highlight: _isClientDataIncomplete, onTap: () async {
             final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const MyDataScreen()));
             if (result == true && mounted) _loadProfile();
           }),
@@ -1068,6 +1187,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _profileTile(
             icon: Icons.assignment_outlined,
             title: 'Datos del cuidador',
+            highlight: _isCaregiverDataIncomplete,
             onTap: () => context.push('/caregiver/profile-data'),
           ),
           _profileTile(icon: Icons.edit_outlined, title: 'Editar perfil', onTap: () => context.push('/caregiver/edit-profile')),
