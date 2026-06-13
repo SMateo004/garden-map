@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
 import '../../services/auth_state.dart';
+import '../client/my_data_screen.dart';
 
 class BecomeCaregiverScreen extends StatefulWidget {
   const BecomeCaregiverScreen({super.key});
@@ -23,17 +24,158 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
     defaultValue: 'https://api.gardenbo.com/api',
   );
 
+  // ── Completeness check ─────────────────────────────────────────────────────
+
+  bool _isClientDataIncomplete(Map<String, dynamic> u) =>
+      (u['firstName'] as String? ?? '').trim().isEmpty ||
+      (u['lastName'] as String? ?? '').trim().isEmpty ||
+      (u['phone'] as String? ?? '').trim().isEmpty ||
+      (u['addressStreet'] as String? ?? '').trim().isEmpty;
+
+  List<String> _missingFields(Map<String, dynamic> u) {
+    final missing = <String>[];
+    if ((u['firstName'] as String? ?? '').trim().isEmpty) missing.add('Nombre');
+    if ((u['lastName'] as String? ?? '').trim().isEmpty) missing.add('Apellido');
+    if ((u['phone'] as String? ?? '').trim().isEmpty) missing.add('Teléfono');
+    if ((u['addressStreet'] as String? ?? '').trim().isEmpty) missing.add('Dirección');
+    return missing;
+  }
+
+  // ── Open Mis Datos and retry on return ────────────────────────────────────
+
+  Future<void> _openMisDatosAndRetry() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MyDataScreen()),
+    );
+    // After returning from Mis Datos, retry the registration check
+    if (mounted) _initAndStart();
+  }
+
+  // ── Show incomplete-profile dialog ────────────────────────────────────────
+
+  void _showIncompleteDialog(List<String> missing) {
+    final isDark = themeNotifier.isDark;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.xl)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: GardenColors.warning.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(GardenRadius.sm),
+              ),
+              child: Icon(Icons.person_outline_rounded, color: GardenColors.warning, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Completa tus datos primero',
+                style: GardenText.labelLarge.copyWith(
+                  color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Para convertirte en cuidador necesitas tener tu perfil de dueño completo.',
+              style: GardenText.body.copyWith(
+                color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...missing.map((field) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  Icon(Icons.cancel_outlined, size: 16, color: GardenColors.error),
+                  const SizedBox(width: 8),
+                  Text(
+                    field,
+                    style: GardenText.body.copyWith(
+                      color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            )),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(
+              'Cancelar',
+              style: TextStyle(color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: GardenColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.md)),
+            ),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _openMisDatosAndRetry();
+            },
+            child: const Text('Completar Mis Datos'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Main flow ─────────────────────────────────────────────────────────────
+
   Future<void> _initAndStart() async {
     if (_isLoading) return;
     setState(() => _isLoading = true);
     try {
-      final prefs = await SharedPreferences.getInstance();
       final token = AuthState.token;
       if (token.isEmpty) {
         if (!mounted) return;
         context.go('/login');
         return;
       }
+
+      // Step 1: fetch user profile to check completeness before proceeding
+      final meResponse = await http.get(
+        Uri.parse('$_baseUrl/auth/me'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 10));
+
+      if (!mounted) return;
+
+      if (meResponse.statusCode != 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error de conexión. Verifica tu internet.'), backgroundColor: GardenColors.error),
+        );
+        return;
+      }
+
+      final meData = jsonDecode(meResponse.body) as Map<String, dynamic>;
+      final userData = meData['data'] as Map<String, dynamic>? ?? {};
+
+      if (_isClientDataIncomplete(userData)) {
+        final missing = _missingFields(userData);
+        _showIncompleteDialog(missing);
+        return;
+      }
+
+      // Step 2: profile is complete — proceed with caregiver registration
+      final prefs = await SharedPreferences.getInstance();
 
       final response = await http.post(
         Uri.parse('$_baseUrl/auth/init-caregiver-profile'),
@@ -43,6 +185,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
         },
       ).timeout(const Duration(seconds: 15));
 
+      if (!mounted) return;
       final data = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (response.statusCode == 200 && data['success'] == true) {
@@ -58,7 +201,6 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
         context.go('/caregiver/onboarding', extra: {'clientConversionMode': true});
       } else {
         final errorCode = (data['error'] as Map<String, dynamic>?)?['code'] as String? ?? '';
-        // Ya tiene perfil de cuidador (registro previo incompleto) → retomar wizard
         if (errorCode == 'CAREGIVER_PROFILE_EXISTS') {
           if (!mounted) return;
           context.go('/caregiver/onboarding', extra: {'resumeMode': true});
@@ -74,7 +216,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Error de conexión. Verifica tu internet.'),
           backgroundColor: GardenColors.error,
         ),
@@ -231,7 +373,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
 
             // ── CTA ────────────────────────────────────────────────────
             GardenButton(
-              label: _isLoading ? 'Iniciando...' : 'Comenzar registro',
+              label: _isLoading ? 'Verificando...' : 'Comenzar registro',
               loading: _isLoading,
               onPressed: _initAndStart,
             ),
