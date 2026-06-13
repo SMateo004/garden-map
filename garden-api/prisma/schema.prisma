@@ -87,7 +87,7 @@ model CaregiverProfile {
   spaceType                       String[]
   spaceDescription                String?            @db.VarChar(500)
   photos                          String[]           // legacy — reemplazado por caregiverPhotos
-  walkerPhotos                    String[]           // legacy
+  walkerPhotos                    String[]           @default([]) // legacy
   caregiverPhotos                 String[]           // fotos del cuidador en acción (min 2, max 6 — todos los servicios)
   placePhotos                     Json?              // { sala:[url], descanso:[url], alimentacion:[url], jardin:[url], juego:[url] }
   profilePhoto                    String?

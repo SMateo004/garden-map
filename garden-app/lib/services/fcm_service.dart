@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode, debugPrint;
 import 'package:go_router/go_router.dart';
@@ -100,6 +101,20 @@ class FcmService {
 
   /// Obtiene el token FCM con hasta 3 reintentos ante fallos de red.
   static Future<void> _registerTokenWithRetry({int retries = 3}) async {
+    // On iOS, FCM requires an APNS token. Simulators don't have APNS, so
+    // skip registration gracefully instead of retrying 3 times and logging.
+    if (!kIsWeb && Platform.isIOS) {
+      try {
+        final apnsToken = await _fcm.getAPNSToken();
+        if (apnsToken == null) {
+          if (kDebugMode) debugPrint('[FCM] Sin APNS token (simulador) — omitiendo registro');
+          return;
+        }
+      } catch (_) {
+        if (kDebugMode) debugPrint('[FCM] APNS no disponible — omitiendo registro');
+        return;
+      }
+    }
     for (int i = 0; i < retries; i++) {
       try {
         final token = await _fcm.getToken();
