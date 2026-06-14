@@ -427,10 +427,11 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         // Bio
                         Text('Sobre ${_caregiver!['firstName']}', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
                         const SizedBox(height: 12),
-                        if (bio.isNotEmpty) Text(bio, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.7)),
+                        if (bio.isNotEmpty)
+                          _ExpandableText(text: bio, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.7), maxLines: 4),
                         if (bioDetail.isNotEmpty) ...[
                           const SizedBox(height: 12),
-                          Text(bioDetail, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.7)),
+                          _ExpandableText(text: bioDetail, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.7), maxLines: 4),
                         ],
                         const SizedBox(height: 32),
 
@@ -455,7 +456,11 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           ),
                           if ((_caregiver!['experienceDescription'] as String? ?? '').isNotEmpty) ...[
                             const SizedBox(height: 14),
-                            Text(_caregiver!['experienceDescription'] as String, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.7)),
+                            _ExpandableText(
+                              text: _caregiver!['experienceDescription'] as String,
+                              style: TextStyle(color: subtextColor, fontSize: 15, height: 1.7),
+                              maxLines: 4,
+                            ),
                           ],
                         ],
 
@@ -847,8 +852,12 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                       // Bio
                       Text('Sobre ${_caregiver!['firstName']}', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 12),
-                      if (bio.isNotEmpty) Text(bio, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6)),
-                      if (bioDetail.isNotEmpty) ...[const SizedBox(height: 10), Text(bioDetail, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6))],
+                      if (bio.isNotEmpty)
+                        _ExpandableText(text: bio, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6), maxLines: 4),
+                      if (bioDetail.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        _ExpandableText(text: bioDetail, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6), maxLines: 4),
+                      ],
                       const SizedBox(height: 24),
                       // Experiencia
                       if (_caregiver!['experienceYears'] != null) ...[
@@ -866,7 +875,11 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         ),
                         if ((_caregiver!['experienceDescription'] as String? ?? '').isNotEmpty) ...[
                           const SizedBox(height: 12),
-                          Text(_caregiver!['experienceDescription'] as String, style: TextStyle(color: subtextColor, fontSize: 14, height: 1.6)),
+                          _ExpandableText(
+                            text: _caregiver!['experienceDescription'] as String,
+                            style: TextStyle(color: subtextColor, fontSize: 14, height: 1.6),
+                            maxLines: 4,
+                          ),
                         ],
                       ],
                       if ((_caregiver!['whyCaregiver'] as String? ?? '').isNotEmpty) ...[
@@ -1254,7 +1267,11 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
           const SizedBox(height: 4),
-          Text(content, style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5)),
+          _ExpandableText(
+            text: content,
+            style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
+            maxLines: 3,
+          ),
         ])),
       ]),
     );
@@ -1295,6 +1312,71 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   String _homeTypeLabel(String type) {
     const labels = {'CASA': '🏠 Casa', 'APARTAMENTO': '🏢 Apartamento', 'APARTMENT': '🏢 Apartamento', 'HOUSE': '🏠 Casa', 'FINCA': '🌾 Finca', 'LOCAL': '🏪 Local'};
     return labels[type] ?? type;
+  }
+}
+
+// ── Widget de texto expandible ────────────────────────────────────────────────
+
+class _ExpandableText extends StatefulWidget {
+  final String text;
+  final TextStyle? style;
+  final int maxLines;
+
+  const _ExpandableText({required this.text, this.style, this.maxLines = 3});
+
+  @override
+  State<_ExpandableText> createState() => _ExpandableTextState();
+}
+
+class _ExpandableTextState extends State<_ExpandableText> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tp = TextPainter(
+          text: TextSpan(text: widget.text, style: widget.style),
+          maxLines: widget.maxLines,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: constraints.maxWidth);
+
+        final overflows = tp.didExceedMaxLines;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.text,
+              style: widget.style,
+              maxLines: _expanded ? null : widget.maxLines,
+              overflow: _expanded ? null : TextOverflow.ellipsis,
+            ),
+            if (overflows) ...[
+              const SizedBox(height: 6),
+              GestureDetector(
+                onTap: () => setState(() => _expanded = !_expanded),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _expanded ? 'Ver menos' : 'Ver más',
+                      style: const TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(width: 3),
+                    Icon(
+                      _expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                      color: GardenColors.primary,
+                      size: 16,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
   }
 }
 
