@@ -12,6 +12,7 @@ import '../../theme/garden_theme.dart';
 import '../chat/chat_screen.dart';
 import 'gps_tracking_screen.dart';
 import 'meet_and_greet_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_state.dart';
 
 class ServiceExecutionScreen extends StatefulWidget {
@@ -401,6 +402,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   Widget _buildBody(String status) {
     if (status == 'CONFIRMED' && widget.role == 'CAREGIVER') {
       return _buildReadyToStart();
+    }
+    if (status == 'CONFIRMED' && widget.role == 'CLIENT') {
+      return _buildClientWaitingView();
     }
     if (status == 'IN_PROGRESS') {
       return _buildInProgressView();
@@ -1492,6 +1496,279 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             ),
           );
         },
+      ),
+    );
+  }
+
+  // --- VISTA: CLIENT WAITING FOR CAREGIVER TO START ---
+  Widget _buildClientWaitingView() {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    final isPaseo = _booking?['serviceType'] == 'PASEO';
+    final isGuarderia = _booking?['serviceType'] == 'GUARDERIA';
+    final heroColors = isPaseo
+        ? [GardenColors.forest, const Color(0xFF0B5C2E)]
+        : [GardenColors.primaryDark, GardenColors.primary];
+
+    final caregiverName = _booking?['caregiverName'] as String? ?? 'Tu cuidador';
+    final caregiverPhoto = _booking?['caregiverPhoto'] as String?;
+    final caregiverRating = _booking?['caregiverRating'];
+    final petName = _booking?['petName'] as String? ?? 'Tu mascota';
+
+    String serviceLabel;
+    String serviceEmoji;
+    if (isPaseo) {
+      serviceLabel = 'Paseo confirmado';
+      serviceEmoji = '🦮';
+    } else if (isGuarderia) {
+      serviceLabel = 'Guardería confirmada';
+      serviceEmoji = '🏡';
+    } else {
+      serviceLabel = 'Hospedaje confirmado';
+      serviceEmoji = '🏠';
+    }
+
+    return Scaffold(
+      backgroundColor: bg,
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Stack(
+              children: [
+                Container(
+                  height: 240,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: heroColors,
+                    ),
+                  ),
+                ),
+                Container(
+                  height: 240,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, Colors.black.withValues(alpha: 0.15)],
+                    ),
+                  ),
+                ),
+                SafeArea(
+                  bottom: false,
+                  child: SizedBox(
+                    height: 240,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: Container(
+                              width: 40, height: 40,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.15),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                              ),
+                              child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 17),
+                            ),
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(GardenRadius.full),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(serviceEmoji, style: const TextStyle(fontSize: 13)),
+                                const SizedBox(width: 6),
+                                Text(serviceLabel, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            petName,
+                            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900, height: 1.05),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Tu cuidador ya está listo',
+                            style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Caregiver card
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: borderColor),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 56, height: 56,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: borderColor, width: 2),
+                          ),
+                          child: ClipOval(
+                            child: caregiverPhoto != null && caregiverPhoto.isNotEmpty
+                                ? Image.network(
+                                    fixImageUrl(caregiverPhoto),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      color: GardenColors.primary.withValues(alpha: 0.1),
+                                      child: const Icon(Icons.person_rounded, color: GardenColors.primary, size: 28),
+                                    ),
+                                  )
+                                : Container(
+                                    color: GardenColors.primary.withValues(alpha: 0.1),
+                                    child: const Icon(Icons.person_rounded, color: GardenColors.primary, size: 28),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(caregiverName, style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w800)),
+                              const SizedBox(height: 3),
+                              if (caregiverRating != null)
+                                Row(children: [
+                                  const Icon(Icons.star_rounded, color: GardenColors.star, size: 14),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    (caregiverRating as num).toStringAsFixed(1),
+                                    style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600),
+                                  ),
+                                ])
+                              else
+                                Text('Cuidador verificado', style: TextStyle(color: subtextColor, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                        if (_caregiverPhone != null && _caregiverPhone!.isNotEmpty)
+                          GestureDetector(
+                            onTap: () => launchUrl(Uri.parse('tel:$_caregiverPhone')),
+                            child: Container(
+                              width: 44, height: 44,
+                              decoration: BoxDecoration(
+                                color: GardenColors.primary.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.phone_rounded, color: GardenColors.primary, size: 20),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Status card
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: GardenColors.primary.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: GardenColors.primary.withValues(alpha: 0.18)),
+                    ),
+                    child: Row(
+                      children: [
+                        const _PulsingDot(color: GardenColors.primary),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Esperando inicio del servicio',
+                                style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Tu cuidador iniciará el servicio cuando llegue. Recibirás una notificación.',
+                                style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Tips
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: borderColor),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('¿Qué pasa ahora?', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 10),
+                        ...[
+                          if (isPaseo) ...[
+                            ('📍', 'Podrás ver la ubicación de tu mascota en tiempo real.'),
+                            ('📸', 'Tu cuidador subirá fotos durante el paseo.'),
+                            ('🔔', 'Te avisamos cuando el paseo termine.'),
+                          ] else ...[
+                            ('🏠', 'Tu mascota estará cuidada en un ambiente seguro.'),
+                            ('📸', 'Recibirás fotos y actualizaciones del servicio.'),
+                            ('🔔', 'Te avisamos si hay cualquier novedad.'),
+                          ],
+                        ].map((t) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(t.$1, style: const TextStyle(fontSize: 14)),
+                              const SizedBox(width: 10),
+                              Expanded(child: Text(t.$2, style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4))),
+                            ],
+                          ),
+                        )).toList(),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -4097,6 +4374,193 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     );
   }
 
+  // ── Cuidador califica al dueño ──────────────────────────────────────────────
+
+  Widget _buildCaregiverRatingSurvey() {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    final ratingLabels = ['', 'Complicado', 'Difícil', 'Normal', 'Bueno', '¡Excelente dueño!'];
+    final starColor = _caregiverSurveyRating >= 4
+        ? GardenColors.star
+        : _caregiverSurveyRating >= 3
+            ? GardenColors.warning
+            : GardenColors.error;
+    final petName = _booking?['petName'] ?? 'la mascota';
+
+    return Scaffold(
+      backgroundColor: bg,
+      body: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(24, MediaQuery.of(context).padding.top + 24, 24, 48),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    GardenColors.primary.withValues(alpha: 0.08),
+                    GardenColors.lime.withValues(alpha: 0.2),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(GardenRadius.xl),
+                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.14)),
+              ),
+              child: Column(
+                children: [
+                  const Text('🐾', style: TextStyle(fontSize: 52)),
+                  const SizedBox(height: 16),
+                  Text(
+                    '¿Cómo fue el dueño de $petName?',
+                    style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w900, height: 1.2),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Tu opinión es voluntaria y ayuda a mejorar la comunidad GARDEN.',
+                    style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 32),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(5, (i) {
+                final val = i + 1;
+                final selected = val <= _caregiverSurveyRating;
+                return GestureDetector(
+                  onTap: () => setState(() => _caregiverSurveyRating = val),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 1.0, end: selected ? 1.2 : 1.0),
+                    duration: const Duration(milliseconds: 180),
+                    builder: (_, s, child) => Transform.scale(scale: s, child: child),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      child: Icon(
+                        selected ? Icons.star_rounded : Icons.star_outline_rounded,
+                        color: selected ? GardenColors.star : borderColor,
+                        size: 52,
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: _caregiverSurveyRating > 0
+                  ? Padding(
+                      key: ValueKey(_caregiverSurveyRating),
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Text(
+                        ratingLabels[_caregiverSurveyRating],
+                        style: TextStyle(color: starColor, fontWeight: FontWeight.w800, fontSize: 16),
+                      ),
+                    )
+                  : const SizedBox(height: 10),
+            ),
+
+            const SizedBox(height: 28),
+
+            Container(
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius: BorderRadius.circular(GardenRadius.lg),
+                border: Border.all(color: borderColor),
+              ),
+              child: TextField(
+                controller: _caregiverCommentController,
+                maxLines: 3,
+                maxLength: 500,
+                style: TextStyle(color: textColor, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Comentario opcional (instrucciones claras, puntualidad, etc.)',
+                  hintStyle: TextStyle(color: subtextColor, fontSize: 13),
+                  contentPadding: const EdgeInsets.all(16),
+                  border: InputBorder.none,
+                  counterStyle: TextStyle(color: subtextColor, fontSize: 11),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 32),
+
+            GardenButton(
+              label: _isSubmittingCaregiverRating ? 'Enviando...' : 'Enviar calificación',
+              icon: Icons.star_rounded,
+              loading: _isSubmittingCaregiverRating,
+              onPressed: _caregiverSurveyRating > 0 && !_isSubmittingCaregiverRating
+                  ? _submitCaregiverRating
+                  : null,
+            ),
+
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: _isSubmittingCaregiverRating ? null : _skipCaregiverRating,
+              child: Text(
+                'Omitir por ahora',
+                style: TextStyle(color: subtextColor, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submitCaregiverRating() async {
+    setState(() => _isSubmittingCaregiverRating = true);
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/rate-owner'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'rating': _caregiverSurveyRating,
+          'comment': _caregiverCommentController.text.trim().isEmpty
+              ? null
+              : _caregiverCommentController.text.trim(),
+        }),
+      );
+      final data = jsonDecode(response.body);
+      if (!mounted) return;
+      if (data['success'] == true) {
+        await _loadBooking();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['error']?['message'] ?? 'Error al enviar calificación'),
+            backgroundColor: GardenColors.error,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error de conexión'), backgroundColor: GardenColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmittingCaregiverRating = false);
+    }
+  }
+
+  Future<void> _skipCaregiverRating() async {
+    setState(() {
+      if (_booking != null) _booking!['caregiverRated'] = true;
+    });
+  }
+
 }
 
 // --- HELPERS LOCALES PARA EL DISEÑO ---
@@ -4828,194 +5292,4 @@ class _EmergencyCallTile extends StatelessWidget {
     );
   }
 
-  // ── Cuidador califica al dueño ──────────────────────────────────────────────
-
-  Widget _buildCaregiverRatingSurvey() {
-    final isDark = themeNotifier.isDark;
-    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-
-    final ratingLabels = ['', 'Complicado', 'Difícil', 'Normal', 'Bueno', '¡Excelente dueño!'];
-    final starColor = _caregiverSurveyRating >= 4
-        ? GardenColors.star
-        : _caregiverSurveyRating >= 3
-            ? GardenColors.warning
-            : GardenColors.error;
-    final petName = _booking?['petName'] ?? 'la mascota';
-
-    return Scaffold(
-      backgroundColor: bg,
-      body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(24, MediaQuery.of(context).padding.top + 24, 24, 48),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    GardenColors.primary.withValues(alpha: 0.08),
-                    GardenColors.lime.withValues(alpha: 0.2),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(GardenRadius.xl),
-                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.14)),
-              ),
-              child: Column(
-                children: [
-                  const Text('🐾', style: TextStyle(fontSize: 52)),
-                  const SizedBox(height: 16),
-                  Text(
-                    '¿Cómo fue el dueño de $petName?',
-                    style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w900, height: 1.2),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Tu opinión es voluntaria y ayuda a mejorar la comunidad GARDEN.',
-                    style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            // Estrellas
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(5, (i) {
-                final val = i + 1;
-                final selected = val <= _caregiverSurveyRating;
-                return GestureDetector(
-                  onTap: () => setState(() => _caregiverSurveyRating = val),
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 1.0, end: selected ? 1.2 : 1.0),
-                    duration: const Duration(milliseconds: 180),
-                    builder: (_, s, child) => Transform.scale(scale: s, child: child),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 5),
-                      child: Icon(
-                        selected ? Icons.star_rounded : Icons.star_outline_rounded,
-                        color: selected ? GardenColors.star : borderColor,
-                        size: 52,
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: _caregiverSurveyRating > 0
-                  ? Padding(
-                      key: ValueKey(_caregiverSurveyRating),
-                      padding: const EdgeInsets.only(top: 10),
-                      child: Text(
-                        ratingLabels[_caregiverSurveyRating],
-                        style: TextStyle(color: starColor, fontWeight: FontWeight.w800, fontSize: 16),
-                      ),
-                    )
-                  : const SizedBox(height: 10),
-            ),
-
-            const SizedBox(height: 28),
-
-            // Comentario opcional
-            Container(
-              decoration: BoxDecoration(
-                color: surface,
-                borderRadius: BorderRadius.circular(GardenRadius.lg),
-                border: Border.all(color: borderColor),
-              ),
-              child: TextField(
-                controller: _caregiverCommentController,
-                maxLines: 3,
-                maxLength: 500,
-                style: TextStyle(color: textColor, fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: 'Comentario opcional (instrucciones claras, puntualidad, etc.)',
-                  hintStyle: TextStyle(color: subtextColor, fontSize: 13),
-                  contentPadding: const EdgeInsets.all(16),
-                  border: InputBorder.none,
-                  counterStyle: TextStyle(color: subtextColor, fontSize: 11),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            GardenButton(
-              label: _isSubmittingCaregiverRating ? 'Enviando...' : 'Enviar calificación',
-              icon: Icons.star_rounded,
-              loading: _isSubmittingCaregiverRating,
-              onPressed: _caregiverSurveyRating > 0 && !_isSubmittingCaregiverRating
-                  ? _submitCaregiverRating
-                  : null,
-            ),
-
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: _isSubmittingCaregiverRating ? null : _skipCaregiverRating,
-              child: Text(
-                'Omitir por ahora',
-                style: TextStyle(color: subtextColor, fontSize: 13),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _submitCaregiverRating() async {
-    setState(() => _isSubmittingCaregiverRating = true);
-    try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/rate-owner'),
-        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'rating': _caregiverSurveyRating,
-          'comment': _caregiverCommentController.text.trim().isEmpty
-              ? null
-              : _caregiverCommentController.text.trim(),
-        }),
-      );
-      final data = jsonDecode(response.body);
-      if (!mounted) return;
-      if (data['success'] == true) {
-        await _loadBooking();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(data['error']?['message'] ?? 'Error al enviar calificación'),
-            backgroundColor: GardenColors.error,
-          ),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error de conexión'), backgroundColor: GardenColors.error),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSubmittingCaregiverRating = false);
-    }
-  }
-
-  Future<void> _skipCaregiverRating() async {
-    // Marcar caregiverRated=true localmente para ir a la vista de completado
-    // (el servidor no requiere que el cuidador califique, es voluntario)
-    setState(() {
-      if (_booking != null) _booking!['caregiverRated'] = true;
-    });
-  }
 }
