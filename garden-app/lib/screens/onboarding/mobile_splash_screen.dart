@@ -175,14 +175,13 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF3B5E1A),
+      backgroundColor: Colors.black,
       body: FadeTransition(
         opacity: _fadeAnim,
-        child: Center(
+        child: SizedBox.expand(
           child: Image.asset(
             'assets/images/garden_logo.png',
-            width: MediaQuery.of(context).size.width * 0.75,
-            fit: BoxFit.contain,
+            fit: BoxFit.cover,
           ),
         ),
       ),
