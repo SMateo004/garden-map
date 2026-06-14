@@ -678,6 +678,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
         statusText = 'Meet & Greet pendiente';
         statusIcon = Icons.handshake_outlined;
         break;
+      case 'SLOT_CONFLICT':
+        statusColor = GardenColors.error;
+        statusText = '¡Elige nueva hora!';
+        statusIcon = Icons.warning_amber_rounded;
+        break;
       case 'PENDING_PAYMENT':
         statusColor = GardenColors.warning;
         statusText = 'Pendiente de pago';
@@ -787,6 +792,19 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                       ],
                     ),
                   ),
+                  if (status == 'SLOT_CONFLICT')
+                    GardenButton(
+                      label: 'Elegir nueva hora',
+                      height: 36,
+                      color: GardenColors.error,
+                      onPressed: () => context.push(
+                        '/slot-conflict/${booking['id']}',
+                        extra: {
+                          'serviceType': booking['serviceType'] ?? 'PASEO',
+                          'caregiverId': booking['caregiverId'] ?? '',
+                        },
+                      ),
+                    ),
                   if (status == 'PENDING_PAYMENT')
                     GardenButton(
                       label: _hasActiveQr(booking) ? 'Ver QR' : 'Pagar',

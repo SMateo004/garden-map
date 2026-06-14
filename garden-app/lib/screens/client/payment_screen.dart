@@ -85,8 +85,23 @@ class _PaymentScreenState extends State<PaymentScreen> {
         final bk = bookingData['data'] as Map<String, dynamic>;
         setState(() => _booking = bk);
 
-        // ── Restore active QR if within 15-min window ────────────────────────
+        // ── Redirigir si ya hay un conflicto de horario detectado ────────────
         final status = bk['status'] as String?;
+        if (status == 'SLOT_CONFLICT') {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              context.pushReplacement(
+                '/slot-conflict/${widget.bookingId}',
+                extra: {
+                  'serviceType': bk['serviceType'] ?? 'PASEO',
+                  'caregiverId': bk['caregiverId'] ?? '',
+                },
+              );
+            }
+          });
+          return;
+        }
+
         final existingQrId = bk['qrId'];
         final qrExpiresAtStr = bk['qrExpiresAt'];
 
@@ -243,6 +258,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
             _paymentConfirmed = true;
           });
           _showPaymentSuccessOverlay();
+        } else if (status == 'SLOT_CONFLICT') {
+          _stopPolling();
+          if (mounted) {
+            context.pushReplacement(
+              '/slot-conflict/${widget.bookingId}',
+              extra: {
+                'serviceType': bookingData['serviceType'] ?? 'PASEO',
+                'caregiverId': bookingData['caregiverId'] ?? '',
+              },
+            );
+          }
         } else if (status == 'CANCELLED') {
           _stopPolling();
           setState(() => _paymentRejected = true);

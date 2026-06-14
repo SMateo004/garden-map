@@ -87,6 +87,11 @@ class FcmService {
           _router!.go('/chat/$bookingId');
         }
         break;
+      case 'SLOT_CONFLICT':
+        if (bookingId != null) {
+          _router!.go('/slot-conflict/$bookingId');
+        }
+        break;
       case 'INCIDENT':
       case 'ACCIDENT':
         if (bookingId != null) {

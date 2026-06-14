@@ -46,6 +46,14 @@ router.post(
   bookingController.initPayment
 );
 
+/** POST /api/bookings/:id/resolve-slot-conflict — cliente elige nueva hora tras SLOT_CONFLICT. Solo cliente titular. */
+router.post(
+  '/:id/resolve-slot-conflict',
+  authMiddleware,
+  requireRole('CLIENT'),
+  bookingController.resolveSlotConflict
+);
+
 /** POST /api/bookings/:id/cancel — cancelar reserva; aplica reembolso según MVP (48h hospedaje / 12h paseos). */
 router.post(
   '/:id/cancel',

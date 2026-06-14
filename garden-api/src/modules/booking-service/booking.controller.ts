@@ -129,6 +129,23 @@ export const cancelMG = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/bookings/:id/resolve-slot-conflict
+ * Cliente elige nueva hora/fecha tras un SLOT_CONFLICT. Pago ya retenido; sin nuevo cargo.
+ */
+export const resolveSlotConflict = asyncHandler(async (req: Request, res: Response) => {
+  const bookingId = req.params.id!;
+  const clientId = req.user!.userId;
+  const { newWalkDate, newTimeSlot, newStartDate, newEndDate } = req.body ?? {};
+  const result = await bookingService.resolveSlotConflict(bookingId, clientId, {
+    newWalkDate,
+    newTimeSlot,
+    newStartDate,
+    newEndDate,
+  });
+  res.json({ success: true, data: result });
+});
+
+/**
  * POST /api/bookings/:id/cancel
  * Cancela la reserva y aplica política de reembolso (MVP: 48h/12h). Solo cliente titular.
  */

@@ -8,6 +8,7 @@ import logger from '../../shared/logger.js';
 import { track } from '../../shared/analytics.js';
 import * as notificationService from '../../services/notification.service.js';
 import { blockchainService } from '../../services/blockchain.service.js';
+import { sendPushToUser } from '../../services/firebase.service.js';
 
 /** Amount in DB is in Bolivianos (Bs). Stripe BOB uses centavos (1 Bs = 100 centavos). */
 const BOB_TO_CENTAVOS = 100;
@@ -235,9 +236,68 @@ export async function verifyPaymentByQr(qrId: string, clientId: string): Promise
     method: 'qr',
     amount: Number(booking.totalAmount),
   });
-  notificationService.onBookingWaitingApproval(booking.id).catch((err) => {
-    logger.error('Notification onBookingWaitingApproval failed', { bookingId: booking.id, err });
-  });
+
+  // ── Detección de conflicto de horario ────────────────────────────────────────
+  // Si otro usuario ya confirmó/pagó la misma franja, marcar SLOT_CONFLICT.
+  // El pago ya está aceptado; el dinero queda retenido hasta que el cliente elija nueva hora.
+  let hasSlotConflict = false;
+  try {
+    const conflictStatuses = [
+      BookingStatus.WAITING_CAREGIVER_APPROVAL,
+      BookingStatus.CONFIRMED,
+      BookingStatus.IN_PROGRESS,
+    ];
+    let conflictBooking = null;
+
+    if (booking.serviceType === 'PASEO' && booking.walkDate && booking.timeSlot) {
+      conflictBooking = await prisma.booking.findFirst({
+        where: {
+          id: { not: booking.id },
+          caregiverId: booking.caregiverId,
+          walkDate: booking.walkDate,
+          timeSlot: booking.timeSlot,
+          status: { in: conflictStatuses },
+        },
+      });
+    } else if ((booking.serviceType === 'HOSPEDAJE' || booking.serviceType === 'GUARDERIA') && booking.startDate && booking.endDate) {
+      conflictBooking = await prisma.booking.findFirst({
+        where: {
+          id: { not: booking.id },
+          caregiverId: booking.caregiverId,
+          serviceType: booking.serviceType,
+          status: { in: conflictStatuses },
+          startDate: { lte: booking.endDate },
+          endDate: { gt: booking.startDate },
+        },
+      });
+    }
+
+    if (conflictBooking) {
+      hasSlotConflict = true;
+      await prisma.booking.update({
+        where: { id: booking.id },
+        data: { status: BookingStatus.SLOT_CONFLICT },
+      });
+      logger.warn('Slot conflict detected after payment', {
+        bookingId: booking.id,
+        conflictBookingId: conflictBooking.id,
+        caregiverId: booking.caregiverId,
+      });
+      sendPushToUser(
+        booking.clientId,
+        'Tu hora fue reservada por otro usuario',
+        'Tu pago está seguro. Abre la app para elegir una nueva hora disponible.'
+      ).catch(() => {});
+    }
+  } catch (err) {
+    logger.error('Slot conflict check failed (non-fatal)', { bookingId: booking.id, err });
+  }
+
+  if (!hasSlotConflict) {
+    notificationService.onBookingWaitingApproval(booking.id).catch((err) => {
+      logger.error('Notification onBookingWaitingApproval failed', { bookingId: booking.id, err });
+    });
+  }
 
   // Registro en Blockchain — guardar txHash
   blockchainService.createBookingOnChain(
@@ -246,7 +306,7 @@ export async function verifyPaymentByQr(qrId: string, clientId: string): Promise
     booking.caregiverId,
     Number(booking.totalAmount),
     booking.startDate ?? booking.walkDate ?? new Date(),
-    resolveBookingEndDate(booking),      // ← multi-day walk: last walkDay date
+    resolveBookingEndDate(booking),
     booking.petName,
     booking.serviceType
   ).then(async (txHash) => {
@@ -258,7 +318,10 @@ export async function verifyPaymentByQr(qrId: string, clientId: string): Promise
     logger.error('Blockchain registration failed (QR)', { bookingId: booking.id, err });
   });
 
-  return { bookingId: booking.id, status: BookingStatus.WAITING_CAREGIVER_APPROVAL };
+  return {
+    bookingId: booking.id,
+    status: hasSlotConflict ? BookingStatus.SLOT_CONFLICT : BookingStatus.WAITING_CAREGIVER_APPROVAL,
+  };
 }
 
 /**

@@ -3376,3 +3376,77 @@ export async function rateOwner(
 
   return bookingToResponse(updated);
 }
+
+/**
+ * El cliente elige una nueva hora/fecha tras detectar SLOT_CONFLICT.
+ * El pago ya está hecho; se reutiliza para la nueva reserva sin cargo adicional.
+ */
+export async function resolveSlotConflict(
+  bookingId: string,
+  clientId: string,
+  newData: {
+    newWalkDate?: string;
+    newTimeSlot?: string;
+    newStartDate?: string;
+    newEndDate?: string;
+  }
+): Promise<{ bookingId: string; status: string }> {
+  return prisma.$transaction(async (tx) => {
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, clientId, status: BookingStatus.SLOT_CONFLICT },
+      select: {
+        id: true,
+        serviceType: true,
+        caregiverId: true,
+        petCount: true,
+        clientId: true,
+      },
+    });
+    if (!booking) throw new BookingNotFoundError(bookingId);
+
+    let updateData: Record<string, unknown> = {
+      status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
+    };
+
+    if (booking.serviceType === 'PASEO') {
+      if (!newData.newWalkDate || !newData.newTimeSlot) {
+        throw new BookingValidationError('Debes indicar nueva fecha y bloque horario para el paseo');
+      }
+      await assertPaseoAvailability(
+        tx,
+        booking.caregiverId,
+        newData.newWalkDate,
+        newData.newTimeSlot as TimeSlot,
+        null,
+        null,
+        booking.petCount
+      );
+      updateData.walkDate = new Date(newData.newWalkDate);
+      updateData.timeSlot = newData.newTimeSlot;
+    } else {
+      if (!newData.newStartDate || !newData.newEndDate) {
+        throw new BookingValidationError('Debes indicar nueva fecha de inicio y fin');
+      }
+      await assertHospedajeAvailability(
+        tx,
+        booking.caregiverId,
+        newData.newStartDate,
+        newData.newEndDate,
+        booking.petCount
+      );
+      updateData.startDate = new Date(newData.newStartDate);
+      updateData.endDate = new Date(newData.newEndDate);
+    }
+
+    await tx.booking.update({ where: { id: bookingId }, data: updateData });
+
+    logger.info('Slot conflict resolved — new slot chosen', {
+      bookingId,
+      clientId,
+      serviceType: booking.serviceType,
+      newData,
+    });
+
+    return { bookingId, status: BookingStatus.WAITING_CAREGIVER_APPROVAL };
+  });
+}

@@ -16,6 +16,7 @@ import 'screens/client/my_pets_screen.dart';
 import 'screens/client/caregiver_profile_screen.dart';
 import 'screens/client/booking_screen.dart';
 import 'screens/client/payment_screen.dart';
+import 'screens/client/slot_conflict_screen.dart';
 import 'screens/client/booking_confirmed_screen.dart';
 import 'screens/caregiver/caregiver_home_screen.dart';
 import 'screens/caregiver/verification_screen.dart';
@@ -344,6 +345,19 @@ final GoRouter _router = GoRouter(
       path: '/my-bookings',
       name: 'myBookings',
       builder: (context, state) => const MyBookingsScreen(),
+    ),
+    GoRoute(
+      path: '/slot-conflict/:bookingId',
+      name: 'slotConflict',
+      builder: (context, state) {
+        final bookingId = state.pathParameters['bookingId']!;
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        return SlotConflictScreen(
+          bookingId: bookingId,
+          serviceType: extra['serviceType'] as String? ?? 'PASEO',
+          caregiverId: extra['caregiverId'] as String? ?? '',
+        );
+      },
     ),
 
     GoRoute(
