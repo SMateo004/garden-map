@@ -5,7 +5,13 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_state.dart';
 
-const _kSplashVersion = 'v3.0-logo-imagen';
+const _kSplashVersion = 'v4.0-fast';
+
+class _NavTarget {
+  final String path;
+  final Object? extra;
+  const _NavTarget(this.path, [this.extra]);
+}
 
 class MobileSplashScreen extends StatefulWidget {
   const MobileSplashScreen({super.key});
@@ -30,54 +36,71 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
     debugPrint('[SPLASH $_kSplashVersion] initState');
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 350),
     );
     _fadeAnim = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeIn),
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
     );
     _run();
   }
 
   Future<void> _run() async {
-    await Future.delayed(const Duration(milliseconds: 100));
-    if (!mounted) return;
     _ctrl.forward();
-    await Future.delayed(const Duration(milliseconds: 2500));
+
+    // Compute destination and enforce minimum display time simultaneously.
+    // We navigate only after both complete — no wasted 2.5s hardcoded delay.
+    final results = await Future.wait<Object?>([
+      _computeDestination(),
+      Future.delayed(const Duration(milliseconds: 800)),
+    ]);
+
     if (!mounted) return;
-    await _navigate();
+    final target = results[0] as _NavTarget;
+    debugPrint('[SPLASH] navigating → ${target.path}');
+    context.go(target.path, extra: target.extra);
   }
 
-  Future<void> _navigate() async {
+  Future<_NavTarget> _computeDestination() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final seen = prefs.getBool('mobile_onboarding_seen') ?? false;
       debugPrint('[SPLASH] onboarding_seen=$seen');
-      if (!mounted) return;
 
-      if (!seen) {
-        debugPrint('[SPLASH] → /onboarding');
-        context.go('/onboarding');
-        return;
-      }
+      if (!seen) return const _NavTarget('/onboarding');
 
       final role = prefs.getString('user_role') ?? '';
       debugPrint('[SPLASH] user_role=$role');
 
-      if (role != 'ADMIN') {
-        final inMaintenance = await _checkMaintenance();
-        if (!mounted) return;
-        if (inMaintenance) {
-          debugPrint('[SPLASH] → /maintenance');
-          context.go('/maintenance');
-          return;
-        }
-      }
+      if (role == 'ADMIN') return const _NavTarget('/admin');
 
-      if (!mounted) return;
-      await _goToHome(prefs);
+      // Maintenance check + home resolution in parallel
+      final token = AuthState.token;
+      debugPrint('[SPLASH] token=${token.isEmpty ? "VACÍO" : "presente"}');
+
+      final futures = await Future.wait([
+        _checkMaintenance(),
+        if (token.isNotEmpty && role != 'ADMIN') _fetchActiveBooking(token) else Future.value(null),
+      ]);
+
+      final inMaintenance = futures[0] as bool;
+      if (inMaintenance) return const _NavTarget('/maintenance');
+
+      if (token.isEmpty) return const _NavTarget('/service-selector');
+
+      final activeBookingResult = futures.length > 1 ? futures[1] : null;
+
+      final activeRole = prefs.getString('active_role') ?? '';
+      final effectiveRole = activeRole.isNotEmpty ? activeRole : role;
+
+      if (effectiveRole == 'CAREGIVER') return const _NavTarget('/caregiver/home');
+
+      // Client: check for active / pending-payment booking returned from parallel call
+      if (activeBookingResult is _NavTarget) return activeBookingResult;
+
+      return const _NavTarget('/service-selector');
     } catch (e, st) {
       debugPrint('[SPLASH] ERROR: $e\n$st');
-      if (mounted) context.go('/login');
+      return const _NavTarget('/login');
     }
   }
 
@@ -85,7 +108,7 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
     try {
       final res = await http
           .get(Uri.parse('$_baseUrl/settings'))
-          .timeout(const Duration(seconds: 6));
+          .timeout(const Duration(seconds: 3));
       final data = jsonDecode(res.body);
       return data['data']?['maintenanceMode'] == true;
     } catch (e) {
@@ -94,49 +117,27 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
     }
   }
 
-  Future<void> _goToHome(SharedPreferences prefs) async {
-    final token = AuthState.token;
-    final permanentRole = prefs.getString('user_role') ?? '';
-    final activeRole = prefs.getString('active_role') ?? '';
-    final role = activeRole.isNotEmpty ? activeRole : permanentRole;
-    debugPrint('[SPLASH] token=${token.isEmpty ? "VACÍO" : "presente"} role=$role');
-
-    if (token.isEmpty) {
-      debugPrint('[SPLASH] → /service-selector (guest)');
-      if (mounted) context.go('/service-selector');
-      return;
-    }
-    if (role == 'ADMIN') {
-      debugPrint('[SPLASH] → /admin');
-      if (mounted) context.go('/admin');
-      return;
-    }
-    if (role == 'CAREGIVER') {
-      debugPrint('[SPLASH] → /caregiver/home');
-      if (mounted) context.go('/caregiver/home');
-      return;
-    }
-
-    debugPrint('[SPLASH] buscando reserva IN_PROGRESS...');
+  /// Returns a [_NavTarget] if there is a booking that needs immediate attention,
+  /// or `null` to fall through to the default home screen.
+  Future<_NavTarget?> _fetchActiveBooking(String token) async {
     try {
       final response = await http.get(
         Uri.parse('$_baseUrl/bookings/my?limit=5&page=1'),
         headers: {'Authorization': 'Bearer $token'},
-      ).timeout(const Duration(seconds: 6));
+      ).timeout(const Duration(seconds: 3));
+
       debugPrint('[SPLASH] bookings status=${response.statusCode}');
-      // Si el token expiró, redirigir al login inmediatamente
+
       if (response.statusCode == 401) {
         AuthState.handleUnauthorized();
-        if (mounted) context.go('/login');
-        return;
+        return const _NavTarget('/login');
       }
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
-          final bookings =
-              (data['data'] as List).cast<Map<String, dynamic>>();
+          final bookings = (data['data'] as List).cast<Map<String, dynamic>>();
 
-          // Check for PENDING_PAYMENT booking with valid QR first
+          // Active QR payment takes priority
           final pendingPayment = bookings.where((b) {
             if (b['status'] != 'PENDING_PAYMENT') return false;
             final qrId = b['qrId'];
@@ -145,30 +146,24 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
             final expiry = DateTime.tryParse(qrExpiresAtStr.toString());
             return expiry != null && expiry.isAfter(DateTime.now());
           }).firstOrNull;
-          if (pendingPayment != null && mounted) {
-            debugPrint('[SPLASH] → /payment/${pendingPayment['id']} (QR activo)');
-            context.go('/payment/${pendingPayment['id']}');
-            return;
+
+          if (pendingPayment != null) {
+            return _NavTarget('/payment/${pendingPayment['id']}');
           }
 
-          final active =
-              bookings.where((b) => b['status'] == 'IN_PROGRESS').firstOrNull;
-          if (active != null && mounted) {
-            debugPrint('[SPLASH] → /service/${active['id']}');
-            context.go(
+          final active = bookings.where((b) => b['status'] == 'IN_PROGRESS').firstOrNull;
+          if (active != null) {
+            return _NavTarget(
               '/service/${active['id']}',
-              extra: {'role': 'CLIENT', 'token': token},
+              {'role': 'CLIENT', 'token': token},
             );
-            return;
           }
         }
       }
     } catch (e) {
       debugPrint('[SPLASH] error bookings: $e');
     }
-
-    debugPrint('[SPLASH] → /service-selector');
-    if (mounted) context.go('/service-selector');
+    return null;
   }
 
   @override
@@ -180,13 +175,14 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF3B5E1A),
+      backgroundColor: Colors.white,
       body: FadeTransition(
         opacity: _fadeAnim,
-        child: SizedBox.expand(
+        child: Center(
           child: Image.asset(
             'assets/images/garden_logo.png',
-            fit: BoxFit.cover,
+            width: 200,
+            fit: BoxFit.contain,
           ),
         ),
       ),

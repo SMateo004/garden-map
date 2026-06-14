@@ -8,6 +8,8 @@ import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../utils/garden_banks.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/address_section.dart';
+import '../../widgets/address_map_picker.dart';
 
 class CaregiverEditProfileScreen extends StatefulWidget {
   const CaregiverEditProfileScreen({super.key});
@@ -31,10 +33,20 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
 
   // Controladores de texto
   final _bioController = TextEditingController();
-  final _addressController = TextEditingController();
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _phoneController = TextEditingController();
+
+  // Dirección detallada
+  final _streetCtrl = TextEditingController();
+  final _numberCtrl = TextEditingController();
+  final _apartmentCtrl = TextEditingController();
+  final _condominioCtrl = TextEditingController();
+  final _referenceCtrl = TextEditingController();
+  String? _addressZone;
+  double? _addressLat;
+  double? _addressLng;
+  bool _isApartment = false;
 
   // Datos de cobro
   final _bankAccountController = TextEditingController();
@@ -72,14 +84,25 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
         setState(() {
           _profile = profile;
           _bioController.text = profile['bio'] as String? ?? '';
-          _addressController.text = profile['address'] as String? ?? '';
-          
+
           final user = profile['user'] as Map<String, dynamic>?;
           if (user != null) {
             _firstNameController.text = user['firstName'] as String? ?? '';
             _lastNameController.text = user['lastName'] as String? ?? '';
             _phoneController.text = user['phone'] as String? ?? '';
           }
+
+          // Dirección detallada
+          _streetCtrl.text = profile['addressStreet'] as String? ?? '';
+          _numberCtrl.text = profile['addressNumber'] as String? ?? '';
+          _apartmentCtrl.text = profile['addressApartment'] as String? ?? '';
+          _condominioCtrl.text = profile['addressCondominio'] as String? ?? '';
+          _referenceCtrl.text = profile['addressReference'] as String? ?? '';
+          _addressZone = profile['addressZone'] as String?;
+          _addressLat = (profile['addressLat'] as num?)?.toDouble();
+          _addressLng = (profile['addressLng'] as num?)?.toDouble();
+          _isApartment = (_apartmentCtrl.text).isNotEmpty;
+
           _selectedBankName = profile['bankName'] as String? ?? '';
           _selectedBankType = profile['bankType'] as String? ?? 'CUENTA_AHORRO';
           _bankAccountController.text = profile['bankAccount'] as String? ?? '';
@@ -203,16 +226,26 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
         await _uploadProfilePhoto();
       }
       // Luego guardar el resto del perfil
+      final addressBody = <String, dynamic>{
+        'bio': _bioController.text.trim(),
+        'address': [_streetCtrl.text.trim(), _numberCtrl.text.trim()].where((s) => s.isNotEmpty).join(', '),
+        if (_addressLat != null) 'addressLat': _addressLat,
+        if (_addressLng != null) 'addressLng': _addressLng,
+        if (_streetCtrl.text.trim().isNotEmpty) 'addressStreet': _streetCtrl.text.trim(),
+        if (_numberCtrl.text.trim().isNotEmpty) 'addressNumber': _numberCtrl.text.trim(),
+        if (_isApartment && _apartmentCtrl.text.trim().isNotEmpty) 'addressApartment': _apartmentCtrl.text.trim(),
+        if (_isApartment && _condominioCtrl.text.trim().isNotEmpty) 'addressCondominio': _condominioCtrl.text.trim(),
+        if (_referenceCtrl.text.trim().isNotEmpty) 'addressReference': _referenceCtrl.text.trim(),
+        if (_addressZone != null) 'addressZone': _addressZone,
+      };
+
       final response = await http.patch(
         Uri.parse('$_baseUrl/caregiver/profile'),
         headers: {
           'Authorization': 'Bearer $_caregiverToken',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({
-          'bio': _bioController.text.trim(),
-          'address': _addressController.text.trim(),
-        }),
+        body: jsonEncode(addressBody),
       );
 
       // Guardar también la info personal y datos de cobro
@@ -381,13 +414,51 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
                         style: TextStyle(color: textColor),
                         decoration: _inputDecoration('Cuéntanos sobre tu experiencia cuidando mascotas...', isDark),
                       ),
-                      const SizedBox(height: 16),
-                      Text('Dirección', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _addressController,
-                        style: TextStyle(color: textColor),
-                        decoration: _inputDecoration('Calle, número, barrio...', isDark),
+                      const Divider(height: 32),
+
+                      // Sección 3 - Dirección detallada
+                      Text('Ubicación', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tu dirección es usada para mostrar tu zona de servicio y calcular distancias.',
+                        style: TextStyle(color: subtextColor, fontSize: 12),
+                      ),
+                      const SizedBox(height: 14),
+                      Theme(
+                        data: Theme.of(context).copyWith(
+                          inputDecorationTheme: InputDecorationTheme(
+                            filled: true,
+                            fillColor: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 2)),
+                            hintStyle: TextStyle(color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          ),
+                        ),
+                        child: AddressSection(
+                          isDark: isDark,
+                          textColor: textColor,
+                          subtextColor: subtextColor,
+                          borderColor: borderColor,
+                          surfaceEl: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
+                          streetController: _streetCtrl,
+                          numberController: _numberCtrl,
+                          apartmentController: _apartmentCtrl,
+                          condominioController: _condominioCtrl,
+                          referenceController: _referenceCtrl,
+                          selectedZone: _addressZone,
+                          onZoneChanged: (val) => setState(() => _addressZone = val),
+                          addressLat: _addressLat,
+                          addressLng: _addressLng,
+                          isApartment: _isApartment,
+                          purposeText: 'Tu dirección define en qué zona ofreces servicios. Solo se muestra la zona (no la calle exacta) a los dueños.',
+                          onMapResult: (result) => setState(() {
+                            _addressLat = result.lat;
+                            _addressLng = result.lng;
+                          }),
+                          onApartmentToggle: (val) => setState(() => _isApartment = val),
+                        ),
                       ),
                       const Divider(height: 32),
 
@@ -531,15 +602,49 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
                                                 style: TextStyle(color: textColor, fontSize: 13),
                                                 decoration: _inputDecoration('Cuéntanos sobre tu experiencia cuidando mascotas...', isDark),
                                               ),
-                                              const SizedBox(height: 16),
-                                              Text('Dirección', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
-                                              const SizedBox(height: 8),
-                                              TextField(
-                                                controller: _addressController,
-                                                style: TextStyle(color: textColor, fontSize: 13),
-                                                decoration: _inputDecoration('Calle, número, barrio...', isDark),
-                                              ),
                                             ],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        _webCard(
+                                          surface, borderColor, textColor,
+                                          title: 'Ubicación',
+                                          icon: Icons.location_on_outlined,
+                                          child: Theme(
+                                            data: Theme.of(context).copyWith(
+                                              inputDecorationTheme: InputDecorationTheme(
+                                                filled: true,
+                                                fillColor: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
+                                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
+                                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
+                                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 2)),
+                                                hintStyle: TextStyle(color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+                                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                              ),
+                                            ),
+                                            child: AddressSection(
+                                              isDark: isDark,
+                                              textColor: textColor,
+                                              subtextColor: subtextColor,
+                                              borderColor: borderColor,
+                                              surfaceEl: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
+                                              streetController: _streetCtrl,
+                                              numberController: _numberCtrl,
+                                              apartmentController: _apartmentCtrl,
+                                              condominioController: _condominioCtrl,
+                                              referenceController: _referenceCtrl,
+                                              selectedZone: _addressZone,
+                                              onZoneChanged: (val) => setState(() => _addressZone = val),
+                                              addressLat: _addressLat,
+                                              addressLng: _addressLng,
+                                              isApartment: _isApartment,
+                                              purposeText: 'Tu dirección define en qué zona ofreces servicios. Solo se muestra la zona (no la calle exacta) a los dueños.',
+                                              onMapResult: (result) => setState(() {
+                                                _addressLat = result.lat;
+                                                _addressLng = result.lng;
+                                              }),
+                                              onApartmentToggle: (val) => setState(() => _isApartment = val),
+                                            ),
                                           ),
                                         ),
                                         if (isPaseoOnly) ...[
