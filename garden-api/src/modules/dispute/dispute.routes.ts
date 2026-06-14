@@ -300,35 +300,44 @@ Responde SOLO en este formato JSON exacto (sin texto adicional):
   "recommendations": ["recomendación específica 1 para el cuidador", "recomendación 2", "recomendación 3"]
 }`;
 
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 1200,
-    messages: [{ role: 'user', content: prompt }],
-  });
+  // Retry up to 3 times before escalating to manual admin review.
+  const MAX_ATTEMPTS = 3;
+  let lastError: unknown;
 
-  const content = (message.content[0] as any).text || '{}';
-  const clean = content.replace(/```json|```/g, '').trim();
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const message = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1200,
+        messages: [{ role: 'user', content: prompt }],
+      });
 
-  try {
-    const parsed = JSON.parse(clean);
-    // Validar que el veredicto sea uno de los tres válidos
-    if (!['CLIENT_WINS', 'CAREGIVER_WINS', 'PARTIAL'].includes(parsed.verdict)) {
-      parsed.verdict = 'CLIENT_WINS'; // fallback conservador: si hay duda, favor al cliente
+      const content = (message.content[0] as any).text || '{}';
+      const clean = content.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+
+      if (!['CLIENT_WINS', 'CAREGIVER_WINS', 'PARTIAL'].includes(parsed.verdict)) {
+        throw new Error(`Invalid verdict: ${parsed.verdict}`);
+      }
+
+      logger.info('AI dispute resolved', { bookingId, attempt, verdict: parsed.verdict });
+      return parsed;
+    } catch (err) {
+      lastError = err;
+      logger.warn(`AI dispute attempt ${attempt}/${MAX_ATTEMPTS} failed`, { bookingId, error: (err as Error).message });
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise(r => setTimeout(r, 1500 * attempt)); // back-off: 1.5s, 3s
+      }
     }
-    return parsed;
-  } catch {
-    logger.error('Failed to parse AI dispute resolution', { bookingId, content });
-    // Fallback: sin evidencia clara → favor al cliente (el cuidador no documentó)
-    return {
-      verdict: 'CLIENT_WINS',
-      analysis: 'El agente no pudo analizar el caso con certeza. Por política de GARDEN, ante la falta de evidencia documentada del servicio, se emite reembolso al cliente.',
-      recommendations: [
-        'Subir siempre fotos de inicio y fin del servicio',
-        'Mantener comunicación activa en el chat de la app',
-        'Activar el tracking GPS durante los paseos',
-      ],
-    };
   }
+
+  // All 3 attempts failed — escalate to admin instead of auto-deciding.
+  logger.error('AI dispute resolution failed after 3 attempts — escalating to manual review', { bookingId, lastError });
+  return {
+    verdict: 'PENDING_MANUAL',
+    analysis: 'El agente de IA no pudo analizar el caso después de 3 intentos. Un administrador de GARDEN revisará esta disputa manualmente y notificará a las partes.',
+    recommendations: [],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -451,6 +460,40 @@ async function applyResolution(bookingId: string, resolution: any, booking: any)
         },
       });
 
+    } else if (resolution.verdict === 'PENDING_MANUAL') {
+      // ── IA falló 3 veces → escalar a revisión manual del admin ────────────
+      await tx.dispute.update({
+        where: { bookingId },
+        data: {
+          aiVerdict: 'PENDING_MANUAL',
+          aiAnalysis: resolution.analysis,
+          status: 'PENDING_ADMIN', // admin must resolve
+        },
+      });
+      await tx.adminNotification.create({
+        data: {
+          type: 'DISPUTE_ESCALATED',
+          bookingId,
+          caregiverId: booking.caregiver.id,
+        },
+      }).catch(() => {});
+      await tx.notification.create({
+        data: {
+          userId: clientId,
+          title: '⏳ Disputa en revisión manual',
+          message: 'Un administrador de GARDEN revisará tu disputa y te notificará en las próximas 24-48 horas.',
+          type: 'SYSTEM',
+        },
+      });
+      await tx.notification.create({
+        data: {
+          userId: caregiverUserId,
+          title: '⏳ Disputa en revisión manual',
+          message: 'Un administrador de GARDEN revisará la disputa y te notificará en las próximas 24-48 horas.',
+          type: 'SYSTEM',
+        },
+      });
+
     } else {
       // ── PARTIAL: 80% al cuidador + 20% → código de descuento para el dueño ─
       // La comisión (10%) se mantiene. El split es sobre el netAmount (90%).
@@ -525,26 +568,50 @@ async function applyResolution(bookingId: string, resolution: any, booking: any)
     }
   });
 
-  // ── Registrar en blockchain según el veredicto ──────────────────────────
-  try {
-    if (resolution.verdict === 'CAREGIVER_WINS') {
-      blockchainService.resolveDisputeCaregiverWinsOnChain(bookingId, netAmount).catch(err => {
-        logger.error('Blockchain resolveDisputeCaregiverWins failed', { bookingId, err });
-      });
-    } else if (resolution.verdict === 'CLIENT_WINS') {
-      blockchainService.resolveDisputeClientWinsOnChain(bookingId, totalAmount).catch(err => {
-        logger.error('Blockchain resolveDisputeClientWins failed', { bookingId, err });
-      });
-    } else {
-      const caregiverPayout = parseFloat((netAmount * 0.80).toFixed(2));
-      const clientDiscountAmount = parseFloat((netAmount * 0.20).toFixed(2));
-      blockchainService.resolvePartialOnChain(bookingId, caregiverPayout, clientDiscountAmount).catch(err => {
-        logger.error('Blockchain resolvePartial failed', { bookingId, err });
-      });
-    }
-  } catch (err) {
-    logger.error('Blockchain dispatch error in applyResolution', { bookingId, err });
+  // ── Registrar en blockchain con retry (3 intentos, back-off exponencial) ──
+  // Fire-and-forget but with retry so ledger inconsistencies are minimized.
+  // If all retries fail, an admin notification is created so it can be manually re-submitted.
+  if (resolution.verdict !== 'PENDING_MANUAL') {
+    _dispatchBlockchainWithRetry(bookingId, resolution.verdict, netAmount, totalAmount);
   }
+}
+
+async function _dispatchBlockchainWithRetry(
+  bookingId: string,
+  verdict: string,
+  netAmount: number,
+  totalAmount: number,
+  maxAttempts = 3,
+) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      if (verdict === 'CAREGIVER_WINS') {
+        await blockchainService.resolveDisputeCaregiverWinsOnChain(bookingId, netAmount);
+      } else if (verdict === 'CLIENT_WINS') {
+        await blockchainService.resolveDisputeClientWinsOnChain(bookingId, totalAmount);
+      } else if (verdict === 'PARTIAL') {
+        const caregiverPayout = parseFloat((netAmount * 0.80).toFixed(2));
+        const clientDiscountAmount = parseFloat((netAmount * 0.20).toFixed(2));
+        await blockchainService.resolvePartialOnChain(bookingId, caregiverPayout, clientDiscountAmount);
+      }
+      logger.info('Blockchain dispute record saved', { bookingId, verdict, attempt });
+      return; // success
+    } catch (err: any) {
+      logger.warn(`Blockchain dispatch attempt ${attempt}/${maxAttempts} failed`, { bookingId, error: err.message });
+      if (attempt < maxAttempts) {
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1))); // 1s, 2s
+      }
+    }
+  }
+  // All retries exhausted — flag for admin to manually re-submit
+  logger.error('Blockchain dispatch failed after all retries — admin notification created', { bookingId, verdict });
+  await prisma.adminNotification.create({
+    data: {
+      type: 'BLOCKCHAIN_FAILURE',
+      bookingId,
+      caregiverId: '', // unknown at this point — admin can look up by bookingId
+    },
+  }).catch(() => {});
 }
 
 export default router;

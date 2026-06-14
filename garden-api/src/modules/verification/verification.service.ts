@@ -181,11 +181,17 @@ export async function submitVerification(
       // 1. Advanced Liveness Check
       logger.info('Step 1: Validating liveness', { sessionId, livenessSessionId });
 
-      if (!livenessSessionId || env.NODE_ENV === 'development') {
-        // En desarrollo o sin sessionId: bypass de liveness con score simulado
-        logger.warn('Liveness check bypassed (no sessionId or development mode)', { sessionId });
+      if (env.NODE_ENV === 'development' && !livenessSessionId) {
+        // Solo en desarrollo y sin sessionId real: bypass con score simulado
+        logger.warn('Liveness check bypassed (development mode, no sessionId)', { sessionId });
         livenessScore = 95;
         livenessStatus = 'PASSED';
+      } else if (!livenessSessionId) {
+        // En producción sin sessionId real: no auto-aprobar.
+        // La verificación continúa con score bajo para que quede en REVIEW manual.
+        logger.warn('Liveness check skipped in production (no sessionId) — routing to manual review', { sessionId });
+        livenessScore = 0;
+        livenessStatus = 'PASSED'; // allow to continue to photo checks, but score=0 flags manual review
       } else {
         logger.info('Starting liveness check', { sessionId, livenessSessionId });
         const livenessResult = await performLivenessCheck({ sessionId: livenessSessionId }, 'AWS_REKOGNITION');

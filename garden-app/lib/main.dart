@@ -54,6 +54,7 @@ import 'theme/garden_theme.dart';
 import 'services/local_notification_service.dart';
 import 'services/fcm_service.dart';
 import 'services/auth_state.dart'; // sessionExpiredNotifier + AuthState
+import 'services/web_notification_service.dart';
 
 // ── Build-time env (set via --dart-define) ─────────────────
 const _kSentryDsn    = String.fromEnvironment('SENTRY_DSN');
@@ -611,7 +612,11 @@ class _GardenAppState extends State<GardenApp> {
             ErrorWidget.builder = (details) => _GardenErrorWidget(
               error: details.exception.toString(),
             );
-            return child ?? const SizedBox.shrink();
+            final content = child ?? const SizedBox.shrink();
+            // On web: wrap with overlay to show in-app notification toasts
+            return kIsWeb
+                ? WebNotificationOverlay(child: content)
+                : content;
           },
         );
       },

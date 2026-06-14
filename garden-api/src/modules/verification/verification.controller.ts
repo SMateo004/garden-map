@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../shared/async-handler.js';
 import * as verificationService from './verification.service.js';
+import { createLivenessSession as awsCreateLivenessSession } from './liveness.service.js';
 import logger from '../../shared/logger.js';
 
 /** POST /api/verification/generate-link — authenticated CAREGIVER. Returns URL with JWT (15min). */
@@ -92,4 +93,18 @@ export const submit = asyncHandler(async (req: Request, res: Response) => {
   });
 
   res.json({ success: true, data: result });
+});
+
+/** POST /api/verification/create-liveness-session — authenticated CAREGIVER.
+ *  Creates an AWS Rekognition FaceLiveness session. The mobile app passes the returned
+ *  sessionId to the Amplify FaceLiveness Flutter widget, then sends it back on /submit. */
+export const createLivenessSession = asyncHandler(async (_req: Request, res: Response) => {
+  const session = await awsCreateLivenessSession();
+  if (!session) {
+    return res.status(503).json({
+      success: false,
+      error: { code: 'LIVENESS_UNAVAILABLE', message: 'El servicio de verificación de vida no está disponible en este momento. Tu solicitud será revisada manualmente.' },
+    });
+  }
+  res.json({ success: true, data: session });
 });

@@ -1,5 +1,6 @@
 import { Request } from 'express';
 import crypto from 'crypto';
+import geoip from 'geoip-lite';
 import prisma from '../../config/database.js';
 import logger from '../../shared/logger.js';
 import { env } from '../../config/env.js';
@@ -73,27 +74,36 @@ export function generateFingerprint(info: DeviceInfo): string {
 }
 
 /**
- * Simulates geolocation detection from IP.
+ * Real geolocation from IP using geoip-lite's bundled MaxMind database.
+ * No external calls — lookup is synchronous and in-memory.
  */
 export async function getGeolocation(ip: string) {
-    // In production: use geoip-lite or an external service like MaxMind/ipstack
-    // For MVP/Demo, we simulate it.
-
-    // Mock logic: 
-    if (ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.')) {
+    if (ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) {
         return { country: 'Local', city: 'DevEnvironment', proxy: false };
     }
 
-    // Just a placeholder
+    const geo = geoip.lookup(ip);
+    if (!geo) {
+        logger.warn('[Fraud] geoip lookup returned null', { ip });
+        return { country: 'Unknown', city: 'Unknown', proxy: false };
+    }
+
     return {
-        country: 'Bolivia',
-        city: 'Santa Cruz',
-        proxy: false
+        country: geo.country ?? 'Unknown',
+        city: geo.city ?? 'Unknown',
+        region: geo.region ?? undefined,
+        timezone: geo.timezone ?? undefined,
+        proxy: false, // geoip-lite doesn't detect proxies; upgrade to MaxMind GeoIP2 for proxy detection
     };
 }
 
+// Track consecutive audit failures to detect DB issues early.
+let _auditFailStreak = 0;
+const AUDIT_FAIL_ALERT_THRESHOLD = 3;
+
 /**
  * Logs a verification audit entry.
+ * On consecutive failures, creates an admin alert so the issue is visible.
  */
 export async function logVerificationAudit(data: {
     userId: string;
@@ -123,8 +133,21 @@ export async function logVerificationAudit(data: {
                 notes: data.notes,
             }
         });
-    } catch (error) {
-        logger.error('Failed to log verification audit', { error, userId: data.userId });
+        _auditFailStreak = 0; // reset on success
+    } catch (error: any) {
+        _auditFailStreak++;
+        logger.error('Failed to log verification audit', { error: error.message, userId: data.userId, streak: _auditFailStreak });
+
+        // If failures are persistent, create an admin notification so it's not silent.
+        if (_auditFailStreak >= AUDIT_FAIL_ALERT_THRESHOLD) {
+            _auditFailStreak = 0; // reset so we don't spam
+            prisma.adminNotification.create({
+                data: {
+                    type: 'AUDIT_LOG_FAILURE',
+                    caregiverId: data.userId, // reusing caregiverId field for the affected userId
+                },
+            }).catch(() => {}); // don't let this double-fail
+        }
     }
 }
 

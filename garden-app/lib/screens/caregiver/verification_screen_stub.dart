@@ -166,10 +166,30 @@ class _VerificationScreenState extends State<VerificationScreen> {
     });
 
     try {
+      // Try to get a real AWS FaceLiveness sessionId.
+      // If the server doesn't have AWS configured, this returns null and the
+      // submission continues without it (backend will flag for manual review).
+      String? livenessSessionId;
+      try {
+        final lsRes = await http.post(
+          Uri.parse('$_baseUrl/verification/create-liveness-session'),
+          headers: {'Authorization': 'Bearer $_caregiverToken'},
+        );
+        final lsData = jsonDecode(lsRes.body);
+        if (lsData['success'] == true) {
+          livenessSessionId = lsData['data']['sessionId'] as String?;
+        }
+      } catch (_) {
+        // Non-critical — proceed without liveness session
+      }
+
       final uri = Uri.parse('$_baseUrl/verification/submit');
       final request = http.MultipartRequest('POST', uri);
 
       request.fields['token'] = _verificationToken;
+      if (livenessSessionId != null) {
+        request.fields['livenessSessionId'] = livenessSessionId;
+      }
 
       final imageData = [
         ('selfie', _selfiePreview),
