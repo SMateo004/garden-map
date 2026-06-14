@@ -49,6 +49,7 @@ import { iniciarJobAjustePrecios } from './jobs/ajuste-precios.job.js';
 import { iniciarJobNotificacionesProgramadas } from './jobs/scheduled-notifications.job.js';
 import { iniciarJobWalkExpiry } from './jobs/walk-expiry.job.js';
 import { iniciarJobAgentHeartbeat } from './jobs/agent-heartbeat.job.js';
+import { iniciarJobServiceReminders } from './jobs/service-reminders.job.js';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
@@ -204,6 +205,7 @@ async function start() {
     iniciarJobNotificacionesProgramadas();
     iniciarJobWalkExpiry();
     iniciarJobAgentHeartbeat();
+    iniciarJobServiceReminders();
   }, 10000);
 
   // Auto-release payment after service ends if owner hasn't reviewed

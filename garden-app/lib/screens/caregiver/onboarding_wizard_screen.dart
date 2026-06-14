@@ -13,7 +13,6 @@ import '../../services/auth_service.dart';
 
 import 'caregiver_profile_data_screen.dart';
 import 'verification_screen.dart';
-import 'email_verification_screen.dart';
 import 'phone_verification_screen.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/address_map_picker.dart';
@@ -378,14 +377,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       final phoneVerified = profile['phoneVerified'] == true;
       if (!phoneVerified) {
         setState(() => _currentStep = 8);
-        return;
-      }
-
-      // Step 9: Verificación de email — requiere emailVerified true
-      final emailVerified = profile['emailVerified'] == true;
-      final userEmailVerified = (profile['user'] as Map<String, dynamic>?)?['emailVerified'] == true;
-      if (!emailVerified && !userEmailVerified) {
-        setState(() => _currentStep = 9);
         return;
       }
 
@@ -905,15 +896,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       final identityDone = identityStatus == 'VERIFIED' || identityStatus == 'APPROVED';
 
       final phoneVerified = profile['phoneVerified'] == true;
-      final emailVerified = profile['emailVerified'] == true ||
-          (profile['user'] as Map?)?['emailVerified'] == true;
 
       if (!identityDone) {
         setState(() => _currentStep = 7);
       } else if (!phoneVerified) {
         setState(() => _currentStep = 8);
-      } else if (!emailVerified) {
-        setState(() => _currentStep = 9);
       } else {
         await _completeWizard();
       }
@@ -939,14 +926,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
       if (status == 'VERIFIED' || status == 'APPROVED') {
         final phoneVerified = profile['phoneVerified'] == true;
-        final emailVerified = profile['emailVerified'] == true ||
-            (profile['user'] as Map?)?['emailVerified'] == true;
         if (!phoneVerified) {
           setState(() => _currentStep = 8);
-        } else if (emailVerified) {
-          await _completeWizard();
         } else {
-          setState(() => _currentStep = 9);
+          await _completeWizard();
         }
       } else {
         if (mounted) {
@@ -964,28 +947,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     }
   }
 
-  /// Step 8 → 9: phone verified, proceed to email verification.
+  /// Step 8 complete: phone verified, finish wizard.
   Future<void> _onPhoneVerificationComplete() async {
-    setState(() => _isLoading = true);
-    try {
-      final res = await http.get(
-        Uri.parse('$_baseUrl/caregiver/my-profile'),
-        headers: {'Authorization': 'Bearer $_authToken'},
-      );
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
-      final profile = body['data'] as Map<String, dynamic>? ?? {};
-      final emailVerified = profile['emailVerified'] == true ||
-          (profile['user'] as Map?)?['emailVerified'] == true;
-      if (emailVerified) {
-        await _completeWizard();
-      } else {
-        setState(() => _currentStep = 9);
-      }
-    } catch (_) {
-      setState(() => _currentStep = 9);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+    await _completeWizard();
   }
 
   void _prevStep() {
@@ -2223,11 +2187,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         phoneNumber: _phoneController.text.trim(),
         onComplete: _onPhoneVerificationComplete,
       );
-    } else if (_currentStep == 9) {
-      postRegStep = EmailVerificationScreen(
-        showAppBar: false,
-        onComplete: () { _completeWizard(); },
-      );
     } else {
       postRegStep = const SizedBox.shrink();
     }
@@ -2242,7 +2201,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       postRegStep,     // 6: Perfil profesional
       postRegStep,     // 7: Verificación de identidad
       postRegStep,     // 8: Verificación de teléfono
-      postRegStep,     // 9: Verificación de email
     ];
 
     final stepTitles = [
@@ -2255,7 +2213,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       'Perfil profesional',
       'Verificación ID',
       'Verificar Teléfono',
-      'Verificación Email',
     ];
 
     // Steps 6-9 are embedded screens that manage their own "Continue" buttons.

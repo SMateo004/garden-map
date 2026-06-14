@@ -2648,6 +2648,7 @@ export async function startService(bookingId: string, caregiverUserId: string, p
       },
     });
     sendPushToUser(booking.clientId, '¡El servicio ha comenzado! 🐕', `El cuidador está cuidando a ${booking.petName}.`).catch(() => {});
+    notificationService.onServiceStarted(bookingId).catch(() => {});
 
     return bookingToResponse(updated);
   });
@@ -2861,6 +2862,7 @@ export async function concludeService(
       },
     });
     sendPushToUser(booking.clientId, 'Servicio finalizado ✅', `El cuidador terminó. Deja tu reseña para liberar el pago.`).catch(() => {});
+    notificationService.onServiceCompleted(bookingId).catch(() => {});
 
     auditLog({
       userId: caregiverUserId,
@@ -2983,6 +2985,7 @@ export async function confirmReceiptByClient(
     const updated = await tx.booking.findUnique({ where: { id: bookingId } });
 
     sendPushToUser(caregiverUserId, '¡Pago liberado! 💸', `Recibiste el pago por el servicio de ${booking.petName}. Revisa tu billetera.`).catch(() => {});
+    notificationService.onRatingReceived(bookingId, rating, comment).catch(() => {});
 
     // Create Review natively
     await tx.review.create({

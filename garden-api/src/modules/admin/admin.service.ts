@@ -17,6 +17,8 @@ import type {
   AdminCaregiverDetailDto,
 } from './admin.types.js';
 import type { ReviewCaregiverBody, ListCaregiversQuery } from './admin.validation.js';
+import * as notificationService from '../../services/notification.service.js';
+import { sendPushToUser } from '../../services/firebase.service.js';
 
 function toIso(date: Date | null): string | null {
   return date ? date.toISOString() : null;
@@ -496,6 +498,9 @@ export async function reviewCaregiver(
     await getCache().del(`caregivers:detail:${profileId}`);
     await delByPrefix('caregivers:list:');
 
+    notificationService.onCaregiverApproved(caregiverUserId).catch(() => {});
+    sendPushToUser(caregiverUserId, '¡Perfil aprobado! 🎉', 'Tu perfil de cuidador fue aprobado. ¡Ya eres parte de GARDEN!').catch(() => {});
+
     logger.info('Admin: cuidador aprobado', {
       profileId,
       adminId,
@@ -552,6 +557,9 @@ export async function reviewCaregiver(
     });
 
     await getCache().del(`caregivers:detail:${profileId}`);
+
+    notificationService.onCaregiverRejected(caregiverUserId, reasonText, messageToUser || undefined).catch(() => {});
+    sendPushToUser(caregiverUserId, 'Solicitud revisada', 'Tu perfil necesita ajustes. Revisa los detalles en la app.').catch(() => {});
 
     logger.info('Admin: solicitud rechazada', {
       profileId,

@@ -341,6 +341,217 @@ export async function onBookingRejected(bookingId: string, reason: string): Prom
 }
 
 /**
+ * Service started (IN_PROGRESS). Email to client.
+ */
+export async function onServiceStarted(bookingId: string): Promise<void> {
+  const booking = await getBookingWithContacts(bookingId);
+  if (!booking) return;
+
+  const clientName = name(booking.client.firstName, booking.client.lastName, 'Cliente');
+  const caregiverName = name(booking.caregiver?.user?.firstName, booking.caregiver?.user?.lastName, 'Tu cuidador');
+  const svc = serviceLabel(booking.serviceType);
+
+  const html = gardenEmail(
+    `¡El servicio ha comenzado! 🐕`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, tu cuidador <strong>${caregiverName}</strong> acaba de iniciar el servicio.</p>` +
+    bookingTable([
+      ['Servicio', svc],
+      ['Mascota', booking.petName],
+      ['Inicio', new Date().toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' })],
+      ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
+    ]) +
+    `<p style="color:#555;font-size:14px;margin:0;">Puedes seguir el progreso en tiempo real desde la sección <strong>"Mis reservas"</strong> en la app. Si necesitas contactar a tu cuidador, hazlo a través del chat. 🐾</p>`
+  );
+
+  fireEmail(booking.client.email, `¡El servicio comenzó! – GARDEN`, html, 'SERVICE_STARTED_CLIENT', bookingId);
+  sendWhatsAppPlaceholder(booking.client.phone, `GARDEN: ${caregiverName} inició el servicio para ${booking.petName}. Síguelo en la app.`, { event: 'SERVICE_STARTED_CLIENT', bookingId });
+}
+
+/**
+ * Service completed (COMPLETED). Email to client with summary and review prompt.
+ */
+export async function onServiceCompleted(bookingId: string): Promise<void> {
+  const booking = await getBookingWithContacts(bookingId);
+  if (!booking) return;
+
+  const clientName = name(booking.client.firstName, booking.client.lastName, 'Cliente');
+  const caregiverName = name(booking.caregiver?.user?.firstName, booking.caregiver?.user?.lastName, 'Tu cuidador');
+  const svc = serviceLabel(booking.serviceType);
+
+  const html = gardenEmail(
+    `Servicio finalizado ✅`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, el servicio de <strong>${svc}</strong> para <strong>${booking.petName}</strong> ha finalizado correctamente.</p>` +
+    bookingTable([
+      ['Servicio', svc],
+      ['Cuidador', caregiverName],
+      ['Mascota', booking.petName],
+      ['Total pagado', `Bs ${booking.totalAmount}`],
+      ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
+    ]) +
+    `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;margin:0 0 20px;">
+       <p style="color:#166534;font-size:14px;font-weight:700;margin:0 0 6px;">⭐ ¡Deja tu reseña!</p>
+       <p style="color:#166534;font-size:13px;margin:0;">Tu opinión ayuda a otros dueños a encontrar cuidadores confiables. Ingresa a la app y califica el servicio para liberar el pago al cuidador.</p>
+     </div>
+     <p style="color:#555;font-size:14px;margin:0;">Gracias por confiar en GARDEN. ¡Esperamos verte pronto! 🌿</p>`
+  );
+
+  fireEmail(booking.client.email, `Servicio finalizado – GARDEN`, html, 'SERVICE_COMPLETED_CLIENT', bookingId);
+  sendWhatsAppPlaceholder(booking.client.phone, `GARDEN: El servicio de ${svc} para ${booking.petName} finalizó. Entra a la app para dejar tu reseña y liberar el pago.`, { event: 'SERVICE_COMPLETED_CLIENT', bookingId });
+}
+
+/**
+ * Admin approved caregiver profile. Email to caregiver.
+ */
+export async function onCaregiverApproved(caregiverUserId: string): Promise<void> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: caregiverUserId },
+      select: { email: true, firstName: true, lastName: true },
+    });
+    if (!user?.email) return;
+
+    const caregiverName = name(user.firstName, user.lastName, 'Cuidador');
+    const html = gardenEmail(
+      `¡Tu perfil fue aprobado! 🎉`,
+      `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, ¡estamos felices de darte la bienvenida como cuidador verificado de GARDEN!</p>` +
+      `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:20px;margin:0 0 20px;text-align:center;">
+         <p style="color:#166534;font-size:32px;margin:0 0 8px;">✅</p>
+         <p style="color:#166534;font-size:16px;font-weight:700;margin:0 0 6px;">Perfil Aprobado</p>
+         <p style="color:#166534;font-size:13px;margin:0;">Tu perfil ya es visible en el marketplace de GARDEN</p>
+       </div>
+       <p style="color:#555;font-size:14px;margin:0 0 16px;">A partir de ahora puedes:</p>
+       <ul style="color:#555;font-size:14px;margin:0 0 20px;padding-left:20px;line-height:1.8;">
+         <li>Recibir solicitudes de reserva de dueños de mascotas</li>
+         <li>Configurar tu disponibilidad y tarifas</li>
+         <li>Aceptar o rechazar reservas según tu agenda</li>
+         <li>Ganar dinero haciendo lo que más te gusta</li>
+       </ul>
+       <p style="color:#555;font-size:14px;margin:0;">¡Mucho éxito y bienvenido a la familia GARDEN! 🌿🐾</p>`
+    );
+
+    fireEmail(user.email, `¡Tu perfil fue aprobado! – GARDEN`, html, 'CAREGIVER_APPROVED', caregiverUserId);
+  } catch (err: any) {
+    logger.error('[NOTIFICATION] onCaregiverApproved error', { caregiverUserId, error: err.message });
+  }
+}
+
+/**
+ * Admin rejected caregiver profile. Email to caregiver with reason.
+ */
+export async function onCaregiverRejected(caregiverUserId: string, reason: string, adminMessage?: string): Promise<void> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: caregiverUserId },
+      select: { email: true, firstName: true, lastName: true },
+    });
+    if (!user?.email) return;
+
+    const caregiverName = name(user.firstName, user.lastName, 'Cuidador');
+    const displayReason = adminMessage || reason || 'No se especificó un motivo.';
+
+    const html = gardenEmail(
+      `Actualización sobre tu solicitud de cuidador`,
+      `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, hemos revisado tu solicitud para ser cuidador en GARDEN.</p>` +
+      `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px;margin:0 0 20px;">
+         <p style="color:#991b1b;font-size:14px;font-weight:700;margin:0 0 8px;">❌ Solicitud no aprobada</p>
+         <p style="color:#991b1b;font-size:13px;margin:0;"><strong>Motivo:</strong> ${displayReason}</p>
+       </div>
+       <p style="color:#555;font-size:14px;margin:0 0 16px;">No te desanimes — puedes corregir los puntos indicados y enviar nuevamente tu solicitud desde la app.</p>
+       <p style="color:#555;font-size:14px;margin:0;">Si tienes dudas sobre el proceso, escríbenos a través del chat de soporte en la app. Estamos aquí para ayudarte. 🌿</p>`
+    );
+
+    fireEmail(user.email, `Actualización sobre tu solicitud – GARDEN`, html, 'CAREGIVER_REJECTED', caregiverUserId);
+  } catch (err: any) {
+    logger.error('[NOTIFICATION] onCaregiverRejected error', { caregiverUserId, error: err.message });
+  }
+}
+
+/**
+ * Client rated the caregiver after service. Email summary to caregiver.
+ */
+export async function onRatingReceived(bookingId: string, rating: number, comment?: string): Promise<void> {
+  const booking = await getBookingWithContacts(bookingId);
+  if (!booking?.caregiver?.user) return;
+
+  const caregiverName = name(booking.caregiver.user.firstName, booking.caregiver.user.lastName, 'Cuidador');
+  const clientName = name(booking.client.firstName, booking.client.lastName, 'Cliente');
+  const svc = serviceLabel(booking.serviceType);
+  const stars = '⭐'.repeat(rating) + '☆'.repeat(5 - rating);
+
+  const html = gardenEmail(
+    `Nueva reseña de ${clientName} ${stars}`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, recibiste una reseña por tu servicio de <strong>${svc}</strong>.</p>` +
+    bookingTable([
+      ['Cliente', clientName],
+      ['Servicio', svc],
+      ['Mascota', booking.petName],
+      ['Calificación', `${stars} (${rating}/5)`],
+      ...(comment ? [['Comentario', comment] as [string, string]] : []),
+      ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
+    ]) +
+    (rating >= 4
+      ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;margin:0 0 20px;">
+           <p style="color:#166534;font-size:13px;margin:0;">¡Excelente trabajo! Las reseñas positivas mejoran tu visibilidad en el marketplace. 🌟</p>
+         </div>`
+      : `<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin:0 0 20px;">
+           <p style="color:#92400e;font-size:13px;margin:0;">Cada reseña es una oportunidad de mejorar. Revisa los comentarios y sigue adelante. 💪</p>
+         </div>`) +
+    `<p style="color:#555;font-size:14px;margin:0;">Puedes ver todas tus reseñas en tu perfil dentro de la app. ¡Sigue así! 🌿</p>`
+  );
+
+  fireEmail(booking.caregiver.user.email, `Nueva reseña recibida – GARDEN`, html, 'RATING_RECEIVED_CAREGIVER', bookingId);
+}
+
+/**
+ * Service reminder. Notifies client and caregiver X hours before service starts.
+ * Call this from a cron job 24h and 2h before the scheduled service.
+ */
+export async function onServiceReminder(bookingId: string, hoursUntil: number): Promise<void> {
+  const booking = await getBookingWithContacts(bookingId);
+  if (!booking) return;
+
+  const clientName = name(booking.client.firstName, booking.client.lastName, 'Cliente');
+  const caregiverName = name(booking.caregiver?.user?.firstName, booking.caregiver?.user?.lastName, 'Tu cuidador');
+  const svc = serviceLabel(booking.serviceType);
+  const dates = dateRange(booking);
+  const timeLabel = hoursUntil === 24 ? 'mañana' : `en ${hoursUntil} horas`;
+
+  // Email to client
+  const clientHtml = gardenEmail(
+    `Recordatorio: tu servicio es ${timeLabel} ⏰`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, te recordamos que tienes un servicio programado <strong>${timeLabel}</strong>.</p>` +
+    bookingTable([
+      ['Servicio', svc],
+      ['Cuidador', caregiverName],
+      ['Mascota', booking.petName],
+      ['Fecha', dates],
+      ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
+    ]) +
+    `<p style="color:#555;font-size:14px;margin:0;">Asegúrate de coordinar la entrega de tu mascota con el cuidador a través del chat de la app. 🐾</p>`
+  );
+  fireEmail(booking.client.email, `Recordatorio de servicio – GARDEN`, clientHtml, 'SERVICE_REMINDER_CLIENT', bookingId);
+  sendWhatsAppPlaceholder(booking.client.phone, `GARDEN: Recordatorio — tu servicio de ${svc} para ${booking.petName} es ${timeLabel}. ID: ${bookingId.slice(0, 8).toUpperCase()}.`, { event: 'SERVICE_REMINDER_CLIENT', bookingId });
+
+  // Email to caregiver
+  if (booking.caregiver?.user) {
+    const caregiverHtml = gardenEmail(
+      `Recordatorio: tienes un servicio ${timeLabel} ⏰`,
+      `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, te recordamos que tienes un servicio programado <strong>${timeLabel}</strong>.</p>` +
+      bookingTable([
+        ['Servicio', svc],
+        ['Cliente', clientName],
+        ['Mascota', booking.petName],
+        ['Fecha', dates],
+        ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
+      ]) +
+      `<p style="color:#555;font-size:14px;margin:0;">Coordina la recepción de la mascota con el cliente a través del chat. ¡Mucho éxito! 🌿</p>`
+    );
+    fireEmail(booking.caregiver.user.email, `Recordatorio de servicio – GARDEN`, caregiverHtml, 'SERVICE_REMINDER_CAREGIVER', bookingId);
+    sendWhatsAppPlaceholder(booking.caregiver.user.phone, `GARDEN: Recordatorio — tienes el servicio de ${svc} (${booking.petName}) ${timeLabel}. ID: ${bookingId.slice(0, 8).toUpperCase()}.`, { event: 'SERVICE_REMINDER_CAREGIVER', bookingId });
+  }
+}
+
+/**
  * Refund processed / client info message.
  */
 export async function onRefundProcessed(bookingId: string, message: string): Promise<void> {
