@@ -51,7 +51,7 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
     // We navigate only after both complete — no wasted 2.5s hardcoded delay.
     final results = await Future.wait<Object?>([
       _computeDestination(),
-      Future.delayed(const Duration(milliseconds: 800)),
+      Future.delayed(const Duration(seconds: 3)),
     ]);
 
     if (!mounted) return;
@@ -175,13 +175,13 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFF3B5E1A),
       body: FadeTransition(
         opacity: _fadeAnim,
         child: Center(
           child: Image.asset(
             'assets/images/garden_logo.png',
-            width: 200,
+            width: MediaQuery.of(context).size.width * 0.75,
             fit: BoxFit.contain,
           ),
         ),
