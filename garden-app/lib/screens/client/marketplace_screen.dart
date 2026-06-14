@@ -1571,21 +1571,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       _ratingChip(4.5, '4.5+ ⭐', textColor),
                     ],
                   ),
-                  _divider(border),
-
-                  // ── Verificación ──
-                  _sectionTitle('Verificación', textColor),
-                  const SizedBox(height: 4),
-                  _filterSwitch(
-                    'Solo verificados blockchain',
-                    Icons.link_rounded,
-                    _filterVerifiedOnly,
-                    (v) {
-                      setState(() => _filterVerifiedOnly = v);
-                      _refreshSheet?.call();
-                    },
-                    textColor, subtextColor,
-                  ),
                 ],
               ),
             ),
@@ -1987,21 +1972,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 ],
               ),
             ),
-            if (isVerified)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: GardenColors.polygon.withValues(alpha: 0.07),
-                  borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(16), bottomRight: Radius.circular(16)),
-                ),
-                child: const Row(children: [
-                  Icon(Icons.link_rounded, size: 12, color: GardenColors.polygon),
-                  SizedBox(width: 6),
-                  Text('Verificado en Polygon Blockchain',
-                      style: TextStyle(color: GardenColors.polygon, fontSize: 11, fontWeight: FontWeight.w600)),
-                ]),
-              ),
           ],
         ),
       ),
