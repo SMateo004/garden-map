@@ -10,6 +10,7 @@ import '../client/my_data_screen.dart';
 import '../client/my_ratings_screen.dart';
 import '../../services/auth_state.dart';
 import '../../services/secure_storage_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -411,6 +412,21 @@ class _ProfileScreenState extends State<ProfileScreen>
       );
     } finally {
       if (mounted) setState(() => _isDeletingAccount = false);
+    }
+  }
+
+  Future<void> _openSupportWhatsApp() async {
+    const phone = '59178081291';
+    const message = 'Hola, necesito ayuda con mi cuenta de GARDEN 🌿';
+    final uri = Uri.parse('https://wa.me/$phone?text=${Uri.encodeComponent(message)}');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo abrir WhatsApp'), backgroundColor: GardenColors.error),
+        );
+      }
     }
   }
 
@@ -972,6 +988,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                           onTap: () => context.push('/admin')),
                     ],
                     const SizedBox(height: 16),
+                    Text('Soporte', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
+                    const SizedBox(height: 8),
+                    _profileTile(icon: Icons.support_agent_outlined, title: 'Contactar soporte', onTap: _openSupportWhatsApp),
+                    const SizedBox(height: 16),
                     Text('Legal', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
                     const SizedBox(height: 8),
                     _profileTile(icon: Icons.gavel_outlined, title: 'Términos y Condiciones',
@@ -1291,6 +1311,15 @@ class _ProfileScreenState extends State<ProfileScreen>
 
         _profileTile(icon: Icons.notifications_outlined, title: 'Notificaciones',
             onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Próximamente')))),
+
+        const SizedBox(height: 24),
+        _sectionLabel('Soporte', textColor),
+        const SizedBox(height: 10),
+        _profileTile(
+          icon: Icons.support_agent_outlined,
+          title: 'Contactar soporte',
+          onTap: _openSupportWhatsApp,
+        ),
 
         const SizedBox(height: 24),
         _sectionLabel('Legal', textColor),

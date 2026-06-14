@@ -61,7 +61,6 @@ async function getBookingSettings() {
         paseo100h,
         paseo50h,
         qrValidityHours,
-        qrValidityMinutes,
     ] = await Promise.all([
         getNumericSetting('platformCommissionPct',   10),
         getNumericSetting('hospedajeRefundAdminFeeBS', 10),
@@ -70,7 +69,6 @@ async function getBookingSettings() {
         getNumericSetting('paseoRefund100Horas',     12),
         getNumericSetting('paseoRefund50Horas',       6),
         getNumericSetting('qrValidityHours',         24),
-        getNumericSetting('qrValidityMinutes',       15),
     ]);
     return {
         COMMISSION_RATE:              commissionPct / 100,
@@ -80,7 +78,7 @@ async function getBookingSettings() {
         PASEO_REFUND_100_HOURS:       paseo100h,
         PASEO_REFUND_50_HOURS:        paseo50h,
         QR_VALIDITY_HOURS:            qrValidityHours,
-        QR_VALIDITY_MINUTES_PAYMENT:  qrValidityMinutes,
+        QR_VALIDITY_MINUTES_PAYMENT:  qrValidityHours * 60,
     };
 }
 

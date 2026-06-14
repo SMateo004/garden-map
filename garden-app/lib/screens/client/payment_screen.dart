@@ -97,8 +97,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
           if (expiry != null) {
             final remaining = expiry.difference(DateTime.now());
             if (remaining.isNegative) {
-              // QR already expired — cancel and show expired screen
-              _cancelBooking();
+              // QR expired — show expired screen but do NOT auto-cancel.
+              // The user may have already paid; admin can verify manually.
               setState(() => _qrExpired = true);
             } else {
               // QR still valid — restore it and resume polling
@@ -524,7 +524,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
             const SizedBox(height: 12),
 
-            Text('Este código expira en 15 minutos',
+            Text('Este código expira en 24 horas',
                 style: TextStyle(color: subtextColor, fontSize: 14)),
 
             if (_walletContributionUsed > 0) ...[
@@ -1225,15 +1225,22 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         color: textColor, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
                 const SizedBox(height: 12),
                 Text(
-                  'El código QR expiró a los 15 minutos y la reserva fue cancelada. Si realizaste el pago antes de que venciera, espera unos segundos y vuelve a verificar. Si no pagaste, crea una nueva reserva.',
+                  'El código QR expiró después de 24 horas. Si ya realizaste el pago, solicita una revisión manual y el equipo de GARDEN verificará tu transacción. Si no pagaste, vuelve al marketplace y crea una nueva reserva.',
                   style: TextStyle(color: subtextColor, fontSize: 14, height: 1.6),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 36),
                 GardenButton(
+                  label: 'Ya pagué — solicitar revisión',
+                  icon: Icons.support_agent_rounded,
+                  onPressed: _showManualReviewDialog,
+                ),
+                const SizedBox(height: 12),
+                GardenButton(
                   label: 'Volver al marketplace',
                   icon: Icons.search_rounded,
                   onPressed: () => context.go('/marketplace'),
+                  outline: true,
                 ),
                 const SizedBox(height: 12),
                 TextButton(
