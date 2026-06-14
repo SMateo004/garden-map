@@ -69,7 +69,7 @@ export interface ReviewPublic {
   id: string;
   clientName: string;
   clientPhoto: string | null;
-  rating: number;
+  rating: number | null;
   comment: string | null;
   serviceType: ServiceType;
   createdAt: Date;

@@ -240,6 +240,55 @@ async function start() {
       logger.error('[AutoRelease] Cron job failed', { error: err.message });
     }
   }, 60 * 60 * 1000); // Every hour
+
+  // SLA: auto-release ON_HOLD bookings if admin hasn't resolved them in N days.
+  // Configurable via 'onHoldSlaHoras' setting (default: 72h = 3 days).
+  // Releases funds to caregiver without overriding the existing low rating.
+  setInterval(async () => {
+    try {
+      const { getNumericSetting } = await import('./utils/settings-cache.js');
+      const slaHoras = await getNumericSetting('onHoldSlaHoras', 72);
+      const cutoff = new Date(Date.now() - slaHoras * 60 * 60 * 1000);
+      const stuckBookings = await prisma.booking.findMany({
+        where: {
+          status: 'COMPLETED',
+          payoutStatus: 'ON_HOLD',
+          ownerRated: true,
+          updatedAt: { lte: cutoff },
+        },
+        select: { id: true, caregiverId: true, totalAmount: true, commissionAmount: true },
+      });
+
+      for (const booking of stuckBookings) {
+        try {
+          await prisma.$transaction(async (tx) => {
+            const claimed = await tx.booking.updateMany({
+              where: { id: booking.id, payoutStatus: 'ON_HOLD' },
+              data: { payoutStatus: 'PAID' },
+            });
+            if (claimed.count === 0) return; // already resolved by admin
+
+            const caregiverProfile = await tx.caregiverProfile.findUnique({
+              where: { id: booking.caregiverId },
+              select: { userId: true },
+            });
+            if (!caregiverProfile) return;
+
+            const amount = Number(booking.totalAmount) - Number(booking.commissionAmount);
+            await tx.user.update({
+              where: { id: caregiverProfile.userId },
+              data: { balance: { increment: amount } },
+            });
+          });
+          logger.info(`[SLA-OnHold] Booking auto-released after ${slaHoras}h SLA`, { bookingId: booking.id });
+        } catch (err: any) {
+          logger.error('[SLA-OnHold] Failed to release booking', { bookingId: booking.id, error: err.message });
+        }
+      }
+    } catch (err: any) {
+      logger.error('[SLA-OnHold] Cron job failed', { error: err.message });
+    }
+  }, 6 * 60 * 60 * 1000); // Every 6 hours
 }
 
 start().catch(err => {

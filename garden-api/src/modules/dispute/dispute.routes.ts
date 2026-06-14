@@ -160,8 +160,8 @@ router.post('/:bookingId/caregiver-response', authMiddleware, requireRole('CAREG
         text: m.message,
         at: m.createdAt,
       })),
-      review: review
-        ? { rating: review.rating, comment: review.comment, at: review.createdAt }
+      review: review && review.rating != null
+        ? { rating: review.rating as number, comment: review.comment, at: review.createdAt }
         : null,
     };
 

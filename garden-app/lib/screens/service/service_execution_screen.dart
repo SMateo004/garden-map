@@ -39,6 +39,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   int _surveyRating = 0;
   final TextEditingController _surveyCommentController = TextEditingController();
 
+  // Caregiver rates owner — post-service
+  int _caregiverSurveyRating = 0;
+  final TextEditingController _caregiverCommentController = TextEditingController();
+  bool _isSubmittingCaregiverRating = false;
+
   // Extension state (PASEO + HOSPEDAJE)
   int _allowedExtensionMinutes = 0;
   int _allowedExtensionDays = 0;
@@ -49,10 +54,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   bool _isSendingPhoto = false;
   bool _isSendingVideo = false;
 
-  // Photo reminder timers (caregiver side)
-  bool _reminder1Shown = false; // first photo (5 min PASEO / 15 min others)
-  bool _reminder2Shown = false; // midpoint photo (non-PASEO only)
-  bool _reminder3Shown = false; // end-of-service photo
+  // Photo reminder timers (caregiver side) — persisted to SharedPreferences so
+  // app restarts don't re-trigger banners already shown in the same service session.
+  bool _reminder1Shown = false;
+  bool _reminder2Shown = false;
+  bool _reminder3Shown = false;
+  bool _remindersLoaded = false;
 
   // Emergency state (client side)
   String? _caregiverPhone; // populated from booking response
@@ -82,12 +89,29 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     _serviceTimer?.cancel();
     _photoRefreshTimer?.cancel();
     _surveyCommentController.dispose();
+    _caregiverCommentController.dispose();
     _gpsStatusSub?.cancel();
     super.dispose();
   }
 
   Future<void> _loadInitialData() async {
+    await _loadReminderFlags();
     await _loadBooking();
+  }
+
+  Future<void> _loadReminderFlags() async {
+    if (widget.role != 'CAREGIVER') return;
+    final prefs = await SharedPreferences.getInstance();
+    final id = widget.bookingId;
+    _reminder1Shown = prefs.getBool('photo_reminder1_$id') ?? false;
+    _reminder2Shown = prefs.getBool('photo_reminder2_$id') ?? false;
+    _reminder3Shown = prefs.getBool('photo_reminder3_$id') ?? false;
+    _remindersLoaded = true;
+  }
+
+  Future<void> _persistReminderFlag(int number) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('photo_reminder${number}_${widget.bookingId}', true);
   }
 
   Future<void> _loadBooking() async {
@@ -122,7 +146,19 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         });
         
         if (_booking?['status'] == 'IN_PROGRESS') {
-          _startTimer();
+          if (_serviceTimer == null || !_serviceTimer!.isActive) {
+            // First time — start the ticker and calibrate from server timestamp.
+            _startTimer();
+          } else {
+            // Timer already running — only recalibrate elapsed from server to prevent drift.
+            final startedAt = _booking?['serviceStartedAt'] as String?;
+            if (startedAt != null) {
+              final startTime = DateTime.tryParse(startedAt);
+              if (startTime != null) {
+                setState(() => _elapsed = DateTime.now().difference(startTime));
+              }
+            }
+          }
           // Start GPS monitoring for caregiver on PASEO
           if (widget.role == 'CAREGIVER' && _booking?['serviceType'] == 'PASEO') {
             _startGpsMonitoring();
@@ -372,6 +408,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     if (status == 'COMPLETED') {
       if (widget.role == 'CLIENT' && !_alreadyRated) {
         return _buildSatisfactionSurvey();
+      }
+      if (widget.role == 'CAREGIVER' && _booking?['caregiverRated'] != true) {
+        return _buildCaregiverRatingSurvey();
       }
       return _buildCompletedView();
     }
@@ -3328,11 +3367,15 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final photoCount = _serviceEvents.length;
     final minPhotos = isPaseo ? 2 : 3;
 
+    // Wait until flags are loaded from SharedPreferences to avoid false triggers on boot
+    if (!_remindersLoaded) return;
+
     // Reminder 1: first photo
     if (!_reminder1Shown && photoCount == 0) {
       final threshold = isPaseo ? 5 : 15;
       if (elapsedMin >= threshold) {
         _reminder1Shown = true;
+        _persistReminderFlag(1);
         _showPhotoReminderBanner(
           '📸 ¡Envía la primera foto!',
           isPaseo ? 'Han pasado 5 minutos. El dueño espera ver a su mascota.' : 'Han pasado 15 minutos sin fotos.',
@@ -3343,6 +3386,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     // Reminder 2: mid-service (not for PASEO)
     if (!isPaseo && !_reminder2Shown && photoCount < 2 && durationMin > 0 && elapsedMin >= durationMin ~/ 2) {
       _reminder2Shown = true;
+      _persistReminderFlag(2);
       _showPhotoReminderBanner('📸 ¡Foto de mitad del servicio!', 'Ya vas por la mitad del servicio.');
     }
 
@@ -3351,6 +3395,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       final endThreshold = isPaseo ? (durationMin - 10) : (durationMin - 15);
       if (endThreshold > 0 && elapsedMin >= endThreshold) {
         _reminder3Shown = true;
+        _persistReminderFlag(3);
         _showPhotoReminderBanner(
           '📸 ¡Última foto antes de finalizar!',
           isPaseo ? 'Quedan ~10 minutos. Envía la foto final.' : 'Quedan ~15 minutos. Envía la foto final.',
@@ -3635,9 +3680,51 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   if (loadingVets)
                     const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
                   else if (nearestVets.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text('No hay veterinarias registradas en el sistema aún.', style: TextStyle(color: subtextColor, fontSize: 12)),
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00897B).withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF00897B).withValues(alpha: 0.2)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            const Icon(Icons.info_outline_rounded, color: Color(0xFF00897B), size: 16),
+                            const SizedBox(width: 8),
+                            Text('Sin veterinarias geo-registradas aún', style: TextStyle(color: const Color(0xFF00897B), fontSize: 12, fontWeight: FontWeight.w700)),
+                          ]),
+                          const SizedBox(height: 10),
+                          Text('Clínicas veterinarias de referencia — Bolivia:', style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 8),
+                          ...[
+                            {'name': 'VetBol Santa Cruz', 'number': '+591 3 3449900'},
+                            {'name': 'Clínica Veterinaria Central', 'number': '+591 3 3337700'},
+                            {'name': 'VetLapaz 24h', 'number': '+591 2 2790090'},
+                          ].map((v) => Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(children: [
+                              Expanded(child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(v['name']!, style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                                  Text(v['number']!, style: TextStyle(color: subtextColor, fontSize: 11)),
+                                ],
+                              )),
+                              GestureDetector(
+                                onTap: () => launchUrl(Uri.parse('tel:${v['number']!.replaceAll(' ', '')}')),
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(color: const Color(0xFF00897B).withValues(alpha: 0.1), shape: BoxShape.circle),
+                                  child: const Icon(Icons.phone_rounded, color: Color(0xFF00897B), size: 16),
+                                ),
+                              ),
+                            ]),
+                          )).toList(),
+                        ],
+                      ),
                     )
                   else
                     ...nearestVets.map((vet) => Container(
@@ -4739,5 +4826,196 @@ class _EmergencyCallTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // ── Cuidador califica al dueño ──────────────────────────────────────────────
+
+  Widget _buildCaregiverRatingSurvey() {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    final ratingLabels = ['', 'Complicado', 'Difícil', 'Normal', 'Bueno', '¡Excelente dueño!'];
+    final starColor = _caregiverSurveyRating >= 4
+        ? GardenColors.star
+        : _caregiverSurveyRating >= 3
+            ? GardenColors.warning
+            : GardenColors.error;
+    final petName = _booking?['petName'] ?? 'la mascota';
+
+    return Scaffold(
+      backgroundColor: bg,
+      body: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(24, MediaQuery.of(context).padding.top + 24, 24, 48),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    GardenColors.primary.withValues(alpha: 0.08),
+                    GardenColors.lime.withValues(alpha: 0.2),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(GardenRadius.xl),
+                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.14)),
+              ),
+              child: Column(
+                children: [
+                  const Text('🐾', style: TextStyle(fontSize: 52)),
+                  const SizedBox(height: 16),
+                  Text(
+                    '¿Cómo fue el dueño de $petName?',
+                    style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w900, height: 1.2),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Tu opinión es voluntaria y ayuda a mejorar la comunidad GARDEN.',
+                    style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 32),
+
+            // Estrellas
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(5, (i) {
+                final val = i + 1;
+                final selected = val <= _caregiverSurveyRating;
+                return GestureDetector(
+                  onTap: () => setState(() => _caregiverSurveyRating = val),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 1.0, end: selected ? 1.2 : 1.0),
+                    duration: const Duration(milliseconds: 180),
+                    builder: (_, s, child) => Transform.scale(scale: s, child: child),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      child: Icon(
+                        selected ? Icons.star_rounded : Icons.star_outline_rounded,
+                        color: selected ? GardenColors.star : borderColor,
+                        size: 52,
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: _caregiverSurveyRating > 0
+                  ? Padding(
+                      key: ValueKey(_caregiverSurveyRating),
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Text(
+                        ratingLabels[_caregiverSurveyRating],
+                        style: TextStyle(color: starColor, fontWeight: FontWeight.w800, fontSize: 16),
+                      ),
+                    )
+                  : const SizedBox(height: 10),
+            ),
+
+            const SizedBox(height: 28),
+
+            // Comentario opcional
+            Container(
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius: BorderRadius.circular(GardenRadius.lg),
+                border: Border.all(color: borderColor),
+              ),
+              child: TextField(
+                controller: _caregiverCommentController,
+                maxLines: 3,
+                maxLength: 500,
+                style: TextStyle(color: textColor, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Comentario opcional (instrucciones claras, puntualidad, etc.)',
+                  hintStyle: TextStyle(color: subtextColor, fontSize: 13),
+                  contentPadding: const EdgeInsets.all(16),
+                  border: InputBorder.none,
+                  counterStyle: TextStyle(color: subtextColor, fontSize: 11),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 32),
+
+            GardenButton(
+              label: _isSubmittingCaregiverRating ? 'Enviando...' : 'Enviar calificación',
+              icon: Icons.star_rounded,
+              loading: _isSubmittingCaregiverRating,
+              onPressed: _caregiverSurveyRating > 0 && !_isSubmittingCaregiverRating
+                  ? _submitCaregiverRating
+                  : null,
+            ),
+
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: _isSubmittingCaregiverRating ? null : _skipCaregiverRating,
+              child: Text(
+                'Omitir por ahora',
+                style: TextStyle(color: subtextColor, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submitCaregiverRating() async {
+    setState(() => _isSubmittingCaregiverRating = true);
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/rate-owner'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'rating': _caregiverSurveyRating,
+          'comment': _caregiverCommentController.text.trim().isEmpty
+              ? null
+              : _caregiverCommentController.text.trim(),
+        }),
+      );
+      final data = jsonDecode(response.body);
+      if (!mounted) return;
+      if (data['success'] == true) {
+        await _loadBooking();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['error']?['message'] ?? 'Error al enviar calificación'),
+            backgroundColor: GardenColors.error,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error de conexión'), backgroundColor: GardenColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmittingCaregiverRating = false);
+    }
+  }
+
+  Future<void> _skipCaregiverRating() async {
+    // Marcar caregiverRated=true localmente para ir a la vista de completado
+    // (el servidor no requiere que el cuidador califique, es voluntario)
+    setState(() {
+      if (_booking != null) _booking!['caregiverRated'] = true;
+    });
   }
 }

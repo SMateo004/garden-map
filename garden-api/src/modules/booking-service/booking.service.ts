@@ -2835,6 +2835,16 @@ export async function concludeService(
       throw new BadRequestError('El servicio debe estar en curso para concluirlo');
     }
 
+    // Validar fotos mínimas server-side (PASEO=2, otros=3)
+    const events = (booking.serviceEvents as any[]) || [];
+    const photoEvents = events.filter((e: any) => e.type === 'PHOTO');
+    const minPhotos = booking.serviceType === ServiceType.PASEO ? 2 : 3;
+    if (photoEvents.length < minPhotos) {
+      throw new BookingValidationError(
+        `Debes subir al menos ${minPhotos} fotos antes de finalizar el servicio. Llevas ${photoEvents.length}.`
+      );
+    }
+
     const tracking = (booking.serviceTrackingData as any[]) || [];
     if (lat && lng) tracking.push({ lat, lng, timestamp: new Date(), type: 'END' });
     const gpsDistance = booking.serviceType === ServiceType.PASEO ? calcGpsDistance(tracking) : null;
@@ -2997,9 +3007,9 @@ export async function confirmReceiptByClient(
       }
     });
 
-    // Update Caregiver Average Rating
+    // Update Caregiver Average Rating — excluir reseñas de sistema (auto-release)
     const result = await tx.review.aggregate({
-      where: { caregiverId: booking.caregiverId },
+      where: { caregiverId: booking.caregiverId, isSystemGenerated: false },
       _avg: { rating: true },
       _count: { id: true },
     });
@@ -3076,7 +3086,23 @@ export async function autoReleasePayment(
 
     await tx.booking.update({
       where: { id: bookingId },
-      data: { payoutStatus: 'PAID' },
+      data: { payoutStatus: 'PAID', ownerRated: true },
+    });
+
+    // Crear reseña de sistema para mantener historial completo.
+    // No se incluye en el promedio del cuidador (isSystemGenerated=true, sin puntuación numérica).
+    await tx.review.create({
+      data: {
+        bookingId: booking.id,
+        clientId:  booking.clientId,
+        caregiverId: booking.caregiverId,
+        rating: null as unknown as number, // null → no afecta promedio
+        comment: null,
+        serviceType: booking.serviceType,
+        isSystemGenerated: true,
+      },
+    }).catch(() => {
+      // Si el campo isSystemGenerated aún no existe en schema viejo, no bloquear el release.
     });
 
     sendPushToUser(
@@ -3086,15 +3112,23 @@ export async function autoReleasePayment(
     ).catch(() => {});
   });
 
-  // Blockchain: rating 5 = símbolo de auto-aprobación sin disputa (no infla rating del perfil)
-  blockchainService.finalizeBookingOnChain(bookingId, 5).then(async (txHash) => {
-    if (txHash) {
-      await prisma.booking.update({ where: { id: bookingId }, data: { blockchainFinalizedTxHash: txHash } });
-      logger.info('[Blockchain] auto-release finalize txHash saved', { bookingId, txHash });
-    }
-  }).catch(err => {
-    logger.error('[AutoRelease] Blockchain finalize failed', { bookingId, err });
+  // Blockchain: solo finalizar si aún no tiene txHash (idempotencia — evita doble registro)
+  const bookingForChain = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: { blockchainFinalizedTxHash: true },
   });
+  if (!bookingForChain?.blockchainFinalizedTxHash) {
+    blockchainService.finalizeBookingOnChain(bookingId, 5).then(async (txHash) => {
+      if (txHash) {
+        await prisma.booking.update({ where: { id: bookingId }, data: { blockchainFinalizedTxHash: txHash } });
+        logger.info('[Blockchain] auto-release finalize txHash saved', { bookingId, txHash });
+      }
+    }).catch(err => {
+      logger.error('[AutoRelease] Blockchain finalize failed', { bookingId, err });
+    });
+  } else {
+    logger.info('[Blockchain] auto-release skipped — already finalized', { bookingId });
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
