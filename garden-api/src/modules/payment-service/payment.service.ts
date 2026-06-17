@@ -299,6 +299,15 @@ export async function verifyPaymentByQr(qrId: string, clientId: string): Promise
     });
   }
 
+  // Si el dueño eligió donar, registrar la donación
+  if (booking.donationAmount && Number(booking.donationAmount) > 0) {
+    prisma.donation.upsert({
+      where: { bookingId: booking.id },
+      create: { bookingId: booking.id, clientId: booking.clientId, amount: booking.donationAmount },
+      update: {},
+    }).catch((err) => logger.error('Donation record creation failed (QR)', { bookingId: booking.id, err }));
+  }
+
   // Registro en Blockchain — guardar txHash
   blockchainService.createBookingOnChain(
     booking.id,
@@ -357,6 +366,15 @@ export async function verifyPaymentManual(
       paidAt: new Date(),
     },
   });
+
+  // Si el dueño eligió donar, registrar la donación (ignorar si ya existe por doble-tap)
+  if (booking.donationAmount && Number(booking.donationAmount) > 0) {
+    await prisma.donation.upsert({
+      where: { bookingId },
+      create: { bookingId, clientId: booking.clientId, amount: booking.donationAmount },
+      update: {},
+    }).catch((err) => logger.error('Donation record creation failed', { bookingId, err }));
+  }
 
   logger.info('Pago aprobado manualmente por admin; esperando aprobación cuidador', { bookingId });
   track(booking.clientId, 'payment_completed', {

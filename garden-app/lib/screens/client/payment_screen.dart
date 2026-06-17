@@ -51,6 +51,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _paidWithWallet = false;
   double _walletContributionUsed = 0.0;
 
+  // Donation state
+  double _donationAmount = 0.0;
+  final TextEditingController _donationController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -60,6 +64,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   @override
   void dispose() {
     _stopPolling();
+    _donationController.dispose();
     super.dispose();
   }
 
@@ -159,11 +164,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
     try {
       Map<String, dynamic> body;
       if (_walletCoversAll) {
-        body = {'method': 'wallet'};
+        body = {'method': 'wallet', if (_donationAmount > 0) 'donationAmount': _donationAmount};
       } else if (_useWallet && _walletBalance > 0) {
-        body = {'method': 'qr', 'walletContribution': _walletBalance};
+        body = {'method': 'qr', 'walletContribution': _walletBalance, if (_donationAmount > 0) 'donationAmount': _donationAmount};
       } else {
-        body = {'method': 'qr'};
+        body = {'method': 'qr', if (_donationAmount > 0) 'donationAmount': _donationAmount};
       }
 
       final response = await http.post(
@@ -288,7 +293,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       await http.post(
         Uri.parse('$_baseUrl/bookings/${widget.bookingId}/cancel'),
         headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
-        body: jsonEncode({'reason': 'QR de pago expirado o cancelado por el usuario'}),
+        body: jsonEncode({'reason': 'QR de pago expirado o cancelado por el usuario', 'source': 'QR_ABANDONED'}),
       );
     } catch (_) {}
   }
@@ -488,6 +493,144 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
+  // ── Donación voluntaria ─────────────────────────────────────────────────────
+
+  Widget _buildDonationSection(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    final presets = [5.0, 10.0, 20.0];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFFCC02).withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFCC02).withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Text('🐾', style: TextStyle(fontSize: 16)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Donar a hogares de perros',
+                      style: TextStyle(
+                        color: Color(0xFF5D4037),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const Text(
+                      '100% va al hogar — Garden no retiene nada',
+                      style: TextStyle(color: Color(0xFF8D6E63), fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              ...presets.map((p) {
+                final selected = _donationAmount == p;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: () => setState(() {
+                      if (selected) {
+                        _donationAmount = 0;
+                        _donationController.clear();
+                      } else {
+                        _donationAmount = p;
+                        _donationController.text = p.toStringAsFixed(0);
+                      }
+                    }),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: selected ? const Color(0xFFFFCC02) : Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: selected ? const Color(0xFFFFCC02) : const Color(0xFFBCAAA4),
+                        ),
+                      ),
+                      child: Text(
+                        'Bs ${p.toStringAsFixed(0)}',
+                        style: TextStyle(
+                          color: selected ? const Color(0xFF5D4037) : const Color(0xFF8D6E63),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+              Expanded(
+                child: TextField(
+                  controller: _donationController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(color: Color(0xFF5D4037), fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'Otro monto',
+                    hintStyle: const TextStyle(color: Color(0xFF8D6E63), fontSize: 12),
+                    prefixText: 'Bs ',
+                    prefixStyle: const TextStyle(color: Color(0xFF5D4037), fontWeight: FontWeight.w700),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: const BorderSide(color: Color(0xFFBCAAA4)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: const BorderSide(color: Color(0xFFFFCC02), width: 2),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                  ),
+                  onChanged: (v) {
+                    final val = double.tryParse(v) ?? 0;
+                    setState(() => _donationAmount = val);
+                  },
+                ),
+              ),
+            ],
+          ),
+          if (_donationAmount > 0) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.favorite_rounded, color: Color(0xFFFFCC02), size: 14),
+                const SizedBox(width: 6),
+                Text(
+                  'Bs ${_donationAmount.toStringAsFixed(2)} se donarán al hogar 🐶',
+                  style: const TextStyle(
+                    color: Color(0xFF5D4037),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   // ── QR view ─────────────────────────────────────────────────────────────────
 
   Widget _buildQrView(Color textColor, Color subtextColor) {
@@ -595,13 +738,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
             const SizedBox(height: 16),
 
-            // "Volver" goes back to payment method selector (no booking cancel)
             TextButton(
-              onPressed: () {
-                _stopPolling();
-                setState(() => _qrResponse = null);
-              },
-              child: Text('Cambiar método de pago', style: TextStyle(color: subtextColor)),
+              onPressed: _handleBack,
+              child: Text('Cancelar reserva', style: TextStyle(color: subtextColor)),
             ),
           ],
         ),
@@ -894,6 +1033,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 20),
+
+          // ── Donación voluntaria ─────────────────────────────────────────────
+          _buildDonationSection(textColor, subtextColor, surface, borderColor),
           const SizedBox(height: 20),
 
           GardenButton(

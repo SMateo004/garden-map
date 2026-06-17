@@ -7,6 +7,7 @@ import prisma from '../config/database.js';
 import { onServiceReminder } from '../services/notification.service.js';
 import { sendPushToUser } from '../services/firebase.service.js';
 import logger from '../shared/logger.js';
+import { autoPayoutExpiredReviews } from '../modules/booking-service/booking.service.js';
 
 async function procesarRecordatoriosDeServicio() {
   const now = new Date();
@@ -55,5 +56,16 @@ export function iniciarJobServiceReminders() {
   cron.schedule('0 * * * *', async () => {
     await procesarRecordatoriosDeServicio();
   });
+
+  // Auto-payout: cada 4 horas libera pagos de servicios completados hace +48h sin calificar
+  cron.schedule('0 */4 * * *', async () => {
+    try {
+      const count = await autoPayoutExpiredReviews();
+      if (count > 0) logger.info(`[AutoPayout] ${count} desembolsos automáticos procesados`);
+    } catch (err) {
+      logger.error('[AutoPayout] Error en job de auto-payout', { err });
+    }
+  });
+
   logger.info('[REMINDERS] Job de recordatorios de servicio activo.');
 }

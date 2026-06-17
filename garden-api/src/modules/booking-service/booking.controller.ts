@@ -156,7 +156,8 @@ export const cancel = asyncHandler(async (req: Request, res: Response) => {
   const booking = await bookingService.cancelBooking(
     bookingId,
     clientId,
-    body.reason
+    body.reason,
+    body.source
   );
   res.json({ success: true, data: booking });
 });
@@ -243,7 +244,7 @@ export const initPayment = asyncHandler(async (req: Request, res: Response) => {
   const bookingId = req.params.id!;
   const clientId = req.user!.userId;
   const body = initPaymentBodySchema.parse(req.body);
-  const result = await bookingService.initPayment(bookingId, clientId, body.method, body.walletContribution ?? 0);
+  const result = await bookingService.initPayment(bookingId, clientId, body.method, body.walletContribution ?? 0, body.donationAmount ?? 0);
   res.json({ success: true, data: result });
 });
 
@@ -372,4 +373,11 @@ export const reportBooking = asyncHandler(async (req: Request, res: Response) =>
   const body = reportBookingBodySchema.parse(req.body);
   const result = await bookingService.reportBooking(bookingId, clientId, body.reasons, body.details);
   res.json({ success: true, data: result });
+});
+
+/** GET /api/bookings/pending-rating */
+export const getPendingRating = asyncHandler(async (req: Request, res: Response) => {
+  const clientId = req.user!.userId;
+  const booking = await bookingService.getPendingRatingBooking(clientId);
+  res.json({ success: true, data: booking ?? null });
 });

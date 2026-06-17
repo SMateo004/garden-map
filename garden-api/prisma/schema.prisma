@@ -38,6 +38,7 @@ model User {
   notifications                Notification[]
   sentMessages                 ChatMessage[]
   walletTransactions           WalletTransaction[]
+  donations                    Donation[]
   refreshTokens                RefreshToken[]
   passwordResets               PasswordReset[]
   passwordResetCodes           PasswordResetCode[]
@@ -273,6 +274,7 @@ model Booking {
   paidAt                    DateTime?
   cancelledAt               DateTime?
   cancellationReason        String?
+  cancellationSource        String?          @db.VarChar(30)
   refundAmount              Decimal?         @db.Decimal(10, 2)
   refundStatus              RefundStatus?
   createdAt                 DateTime         @default(now())
@@ -295,6 +297,8 @@ model Booking {
   payoutStatus              String           @default("PENDING")
   /// Monto cubierto por la billetera del cliente al pagar esta reserva. 0 = no usó billetera.
   walletPaymentAmount       Decimal          @default(0) @db.Decimal(10, 2)
+  /// Monto extra donado voluntariamente por el cliente al momento del pago, destinado a hogares de perros.
+  donationAmount            Decimal?         @db.Decimal(10, 2)
   updatedAt                 DateTime         @updatedAt
   caregiver                 CaregiverProfile @relation("CaregiverBookings", fields: [caregiverId], references: [id], onDelete: Cascade)
   client                    User             @relation("ClientBookings", fields: [clientId], references: [id], onDelete: Cascade)
@@ -305,6 +309,7 @@ model Booking {
   messages                  ChatMessage[]
   meetAndGreet              MeetAndGreet?
   bookingPets               BookingPet[]
+  donation                  Donation?
 
   @@index([clientId, status])
   @@index([caregiverId, status])
@@ -501,6 +506,25 @@ model AdminNotification {
   @@index([caregiverId])
   @@index([bookingId])
   @@map("admin_notifications")
+}
+
+/// Donación voluntaria del dueño al momento del pago, destinada al 100% a hogares de perros.
+model Donation {
+  id               String    @id @default(uuid())
+  bookingId        String    @unique
+  clientId         String
+  amount           Decimal   @db.Decimal(10, 2)
+  createdAt        DateTime  @default(now())
+  /// Fecha en que el admin transfirió los fondos al hogar.
+  disbursedAt      DateTime?
+  disbursementNote String?   @db.VarChar(500)
+
+  booking          Booking   @relation(fields: [bookingId], references: [id])
+  client           User      @relation(fields: [clientId], references: [id])
+
+  @@index([disbursedAt])
+  @@index([clientId])
+  @@map("donations")
 }
 
 model IdentityVerificationSession {

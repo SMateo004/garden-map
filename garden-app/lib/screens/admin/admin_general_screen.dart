@@ -20,7 +20,7 @@ class _AdminGeneralScreenState extends State<AdminGeneralScreen>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 3, vsync: this);
+    _tabCtrl = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -53,6 +53,7 @@ class _AdminGeneralScreenState extends State<AdminGeneralScreen>
               Tab(icon: Icon(Icons.bolt_rounded, size: 16), text: 'En Vivo'),
               Tab(icon: Icon(Icons.account_balance_rounded, size: 16), text: 'Financiero'),
               Tab(icon: Icon(Icons.map_rounded, size: 16), text: 'Zonas'),
+              Tab(icon: Icon(Icons.favorite_rounded, size: 16), text: 'Donaciones'),
             ],
           ),
         ),
@@ -63,6 +64,7 @@ class _AdminGeneralScreenState extends State<AdminGeneralScreen>
               _LiveStatsTab(adminToken: widget.adminToken),
               _FinancialTab(adminToken: widget.adminToken),
               _ZonesTab(adminToken: widget.adminToken),
+              _DonationsTab(adminToken: widget.adminToken),
             ],
           ),
         ),
@@ -1620,6 +1622,229 @@ class _ZonesTabState extends State<_ZonesTab> {
             }),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DONATIONS TAB
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _DonationsTab extends StatefulWidget {
+  final String adminToken;
+  const _DonationsTab({required this.adminToken});
+
+  @override
+  State<_DonationsTab> createState() => _DonationsTabState();
+}
+
+class _DonationsTabState extends State<_DonationsTab> {
+  static const _baseUrl = String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
+
+  bool _loading = true;
+  double _pendingTotal = 0;
+  List<Map<String, dynamic>> _donations = [];
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/admin/donations'),
+        headers: {'Authorization': 'Bearer ${widget.adminToken}'},
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] == true) {
+        setState(() {
+          _pendingTotal = (data['data']['pendingTotal'] as num).toDouble();
+          _donations = (data['data']['donations'] as List).cast<Map<String, dynamic>>();
+        });
+      } else {
+        setState(() => _error = data['error']?['message'] ?? 'Error');
+      }
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _disburse(String donationId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('¿Marcar como enviada?'),
+        content: const Text('Confirma que ya transferiste este monto al hogar de perros.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Confirmar')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await http.post(
+      Uri.parse('$_baseUrl/admin/donations/$donationId/disburse'),
+      headers: {'Authorization': 'Bearer ${widget.adminToken}', 'Content-Type': 'application/json'},
+      body: jsonEncode({'note': 'Transferido al hogar de perros'}),
+    );
+    await _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_error != null) return Center(child: Text(_error!, style: TextStyle(color: GardenColors.error)));
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // ── Total acumulado ─────────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF8E1),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFFFCC02).withValues(alpha: 0.5)),
+            ),
+            child: Column(
+              children: [
+                const Text('🐾', style: TextStyle(fontSize: 36)),
+                const SizedBox(height: 8),
+                const Text(
+                  'Total pendiente de transferir',
+                  style: TextStyle(color: Color(0xFF8D6E63), fontSize: 13),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Bs ${_pendingTotal.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    color: Color(0xFF5D4037),
+                    fontSize: 32,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  '100% va al hogar de perros — Garden no retiene nada',
+                  style: TextStyle(color: Color(0xFF8D6E63), fontSize: 11),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          Text('Historial de donaciones', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 12),
+
+          if (_donations.isEmpty)
+            Center(child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Text('Aún no hay donaciones', style: TextStyle(color: subtextColor)),
+            ))
+          else
+            ..._donations.map((d) {
+              final client = d['client'] as Map<String, dynamic>?;
+              final booking = d['booking'] as Map<String, dynamic>?;
+              final amount = (d['amount'] as num).toDouble();
+              final disbursed = d['disbursedAt'] != null;
+              final createdAt = d['createdAt'] as String?;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: disbursed ? borderColor : const Color(0xFFFFCC02).withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: disbursed
+                            ? borderColor.withValues(alpha: 0.3)
+                            : const Color(0xFFFFCC02).withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        disbursed ? Icons.check_circle_rounded : Icons.favorite_rounded,
+                        color: disbursed ? subtextColor : const Color(0xFFFFCC02),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${client?['firstName'] ?? ''} ${client?['lastName'] ?? ''}'.trim(),
+                            style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13),
+                          ),
+                          Text(
+                            '${booking?['serviceType'] ?? ''} • ${booking?['petName'] ?? ''}',
+                            style: TextStyle(color: subtextColor, fontSize: 11),
+                          ),
+                          if (createdAt != null)
+                            Text(
+                              createdAt.substring(0, 10),
+                              style: TextStyle(color: subtextColor, fontSize: 10),
+                            ),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          'Bs ${amount.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            color: disbursed ? subtextColor : const Color(0xFF5D4037),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
+                        ),
+                        if (!disbursed)
+                          GestureDetector(
+                            onTap: () => _disburse(d['id'] as String),
+                            child: Container(
+                              margin: const EdgeInsets.only(top: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFCC02),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text('Marcar enviada', style: TextStyle(color: Color(0xFF5D4037), fontSize: 10, fontWeight: FontWeight.w700)),
+                            ),
+                          )
+                        else
+                          Text('Enviada', style: TextStyle(color: subtextColor, fontSize: 10)),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
       ),
     );
   }

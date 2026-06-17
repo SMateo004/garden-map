@@ -1032,7 +1032,8 @@ export async function initPayment(
   bookingId: string,
   clientId: string,
   method: InitPaymentBody['method'],
-  walletContribution: number = 0
+  walletContribution: number = 0,
+  donationAmount: number = 0
 ): Promise<{
   qrId?: string; qrImageUrl?: string; qrExpiresAt?: string; status: string;
   walletDeducted?: number; remainingAmount?: number; paidWithWallet?: boolean;
@@ -1178,12 +1179,13 @@ export async function initPayment(
         data: { walletPaymentAmount: effectiveWalletContribution },
       });
 
+      const effectiveDonation = Math.max(0, donationAmount);
       const remainingAmount = Math.round(totalAmount - effectiveWalletContribution);
       const { qrId, qrImageUrl, qrExpiresAt } = generateQR(bookingId, cfg.QR_VALIDITY_MINUTES_PAYMENT);
       // Re-use qrId/url/expiry fields; the QR encodes the full bookingId — admin uses the booking total
       await tx.booking.update({
         where: { id: bookingId },
-        data: { qrId, qrImageUrl, qrExpiresAt },
+        data: { qrId, qrImageUrl, qrExpiresAt, donationAmount: effectiveDonation > 0 ? effectiveDonation : null },
       });
       logger.info('Pago parcial con billetera + QR', { bookingId, clientId, walletContribution: effectiveWalletContribution, remainingAmount });
       return {
@@ -1199,13 +1201,14 @@ export async function initPayment(
 
     // ── PAGO QR COMPLETO (sin billetera) ──────────────────────────────────────
     if (method === 'qr') {
+      const effectiveDonation = Math.max(0, donationAmount);
       const { qrId, qrImageUrl, qrExpiresAt } = generateQR(
         bookingId,
         cfg.QR_VALIDITY_MINUTES_PAYMENT
       );
       await tx.booking.update({
         where: { id: bookingId },
-        data: { qrId, qrImageUrl, qrExpiresAt },
+        data: { qrId, qrImageUrl, qrExpiresAt, donationAmount: effectiveDonation > 0 ? effectiveDonation : null },
       });
       logger.info('Pago QR iniciado', { bookingId, clientId, qrId });
       return {
@@ -1460,7 +1463,8 @@ export async function calculateRefund(
 export async function cancelBooking(
   bookingId: string,
   clientId: string,
-  cancellationReason?: string
+  cancellationReason?: string,
+  cancellationSource?: 'CLIENT_REQUEST' | 'QR_ABANDONED' | 'PAYMENT_TIMEOUT'
 ): Promise<BookingCreateResult> {
   const result = await prisma.$transaction(async (tx) => {
     const booking = await tx.booking.findFirst({
@@ -1500,6 +1504,7 @@ export async function cancelBooking(
         status: BookingStatus.CANCELLED,
         cancelledAt: now,
         cancellationReason: cancellationReason ?? null,
+        cancellationSource: cancellationSource ?? null,
         refundAmount: new Prisma.Decimal(refundAmount),
         refundStatus,
       },
@@ -1532,33 +1537,34 @@ export async function cancelBooking(
       logger.info('cancelBooking: wallet portion auto-refunded', { bookingId, walletRefund });
     }
 
-    // 1. Notificación para el cliente (dueño)
-    const baseMsg = refundAmount > 0
-      ? `Se te devolverá Bs ${refundAmount.toFixed(2)}.${walletRefundNote}${walletRefund < refundAmount ? ' El resto será procesado por el equipo de soporte pronto.' : ''}`
-      : 'No aplica reembolso según la política de cancelación.';
-    await tx.notification.create({
-      data: {
-        userId: clientId,
-        title: 'Has cancelado tu reserva',
-        message: `Tu reserva ha sido cancelada. ${baseMsg}`,
-        type: 'BOOKING_CANCELLED',
-      }
-    });
-
-    // 2. Notificación para el cuidador
-    const caregiver = await tx.caregiverProfile.findUnique({
-      where: { id: booking.caregiverId },
-      select: { userId: true },
-    });
-    if (caregiver) {
+    // 1 & 2. Notificaciones — solo si el cliente canceló explícitamente (no para QR abandonado o timeout)
+    if (cancellationSource === 'CLIENT_REQUEST' || !cancellationSource) {
+      const baseMsg = refundAmount > 0
+        ? `Se te devolverá Bs ${refundAmount.toFixed(2)}.${walletRefundNote}${walletRefund < refundAmount ? ' El resto será procesado por el equipo de soporte pronto.' : ''}`
+        : 'No aplica reembolso según la política de cancelación.';
       await tx.notification.create({
         data: {
-          userId: caregiver.userId,
-          title: 'Una reserva ha sido cancelada por el cliente',
-          message: `El cliente ha cancelado la reserva ${bookingId}. Tu calendario se ha liberado automáticamente para estas fechas.`,
+          userId: clientId,
+          title: 'Has cancelado tu reserva',
+          message: `Tu reserva ha sido cancelada. ${baseMsg}`,
           type: 'BOOKING_CANCELLED',
         }
       });
+
+      const caregiver = await tx.caregiverProfile.findUnique({
+        where: { id: booking.caregiverId },
+        select: { userId: true },
+      });
+      if (caregiver) {
+        await tx.notification.create({
+          data: {
+            userId: caregiver.userId,
+            title: 'Una reserva ha sido cancelada por el cliente',
+            message: `El cliente ha cancelado la reserva ${bookingId}. Tu calendario se ha liberado automáticamente para estas fechas.`,
+            type: 'BOOKING_CANCELLED',
+          }
+        });
+      }
     }
 
     logger.info('Booking cancelled', {
@@ -1570,9 +1576,11 @@ export async function cancelBooking(
     return { booking: updated, refundAmount, refundStatus };
   });
 
-  notificationService
-    .onClientCancelled(bookingId)
-    .catch((err) => logger.error('Notification onClientCancelled failed', { bookingId, err }));
+  if (cancellationSource === 'CLIENT_REQUEST' || !cancellationSource) {
+    notificationService
+      .onClientCancelled(bookingId)
+      .catch((err) => logger.error('Notification onClientCancelled failed', { bookingId, err }));
+  }
 
   if (result.refundAmount > 0 && result.refundStatus === RefundStatus.APPROVED) {
     notificationService
@@ -2318,9 +2326,20 @@ export async function getMyBookings(
   limit = 20
 ): Promise<{ bookings: BookingCreateResult[]; pagination: { page: number; limit: number; total: number; pages: number } }> {
   const skip = (page - 1) * limit;
+  const hiddenSources = ['QR_ABANDONED', 'PAYMENT_TIMEOUT'];
+  const baseWhere = {
+    clientId,
+    NOT: {
+      AND: [
+        { status: BookingStatus.CANCELLED },
+        { cancellationSource: { in: hiddenSources } },
+      ],
+    },
+  };
+
   const [bookings, total] = await Promise.all([
     prisma.booking.findMany({
-      where: { clientId },
+      where: baseWhere,
       include: {
         caregiver: {
           include: {
@@ -2342,7 +2361,7 @@ export async function getMyBookings(
       skip,
       take: limit,
     }),
-    prisma.booking.count({ where: { clientId } }),
+    prisma.booking.count({ where: baseWhere }),
   ]);
 
   return {
@@ -3483,4 +3502,75 @@ export async function resolveSlotConflict(
 
     return { bookingId, status: BookingStatus.WAITING_CAREGIVER_APPROVAL };
   });
+}
+
+/** Devuelve la primera reserva COMPLETED sin calificar del cliente (para el modal al abrir app). */
+export async function getPendingRatingBooking(clientId: string) {
+  const booking = await prisma.booking.findFirst({
+    where: {
+      clientId,
+      status: BookingStatus.COMPLETED,
+      ownerRated: false,
+      payoutStatus: 'PENDING',
+    },
+    orderBy: { updatedAt: 'desc' },
+    select: {
+      id: true,
+      serviceType: true,
+      petName: true,
+      updatedAt: true,
+      caregiver: { select: { user: { select: { firstName: true, lastName: true } } } },
+    },
+  });
+  return booking;
+}
+
+/**
+ * Auto-desembolso: libera el pago al cuidador si el dueño no calificó en 48h tras
+ * que el cuidador marcó el servicio como completado (proxy: updatedAt con status COMPLETED).
+ */
+export async function autoPayoutExpiredReviews() {
+  const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+  const expired = await prisma.booking.findMany({
+    where: {
+      status: BookingStatus.COMPLETED,
+      ownerRated: false,
+      payoutStatus: 'PENDING',
+      updatedAt: { lt: cutoff },
+    },
+    include: { caregiver: { select: { userId: true } } },
+  });
+
+  for (const booking of expired) {
+    try {
+      const amount = Number(booking.totalAmount) - Number(booking.commissionAmount);
+      await prisma.$transaction(async (tx) => {
+        const updatedUser = await tx.user.update({
+          where: { id: booking.caregiver.userId },
+          data: { balance: { increment: amount } },
+          select: { balance: true },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            userId: booking.caregiver.userId,
+            type: 'EARNING',
+            amount,
+            balance: Number(updatedUser.balance),
+            description: `Pago automático (sin calificación) — ${booking.petName}`,
+            bookingId: booking.id,
+            status: 'COMPLETED',
+          },
+        });
+        await tx.booking.update({
+          where: { id: booking.id },
+          data: { payoutStatus: 'PAID' },
+        });
+      });
+      logger.info('[AutoPayout] Desembolso automático completado', { bookingId: booking.id, amount });
+    } catch (err) {
+      logger.error('[AutoPayout] Error en desembolso automático', { bookingId: booking.id, err });
+    }
+  }
+
+  return expired.length;
 }

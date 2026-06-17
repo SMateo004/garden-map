@@ -80,6 +80,7 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
       final futures = await Future.wait([
         _checkMaintenance(),
         if (token.isNotEmpty && role != 'ADMIN') _fetchActiveBooking(token) else Future.value(null),
+        if (token.isNotEmpty && role == 'CLIENT') _fetchPendingRating(token) else Future.value(null),
       ]);
 
       final inMaintenance = futures[0] as bool;
@@ -88,14 +89,18 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
       if (token.isEmpty) return const _NavTarget('/service-selector');
 
       final activeBookingResult = futures.length > 1 ? futures[1] : null;
+      final pendingRatingResult = futures.length > 2 ? futures[2] : null;
 
       final activeRole = prefs.getString('active_role') ?? '';
       final effectiveRole = activeRole.isNotEmpty ? activeRole : role;
 
       if (effectiveRole == 'CAREGIVER') return const _NavTarget('/caregiver/home');
 
-      // Client: check for active / pending-payment booking returned from parallel call
+      // Pending-payment / in-progress takes priority over rating
       if (activeBookingResult is _NavTarget) return activeBookingResult;
+
+      // Service completed but not yet rated — redirect to rating screen
+      if (pendingRatingResult is _NavTarget) return pendingRatingResult;
 
       return const _NavTarget('/service-selector');
     } catch (e, st) {
@@ -162,6 +167,29 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
       }
     } catch (e) {
       debugPrint('[SPLASH] error bookings: $e');
+    }
+    return null;
+  }
+
+  /// Returns a [_NavTarget] to the service rating screen if there's a completed,
+  /// unrated booking; null otherwise.
+  Future<_NavTarget?> _fetchPendingRating(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/bookings/pending-rating'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 3));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          final bookingId = data['data']['id'] as String?;
+          if (bookingId != null) {
+            return _NavTarget('/service/$bookingId', {'role': 'CLIENT', 'token': token});
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[SPLASH] error pending-rating: $e');
     }
     return null;
   }

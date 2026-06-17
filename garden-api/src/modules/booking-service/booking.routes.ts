@@ -15,6 +15,14 @@ router.get(
   bookingController.getMyBookings
 );
 
+/** GET /api/bookings/pending-rating — primera reserva COMPLETED sin calificar del cliente. */
+router.get(
+  '/pending-rating',
+  authMiddleware,
+  requireRole('CLIENT'),
+  bookingController.getPendingRating
+);
+
 /** GET /api/bookings/:id/confirm — datos para página de confirmación. Solo cliente titular. */
 router.get(
   '/:id/confirm',

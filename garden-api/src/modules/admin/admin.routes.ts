@@ -243,4 +243,36 @@ router.delete('/vets/:id', asyncHandler(async (req, res) => {
   res.json({ success: true });
 }));
 
+// ── Donaciones ────────────────────────────────────────────────────────────────
+
+/** GET /api/admin/donations — resumen + historial de donaciones para hogares de perros. */
+router.get('/donations', asyncHandler(async (_req, res) => {
+  const [donations, summary] = await Promise.all([
+    prisma.donation.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      include: {
+        client: { select: { firstName: true, lastName: true, email: true } },
+        booking: { select: { serviceType: true, petName: true } },
+      },
+    }),
+    prisma.donation.aggregate({
+      _sum: { amount: true },
+      where: { disbursedAt: null },
+    }),
+  ]);
+  const pendingTotal = Number(summary._sum.amount ?? 0);
+  res.json({ success: true, data: { pendingTotal, donations } });
+}));
+
+/** POST /api/admin/donations/:id/disburse — marcar donación como enviada al hogar. */
+router.post('/donations/:id/disburse', asyncHandler(async (req, res) => {
+  const { note } = req.body as { note?: string };
+  const donation = await prisma.donation.update({
+    where: { id: req.params.id },
+    data: { disbursedAt: new Date(), disbursementNote: note ?? null },
+  });
+  res.json({ success: true, data: donation });
+}));
+
 export default router;

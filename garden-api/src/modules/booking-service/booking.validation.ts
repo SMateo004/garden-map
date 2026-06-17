@@ -164,6 +164,7 @@ export function parseCreateBookingBody(data: unknown): CreateBookingBody {
 /** POST /api/bookings/:id/cancel — motivo opcional. */
 export const cancelBookingBodySchema = z.object({
   reason: z.string().max(2000).optional(),
+  source: z.enum(['CLIENT_REQUEST', 'QR_ABANDONED', 'PAYMENT_TIMEOUT']).optional(),
 });
 
 /** POST /api/bookings/:id/extend — nueva fecha de salida (hospedaje). */
@@ -194,6 +195,8 @@ export const initPaymentBodySchema = z.object({
   }),
   /// Monto en Bs a descontar de la billetera antes de generar el QR (0 = sin billetera).
   walletContribution: z.coerce.number().min(0).optional().default(0),
+  /// Donación voluntaria al hogar de perros (Bs). Se suma al total del QR; 100% va al hogar.
+  donationAmount: z.coerce.number().min(0).max(10000).optional().default(0),
 });
 
 export type InitPaymentBody = z.infer<typeof initPaymentBodySchema>;

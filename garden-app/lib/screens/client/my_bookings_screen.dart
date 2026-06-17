@@ -217,7 +217,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       final response = await http.post(
         Uri.parse('$_baseUrl/bookings/$bookingId/cancel'),
         headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
-        body: jsonEncode({'reason': 'Cancelado por dueño tras Meet & Greet'}),
+        body: jsonEncode({'reason': 'Cancelado por dueño tras Meet & Greet', 'source': 'CLIENT_REQUEST'}),
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
@@ -270,7 +270,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       await http.post(
         Uri.parse('$_baseUrl/bookings/$bookingId/cancel'),
         headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
-        body: jsonEncode({'reason': 'QR de pago expirado'}),
+        body: jsonEncode({'reason': 'QR de pago expirado', 'source': 'QR_ABANDONED'}),
       );
       debugPrint('MY_BOOKINGS: auto-cancelled expired booking $bookingId');
     } catch (e) {
