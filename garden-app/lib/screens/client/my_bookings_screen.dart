@@ -95,12 +95,6 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       if (data['success'] == true) {
         final loaded = (data['data'] as List).cast<Map<String, dynamic>>();
         if (mounted) setState(() => _bookings = loaded);
-        // Silently cancel any PENDING_PAYMENT bookings whose QR already expired
-        for (final b in loaded) {
-          if (_isQrExpired(b)) {
-            _cancelExpiredBooking(b['id'] as String);
-          }
-        }
         _checkMGDecisionNeeded();
         // Schedule highlight clear after 5 seconds on first load
         if (_highlightBookingId != null) {
@@ -247,35 +241,12 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     return expiry != null && expiry.isAfter(DateTime.now());
   }
 
-  /// A PENDING_PAYMENT booking is only meaningful (and visible) when it has
-  /// an active QR. Without a QR the slot should not be considered reserved.
-  /// A PENDING_PAYMENT with an expired QR should also be hidden (and cancelled).
+  /// A PENDING_PAYMENT booking is only visible to the client while the QR is active.
+  /// Once expired the booking is hidden here but kept alive in the backend so
+  /// admin can still approve the manual bank transfer.
   bool _shouldShowBooking(Map<String, dynamic> b) {
     if (b['status'] != 'PENDING_PAYMENT') return true;
     return _hasActiveQr(b);
-  }
-
-  /// Returns true if this PENDING_PAYMENT booking has a QR that already expired.
-  bool _isQrExpired(Map<String, dynamic> b) {
-    if (b['status'] != 'PENDING_PAYMENT') return false;
-    final qrId = b['qrId'];
-    final qrExpiresAtStr = b['qrExpiresAt'];
-    if (qrId == null || qrExpiresAtStr == null) return false;
-    final expiry = DateTime.tryParse(qrExpiresAtStr.toString());
-    return expiry != null && expiry.isBefore(DateTime.now());
-  }
-
-  Future<void> _cancelExpiredBooking(String bookingId) async {
-    try {
-      await http.post(
-        Uri.parse('$_baseUrl/bookings/$bookingId/cancel'),
-        headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
-        body: jsonEncode({'reason': 'QR de pago expirado', 'source': 'QR_ABANDONED'}),
-      );
-      debugPrint('MY_BOOKINGS: auto-cancelled expired booking $bookingId');
-    } catch (e) {
-      debugPrint('MY_BOOKINGS: failed to auto-cancel $bookingId: $e');
-    }
   }
 
   List<Map<String, dynamic>> get _filteredBookings {
