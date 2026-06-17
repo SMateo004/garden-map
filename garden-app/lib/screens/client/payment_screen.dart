@@ -148,10 +148,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   // ── Computed ────────────────────────────────────────────────────────────────
 
-  double get _totalAmount {
+  double get _serviceAmount {
     final raw = _booking?['totalAmount'] ?? _booking?['totalPrice'];
     return double.tryParse(raw?.toString() ?? '0') ?? 0.0;
   }
+
+  double get _totalAmount => _serviceAmount + _donationAmount;
 
   bool get _walletCoversAll => _useWallet && _walletBalance >= _totalAmount;
   double get _walletCoverage => _useWallet ? _walletBalance.clamp(0, _totalAmount) : 0.0;
@@ -806,12 +808,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 Divider(height: 24, color: borderColor),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text('Total a pagar',
                         style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
-                    Text('Bs ${_booking!['totalAmount'] ?? _booking!['totalPrice'] ?? '—'}',
-                        style: const TextStyle(
-                            color: GardenColors.primary, fontSize: 24, fontWeight: FontWeight.w900)),
+                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                      Text('Bs ${_totalAmount.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                              color: GardenColors.primary, fontSize: 24, fontWeight: FontWeight.w900)),
+                      if (_donationAmount > 0)
+                        Text('servicio Bs ${_serviceAmount.toStringAsFixed(2)} + donación Bs ${_donationAmount.toStringAsFixed(2)}',
+                            style: TextStyle(color: subtextColor, fontSize: 11)),
+                    ]),
                   ],
                 ),
               ],

@@ -690,6 +690,7 @@ export async function getPaymentsPending(
     caregiverId: b.caregiverId,
     serviceType: b.serviceType,
     totalAmount: String(b.totalAmount),
+    donationAmount: Number(b.donationAmount ?? 0),
     walletPaymentAmount: Number(b.walletPaymentAmount ?? 0),
     petName: b.petName,
     startDate: b.startDate?.toISOString().slice(0, 10) ?? null,

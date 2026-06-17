@@ -1962,8 +1962,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   const SizedBox(height: 2),
                   Text(date, style: TextStyle(color: subtextColor, fontSize: 12)),
                 ])),
-                Text('Bs ${p['totalAmount']}',
-                  style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w900, fontSize: 22)),
+                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  Text('Bs ${((double.tryParse(p['totalAmount']?.toString() ?? '0') ?? 0) + (double.tryParse(p['donationAmount']?.toString() ?? '0') ?? 0)).toStringAsFixed(2)}',
+                    style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w900, fontSize: 22)),
+                  if ((double.tryParse(p['donationAmount']?.toString() ?? '0') ?? 0) > 0)
+                    Text('+ Bs ${p['donationAmount']} donación',
+                      style: const TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.w600)),
+                ]),
               ]),
               const SizedBox(height: 10),
               Row(children: [
