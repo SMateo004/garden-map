@@ -187,11 +187,11 @@ export async function submitVerification(
         livenessScore = 95;
         livenessStatus = 'PASSED';
       } else if (!livenessSessionId) {
-        // En producción sin sessionId real: no auto-aprobar.
-        // La verificación continúa con score bajo para que quede en REVIEW manual.
-        logger.warn('Liveness check skipped in production (no sessionId) — routing to manual review', { sessionId });
+        // En producción sin sessionId: liveness=0 penaliza el trust score.
+        // El sistema auto-decide VERIFIED/REJECTED según face+OCR — no hay revisión manual.
+        logger.warn('Liveness check skipped in production (no sessionId) — will auto-decide from face+OCR signals', { sessionId });
         livenessScore = 0;
-        livenessStatus = 'PASSED'; // allow to continue to photo checks, but score=0 flags manual review
+        livenessStatus = 'PASSED'; // allow photo checks to run; liveness=0 penalizes trust score
       } else {
         logger.info('Starting liveness check', { sessionId, livenessSessionId });
         const livenessResult = await performLivenessCheck({ sessionId: livenessSessionId }, 'AWS_REKOGNITION');
@@ -332,6 +332,20 @@ export async function submitVerification(
     if (hasIdentityReuse || isMaliciousBehavior || isCompromisedDevice) {
       logger.warn('Hard block triggered during verification', { sessionId, hasIdentityReuse, isMaliciousBehavior, isCompromisedDevice });
       finalStatus = 'REJECTED';
+    }
+
+    // Auto-resolve REVIEW — no manual queue allowed. Decide from signals already computed.
+    if (finalStatus === 'REVIEW') {
+      const noMajorFraud = !finalFraudFlags.some(f =>
+        ['duplicate_identity', 'identity_inconsistency', 'multiple_accounts_on_device'].includes(f)
+      );
+      if (trustScore >= 75 && faceSimilarityValue >= 85 && noMajorFraud) {
+        finalStatus = 'VERIFIED';
+        logger.info('REVIEW auto-promoted → VERIFIED (face+OCR sufficient, no major fraud)', { sessionId, trustScore, faceSimilarityValue });
+      } else {
+        finalStatus = 'REJECTED';
+        logger.info('REVIEW auto-demoted → REJECTED (signals insufficient without liveness)', { sessionId, trustScore, faceSimilarityValue });
+      }
     }
 
     logger.info('Multi-Signal Scoring complete', {

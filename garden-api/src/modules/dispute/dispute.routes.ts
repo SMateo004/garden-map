@@ -331,11 +331,26 @@ Responde SOLO en este formato JSON exacto (sin texto adicional):
     }
   }
 
-  // All 3 attempts failed — escalate to admin instead of auto-deciding.
-  logger.error('AI dispute resolution failed after 3 attempts — escalating to manual review', { bookingId, lastError });
+  // All 3 attempts failed — apply evidence-based deterministic fallback (no manual queue).
+  logger.error('AI dispute resolution failed after 3 attempts — applying evidence-based fallback', { bookingId, lastError });
+
+  const photoEvents = Array.isArray(b.serviceEvents)
+    ? b.serviceEvents.filter((e: any) => e.type === 'PHOTO').length
+    : 0;
+  const hasGps = b.trackingPoints != null && b.trackingPoints > 0;
+  const hasStartPhoto = !!b.serviceStartPhoto;
+  const hasEndPhoto = !!b.serviceEndPhoto;
+
+  // Caregiver wins if they documented the service: both start+end photos, OR 2+ event photos + GPS
+  const caregiverDocumented = (hasStartPhoto && hasEndPhoto) || (photoEvents >= 2 && hasGps);
+  const fallbackVerdict = caregiverDocumented ? 'CAREGIVER_WINS' : 'CLIENT_WINS';
+  const fallbackAnalysis = caregiverDocumented
+    ? `Decisión automática (fallo técnico IA, ${MAX_ATTEMPTS} intentos): el cuidador documentó el servicio con fotos y/o GPS — veredicto a su favor.`
+    : `Decisión automática (fallo técnico IA, ${MAX_ATTEMPTS} intentos): el cuidador no subió documentación suficiente del servicio — reembolso al cliente.`;
+
   return {
-    verdict: 'PENDING_MANUAL',
-    analysis: 'El agente de IA no pudo analizar el caso después de 3 intentos. Un administrador de GARDEN revisará esta disputa manualmente y notificará a las partes.',
+    verdict: fallbackVerdict,
+    analysis: fallbackAnalysis,
     recommendations: [],
   };
 }
@@ -460,40 +475,6 @@ async function applyResolution(bookingId: string, resolution: any, booking: any)
         },
       });
 
-    } else if (resolution.verdict === 'PENDING_MANUAL') {
-      // ── IA falló 3 veces → escalar a revisión manual del admin ────────────
-      await tx.dispute.update({
-        where: { bookingId },
-        data: {
-          aiVerdict: 'PENDING_MANUAL',
-          aiAnalysis: resolution.analysis,
-          status: 'PENDING_ADMIN', // admin must resolve
-        },
-      });
-      await tx.adminNotification.create({
-        data: {
-          type: 'DISPUTE_ESCALATED',
-          bookingId,
-          caregiverId: booking.caregiver.id,
-        },
-      }).catch(() => {});
-      await tx.notification.create({
-        data: {
-          userId: clientId,
-          title: '⏳ Disputa en revisión manual',
-          message: 'Un administrador de GARDEN revisará tu disputa y te notificará en las próximas 24-48 horas.',
-          type: 'SYSTEM',
-        },
-      });
-      await tx.notification.create({
-        data: {
-          userId: caregiverUserId,
-          title: '⏳ Disputa en revisión manual',
-          message: 'Un administrador de GARDEN revisará la disputa y te notificará en las próximas 24-48 horas.',
-          type: 'SYSTEM',
-        },
-      });
-
     } else {
       // ── PARTIAL: 80% al cuidador + 20% → código de descuento para el dueño ─
       // La comisión (10%) se mantiene. El split es sobre el netAmount (90%).
@@ -571,9 +552,7 @@ async function applyResolution(bookingId: string, resolution: any, booking: any)
   // ── Registrar en blockchain con retry (3 intentos, back-off exponencial) ──
   // Fire-and-forget but with retry so ledger inconsistencies are minimized.
   // If all retries fail, an admin notification is created so it can be manually re-submitted.
-  if (resolution.verdict !== 'PENDING_MANUAL') {
-    _dispatchBlockchainWithRetry(bookingId, resolution.verdict, netAmount, totalAmount);
-  }
+  _dispatchBlockchainWithRetry(bookingId, resolution.verdict, netAmount, totalAmount);
 }
 
 async function _dispatchBlockchainWithRetry(
