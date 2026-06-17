@@ -49,4 +49,14 @@ post_install do |installer|
   Dir.glob(File.join(installer.sandbox.root, '**', '*.framework')).each do |framework|
     system("xattr -cr '#{framework}'")
   end
+
+  # PostHog bundles PHPLCrashReporter but the vendor/Source headers are missing from the pod.
+  # Create a stub CrashReporter.h so the module.modulemap resolves and the build succeeds.
+  # Crash reporting via PLCrashReporter won't function, but all other PostHog features work.
+  crash_reporter_dir = File.join(installer.sandbox.root, 'PostHog', 'vendor', 'PHPLCrashReporter', 'Source')
+  unless File.exist?(File.join(crash_reporter_dir, 'CrashReporter.h'))
+    FileUtils.mkdir_p(crash_reporter_dir)
+    File.write(File.join(crash_reporter_dir, 'CrashReporter.h'), "// stub header — PLCrashReporter vendor files not shipped in this pod version\n")
+    puts "PostHog: created stub CrashReporter.h at #{crash_reporter_dir}"
+  end
 end

@@ -49,7 +49,6 @@ import 'screens/auth/forgot_password_new_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
-import 'package:posthog_flutter/posthog_flutter.dart';
 import 'theme/garden_theme.dart';
 import 'services/local_notification_service.dart';
 import 'services/fcm_service.dart';
@@ -58,7 +57,6 @@ import 'services/web_notification_service.dart';
 
 // ── Build-time env (set via --dart-define) ─────────────────
 const _kSentryDsn    = String.fromEnvironment('SENTRY_DSN');
-const _kPostHogKey   = String.fromEnvironment('POSTHOG_API_KEY');
 
 // ── Compatibilidad con sistema anterior (Legacy Constants) ──
 const kBackgroundColor = GardenColors.background;
@@ -522,13 +520,6 @@ Future<void> _bootstrap() async {
     };
 
     await FcmService.init();
-  }
-
-  // PostHog: analytics de producto (solo si la key está configurada en build)
-  if (_kPostHogKey.isNotEmpty) {
-    final phConfig = PostHogConfig(_kPostHogKey)
-      ..host = 'https://us.i.posthog.com';
-    await Posthog().setup(phConfig);
   }
 
   await LocalNotificationService.init();
