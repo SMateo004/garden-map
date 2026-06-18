@@ -7,20 +7,37 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1067635397531:android:c319d231cbfa982ca7473e",
+        "mobilesdk_app_id": "1:1067635397531:android:6a72f41dadda87b3a7473e",
         "android_client_info": {
           "package_name": "com.garden.bolivia"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1067635397531-d9v8mtsm3to56m71krq6h5g01p1081vh.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyCp8IPlvPLVixDvUfhls2sQ_4hPnbPrRpY"
+          "current_key": "AIzaSyC9lxPXOUFA_BVuM7VxKEmmR2TfRHWg18c"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1067635397531-d9v8mtsm3to56m71krq6h5g01p1081vh.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1067635397531-kf2csers9d0veh5s4ioeiitemlg5rigf.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.garden.bolivia"
+              }
+            }
+          ]
         }
       }
     }
