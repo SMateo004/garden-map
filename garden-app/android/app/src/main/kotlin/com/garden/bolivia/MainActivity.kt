@@ -1,4 +1,4 @@
-package com.example.garden_app
+package com.garden.bolivia
 
 import io.flutter.embedding.android.FlutterActivity
 

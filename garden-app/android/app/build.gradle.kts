@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.garden_app"
+    namespace = "com.garden.bolivia"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "30.0.14904198"
 
@@ -23,7 +23,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.garden_app"
+        applicationId = "com.garden.bolivia"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 23 // posthog-android 3.41+ requires API 23+
