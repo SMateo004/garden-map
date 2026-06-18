@@ -83,10 +83,9 @@ class SocialAuthService {
         );
       }
 
-      // Mobile
-      final googleUser = await GoogleSignIn(
-        clientId: '1067635397531-d9v8mtsm3to56m71krq6h5g01p1081vh.apps.googleusercontent.com',
-      ).signIn();
+      // Mobile — no pasamos clientId; el plugin lee CLIENT_ID de GoogleService-Info.plist (iOS)
+      // y oauth_client de google-services.json (Android).
+      final googleUser = await GoogleSignIn().signIn();
       if (googleUser == null) return null;
 
       final googleAuth = await googleUser.authentication;

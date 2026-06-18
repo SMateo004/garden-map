@@ -402,7 +402,16 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
         data = await SocialAuthService.signInWithFacebook();
       }
 
-      if (data == null) return;
+      if (data == null) {
+        if (mounted) {
+          widget.onResult(const SocialLoginResult(
+            success: false,
+            userExists: false,
+            error: 'No se pudo obtener los datos del proveedor. Intenta de nuevo.',
+          ));
+        }
+        return;
+      }
 
       final result = await SocialAuthService.loginWithBackend(data);
       if (mounted) widget.onResult(result);

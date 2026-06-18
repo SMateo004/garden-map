@@ -899,7 +899,16 @@ class _SocialRegisterButtonsState extends State<_SocialRegisterButtons> {
       } else {
         data = await SocialAuthService.signInWithFacebook();
       }
-      if (data != null && mounted) widget.onSocialData(data);
+      if (data == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('No se pudo obtener los datos del proveedor. Intenta de nuevo.'),
+            backgroundColor: Colors.red,
+          ));
+        }
+        return;
+      }
+      if (mounted) widget.onSocialData(data);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
