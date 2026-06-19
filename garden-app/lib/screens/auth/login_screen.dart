@@ -19,6 +19,28 @@ class _LoginScreenState extends State<LoginScreen> {
   final _authService = AuthService();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _checkingRedirect = kIsWeb; // en web verifica resultado pendiente de Google redirect
+
+  @override
+  void initState() {
+    super.initState();
+    if (kIsWeb) _handleGoogleRedirectResult();
+  }
+
+  /// Recoge el resultado de signInWithRedirect si el usuario volvió de Google.
+  Future<void> _handleGoogleRedirectResult() async {
+    try {
+      final data = await SocialAuthService.getGoogleRedirectResult();
+      if (data == null) return; // no hay redirect pendiente
+      if (!mounted) return;
+      final result = await SocialAuthService.loginWithBackend(data);
+      if (mounted) _handleSocialResult(result);
+    } catch (e) {
+      debugPrint('[Login] redirect result error: $e');
+    } finally {
+      if (mounted) setState(() => _checkingRedirect = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -116,6 +138,14 @@ class _LoginScreenState extends State<LoginScreen> {
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    // Mientras se verifica si hay un resultado de Google redirect pendiente
+    if (_checkingRedirect) {
+      return Scaffold(
+        backgroundColor: bg,
+        body: const Center(child: CircularProgressIndicator(color: GardenColors.primary)),
+      );
+    }
 
     return Scaffold(
       backgroundColor: bg,

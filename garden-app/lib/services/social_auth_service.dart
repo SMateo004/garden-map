@@ -6,6 +6,8 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'auth_state.dart';
+import 'secure_storage_service.dart';
 
 enum SocialProvider { google, apple, facebook }
 
@@ -62,25 +64,48 @@ class SocialAuthService {
 
   // ── Google ──────────────────────────────────────────────────────────────
 
+  // ── Web redirect helpers ─────────────────────────────────────────────────
+
+  /// Inicia el flujo redirect de Google en web. La página navega a Google
+  /// y vuelve; el resultado se lee con [getGoogleRedirectResult].
+  static Future<void> startGoogleRedirect() async {
+    final provider = GoogleAuthProvider()
+      ..addScope('email')
+      ..addScope('profile');
+    await FirebaseAuth.instance.signInWithRedirect(provider);
+  }
+
+  /// Lee el resultado pendiente de un signInWithRedirect de Google.
+  /// Devuelve null si no hay resultado o si hubo un error.
+  static Future<SocialUserData?> getGoogleRedirectResult() async {
+    try {
+      final result = await FirebaseAuth.instance.getRedirectResult();
+      final user = result.user;
+      if (user == null) return null;
+      final idToken = await user.getIdToken();
+      final parts = (user.displayName ?? '').split(' ');
+      return SocialUserData(
+        idToken: idToken,
+        email: user.email ?? '',
+        firstName: parts.isNotEmpty ? parts.first : '',
+        lastName: parts.length > 1 ? parts.sublist(1).join(' ') : '',
+        photoUrl: user.photoURL,
+        provider: SocialProvider.google,
+      );
+    } catch (e) {
+      debugPrint('[SocialAuth] getRedirectResult error: $e');
+      return null;
+    }
+  }
+
   static Future<SocialUserData?> signInWithGoogle() async {
     try {
       if (kIsWeb) {
-        final provider = GoogleAuthProvider()
-          ..addScope('email')
-          ..addScope('profile');
-        final result = await FirebaseAuth.instance.signInWithPopup(provider);
-        final user = result.user;
-        if (user == null) return null;
-        final idToken = await user.getIdToken();
-        final parts = (user.displayName ?? '').split(' ');
-        return SocialUserData(
-          idToken: idToken,
-          email: user.email ?? '',
-          firstName: parts.isNotEmpty ? parts.first : '',
-          lastName: parts.length > 1 ? parts.sublist(1).join(' ') : '',
-          photoUrl: user.photoURL,
-          provider: SocialProvider.google,
-        );
+        // En web usamos signInWithRedirect (más fiable que signInWithPopup
+        // en Flutter web, que puede quedar colgado por restricciones de dominio).
+        // El resultado se recoge en LoginScreen.initState vía getGoogleRedirectResult().
+        await startGoogleRedirect();
+        return null; // la página navega a Google; el flujo continúa tras el redirect
       }
 
       // Mobile — no pasamos clientId; el plugin lee CLIENT_ID de GoogleService-Info.plist (iOS)
@@ -240,15 +265,20 @@ class SocialAuthService {
         final activeRole = user['activeRole'] as String?;
         final name = '${user['firstName']} ${user['lastName']}';
 
-        // Persist tokens + roles — mismas claves que AuthService
+        // Persist tokens — usar SecureStorageService igual que AuthService
+        final accessToken  = d['accessToken']  as String;
+        final refreshToken = d['refreshToken'] as String;
+        await SecureStorageService.saveAccessToken(accessToken);
+        await SecureStorageService.saveRefreshToken(refreshToken);
+        // Actualizar caché en memoria para que AuthState.hasSession sea true
+        await AuthState.update(accessToken);
+
+        // Datos no-sensibles van a SharedPreferences
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('access_token',  d['accessToken'] as String);
-        await prefs.setString('refresh_token', d['refreshToken'] as String);
-        await prefs.setString('user_role',     role);
-        await prefs.setString('user_id',       user['id'] as String? ?? '');
-        await prefs.setString('user_name',     name);
-        await prefs.setString('user_photo',    user['profilePicture'] as String? ?? '');
-        // Save active_role only if it overrides the permanent role
+        await prefs.setString('user_role',  role);
+        await prefs.setString('user_id',    user['id'] as String? ?? '');
+        await prefs.setString('user_name',  name);
+        await prefs.setString('user_photo', user['profilePicture'] as String? ?? '');
         if (activeRole != null && activeRole.isNotEmpty && activeRole != role) {
           await prefs.setString('active_role', activeRole);
         } else {
