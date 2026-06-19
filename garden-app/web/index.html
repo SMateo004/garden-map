@@ -267,7 +267,7 @@ const SearchBar = ({ onSearch }) => {
   const Seg = ({ id, label, value, placeholder, first }) => {
     const active = open === id;
     return (
-      <button onClick={()=>setOpen(active?null:id)} style={{
+      <button className="seg-btn" onClick={()=>setOpen(active?null:id)} style={{
         flex:1, textAlign:'left', padding:'16px 24px', borderRadius:999,
         background: active ? 'var(--surface)' : 'transparent',
         boxShadow: active ? '0 10px 30px rgba(30,45,15,0.16)' : 'none',
@@ -299,7 +299,7 @@ const SearchBar = ({ onSearch }) => {
         <Seg id="when" label="Cuándo" value={when} placeholder="Agregá fecha"/>
         <Divider/>
         <Seg id="pet" label="Mascota" value={pet?PETS.find(p=>p.id===pet).label:null} placeholder="¿Quién va?"/>
-        <button onClick={()=>onSearch({service,zone,when,pet})} style={{
+        <button className="search-btn" onClick={()=>onSearch({service,zone,when,pet})} style={{
           flexShrink:0, display:'flex', alignItems:'center', gap:10,
           background: canSearch ? 'var(--primary)' : 'var(--primary-light)',
           color:'var(--bg)', borderRadius:999, padding:'16px 26px', fontWeight:800, fontSize:16,
@@ -312,7 +312,7 @@ const SearchBar = ({ onSearch }) => {
 
       {/* dropdown panels */}
       {open && (
-        <div style={{
+        <div className="search-dropdown" style={{
           position:'absolute', top:'calc(100% + 14px)', left:0, right:0,
           background:'var(--surface)', borderRadius:28,
           border:'1px solid var(--border)', boxShadow:'0 24px 60px rgba(30,45,15,0.2)',
@@ -322,22 +322,22 @@ const SearchBar = ({ onSearch }) => {
           <style>{`@keyframes pop{from{opacity:0;transform:translateY(-10px) scale(.98)}to{opacity:1;transform:none}}`}</style>
 
           {open==='service' && (
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
               {SERVICES.map(s=>{
                 const on = service===s.id;
                 return (
                   <button key={s.id} onClick={()=>{setService(s.id);setOpen('where');}} style={{
-                    display:'flex', alignItems:'center', gap:16, padding:'18px 20px', borderRadius:18,
+                    display:'flex', alignItems:'center', gap:12, padding:'14px 16px', borderRadius:16,
                     background: on?'var(--lime)':'var(--surface-elev)',
                     border:`1.5px solid ${on?'var(--primary)':'var(--border)'}`,
                     textAlign:'left', transition:'all .2s ease',
                   }}>
-                    <div style={{ width:52, height:52, borderRadius:14, background:on?'var(--surface)':'var(--lime)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                      <s.Icon size={26} stroke="var(--primary-dark)"/>
+                    <div className="svc-opt-icon" style={{ width:40, height:40, borderRadius:12, background:on?'var(--surface)':'var(--lime)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                      <s.Icon size={20} stroke="var(--primary-dark)"/>
                     </div>
                     <div>
-                      <div style={{ fontWeight:800, fontSize:18 }}>{s.label}</div>
-                      <div style={{ fontSize:14, color:'var(--text-sec)' }}>{s.desc}</div>
+                      <div style={{ fontWeight:800, fontSize:15 }}>{s.label}</div>
+                      <div style={{ fontSize:12.5, color:'var(--text-sec)' }}>{s.desc}</div>
                     </div>
                   </button>
                 );
@@ -380,18 +380,18 @@ const SearchBar = ({ onSearch }) => {
           )}
 
           {open==='pet' && (
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
               {PETS.map(p=>{
                 const on = pet===p.id;
                 return <button key={p.id} onClick={()=>{setPet(p.id);setOpen(null);}} style={{
-                  display:'flex', alignItems:'center', gap:14, padding:'16px 20px', borderRadius:18,
+                  display:'flex', alignItems:'center', gap:12, padding:'14px 16px', borderRadius:16,
                   background:on?'var(--lime)':'var(--surface-elev)',
                   border:`1.5px solid ${on?'var(--primary)':'var(--border)'}`, textAlign:'left', transition:'all .2s ease',
                 }}>
-                  <span style={{ fontSize:30 }}>{p.emoji}</span>
+                  <span className="pet-emoji" style={{ fontSize:24, flexShrink:0 }}>{p.emoji}</span>
                   <div>
-                    <div style={{ fontWeight:800, fontSize:17 }}>{p.label}</div>
-                    <div style={{ fontSize:13.5, color:'var(--text-sec)' }}>{p.sub}</div>
+                    <div style={{ fontWeight:800, fontSize:15 }}>{p.label}</div>
+                    <div style={{ fontSize:12.5, color:'var(--text-sec)' }}>{p.sub}</div>
                   </div>
                 </button>;
               })}
@@ -789,6 +789,38 @@ function App() {
         @media (max-width:620px){
           .nav-register{display:none !important;}
           .navlinks a[href="#descargar"]{display:none !important;}
+
+          /* Searchbar: layout 2×2 horizontal en vez de columna */
+          .searchbar{
+            flex-direction:row !important;
+            flex-wrap:wrap !important;
+            border-radius:20px !important;
+            padding:6px !important;
+            gap:0 !important;
+            align-items:stretch !important;
+          }
+          .searchbar .seg-btn{
+            flex:none !important;
+            width:50% !important;
+            border-radius:14px !important;
+            padding:12px 14px !important;
+          }
+          .searchbar .seg-btn .mono{ font-size:10px !important; }
+          .searchbar .seg-btn > div:last-child{ font-size:14px !important; margin-top:2px !important; }
+          .searchbar .search-btn{
+            flex:none !important;
+            width:100% !important;
+            border-radius:14px !important;
+            justify-content:center !important;
+            padding:13px !important;
+            margin-top:4px !important;
+            font-size:15px !important;
+          }
+          /* Dropdown: más compacto, 1 columna en móvil */
+          .search-dropdown{ padding:16px !important; border-radius:20px !important; }
+          .search-dropdown > div{ grid-template-columns:1fr !important; gap:8px !important; }
+          .svc-opt-icon{ width:32px !important; height:32px !important; border-radius:10px !important; }
+          .pet-emoji{ font-size:20px !important; }
           .searchword{display:none;}
 
           /* Hero compacto: búsqueda visible sin hacer scroll */
