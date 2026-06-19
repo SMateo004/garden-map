@@ -572,7 +572,7 @@ class _GoogleLogo extends StatelessWidget {
     return SizedBox(
       width: 20, height: 20,
       child: Image.asset(
-        'assets/images/google-logo.png',
+        'assets/images/google-logo.webp',
         width: 20, height: 20,
         errorBuilder: (_, __, ___) => CustomPaint(painter: _GoogleGPainter()),
       ),
