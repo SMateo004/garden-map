@@ -1220,6 +1220,7 @@ ThemeData gardenTheme({bool dark = false}) {
     brightness: dark ? Brightness.dark : Brightness.light,
     primaryColor: GardenColors.primary,
     scaffoldBackgroundColor: bg,
+    fontFamily: GoogleFonts.nunito().fontFamily,
     textTheme: nunitoTextTheme,
     colorScheme: ColorScheme(
       brightness: dark ? Brightness.dark : Brightness.light,

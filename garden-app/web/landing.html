@@ -465,11 +465,6 @@ const Hero = ({ onSearch }) => (
     <FloatBits/>
 
     <div style={{ position:'relative', maxWidth:1000 }}>
-      <div className="reveal in" style={{ display:'inline-flex', alignItems:'center', gap:10, padding:'9px 18px', borderRadius:999, background:'var(--surface)', border:'1px solid var(--border)', boxShadow:'0 4px 16px rgba(30,45,15,0.06)', marginBottom:28 }}>
-        <span style={{ width:9, height:9, borderRadius:999, background:'var(--accent)' }}/>
-        <span className="mono" style={{ fontSize:13, letterSpacing:'0.08em', color:'var(--text-sec)', fontWeight:600 }}>Ya disponible en Santa Cruz de la Sierra</span>
-      </div>
-
       <h1 style={{ fontWeight:900, fontSize:'clamp(44px,7vw,96px)', letterSpacing:'-0.045em', lineHeight:0.98, textWrap:'balance' }}>
         Cuidamos a quien<br/>vos más <span style={{ color:'var(--primary)', fontStyle:'italic' }}>querés</span>.
       </h1>
@@ -703,15 +698,15 @@ function App() {
     if (params.service && params.service !== 'visita') p.service = params.service;
     // zone: clave uppercase para que Flutter la pre-seleccione en la UI
     if (params.zone) p.zone = params.zone;
-    // mascota → petType + size (Flutter lee q['size'] → initialSize → _selectedSizes)
+    // mascota → petType + size (Flutter usa SMALL/MEDIUM/LARGE internamente)
     if (params.pet === 'gato') {
       p.petType = 'CATS';
     } else if (params.pet === 'p-s') {
-      p.petType = 'DOGS'; p.size = 'PEQUEÑO';
+      p.petType = 'DOGS'; p.size = 'SMALL';
     } else if (params.pet === 'p-m') {
-      p.petType = 'DOGS'; p.size = 'MEDIANO';
+      p.petType = 'DOGS'; p.size = 'MEDIUM';
     } else if (params.pet === 'p-l') {
-      p.petType = 'DOGS'; p.size = 'GRANDE';
+      p.petType = 'DOGS'; p.size = 'LARGE';
     }
     window.location.href = flutterUrl('/marketplace', Object.keys(p).length ? p : null);
   };

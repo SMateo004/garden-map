@@ -239,14 +239,17 @@ final GoRouter _router = GoRouter(
         }
         // Web: usar WebShellScreen con nav en el header
         // zone: normalizar a UPPERCASE para coincidir con kZoneLabels keys
-        // size: aceptar tanto 'size' (nuevo) como 'sizesAccepted' (legacy)
+        // size: aceptar tanto 'size' (SMALL/MEDIUM/LARGE) como 'sizesAccepted' legacy
         final rawZone = q['zone'];
         final rawSize = q['size'] ?? q['sizesAccepted'];
+        final normalizedSize = const {
+          'PEQUEÑO': 'SMALL', 'MEDIANO': 'MEDIUM', 'GRANDE': 'LARGE',
+        }[rawSize] ?? rawSize;
         return WebShellScreen(
           initialTab: 0,
           initialService: q['service'],
           initialZone: rawZone != null ? rawZone.toUpperCase() : null,
-          initialSize: rawSize,
+          initialSize: normalizedSize,
           initialPetType: q['petType'],
         );
       },

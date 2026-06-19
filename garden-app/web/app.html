@@ -86,11 +86,25 @@
   </div>
 
   <script>
-    // Restaurar ruta Flutter cuando viene redirigido desde la landing React
+    // Si no hay ruta Flutter específica → redirigir al landing React
     (function () {
+      var h = window.location.hash;
+      if (!h || h === '#' || h === '#/') {
+        window.location.replace('/');
+        return;
+      }
+      // Restaurar ruta cuando viene redirigido con ?_route=
       var r = new URLSearchParams(location.search).get('_route');
       if (r) history.replaceState(null, '', r);
     })();
+
+    // Botón atrás que regresa a #/ → volver al landing React
+    window.addEventListener('popstate', function () {
+      var h = window.location.hash;
+      if (!h || h === '#' || h === '#/') {
+        setTimeout(function () { window.location.replace('/'); }, 0);
+      }
+    });
   </script>
   <script>
     // Ocultar splash cuando Flutter monta su primer canvas
