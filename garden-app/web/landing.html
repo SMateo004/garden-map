@@ -687,12 +687,18 @@ function App() {
     return ()=>window.removeEventListener('scroll',h);
   },[]);
 
+  const petToType = (id) => {
+    if (!id) return null;
+    if (id === 'gato') return 'CATS';
+    return 'DOGS'; // p-s, p-m, p-l
+  };
   const handleSearch = (params) => {
     const p = {};
     if (params.service) p.service = params.service;
     if (params.zone)    p.zone    = params.zone;
-    if (params.when)    p.when    = params.when;
-    if (params.pet)     p.pet     = params.pet;
+    // 'when' no lo usa el route de Flutter → no se manda
+    const pt = petToType(params.pet);
+    if (pt) p.petType = pt;
     window.location.href = flutterUrl('/marketplace', Object.keys(p).length ? p : null);
   };
 
