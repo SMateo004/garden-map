@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/client/client_welcome_screen.dart';
-import 'screens/client/landing_screen.dart';
 import 'screens/client/about_screen.dart';
 import 'screens/caregiver/onboarding_wizard_screen.dart';
 import 'screens/test_agentes_screen.dart';
@@ -54,6 +53,7 @@ import 'services/local_notification_service.dart';
 import 'services/fcm_service.dart';
 import 'services/auth_state.dart'; // sessionExpiredNotifier + AuthState
 import 'services/web_notification_service.dart';
+import 'utils/web_redirect.dart';
 
 // ── Build-time env (set via --dart-define) ─────────────────
 const _kSentryDsn    = String.fromEnvironment('SENTRY_DSN');
@@ -135,8 +135,16 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/',
       name: 'landing',
-      builder: (context, state) =>
-          kIsWeb ? const LandingScreen() : const _MobileAuthGate(),
+      builder: (context, state) {
+        if (kIsWeb) {
+          // En web la landing vive en index.html (React). Redirigir siempre.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            redirectToReactLanding();
+          });
+          return const SizedBox.shrink();
+        }
+        return const _MobileAuthGate();
+      },
     ),
     GoRoute(
       path: '/splash',
