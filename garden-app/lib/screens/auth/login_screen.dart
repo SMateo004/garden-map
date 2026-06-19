@@ -568,9 +568,14 @@ class _GoogleLogo extends StatelessWidget {
   const _GoogleLogo();
   @override
   Widget build(BuildContext context) {
+    // Intentar usar asset PNG; si no existe, fallback al logo vectorial
     return SizedBox(
       width: 20, height: 20,
-      child: CustomPaint(painter: _GoogleGPainter()),
+      child: Image.asset(
+        'assets/images/google-logo.png',
+        width: 20, height: 20,
+        errorBuilder: (_, __, ___) => CustomPaint(painter: _GoogleGPainter()),
+      ),
     );
   }
 }
@@ -616,18 +621,31 @@ class _FacebookLogo extends StatelessWidget {
   const _FacebookLogo();
   @override
   Widget build(BuildContext context) {
-    return const SizedBox(
+    // Intentar usar asset PNG; si no existe, fallback al logo vectorial
+    return SizedBox(
       width: 20, height: 20,
-      child: Center(
-        child: Text(
-          'f',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            height: 1,
-            fontFamily: 'Georgia',
-          ),
+      child: Image.asset(
+        'assets/images/facebook-logo.png',
+        width: 20, height: 20,
+        errorBuilder: (_, __, ___) => const _FacebookLogoFallback(),
+      ),
+    );
+  }
+}
+
+class _FacebookLogoFallback extends StatelessWidget {
+  const _FacebookLogoFallback();
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Text(
+        'f',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.w900,
+          height: 1,
+          fontFamily: 'Arial',
         ),
       ),
     );
