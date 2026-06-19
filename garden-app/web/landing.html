@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Garden · Encuentra quien cuide a tu mascota</title>
-<!-- Unregister stale Flutter service workers before anything else -->
+<!-- Unregister stale Flutter service workers + fallback route guard -->
 <script>
 (function () {
   if ('serviceWorker' in navigator) {
@@ -12,10 +12,11 @@
       regs.forEach(function (r) { r.unregister(); });
     });
   }
-  // Route guard: paths other than "/" load the Flutter app
+  // Fallback: si alguien llega directo a /login, /marketplace, etc. redirigir a Flutter
   var p = window.location.pathname;
-  if (p !== '/' && p !== '/index.html') {
-    window.location.replace('/app.html?_route=' + encodeURIComponent(p + window.location.search));
+  var flutterRoutes = ['/login', '/register', '/marketplace', '/become-caregiver', '/booking', '/profile', '/admin'];
+  if (flutterRoutes.some(function(r){ return p === r || p.startsWith(r + '/'); })) {
+    window.location.replace('/app.html#' + p + window.location.search);
   }
 })();
 </script>
@@ -76,6 +77,13 @@ const { useState, useEffect, useRef } = React;
 const APP_STORE_URL  = 'https://apps.apple.com/app/garden-cuidadores/id000000000';
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.garden.bolivia';
 
+// Flutter usa hash URL strategy → todas las rutas van a app.html#/ruta
+const FLUTTER = '/app.html';
+const flutterUrl = (route, params) => {
+  const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+  return FLUTTER + '#' + route + qs;
+};
+
 // ─── Paw Leaf logo ─────────────────────────────────────────
 const PawLeaf = ({ size = 40, color = '#778C43', accent = '#58E262' }) => (
   <svg viewBox="0 0 120 120" width={size} height={size} xmlns="http://www.w3.org/2000/svg">
@@ -124,7 +132,7 @@ const PETS = [
 
 // ─── NAV ───────────────────────────────────────────────────
 const navSectionHref = (t) => {
-  if (t === 'Cuidadores') return '/become-caregiver';
+  if (t === 'Cuidadores') return flutterUrl('/become-caregiver');
   const slug = t.toLowerCase()
     .normalize('NFD').replace(/[^\x00-\xFF]/g,'')
     .replace(/\s+/g, '-');
@@ -153,11 +161,11 @@ const Nav = ({ scrolled }) => (
           onMouseLeave={e=>e.currentTarget.style.background='transparent'}>{t}</a>
       ))}
       {/* Iniciar sesión */}
-      <a href="/login" className="nav-login" style={{ padding:'10px 16px', borderRadius:999, fontWeight:700, fontSize:15.5, color:'var(--text-sec)' }}
+      <a href={flutterUrl('/login')} className="nav-login" style={{ padding:'10px 16px', borderRadius:999, fontWeight:700, fontSize:15.5, color:'var(--text-sec)' }}
         onMouseEnter={e=>e.currentTarget.style.background='rgba(217,239,159,0.5)'}
         onMouseLeave={e=>e.currentTarget.style.background='transparent'}>Iniciar sesión</a>
       {/* Registrarse */}
-      <a href="/register" className="nav-register" style={{
+      <a href={flutterUrl('/register')} className="nav-register" style={{
         padding:'10px 20px', borderRadius:999, fontWeight:800, fontSize:15.5,
         color:'var(--primary)', border:'1.5px solid var(--primary)',
       }}
@@ -491,7 +499,7 @@ const Services = () => (
     <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(270px,1fr))', gap:22, marginTop:56 }}>
       {SERVICES.map((s,i)=>(
         <Reveal key={s.id} delay={i*0.08}>
-          <a href={'/marketplace?service=' + s.id} style={{ display:'block', height:'100%' }}>
+          <a href={flutterUrl('/marketplace', {service: s.id})} style={{ display:'block', height:'100%' }}>
             <div className="svc-card" style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:26, padding:36, height:'100%', transition:'transform .3s cubic-bezier(.2,.7,.3,1), box-shadow .3s', cursor:'pointer' }}
               onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-8px)';e.currentTarget.style.boxShadow='0 22px 50px rgba(30,45,15,0.14)';}}
               onMouseLeave={e=>{e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none';}}>
@@ -634,9 +642,9 @@ const footerLinks = {
   ],
   'Empresa': [
     ['Sobre Garden', '/'],
-    ['Cuidadores', '/become-caregiver'],
+    ['Cuidadores', flutterUrl('/become-caregiver')],
     ['Contacto', 'mailto:hola@gardenbo.com'],
-    ['Trabajá con nosotros', '/become-caregiver'],
+    ['Trabajá con nosotros', flutterUrl('/become-caregiver')],
   ],
 };
 
@@ -673,7 +681,6 @@ const Footer = () => (
 // ─── APP ───────────────────────────────────────────────────
 function App() {
   const [scrolled, setScrolled] = useState(false);
-  const [query, setQuery] = useState(null);
   useEffect(()=>{
     const h=()=>setScrolled(window.scrollY>30);
     window.addEventListener('scroll',h,{passive:true}); h();
@@ -681,7 +688,12 @@ function App() {
   },[]);
 
   const handleSearch = (params) => {
-    setQuery(params);
+    const p = {};
+    if (params.service) p.service = params.service;
+    if (params.zone)    p.zone    = params.zone;
+    if (params.when)    p.when    = params.when;
+    if (params.pet)     p.pet     = params.pet;
+    window.location.href = flutterUrl('/marketplace', Object.keys(p).length ? p : null);
   };
 
   return (
@@ -693,7 +705,7 @@ function App() {
       <Trust/>
       <Download/>
       <Footer/>
-      {query && <SearchReveal query={query} onClose={()=>setQuery(null)}/>}
+      {/* SearchReveal removed — handleSearch navigates directly to Flutter marketplace */}
       <style>{`
         @media (max-width:860px){
           .navlinks a:not([href="#descargar"]):not(.nav-register):not(.nav-login){display:none;}
