@@ -492,25 +492,25 @@ const SearchReveal = ({ query, onClose }) => {
 
 // ─── HERO ──────────────────────────────────────────────────
 const Hero = ({ onSearch }) => (
-  <header id="top" style={{ position:'relative', minHeight:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'140px 5vw 80px', textAlign:'center' }}>
+  <header id="top" className="hero-section" style={{ position:'relative', minHeight:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'140px 5vw 80px', textAlign:'center' }}>
     <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse 70% 60% at 50% 0%, rgba(217,239,159,0.55), transparent 70%)' }}/>
     <div style={{ position:'absolute', top:'-10%', right:'-8%', width:'45vw', height:'45vw', maxWidth:680, maxHeight:680, borderRadius:'50%', background:'radial-gradient(circle, rgba(119,140,67,0.10), transparent 70%)' }}/>
     <FloatBits/>
 
     <div style={{ position:'relative', maxWidth:1000 }}>
-      <h1 style={{ fontWeight:900, fontSize:'clamp(44px,7vw,96px)', letterSpacing:'-0.045em', lineHeight:0.98, textWrap:'balance' }}>
+      <h1 className="hero-h1" style={{ fontWeight:900, fontSize:'clamp(44px,7vw,96px)', letterSpacing:'-0.045em', lineHeight:0.98, textWrap:'balance' }}>
         Cuidamos a quien<br/>vos más <span style={{ color:'var(--primary)', fontStyle:'italic' }}>querés</span>.
       </h1>
-      <p style={{ fontSize:'clamp(18px,2.2vw,24px)', color:'var(--text-sec)', maxWidth:640, margin:'24px auto 0', lineHeight:1.5, textWrap:'pretty' }}>
+      <p className="hero-sub" style={{ fontSize:'clamp(18px,2.2vw,24px)', color:'var(--text-sec)', maxWidth:640, margin:'24px auto 0', lineHeight:1.5, textWrap:'pretty' }}>
         Paseadores, cuidadores y hospedaje para tu mascota — <strong style={{ color:'var(--text)' }}>verificados</strong>, cerca de tu casa y con pago protegido.
       </p>
     </div>
 
-    <div style={{ position:'relative', marginTop:52, width:'100%', display:'flex', justifyContent:'center' }}>
+    <div className="hero-search-wrap" style={{ position:'relative', marginTop:52, width:'100%', display:'flex', justifyContent:'center' }}>
       <SearchBar onSearch={onSearch}/>
     </div>
 
-    <div style={{ position:'relative', marginTop:30, display:'flex', gap:28, flexWrap:'wrap', justifyContent:'center', alignItems:'center', color:'var(--text-sec)', fontSize:15, fontWeight:600 }}>
+    <div className="hero-trust" style={{ position:'relative', marginTop:30, display:'flex', gap:28, flexWrap:'wrap', justifyContent:'center', alignItems:'center', color:'var(--text-sec)', fontSize:15, fontWeight:600 }}>
       <span style={{ display:'flex', alignItems:'center', gap:8 }}><IcoShield size={18} stroke="var(--primary)"/>Identidad verificada</span>
       <span style={{ display:'flex', alignItems:'center', gap:8 }}><Ico size={18} d="M3 11l18-5v12L3 14v-3z" stroke="var(--primary)"/>Pago protegido</span>
       <span style={{ display:'flex', alignItems:'center', gap:8 }}><IcoPaw size={18} stroke="var(--primary)"/>+500 mascotas felices</span>
@@ -530,11 +530,11 @@ const Reveal = ({ children, delay=0, style={} }) => {
 };
 
 const Services = () => (
-  <section id="servicios" style={{ padding:'120px 5vw', maxWidth:1320, margin:'0 auto' }}>
+  <section id="servicios" className="sec-pad" style={{ padding:'120px 5vw', maxWidth:1320, margin:'0 auto' }}>
     <Reveal><div className="mono" style={{ fontSize:13, letterSpacing:'0.16em', textTransform:'uppercase', color:'var(--primary)', fontWeight:600 }}>Servicios</div></Reveal>
     <Reveal delay={0.05}><h2 style={{ fontWeight:900, fontSize:'clamp(34px,5vw,60px)', letterSpacing:'-0.035em', marginTop:14, maxWidth:780, lineHeight:1.04 }}>Todo lo que tu mascota necesita, en un solo jardín.</h2></Reveal>
 
-    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(270px,1fr))', gap:22, marginTop:56 }}>
+    <div className="svc-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(270px,1fr))', gap:22, marginTop:56 }}>
       {SERVICES.map((s,i)=>(
         <Reveal key={s.id} delay={i*0.08}>
           <a href={flutterUrl('/marketplace', {service: s.id})} style={{ display:'block', height:'100%' }}>
@@ -566,7 +566,7 @@ const How = () => {
     { n:'04', t:'Relajate', d:'Recibí fotos y seguimiento en tiempo real. Tu mascota en las mejores manos.', Icon:IcoSun },
   ];
   return (
-    <section id="como-funciona" style={{ padding:'120px 5vw', background:'var(--forest)', color:'var(--bg)', position:'relative', overflow:'hidden' }}>
+    <section id="como-funciona" className="sec-pad" style={{ padding:'120px 5vw', background:'var(--forest)', color:'var(--bg)', position:'relative', overflow:'hidden' }}>
       <div style={{ position:'absolute', top:'-15%', left:'-10%', width:560, height:560, borderRadius:'50%', background:'radial-gradient(circle, rgba(119,140,67,0.18), transparent 70%)' }}/>
       <div style={{ maxWidth:1320, margin:'0 auto', position:'relative' }}>
         <Reveal><div className="mono" style={{ fontSize:13, letterSpacing:'0.16em', textTransform:'uppercase', color:'var(--accent)', fontWeight:600 }}>Cómo funciona</div></Reveal>
@@ -595,7 +595,7 @@ const How = () => {
 
 // ─── TRUST ─────────────────────────────────────────────────
 const Trust = () => (
-  <section id="confianza" style={{ padding:'120px 5vw', maxWidth:1320, margin:'0 auto' }}>
+  <section id="confianza" className="sec-pad" style={{ padding:'120px 5vw', maxWidth:1320, margin:'0 auto' }}>
     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:64, alignItems:'center' }} className="trust-grid">
       <Reveal>
         <div className="mono" style={{ fontSize:13, letterSpacing:'0.16em', textTransform:'uppercase', color:'var(--primary)', fontWeight:600 }}>Confianza</div>
@@ -640,7 +640,7 @@ const Trust = () => (
 
 // ─── DOWNLOAD CTA ──────────────────────────────────────────
 const Download = () => (
-  <section id="descargar" style={{ padding:'40px 5vw 120px', maxWidth:1320, margin:'0 auto' }}>
+  <section id="descargar" className="download-section" style={{ padding:'40px 5vw 120px', maxWidth:1320, margin:'0 auto' }}>
     <Reveal>
       <div style={{ background:'linear-gradient(150deg, var(--primary), var(--primary-dark))', borderRadius:40, padding:'72px 7vw', position:'relative', overflow:'hidden', textAlign:'center' }}>
         <div style={{ position:'absolute', right:-60, bottom:-60, opacity:0.12 }}><PawLeaf size={320} color="#fff" accent="#fff"/></div>
@@ -689,7 +689,7 @@ const footerLinks = {
 };
 
 const Footer = () => (
-  <footer style={{ background:'var(--forest)', color:'var(--bg)', padding:'72px 5vw 40px' }}>
+  <footer className="footer-inner" style={{ background:'var(--forest)', color:'var(--bg)', padding:'72px 5vw 40px' }}>
     <div style={{ maxWidth:1320, margin:'0 auto' }}>
       <div style={{ display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:40 }}>
         <div style={{ maxWidth:320 }}>
@@ -755,8 +755,26 @@ function App() {
       <Trust/>
       <Download/>
       <Footer/>
-      {/* SearchReveal removed — handleSearch navigates directly to Flutter marketplace */}
+      {/* Banner fijo en mobile para recomendar la app */}
+      <div className="app-banner-mobile">
+        <div style={{ display:'flex', alignItems:'center', gap:10, flex:1, minWidth:0 }}>
+          <span style={{ fontSize:28, flexShrink:0 }}>🐾</span>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontWeight:800, fontSize:13.5, color:'var(--text)', lineHeight:1.2 }}>Mejor experiencia en la app</div>
+            <div style={{ fontSize:12, color:'var(--text-sec)', marginTop:2 }}>Reservas, GPS y notificaciones</div>
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:8, flexShrink:0 }}>
+          <a href={APP_STORE_URL} style={{ background:'#000', color:'#fff', padding:'9px 14px', borderRadius:10, fontSize:12, fontWeight:700, whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:5 }}>
+            <span style={{ fontSize:14 }}></span> iOS
+          </a>
+          <a href={PLAY_STORE_URL} style={{ background:'#000', color:'#fff', padding:'9px 14px', borderRadius:10, fontSize:12, fontWeight:700, whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:5 }}>
+            <span style={{ fontSize:13 }}>▶</span> Android
+          </a>
+        </div>
+      </div>
       <style>{`
+        /* ── Tablet (≤860px) ─────────────────── */
         @media (max-width:860px){
           .navlinks a:not([href="#descargar"]):not(.nav-register):not(.nav-login){display:none;}
           .nav-login{display:none !important;}
@@ -765,10 +783,53 @@ function App() {
           .searchbar button{border-radius:18px !important;}
           .searchword{display:inline;}
           .trust-grid{grid-template-columns:1fr !important;gap:48px !important;}
+          .sec-pad{padding-top:80px !important;padding-bottom:80px !important;}
         }
+        /* ── Mobile (≤620px) ─────────────────── */
         @media (max-width:620px){
           .nav-register{display:none !important;}
+          .navlinks a[href="#descargar"]{display:none !important;}
           .searchword{display:none;}
+
+          /* Hero compacto: búsqueda visible sin hacer scroll */
+          .hero-section{
+            min-height:auto !important;
+            padding:90px 5vw 32px !important;
+          }
+          .hero-h1{font-size:clamp(36px,10vw,52px) !important;}
+          .hero-sub{font-size:16px !important;margin-top:16px !important;}
+          .hero-trust{flex-direction:column;gap:10px;align-items:flex-start;margin-top:20px !important;}
+          .hero-search-wrap{margin-top:28px !important;}
+
+          /* Secciones: menos espacio vertical */
+          .sec-pad{padding-top:60px !important;padding-bottom:60px !important;}
+
+          /* Tarjetas de servicio: 1 columna */
+          .svc-grid{grid-template-columns:1fr !important;}
+
+          /* Sección download: espacio extra abajo para el banner fijo */
+          .download-section{padding-bottom:110px !important;}
+
+          /* Footer: extra bottom padding */
+          .footer-inner{padding-bottom:100px !important;}
+
+          /* Banner app fijo */
+          .app-banner-mobile{display:flex !important;}
+        }
+
+        /* Banner app fijo — oculto en desktop */
+        .app-banner-mobile{
+          display:none;
+          position:fixed;
+          bottom:0;left:0;right:0;
+          background:var(--surface);
+          border-top:1px solid var(--border);
+          padding:12px 16px 20px;
+          align-items:center;
+          gap:12px;
+          z-index:100;
+          box-shadow:0 -8px 32px rgba(30,45,15,0.12);
+          padding-bottom:calc(12px + env(safe-area-inset-bottom, 0px));
         }
       `}</style>
     </div>
