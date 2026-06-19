@@ -4,9 +4,15 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Garden · Encuentra quien cuide a tu mascota</title>
-<!-- Route guard: paths other than "/" load the Flutter app -->
+<!-- Unregister stale Flutter service workers before anything else -->
 <script>
 (function () {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function (regs) {
+      regs.forEach(function (r) { r.unregister(); });
+    });
+  }
+  // Route guard: paths other than "/" load the Flutter app
   var p = window.location.pathname;
   if (p !== '/' && p !== '/index.html') {
     window.location.replace('/app.html?_route=' + encodeURIComponent(p + window.location.search));
