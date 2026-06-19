@@ -52,12 +52,17 @@ class _WebShellScreenState extends State<WebShellScreen> {
   }
 
   Future<void> _loadAuth() async {
-    final prefs = await SharedPreferences.getInstance();
     final token = AuthState.token;
+    // Solo mostrar nombre si hay sesión activa
+    String? name;
+    if (token.isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      name = prefs.getString('user_name');
+    }
     if (mounted) {
       setState(() {
         _authToken = token;
-        _userName = prefs.getString('user_name');
+        _userName = name;
       });
     }
   }
@@ -184,7 +189,9 @@ class _WebShellScreenState extends State<WebShellScreen> {
                         ),
                         const SizedBox(width: 8),
                         GestureDetector(
-                          onTap: () => context.push('/profile'),
+                          onTap: () => _authToken.isNotEmpty
+                              ? context.push('/profile')
+                              : context.push('/login'),
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
@@ -193,11 +200,19 @@ class _WebShellScreenState extends State<WebShellScreen> {
                             ),
                             child: Row(mainAxisSize: MainAxisSize.min, children: [
                               Text(
-                                _userName?.split(' ').first ?? 'Perfil',
+                                _authToken.isNotEmpty
+                                    ? (_userName?.split(' ').first ?? 'Perfil')
+                                    : 'Iniciar sesión',
                                 style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 13),
                               ),
                               const SizedBox(width: 6),
-                              const Icon(Icons.account_circle_outlined, size: 18, color: GardenColors.primary),
+                              Icon(
+                                _authToken.isNotEmpty
+                                    ? Icons.account_circle_outlined
+                                    : Icons.login_outlined,
+                                size: 18,
+                                color: GardenColors.primary,
+                              ),
                             ]),
                           ),
                         ),
