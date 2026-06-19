@@ -121,7 +121,17 @@ const SERVICES = [
   { id:'guarderia', label:'Guardería de día', desc:'Mientras trabajás', Icon:IcoSun },
   { id:'visita', label:'Visita a domicilio', desc:'En tu propia casa', Icon:IcoVisit },
 ];
-const ZONES = ['Equipetrol','Las Palmas','Urubó','Zona Norte','Sirari','Radial 26','Centro','Av. Banzer'];
+// key = valor que acepta el API, label = lo que ve el usuario
+const ZONES = [
+  { key:'equipetrol', label:'Equipetrol' },
+  { key:'las_palmas', label:'Las Palmas' },
+  { key:'norte',      label:'Zona Norte' },
+  { key:'urubo_norte',label:'Urubó' },
+  { key:'centro',     label:'Centro' },
+  { key:'sur',        label:'Sur' },
+  { key:'remanzo',    label:'Remanzo' },
+  { key:'otros',      label:'Av. Banzer / Sirari' },
+];
 const WHENS = ['Hoy','Mañana','Este fin de semana','Elegir fechas'];
 const PETS = [
   { id:'p-s', label:'Perro pequeño', sub:'Hasta 10 kg', emoji:'🐕' },
@@ -255,7 +265,7 @@ const SearchBar = ({ onSearch }) => {
       }}>
         <Seg id="service" label="Servicio" value={service?svcLabel:null} placeholder="Elegí un servicio" first/>
         <Divider/>
-        <Seg id="where" label="Dónde" value={zone} placeholder="Tu zona en SCZ"/>
+        <Seg id="where" label="Dónde" value={zone ? ZONES.find(z=>z.key===zone)?.label : null} placeholder="Tu zona en SCZ"/>
         <Divider/>
         <Seg id="when" label="Cuándo" value={when} placeholder="Agregá fecha"/>
         <Divider/>
@@ -311,13 +321,13 @@ const SearchBar = ({ onSearch }) => {
               <div className="mono" style={{ fontSize:12, letterSpacing:'0.1em', textTransform:'uppercase', color:'var(--text-hint)', marginBottom:16, fontWeight:600 }}>Zonas de Santa Cruz de la Sierra</div>
               <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
                 {ZONES.map(z=>{
-                  const on = zone===z;
-                  return <button key={z} onClick={()=>{setZone(z);setOpen('when');}} style={{
+                  const on = zone===z.key;
+                  return <button key={z.key} onClick={()=>{setZone(z.key);setOpen('when');}} style={{
                     display:'flex', alignItems:'center', gap:8, padding:'12px 18px', borderRadius:999,
                     background:on?'var(--primary)':'var(--surface-elev)', color:on?'var(--bg)':'var(--text)',
                     border:`1.5px solid ${on?'var(--primary)':'var(--border)'}`, fontWeight:700, fontSize:15,
                     transition:'all .2s ease',
-                  }}><IcoPin size={16} stroke={on?'var(--bg)':'var(--primary)'}/>{z}</button>;
+                  }}><IcoPin size={16} stroke={on?'var(--bg)':'var(--primary)'}/>{z.label}</button>;
                 })}
               </div>
             </div>
@@ -687,18 +697,22 @@ function App() {
     return ()=>window.removeEventListener('scroll',h);
   },[]);
 
-  const petToType = (id) => {
-    if (!id) return null;
-    if (id === 'gato') return 'CATS';
-    return 'DOGS'; // p-s, p-m, p-l
-  };
   const handleSearch = (params) => {
     const p = {};
-    if (params.service) p.service = params.service;
-    if (params.zone)    p.zone    = params.zone;
-    // 'when' no lo usa el route de Flutter → no se manda
-    const pt = petToType(params.pet);
-    if (pt) p.petType = pt;
+    // service: visita no existe en el API, omitir para mostrar todos
+    if (params.service && params.service !== 'visita') p.service = params.service;
+    // zone: ya viene como clave API (equipetrol, las_palmas, etc.)
+    if (params.zone) p.zone = params.zone;
+    // mascota → petType + sizesAccepted
+    if (params.pet === 'gato') {
+      p.petType = 'CATS';
+    } else if (params.pet === 'p-s') {
+      p.petType = 'DOGS'; p.sizesAccepted = 'PEQUEÑO';
+    } else if (params.pet === 'p-m') {
+      p.petType = 'DOGS'; p.sizesAccepted = 'MEDIANO';
+    } else if (params.pet === 'p-l') {
+      p.petType = 'DOGS'; p.sizesAccepted = 'GRANDE';
+    }
     window.location.href = flutterUrl('/marketplace', Object.keys(p).length ? p : null);
   };
 
