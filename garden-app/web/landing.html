@@ -121,16 +121,16 @@ const SERVICES = [
   { id:'guarderia', label:'Guardería de día', desc:'Mientras trabajás', Icon:IcoSun },
   { id:'visita', label:'Visita a domicilio', desc:'En tu propia casa', Icon:IcoVisit },
 ];
-// key = valor que acepta el API, label = lo que ve el usuario
+// key = clave interna Flutter (uppercase, se lowercase antes del API call),
+// label = lo que ve el usuario
 const ZONES = [
-  { key:'equipetrol', label:'Equipetrol' },
-  { key:'las_palmas', label:'Las Palmas' },
-  { key:'norte',      label:'Zona Norte' },
-  { key:'urubo_norte',label:'Urubó' },
-  { key:'centro',     label:'Centro' },
-  { key:'sur',        label:'Sur' },
-  { key:'remanzo',    label:'Remanzo' },
-  { key:'otros',      label:'Av. Banzer / Sirari' },
+  { key:'EQUIPETROL', label:'Equipetrol' },
+  { key:'LAS_PALMAS', label:'Las Palmas' },
+  { key:'NORTE',      label:'Zona Norte' },
+  { key:'URUBO_NORTE',label:'Urubó' },
+  { key:'CENTRO',     label:'Centro' },
+  { key:'SUR',        label:'Sur' },
+  { key:'REMANZO',    label:'Remanzo' },
 ];
 const WHENS = ['Hoy','Mañana','Este fin de semana','Elegir fechas'];
 const PETS = [
@@ -701,17 +701,17 @@ function App() {
     const p = {};
     // service: visita no existe en el API, omitir para mostrar todos
     if (params.service && params.service !== 'visita') p.service = params.service;
-    // zone: ya viene como clave API (equipetrol, las_palmas, etc.)
+    // zone: clave uppercase para que Flutter la pre-seleccione en la UI
     if (params.zone) p.zone = params.zone;
-    // mascota → petType + sizesAccepted
+    // mascota → petType + size (Flutter lee q['size'] → initialSize → _selectedSizes)
     if (params.pet === 'gato') {
       p.petType = 'CATS';
     } else if (params.pet === 'p-s') {
-      p.petType = 'DOGS'; p.sizesAccepted = 'PEQUEÑO';
+      p.petType = 'DOGS'; p.size = 'PEQUEÑO';
     } else if (params.pet === 'p-m') {
-      p.petType = 'DOGS'; p.sizesAccepted = 'MEDIANO';
+      p.petType = 'DOGS'; p.size = 'MEDIANO';
     } else if (params.pet === 'p-l') {
-      p.petType = 'DOGS'; p.sizesAccepted = 'GRANDE';
+      p.petType = 'DOGS'; p.size = 'GRANDE';
     }
     window.location.href = flutterUrl('/marketplace', Object.keys(p).length ? p : null);
   };
