@@ -13,9 +13,19 @@ import '../../services/auth_state.dart';
 import '../../utils/qr_saver.dart';
 
 class PaymentScreen extends StatefulWidget {
-  final String bookingId;
+  /// Existing booking (M&G follow-up, back navigation recovery, etc.)
+  final String? bookingId;
+  /// New flow: booking not yet created — will be created when user presses "Generar QR".
+  final Map<String, dynamic>? bookingParams;
   final Map<String, dynamic>? mgData;
-  const PaymentScreen({super.key, required this.bookingId, this.mgData});
+
+  const PaymentScreen({
+    super.key,
+    this.bookingId,
+    this.bookingParams,
+    this.mgData,
+  }) : assert(bookingId != null || bookingParams != null,
+            'Either bookingId or bookingParams must be provided');
 
   @override
   State<PaymentScreen> createState() => _PaymentScreenState();
@@ -26,6 +36,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _isLoading = true;
   String _clientToken = '';
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
+
+  // In params mode, bookingId is null until the user presses "Generar QR"
+  String? _bookingId;
 
   Map<String, dynamic>? _qrResponse;
   bool _isSubmitting = false;
@@ -77,9 +90,31 @@ class _PaymentScreenState extends State<PaymentScreen> {
       return;
     }
 
+    // In params mode: no booking exists yet — only load wallet balance.
+    if (widget.bookingParams != null && widget.bookingId == null) {
+      try {
+        final walletRes = await http.get(
+          Uri.parse('$_baseUrl/wallet'),
+          headers: {'Authorization': 'Bearer $_clientToken'},
+        );
+        final walletData = jsonDecode(walletRes.body);
+        if (walletData['success'] == true) {
+          setState(() {
+            _walletBalance =
+                double.tryParse(walletData['data']?['balance']?.toString() ?? '0') ?? 0.0;
+            _walletLoaded = true;
+          });
+        }
+      } catch (_) {}
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
+    // Normal mode: load existing booking + wallet.
+    _bookingId = widget.bookingId;
     try {
       final results = await Future.wait([
-        http.get(Uri.parse('$_baseUrl/bookings/${widget.bookingId}'),
+        http.get(Uri.parse('$_baseUrl/bookings/$_bookingId'),
             headers: {'Authorization': 'Bearer $_clientToken'}),
         http.get(Uri.parse('$_baseUrl/wallet'),
             headers: {'Authorization': 'Bearer $_clientToken'}),
@@ -96,7 +131,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               context.pushReplacement(
-                '/slot-conflict/${widget.bookingId}',
+                '/slot-conflict/$_bookingId',
                 extra: {
                   'serviceType': bk['serviceType'] ?? 'PASEO',
                   'caregiverId': bk['caregiverId'] ?? '',
@@ -117,11 +152,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
           if (expiry != null) {
             final remaining = expiry.difference(DateTime.now());
             if (remaining.isNegative) {
-              // QR expired — show expired screen but do NOT auto-cancel.
-              // The user may have already paid; admin can verify manually.
               setState(() => _qrExpired = true);
             } else {
-              // QR still valid — restore it and resume polling
               _walletContributionUsed =
                   double.tryParse(bk['walletPaymentAmount']?.toString() ?? '0') ?? 0.0;
               setState(() => _qrResponse = {'qrId': existingQrId});
@@ -155,7 +187,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   double get _totalAmount => _serviceAmount + _donationAmount;
 
-  bool get _walletCoversAll => _useWallet && _walletBalance >= _totalAmount;
+  bool get _walletCoversAll => _useWallet && _totalAmount > 0 && _walletBalance >= _totalAmount;
   double get _walletCoverage => _useWallet ? _walletBalance.clamp(0, _totalAmount) : 0.0;
   double get _remainingAfterWallet => (_totalAmount - _walletCoverage).clamp(0, double.infinity);
 
@@ -164,6 +196,23 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Future<void> _initPayment() async {
     setState(() => _isSubmitting = true);
     try {
+      // ── Params mode: create the booking NOW (first time user presses "Generar QR") ──
+      if (widget.bookingParams != null && _bookingId == null) {
+        final createRes = await http.post(
+          Uri.parse('$_baseUrl/bookings'),
+          headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
+          body: jsonEncode(widget.bookingParams),
+        );
+        final createData = jsonDecode(createRes.body);
+        if (createRes.statusCode != 201 || createData['success'] != true) {
+          final errors = (createData['errors'] as List?)?.map((e) => e['message'] as String).join(', ');
+          throw Exception(errors ?? createData['error']?['message'] ?? 'Error al crear la reserva');
+        }
+        _bookingId = createData['data']['id'] as String;
+        final bk = createData['data'] as Map<String, dynamic>;
+        if (mounted) setState(() => _booking = bk);
+      }
+
       Map<String, dynamic> body;
       if (_walletCoversAll) {
         body = {'method': 'wallet', if (_donationAmount > 0) 'donationAmount': _donationAmount};
@@ -174,7 +223,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       }
 
       final response = await http.post(
-        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/payment'),
+        Uri.parse('$_baseUrl/bookings/$_bookingId/payment'),
         headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
         body: jsonEncode(body),
       );
@@ -245,9 +294,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Future<void> _checkPaymentStatus() async {
+    if (_bookingId == null) return;
     try {
       final response = await http.get(
-        Uri.parse('$_baseUrl/bookings/${widget.bookingId}'),
+        Uri.parse('$_baseUrl/bookings/$_bookingId'),
         headers: {'Authorization': 'Bearer $_clientToken'},
       );
       final data = jsonDecode(response.body);
@@ -269,7 +319,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           _stopPolling();
           if (mounted) {
             context.pushReplacement(
-              '/slot-conflict/${widget.bookingId}',
+              '/slot-conflict/$_bookingId',
               extra: {
                 'serviceType': bookingData['serviceType'] ?? 'PASEO',
                 'caregiverId': bookingData['caregiverId'] ?? '',
@@ -280,7 +330,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
           _stopPolling();
           setState(() => _paymentRejected = true);
         } else if (status == 'PENDING_PAYMENT' && qrId == null && _qrResponse != null) {
-          // Admin rechazó el pago — limpió el QR y volvió a PENDING_PAYMENT
           _stopPolling();
           setState(() => _paymentRejected = true);
         }
@@ -291,9 +340,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
   // ── Cancel booking ──────────────────────────────────────────────────────────
 
   Future<void> _cancelBooking() async {
+    if (_bookingId == null) return; // no booking created yet in params mode
     try {
       await http.post(
-        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/cancel'),
+        Uri.parse('$_baseUrl/bookings/$_bookingId/cancel'),
         headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
         body: jsonEncode({'reason': 'QR de pago expirado o cancelado por el usuario', 'source': 'QR_ABANDONED'}),
       );
@@ -427,7 +477,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Future<void> _proposeMeetAndGreet() async {
     try {
       final response = await http.post(
-        Uri.parse('$_baseUrl/meet-and-greet/${widget.bookingId}/propose'),
+        Uri.parse('$_baseUrl/meet-and-greet/$_bookingId/propose'),
         headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
         body: jsonEncode(widget.mgData),
       );
@@ -664,7 +714,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   ],
                 ),
                 child: QrImageView(
-                  data: (_qrResponse!['qrId'] as String? ?? widget.bookingId),
+                  data: (_qrResponse!['qrId'] as String? ?? _bookingId ?? ''),
                   version: QrVersions.auto,
                   size: 250,
                   eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Color(0xFF1A1A1A)),
@@ -753,24 +803,115 @@ class _PaymentScreenState extends State<PaymentScreen> {
   // ── Payment body ─────────────────────────────────────────────────────────────
 
   Widget _buildPaymentBody() {
-    if (_booking == null) {
-      return Center(
-        child: Text('Reserva no encontrada',
-            style: TextStyle(
-                color: themeNotifier.isDark
-                    ? GardenColors.darkTextPrimary
-                    : GardenColors.lightTextPrimary)),
-      );
-    }
-
     final isDark = themeNotifier.isDark;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
+    if (_booking == null && widget.bookingParams == null) {
+      return Center(
+        child: Text('Reserva no encontrada',
+            style: TextStyle(color: textColor)),
+      );
+    }
+
     if (_qrResponse != null) {
       return _buildQrView(textColor, subtextColor);
+    }
+
+    // Build summary card — use _booking if available, else bookingParams preview
+    final Widget summaryCard;
+    if (_booking != null) {
+      final bk = _booking!;
+      summaryCard = Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor),
+        ),
+        child: Column(
+          children: [
+            _summaryRow(Icons.pets_outlined, 'Mascota', bk['petName'] ?? '—',
+                textColor, subtextColor),
+            const SizedBox(height: 10),
+            _summaryRow(
+              bk['serviceType'] == 'PASEO'
+                  ? Icons.directions_walk_outlined
+                  : Icons.home_outlined,
+              'Servicio',
+              bk['serviceType'] == 'PASEO' ? 'Paseo' : 'Hospedaje',
+              textColor,
+              subtextColor,
+            ),
+            const SizedBox(height: 10),
+            _summaryRow(Icons.calendar_today_outlined, 'Fecha',
+                bk['walkDate'] ?? bk['startDate'] ?? '—', textColor, subtextColor),
+            Divider(height: 24, color: borderColor),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text('Total a pagar',
+                    style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  Text('Bs ${_totalAmount.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                          color: GardenColors.primary, fontSize: 24, fontWeight: FontWeight.w900)),
+                  if (_donationAmount > 0)
+                    Text('servicio Bs ${_serviceAmount.toStringAsFixed(2)} + donación Bs ${_donationAmount.toStringAsFixed(2)}',
+                        style: TextStyle(color: subtextColor, fontSize: 11)),
+                ]),
+              ],
+            ),
+          ],
+        ),
+      );
+    } else {
+      // Params mode — show preview from bookingParams before booking is created
+      final params = widget.bookingParams!;
+      final serviceType = params['serviceType'] as String? ?? '';
+      final petIds = params['petIds'] as List? ?? [];
+      final date = (params['walkDate'] ?? params['startDate'] ?? '') as String;
+      summaryCard = Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor),
+        ),
+        child: Column(
+          children: [
+            _summaryRow(Icons.pets_outlined, 'Mascotas',
+                '${petIds.length} mascota${petIds.length == 1 ? '' : 's'}',
+                textColor, subtextColor),
+            const SizedBox(height: 10),
+            _summaryRow(
+              serviceType == 'PASEO' ? Icons.directions_walk_outlined : Icons.home_outlined,
+              'Servicio',
+              serviceType == 'PASEO' ? 'Paseo' : 'Hospedaje',
+              textColor,
+              subtextColor,
+            ),
+            if (date.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              _summaryRow(Icons.calendar_today_outlined, 'Fecha', date, textColor, subtextColor),
+            ],
+            Divider(height: 24, color: borderColor),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text('Total a pagar',
+                    style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+                Text('Se calculará al generar el QR',
+                    style: TextStyle(color: subtextColor, fontSize: 13)),
+              ],
+            ),
+          ],
+        ),
+      );
     }
 
     return SingleChildScrollView(
@@ -781,52 +922,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
           Text('Resumen',
               style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800)),
           const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: borderColor),
-            ),
-            child: Column(
-              children: [
-                _summaryRow(Icons.pets_outlined, 'Mascota', _booking!['petName'] ?? '—',
-                    textColor, subtextColor),
-                const SizedBox(height: 10),
-                _summaryRow(
-                  _booking!['serviceType'] == 'PASEO'
-                      ? Icons.directions_walk_outlined
-                      : Icons.home_outlined,
-                  'Servicio',
-                  _booking!['serviceType'] == 'PASEO' ? 'Paseo' : 'Hospedaje',
-                  textColor,
-                  subtextColor,
-                ),
-                const SizedBox(height: 10),
-                _summaryRow(Icons.calendar_today_outlined, 'Fecha',
-                    _booking!['walkDate'] ?? _booking!['startDate'] ?? '—', textColor, subtextColor),
-                Divider(height: 24, color: borderColor),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('Total a pagar',
-                        style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
-                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      Text('Bs ${_totalAmount.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                              color: GardenColors.primary, fontSize: 24, fontWeight: FontWeight.w900)),
-                      if (_donationAmount > 0)
-                        Text('servicio Bs ${_serviceAmount.toStringAsFixed(2)} + donación Bs ${_donationAmount.toStringAsFixed(2)}',
-                            style: TextStyle(color: subtextColor, fontSize: 11)),
-                    ]),
-                  ],
-                ),
-              ],
-            ),
-          ),
+          summaryCard,
           const SizedBox(height: 28),
 
+          if (_booking != null) ...[
           Text('Método de pago',
               style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
@@ -1047,6 +1146,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
           _buildDonationSection(textColor, subtextColor, surface, borderColor),
           const SizedBox(height: 20),
 
+          ], // end if (_booking != null)
+          if (_booking == null) const SizedBox(height: 20),
+
           GardenButton(
             label: _isSubmitting
                 ? 'Procesando...'
@@ -1257,7 +1359,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 icon: Icons.list_alt_rounded,
                 onPressed: () async {
                   final prefs = await SharedPreferences.getInstance();
-                  await prefs.setString('highlight_booking_id', widget.bookingId);
+                  if (_bookingId != null) await prefs.setString('highlight_booking_id', _bookingId!);
                   if (mounted) context.go('/my-bookings-tab');
                 },
               ),
@@ -1471,9 +1573,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 'Toma una captura de tu comprobante bancario', subtextColor, textColor),
             const SizedBox(height: 12),
             _reviewStep(Icons.email_outlined, 'Envíala a soporte@garden.bo', subtextColor, textColor),
-            _reviewStep(Icons.tag_outlined,
-                'Incluye el ID de tu reserva: ${widget.bookingId.substring(0, 8).toUpperCase()}',
-                subtextColor, textColor),
+            if (_bookingId != null)
+              _reviewStep(Icons.tag_outlined,
+                  'Incluye el ID de tu reserva: ${_bookingId!.substring(0, 8).toUpperCase()}',
+                  subtextColor, textColor),
             const SizedBox(height: 12),
             _reviewStep(Icons.schedule_outlined, 'Nuestro equipo lo revisará en 24 horas',
                 subtextColor, textColor),

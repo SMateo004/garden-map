@@ -378,15 +378,15 @@ class _BookingScreenState extends State<BookingScreen> {
       return;
     }
 
-    setState(() => _isSubmitting = true);
-    try {
-      final Map<String, dynamic> body;
-      if (_selectedService == 'GUARDERIA') {
-        body = {
-          'serviceType': 'GUARDERIA',
-          'caregiverId': widget.caregiverId,
-          'petIds': _selectedPetIds,
-          'walkDate': _selectedDate!.toIso8601String().split('T')[0],
+    // Build the body but DON'T call the API yet.
+    // The booking is created only when the user generates the QR in PaymentScreen.
+    final Map<String, dynamic> body;
+    if (_selectedService == 'GUARDERIA') {
+      body = {
+        'serviceType': 'GUARDERIA',
+        'caregiverId': widget.caregiverId,
+        'petIds': _selectedPetIds,
+        'walkDate': _selectedDate!.toIso8601String().split('T')[0],
           'timeSlot': _selectedTimeSlot,
           'duration': _guarderiaSelectedDuration,
           'startTime': _selectedStartTime!,
@@ -431,56 +431,50 @@ class _BookingScreenState extends State<BookingScreen> {
         };
       }
 
-      // If M&G enabled, include mgData in the booking body so backend creates PENDING_MG
-      if (_includeMG && _mgDate != null) {
-        final timeStr = _mgTime != null
-            ? '${_mgTime!.hour.toString().padLeft(2, '0')}:${_mgTime!.minute.toString().padLeft(2, '0')}'
-            : '10:00';
-        final dateStr = _mgDate!.toIso8601String().split('T')[0];
-        body['mgData'] = {
-          'modalidad': _mgVirtual ? 'VIRTUAL' : 'IN_PERSON',
-          'proposedDate': '${dateStr}T$timeStr:00',
-          if (_mgPlaceCtrl.text.trim().isNotEmpty) 'meetingPoint': _mgPlaceCtrl.text.trim(),
-        };
-      }
+    // If M&G enabled, include mgData so backend creates PENDING_MG (still goes via API immediately)
+    if (_includeMG && _mgDate != null) {
+      final timeStr = _mgTime != null
+          ? '${_mgTime!.hour.toString().padLeft(2, '0')}:${_mgTime!.minute.toString().padLeft(2, '0')}'
+          : '10:00';
+      final dateStr = _mgDate!.toIso8601String().split('T')[0];
+      body['mgData'] = {
+        'modalidad': _mgVirtual ? 'VIRTUAL' : 'IN_PERSON',
+        'proposedDate': '${dateStr}T$timeStr:00',
+        if (_mgPlaceCtrl.text.trim().isNotEmpty) 'meetingPoint': _mgPlaceCtrl.text.trim(),
+      };
 
-      final response = await http.post(
-        Uri.parse('$_baseUrl/bookings'),
-        headers: {
-          'Authorization': 'Bearer $_clientToken',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(body),
-      );
-
-      final data = jsonDecode(response.body);
-      if (response.statusCode == 201 && data['success'] == true) {
-        final bookingId = data['data']['id'];
-        if (!mounted) return;
-
-        if (_includeMG && _mgDate != null) {
-          // M&G flow: go to Mis Reservas with highlight — payment comes later
+      // M&G still creates the booking immediately (goes to Mis Reservas, not payment)
+      setState(() => _isSubmitting = true);
+      try {
+        final response = await http.post(
+          Uri.parse('$_baseUrl/bookings'),
+          headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
+          body: jsonEncode(body),
+        );
+        final data = jsonDecode(response.body);
+        if (response.statusCode == 201 && data['success'] == true) {
+          final bookingId = data['data']['id'];
+          if (!mounted) return;
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('highlight_booking_id', bookingId);
           if (mounted) context.go('/my-bookings-tab');
         } else {
-          context.push('/payment/$bookingId');
+          final errors = (data['errors'] as List?)?.map((e) => e['message'] as String).join(', ');
+          throw Exception(errors ?? data['error']?['message'] ?? 'Error al crear reserva');
         }
-      } else {
-        if (data['errors'] != null) {
-          final errors = (data['errors'] as List)
-              .map((e) => e['message'] as String)
-              .join(', ');
-          throw Exception(errors);
-        }
-        throw Exception(data['error']?['message'] ?? data['message'] ?? 'Error al crear reserva');
+      } catch (e) {
+        if (!mounted) return;
+        _showError(e.toString().replaceFirst('Exception: ', ''));
+      } finally {
+        if (mounted) setState(() => _isSubmitting = false);
       }
-    } catch (e) {
-      if (!mounted) return;
-      _showError(e.toString().replaceFirst('Exception: ', ''));
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+      return;
     }
+
+    // Normal flow (no M&G): navigate to PaymentScreen with booking params.
+    // The booking (PENDING_PAYMENT) is created only when the user generates the QR.
+    if (!mounted) return;
+    context.push('/payment-new', extra: {'bookingParams': body});
   }
 
   void _showError(String msg) => GardenSnackBar.error(context, msg);

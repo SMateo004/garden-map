@@ -338,6 +338,17 @@ final GoRouter _router = GoRouter(
         );
       },
     ),
+    // New flow: booking is NOT created yet — created when user presses "Generar QR"
+    GoRoute(
+      path: '/payment-new',
+      name: 'paymentNew',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return PaymentScreen(
+          bookingParams: extra?['bookingParams'] as Map<String, dynamic>?,
+        );
+      },
+    ),
     GoRoute(
       path: '/booking-confirmed/:bookingId',
       name: 'bookingConfirmed',
