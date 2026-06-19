@@ -14,6 +14,7 @@ import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_logo_loader.dart';
 import '../../widgets/notification_bell.dart';
 import '../../services/auth_state.dart';
+import '../../utils/web_redirect.dart';
 
 // ── App store links (actualizar cuando estén disponibles) ────────────────────
 const _kAppStoreUrl  = 'https://apps.apple.com/app/garden-cuidadores/id000000000';
@@ -1045,9 +1046,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: [
-                  // Logo — mismo tamaño que landing
+                  // Logo → siempre vuelve al landing de React
                   GestureDetector(
-                    onTap: () => context.go('/marketplace'),
+                    onTap: () => redirectToReactLanding(),
                     child: Image.asset('assets/images/logo-horizontal.png', height: 52),
                   ),
                   const SizedBox(width: 8),

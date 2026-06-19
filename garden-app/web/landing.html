@@ -246,12 +246,19 @@ const FloatBits = () => {
 };
 
 // ─── SEARCH BAR (Airbnb-style segmented) ───────────────────
+const DOG_SIZES = [
+  { id:'p-s', label:'Perro pequeño', sub:'Hasta 10 kg', emoji:'🐕' },
+  { id:'p-m', label:'Perro mediano', sub:'10–25 kg', emoji:'🐕' },
+  { id:'p-l', label:'Perro grande', sub:'+25 kg', emoji:'🐕‍🦺' },
+];
+
 const SearchBar = ({ onSearch }) => {
   const [open, setOpen] = useState(null); // 'service'|'where'|'when'|'pet'|null
   const [service, setService] = useState(null);
   const [zone, setZone] = useState(null);
   const [when, setWhen] = useState(null);
   const [pet, setPet] = useState(null);
+  const [petStep, setPetStep] = useState('species'); // 'species'|'size'
   const wrapRef = useRef(null);
 
   useEffect(()=>{
@@ -263,10 +270,10 @@ const SearchBar = ({ onSearch }) => {
   const svcLabel = service ? SERVICES.find(s=>s.id===service).label : 'Elegí un servicio';
   const canSearch = service || zone || when || pet;
 
-  const Seg = ({ id, label, value, placeholder, first }) => {
+  const Seg = ({ id, label, value, placeholder, first, onOpen }) => {
     const active = open === id;
     return (
-      <button className="seg-btn" onClick={()=>setOpen(active?null:id)} style={{
+      <button className="seg-btn" onClick={()=>{ if(!active && onOpen) onOpen(); setOpen(active?null:id); }} style={{
         flex:1, textAlign:'left', padding:'16px 24px', borderRadius:999,
         background: active ? 'var(--surface)' : 'transparent',
         boxShadow: active ? '0 10px 30px rgba(30,45,15,0.16)' : 'none',
@@ -297,7 +304,7 @@ const SearchBar = ({ onSearch }) => {
         <Divider/>
         <Seg id="when" label="Cuándo" value={when} placeholder="Agregá fecha"/>
         <Divider/>
-        <Seg id="pet" label="Mascota" value={pet?PETS.find(p=>p.id===pet).label:null} placeholder="¿Quién va?"/>
+        <Seg id="pet" label="Mascota" value={pet?PETS.find(p=>p.id===pet)?.label:null} placeholder="¿Quién va?" onOpen={()=>setPetStep('species')}/>
         <button className="search-btn" onClick={()=>onSearch({service,zone,when,pet})} style={{
           flexShrink:0, display:'flex', alignItems:'center', gap:10,
           background: canSearch ? 'var(--primary)' : 'var(--primary-light)',
@@ -379,22 +386,58 @@ const SearchBar = ({ onSearch }) => {
           )}
 
           {open==='pet' && (
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-              {PETS.map(p=>{
-                const on = pet===p.id;
-                return <button key={p.id} onClick={()=>{setPet(p.id);setOpen(null);}} style={{
+            petStep==='species' ? (
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                <button onClick={()=>setPetStep('size')} style={{
                   display:'flex', alignItems:'center', gap:12, padding:'14px 16px', borderRadius:16,
-                  background:on?'var(--lime)':'var(--surface-elev)',
-                  border:`1.5px solid ${on?'var(--primary)':'var(--border)'}`, textAlign:'left', transition:'all .2s ease',
+                  background:'var(--surface-elev)', border:'1.5px solid var(--border)',
+                  textAlign:'left', transition:'all .2s ease',
                 }}>
-                  <span className="pet-emoji" style={{ fontSize:24, flexShrink:0 }}>{p.emoji}</span>
+                  <span className="pet-emoji" style={{ fontSize:24, flexShrink:0 }}>🐶</span>
                   <div>
-                    <div style={{ fontWeight:800, fontSize:15 }}>{p.label}</div>
-                    <div style={{ fontSize:12.5, color:'var(--text-sec)' }}>{p.sub}</div>
+                    <div style={{ fontWeight:800, fontSize:15 }}>Perro</div>
+                    <div style={{ fontSize:12.5, color:'var(--text-sec)' }}>Elegí el tamaño →</div>
                   </div>
-                </button>;
-              })}
-            </div>
+                </button>
+                <button onClick={()=>{setPet('gato');setOpen(null);}} style={{
+                  display:'flex', alignItems:'center', gap:12, padding:'14px 16px', borderRadius:16,
+                  background:pet==='gato'?'var(--lime)':'var(--surface-elev)',
+                  border:`1.5px solid ${pet==='gato'?'var(--primary)':'var(--border)'}`,
+                  textAlign:'left', transition:'all .2s ease',
+                }}>
+                  <span className="pet-emoji" style={{ fontSize:24, flexShrink:0 }}>🐱</span>
+                  <div>
+                    <div style={{ fontWeight:800, fontSize:15 }}>Gato</div>
+                    <div style={{ fontSize:12.5, color:'var(--text-sec)' }}>Cualquier edad</div>
+                  </div>
+                </button>
+              </div>
+            ) : (
+              <div>
+                <button onClick={()=>setPetStep('species')} style={{
+                  display:'flex', alignItems:'center', gap:6, marginBottom:12, padding:'4px 0',
+                  background:'none', border:'none', color:'var(--text-sec)', fontSize:13,
+                  fontWeight:600, cursor:'pointer',
+                }}>← Volver</button>
+                <div style={{ fontWeight:700, fontSize:12, color:'var(--text-sec)', marginBottom:10, textTransform:'uppercase', letterSpacing:'0.09em' }}>Tamaño del perro</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
+                  {DOG_SIZES.map(p=>{
+                    const on = pet===p.id;
+                    return <button key={p.id} onClick={()=>{setPet(p.id);setOpen(null);}} style={{
+                      display:'flex', flexDirection:'column', alignItems:'center', gap:5,
+                      padding:'14px 10px', borderRadius:16,
+                      background:on?'var(--lime)':'var(--surface-elev)',
+                      border:`1.5px solid ${on?'var(--primary)':'var(--border)'}`,
+                      textAlign:'center', transition:'all .2s ease',
+                    }}>
+                      <span className="pet-emoji" style={{ fontSize:22 }}>{p.emoji}</span>
+                      <div style={{ fontWeight:800, fontSize:13 }}>{p.label.replace('Perro ','')}</div>
+                      <div style={{ fontSize:11.5, color:'var(--text-sec)' }}>{p.sub}</div>
+                    </button>;
+                  })}
+                </div>
+              </div>
+            )
           )}
         </div>
       )}

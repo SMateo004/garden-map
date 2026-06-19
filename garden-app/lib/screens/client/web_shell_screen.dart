@@ -7,6 +7,7 @@ import 'marketplace_screen.dart';
 import 'my_bookings_screen.dart';
 import 'my_pets_screen.dart';
 import '../../services/auth_state.dart';
+import '../../utils/web_redirect.dart';
 
 /// Shell de navegación para el cliente en WEB.
 /// Muestra las pestañas en el header (AppBar) en lugar de la barra inferior.
@@ -117,9 +118,9 @@ class _WebShellScreenState extends State<WebShellScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Row(
                     children: [
-                      // Logo (40% más pequeño que el original)
+                      // Logo → siempre vuelve al landing de React
                       GestureDetector(
-                        onTap: () => setState(() => _selectedTab = 0),
+                        onTap: () => redirectToReactLanding(),
                         child: Image.asset(
                           isDark
                               ? 'assets/images/logo-horizontal-dark.png'
@@ -131,7 +132,7 @@ class _WebShellScreenState extends State<WebShellScreen> {
                       // Header público (sin sesión) — igual al home
                       if (_authToken.isEmpty) ...[
                         TextButton(
-                          onPressed: () => context.go('/become-caregiver'),
+                          onPressed: () => context.push('/become-caregiver'),
                           style: TextButton.styleFrom(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           ),
@@ -142,7 +143,7 @@ class _WebShellScreenState extends State<WebShellScreen> {
                           ),
                         ),
                         TextButton(
-                          onPressed: () => context.go('/login'),
+                          onPressed: () => context.push('/login'),
                           style: TextButton.styleFrom(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           ),
@@ -162,7 +163,7 @@ class _WebShellScreenState extends State<WebShellScreen> {
                             label: 'Registrarse',
                             width: 150,
                             height: 38,
-                            onPressed: () => context.go('/register'),
+                            onPressed: () => context.push('/register'),
                           ),
                         ),
                       ] else ...[
