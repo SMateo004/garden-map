@@ -64,19 +64,8 @@ class SocialAuthService {
 
   // ── Google ──────────────────────────────────────────────────────────────
 
-  // ── Web redirect helpers ─────────────────────────────────────────────────
-
-  /// Inicia el flujo redirect de Google en web. La página navega a Google
-  /// y vuelve; el resultado se lee con [getGoogleRedirectResult].
-  static Future<void> startGoogleRedirect() async {
-    final provider = GoogleAuthProvider()
-      ..addScope('email')
-      ..addScope('profile');
-    await FirebaseAuth.instance.signInWithRedirect(provider);
-  }
-
-  /// Lee el resultado pendiente de un signInWithRedirect de Google.
-  /// Devuelve null si no hay resultado o si hubo un error.
+  /// Lee el resultado pendiente de un signInWithRedirect de Google (si lo hubo).
+  /// Devuelve null si no hay resultado pendiente.
   static Future<SocialUserData?> getGoogleRedirectResult() async {
     try {
       final result = await FirebaseAuth.instance.getRedirectResult();
@@ -101,11 +90,36 @@ class SocialAuthService {
   static Future<SocialUserData?> signInWithGoogle() async {
     try {
       if (kIsWeb) {
-        // En web usamos signInWithRedirect (más fiable que signInWithPopup
-        // en Flutter web, que puede quedar colgado por restricciones de dominio).
-        // El resultado se recoge en LoginScreen.initState vía getGoogleRedirectResult().
-        await startGoogleRedirect();
-        return null; // la página navega a Google; el flujo continúa tras el redirect
+        // En web usamos el paquete google_sign_in con el client ID web
+        // (usa GIS de Google en lugar del OAuth flow de Firebase, evitando
+        // el bug de popup/redirect colgado en Flutter web).
+        const webClientId =
+            '1067635397531-d9v8mtsm3to56m71krq6h5g01p1081vh.apps.googleusercontent.com';
+        final googleSignIn = GoogleSignIn(
+          clientId: webClientId,
+          scopes: ['email', 'profile'],
+        );
+        final googleUser = await googleSignIn.signIn();
+        if (googleUser == null) return null;
+
+        final googleAuth = await googleUser.authentication;
+        final credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+        final result = await FirebaseAuth.instance.signInWithCredential(credential);
+        final user = result.user;
+        if (user == null) return null;
+        final idToken = await user.getIdToken();
+        final parts = (user.displayName ?? '').split(' ');
+        return SocialUserData(
+          idToken: idToken,
+          email: user.email ?? '',
+          firstName: parts.isNotEmpty ? parts.first : '',
+          lastName: parts.length > 1 ? parts.sublist(1).join(' ') : '',
+          photoUrl: user.photoURL,
+          provider: SocialProvider.google,
+        );
       }
 
       // Mobile — no pasamos clientId; el plugin lee CLIENT_ID de GoogleService-Info.plist (iOS)
