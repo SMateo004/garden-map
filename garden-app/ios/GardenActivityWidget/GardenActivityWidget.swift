@@ -5,13 +5,12 @@ import WidgetKit
 // ── Brand colors ──────────────────────────────────────────────────────────────
 
 private extension Color {
-    /// Garden primary green #778C43
     static let gardenGreen = Color(red: 119/255, green: 140/255, blue: 67/255)
     static let gardenGreenDim = Color(red: 119/255, green: 140/255, blue: 67/255).opacity(0.22)
     static let gardenSurface = Color(white: 0.11)
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Attribute helpers ─────────────────────────────────────────────────────────
 
 @available(iOS 16.2, *)
 private extension GardenServiceAttributes {
@@ -26,13 +25,11 @@ private extension GardenServiceAttributes {
     }
 
     func displaySubtitle() -> String {
-        role == "CLIENT"
-            ? "Con \(caregiverName)"
-            : "Dueño: \(ownerName)"
+        role == "CLIENT" ? "Con \(caregiverName)" : "Dueño: \(ownerName)"
     }
 }
 
-// ── Lock Screen / Banner view ─────────────────────────────────────────────────
+// ── Lock Screen / Banner ──────────────────────────────────────────────────────
 
 @available(iOS 16.2, *)
 struct GardenLockScreenView: View {
@@ -40,8 +37,6 @@ struct GardenLockScreenView: View {
 
     var body: some View {
         HStack(spacing: 14) {
-
-            // Left icon bubble
             ZStack {
                 Circle()
                     .fill(Color.gardenGreenDim)
@@ -50,7 +45,6 @@ struct GardenLockScreenView: View {
                     .font(.system(size: 28))
             }
 
-            // Center labels
             VStack(alignment: .leading, spacing: 3) {
                 Text(context.attributes.displayTitle(state: context.state))
                     .font(.system(size: 14, weight: .bold))
@@ -64,7 +58,6 @@ struct GardenLockScreenView: View {
 
             Spacer(minLength: 0)
 
-            // Right: timer block
             if context.state.status != "COMPLETED" {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(context.state.timerValue)
@@ -88,22 +81,20 @@ struct GardenLockScreenView: View {
     }
 }
 
-// ── Widget entry point ────────────────────────────────────────────────────────
+// ── Widget + Dynamic Island ───────────────────────────────────────────────────
 
 @available(iOS 16.2, *)
-struct GardenActivityWidget: Widget {
+struct GardenServiceLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: GardenServiceAttributes.self) { context in
 
-            // ── Lock Screen / Notification Banner ───────────────────────────
+            // Lock Screen / Banner
             GardenLockScreenView(context: context)
 
         } dynamicIsland: { context in
-
             DynamicIsland {
 
-                // ── Expanded (user presses and holds the pill) ──────────────
-
+                // Expanded (press & hold the pill)
                 DynamicIslandExpandedRegion(.leading) {
                     HStack(spacing: 8) {
                         ZStack {
@@ -150,10 +141,7 @@ struct GardenActivityWidget: Widget {
                         Text(context.attributes.displaySubtitle())
                             .font(.system(size: 12))
                             .foregroundColor(Color(white: 0.65))
-
                         Spacer()
-
-                        // "Abrir Garden" CTA
                         HStack(spacing: 3) {
                             Text("Abrir Garden")
                                 .font(.system(size: 12, weight: .semibold))
@@ -167,14 +155,10 @@ struct GardenActivityWidget: Widget {
                 }
 
             } compactLeading: {
-
-                // ── Compact left side: service emoji ────────────────────────
                 Text(context.attributes.serviceEmoji)
                     .font(.system(size: 14))
 
             } compactTrailing: {
-
-                // ── Compact right side: live timer ──────────────────────────
                 Text(context.state.timerValue)
                     .font(.system(size: 13, weight: .bold, design: .monospaced))
                     .foregroundColor(.gardenGreen)
@@ -182,8 +166,6 @@ struct GardenActivityWidget: Widget {
                     .frame(minWidth: 42)
 
             } minimal: {
-
-                // ── Minimal (tiny dot when another app has priority) ────────
                 Text(context.attributes.serviceEmoji)
                     .font(.system(size: 12))
             }
@@ -194,12 +176,12 @@ struct GardenActivityWidget: Widget {
     }
 }
 
-// ── Bundle ─────────────────────────────────────────────────────────────────────
+// ── Bundle entry point ────────────────────────────────────────────────────────
 
 @available(iOS 16.2, *)
 @main
 struct GardenActivityWidgetBundle: WidgetBundle {
     var body: some Widget {
-        GardenActivityWidget()
+        GardenServiceLiveActivityWidget()
     }
 }
