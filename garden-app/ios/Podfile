@@ -35,7 +35,7 @@ target 'Runner' do
   end
 end
 
-target 'GardenActivityWidget' do
+target 'GardenActivityWidgetExtension' do
   use_frameworks!
   inherit! :search_paths
   # Pure SwiftUI widget — no extra pods needed
