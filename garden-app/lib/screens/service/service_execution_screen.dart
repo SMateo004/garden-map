@@ -14,6 +14,7 @@ import 'gps_tracking_screen.dart';
 import 'meet_and_greet_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_state.dart';
+import '../../services/garden_live_activity.dart';
 
 class ServiceExecutionScreen extends StatefulWidget {
   final String bookingId;
@@ -92,6 +93,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     _surveyCommentController.dispose();
     _caregiverCommentController.dispose();
     _gpsStatusSub?.cancel();
+    GardenLiveActivity.instance.endActivity();
     super.dispose();
   }
 
@@ -177,6 +179,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           _serviceTimer?.cancel();
           _photoRefreshTimer?.cancel();
           _photoRefreshTimer = null;
+          GardenLiveActivity.instance.endActivity();
         }
       } else {
         setState(() => _isLoading = false);
@@ -314,22 +317,45 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
   void _startTimer() {
     _serviceTimer?.cancel();
+    DateTime? startTime;
     final startedAt = _booking?['serviceStartedAt'] as String?;
     if (startedAt != null) {
-      final startTime = DateTime.tryParse(startedAt);
+      startTime = DateTime.tryParse(startedAt);
       if (startTime != null) {
         _elapsed = DateTime.now().difference(startTime);
       }
     }
+
+    // Launch Live Activity / Android notification on first timer start
+    _startLiveActivity(startTime ?? DateTime.now());
+
     _serviceTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
         setState(() => _elapsed += const Duration(seconds: 1));
-        // Check photo reminders every 30s to avoid excessive work
+        // Update Live Activity timer every 10 s (stays within iOS budget)
+        if (_elapsed.inSeconds % 10 == 0) {
+          GardenLiveActivity.instance.updateTimer(_elapsed);
+        }
+        // Photo reminders every 30s
         if (_elapsed.inSeconds % 30 == 0 && widget.role == 'CAREGIVER') {
           _checkPhotoReminders();
         }
       }
     });
+  }
+
+  void _startLiveActivity(DateTime startTime) {
+    final bk = _booking;
+    if (bk == null) return;
+    GardenLiveActivity.instance.startActivity(
+      petName: bk['petName'] as String? ?? bk['petNames']?.toString() ?? 'Mascota',
+      caregiverName: bk['caregiverName'] as String? ?? '',
+      ownerName: bk['clientName'] as String? ?? bk['ownerName'] as String? ?? '',
+      serviceType: bk['serviceType'] as String? ?? 'PASEO',
+      role: widget.role,
+      bookingId: widget.bookingId,
+      startTime: startTime,
+    );
   }
 
   @override
