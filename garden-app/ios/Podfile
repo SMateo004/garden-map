@@ -36,9 +36,7 @@ target 'Runner' do
 end
 
 target 'GardenActivityWidgetExtension' do
-  use_frameworks!
   inherit! :search_paths
-  # Pure SwiftUI widget — no extra pods needed
 end
 
 post_install do |installer|
@@ -49,6 +47,18 @@ post_install do |installer|
       config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
       config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
       config.build_settings['CODE_SIGN_IDENTITY'] = ''
+    end
+  end
+  # Fix build-phase cycle caused by CocoaPods embedding the widget extension
+  installer.aggregate_targets.each do |aggregate_target|
+    aggregate_target.user_project.targets.each do |target|
+      target.build_phases.each do |build_phase|
+        if build_phase.respond_to?(:name) && build_phase.name == '[CP] Embed Pods Frameworks'
+          build_phase.input_paths.delete_if { |path| path.include?('GardenActivityWidget') }
+          build_phase.output_paths.delete_if { |path| path.include?('GardenActivityWidget') }
+        end
+      end
+      aggregate_target.user_project.save
     end
   end
   # Strip macOS extended attributes that cause "resource fork detritus" codesign errors
