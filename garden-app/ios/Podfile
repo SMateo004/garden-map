@@ -35,6 +35,12 @@ target 'Runner' do
   end
 end
 
+target 'GardenActivityWidget' do
+  use_frameworks!
+  inherit! :search_paths
+  # Pure SwiftUI widget — no extra pods needed
+end
+
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
