@@ -205,6 +205,35 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     }
   }
 
+  // Devuelve "Día X de Y · Z días restantes" (o "¡Día final!" / "X días de retraso")
+  String _buildHospedajeDayLabel() {
+    final startStr  = _booking?['startDate'] as String?;
+    final endStr    = _booking?['endDate']   as String?;
+    final totalDays = _booking?['totalDays'] as int?;
+    if (startStr == null) return '${_elapsed.inHours}h en curso';
+
+    final start = DateTime.tryParse(startStr);
+    final end   = endStr != null ? DateTime.tryParse(endStr) : null;
+    if (start == null) return '${_elapsed.inHours}h en curso';
+
+    final now     = DateTime.now();
+    final today   = DateTime(now.year, now.month, now.day);
+    final startDay = DateTime(start.year, start.month, start.day);
+    final daysSinceStart = today.difference(startDay).inDays + 1; // día 1 = día de inicio
+
+    if (end != null) {
+      final endDay = DateTime(end.year, end.month, end.day);
+      final daysLeft = endDay.difference(today).inDays;
+      if (daysLeft < 0) {
+        return 'Día ${daysSinceStart} · ${(-daysLeft)} día${(-daysLeft) == 1 ? '' : 's'} de retraso ⚠️';
+      }
+      if (daysLeft == 0) return 'Día $daysSinceStart de ${totalDays ?? daysSinceStart} · ¡Último día!';
+      return 'Día $daysSinceStart de ${totalDays ?? (daysSinceStart + daysLeft)} · $daysLeft día${daysLeft == 1 ? '' : 's'} restante${daysLeft == 1 ? '' : 's'}';
+    }
+
+    return 'Día $daysSinceStart${totalDays != null ? ' de $totalDays' : ''}';
+  }
+
   void _startGpsMonitoring() {
     _gpsStatusSub?.cancel();
     _gpsDialogShown = false;
@@ -1882,7 +1911,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final isPaseo = _booking?['serviceType'] == 'PASEO';
     final timerStr = isPaseo
         ? '${_elapsed.inHours.toString().padLeft(2,'0')}:${(_elapsed.inMinutes%60).toString().padLeft(2,'0')}:${(_elapsed.inSeconds%60).toString().padLeft(2,'0')}'
-        : '${_elapsed.inHours}h con tu cuidador';
+        : _buildHospedajeDayLabel();
     final incidents = (_booking?['serviceEvents'] as List<dynamic>? ?? [])
         .where((e) => e['type'] == 'INCIDENT' || e['type'] == 'ACCIDENT').toList();
     final lastPhoto = _serviceEvents.isNotEmpty ? _serviceEvents.last : null;
@@ -2499,7 +2528,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final isHospedaje = _booking?['serviceType'] == 'HOSPEDAJE';
     final isPaseo = _booking?['serviceType'] == 'PASEO';
     final timerStr = isHospedaje
-        ? '${_elapsed.inHours}h ${(_elapsed.inMinutes % 60).toString().padLeft(2,'0')}m'
+        ? _buildHospedajeDayLabel()
         : '${_elapsed.inHours.toString().padLeft(2,'0')}:${(_elapsed.inMinutes%60).toString().padLeft(2,'0')}:${(_elapsed.inSeconds%60).toString().padLeft(2,'0')}';
     final minPhotos = isPaseo ? 2 : 3;
     final photoCount = _serviceEvents.length;

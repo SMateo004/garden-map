@@ -63,23 +63,26 @@ async function getBookingSettings() {
         paseo100h,
         paseo50h,
         qrValidityMinutes,
+        hospedajeMaxExtensionDays,
     ] = await Promise.all([
-        getNumericSetting('platformCommissionPct',   10),
-        getNumericSetting('hospedajeRefundAdminFeeBS', 10),
-        getNumericSetting('hospedajeRefund100Horas', 48),
-        getNumericSetting('hospedajeRefund50Horas',  24),
-        getNumericSetting('paseoRefund100Horas',     12),
-        getNumericSetting('paseoRefund50Horas',       6),
-        getNumericSetting('qrValidityMinutes',       15),  // default 15 min
+        getNumericSetting('platformCommissionPct',         10),
+        getNumericSetting('hospedajeRefundAdminFeeBS',     10),
+        getNumericSetting('hospedajeRefund100Horas',       48),
+        getNumericSetting('hospedajeRefund50Horas',        24),
+        getNumericSetting('paseoRefund100Horas',           12),
+        getNumericSetting('paseoRefund50Horas',             6),
+        getNumericSetting('qrValidityMinutes',             15),
+        getNumericSetting('hospedajeMaxExtensionDays',     30),
     ]);
     return {
-        COMMISSION_RATE:              commissionPct / 100,
-        HOSPEDAJE_REFUND_ADMIN_FEE_BS: hospedajeAdminFee,
-        HOSPEDAJE_REFUND_100_HOURS:   hospedaje100h,
-        HOSPEDAJE_REFUND_50_HOURS:    hospedaje50h,
-        PASEO_REFUND_100_HOURS:       paseo100h,
-        PASEO_REFUND_50_HOURS:        paseo50h,
-        QR_VALIDITY_MINUTES_PAYMENT:  qrValidityMinutes,
+        COMMISSION_RATE:                commissionPct / 100,
+        HOSPEDAJE_REFUND_ADMIN_FEE_BS:  hospedajeAdminFee,
+        HOSPEDAJE_REFUND_100_HOURS:     hospedaje100h,
+        HOSPEDAJE_REFUND_50_HOURS:      hospedaje50h,
+        PASEO_REFUND_100_HOURS:         paseo100h,
+        PASEO_REFUND_50_HOURS:          paseo50h,
+        QR_VALIDITY_MINUTES_PAYMENT:    qrValidityMinutes,
+        HOSPEDAJE_MAX_EXTENSION_DAYS:   hospedajeMaxExtensionDays,
     };
 }
 
@@ -1492,7 +1495,8 @@ export async function calculateRefund(
       };
     }
     if (hoursUntil > cfg.HOSPEDAJE_REFUND_50_HOURS) {
-      const amount = total * 0.5;
+      // Admin fee también aplica en el caso del 50%
+      const amount = Math.max(0, (total - cfg.HOSPEDAJE_REFUND_ADMIN_FEE_BS) * 0.5);
       return {
         refundAmount: Math.round(amount * 100) / 100,
         refundStatus: RefundStatus.APPROVED,
@@ -2097,16 +2101,19 @@ export async function checkHospedajeExtensionAvailability(
   bookingId: string,
   clientId: string
 ): Promise<{ availableDays: number; pricePerDay: number }> {
-  const booking = await prisma.booking.findFirst({
-    where: { id: bookingId, clientId },
-    select: { id: true, serviceType: true, status: true, pricePerUnit: true },
-  });
+  const [booking, cfg] = await Promise.all([
+    prisma.booking.findFirst({
+      where: { id: bookingId, clientId },
+      select: { id: true, serviceType: true, status: true, pricePerUnit: true },
+    }),
+    getBookingSettings(),
+  ]);
 
   if (!booking) return { availableDays: 0, pricePerDay: 0 };
   if (booking.serviceType !== ServiceType.HOSPEDAJE) return { availableDays: 0, pricePerDay: 0 };
   if (booking.status !== BookingStatus.IN_PROGRESS) return { availableDays: 0, pricePerDay: 0 };
 
-  return { availableDays: 30, pricePerDay: Number(booking.pricePerUnit) };
+  return { availableDays: cfg.HOSPEDAJE_MAX_EXTENSION_DAYS, pricePerDay: Number(booking.pricePerUnit) };
 }
 
 export async function requestHospedajeExtensionPayment(
@@ -2229,6 +2236,28 @@ export async function confirmHospedajeExtensionQr(
   const newEndDate = new Date(booking.endDate!);
   newEndDate.setDate(newEndDate.getDate() + additionalDays);
   const newTotalDays = (booking.totalDays ?? 1) + additionalDays;
+
+  // Verificar que la nueva endDate no entra en conflicto con otra reserva del mismo cuidador.
+  // Se hace ANTES de modificar la DB para que, si hay conflicto, el error llegue al cliente
+  // y el pago (ya confirmado por el banco) sea reembolsado manualmente por el admin.
+  await prisma.$transaction(async (checkTx) => {
+    await assertHospedajeAvailability(
+      checkTx,
+      booking.caregiverId,
+      booking.endDate!.toISOString(),   // desde la endDate actual (nuevo rango)
+      newEndDate.toISOString(),
+      1  // petCount=1 mínimo; la mascota ya está alojada, solo verificamos fechas adicionales
+    );
+  }).catch((err) => {
+    // Si hay conflicto de disponibilidad, lanzar con mensaje claro
+    if (err instanceof BookingValidationError || (err as any).code === 'AVAILABILITY_CONFLICT') {
+      throw new BookingValidationError(
+        `Las fechas de extensión (${additionalDays} días más) entran en conflicto con otra reserva del cuidador. ` +
+        `El pago fue recibido — contacta al soporte para el reembolso.`
+      );
+    }
+    throw err;
+  });
   const newTotal = Number(booking.totalAmount) + extraAmount;
   const newCommission = Number(booking.commissionAmount) + extraCommission;
 
@@ -2726,6 +2755,10 @@ export async function rejectBooking(bookingId: string, caregiverUserId: string, 
   });
 }
 export async function startService(bookingId: string, caregiverUserId: string, photoUrl: string): Promise<BookingCreateResult> {
+  if (!photoUrl || photoUrl.trim().length === 0) {
+    throw new BadRequestError('Se requiere una foto de inicio del servicio');
+  }
+
   return prisma.$transaction(async (tx) => {
     const profile = await tx.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
     if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
