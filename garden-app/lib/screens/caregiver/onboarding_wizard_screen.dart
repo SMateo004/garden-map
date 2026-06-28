@@ -134,7 +134,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   Future<void> _loadPriceStats() async {
     try {
       final service = _servicesOffered.isNotEmpty ? _servicesOffered.first : 'PASEO';
-      final zone = _selectedZone ?? 'EQUIPETROL';
+      // _addressZone viene del domicilio (Paso 0); _selectedZone es legado
+      final zone = _addressZone ?? _selectedZone ?? 'EQUIPETROL';
       final url = '${const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api')}/caregivers/price-stats?zone=$zone&service=$service';
       final res = await http.get(Uri.parse(url));
       final data = jsonDecode(res.body);
@@ -573,6 +574,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           _showStepError('Selecciona al menos un servicio', scrollTo: _keyStep1Services);
           return false;
         }
+        if (_servicesOffered.contains('HOSPEDAJE') && _homeType == null) {
+          _showStepError('Indica si tu espacio es Casa o Departamento', scrollTo: _keyStep1Services);
+          return false;
+        }
         return true;
       case 3: // Precio
         if (_servicesOffered.contains('HOSPEDAJE') && _precioHospedaje < 10) {
@@ -688,6 +693,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         if (_homeType != null) 'homeType': _homeType,
         'hasYard': _hasYard,
       });
+      // Actualizar price stats con la zona real antes de mostrar el paso de precio
+      _loadPriceStats();
       setState(() { _isLoading = false; _currentStep++; });
       return;
     }
