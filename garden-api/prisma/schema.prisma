@@ -269,8 +269,10 @@ model Booking {
   stripePaymentIntentId     String?
   stripeEventId             String?          @unique // Idempotencia: un evento Stripe no se procesa dos veces
   qrId                      String?          @unique
-  qrImageUrl                String?
+  qrImageUrl                String?          @db.Text  // Base64 image from SIP or URL
   qrExpiresAt               DateTime?
+  sipQrId                   String?          // idQr returned by SIP after generating QR
+  sipTransaccionId          String?          // idTransaccion returned by SIP
   paidAt                    DateTime?
   cancelledAt               DateTime?
   cancellationReason        String?

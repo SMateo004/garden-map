@@ -5,6 +5,7 @@ import { stripe, STRIPE_WEBHOOK_SECRET } from '../../config/stripe.js';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import { ForbiddenError } from '../../shared/errors.js';
+import { env } from '../../config/env.js';
 import * as paymentService from './payment.service.js';
 
 const router = Router();
@@ -106,6 +107,52 @@ router.post(
       userId
     );
     res.json({ success: true, data: result });
+  })
+);
+
+/**
+ * POST /api/payments/confirmarPago
+ * Callback que SIP (banco) llama cuando el pago fue procesado exitosamente.
+ * Autenticado con Basic Auth — las credenciales las definimos nosotros y las registramos en el portal SIP.
+ * Spec SIP: responder siempre { codigo: "0000", mensaje: "Registro Exitoso" } en 200 para que SIP no reintente.
+ */
+router.post(
+  '/confirmarPago',
+  asyncHandler(async (req: Request, res: Response) => {
+    // Basic Auth validation
+    const authHeader = req.headers.authorization ?? '';
+    if (!authHeader.startsWith('Basic ')) {
+      res.status(401).json({ codigo: '9999', mensaje: 'Unauthorized' });
+      return;
+    }
+    const [user, pass] = Buffer.from(authHeader.slice(6), 'base64').toString().split(':');
+    if (
+      !env.SIP_CALLBACK_USER ||
+      !env.SIP_CALLBACK_PASS ||
+      user !== env.SIP_CALLBACK_USER ||
+      pass !== env.SIP_CALLBACK_PASS
+    ) {
+      res.status(401).json({ codigo: '9999', mensaje: 'Unauthorized' });
+      return;
+    }
+
+    const { alias } = req.body as { alias?: string };
+    if (!alias) {
+      res.status(400).json({ codigo: '9999', mensaje: 'alias requerido' });
+      return;
+    }
+
+    try {
+      await paymentService.verifyPaymentBySipCallback(alias);
+    } catch (err) {
+      // Respondemos 200 de todas formas para que SIP no reintente indefinidamente.
+      // El error ya quedó logeado dentro del service.
+      const message = err instanceof Error ? err.message : 'Error interno';
+      res.status(200).json({ codigo: '9999', mensaje: message });
+      return;
+    }
+
+    res.status(200).json({ codigo: '0000', mensaje: 'Registro Exitoso' });
   })
 );
 

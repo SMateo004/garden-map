@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/notification_bell.dart';
@@ -54,7 +56,6 @@ class _WebShellScreenState extends State<WebShellScreen> {
 
   Future<void> _loadAuth() async {
     final token = AuthState.token;
-    // Solo mostrar nombre si hay sesión activa
     String? name;
     if (token.isNotEmpty) {
       final prefs = await SharedPreferences.getInstance();
@@ -66,6 +67,34 @@ class _WebShellScreenState extends State<WebShellScreen> {
         _userName = name;
       });
     }
+    // Verificar si hay un QR de pago activo pendiente y redirigir
+    if (token.isNotEmpty) {
+      await _checkPendingPayment(token);
+    }
+  }
+
+  Future<void> _checkPendingPayment(String token) async {
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/bookings/my?limit=5&page=1'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 4));
+      if (!mounted || res.statusCode != 200) return;
+      final data = jsonDecode(res.body);
+      if (data['success'] != true) return;
+      final bookings = (data['data'] as List).cast<Map<String, dynamic>>();
+      final pending = bookings.where((b) {
+        if (b['status'] != 'PENDING_PAYMENT') return false;
+        final qrId = b['qrId'];
+        final expiresAtStr = b['qrExpiresAt'];
+        if (qrId == null || expiresAtStr == null) return false;
+        final expiry = DateTime.tryParse(expiresAtStr.toString());
+        return expiry != null && expiry.isAfter(DateTime.now());
+      }).firstOrNull;
+      if (pending != null && mounted) {
+        context.go('/payment/${pending['id']}');
+      }
+    } catch (_) {}
   }
 
   Widget _buildBody() {

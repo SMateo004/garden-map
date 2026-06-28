@@ -52,7 +52,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   Timer? _pollTimer;
   Timer? _expiryTimer;
-  static const _qrTtl = Duration(minutes: 15);
+  Timer? _countdownTicker;
+  Duration _countdownRemaining = Duration.zero;
 
   // QR capture key for "Guardar QR"
   final GlobalKey _qrBoundaryKey = GlobalKey();
@@ -265,18 +266,30 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   // ── Polling ─────────────────────────────────────────────────────────────────
 
-  /// Starts polling for a freshly generated QR (full 15-min window).
+  /// Starts polling for a freshly generated QR. Reads expiry from the API response.
   void _startPolling() {
-    _checkPaymentStatus(); // Immediate check
+    // Compute remaining from the backend's qrExpiresAt (never trust a hardcoded constant)
+    Duration remaining = const Duration(minutes: 15); // safe fallback
+    final expiresAtStr = _qrResponse?['qrExpiresAt'] as String?;
+    if (expiresAtStr != null) {
+      final expiry = DateTime.tryParse(expiresAtStr);
+      if (expiry != null) {
+        final r = expiry.difference(DateTime.now());
+        remaining = r.isNegative ? Duration.zero : r;
+      }
+    }
+    _checkPaymentStatus();
     _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _checkPaymentStatus());
-    _expiryTimer = Timer(_qrTtl, _onQrExpired);
+    _expiryTimer = Timer(remaining, _onQrExpired);
+    _startCountdown(remaining);
   }
 
   /// Starts polling for a restored QR with [remaining] time left.
   void _startPollingWithRemainingTime(Duration remaining) {
-    _checkPaymentStatus(); // Immediate check on restore
+    _checkPaymentStatus();
     _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _checkPaymentStatus());
     _expiryTimer = Timer(remaining, _onQrExpired);
+    _startCountdown(remaining);
   }
 
   void _stopPolling() {
@@ -284,13 +297,31 @@ class _PaymentScreenState extends State<PaymentScreen> {
     _pollTimer = null;
     _expiryTimer?.cancel();
     _expiryTimer = null;
+    _countdownTicker?.cancel();
+    _countdownTicker = null;
+  }
+
+  void _startCountdown(Duration remaining) {
+    _countdownTicker?.cancel();
+    if (remaining <= Duration.zero) return;
+    setState(() => _countdownRemaining = remaining);
+    _countdownTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() {
+        _countdownRemaining = _countdownRemaining.inSeconds > 0
+            ? _countdownRemaining - const Duration(seconds: 1)
+            : Duration.zero;
+      });
+    });
   }
 
   Future<void> _onQrExpired() async {
     if (!mounted || _paymentConfirmed) return;
     _stopPolling();
     await _cancelBooking();
-    if (mounted) setState(() => _qrExpired = true);
+    // El booking ya fue cancelado por el cliente — el job del servidor lo habrá hecho
+    // o lo hará en el próximo ciclo si el cliente no tenía red. Ir a marketplace.
+    if (mounted) context.go('/marketplace');
   }
 
   Future<void> _checkPaymentStatus() async {
@@ -391,20 +422,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
       if (confirm == true && mounted) {
         _stopPolling();
         await _cancelBooking();
-        if (mounted) {
-          if (context.canPop()) {
-            context.pop();
-          } else {
-            context.go('/service-selector');
-          }
-        }
+        if (mounted) context.go('/marketplace');
       }
     } else {
+      // No hay QR activo — volver normalmente
       if (mounted) {
         if (context.canPop()) {
           context.pop();
         } else {
-          context.go('/service-selector');
+          context.go('/marketplace');
         }
       }
     }
@@ -683,6 +709,40 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
+  // ── Countdown ───────────────────────────────────────────────────────────────
+
+  Widget _buildCountdown(Color subtextColor) {
+    final secs = _countdownRemaining.inSeconds;
+    if (secs <= 0) {
+      return const Text('QR expirado', style: TextStyle(color: GardenColors.error, fontSize: 14, fontWeight: FontWeight.w700));
+    }
+    final mm = (secs ~/ 60).toString().padLeft(2, '0');
+    final ss = (secs % 60).toString().padLeft(2, '0');
+    final isUrgent = secs <= 120;   // < 2 min → rojo
+    final isWarning = secs <= 300;  // < 5 min → naranja
+    final color = isUrgent ? GardenColors.error : isWarning ? GardenColors.warning : GardenColors.success;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.timer_outlined, size: 16, color: color),
+          const SizedBox(width: 8),
+          Text(
+            'Expira en  $mm:$ss',
+            style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.w800, fontFeatures: const []),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── QR view ─────────────────────────────────────────────────────────────────
 
   Widget _buildQrView(Color textColor, Color subtextColor) {
@@ -745,8 +805,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
             const SizedBox(height: 12),
 
-            Text('Este código expira en 24 horas',
-                style: TextStyle(color: subtextColor, fontSize: 14)),
+            // ── Countdown de 15 min ────────────────────────────────────────
+            _buildCountdown(subtextColor),
 
             if (_walletContributionUsed > 0) ...[
               const SizedBox(height: 12),
@@ -1504,7 +1564,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         color: textColor, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
                 const SizedBox(height: 12),
                 Text(
-                  'El código QR expiró después de 24 horas sin detectar ningún pago. No se realizó ninguna reserva. Puedes volver al marketplace y crear una nueva.',
+                  'El código QR expiró después de 15 minutos sin detectar ningún pago. No se realizó ninguna reserva. Puedes volver al marketplace y crear una nueva.',
                   style: TextStyle(color: subtextColor, fontSize: 14, height: 1.6),
                   textAlign: TextAlign.center,
                 ),

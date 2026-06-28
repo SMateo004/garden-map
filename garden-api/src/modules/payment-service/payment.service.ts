@@ -9,6 +9,7 @@ import { track } from '../../shared/analytics.js';
 import * as notificationService from '../../services/notification.service.js';
 import { blockchainService } from '../../services/blockchain.service.js';
 import { sendPushToUser } from '../../services/firebase.service.js';
+import { confirmExtensionQrBySip } from '../booking-service/booking.service.js';
 
 /** Amount in DB is in Bolivianos (Bs). Stripe BOB uses centavos (1 Bs = 100 centavos). */
 const BOB_TO_CENTAVOS = 100;
@@ -406,4 +407,103 @@ export async function verifyPaymentManual(
   });
 
   return { bookingId, status: BookingStatus.WAITING_CAREGIVER_APPROVAL };
+}
+
+/**
+ * Confirmación de pago desde el callback de SIP (banco).
+ * No requiere clientId — la autenticación es Basic Auth server-to-server.
+ * El alias SIP equivale al bookingId de nuestra plataforma.
+ */
+export async function verifyPaymentBySipCallback(
+  alias: string
+): Promise<{ bookingId: string; status: string }> {
+  const booking = await prisma.booking.findFirst({
+    where: { id: alias },
+  });
+
+  if (!booking) {
+    logger.warn('[SIP callback] Booking no encontrada para alias', { alias });
+    throw new NotFoundError('Reserva no encontrada para el alias recibido');
+  }
+
+  // Pago de extensión — el alias es el bookingId y el qrId en el evento también es el bookingId
+  if (booking.status === BookingStatus.IN_PROGRESS) {
+    await confirmExtensionQrBySip(alias, alias);
+    return { bookingId: alias, status: 'EXTENSION_CONFIRMED' };
+  }
+
+  if (booking.status !== BookingStatus.PENDING_PAYMENT) {
+    // Race condition: QR expiró y nuestro job lo canceló (QR_ABANDONED) justo antes
+    // de que el banco terminara de procesar un escaneo iniciado milisegundos antes.
+    // Respondemos "0000" (éxito) para que SIP NO reintente el callback indefinidamente.
+    // El pago queda en limbo — el admin debe revisarlo manualmente y decidir el reembolso.
+    if (booking.cancellationSource === 'QR_ABANDONED') {
+      logger.error('[SIP callback] ALERTA: pago recibido sobre reserva ya cancelada por expiración de QR — REVISIÓN MANUAL REQUERIDA', {
+        bookingId: booking.id,
+        alias,
+        bookingStatus: booking.status,
+        cancelledAt: booking.cancelledAt,
+      });
+      return { bookingId: booking.id, status: 'CANCELLED_QR_ABANDONED_RACE_CONDITION' };
+    }
+
+    // Idempotencia: si ya fue procesado correctamente, respondemos OK sin error
+    if (booking.paidAt) {
+      logger.info('[SIP callback] Pago ya procesado previamente', { bookingId: booking.id });
+      return { bookingId: booking.id, status: booking.status };
+    }
+
+    throw new BadRequestError(`La reserva no está en estado esperado (estado: ${booking.status})`);
+  }
+
+  const updateResult = await prisma.booking.updateMany({
+    where: { id: booking.id, status: BookingStatus.PENDING_PAYMENT },
+    data: {
+      status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
+      paidAt: new Date(),
+    },
+  });
+
+  if (updateResult.count === 0) {
+    logger.info('[SIP callback] Pago ya procesado por solicitud concurrente', { bookingId: booking.id });
+    return { bookingId: booking.id, status: BookingStatus.WAITING_CAREGIVER_APPROVAL };
+  }
+
+  logger.info('[SIP callback] Pago confirmado — reserva esperando aprobación cuidador', { bookingId: booking.id, alias });
+  track(booking.clientId, 'payment_completed', {
+    bookingId: booking.id,
+    method: 'sip_qr',
+    amount: Number(booking.totalAmount),
+  });
+
+  notificationService.onBookingWaitingApproval(booking.id).catch((err) => {
+    logger.error('[SIP callback] Notification failed', { bookingId: booking.id, err });
+  });
+
+  if (booking.donationAmount && Number(booking.donationAmount) > 0) {
+    prisma.donation.upsert({
+      where: { bookingId: booking.id },
+      create: { bookingId: booking.id, clientId: booking.clientId, amount: booking.donationAmount },
+      update: {},
+    }).catch((err) => logger.error('[SIP callback] Donation record failed', { bookingId: booking.id, err }));
+  }
+
+  blockchainService.createBookingOnChain(
+    booking.id,
+    booking.clientId,
+    booking.caregiverId,
+    Number(booking.totalAmount),
+    booking.startDate ?? booking.walkDate ?? new Date(),
+    resolveBookingEndDate(booking),
+    booking.petName,
+    booking.serviceType
+  ).then(async (txHash) => {
+    if (txHash) {
+      await prisma.booking.update({ where: { id: booking.id }, data: { blockchainTxHash: txHash } });
+    }
+  }).catch(err => {
+    logger.error('[SIP callback] Blockchain registration failed', { bookingId: booking.id, err });
+  });
+
+  return { bookingId: booking.id, status: BookingStatus.WAITING_CAREGIVER_APPROVAL };
 }

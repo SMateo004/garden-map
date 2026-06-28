@@ -65,9 +65,31 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
     io.on('connection', (socket) => {
         logger.info('Socket connected', { userId: socket.data.userId });
 
-        socket.on('join_booking', (bookingId: string) => {
+        socket.on('join_booking', async (bookingId: string) => {
+            const userId = socket.data.userId as string;
+            if (!bookingId || typeof bookingId !== 'string') {
+                socket.emit('error', { message: 'bookingId inválido' });
+                return;
+            }
+            // Verificar que el usuario es cliente o cuidador de esta reserva
+            const booking = await prisma.booking.findFirst({
+                where: {
+                    id: bookingId,
+                    OR: [
+                        { clientId: userId },
+                        { caregiver: { userId } },
+                    ],
+                },
+                select: { id: true },
+            }).catch(() => null);
+
+            if (!booking) {
+                socket.emit('error', { message: 'No tienes acceso a esta reserva' });
+                logger.warn('Socket join_booking denegado', { userId, bookingId });
+                return;
+            }
             socket.join(`booking:${bookingId}`);
-            logger.info('User joined booking room', { userId: socket.data.userId, bookingId });
+            logger.info('User joined booking room', { userId, bookingId });
         });
 
         socket.on('send_message', async (data: { bookingId: string; message: string }) => {

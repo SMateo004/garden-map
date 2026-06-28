@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -70,6 +71,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   StreamSubscription<ServiceStatus>? _gpsStatusSub;
   bool _gpsDialogShown = false;
 
+  // GPS live info — client side (PASEO, IN_PROGRESS)
+  int _gpsPointCount = 0;
+  double _gpsDistanceM = 0;
+  DateTime? _gpsLastPoint;
+  Timer? _gpsInfoTimer;
+
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
   bool get _alreadyRated => _booking?['ownerRating'] != null;
 
@@ -93,6 +100,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     _surveyCommentController.dispose();
     _caregiverCommentController.dispose();
     _gpsStatusSub?.cancel();
+    _gpsInfoTimer?.cancel();
     GardenLiveActivity.instance.endActivity();
     super.dispose();
   }
@@ -169,6 +177,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           if (widget.role == 'CLIENT' && _photoRefreshTimer == null) {
             _photoRefreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _loadBooking());
           }
+          // GPS live info polling — cliente+PASEO, cada 15s
+          if (widget.role == 'CLIENT' && _booking?['serviceType'] == 'PASEO' && _gpsInfoTimer == null) {
+            _loadGpsInfo();
+            _gpsInfoTimer = Timer.periodic(const Duration(seconds: 15), (_) => _loadGpsInfo());
+          }
           if (widget.role == 'CLIENT' && _booking?['serviceType'] == 'PASEO') {
             _loadExtensionAvailability();
           }
@@ -179,6 +192,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           _serviceTimer?.cancel();
           _photoRefreshTimer?.cancel();
           _photoRefreshTimer = null;
+          _gpsInfoTimer?.cancel();
+          _gpsInfoTimer = null;
           GardenLiveActivity.instance.endActivity();
         }
       } else {
@@ -199,6 +214,56 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         _showGpsDisabledDialog();
       }
     });
+  }
+
+  Future<void> _loadGpsInfo() async {
+    if (!mounted) return;
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/track'),
+        headers: {'Authorization': 'Bearer $_token'},
+      );
+      if (!mounted) return;
+      final data = jsonDecode(res.body);
+      if (data['success'] == true) {
+        final pts = (data['data'] as List? ?? []);
+        if (pts.isEmpty) return;
+        // Haversine distance from track points
+        double distM = 0;
+        for (int i = 1; i < pts.length; i++) {
+          final prev = pts[i - 1];
+          final curr = pts[i];
+          final lat1 = (prev['lat'] as num).toDouble() * math.pi / 180;
+          final lat2 = (curr['lat'] as num).toDouble() * math.pi / 180;
+          final dLat = lat2 - lat1;
+          final dLng = ((curr['lng'] as num).toDouble() - (prev['lng'] as num).toDouble()) * math.pi / 180;
+          final a = math.pow(math.sin(dLat / 2), 2) +
+              math.cos(lat1) * math.cos(lat2) * math.pow(math.sin(dLng / 2), 2);
+          distM += 6371000.0 * 2 * math.atan2(math.sqrt(a.toDouble()), math.sqrt(1 - a.toDouble()));
+        }
+        final lastTs = pts.last['timestamp'] as String?;
+        setState(() {
+          _gpsPointCount = pts.length;
+          _gpsDistanceM = distM;
+          _gpsLastPoint = lastTs != null ? DateTime.tryParse(lastTs) : null;
+        });
+      }
+    } catch (_) {}
+  }
+
+  String _buildGpsStatusText() {
+    if (_gpsPointCount == 0) return 'El cuidador aún no ha compartido su ubicación';
+    final dist = _gpsDistanceM < 1000
+        ? '${_gpsDistanceM.toStringAsFixed(0)} m recorridos'
+        : '${(_gpsDistanceM / 1000).toStringAsFixed(2)} km recorridos';
+    if (_gpsLastPoint == null) return '$_gpsPointCount puntos · $dist';
+    final diff = DateTime.now().difference(_gpsLastPoint!);
+    final ago = diff.inSeconds < 60
+        ? 'hace ${diff.inSeconds}s'
+        : diff.inMinutes < 60
+            ? 'hace ${diff.inMinutes} min'
+            : 'hace ${diff.inHours}h';
+    return '$dist · actualizado $ago';
   }
 
   void _showGpsDisabledDialog() {
@@ -729,33 +794,33 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: GardenColors.forest.withValues(alpha: 0.06),
+                        color: GardenColors.secondary.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(GardenRadius.lg),
-                        border: Border.all(color: GardenColors.forest.withValues(alpha: 0.18)),
+                        border: Border.all(color: GardenColors.secondary.withValues(alpha: 0.22)),
                       ),
                       child: Row(
                         children: [
                           Container(
                             padding: const EdgeInsets.all(9),
                             decoration: BoxDecoration(
-                              color: GardenColors.forest.withValues(alpha: 0.12),
+                              color: GardenColors.secondary.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(GardenRadius.sm),
                             ),
-                            child: const Icon(Icons.gps_fixed_rounded, color: GardenColors.forest, size: 18),
+                            child: const Icon(Icons.map_rounded, color: GardenColors.secondary, size: 18),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('GPS activo durante el paseo',
+                                Text('Comparte tu GPS durante el paseo',
                                   style: TextStyle(
-                                    color: isDark ? GardenColors.darkTextPrimary : GardenColors.forest,
+                                    color: isDark ? GardenColors.darkTextPrimary : GardenColors.secondary,
                                     fontWeight: FontWeight.w700, fontSize: 13,
                                   )),
                                 const SizedBox(height: 3),
                                 Text(
-                                  'Tu ubicación se comparte con el dueño en tiempo real.',
+                                  'Una vez iniciado, abre "Mapa GPS" en Acciones para que el dueño te vea en tiempo real.',
                                   style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4),
                                 ),
                               ],
@@ -863,7 +928,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       : (isPaseo ? GardenColors.forest : GardenColors.primary),
                   onPressed: isBlocked ? () {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(blockReason!),
+                      content: Text(blockReason),
                       backgroundColor: isWebNonPro ? GardenColors.primary : GardenColors.warning,
                       duration: const Duration(seconds: 4),
                     ));
@@ -872,7 +937,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 const SizedBox(height: 8),
                 Text(
                   isBlocked && !isWebNonPro
-                      ? blockReason!
+                      ? blockReason
                       : 'El pago en escrow se liberará al finalizar',
                   style: TextStyle(color: subtextColor, fontSize: 11),
                   textAlign: TextAlign.center,
@@ -2124,10 +2189,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
                   // ── Acciones GPS/Extensión (PASEO) ──────────────────────────
                   if (_booking?['serviceType'] == 'PASEO') ...[
-                    GardenButton(
-                      label: '🗺️  Ver dónde está ${_booking?['petName'] ?? 'mi mascota'}',
-                      color: GardenColors.forest,
-                      onPressed: () => Navigator.push(
+                    // ── Card GPS en vivo ──────────────────────────────────────
+                    GestureDetector(
+                      onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => GpsTrackingScreen(
@@ -2137,6 +2201,70 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             token: _token,
                             petPhoto: _booking?['petPhoto'] as String?,
                           ),
+                        ),
+                      ),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              GardenColors.forest.withValues(alpha: 0.92),
+                              GardenColors.forest.withValues(alpha: 0.75),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(GardenRadius.xl),
+                          boxShadow: [
+                            BoxShadow(
+                              color: GardenColors.forest.withValues(alpha: 0.25),
+                              blurRadius: 12, offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44, height: 44,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(GardenRadius.md),
+                              ),
+                              child: const Icon(Icons.map_rounded, color: Colors.white, size: 22),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      _GpsPulsingDot(active: _gpsPointCount > 0),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        _gpsPointCount > 0 ? 'GPS en vivo' : 'Esperando GPS...',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    _buildGpsStatusText(),
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.82),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 20),
+                          ],
                         ),
                       ),
                     ),
@@ -2632,8 +2760,34 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       ),
                     ],
                   ),
+                  // Row 3: Mapa GPS (solo PASEO)
+                  if (isPaseo) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _ActionTile(
+                            icon: Icons.map_rounded,
+                            label: 'Mapa GPS',
+                            sublabel: 'Compartir ruta',
+                            color: GardenColors.secondary,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => GpsTrackingScreen(
+                                bookingId: widget.bookingId,
+                                role: 'CAREGIVER',
+                                petName: _booking?['petName'] as String? ?? '',
+                                token: _token,
+                                petPhoto: _booking?['petPhoto'] as String?,
+                              ),
+                            )),
+                            isDark: isDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 12),
-                  // Row 3: Finalizar (full width)
+                  // Row 4: Finalizar (full width)
                   GestureDetector(
                     onTap: _showFinishConfirmation,
                     child: Container(
@@ -3121,6 +3275,17 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     _InfoRow('Mascota', _booking?['petName'] as String? ?? '—', textColor, subtextColor),
                     _InfoRow('Servicio', _booking?['serviceType'] == 'PASEO' ? '🦮 Paseo' : '🏠 Hospedaje', textColor, subtextColor),
                     _InfoRow('Total', 'Bs ${_booking?['totalAmount'] ?? '—'}', textColor, subtextColor),
+                    if (_booking?['serviceType'] == 'PASEO') ...[
+                      Builder(builder: (_) {
+                        final rawDist = _booking?['gpsDistance'];
+                        if (rawDist == null) return const SizedBox.shrink();
+                        final distM = (rawDist as num).toDouble();
+                        final distStr = distM < 1000
+                            ? '${distM.toStringAsFixed(0)} m'
+                            : '${(distM / 1000).toStringAsFixed(2)} km';
+                        return _InfoRow('📍 Recorrido', distStr, textColor, subtextColor);
+                      }),
+                    ],
                     const SizedBox(height: 10),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -4938,6 +5103,22 @@ class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen
     return '$m:$s';
   }
 
+  Widget _buildQrImage(String url, double size) {
+    const fallback = Center(child: Icon(Icons.qr_code_rounded, size: 90, color: GardenColors.primary));
+    if (url.startsWith('data:image/')) {
+      try {
+        final comma = url.indexOf(',');
+        final bytes = base64Decode(url.substring(comma + 1));
+        return Image.memory(bytes, width: size, height: size, fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => SizedBox(width: size, height: size, child: fallback));
+      } catch (_) {
+        return SizedBox(width: size, height: size, child: fallback);
+      }
+    }
+    return Image.network(url, width: size, height: size, fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => SizedBox(width: size, height: size, child: fallback));
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = themeNotifier.isDark;
@@ -5030,9 +5211,7 @@ class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen
               boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, 8))],
             ),
             child: widget.qrImageUrl != null && widget.qrImageUrl!.isNotEmpty
-                ? Image.network(widget.qrImageUrl!, width: 230, height: 230, fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const SizedBox(width: 230, height: 230,
-                        child: Center(child: Icon(Icons.qr_code_rounded, size: 90, color: GardenColors.primary))))
+                ? _buildQrImage(widget.qrImageUrl!, 230)
                 : const SizedBox(width: 230, height: 230,
                     child: Center(child: Icon(Icons.qr_code_rounded, size: 90, color: GardenColors.primary))),
           ),
@@ -5318,4 +5497,41 @@ class _EmergencyCallTile extends StatelessWidget {
     );
   }
 
+}
+
+// Widget punto pulsante para el indicador GPS del cliente
+class _GpsPulsingDot extends StatefulWidget {
+  final bool active;
+  const _GpsPulsingDot({this.active = true});
+  @override
+  _GpsPulsingDotState createState() => _GpsPulsingDotState();
+}
+
+class _GpsPulsingDotState extends State<_GpsPulsingDot> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
+      ..repeat(reverse: true);
+  }
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.active ? GardenColors.success : Colors.white54;
+    if (!widget.active) {
+      return Container(
+        width: 7, height: 7,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      );
+    }
+    return FadeTransition(
+      opacity: _ctrl,
+      child: Container(
+        width: 7, height: 7,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+    );
+  }
 }

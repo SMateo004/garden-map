@@ -36,6 +36,7 @@ target 'Runner' do
 end
 
 target 'GardenActivityWidgetExtension' do
+  use_frameworks!
   inherit! :search_paths
 end
 

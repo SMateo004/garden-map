@@ -22,6 +22,8 @@ import * as notificationService from '../../services/notification.service.js';
 import { blockchainService } from '../../services/blockchain.service.js';
 import { sendPushToUser } from '../../services/firebase.service.js';
 import { getIO } from '../../services/socket.service.js';
+import * as sipService from '../../services/sip.service.js';
+import { env } from '../../config/env.js';
 import type {
   CreateBookingBody,
   InitPaymentBody,
@@ -60,7 +62,7 @@ async function getBookingSettings() {
         hospedaje50h,
         paseo100h,
         paseo50h,
-        qrValidityHours,
+        qrValidityMinutes,
     ] = await Promise.all([
         getNumericSetting('platformCommissionPct',   10),
         getNumericSetting('hospedajeRefundAdminFeeBS', 10),
@@ -68,7 +70,7 @@ async function getBookingSettings() {
         getNumericSetting('hospedajeRefund50Horas',  24),
         getNumericSetting('paseoRefund100Horas',     12),
         getNumericSetting('paseoRefund50Horas',       6),
-        getNumericSetting('qrValidityHours',         24),
+        getNumericSetting('qrValidityMinutes',       15),  // default 15 min
     ]);
     return {
         COMMISSION_RATE:              commissionPct / 100,
@@ -77,8 +79,7 @@ async function getBookingSettings() {
         HOSPEDAJE_REFUND_50_HOURS:    hospedaje50h,
         PASEO_REFUND_100_HOURS:       paseo100h,
         PASEO_REFUND_50_HOURS:        paseo50h,
-        QR_VALIDITY_HOURS:            qrValidityHours,
-        QR_VALIDITY_MINUTES_PAYMENT:  qrValidityHours * 60,
+        QR_VALIDITY_MINUTES_PAYMENT:  qrValidityMinutes,
     };
 }
 
@@ -911,39 +912,60 @@ export async function checkExtensionAvailability(
 }
 
 // ---------------------------------------------------------------------------
-// Pago: QR placeholder (API bancaria futura) e iniciar pago / aprobación manual
+// Pago: generación de QR (SIP bancario o placeholder local) e iniciar pago
 // ---------------------------------------------------------------------------
 
 export interface GenerateQRResult {
   qrId: string;
-  qrImageUrl: string;
+  qrImageUrl: string;  // Base64 "data:image/png;base64,..." con SIP, URL placeholder en dev
   qrExpiresAt: Date;
+  sipQrId?: string;          // idQr de SIP (solo cuando SIP_ENABLED=true)
+  sipTransaccionId?: string; // idTransaccion de SIP (solo cuando SIP_ENABLED=true)
 }
 
 /**
- * Genera datos de QR de pago. Placeholder para integración con API bancaria real.
+ * Genera QR de pago.
+ * - Con SIP_ENABLED=true: llama a la API bancaria SIP y devuelve imagen Base64 real.
+ * - Con SIP_ENABLED=false: genera un UUID local y URL placeholder (modo dev/CI).
  *
- * Integración futura (API bancaria):
- * - Sustituir el bloque siguiente por: llamada HTTP a proveedor (ej. banco/aggregator),
- *   enviando bookingId, totalAmount, currency; recibir qrId, qrImageUrl (o base64), expiresAt.
- * - En webhook/callback del banco: llamar a paymentService.verifyPaymentByQr(qrId) al confirmar pago.
- *
- * @param _bookingId Reserva asociada (enviar a API bancaria para referencia)
- * @param validityMinutes Minutos hasta expiración (default 24h). Página de pago usa 15.
+ * El alias enviado a SIP es el bookingId, que SIP nos devolverá en el callback
+ * para que podamos identificar qué reserva se pagó.
  */
-export function generateQR(
-  _bookingId: string,
-  validityMinutes: number = 24 * 60  // default 24h; overridden by initPayment usando el setting
-): GenerateQRResult {
-  const qrId = crypto.randomUUID();
+export async function generateQR(
+  bookingId: string,
+  validityMinutes: number = 24 * 60,
+  monto?: number
+): Promise<GenerateQRResult> {
   const qrExpiresAt = new Date(Date.now() + validityMinutes * 60 * 1000);
-  // Placeholder: en producción reemplazar por URL/imagen devuelta por API bancaria
+
+  if (env.SIP_ENABLED) {
+    try {
+      const callbackUrl = `${env.API_PUBLIC_URL}/api/payments/confirmarPago`;
+      const result = await sipService.generateQr(
+        bookingId,
+        monto ?? 0,
+        qrExpiresAt,
+        callbackUrl,
+        'Pago GARDEN'
+      );
+      logger.info('[SIP] QR generado via API bancaria', { bookingId, idQr: result.idQr });
+      return {
+        qrId: bookingId,                             // alias = bookingId
+        qrImageUrl: `data:image/png;base64,${result.imagenQr}`,
+        qrExpiresAt,
+        sipQrId: result.idQr,
+        sipTransaccionId: result.idTransaccion,
+      };
+    } catch (err) {
+      logger.error('[SIP] Error generando QR — cayendo a placeholder', { bookingId, err });
+      // No propagar el error; caemos al placeholder para no bloquear al usuario
+    }
+  }
+
+  // Modo local / fallback
+  const qrId = crypto.randomUUID();
   const qrImageUrl = `https://api.garden.bo/qr/placeholder/${qrId}`;
-  logger.info('QR generado (placeholder; integrar API bancaria)', {
-    bookingId: _bookingId,
-    qrId,
-    validityMinutes,
-  });
+  logger.info('QR generado (placeholder local)', { bookingId, qrId, validityMinutes });
   return { qrId, qrImageUrl, qrExpiresAt };
 }
 
@@ -1181,17 +1203,24 @@ export async function initPayment(
 
       const effectiveDonation = Math.max(0, donationAmount);
       const remainingAmount = Math.round(totalAmount - effectiveWalletContribution);
-      const { qrId, qrImageUrl, qrExpiresAt } = generateQR(bookingId, cfg.QR_VALIDITY_MINUTES_PAYMENT);
+      const qrResult = await generateQR(bookingId, cfg.QR_VALIDITY_MINUTES_PAYMENT, remainingAmount);
       // Re-use qrId/url/expiry fields; the QR encodes the full bookingId — admin uses the booking total
       await tx.booking.update({
         where: { id: bookingId },
-        data: { qrId, qrImageUrl, qrExpiresAt, donationAmount: effectiveDonation > 0 ? effectiveDonation : null },
+        data: {
+          qrId: qrResult.qrId,
+          qrImageUrl: qrResult.qrImageUrl,
+          qrExpiresAt: qrResult.qrExpiresAt,
+          sipQrId: qrResult.sipQrId ?? null,
+          sipTransaccionId: qrResult.sipTransaccionId ?? null,
+          donationAmount: effectiveDonation > 0 ? effectiveDonation : null,
+        },
       });
       logger.info('Pago parcial con billetera + QR', { bookingId, clientId, walletContribution: effectiveWalletContribution, remainingAmount });
       return {
-        qrId,
-        qrImageUrl,
-        qrExpiresAt: qrExpiresAt.toISOString(),
+        qrId: qrResult.qrId,
+        qrImageUrl: qrResult.qrImageUrl,
+        qrExpiresAt: qrResult.qrExpiresAt.toISOString(),
         status: BookingStatus.PENDING_PAYMENT,
         walletDeducted: effectiveWalletContribution,
         remainingAmount,
@@ -1202,19 +1231,23 @@ export async function initPayment(
     // ── PAGO QR COMPLETO (sin billetera) ──────────────────────────────────────
     if (method === 'qr') {
       const effectiveDonation = Math.max(0, donationAmount);
-      const { qrId, qrImageUrl, qrExpiresAt } = generateQR(
-        bookingId,
-        cfg.QR_VALIDITY_MINUTES_PAYMENT
-      );
+      const qrResult = await generateQR(bookingId, cfg.QR_VALIDITY_MINUTES_PAYMENT, totalAmount);
       await tx.booking.update({
         where: { id: bookingId },
-        data: { qrId, qrImageUrl, qrExpiresAt, donationAmount: effectiveDonation > 0 ? effectiveDonation : null },
+        data: {
+          qrId: qrResult.qrId,
+          qrImageUrl: qrResult.qrImageUrl,
+          qrExpiresAt: qrResult.qrExpiresAt,
+          sipQrId: qrResult.sipQrId ?? null,
+          sipTransaccionId: qrResult.sipTransaccionId ?? null,
+          donationAmount: effectiveDonation > 0 ? effectiveDonation : null,
+        },
       });
-      logger.info('Pago QR iniciado', { bookingId, clientId, qrId });
+      logger.info('Pago QR iniciado', { bookingId, clientId, qrId: qrResult.qrId });
       return {
-        qrId,
-        qrImageUrl,
-        qrExpiresAt: qrExpiresAt.toISOString(),
+        qrId: qrResult.qrId,
+        qrImageUrl: qrResult.qrImageUrl,
+        qrExpiresAt: qrResult.qrExpiresAt.toISOString(),
         status: BookingStatus.PENDING_PAYMENT,
       };
     }
@@ -1582,6 +1615,12 @@ export async function cancelBooking(
       .catch((err) => logger.error('Notification onClientCancelled failed', { bookingId, err }));
   }
 
+  // Invalida el QR en el banco si fue generado vía SIP y aún no fue cobrado
+  if (env.SIP_ENABLED && result.booking.sipQrId) {
+    sipService.disableQr(bookingId)
+      .catch(err => logger.warn('[SIP] disableQr on cancel failed (non-fatal)', { bookingId, err }));
+  }
+
   if (result.refundAmount > 0 && result.refundStatus === RefundStatus.APPROVED) {
     notificationService
       .onRefundProcessed(
@@ -1842,16 +1881,18 @@ export async function requestWalkExtensionPayment(
   const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
 
   if (method === 'qr') {
-    const { qrId, qrImageUrl, qrExpiresAt } = generateQR(bookingId, 15); // 15 min de validez para extensiones
+    const qrResult = await generateQR(bookingId, 15, extraTotal); // 15 min de validez para extensiones
     events.push({
       type: 'EXTENSION_PENDING_PAYMENT',
       extensionId,
       additionalMinutes,
       extraAmount: extraTotal,
       method: 'qr',
-      qrId,
-      qrImageUrl,
-      qrExpiresAt: qrExpiresAt.toISOString(),
+      qrId: qrResult.qrId,
+      qrImageUrl: qrResult.qrImageUrl,
+      qrExpiresAt: qrResult.qrExpiresAt.toISOString(),
+      sipQrId: qrResult.sipQrId,
+      sipTransaccionId: qrResult.sipTransaccionId,
       timestamp: new Date().toISOString(),
     });
 
@@ -1864,9 +1905,9 @@ export async function requestWalkExtensionPayment(
     return {
       extensionId,
       extraAmount: extraTotal,
-      qrId,
-      qrImageUrl,
-      qrExpiresAt: qrExpiresAt.toISOString(),
+      qrId: qrResult.qrId,
+      qrImageUrl: qrResult.qrImageUrl,
+      qrExpiresAt: qrResult.qrExpiresAt.toISOString(),
       status: 'PENDING_QR',
     };
   }
@@ -2055,22 +2096,24 @@ export async function requestHospedajeExtensionPayment(
   }
 
   if (method === 'qr') {
-    const { qrId, qrImageUrl, qrExpiresAt } = generateQR(bookingId, 15);
+    const qrResult = await generateQR(bookingId, 15, extraTotal);
     events.push({
       type: 'EXTENSION_PENDING_PAYMENT',
       extensionId,
       additionalDays,
       extraAmount: extraTotal,
       method: 'qr',
-      qrId,
-      qrImageUrl,
-      qrExpiresAt: qrExpiresAt.toISOString(),
+      qrId: qrResult.qrId,
+      qrImageUrl: qrResult.qrImageUrl,
+      qrExpiresAt: qrResult.qrExpiresAt.toISOString(),
+      sipQrId: qrResult.sipQrId,
+      sipTransaccionId: qrResult.sipTransaccionId,
       timestamp: new Date().toISOString(),
     });
 
     await prisma.booking.update({ where: { id: bookingId }, data: { serviceEvents: events } });
     logger.info('Hospedaje extension QR payment initiated', { bookingId, extensionId, additionalDays, extraTotal });
-    return { extensionId, extraAmount: extraTotal, qrId, qrImageUrl, qrExpiresAt: qrExpiresAt.toISOString(), status: 'PENDING_QR' };
+    return { extensionId, extraAmount: extraTotal, qrId: qrResult.qrId, qrImageUrl: qrResult.qrImageUrl, qrExpiresAt: qrResult.qrExpiresAt.toISOString(), status: 'PENDING_QR' };
   }
 
   const manualPaymentId = `EXT-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
@@ -3573,4 +3616,119 @@ export async function autoPayoutExpiredReviews() {
   }
 
   return expired.length;
+}
+
+/**
+ * Confirma el pago de una extensión de servicio vía callback SIP (server-to-server).
+ * No requiere clientId — la autenticación es Basic Auth en el endpoint confirmarPago.
+ * Compatible con extensiones de paseo (additionalMinutes) y hospedaje (additionalDays).
+ * Idempotente: si el evento ya fue confirmado, retorna sin error.
+ */
+export async function confirmExtensionQrBySip(bookingId: string, qrId: string): Promise<void> {
+  const cfg = await getBookingSettings();
+
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId },
+    select: {
+      id: true, clientId: true, caregiverId: true, serviceType: true, status: true,
+      duration: true, endDate: true, totalDays: true,
+      totalAmount: true, commissionAmount: true, pricePerUnit: true,
+      petName: true, serviceEvents: true,
+    },
+  });
+
+  if (!booking) throw new BookingNotFoundError(bookingId);
+  if (booking.status !== BookingStatus.IN_PROGRESS) {
+    throw new BookingValidationError(`Reserva no está en curso para confirmar extensión (estado: ${booking.status})`);
+  }
+
+  const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
+  const pendingIdx = events.findIndex(
+    (e: any) => e.type === 'EXTENSION_PENDING_PAYMENT' && e.method === 'qr' && e.qrId === qrId
+  );
+
+  if (pendingIdx === -1) {
+    logger.info('[SIP callback] Extensión ya procesada o qrId no encontrado — idempotente', { bookingId, qrId });
+    return;
+  }
+
+  const pending = events[pendingIdx];
+  if (new Date(pending.qrExpiresAt) < new Date()) {
+    throw new BookingValidationError('QR de extensión expirado');
+  }
+
+  const { extraAmount, extensionId } = pending;
+  const pricePerUnitClient = Number(booking.pricePerUnit);
+  const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
+
+  events[pendingIdx] = {
+    type: 'EXTENSION_CONFIRMED',
+    extensionId,
+    ...(pending.additionalMinutes !== undefined ? { additionalMinutes: pending.additionalMinutes } : {}),
+    ...(pending.additionalDays !== undefined ? { additionalDays: pending.additionalDays } : {}),
+    extraAmount,
+    method: 'qr',
+    paidAt: new Date().toISOString(),
+    timestamp: new Date().toISOString(),
+  };
+
+  let updateData: Parameters<typeof prisma.booking.update>[0]['data'];
+  let pushTitle: string;
+  let pushBody: string;
+  let notifMessage: string;
+
+  if (booking.serviceType === ServiceType.PASEO) {
+    const additionalMinutes: number = pending.additionalMinutes;
+    const extraCommission = extraAmount - Math.round((pricePerUnitCaregiver / 60) * additionalMinutes);
+    updateData = {
+      duration: (booking.duration ?? 60) + additionalMinutes,
+      totalAmount: new Prisma.Decimal(Number(booking.totalAmount) + extraAmount),
+      commissionAmount: new Prisma.Decimal(Number(booking.commissionAmount) + extraCommission),
+      serviceEvents: events,
+    };
+    pushTitle = '⏱️ Extensión confirmada';
+    pushBody = `+${additionalMinutes} min · Bs ${extraAmount} adicionales`;
+    notifMessage = `El pago de +${additionalMinutes} min fue confirmado por el banco. Bs ${extraAmount} adicionales — ${booking.petName ?? 'mascota'}.`;
+  } else {
+    const additionalDays: number = pending.additionalDays;
+    const extraCommission = extraAmount - pricePerUnitCaregiver * additionalDays;
+    const newEndDate = new Date(booking.endDate!);
+    newEndDate.setDate(newEndDate.getDate() + additionalDays);
+    updateData = {
+      endDate: newEndDate,
+      totalDays: (booking.totalDays ?? 1) + additionalDays,
+      totalAmount: new Prisma.Decimal(Number(booking.totalAmount) + extraAmount),
+      commissionAmount: new Prisma.Decimal(Number(booking.commissionAmount) + extraCommission),
+      serviceEvents: events,
+    };
+    pushTitle = '🏠 Hospedaje extendido';
+    pushBody = `+${additionalDays} noche${additionalDays > 1 ? 's' : ''} · Bs ${extraAmount} adicionales`;
+    notifMessage = `El pago de +${additionalDays} noche${additionalDays > 1 ? 's' : ''} fue confirmado por el banco. Bs ${extraAmount} adicionales — ${booking.petName ?? 'mascota'}.`;
+  }
+
+  let caregiverUserId: string | null = null;
+  await prisma.$transaction(async (tx) => {
+    await tx.booking.update({ where: { id: bookingId }, data: updateData });
+    const caregiver = await tx.caregiverProfile.findFirst({
+      where: { id: booking.caregiverId },
+      select: { userId: true },
+    });
+    if (caregiver) {
+      caregiverUserId = caregiver.userId;
+      await tx.notification.create({
+        data: {
+          userId: caregiver.userId,
+          title: pushTitle,
+          message: notifMessage,
+          type: 'SERVICE_EXTENSION',
+        },
+      });
+    }
+  });
+
+  if (caregiverUserId) {
+    sendPushToUser(caregiverUserId, pushTitle, pushBody).catch(() => {});
+  }
+
+  logger.info('[SIP callback] Extension confirmed via banco', { bookingId, extensionId, serviceType: booking.serviceType });
 }

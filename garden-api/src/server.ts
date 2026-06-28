@@ -50,6 +50,7 @@ import { iniciarJobNotificacionesProgramadas } from './jobs/scheduled-notificati
 import { iniciarJobWalkExpiry } from './jobs/walk-expiry.job.js';
 import { iniciarJobAgentHeartbeat } from './jobs/agent-heartbeat.job.js';
 import { iniciarJobServiceReminders } from './jobs/service-reminders.job.js';
+import { iniciarJobQrExpiry } from './jobs/qr-expiry.job.js';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
@@ -206,6 +207,7 @@ async function start() {
     iniciarJobWalkExpiry();
     iniciarJobAgentHeartbeat();
     iniciarJobServiceReminders();
+    iniciarJobQrExpiry();
   }, 10000);
 
   // Auto-release payment after service ends if owner hasn't reviewed

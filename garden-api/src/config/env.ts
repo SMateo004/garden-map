@@ -52,6 +52,16 @@ const envSchema = z.object({
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_VERIFY_SERVICE_SID: z.string().optional(),
+  // SIP — Integración QR bancario Bolivia (MC4 / Banco)
+  // Poner SIP_ENABLED=true y completar las demás vars cuando lleguen las credenciales del banco.
+  SIP_ENABLED: z.string().transform(v => v === 'true').default('false'),
+  SIP_API_URL: z.string().url().optional(),          // ej. https://sip.mc4.com.bo:8443
+  SIP_APIKEY: z.string().optional(),                 // apikey global (del correo del banco)
+  SIP_USERNAME: z.string().optional(),               // usuario (del correo del banco)
+  SIP_PASSWORD: z.string().optional(),               // contraseña (del correo del banco)
+  SIP_APIKEY_SERVICIO: z.string().optional(),        // apikey del servicio (desde portal SIP → Servicios → Mostrar apikey)
+  SIP_CALLBACK_USER: z.string().optional(),          // usuario Basic Auth que nosotros definimos para el callback
+  SIP_CALLBACK_PASS: z.string().optional(),          // contraseña Basic Auth (debe tener mayúscula + especial)
 })
 .refine(
   data => data.NODE_ENV !== 'production' || !!data.ANTHROPIC_API_KEY,
