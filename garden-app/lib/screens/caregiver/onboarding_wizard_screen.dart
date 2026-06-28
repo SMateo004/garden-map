@@ -298,41 +298,44 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         setState(() => _phoneController.text = savedPhone);
       }
 
-      // Step 1: Services & zone
-      final zone = profile['zone'];
-      final servicesOffered = (profile['servicesOffered'] as List?) ?? [];
-      if (zone == null || servicesOffered.isEmpty) {
+      // Step 1: Foto de perfil
+      if (profile['profilePhoto'] == null) {
         setState(() => _currentStep = 1);
         return;
       }
 
-      // Step 2: Availability
-      final svcAvail = profile['serviceAvailability'] as Map?;
-      if (svcAvail == null || svcAvail.isEmpty) {
+      // Step 2: Servicios y zona
+      final zone = profile['zone'];
+      final servicesOffered = (profile['servicesOffered'] as List?) ?? [];
+      if (zone == null || servicesOffered.isEmpty) {
         setState(() => _currentStep = 2);
         return;
       }
 
-      // Step 3: Photos (skipped for PASEO-only caregivers)
-      final photos = (profile['photos'] as List?) ?? [];
-      final isPaseoOnly = servicesOffered.length == 1 && servicesOffered.contains('PASEO');
-      final minPhotos = servicesOffered.contains('HOSPEDAJE') ? 4 : isPaseoOnly ? 0 : 2;
-      if (photos.length < minPhotos) {
+      // Step 3: Precio
+      final priceDay  = profile['pricePerDay'];
+      final priceWalk = profile['pricePerWalk60'];
+      final priceGuar = profile['pricePerGuarderia'];
+      final hasPrice  = (priceDay  != null && priceDay  != 0) ||
+                        (priceWalk != null && priceWalk != 0) ||
+                        (priceGuar != null && priceGuar != 0);
+      if (!hasPrice) {
         setState(() => _currentStep = 3);
         return;
       }
 
-      // Step 4: Price
-      final priceDay = profile['pricePerDay'];
-      final priceWalk = profile['pricePerWalk60'];
-      final hasPrice = (priceDay != null && priceDay != 0) || (priceWalk != null && priceWalk != 0);
-      if (!hasPrice) {
+      // Step 4: Disponibilidad
+      final svcAvail = profile['serviceAvailability'] as Map?;
+      if (svcAvail == null || svcAvail.isEmpty) {
         setState(() => _currentStep = 4);
         return;
       }
 
-      // Step 5: Profile photo
-      if (profile['profilePhoto'] == null) {
+      // Step 5: Fotos (skipped for PASEO-only caregivers)
+      final photos = (profile['caregiverPhotos'] as List?) ?? (profile['photos'] as List?) ?? [];
+      final isPaseoOnly = servicesOffered.length == 1 && servicesOffered.contains('PASEO');
+      final minPhotos = servicesOffered.contains('HOSPEDAJE') ? 4 : isPaseoOnly ? 0 : 2;
+      if (photos.length < minPhotos) {
         setState(() => _currentStep = 5);
         return;
       }
@@ -559,42 +562,19 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           return false;
         }
         return true;
-      case 1:
+      case 1: // Foto de perfil
+        if (_profilePhotoUrl == null && _localProfilePhoto == null) {
+          _showStepError('Por favor, sube una foto de perfil para continuar');
+          return false;
+        }
+        return true;
+      case 2: // Servicios
         if (_servicesOffered.isEmpty) {
           _showStepError('Selecciona al menos un servicio', scrollTo: _keyStep1Services);
           return false;
         }
         return true;
-      case 2:
-        if (!_weekdays && !_weekends && !_holidays) {
-          _showStepError('Selecciona al menos un día disponible', scrollTo: _keyStep2Days);
-          return false;
-        }
-        if (_times.isEmpty) {
-          _showStepError('Selecciona al menos un horario', scrollTo: _keyStep2Times);
-          return false;
-        }
-        return true;
-      case 3:
-        // Fotos del cuidador: obligatorio para todos los servicios (mín 2)
-        if (_caregiverPhotoUrls.length + _localCaregiverPhotos.length < 2) {
-          _showStepError('Sube al menos 2 fotos tuyas en acción para continuar');
-          return false;
-        }
-        // Fotos del lugar: solo HOSPEDAJE/GUARDERÍA, secciones requeridas
-        final needsPlace = _servicesOffered.contains('HOSPEDAJE') || _servicesOffered.contains('GUARDERIA');
-        if (needsPlace) {
-          for (final sec in ['sala', 'descanso', 'alimentacion']) {
-            final total = (_placePhotoUrls[sec]?.length ?? 0) + (_localPlacePhotos[sec]?.length ?? 0);
-            if (total < 1) {
-              final labels = {'sala': 'Sala / Área principal', 'descanso': 'Zona de descanso', 'alimentacion': 'Área de alimentación'};
-              _showStepError('Agrega al menos 1 foto de: ${labels[sec]}');
-              return false;
-            }
-          }
-        }
-        return true;
-      case 4:
+      case 3: // Precio
         if (_servicesOffered.contains('HOSPEDAJE') && _precioHospedaje < 10) {
           _showStepError('El precio mínimo de Hospedaje es Bs 10');
           return false;
@@ -608,14 +588,35 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           return false;
         }
         return true;
-      case 5: // Foto de perfil (retrato) — triggers registration
-        if (_profilePhotoUrl == null && _localProfilePhoto == null) {
-          _showStepError('Por favor, sube una foto de perfil profesional');
+      case 4: // Disponibilidad
+        if (!_weekdays && !_weekends && !_holidays) {
+          _showStepError('Selecciona al menos un día disponible', scrollTo: _keyStep2Days);
+          return false;
+        }
+        if (_times.isEmpty) {
+          _showStepError('Selecciona al menos un horario', scrollTo: _keyStep2Times);
           return false;
         }
         return true;
+      case 5: // Fotos del cuidador + lugar
+        if (_caregiverPhotoUrls.length + _localCaregiverPhotos.length < 2) {
+          _showStepError('Sube al menos 2 fotos tuyas en acción para continuar');
+          return false;
+        }
+        final needsPlace = _servicesOffered.contains('HOSPEDAJE') || _servicesOffered.contains('GUARDERIA');
+        if (needsPlace) {
+          for (final sec in ['sala', 'descanso', 'alimentacion']) {
+            final total = (_placePhotoUrls[sec]?.length ?? 0) + (_localPlacePhotos[sec]?.length ?? 0);
+            if (total < 1) {
+              final labels = {'sala': 'Sala / Área principal', 'descanso': 'Zona de descanso', 'alimentacion': 'Área de alimentación'};
+              _showStepError('Agrega al menos 1 foto de: ${labels[sec]}');
+              return false;
+            }
+          }
+        }
+        return true;
       default:
-        return true; // Steps 6-9 handled by embedded screens
+        return true; // Steps 6-8 handled by embedded screens
     }
   }
 
@@ -633,98 +634,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       return;
     }
 
-    // Step 1: Servicios → PATCH profile (zona se toma del domicilio del Paso 0)
+    // Step 1: Foto de perfil → upload then PATCH profile
     if (_currentStep == 1) {
-      if (!_validateCurrentStep()) return;
-      setState(() => _isLoading = true);
-      await _patchProfile({
-        'zone': _addressZone ?? _selectedZone, // usa zona del domicilio; fallback a legado
-        'servicesOffered': _servicesOffered,
-        if (_homeType != null) 'homeType': _homeType,
-        'hasYard': _hasYard,
-      });
-      setState(() { _isLoading = false; _currentStep++; });
-      return;
-    }
-
-    // Step 2: Disponibilidad → PATCH profile
-    if (_currentStep == 2) {
-      if (!_validateCurrentStep()) return;
-      setState(() => _isLoading = true);
-      final svcAvail = <String, dynamic>{};
-      for (final svc in _servicesOffered) {
-        svcAvail[svc] = {
-          'weekdays': _weekdays,
-          'weekends': _weekends,
-          'holidays': _holidays,
-          'times': _times,
-          'lastMinute': false,
-        };
-      }
-      await _patchProfile({
-        'serviceAvailability': svcAvail, // used by _computeAndSetResumeStep on resume
-        'serviceDetails': {              // synced by backend to defaultAvailabilitySchedule
-          'availability': {
-            'weekdays': _weekdays,
-            'weekends': _weekends,
-            'holidays': _holidays,
-            'slots': {
-              'morning':   _times.contains('MORNING'),
-              'afternoon': _times.contains('AFTERNOON'),
-              'night':     _times.contains('NIGHT'),
-            },
-          },
-        },
-      });
-      setState(() { _isLoading = false; _currentStep++; });
-      return;
-    }
-
-    // Step 3: Fotos del cuidador (+ fotos del lugar para HOSPEDAJE/GUARDERÍA)
-    if (_currentStep == 3) {
-      if (!_validateCurrentStep()) return;
-      setState(() => _isLoading = true);
-      try {
-        // Subir fotos del cuidador pendientes
-        if (_localCaregiverPhotos.isNotEmpty) await _uploadPendingCaregiverPhotos();
-        // Subir fotos del lugar pendientes (todas las secciones)
-        if (_localPlacePhotos.values.any((l) => l.isNotEmpty)) await _uploadPendingPlacePhotos();
-        // Persistir en perfil
-        await _patchProfile({
-          'caregiverPhotos': _caregiverPhotoUrls,
-          if (_placePhotoUrls.isNotEmpty) 'placePhotos': _placePhotoUrls,
-        });
-      } catch (_) {
-        setState(() => _isLoading = false);
-        return;
-      }
-      setState(() { _isLoading = false; _currentStep++; });
-      return;
-    }
-
-    // Step 4: Precio → PATCH profile
-    if (_currentStep == 4) {
-      if (!_validateCurrentStep()) return;
-      setState(() => _isLoading = true);
-      await _patchProfile({
-        if (_servicesOffered.contains('HOSPEDAJE')) 'pricePerDay': _precioHospedaje.toInt(),
-        if (_servicesOffered.contains('PASEO')) 'pricePerWalk60': _precioPaseo.toInt(),
-        if (_servicesOffered.contains('GUARDERIA')) 'pricePerGuarderia': _precioGuarderia.toInt(),
-        if (_servicesOffered.contains('GUARDERIA')) 'guarderiaIncludeWalk': _guarderiaIncludeWalk,
-      });
-      setState(() { _isLoading = false; _currentStep++; });
-      return;
-    }
-
-    // Step 5: Foto de perfil → upload then PATCH profile
-    if (_currentStep == 5) {
       if (!_validateCurrentStep()) return;
       setState(() => _isLoading = true);
       if (_localProfilePhoto != null && _profilePhotoUrl == null) {
         try {
           final uri = Uri.parse('$_baseUrl/upload/public-single-photo');
           final request = http.MultipartRequest('POST', uri);
-          // bytes ya en memoria — sin blob URL
           final bytes = _localProfilePhoto!.bytes;
           String mimeType = _localProfilePhoto!.mimeType;
           if (mimeType == 'image/jpg' || mimeType.isEmpty) mimeType = 'image/jpeg';
@@ -757,6 +674,86 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       await _patchProfile({
         if (_profilePhotoUrl != null) 'profilePhoto': _profilePhotoUrl,
       });
+      setState(() { _isLoading = false; _currentStep++; });
+      return;
+    }
+
+    // Step 2: Servicios → PATCH profile (zona se toma del domicilio del Paso 0)
+    if (_currentStep == 2) {
+      if (!_validateCurrentStep()) return;
+      setState(() => _isLoading = true);
+      await _patchProfile({
+        'zone': _addressZone ?? _selectedZone,
+        'servicesOffered': _servicesOffered,
+        if (_homeType != null) 'homeType': _homeType,
+        'hasYard': _hasYard,
+      });
+      setState(() { _isLoading = false; _currentStep++; });
+      return;
+    }
+
+    // Step 3: Precio → PATCH profile (justo después de servicios, flujo natural)
+    if (_currentStep == 3) {
+      if (!_validateCurrentStep()) return;
+      setState(() => _isLoading = true);
+      await _patchProfile({
+        if (_servicesOffered.contains('HOSPEDAJE')) 'pricePerDay': _precioHospedaje.toInt(),
+        if (_servicesOffered.contains('PASEO')) 'pricePerWalk60': _precioPaseo.toInt(),
+        if (_servicesOffered.contains('GUARDERIA')) 'pricePerGuarderia': _precioGuarderia.toInt(),
+        if (_servicesOffered.contains('GUARDERIA')) 'guarderiaIncludeWalk': _guarderiaIncludeWalk,
+      });
+      setState(() { _isLoading = false; _currentStep++; });
+      return;
+    }
+
+    // Step 4: Disponibilidad → PATCH profile
+    if (_currentStep == 4) {
+      if (!_validateCurrentStep()) return;
+      setState(() => _isLoading = true);
+      final svcAvail = <String, dynamic>{};
+      for (final svc in _servicesOffered) {
+        svcAvail[svc] = {
+          'weekdays': _weekdays,
+          'weekends': _weekends,
+          'holidays': _holidays,
+          'times': _times,
+          'lastMinute': false,
+        };
+      }
+      await _patchProfile({
+        'serviceAvailability': svcAvail,
+        'serviceDetails': {
+          'availability': {
+            'weekdays': _weekdays,
+            'weekends': _weekends,
+            'holidays': _holidays,
+            'slots': {
+              'morning':   _times.contains('MORNING'),
+              'afternoon': _times.contains('AFTERNOON'),
+              'night':     _times.contains('NIGHT'),
+            },
+          },
+        },
+      });
+      setState(() { _isLoading = false; _currentStep++; });
+      return;
+    }
+
+    // Step 5: Fotos del cuidador + lugar
+    if (_currentStep == 5) {
+      if (!_validateCurrentStep()) return;
+      setState(() => _isLoading = true);
+      try {
+        if (_localCaregiverPhotos.isNotEmpty) await _uploadPendingCaregiverPhotos();
+        if (_localPlacePhotos.values.any((l) => l.isNotEmpty)) await _uploadPendingPlacePhotos();
+        await _patchProfile({
+          'caregiverPhotos': _caregiverPhotoUrls,
+          if (_placePhotoUrls.isNotEmpty) 'placePhotos': _placePhotoUrls,
+        });
+      } catch (_) {
+        setState(() => _isLoading = false);
+        return;
+      }
       setState(() { _isLoading = false; _currentStep++; });
       return;
     }
@@ -2105,12 +2102,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text('Tu retrato final', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
+          Text('Tu foto de perfil', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
           const SizedBox(height: 10),
           Text(
-            'Sube una foto tuya clara, sonriendo e idealmente con una mascota. Esta será la cara visible de tu negocio en GARDEN.',
+            'Es lo primero que verán los dueños de mascotas. Sube una foto clara, sonriendo — idealmente con una mascota.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, color: subtextColor),
+            style: TextStyle(fontSize: 14, color: subtextColor, height: 1.5),
           ),
           const SizedBox(height: 40),
 
@@ -2199,11 +2196,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
     final steps = [
       _buildStep1(),   // 0: Datos personales → register
-      _buildStep3(),   // 1: Servicios y zona
-      _buildStep4(),   // 2: Disponibilidad básica
-      _buildStep2(),   // 3: Fotos del lugar
-      _buildStep5(),   // 4: Precio
-      _buildStep7(),   // 5: Foto de perfil
+      _buildStep7(),   // 1: Foto de perfil (primera impresión, involucra al cuidador)
+      _buildStep3(),   // 2: Servicios y zona
+      _buildStep5(),   // 3: Precio (flujo natural: ofrezco X → cobro Y)
+      _buildStep4(),   // 4: Disponibilidad básica
+      _buildStep2(),   // 5: Fotos del lugar/acción
       postRegStep,     // 6: Perfil profesional
       postRegStep,     // 7: Verificación de identidad
       postRegStep,     // 8: Verificación de teléfono
@@ -2211,11 +2208,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
     final stepTitles = [
       'Datos básicos',
+      'Foto de perfil',
       'Servicios',
-      'Disponibilidad',
-      'Fotos del lugar',
       'Precio',
-      'Tu retrato',
+      'Disponibilidad',
+      'Fotos',
       'Perfil profesional',
       'Verificación ID',
       'Verificar Teléfono',
@@ -2293,7 +2290,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(4),
                 child: LinearProgressIndicator(
-                  value: (_currentStep + 1) / 10,
+                  value: (_currentStep + 1) / 9,
                   backgroundColor: borderColor,
                   valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
                   minHeight: 4,
@@ -2354,7 +2351,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                             ClipRRect(
                               borderRadius: BorderRadius.circular(2),
                               child: LinearProgressIndicator(
-                                value: (_currentStep + 1) / 10,
+                                value: (_currentStep + 1) / 9,
                                 backgroundColor: borderColor,
                                 valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
                                 minHeight: 3,
