@@ -27,6 +27,11 @@ class CaregiverProfileDataScreen extends StatefulWidget {
   /// instead of an individual caregiver.
   final bool isCompany;
 
+  /// When false, hides the caregiver/place photo upload sections.
+  /// Set to false when embedded inside the onboarding wizard (photos were
+  /// already uploaded in the dedicated photo step). True for standalone edit.
+  final bool showPhotos;
+
   const CaregiverProfileDataScreen({
     super.key,
     this.embeddedMode = false,
@@ -34,6 +39,7 @@ class CaregiverProfileDataScreen extends StatefulWidget {
     this.initialProfile,
     this.servicesOffered = const [],
     this.isCompany = false,
+    this.showPhotos = true,
   });
 
   @override
@@ -867,51 +873,52 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                               const SizedBox(height: 14),
                             ],
 
-                            _webSection(surface, borderColor, textColor,
-                              title: 'Fotos del cuidador',
-                              icon: Icons.photo_library_outlined,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  SizedBox(key: _keyPhotos, height: 0),
-                                  Text(
-                                    'Fotos tuyas en acción con mascotas (mín. 2, máx. 6)',
-                                    style: TextStyle(color: subtextColor, fontSize: 12),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  if (_uploadingCaregiverPhoto)
-                                    const Padding(
-                                      padding: EdgeInsets.only(bottom: 8),
-                                      child: LinearProgressIndicator(color: GardenColors.primary),
-                                    ),
-                                  _buildCaregiverPhotoGrid(borderColor),
-                                ],
-                              ),
-                            ),
-
-                            if (_needsPlacePhotos) ...[
-                              const SizedBox(height: 14),
+                            if (widget.showPhotos) ...[
                               _webSection(surface, borderColor, textColor,
-                                title: 'Fotos del lugar',
-                                icon: Icons.home_work_outlined,
+                                title: 'Fotos del cuidador',
+                                icon: Icons.photo_library_outlined,
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    SizedBox(key: _keyPhotos, height: 0),
                                     Text(
-                                      'Muestra el espacio donde se brindará el servicio',
+                                      'Fotos tuyas en acción con mascotas (mín. 2, máx. 6)',
                                       style: TextStyle(color: subtextColor, fontSize: 12),
                                     ),
                                     const SizedBox(height: 12),
-                                    if (_uploadingPlacePhoto)
+                                    if (_uploadingCaregiverPhoto)
                                       const Padding(
                                         padding: EdgeInsets.only(bottom: 8),
                                         child: LinearProgressIndicator(color: GardenColors.primary),
                                       ),
-                                    for (final (key, label, required) in _placeSections)
-                                      _buildPlaceSectionBlock(key, label, required, borderColor, textColor, subtextColor),
+                                    _buildCaregiverPhotoGrid(borderColor),
                                   ],
                                 ),
                               ),
+                              if (_needsPlacePhotos) ...[
+                                const SizedBox(height: 14),
+                                _webSection(surface, borderColor, textColor,
+                                  title: 'Fotos del lugar',
+                                  icon: Icons.home_work_outlined,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Muestra el espacio donde se brindará el servicio',
+                                        style: TextStyle(color: subtextColor, fontSize: 12),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      if (_uploadingPlacePhoto)
+                                        const Padding(
+                                          padding: EdgeInsets.only(bottom: 8),
+                                          child: LinearProgressIndicator(color: GardenColors.primary),
+                                        ),
+                                      for (final (key, label, required) in _placeSections)
+                                        _buildPlaceSectionBlock(key, label, required, borderColor, textColor, subtextColor),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ],
                           ],
                         ),
@@ -1205,40 +1212,40 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             ),
             const Divider(height: 48),
 
-            // Sección — Fotos del cuidador (todos los servicios, mín 2 máx 6)
-            SizedBox(key: _keyPhotos, height: 0),
-            _sectionTitle('Fotos del cuidador', textColor),
-            Text(
-              'Sube fotos tuyas en acción con mascotas (mín. 2, máx. 6)',
-              style: TextStyle(color: subtextColor, fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            if (_uploadingCaregiverPhoto)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: LinearProgressIndicator(color: GardenColors.primary),
-              ),
-            _buildCaregiverPhotoGrid(borderColor),
-
-            // Sección — Fotos del lugar (solo HOSPEDAJE / GUARDERÍA)
-            if (_needsPlacePhotos) ...[
-              const SizedBox(height: 28),
-              _sectionTitle('Fotos del lugar', textColor),
+            // Sección — Fotos (oculta en modo wizard; ya se subieron en el Paso 2)
+            if (widget.showPhotos) ...[
+              SizedBox(key: _keyPhotos, height: 0),
+              _sectionTitle('Fotos del cuidador', textColor),
               Text(
-                'Muestra el espacio donde se brindará el servicio',
+                'Sube fotos tuyas en acción con mascotas (mín. 2, máx. 6)',
                 style: TextStyle(color: subtextColor, fontSize: 13),
               ),
               const SizedBox(height: 12),
-              if (_uploadingPlacePhoto)
+              if (_uploadingCaregiverPhoto)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
                   child: LinearProgressIndicator(color: GardenColors.primary),
                 ),
-              for (final (key, label, required) in _placeSections)
-                _buildPlaceSectionBlock(key, label, required, borderColor, textColor, subtextColor),
-            ],
+              _buildCaregiverPhotoGrid(borderColor),
 
-            const Divider(height: 48),
+              if (_needsPlacePhotos) ...[
+                const SizedBox(height: 28),
+                _sectionTitle('Fotos del lugar', textColor),
+                Text(
+                  'Muestra el espacio donde se brindará el servicio',
+                  style: TextStyle(color: subtextColor, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                if (_uploadingPlacePhoto)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: LinearProgressIndicator(color: GardenColors.primary),
+                  ),
+                for (final (key, label, required) in _placeSections)
+                  _buildPlaceSectionBlock(key, label, required, borderColor, textColor, subtextColor),
+              ],
+              const Divider(height: 48),
+            ],
 
             // Sección 8 — FAQ
             SizedBox(key: _keyFaq, height: 0),

@@ -52,7 +52,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _bioController = TextEditingController();
   final _addressController = TextEditingController();
 
   // Dirección detallada
@@ -110,7 +109,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   final _keyStep0Phone = GlobalKey();
   final _keyStep0Address = GlobalKey();
   final _keyStep0Dob = GlobalKey();
-  final _keyStep0Bio = GlobalKey();
   final _keyStep1Services = GlobalKey();
   final _keyStep1Zone = GlobalKey();
   final _keyStep2Days = GlobalKey();
@@ -195,9 +193,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           // Pre-fill address and bio from client profile data
           if ((user['address'] as String? ?? '').isNotEmpty) {
             _addressController.text = user['address'] as String;
-          }
-          if ((user['bio'] as String? ?? '').isNotEmpty) {
-            _bioController.text = user['bio'] as String;
           }
           if (user['dateOfBirth'] != null) {
             try {
@@ -463,7 +458,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _phoneController.dispose();
-    _bioController.dispose();
     _addressController.dispose();
     _addressStreetController.dispose();
     _addressNumberController.dispose();
@@ -564,18 +558,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           _showStepError('Falta: Fecha de nacimiento', scrollTo: _keyStep0Dob);
           return false;
         }
-        if (_bioController.text.trim().length < 50) {
-          _showStepError('La descripción debe tener al menos 50 caracteres', scrollTo: _keyStep0Bio);
-          return false;
-        }
         return true;
       case 1:
         if (_servicesOffered.isEmpty) {
           _showStepError('Selecciona al menos un servicio', scrollTo: _keyStep1Services);
-          return false;
-        }
-        if (_selectedZone == null) {
-          _showStepError('Selecciona tu zona en Santa Cruz', scrollTo: _keyStep1Zone);
           return false;
         }
         return true;
@@ -647,12 +633,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       return;
     }
 
-    // Step 1: Servicios y zona → PATCH profile
+    // Step 1: Servicios → PATCH profile (zona se toma del domicilio del Paso 0)
     if (_currentStep == 1) {
       if (!_validateCurrentStep()) return;
       setState(() => _isLoading = true);
       await _patchProfile({
-        'zone': _selectedZone,
+        'zone': _addressZone ?? _selectedZone, // usa zona del domicilio; fallback a legado
         'servicesOffered': _servicesOffered,
         if (_homeType != null) 'homeType': _homeType,
         'hasYard': _hasYard,
@@ -798,7 +784,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             'isOver18': true,
           },
           'profile': {
-            'bio': _bioController.text.trim(),
             'address': _buildFullAddress(),
             if (_addressLat != null) 'addressLat': _addressLat,
             if (_addressLng != null) 'addressLng': _addressLng,
@@ -1191,25 +1176,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             ),
           ),
           const SizedBox(height: 16),
-
-          SizedBox(key: _keyStep0Bio, height: 0),
-          TextFormField(
-            controller: _bioController,
-            maxLines: 4,
-            maxLength: 500,
-            style: TextStyle(color: textColor, fontSize: 14),
-            decoration: InputDecoration(
-              hintText: 'Describe tu experiencia con animales (mínimo 50 caracteres)',
-              prefixIcon: Padding(
-                padding: const EdgeInsets.only(top: 14),
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: Icon(Icons.description_outlined, color: subtextColor, size: 20),
-                ),
-              ),
-              alignLabelWithHint: true,
-            ),
-          ),
         ],
       ),
     );
@@ -1617,24 +1583,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             Expanded(child: serviceCard('GUARDERIA', '🏡', 'Guardería')),
           ]),
           const SizedBox(height: 28),
-
-          SizedBox(key: _keyStep1Zone, height: 0),
-          Text('Zona en Santa Cruz', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            value: _selectedZone,
-            dropdownColor: surfaceEl,
-            style: TextStyle(color: textColor, fontSize: 14),
-            decoration: InputDecoration(
-              prefixIcon: Icon(Icons.location_on_outlined, color: subtextColor, size: 20),
-            ),
-            hint: Text('Selecciona tu zona', style: TextStyle(color: subtextColor)),
-            items: zoneLabels.entries.map((e) => DropdownMenuItem(
-              value: e.key,
-              child: Text(e.value, style: TextStyle(color: textColor)),
-            )).toList(),
-            onChanged: (v) { setState(() => _selectedZone = v); _loadPriceStats(); },
-          ),
 
           if (_servicesOffered.contains('HOSPEDAJE')) ...[
             const SizedBox(height: 28),
@@ -2226,6 +2174,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         embeddedMode: true,
         onSaveComplete: _afterStep6Save,
         servicesOffered: _servicesOffered,
+        showPhotos: false, // fotos ya subidas en Paso 2
       );
     } else if (_currentStep == 7) {
       postRegStep = VerificationScreen(
@@ -2237,6 +2186,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         showAppBar: false,
         phoneNumber: _phoneController.text.trim(),
         onComplete: _onPhoneVerificationComplete,
+        onChangePhone: (newPhone) async {
+          // Actualiza el teléfono en el perfil y recarga el paso para enviar nuevo OTP
+          _phoneController.text = newPhone;
+          await _patchProfile({'phone': newPhone});
+          if (mounted) setState(() {}); // rebuild para que PhoneVerificationScreen reciba nuevo número
+        },
       );
     } else {
       postRegStep = const SizedBox.shrink();
@@ -2378,7 +2333,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                                 ),
                                 const Spacer(),
                                 Text(
-                                  'Paso ${_currentStep + 1} de 10',
+                                  'Paso ${_currentStep + 1} de 9',
                                   style: TextStyle(color: subtextColor, fontSize: 12),
                                 ),
                                 const SizedBox(width: 10),
@@ -2421,7 +2376,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Paso ${_currentStep + 1} de 10',
+                        Text('Paso ${_currentStep + 1} de 9',
                             style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w500)),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),

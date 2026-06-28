@@ -11,12 +11,16 @@ class PhoneVerificationScreen extends StatefulWidget {
   final String phoneNumber; // 8-digit Bolivian number (without country code)
   final VoidCallback? onComplete;
   final bool showAppBar;
+  /// Called when the user wants to change the phone number before verifying.
+  /// If null, the "Cambiar número" button is not shown.
+  final void Function(String newPhone)? onChangePhone;
 
   const PhoneVerificationScreen({
     super.key,
     required this.phoneNumber,
     this.onComplete,
     this.showAppBar = true,
+    this.onChangePhone,
   });
 
   @override
@@ -146,6 +150,52 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     if (allFilled) _submitCode();
   }
 
+  void _showChangePhoneDialog(BuildContext context, Color subtextColor) {
+    final ctrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cambiar número de teléfono'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Ingresa tu número correcto (8 dígitos, empieza en 6 o 7).',
+                style: TextStyle(color: subtextColor, fontSize: 13)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: ctrl,
+              keyboardType: TextInputType.phone,
+              maxLength: 8,
+              decoration: const InputDecoration(
+                prefixText: '+591 ',
+                hintText: '7XXXXXXX',
+                counterText: '',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              final num = ctrl.text.trim();
+              final valid = num.length == 8 &&
+                  (num.startsWith('6') || num.startsWith('7'));
+              if (!valid) return;
+              Navigator.pop(ctx);
+              widget.onChangePhone!(num);
+            },
+            child: const Text('Confirmar',
+                style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -178,7 +228,16 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
                 style: TextStyle(fontSize: 15, color: subtextColor, height: 1.5),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 32),
+              if (widget.onChangePhone != null) ...[
+                const SizedBox(height: 6),
+                TextButton.icon(
+                  onPressed: () => _showChangePhoneDialog(context, subtextColor),
+                  icon: const Icon(Icons.edit_outlined, size: 15, color: GardenColors.primary),
+                  label: const Text('Cambiar número',
+                      style: TextStyle(color: GardenColors.primary, fontSize: 13)),
+                ),
+              ],
+              const SizedBox(height: 26),
 
               if (_isSending && !_codeSent) ...[
                 const CircularProgressIndicator(color: GardenColors.primary),
