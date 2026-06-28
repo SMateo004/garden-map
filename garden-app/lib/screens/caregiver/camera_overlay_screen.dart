@@ -111,10 +111,6 @@ class _CameraOverlayScreenState extends State<CameraOverlayScreen>
 
     setState(() => _isCapturing = true);
     try {
-      // Apagar linterna antes de capturar (evita sobreexposición)
-      if (_torchOn) {
-        await controller.setFlashMode(FlashMode.off);
-      }
       final xfile = await controller.takePicture();
       if (!mounted) return;
       Navigator.of(context).pop(File(xfile.path));
