@@ -1080,50 +1080,95 @@ export async function initPayment(
     }
 
     const totalAmount = Number(booking.totalAmount);
+    const effectiveDonation = Math.max(0, donationAmount);
+
+    // ── Helper: saldo disponible (descuenta retiros pendientes) ───────────────
+    // Reutilizado en todas las rutas de pago con billetera para que un retiro
+    // pendiente no se pueda usar simultáneamente para pagar una reserva.
+    const _getAvailableBalance = async (): Promise<{ balance: number; available: number }> => {
+      const user = await tx.user.findUnique({ where: { id: clientId }, select: { balance: true } });
+      const balance = Number(user?.balance ?? 0);
+      const pendingAgg = await tx.walletTransaction.aggregate({
+        where: { userId: clientId, type: 'WITHDRAWAL', status: { in: ['PENDING', 'PROCESSING'] } },
+        _sum: { amount: true },
+      });
+      const pendingWithdrawals = Number(pendingAgg._sum.amount ?? 0);
+      return { balance, available: Math.max(0, balance - pendingWithdrawals) };
+    };
+
+    // ── Helper: crear registro de donación + tx de billetera ──────────────────
+    const _recordDonation = async (balanceAfterService: number) => {
+      if (effectiveDonation <= 0) return balanceAfterService;
+      const updatedDonation = await tx.user.update({
+        where: { id: clientId },
+        data: { balance: { decrement: effectiveDonation } },
+        select: { balance: true },
+      });
+      const balanceAfterDonation = Number(updatedDonation.balance);
+      await tx.walletTransaction.create({
+        data: {
+          userId: clientId,
+          type: 'DONATION',
+          amount: effectiveDonation,
+          balance: balanceAfterDonation,
+          description: `Donación voluntaria — reserva ${bookingId.slice(0, 8)}`,
+          bookingId,
+          status: 'COMPLETED',
+        },
+      });
+      await tx.donation.upsert({
+        where: { bookingId },
+        create: { bookingId, clientId, amount: effectiveDonation },
+        update: {},
+      });
+      return balanceAfterDonation;
+    };
 
     // ── PAGO COMPLETO CON BILLETERA ────────────────────────────────────────────
     if (method === 'wallet') {
-      const user = await tx.user.findUnique({
-        where: { id: clientId },
-        select: { balance: true },
-      });
-      const balance = Number(user?.balance ?? 0);
-      if (balance < totalAmount) {
+      const { balance, available } = await _getAvailableBalance();
+      const totalCharge = totalAmount + effectiveDonation;
+      if (available < totalCharge) {
         throw new BookingValidationError(
-          `Saldo insuficiente. Tienes Bs ${balance.toFixed(2)} y la reserva cuesta Bs ${totalAmount.toFixed(2)}.`
+          `Saldo disponible insuficiente. Disponible: Bs ${available.toFixed(2)}, total: Bs ${totalCharge.toFixed(2)}${effectiveDonation > 0 ? ` (incluye Bs ${effectiveDonation.toFixed(2)} de donación)` : ''}.`
         );
       }
+      void balance; // used only for reference; decrement is atomic
 
       const updatedWallet = await tx.user.update({
         where: { id: clientId },
         data: { balance: { decrement: totalAmount } },
         select: { balance: true },
       });
-      const newBalance = Number(updatedWallet.balance);
+      const balanceAfterService = Number(updatedWallet.balance);
       await tx.walletTransaction.create({
         data: {
           userId: clientId,
           type: 'PAYMENT',
           amount: totalAmount,
-          balance: newBalance,
+          balance: balanceAfterService,
           description: `Pago con billetera — reserva ${bookingId.slice(0, 8)}`,
           bookingId,
           status: 'COMPLETED',
         },
       });
+      // Descontar donación (si aplica) y registrarla
+      await _recordDonation(balanceAfterService);
+
       await tx.booking.update({
         where: { id: bookingId },
         data: {
           status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
           paidAt: new Date(),
           walletPaymentAmount: totalAmount,
+          donationAmount: effectiveDonation > 0 ? effectiveDonation : null,
         },
       });
-      logger.info('Pago completo con billetera', { bookingId, clientId, totalAmount, newBalance });
+      logger.info('Pago completo con billetera', { bookingId, clientId, totalAmount, effectiveDonation });
       return {
         status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
         paidWithWallet: true,
-        walletDeducted: totalAmount,
+        walletDeducted: totalAmount + effectiveDonation,
         remainingAmount: 0,
       };
     }
@@ -1135,53 +1180,52 @@ export async function initPayment(
     );
 
     if (effectiveWalletContribution > 0) {
-      const user = await tx.user.findUnique({
-        where: { id: clientId },
-        select: { balance: true },
-      });
-      const balance = Number(user?.balance ?? 0);
-      if (balance < effectiveWalletContribution) {
+      const { available } = await _getAvailableBalance();
+      if (available < effectiveWalletContribution) {
         throw new BookingValidationError(
-          `Saldo insuficiente para la contribución de billetera. Tienes Bs ${balance.toFixed(2)}.`
+          `Saldo disponible insuficiente para la contribución de billetera. Disponible: Bs ${available.toFixed(2)}.`
         );
       }
 
-      // If wallet covers everything, treat as full wallet payment
-      if (effectiveWalletContribution >= totalAmount) {
+      // Si la billetera cubre el total del servicio + donación → pago completo por billetera
+      if (effectiveWalletContribution >= totalAmount && available >= totalAmount + effectiveDonation) {
         const updatedWalletFull = await tx.user.update({
           where: { id: clientId },
           data: { balance: { decrement: totalAmount } },
           select: { balance: true },
         });
-        const newBalance = Number(updatedWalletFull.balance);
+        const balanceAfterService = Number(updatedWalletFull.balance);
         await tx.walletTransaction.create({
           data: {
             userId: clientId,
             type: 'PAYMENT',
             amount: totalAmount,
-            balance: newBalance,
+            balance: balanceAfterService,
             description: `Pago con billetera — reserva ${bookingId.slice(0, 8)}`,
             bookingId,
             status: 'COMPLETED',
           },
         });
+        await _recordDonation(balanceAfterService);
+
         await tx.booking.update({
           where: { id: bookingId },
           data: {
             status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
             paidAt: new Date(),
             walletPaymentAmount: totalAmount,
+            donationAmount: effectiveDonation > 0 ? effectiveDonation : null,
           },
         });
         return {
           status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
           paidWithWallet: true,
-          walletDeducted: totalAmount,
+          walletDeducted: totalAmount + effectiveDonation,
           remainingAmount: 0,
         };
       }
 
-      // Partial: deduct wallet portion, generate QR for remainder
+      // Parcial: descontar porción de billetera, QR para el resto + donación
       const updatedWalletPartial = await tx.user.update({
         where: { id: clientId },
         data: { balance: { decrement: effectiveWalletContribution } },
@@ -1204,10 +1248,10 @@ export async function initPayment(
         data: { walletPaymentAmount: effectiveWalletContribution },
       });
 
-      const effectiveDonation = Math.max(0, donationAmount);
+      // QR incluye el monto restante del servicio + donación completa
       const remainingAmount = Math.round(totalAmount - effectiveWalletContribution);
-      const qrResult = await generateQR(bookingId, cfg.QR_VALIDITY_MINUTES_PAYMENT, remainingAmount);
-      // Re-use qrId/url/expiry fields; the QR encodes the full bookingId — admin uses the booking total
+      const qrMonto = remainingAmount + effectiveDonation;
+      const qrResult = await generateQR(bookingId, cfg.QR_VALIDITY_MINUTES_PAYMENT, qrMonto);
       await tx.booking.update({
         where: { id: bookingId },
         data: {
@@ -1219,22 +1263,22 @@ export async function initPayment(
           donationAmount: effectiveDonation > 0 ? effectiveDonation : null,
         },
       });
-      logger.info('Pago parcial con billetera + QR', { bookingId, clientId, walletContribution: effectiveWalletContribution, remainingAmount });
+      logger.info('Pago parcial con billetera + QR', { bookingId, clientId, walletContribution: effectiveWalletContribution, remainingAmount, effectiveDonation, qrMonto });
       return {
         qrId: qrResult.qrId,
         qrImageUrl: qrResult.qrImageUrl,
         qrExpiresAt: qrResult.qrExpiresAt.toISOString(),
         status: BookingStatus.PENDING_PAYMENT,
         walletDeducted: effectiveWalletContribution,
-        remainingAmount,
+        remainingAmount: qrMonto,
         paidWithWallet: false,
       };
     }
 
-    // ── PAGO QR COMPLETO (sin billetera) ──────────────────────────────────────
+    // ── PAGO QR COMPLETO (sin billetera) — QR incluye donación ───────────────
     if (method === 'qr') {
-      const effectiveDonation = Math.max(0, donationAmount);
-      const qrResult = await generateQR(bookingId, cfg.QR_VALIDITY_MINUTES_PAYMENT, totalAmount);
+      const qrMonto = totalAmount + effectiveDonation;
+      const qrResult = await generateQR(bookingId, cfg.QR_VALIDITY_MINUTES_PAYMENT, qrMonto);
       await tx.booking.update({
         where: { id: bookingId },
         data: {
@@ -1246,7 +1290,7 @@ export async function initPayment(
           donationAmount: effectiveDonation > 0 ? effectiveDonation : null,
         },
       });
-      logger.info('Pago QR iniciado', { bookingId, clientId, qrId: qrResult.qrId });
+      logger.info('Pago QR iniciado', { bookingId, clientId, qrId: qrResult.qrId, totalAmount, effectiveDonation, qrMonto });
       return {
         qrId: qrResult.qrId,
         qrImageUrl: qrResult.qrImageUrl,
