@@ -254,6 +254,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       pricePerWalk30: applyMarkup(c.pricePerWalk30, markupRate),
       pricePerWalk60: applyMarkup(c.pricePerWalk60, markupRate),
       pricePerGuarderia: applyMarkup(c.pricePerGuarderia, markupRate),
+      guarderiaIncludeWalk: (c as any).guarderiaIncludeWalk ?? false,
       verified: c.verified,
       spaceType: Array.isArray(c.spaceType) ? c.spaceType : (c.spaceType ? [c.spaceType] : []),
       experienceYears: c.experienceYears,
@@ -459,6 +460,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     pricePerWalk30: applyMarkup(profile.pricePerWalk30, markupRate),
     pricePerWalk60: applyMarkup(profile.pricePerWalk60, markupRate),
     pricePerGuarderia: applyMarkup(profile.pricePerGuarderia, markupRate),
+    guarderiaIncludeWalk: (profile as any).guarderiaIncludeWalk ?? false,
     verified: profile.verified,
     spaceType: Array.isArray(profile.spaceType) ? profile.spaceType : (profile.spaceType ? [profile.spaceType] : []),
     bio: profile.bio,
@@ -1046,6 +1048,7 @@ export async function createCaregiverProfile(
       pricePerWalk30: input.pricePerWalk30,
       pricePerWalk60: input.pricePerWalk60,
       pricePerGuarderia: input.pricePerGuarderia,
+      guarderiaIncludeWalk: false,
       verified: false,
     },
     include: { user: { select: { firstName: true, lastName: true, profilePicture: true } } },
@@ -1084,6 +1087,7 @@ export async function upsertCaregiverProfile(
     pricePerWalk30: input.pricePerWalk30 ?? null,
     pricePerWalk60: input.pricePerWalk60 ?? null,
     pricePerGuarderia: input.pricePerGuarderia ?? null,
+    guarderiaIncludeWalk: false,
   };
 
   const result = await prisma.$transaction(async (tx) => {
@@ -1136,6 +1140,7 @@ function mapProfileToListItem(profile: any, markupRate: number): CaregiverListIt
     pricePerWalk30: applyMarkup(profile.pricePerWalk30, markupRate),
     pricePerWalk60: applyMarkup(profile.pricePerWalk60, markupRate),
     pricePerGuarderia: applyMarkup(profile.pricePerGuarderia, markupRate),
+    guarderiaIncludeWalk: (profile as any).guarderiaIncludeWalk ?? false,
     verified: profile.verified,
     spaceType: Array.isArray(profile.spaceType) ? profile.spaceType : (profile.spaceType ? [profile.spaceType] : []),
     experienceYears: profile.experienceYears,

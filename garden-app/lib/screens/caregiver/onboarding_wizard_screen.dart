@@ -119,7 +119,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   // Paso 5: Precio (uno por cada servicio)
   double _precioHospedaje = 90.0;  // pricePerDay (por noche)
   double _precioPaseo = 90.0;      // pricePerWalk60 (por hora)
-  double _precioGuarderia = 90.0;  // pricePerGuarderia (por hora)
+  double _precioGuarderia = 90.0;        // pricePerGuarderia (por hora)
+  bool  _guarderiaIncludeWalk = false;   // ¿La guardería incluye un paseo?
   String _authToken = '';
   Map<String, dynamic>? _priceStats;
 
@@ -272,9 +273,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       final pDay  = ((profile['pricePerDay']       ?? 0) as num).toDouble();
       final pWalk = ((profile['pricePerWalk60']     ?? 0) as num).toDouble();
       final pGuar = ((profile['pricePerGuarderia']  ?? 0) as num).toDouble();
-      _precioHospedaje = pDay  > 0 ? pDay  : 90.0;
-      _precioPaseo     = pWalk > 0 ? pWalk : 60.0;
-      _precioGuarderia = pGuar > 0 ? pGuar : 50.0;
+      _precioHospedaje       = pDay  > 0 ? pDay  : 90.0;
+      _precioPaseo           = pWalk > 0 ? pWalk : 60.0;
+      _precioGuarderia       = pGuar > 0 ? pGuar : 50.0;
+      _guarderiaIncludeWalk  = profile['guarderiaIncludeWalk'] == true;
 
       // Step 5: Profile photo
       _profilePhotoUrl = profile['profilePhoto'] as String?;
@@ -722,6 +724,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         if (_servicesOffered.contains('HOSPEDAJE')) 'pricePerDay': _precioHospedaje.toInt(),
         if (_servicesOffered.contains('PASEO')) 'pricePerWalk60': _precioPaseo.toInt(),
         if (_servicesOffered.contains('GUARDERIA')) 'pricePerGuarderia': _precioGuarderia.toInt(),
+        if (_servicesOffered.contains('GUARDERIA')) 'guarderiaIncludeWalk': _guarderiaIncludeWalk,
       });
       setState(() { _isLoading = false; _currentStep++; });
       return;
@@ -1899,7 +1902,55 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             const SizedBox(height: 20),
           ],
           if (offersGuarderia) ...[
-            _buildPriceCard(titulo: 'Guardería', unidad: '/ día', emoji: '🏡', value: _precioGuarderia, onChanged: (v) => setState(() => _precioGuarderia = v)),
+            _buildPriceCard(titulo: 'Guardería', unidad: '/ hora', emoji: '🏡', value: _precioGuarderia, onChanged: (v) => setState(() => _precioGuarderia = v)),
+            const SizedBox(height: 12),
+            // Toggle: ¿La guardería incluye paseo?
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: _guarderiaIncludeWalk
+                    ? GardenColors.forest.withValues(alpha: 0.07)
+                    : (isDark ? GardenColors.darkSurface : GardenColors.lightSurface),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: _guarderiaIncludeWalk
+                      ? GardenColors.forest.withValues(alpha: 0.35)
+                      : (isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Text('🦮', style: TextStyle(fontSize: 22)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Incluye paseo',
+                          style: TextStyle(
+                            color: textColor,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Activa si tu guardería incluye un paseo durante el día. Se mostrará en tu perfil.',
+                          style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Switch(
+                    value: _guarderiaIncludeWalk,
+                    onChanged: (v) => setState(() => _guarderiaIncludeWalk = v),
+                    activeColor: GardenColors.forest,
+                  ),
+                ],
+              ),
+            ),
           ],
         ],
       ),

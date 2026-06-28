@@ -107,6 +107,7 @@ model CaregiverProfile {
   pricePerWalk30                  Int?
   pricePerWalk60                  Int?
   pricePerGuarderia               Float?
+  guarderiaIncludeWalk            Boolean  @default(false)
   rates                           Json?
   termsAccepted                   Boolean?
   privacyAccepted                 Boolean?

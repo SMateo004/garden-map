@@ -627,6 +627,8 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                                   emoji = '🏠';
                                   label = 'Hospedaje';
                                 }
+                                final includesWalk = isGuarderia &&
+                                    (_caregiver?['guarderiaIncludeWalk'] == true);
                                 return Container(
                                   margin: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                                   padding: const EdgeInsets.all(14),
@@ -635,15 +637,44 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
                                   ),
-                                  child: Row(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(emoji, style: const TextStyle(fontSize: 24)),
-                                      const SizedBox(width: 12),
-                                      Expanded(child: Text(label, style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700))),
-                                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                                        Text('Bs ${price ?? '—'}', style: const TextStyle(color: GardenColors.primary, fontSize: 18, fontWeight: FontWeight.w800)),
-                                        Text(unit, style: TextStyle(color: subtextColor, fontSize: 11)),
-                                      ]),
+                                      Row(
+                                        children: [
+                                          Text(emoji, style: const TextStyle(fontSize: 24)),
+                                          const SizedBox(width: 12),
+                                          Expanded(child: Text(label, style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700))),
+                                          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                                            Text('Bs ${price ?? '—'}', style: const TextStyle(color: GardenColors.primary, fontSize: 18, fontWeight: FontWeight.w800)),
+                                            Text(unit, style: TextStyle(color: subtextColor, fontSize: 11)),
+                                          ]),
+                                        ],
+                                      ),
+                                      if (includesWalk) ...[
+                                        const SizedBox(height: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                          decoration: BoxDecoration(
+                                            color: GardenColors.forest.withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(GardenRadius.full),
+                                            border: Border.all(color: GardenColors.forest.withValues(alpha: 0.3)),
+                                          ),
+                                          child: const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text('🦮', style: TextStyle(fontSize: 13)),
+                                              SizedBox(width: 5),
+                                              Text('Incluye paseo',
+                                                style: TextStyle(
+                                                  color: GardenColors.forest,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w700,
+                                                )),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 );

@@ -1242,6 +1242,31 @@ class _BookingScreenState extends State<BookingScreen> {
                   ],
                 ] else if (_selectedService == 'GUARDERIA') ...[
                   // ── Guardería: duración fija ──
+                  // Badge "Incluye paseo" si el cuidador lo ofrece
+                  if (_caregiver?['guarderiaIncludeWalk'] == true) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: GardenColors.forest.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(GardenRadius.lg),
+                        border: Border.all(color: GardenColors.forest.withValues(alpha: 0.3)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('🦮', style: TextStyle(fontSize: 16)),
+                          SizedBox(width: 8),
+                          Text('Esta guardería incluye un paseo durante el día',
+                            style: TextStyle(
+                              color: GardenColors.forest,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            )),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   Text('Duración', style: GardenText.h4.copyWith(color: textColor)),
                   const SizedBox(height: 12),
                   Builder(builder: (_) {

@@ -1,7 +1,7 @@
 /**
- * Job que corre cada minuto y revisa paseos IN_PROGRESS próximos a vencer.
- * - 5 min antes del fin: notifica al cliente que recoja a su mascota o amplíe.
- * - Al vencer: notifica al cliente que el tiempo terminó y puede ampliar.
+ * Job que corre cada minuto y revisa paseos Y guarderías IN_PROGRESS próximos a vencer.
+ * - 5 min antes del fin: notifica al cliente que recoja a su mascota.
+ * - Al vencer: notifica al cliente que el tiempo terminó.
  * Usa serviceEvents para no duplicar notificaciones.
  */
 import cron from 'node-cron';
@@ -20,18 +20,18 @@ export async function procesarVencimientoPaseos() {
     try {
         const now = new Date();
 
-        // Solo paseos IN_PROGRESS con hora de inicio conocida
+        // Paseos Y guarderías IN_PROGRESS con duración conocida
         const activos = await prisma.booking.findMany({
             where: {
                 status: 'IN_PROGRESS',
-                serviceType: 'PASEO',
-                startTime: { not: null },
+                serviceType: { in: ['PASEO', 'GUARDERIA'] },
                 duration: { not: null },
             },
             select: {
                 id: true,
                 clientId: true,
                 petName: true,
+                serviceType: true,
                 walkDate: true,
                 startTime: true,
                 duration: true,
@@ -78,11 +78,13 @@ export async function procesarVencimientoPaseos() {
                         },
                     });
 
+                    const isGuarderia = (booking as any).serviceType === 'GUARDERIA';
+                    const serviceLabel = isGuarderia ? 'guardería' : 'paseo';
                     await prisma.notification.create({
                         data: {
                             userId: booking.clientId,
                             title: '⏱️ ¡Quedan 5 minutos!',
-                            message: `El paseo de ${booking.petName ?? 'tu mascota'} termina en 5 min. ¿Todo bien? Puedes ampliar el tiempo desde la app.`,
+                            message: `La ${serviceLabel} de ${booking.petName ?? 'tu mascota'} termina en 5 min. Ve a recoger a tu mascota.`,
                             type: 'WALK_EXPIRY_WARNING',
                         },
                     });
@@ -90,7 +92,7 @@ export async function procesarVencimientoPaseos() {
                     sendPushToUser(
                         booking.clientId,
                         '⏱️ ¡Quedan 5 minutos!',
-                        `El paseo de ${booking.petName ?? 'tu mascota'} termina pronto. ¿Amplías el tiempo?`
+                        `La ${serviceLabel} de ${booking.petName ?? 'tu mascota'} termina pronto. ¡Ve a buscarla!`
                     ).catch(() => {});
 
                     logger.info('[WALK-EXPIRY] 5-min warning sent', { bookingId: booking.id });
@@ -109,11 +111,13 @@ export async function procesarVencimientoPaseos() {
                         },
                     });
 
+                    const isGuarderiaEnd = (booking as any).serviceType === 'GUARDERIA';
+                    const serviceLabelEnd = isGuarderiaEnd ? 'guardería' : 'paseo';
                     await prisma.notification.create({
                         data: {
                             userId: booking.clientId,
                             title: '🐾 Tu mascota está lista',
-                            message: `El tiempo del paseo de ${booking.petName ?? 'tu mascota'} ha terminado. ¿Deseas añadir más tiempo?`,
+                            message: `El tiempo de la ${serviceLabelEnd} de ${booking.petName ?? 'tu mascota'} ha terminado. ¡Es hora de recogerla!`,
                             type: 'WALK_EXPIRY_END',
                         },
                     });
@@ -121,7 +125,7 @@ export async function procesarVencimientoPaseos() {
                     sendPushToUser(
                         booking.clientId,
                         '🐾 Tu mascota está lista',
-                        `El paseo de ${booking.petName ?? 'tu mascota'} terminó. ¿Amplías el tiempo?`
+                        `La ${serviceLabelEnd} de ${booking.petName ?? 'tu mascota'} terminó.`
                     ).catch(() => {});
 
                     logger.info('[WALK-EXPIRY] End warning sent', { bookingId: booking.id });
