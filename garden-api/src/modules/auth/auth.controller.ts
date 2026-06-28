@@ -453,7 +453,6 @@ export const deleteAccount = asyncHandler(async (req: Request, res: Response) =>
 
   // For caregiver: check their bookings too
   let caregiverPendingBookings = 0;
-  let caregiverBalance = 0;
   const caregiverProfile = await prisma.caregiverProfile.findUnique({ where: { userId } });
   if (caregiverProfile) {
     caregiverPendingBookings = await prisma.booking.count({
@@ -462,11 +461,12 @@ export const deleteAccount = asyncHandler(async (req: Request, res: Response) =>
         status: { in: ['CONFIRMED', 'IN_PROGRESS', 'PENDING_PAYMENT', 'PAYMENT_PENDING_APPROVAL', 'WAITING_CAREGIVER_APPROVAL'] },
       },
     });
-    caregiverBalance = Number(caregiverProfile.balance ?? 0);
   }
 
+  // Leer balance desde User (fuente unificada) — NO desde las tablas deprecadas
   const clientProfile = await prisma.clientProfile.findUnique({ where: { userId } });
-  const clientBalance = Number(clientProfile?.balance ?? 0);
+  const userWithBalance = await prisma.user.findUnique({ where: { id: userId }, select: { balance: true } });
+  const unifiedBalance = Number(userWithBalance?.balance ?? 0);
 
   const pendingDisputes = await (prisma as any).dispute?.count?.({
     where: { status: { in: ['OPEN', 'IN_REVIEW'] }, booking: { OR: [{ clientId: userId }, ...(caregiverProfile ? [{ caregiverId: caregiverProfile.id }] : [])] } },
@@ -486,31 +486,19 @@ export const deleteAccount = asyncHandler(async (req: Request, res: Response) =>
   }
 
   // 4. Transfer wallet balance to Garden (create an outgoing transaction)
-  if (caregiverBalance > 0) {
+  // Usa User.balance (fuente unificada), no las tablas deprecadas CaregiverProfile/ClientProfile
+  if (unifiedBalance > 0) {
     await prisma.walletTransaction.create({
       data: {
         userId,
         type: 'WITHDRAWAL',
-        amount: caregiverProfile!.balance,
+        amount: unifiedBalance,
         balance: 0,
         description: 'Saldo transferido a GARDEN al eliminar cuenta',
         status: 'COMPLETED',
       },
     });
-    await prisma.caregiverProfile.update({ where: { userId }, data: { balance: 0 } });
-  }
-  if (clientBalance > 0) {
-    await prisma.walletTransaction.create({
-      data: {
-        userId,
-        type: 'WITHDRAWAL',
-        amount: clientProfile!.balance,
-        balance: 0,
-        description: 'Saldo transferido a GARDEN al eliminar cuenta',
-        status: 'COMPLETED',
-      },
-    });
-    await prisma.clientProfile.update({ where: { userId }, data: { balance: 0 } });
+    await prisma.user.update({ where: { id: userId }, data: { balance: 0 } });
   }
 
   // 5. Soft-delete: anonymize user data so they can re-register with same email

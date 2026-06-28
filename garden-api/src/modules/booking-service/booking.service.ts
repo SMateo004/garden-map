@@ -1094,11 +1094,12 @@ export async function initPayment(
         );
       }
 
-      const newBalance = balance - totalAmount;
-      await tx.user.update({
+      const updatedWallet = await tx.user.update({
         where: { id: clientId },
-        data: { balance: newBalance },
+        data: { balance: { decrement: totalAmount } },
+        select: { balance: true },
       });
+      const newBalance = Number(updatedWallet.balance);
       await tx.walletTransaction.create({
         data: {
           userId: clientId,
@@ -1147,11 +1148,12 @@ export async function initPayment(
 
       // If wallet covers everything, treat as full wallet payment
       if (effectiveWalletContribution >= totalAmount) {
-        const newBalance = balance - totalAmount;
-        await tx.user.update({
+        const updatedWalletFull = await tx.user.update({
           where: { id: clientId },
-          data: { balance: newBalance },
+          data: { balance: { decrement: totalAmount } },
+          select: { balance: true },
         });
+        const newBalance = Number(updatedWalletFull.balance);
         await tx.walletTransaction.create({
           data: {
             userId: clientId,
@@ -1180,11 +1182,12 @@ export async function initPayment(
       }
 
       // Partial: deduct wallet portion, generate QR for remainder
-      const newBalance = balance - effectiveWalletContribution;
-      await tx.user.update({
+      const updatedWalletPartial = await tx.user.update({
         where: { id: clientId },
-        data: { balance: newBalance },
+        data: { balance: { decrement: effectiveWalletContribution } },
+        select: { balance: true },
       });
+      const newBalance = Number(updatedWalletPartial.balance);
       await tx.walletTransaction.create({
         data: {
           userId: clientId,
@@ -3344,17 +3347,17 @@ export async function reportBooking(
       const caregiverBalance = Number(caregiverUser?.balance ?? 0);
       const actualFine = Math.min(fineAmount, caregiverBalance); // can't go negative
       if (actualFine > 0) {
-        const newCaregiverBalance = caregiverBalance - actualFine;
-        await tx.user.update({
+        const updatedCaregiver = await tx.user.update({
           where: { id: booking.caregiver.userId },
-          data: { balance: newCaregiverBalance },
+          data: { balance: { decrement: actualFine } },
+          select: { balance: true },
         });
         await tx.walletTransaction.create({
           data: {
             userId: booking.caregiver.userId,
             type: 'FINE',
             amount: actualFine,
-            balance: newCaregiverBalance,
+            balance: Number(updatedCaregiver.balance),
             description: `Multa por incumplimiento — reserva ${bookingId.slice(0, 8)} (${FINE_PERCENT * 100}% de Bs ${totalAmount})`,
             bookingId,
             status: 'COMPLETED',
