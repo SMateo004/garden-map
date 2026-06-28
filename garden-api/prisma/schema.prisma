@@ -302,6 +302,13 @@ model Booking {
   walletPaymentAmount       Decimal          @default(0) @db.Decimal(10, 2)
   /// Monto extra donado voluntariamente por el cliente al momento del pago, destinado a hogares de perros.
   donationAmount            Decimal?         @db.Decimal(10, 2)
+  /// Deuda previa del cliente (saldo negativo) incorporada al monto de este pago.
+  /// Se recupera al confirmar el pago — va a GARDEN (el cuidador que generó la deuda ya fue pagado).
+  debtRecoveryAmount        Decimal          @default(0) @db.Decimal(10, 2)
+  /// Minutos de overtime cobrados al finalizar el servicio (0 si no hubo).
+  overtimeMinutes           Int              @default(0)
+  /// Monto cobrado al cliente por overtime (Bs).
+  overtimeFeeAmount         Decimal          @default(0) @db.Decimal(10, 2)
   updatedAt                 DateTime         @updatedAt
   caregiver                 CaregiverProfile @relation("CaregiverBookings", fields: [caregiverId], references: [id], onDelete: Cascade)
   client                    User             @relation("ClientBookings", fields: [clientId], references: [id], onDelete: Cascade)

@@ -1085,6 +1085,13 @@ export async function initPayment(
     const totalAmount = Number(booking.totalAmount);
     const effectiveDonation = Math.max(0, donationAmount);
 
+    // ── Deuda previa del cliente (saldo negativo) ─────────────────────────────
+    // Si el cliente tiene saldo negativo (por cargo de overtime de un servicio anterior),
+    // la deuda se incorpora al pago actual y se recupera cuando el pago se confirme.
+    const clientUser = await tx.user.findUnique({ where: { id: clientId }, select: { balance: true } });
+    const clientBalance = Number(clientUser?.balance ?? 0);
+    const debtAmount = clientBalance < 0 ? Math.abs(clientBalance) : 0;
+
     // ── Helper: saldo disponible (descuenta retiros pendientes) ───────────────
     // Reutilizado en todas las rutas de pago con billetera para que un retiro
     // pendiente no se pueda usar simultáneamente para pagar una reserva.
@@ -1130,17 +1137,20 @@ export async function initPayment(
     // ── PAGO COMPLETO CON BILLETERA ────────────────────────────────────────────
     if (method === 'wallet') {
       const { balance, available } = await _getAvailableBalance();
-      const totalCharge = totalAmount + effectiveDonation;
+      // Incluir deuda previa en el total a cobrar por billetera
+      const totalCharge = totalAmount + effectiveDonation + debtAmount;
       if (available < totalCharge) {
         throw new BookingValidationError(
-          `Saldo disponible insuficiente. Disponible: Bs ${available.toFixed(2)}, total: Bs ${totalCharge.toFixed(2)}${effectiveDonation > 0 ? ` (incluye Bs ${effectiveDonation.toFixed(2)} de donación)` : ''}.`
+          `Saldo disponible insuficiente. Disponible: Bs ${available.toFixed(2)}, total: Bs ${totalCharge.toFixed(2)}${effectiveDonation > 0 ? ` (incluye Bs ${effectiveDonation.toFixed(2)} de donación)` : ''}${debtAmount > 0 ? ` + Bs ${debtAmount.toFixed(2)} de deuda previa` : ''}.`
         );
       }
       void balance; // used only for reference; decrement is atomic
 
+      // Wallet completo: también recupera deuda
+      const totalDecrement = totalAmount + debtAmount;
       const updatedWallet = await tx.user.update({
         where: { id: clientId },
-        data: { balance: { decrement: totalAmount } },
+        data: { balance: { decrement: totalDecrement } },
         select: { balance: true },
       });
       const balanceAfterService = Number(updatedWallet.balance);
@@ -1149,12 +1159,25 @@ export async function initPayment(
           userId: clientId,
           type: 'PAYMENT',
           amount: totalAmount,
-          balance: balanceAfterService,
+          balance: balanceAfterService + debtAmount, // snapshot pre-deuda
           description: `Pago con billetera — reserva ${bookingId.slice(0, 8)}`,
           bookingId,
           status: 'COMPLETED',
         },
       });
+      if (debtAmount > 0) {
+        await tx.walletTransaction.create({
+          data: {
+            userId: clientId,
+            type: 'DEBT_RECOVERY',
+            amount: debtAmount,
+            balance: balanceAfterService,
+            description: `Recuperación de deuda por tiempo extra — reserva ${bookingId.slice(0, 8)}`,
+            bookingId,
+            status: 'COMPLETED',
+          },
+        });
+      }
       // Descontar donación (si aplica) y registrarla
       await _recordDonation(balanceAfterService);
 
@@ -1165,13 +1188,14 @@ export async function initPayment(
           paidAt: new Date(),
           walletPaymentAmount: totalAmount,
           donationAmount: effectiveDonation > 0 ? effectiveDonation : null,
+          debtRecoveryAmount: debtAmount,
         },
       });
-      logger.info('Pago completo con billetera', { bookingId, clientId, totalAmount, effectiveDonation });
+      logger.info('Pago completo con billetera', { bookingId, clientId, totalAmount, effectiveDonation, debtAmount });
       return {
         status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
         paidWithWallet: true,
-        walletDeducted: totalAmount + effectiveDonation,
+        walletDeducted: totalAmount + effectiveDonation + debtAmount,
         remainingAmount: 0,
       };
     }
@@ -1190,11 +1214,12 @@ export async function initPayment(
         );
       }
 
-      // Si la billetera cubre el total del servicio + donación → pago completo por billetera
-      if (effectiveWalletContribution >= totalAmount && available >= totalAmount + effectiveDonation) {
+      // Si la billetera cubre el total del servicio + donación + deuda → pago completo por billetera
+      if (effectiveWalletContribution >= totalAmount && available >= totalAmount + effectiveDonation + debtAmount) {
+        const totalDecrementFull = totalAmount + debtAmount;
         const updatedWalletFull = await tx.user.update({
           where: { id: clientId },
-          data: { balance: { decrement: totalAmount } },
+          data: { balance: { decrement: totalDecrementFull } },
           select: { balance: true },
         });
         const balanceAfterService = Number(updatedWalletFull.balance);
@@ -1203,12 +1228,25 @@ export async function initPayment(
             userId: clientId,
             type: 'PAYMENT',
             amount: totalAmount,
-            balance: balanceAfterService,
+            balance: balanceAfterService + debtAmount,
             description: `Pago con billetera — reserva ${bookingId.slice(0, 8)}`,
             bookingId,
             status: 'COMPLETED',
           },
         });
+        if (debtAmount > 0) {
+          await tx.walletTransaction.create({
+            data: {
+              userId: clientId,
+              type: 'DEBT_RECOVERY',
+              amount: debtAmount,
+              balance: balanceAfterService,
+              description: `Recuperación de deuda por tiempo extra — reserva ${bookingId.slice(0, 8)}`,
+              bookingId,
+              status: 'COMPLETED',
+            },
+          });
+        }
         await _recordDonation(balanceAfterService);
 
         await tx.booking.update({
@@ -1218,17 +1256,18 @@ export async function initPayment(
             paidAt: new Date(),
             walletPaymentAmount: totalAmount,
             donationAmount: effectiveDonation > 0 ? effectiveDonation : null,
+            debtRecoveryAmount: debtAmount,
           },
         });
         return {
           status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
           paidWithWallet: true,
-          walletDeducted: totalAmount + effectiveDonation,
+          walletDeducted: totalAmount + effectiveDonation + debtAmount,
           remainingAmount: 0,
         };
       }
 
-      // Parcial: descontar porción de billetera, QR para el resto + donación
+      // Parcial: descontar porción de billetera, QR para el resto + donación + deuda
       const updatedWalletPartial = await tx.user.update({
         where: { id: clientId },
         data: { balance: { decrement: effectiveWalletContribution } },
@@ -1251,9 +1290,9 @@ export async function initPayment(
         data: { walletPaymentAmount: effectiveWalletContribution },
       });
 
-      // QR incluye el monto restante del servicio + donación completa
+      // QR incluye el monto restante del servicio + donación completa + deuda previa
       const remainingAmount = Math.round(totalAmount - effectiveWalletContribution);
-      const qrMonto = remainingAmount + effectiveDonation;
+      const qrMonto = remainingAmount + effectiveDonation + debtAmount;
       const qrResult = await generateQR(bookingId, cfg.QR_VALIDITY_MINUTES_PAYMENT, qrMonto);
       await tx.booking.update({
         where: { id: bookingId },
@@ -1264,9 +1303,10 @@ export async function initPayment(
           sipQrId: qrResult.sipQrId ?? null,
           sipTransaccionId: qrResult.sipTransaccionId ?? null,
           donationAmount: effectiveDonation > 0 ? effectiveDonation : null,
+          debtRecoveryAmount: debtAmount,
         },
       });
-      logger.info('Pago parcial con billetera + QR', { bookingId, clientId, walletContribution: effectiveWalletContribution, remainingAmount, effectiveDonation, qrMonto });
+      logger.info('Pago parcial con billetera + QR', { bookingId, clientId, walletContribution: effectiveWalletContribution, remainingAmount, effectiveDonation, debtAmount, qrMonto });
       return {
         qrId: qrResult.qrId,
         qrImageUrl: qrResult.qrImageUrl,
@@ -1278,9 +1318,9 @@ export async function initPayment(
       };
     }
 
-    // ── PAGO QR COMPLETO (sin billetera) — QR incluye donación ───────────────
+    // ── PAGO QR COMPLETO (sin billetera) — QR incluye donación + deuda previa ─
     if (method === 'qr') {
-      const qrMonto = totalAmount + effectiveDonation;
+      const qrMonto = totalAmount + effectiveDonation + debtAmount;
       const qrResult = await generateQR(bookingId, cfg.QR_VALIDITY_MINUTES_PAYMENT, qrMonto);
       await tx.booking.update({
         where: { id: bookingId },
@@ -1291,9 +1331,10 @@ export async function initPayment(
           sipQrId: qrResult.sipQrId ?? null,
           sipTransaccionId: qrResult.sipTransaccionId ?? null,
           donationAmount: effectiveDonation > 0 ? effectiveDonation : null,
+          debtRecoveryAmount: debtAmount,
         },
       });
-      logger.info('Pago QR iniciado', { bookingId, clientId, qrId: qrResult.qrId, totalAmount, effectiveDonation, qrMonto });
+      logger.info('Pago QR iniciado', { bookingId, clientId, qrId: qrResult.qrId, totalAmount, effectiveDonation, debtAmount, qrMonto });
       return {
         qrId: qrResult.qrId,
         qrImageUrl: qrResult.qrImageUrl,
@@ -2960,6 +3001,32 @@ export async function getGpsTrack(bookingId: string, userId: string): Promise<an
   return (booking.serviceTrackingData as any[]) || [];
 }
 
+// ── Helper: calcular overtime al finalizar un servicio ──────────────────────
+function calcOvertimeMinutes(
+  serviceType: ServiceType,
+  serviceStartedAt: Date | null,
+  duration: number | null,
+  endDate: Date | null,
+  concludedAt: Date
+): number {
+  const GRACE_MINUTES = 15;
+
+  if (serviceType === ServiceType.HOSPEDAJE) {
+    if (!endDate) return 0;
+    const endMidnight = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 0, 0, 0);
+    const diffMs = concludedAt.getTime() - endMidnight.getTime();
+    const diffMins = Math.max(0, Math.floor(diffMs / 60_000));
+    return Math.max(0, diffMins - GRACE_MINUTES);
+  }
+
+  // PASEO / GUARDERÍA
+  if (!serviceStartedAt || !duration) return 0;
+  const expectedEndMs = serviceStartedAt.getTime() + duration * 60_000;
+  const diffMs = concludedAt.getTime() - expectedEndMs;
+  const diffMins = Math.max(0, Math.floor(diffMs / 60_000));
+  return Math.max(0, diffMins - GRACE_MINUTES);
+}
+
 export async function concludeService(
   bookingId: string,
   caregiverUserId: string,
@@ -2967,6 +3034,8 @@ export async function concludeService(
   lat: number | null,
   lng: number | null
 ): Promise<BookingCreateResult> {
+  const concludedAt = new Date();
+
   return prisma.$transaction(async (tx) => {
     const profile = await tx.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
     if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
@@ -2988,30 +3057,117 @@ export async function concludeService(
     }
 
     const tracking = (booking.serviceTrackingData as any[]) || [];
-    if (lat && lng) tracking.push({ lat, lng, timestamp: new Date(), type: 'END' });
+    if (lat && lng) tracking.push({ lat, lng, timestamp: concludedAt, type: 'END' });
     const gpsDistance = booking.serviceType === ServiceType.PASEO ? calcGpsDistance(tracking) : null;
+
+    // ── Calcular overtime ──────────────────────────────────────────────────────
+    const overtimeMins = calcOvertimeMinutes(
+      booking.serviceType,
+      booking.serviceStartedAt,
+      booking.duration,
+      booking.endDate,
+      concludedAt
+    );
+
+    let overtimeFeeGross = 0;
+    let overtimeFeeCaregiver = 0;
+    const cfg = await getBookingSettings();
+
+    if (overtimeMins > 0) {
+      // Tarifa por minuto basada en lo que pagó el cliente (prorrateado del total)
+      let ratePerMin: number;
+      if (booking.serviceType === ServiceType.HOSPEDAJE) {
+        const totalDays = Number(booking.totalDays ?? 1);
+        ratePerMin = Number(booking.totalAmount) / (totalDays * 24 * 60);
+      } else {
+        // PASEO / GUARDERÍA: precio por minuto del servicio contratado
+        ratePerMin = Number(booking.totalAmount) / Number(booking.duration ?? 60);
+      }
+      overtimeFeeGross    = Math.round(overtimeMins * ratePerMin * 100) / 100;
+      overtimeFeeCaregiver = Math.round(overtimeFeeGross * (1 - cfg.COMMISSION_RATE) * 100) / 100;
+
+      // Cobrar al cliente (puede quedar negativo — se recupera en la próxima reserva)
+      const updatedClient = await tx.user.update({
+        where: { id: booking.clientId },
+        data: { balance: { decrement: overtimeFeeGross } },
+        select: { balance: true },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          userId: booking.clientId,
+          type: 'OVERTIME_FEE',
+          amount: overtimeFeeGross,
+          balance: Number(updatedClient.balance),
+          description: `Cargo por tiempo extra — ${overtimeMins} min sobre el horario acordado (${bookingId.slice(0, 8)})`,
+          bookingId,
+          status: 'COMPLETED',
+        },
+      });
+
+      // Pagar al cuidador su parte del overtime
+      const updatedCaregiver = await tx.user.update({
+        where: { id: profile.userId },
+        data: { balance: { increment: overtimeFeeCaregiver } },
+        select: { balance: true },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          userId: profile.userId,
+          type: 'OVERTIME_EARNING',
+          amount: overtimeFeeCaregiver,
+          balance: Number(updatedCaregiver.balance),
+          description: `Pago por espera extra — ${overtimeMins} min (${bookingId.slice(0, 8)})`,
+          bookingId,
+          status: 'COMPLETED',
+        },
+      });
+
+      // Notificar al cliente del cargo
+      const svcLabel = booking.serviceType === ServiceType.PASEO ? 'paseo'
+                     : booking.serviceType === ServiceType.GUARDERIA ? 'guardería' : 'hospedaje';
+      const balanceAfter = Number(updatedClient.balance);
+      const balanceMsg = balanceAfter < 0
+        ? ` Tu billetera quedó en Bs ${balanceAfter.toFixed(2)} — este saldo se sumará a tu próxima reserva.`
+        : ` Se descontaron Bs ${overtimeFeeGross.toFixed(2)} de tu billetera.`;
+      await tx.notification.create({
+        data: {
+          userId: booking.clientId,
+          title: '⏰ Cargo por tiempo extra',
+          message: `El ${svcLabel} de ${booking.petName ?? 'tu mascota'} se extendió ${overtimeMins} min sobre el tiempo contratado (incluidos 15 min de gracia gratuita). Cargo: Bs ${overtimeFeeGross.toFixed(2)}.${balanceMsg}`,
+          type: 'SYSTEM',
+        },
+      });
+      sendPushToUser(
+        booking.clientId,
+        '⏰ Cargo por tiempo extra',
+        `${overtimeMins} min extra · Bs ${overtimeFeeGross.toFixed(2)} cargados a tu billetera`
+      ).catch(() => {});
+    }
 
     const updated = await tx.booking.update({
       where: { id: bookingId },
       data: {
         status: BookingStatus.COMPLETED,
-        serviceEndedAt: new Date(),
+        serviceEndedAt: concludedAt,
         serviceEndPhoto: photoUrl,
         serviceTrackingData: tracking,
         gpsDistance,
+        overtimeMinutes:  overtimeMins,
+        overtimeFeeAmount: overtimeFeeGross,
       },
     });
 
-    // Notificación in-app al cliente
+    // Notificación de servicio completado + pedido de calificación
+    const ratingMsg = `El cuidador finalizó el servicio de ${booking.petName}. ¡Califica para que reciba su pago!`;
     await tx.notification.create({
       data: {
         userId: booking.clientId,
-        title: 'Servicio finalizado ✅',
-        message: `El cuidador finalizó el servicio para ${booking.petName}. Entra a "Mis reservas" para confirmar la recepción y dejar tu reseña.`,
+        title: 'Servicio finalizado ✅ — Califica ahora',
+        message: ratingMsg,
         type: 'SERVICE_COMPLETED',
       },
     });
-    sendPushToUser(booking.clientId, 'Servicio finalizado ✅', `El cuidador terminó. Deja tu reseña para liberar el pago.`).catch(() => {});
+    sendPushToUser(booking.clientId, 'Servicio finalizado ✅', '⭐ Tu calificación libera el pago al cuidador').catch(() => {});
     notificationService.onServiceCompleted(bookingId).catch(() => {});
 
     auditLog({
@@ -3019,7 +3175,7 @@ export async function concludeService(
       action: 'BOOKING_COMPLETED',
       entity: 'Booking',
       entityId: bookingId,
-      details: { serviceType: booking.serviceType, gpsDistance },
+      details: { serviceType: booking.serviceType, gpsDistance, overtimeMins, overtimeFeeGross },
     });
 
     return bookingToResponse(updated);

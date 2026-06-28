@@ -155,12 +155,66 @@ async function procesarAvisosFinHospedaje() {
   }
 }
 
+// ── Recordatorio de calificación post-servicio ───────────────────────────────
+// Corre cada hora. Si el servicio lleva ~22-26h completado sin calificación,
+// envía un segundo push + email recordando que la calificación libera el pago.
+
+async function procesarRecordatoriosCalificacion() {
+  const now = new Date();
+  const windowStart = new Date(now.getTime() - 26 * 60 * 60 * 1000);
+  const windowEnd   = new Date(now.getTime() - 22 * 60 * 60 * 1000);
+
+  const pendientes = await prisma.booking.findMany({
+    where: {
+      status: 'COMPLETED',
+      ownerRated: false,
+      payoutStatus: 'PENDING',
+      serviceEndedAt: { gte: windowStart, lte: windowEnd },
+    },
+    select: {
+      id: true,
+      clientId: true,
+      petName: true,
+      serviceType: true,
+      caregiver: { select: { user: { select: { firstName: true, lastName: true } } } },
+    },
+  });
+
+  for (const b of pendientes) {
+    try {
+      const caregiverName = [b.caregiver?.user?.firstName, b.caregiver?.user?.lastName].filter(Boolean).join(' ') || 'tu cuidador';
+      const svcLabel = b.serviceType === 'PASEO' ? 'paseo' : b.serviceType === 'GUARDERIA' ? 'guardería' : 'hospedaje';
+
+      await prisma.notification.create({
+        data: {
+          userId: b.clientId,
+          title: '⭐ ¡No olvides calificar!',
+          message: `Aún no has calificado el ${svcLabel} de ${b.petName ?? 'tu mascota'} con ${caregiverName}. Tu calificación libera el pago al cuidador.`,
+          type: 'SERVICE_COMPLETED',
+        },
+      });
+      sendPushToUser(
+        b.clientId,
+        '⭐ ¡Califica el servicio!',
+        `Recuerda calificar el ${svcLabel} de ${b.petName ?? 'tu mascota'}. El cuidador espera su pago.`
+      ).catch(() => {});
+
+      logger.info('[RATING-REMINDER] Recordatorio 24h enviado', { bookingId: b.id });
+    } catch (err: any) {
+      logger.error('[RATING-REMINDER] Error', { bookingId: b.id, err: err?.message });
+    }
+  }
+}
+
 export function iniciarJobServiceReminders() {
-  // Recordatorios de inicio de servicio — cada hora
+  // Recordatorios de inicio de servicio + avisos de fin de hospedaje + recordatorios de calificación
   cron.schedule('0 * * * *', async () => {
     await procesarRecordatoriosDeServicio();
     await procesarAvisosFinHospedaje().catch(err =>
       logger.error('[HOSPEDAJE-EXPIRY] Job falló', { err })
+    );
+    await procesarRecordatoriosCalificacion().catch(err =>
+      logger.error('[RATING-REMINDER] Job falló', { err })
     );
   });
 
@@ -174,5 +228,5 @@ export function iniciarJobServiceReminders() {
     }
   });
 
-  logger.info('[REMINDERS] Job de recordatorios de servicio activo (incluye avisos fin de hospedaje).');
+  logger.info('[REMINDERS] Job de recordatorios de servicio activo (incluye avisos fin de hospedaje + recordatorios de calificación).');
 }

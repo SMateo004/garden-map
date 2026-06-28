@@ -309,6 +309,27 @@ export async function verifyPaymentByQr(qrId: string, clientId: string): Promise
     }).catch((err) => logger.error('Donation record creation failed (QR)', { bookingId: booking.id, err }));
   }
 
+  // Si había deuda previa incluida en el QR, recuperarla (zerificar balance negativo)
+  const debtRecovery = Number((booking as any).debtRecoveryAmount ?? 0);
+  if (debtRecovery > 0) {
+    prisma.user.update({
+      where: { id: booking.clientId },
+      data: { balance: { increment: debtRecovery } },
+    }).then(() => {
+      return prisma.walletTransaction.create({
+        data: {
+          userId: booking.clientId,
+          type: 'DEBT_RECOVERY',
+          amount: debtRecovery,
+          balance: 0, // balance se zerificó
+          description: `Deuda por tiempo extra recuperada vía QR — reserva ${booking.id.slice(0, 8)}`,
+          bookingId: booking.id,
+          status: 'COMPLETED',
+        },
+      });
+    }).catch((err) => logger.error('Debt recovery failed (QR)', { bookingId: booking.id, err }));
+  }
+
   // Registro en Blockchain — guardar txHash
   blockchainService.createBookingOnChain(
     booking.id,

@@ -10,6 +10,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/garden_theme.dart';
+import '../../widgets/slide_to_confirm_button.dart';
 import '../chat/chat_screen.dart';
 import 'gps_tracking_screen.dart';
 import 'meet_and_greet_screen.dart';
@@ -2725,6 +2726,18 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   ),
                   const SizedBox(height: 16),
 
+                  // ── Botón deslizante: Finalizar servicio ─────────────────
+                  SlideToConfirmButton(
+                    label: isPhotoMet
+                        ? 'Desliza para finalizar servicio'
+                        : 'Necesitas ${minPhotos - photoCount} foto${minPhotos - photoCount == 1 ? '' : 's'} más',
+                    color: isPhotoMet ? GardenColors.success : GardenColors.warning,
+                    icon: Icons.check_circle_rounded,
+                    height: 58,
+                    onConfirmed: isPhotoMet ? _showFinishConfirmation : null,
+                  ),
+                  const SizedBox(height: 20),
+
                   // ── Grid de acciones ─────────────────────────────────────
                   Text('Acciones', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
                   const SizedBox(height: 12),
@@ -2816,51 +2829,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     ),
                   ],
                   const SizedBox(height: 12),
-                  // Row 4: Finalizar (full width)
-                  GestureDetector(
-                    onTap: _showFinishConfirmation,
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
-                        borderRadius: BorderRadius.circular(GardenRadius.xl),
-                        border: Border.all(color: GardenColors.success.withValues(alpha: 0.25)),
-                        boxShadow: GardenShadows.card,
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 40, height: 40,
-                            decoration: BoxDecoration(
-                              color: GardenColors.success.withValues(alpha: 0.11),
-                              borderRadius: BorderRadius.circular(GardenRadius.md),
-                            ),
-                            child: const Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 20),
-                          ),
-                          const SizedBox(width: 14),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Finalizar servicio',
-                                style: TextStyle(
-                                  color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
-                                  fontWeight: FontWeight.w800, fontSize: 14)),
-                              Text('${_serviceEvents.length} / $minPhotos fotos completadas',
-                                style: TextStyle(
-                                  color: _serviceEvents.length >= minPhotos ? GardenColors.success : GardenColors.warning,
-                                  fontSize: 11)),
-                            ],
-                          ),
-                          const Spacer(),
-                          Icon(Icons.arrow_forward_ios_rounded,
-                            size: 14,
-                            color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 6),
 
                   // ── Fotos enviadas ───────────────────────────────────────
                   if (_serviceEvents.isNotEmpty) ...[
