@@ -1,12 +1,14 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import 'camera_overlay_screen.dart';
 
 class VerificationScreen extends StatefulWidget {
   final VoidCallback? onComplete;
@@ -31,8 +33,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
   Uint8List? _selfiePreview;
   Uint8List? _ciFrontPreview;
   Uint8List? _ciBackPreview;
-
-  final ImagePicker _picker = ImagePicker();
 
   // Estado del proceso
   // 0: intro, 1: selfie, 2: CI frontal, 3: CI trasero, 4: enviando, 5: resultado
@@ -102,28 +102,53 @@ class _VerificationScreenState extends State<VerificationScreen> {
   }
 
   Future<void> _capturePhoto(String type) async {
-    try {
-      final preferredCamera =
-          type == 'selfie' ? CameraDevice.front : CameraDevice.rear;
+    final isSelfie = type == 'selfie';
 
-      final XFile? photo = await _picker.pickImage(
-        source: ImageSource.camera,
-        preferredCameraDevice: preferredCamera,
-        imageQuality: 85,
-        maxWidth: 1280,
-        maxHeight: 1280,
+    final String title;
+    final String hint;
+    final CameraFrameShape frameShape;
+    final CameraLensDirection lensDir;
+
+    if (isSelfie) {
+      title = 'Toma tu selfie';
+      hint = 'Centra tu rostro en el óvalo y mira directo a la cámara';
+      frameShape = CameraFrameShape.oval;
+      lensDir = CameraLensDirection.front;
+    } else if (type == 'ciFront') {
+      title = 'CI — Frente';
+      hint = 'Coloca el documento dentro del marco. Asegúrate que sea legible.';
+      frameShape = CameraFrameShape.rectangle;
+      lensDir = CameraLensDirection.back;
+    } else {
+      title = 'CI — Reverso';
+      hint = 'Coloca el reverso del documento dentro del marco.';
+      frameShape = CameraFrameShape.rectangle;
+      lensDir = CameraLensDirection.back;
+    }
+
+    try {
+      final File? file = await Navigator.of(context).push<File>(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => CameraOverlayScreen(
+            frameShape: frameShape,
+            title: title,
+            hint: hint,
+            lensDirection: lensDir,
+          ),
+        ),
       );
 
-      if (photo == null) return; // User cancelled
+      if (file == null) return;
 
-      final bytes = await photo.readAsBytes();
+      final bytes = await file.readAsBytes();
 
       setState(() {
         if (type == 'selfie') {
           _selfiePreview = bytes;
         } else if (type == 'ciFront') {
           _ciFrontPreview = bytes;
-        } else if (type == 'ciBack') {
+        } else {
           _ciBackPreview = bytes;
         }
       });
@@ -142,7 +167,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text(
-                'No se pudo acceder a la camara. Verifica los permisos de la app.'),
+                'No se pudo acceder a la cámara. Verifica los permisos de la app.'),
             backgroundColor: Colors.red.shade700,
             duration: const Duration(seconds: 4),
           ),
