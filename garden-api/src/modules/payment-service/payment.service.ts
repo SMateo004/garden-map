@@ -310,7 +310,7 @@ export async function verifyPaymentByQr(qrId: string, clientId: string): Promise
   }
 
   // Si había deuda previa incluida en el QR, recuperarla (zerificar balance negativo)
-  const debtRecovery = Number((booking as any).debtRecoveryAmount ?? 0);
+  const debtRecovery = Number(booking.debtRecoveryAmount ?? 0);
   if (debtRecovery > 0) {
     prisma.user.update({
       where: { id: booking.clientId },
@@ -507,6 +507,27 @@ export async function verifyPaymentBySipCallback(
       create: { bookingId: booking.id, clientId: booking.clientId, amount: booking.donationAmount },
       update: {},
     }).catch((err) => logger.error('[SIP callback] Donation record failed', { bookingId: booking.id, err }));
+  }
+
+  // Recuperar deuda previa incluida en el QR (igual que en verifyPaymentByQr)
+  const sipDebtRecovery = Number(booking.debtRecoveryAmount ?? 0);
+  if (sipDebtRecovery > 0) {
+    prisma.user.update({
+      where: { id: booking.clientId },
+      data: { balance: { increment: sipDebtRecovery } },
+    }).then(() =>
+      prisma.walletTransaction.create({
+        data: {
+          userId: booking.clientId,
+          type: 'DEBT_RECOVERY',
+          amount: sipDebtRecovery,
+          balance: 0,
+          description: `Deuda por tiempo extra recuperada vía SIP — reserva ${booking.id.slice(0, 8)}`,
+          bookingId: booking.id,
+          status: 'COMPLETED',
+        },
+      })
+    ).catch((err) => logger.error('[SIP callback] Debt recovery failed', { bookingId: booking.id, err }));
   }
 
   blockchainService.createBookingOnChain(

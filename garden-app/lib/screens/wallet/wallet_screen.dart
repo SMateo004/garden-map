@@ -735,7 +735,9 @@ class _WalletScreenState extends State<WalletScreen> {
   Widget _buildTransactionTile(Map<String, dynamic> t, Color surface, Color textColor, Color subtextColor, Color borderColor) {
     final type = t['type'] as String;
     final amount = t['amount'] as num;
-    final isPositive = type == 'EARNING' || type == 'REFUND' || type == 'GIFT';
+    final isPositive = type == 'EARNING' || type == 'REFUND' || type == 'GIFT'
+        || type == 'OVERTIME_EARNING' // cuidador: ganancia por espera extra
+        || type == 'DEBT_RECOVERY';   // cliente: se zerifica deuda anterior
     final isPending = t['status'] == 'PENDING';
 
     IconData icon;
@@ -769,6 +771,18 @@ class _WalletScreenState extends State<WalletScreen> {
       case 'GIFT':
         icon = Icons.card_giftcard_rounded;
         color = Colors.purple;
+        break;
+      case 'OVERTIME_FEE':
+        icon = Icons.timer_off_rounded;
+        color = GardenColors.orange;
+        break;
+      case 'OVERTIME_EARNING':
+        icon = Icons.timer_rounded;
+        color = GardenColors.success;
+        break;
+      case 'DEBT_RECOVERY':
+        icon = Icons.healing_rounded;
+        color = GardenColors.info;
         break;
       default:
         icon = Icons.swap_horiz_rounded;

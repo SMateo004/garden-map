@@ -3013,8 +3013,12 @@ function calcOvertimeMinutes(
 
   if (serviceType === ServiceType.HOSPEDAJE) {
     if (!endDate) return 0;
-    const endMidnight = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 0, 0, 0);
-    const diffMs = concludedAt.getTime() - endMidnight.getTime();
+    // endDate es @db.Date → llega como medianoche UTC (00:00 UTC = 20:00 Bolivia UTC-4).
+    // "Medianoche Bolivia" del día siguiente = endDate + 24h (próxima 00:00 UTC) + 4h offset
+    // = endDate + 28h. Eso sería 00:00 Bolivia del día endDate+1.
+    // Usamos endDate + 24h como "inicio del día siguiente en UTC" — momento de checkout.
+    const checkoutUTC = new Date(endDate.getTime() + 24 * 60 * 60 * 1000); // 00:00 UTC del día después
+    const diffMs = concludedAt.getTime() - checkoutUTC.getTime();
     const diffMins = Math.max(0, Math.floor(diffMs / 60_000));
     return Math.max(0, diffMins - GRACE_MINUTES);
   }
