@@ -364,11 +364,12 @@ export const completeWithdrawal = asyncHandler(async (req: Request, res: Respons
         );
       }
 
-      const newBalance = Number(userRecord.balance) - Number(tx.amount);
-      await prismaTx.user.update({
+      const updatedUser = await prismaTx.user.update({
         where: { id: tx.userId },
-        data: { balance: newBalance },
+        data: { balance: { decrement: tx.amount } },
+        select: { balance: true },
       });
+      const newBalance = Number(updatedUser.balance);
 
       await prismaTx.walletTransaction.update({
         where: { id },
