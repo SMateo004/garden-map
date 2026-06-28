@@ -53,6 +53,8 @@ post_install do |installer|
   # Fix build-phase cycle caused by CocoaPods embedding the widget extension,
   # and fix Xcode 26 cycle where Thin Binary declares INFOPLIST_PATH as input.
   # Both fixes run on every pod install so Flutter can't re-introduce them.
+  # Also injects a Run Script phase into GardenActivityWidgetExtension that strips
+  # macOS extended attributes (iCloud adds them at write time) right before codesign.
   installer.aggregate_targets.each do |aggregate_target|
     project = aggregate_target.user_project
     project.targets.each do |target|
@@ -68,12 +70,24 @@ post_install do |installer|
           build_phase.input_paths&.delete_if  { |p| p.include?('INFOPLIST_PATH') }
         end
       end
+
+      # (no additional signing override needed — iCloud issue resolved via build/ symlink)
     end
     project.save
   end
-  # Strip macOS extended attributes that cause "resource fork detritus" codesign errors
+  # Strip macOS extended attributes (com.apple.quarantine, com.apple.fileprovider.dir#N, etc.)
+  # that cause "resource fork, Finder information, or similar detritus not allowed" codesign errors.
+  # Pods: only frameworks (some pod source files are read-only, xattr -cr would fail on them).
   Dir.glob(File.join(installer.sandbox.root, '**', '*.framework')).each do |framework|
     system("xattr -cr '#{framework}'")
+  end
+  # Widget extension source, Runner source, and flutter build output: safe to clean entirely.
+  [
+    File.expand_path(File.join('..', 'GardenActivityWidget'), __FILE__),
+    File.expand_path(File.join('..', 'Runner'), __FILE__),
+    File.expand_path(File.join('..', '..', 'build'), __FILE__),
+  ].each do |dir|
+    system("xattr -cr '#{dir}'") if File.exist?(dir)
   end
 
   # PostHog bundles PHPLCrashReporter but the vendor/Source headers are missing from the pod.
