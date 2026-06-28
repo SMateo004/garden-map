@@ -1065,7 +1065,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     );
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1207,7 +1207,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     ];
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1535,20 +1535,24 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           });
           _loadPriceStats();
         },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 18),
           decoration: BoxDecoration(
-            color: selected ? GardenColors.primary.withValues(alpha: 0.12) : surfaceEl,
-            borderRadius: BorderRadius.circular(14),
+            color: selected ? GardenColors.primary.withValues(alpha: 0.1) : surfaceEl,
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: selected ? GardenColors.primary : borderColor,
               width: selected ? 2 : 1,
             ),
+            boxShadow: selected ? [
+              BoxShadow(color: GardenColors.primary.withValues(alpha: 0.18), blurRadius: 10, offset: const Offset(0, 3)),
+            ] : [],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(emoji, style: const TextStyle(fontSize: 26)),
+              Text(emoji, style: const TextStyle(fontSize: 30)),
               const SizedBox(height: 8),
               Text(
                 label,
@@ -1557,9 +1561,18 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: selected ? GardenColors.primary : textColor,
-                  fontWeight: FontWeight.w700, fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
                 ),
               ),
+              if (selected) ...[
+                const SizedBox(height: 6),
+                Container(
+                  width: 20, height: 20,
+                  decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
+                  child: const Icon(Icons.check_rounded, size: 13, color: Colors.white),
+                ),
+              ],
             ],
           ),
         ),
@@ -1567,17 +1580,17 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('¿Qué ofreces?', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
           const SizedBox(height: 6),
-          Text('Selecciona los servicios que brindarás', style: TextStyle(fontSize: 14, color: subtextColor)),
+          Text('Selecciona los servicios que brindarás', style: TextStyle(fontSize: 14, color: subtextColor, height: 1.4)),
           const SizedBox(height: 28),
 
           SizedBox(key: _keyStep1Services, height: 0),
-          Text('Servicios', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w700)),
+          Text('SERVICIOS', style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
           const SizedBox(height: 12),
           Row(children: [
             Expanded(child: serviceCard('HOSPEDAJE', '🏠', 'Hospedaje')),
@@ -1589,8 +1602,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           const SizedBox(height: 28),
 
           if (_servicesOffered.contains('HOSPEDAJE')) ...[
-            const SizedBox(height: 28),
-            Text('Tu hogar', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: textColor)),
+            const SizedBox(height: 4),
+            Text('TU HOGAR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: subtextColor, letterSpacing: 1.2)),
             const SizedBox(height: 12),
             Row(children: [
               Expanded(
@@ -1667,7 +1680,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         decoration: BoxDecoration(color: surfaceEl, borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor)),
         child: SwitchListTile(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 15)),
+          title: Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
           subtitle: Text(subtitle, style: TextStyle(color: subtextColor, fontSize: 12)),
           value: value,
           activeColor: GardenColors.primary,
@@ -1677,7 +1690,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1687,7 +1700,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           const SizedBox(height: 28),
 
           SizedBox(key: _keyStep2Days, height: 0),
-          Text('Días disponibles', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w700)),
+          Text('DÍAS DISPONIBLES', style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
           const SizedBox(height: 12),
           availSwitch('Días de semana', 'Lunes a Viernes', _weekdays, (v) => setState(() => _weekdays = v)),
           availSwitch('Fines de semana', 'Sábado y Domingo', _weekends, (v) => setState(() => _weekends = v)),
@@ -1695,7 +1708,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
           const SizedBox(height: 12),
           SizedBox(key: _keyStep2Times, height: 0),
-          Text('Horarios', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w700)),
+          Text('HORARIOS', style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8, runSpacing: 8,
@@ -1736,71 +1749,85 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     String? infoNote,
   }) {
     final isDark = themeNotifier.isDark;
-    final cardBg = isDark ? const Color(0xFF1C2A1A) : const Color(0xFF2A3D1A);
+    // Fondo oscuro intencional en ambos modos (hace que el precio grande resalte)
+    // Light: forest green profundo. Dark: bosque aún más oscuro.
+    final cardBg = isDark ? GardenColors.darkSurface : GardenColors.forest;
 
     const double sliderMin = 10.0;
     const double sliderMax = 400.0;
     final double sv = value.clamp(sliderMin, sliderMax);
     final double ratio = (sv - sliderMin) / (sliderMax - sliderMin);
     final String posicion = ratio < 0.25 ? 'ECONÓMICO' : ratio < 0.6 ? 'ESTÁNDAR' : 'PREMIUM';
+    // Colores de posición usando el sistema de colores de Garden
     final Color posicionColor = posicion == 'ECONÓMICO'
-        ? const Color(0xFF2196F3)
-        : posicion == 'PREMIUM' ? const Color(0xFFFFD700) : const Color(0xFF4CAF50);
+        ? GardenColors.info
+        : posicion == 'PREMIUM' ? GardenColors.warning : GardenColors.accent;
+    final Color posicionText = posicion == 'PREMIUM'
+        ? GardenColors.darkBackground
+        : posicion == 'ECONÓMICO' ? Colors.white : GardenColors.darkBackground;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
       decoration: BoxDecoration(
         color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4)),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        boxShadow: [BoxShadow(color: GardenColors.forest.withValues(alpha: 0.25), blurRadius: 12, offset: const Offset(0, 4))],
       ),
       child: Column(children: [
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(emoji, style: const TextStyle(fontSize: 20)),
+          Text(emoji, style: const TextStyle(fontSize: 22)),
           const SizedBox(width: 8),
-          Text(titulo, style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w700)),
+          Text(titulo, style: const TextStyle(color: Colors.white70, fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 0.2)),
         ]),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
           children: [
-            const Text('Bs ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70)),
-            Text(sv.toStringAsFixed(0), style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.white, height: 1.1)),
+            const Text('Bs ', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white60)),
+            Text(sv.toStringAsFixed(0), style: const TextStyle(fontSize: 52, fontWeight: FontWeight.w900, color: Colors.white, height: 1.0, letterSpacing: -1)),
           ],
         ),
-        const SizedBox(height: 2),
-        Text(unidad, style: const TextStyle(color: Colors.white60, fontSize: 12)),
+        const SizedBox(height: 4),
+        Text(unidad, style: const TextStyle(color: Colors.white54, fontSize: 12, letterSpacing: 0.3)),
         if (infoNote != null) ...[
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(10),
+              color: Colors.white.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
             ),
-            child: Text(infoNote, style: const TextStyle(color: Colors.white70, fontSize: 11), textAlign: TextAlign.center),
+            child: Text(infoNote, style: const TextStyle(color: Colors.white70, fontSize: 11, height: 1.4), textAlign: TextAlign.center),
           ),
         ],
-        const SizedBox(height: 10),
+        const SizedBox(height: 14),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
           decoration: BoxDecoration(color: posicionColor, borderRadius: BorderRadius.circular(20)),
-          child: Text(posicion, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold,
-              color: posicion == 'PREMIUM' ? Colors.black : Colors.white)),
+          child: Text(posicion, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: posicionText, letterSpacing: 0.5)),
         ),
-        const SizedBox(height: 16),
-        Slider(
-          value: sv, min: sliderMin, max: sliderMax, divisions: 78,
-          activeColor: GardenColors.primary, inactiveColor: Colors.white24, thumbColor: Colors.white,
-          label: 'Bs ${sv.toStringAsFixed(0)}',
-          onChanged: onChanged,
+        const SizedBox(height: 14),
+        SliderTheme(
+          data: const SliderThemeData(
+            trackHeight: 5,
+            thumbShape: RoundSliderThumbShape(enabledThumbRadius: 10),
+            overlayShape: RoundSliderOverlayShape(overlayRadius: 18),
+          ),
+          child: Slider(
+            value: sv, min: sliderMin, max: sliderMax, divisions: 78,
+            activeColor: GardenColors.lime, inactiveColor: Colors.white.withValues(alpha: 0.18), thumbColor: Colors.white,
+            label: 'Bs ${sv.toStringAsFixed(0)}',
+            onChanged: onChanged,
+          ),
         ),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          const Text('Bs 10', style: TextStyle(color: Colors.white54, fontSize: 11)),
-          const Text('Bs 400', style: TextStyle(color: Colors.white54, fontSize: 11)),
+          const Text('Bs 10', style: TextStyle(color: Colors.white38, fontSize: 11)),
+          const Text('Bs 400', style: TextStyle(color: Colors.white38, fontSize: 11)),
         ]),
       ]),
     );
@@ -1817,7 +1844,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     final serviceCount    = [offersHospedaje, offersPaseo, offersGuarderia].where((b) => b).length;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1934,7 +1961,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   // ignore: unused_element
   Widget _buildStep6Deprecated() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2105,7 +2132,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     final surfaceEl    = isDark ? GardenColors.darkSurfaceElevated: GardenColors.lightSurfaceElevated;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -2376,22 +2403,59 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                 if (!kIsWeb) ...[
                   Container(
                     color: surface,
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                    child: Column(
                       children: [
-                        Text('Paso ${_currentStep + 1} de 9',
-                            style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w500)),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: GardenColors.primary.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
-                          ),
-                          child: Text(stepTitles[_currentStep],
-                              style: const TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w700)),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  stepTitles[_currentStep],
+                                  style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w800),
+                                ),
+                                const SizedBox(height: 1),
+                                Text(
+                                  'Paso ${_currentStep + 1} de 9',
+                                  style: TextStyle(color: subtextColor, fontSize: 11),
+                                ),
+                              ],
+                            ),
+                            // Dots: 9 pasos, llenos los completados
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: List.generate(9, (i) {
+                                final done   = i < _currentStep;
+                                final active = i == _currentStep;
+                                return AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                                  width:  active ? 18 : 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    color: done || active
+                                        ? GardenColors.primary
+                                        : borderColor,
+                                    borderRadius: BorderRadius.circular(3),
+                                  ),
+                                );
+                              }),
+                            ),
+                          ],
                         ),
+                        const SizedBox(height: 10),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(2),
+                          child: LinearProgressIndicator(
+                            value: (_currentStep + 1) / 9,
+                            backgroundColor: borderColor,
+                            valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
+                            minHeight: 3,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
                       ],
                     ),
                   ),
