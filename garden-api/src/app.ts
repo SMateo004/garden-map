@@ -272,6 +272,9 @@ const PUBLIC_SETTING_KEYS = new Set([
   'paymentsEnabled',
   'hospedajeEnabled',
   'paseoEnabled',
+  'guarderiaEnabled',   // ← faltaba
+  'retirosEnabled',     // ← faltaba
+  'disputasEnabled',
   'preciosDinamicosEnabled',
   'meetGreetEnabled',
   'betaInviteRequired',
@@ -286,12 +289,21 @@ app.get('/api/settings', async (_req, res) => {
       if (!PUBLIC_SETTING_KEYS.has(s.key)) continue; // skip financial/operational keys
       try { map[s.key] = JSON.parse(s.value); } catch { map[s.key] = s.value; }
     }
+    // Defaults sincronizados con server.ts seed — solo aplican si la key aún no existe en DB
     const defaults: Record<string, unknown> = {
       walk30Enabled: false,
       maintenanceMode: false,
       newRegistrationsEnabled: true,
       marketplaceEnabled: true,
       paymentsEnabled: true,
+      hospedajeEnabled: true,
+      paseoEnabled: true,
+      guarderiaEnabled: true,
+      retirosEnabled: true,
+      disputasEnabled: true,
+      preciosDinamicosEnabled: true,
+      meetGreetEnabled: true,
+      betaInviteRequired: false,
     };
     res.json({ success: true, data: { ...defaults, ...map } });
   } catch {

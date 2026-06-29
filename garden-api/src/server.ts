@@ -166,6 +166,7 @@ async function start() {
         { key: 'maintenanceMode',          value: 'false' },
         { key: 'hospedajeEnabled',         value: 'true'  },
         { key: 'paseoEnabled',             value: 'true'  },
+        { key: 'guarderiaEnabled',         value: 'true'  }, // ← faltaba seed
         { key: 'retirosEnabled',           value: 'true'  },
         { key: 'disputasEnabled',          value: 'true'  },
         { key: 'preciosDinamicosEnabled',  value: 'true'  },
@@ -173,18 +174,21 @@ async function start() {
         // ── Beta access control ──────────────────────────────────────────────
         { key: 'betaInviteRequired',       value: 'false' },
         // JSON array of valid invite codes: ["GARDEN2025","BETA01"]
-        // Update via PATCH /api/admin/settings/betaInviteCodes
         { key: 'betaInviteCodes',          value: '[]'    },
+        // ── Códigos de registro especiales (string) ──────────────────────────
+        { key: 'professionalRegistrationCode', value: '' }, // ← faltaba seed
+        { key: 'companyRegistrationCode',      value: '' }, // ← faltaba seed
         // ── Pagos y finanzas (numeric) ───────────────────────────────────────
         { key: 'platformCommissionPct',    value: '10'    },
         { key: 'montoMinimoRetiro',        value: '50'    },
-        { key: 'qrValidityHours',          value: '24'    },
-        { key: 'qrValidityMinutes',        value: '15'    },
+        { key: 'qrValidityMinutes',        value: '15'    }, // usado actualmente
+        { key: 'qrValidityHours',          value: '24'    }, // legado, ya no activo
         { key: 'autoReleasePaymentHoras',  value: '24'    },
+        { key: 'onHoldSlaHoras',           value: '72'    }, // ← faltaba seed
         // ── Política cancelación HOSPEDAJE (numeric) ─────────────────────────
-        { key: 'hospedajeRefundAdminFeeBS', value: '10'  },
-        { key: 'hospedajeRefund100Horas',  value: '48'   },
-        { key: 'hospedajeRefund50Horas',   value: '24'   },
+        { key: 'hospedajeRefundAdminFeeBS',    value: '10' },
+        { key: 'hospedajeRefund100Horas',      value: '48' },
+        { key: 'hospedajeRefund50Horas',       value: '24' },
         // ── Política cancelación PASEO (numeric) ─────────────────────────────
         { key: 'paseoRefund100Horas',      value: '12'   },
         { key: 'paseoRefund50Horas',       value: '6'    },

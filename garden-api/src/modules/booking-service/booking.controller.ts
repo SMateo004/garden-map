@@ -78,6 +78,12 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
       error: { code: 'PASEO_DISABLED', message: 'El servicio de paseos está temporalmente deshabilitado.' },
     });
   }
+  if (body.serviceType === 'PASEO' && (body as any).duration === 30 && !await getBoolSetting('walk30Enabled', false)) {
+    return res.status(503).json({
+      success: false,
+      error: { code: 'WALK30_DISABLED', message: 'Los paseos de 30 minutos están temporalmente deshabilitados.' },
+    });
+  }
   if (body.serviceType === 'GUARDERIA' && !await getBoolSetting('guarderiaEnabled', true)) {
     return res.status(503).json({
       success: false,
