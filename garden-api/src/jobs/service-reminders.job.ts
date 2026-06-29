@@ -209,33 +209,62 @@ async function procesarRecordatoriosCalificacion() {
 // ── Procesador de notificaciones masivas programadas ─────────────────────────
 // Corre cada minuto. Si hay MassNotifications con scheduledAt <= now y status SCHEDULED, las envía.
 
+const BATCH_SIZE = 200;
+
 async function procesarNotificacionesMasivasProgramadas() {
   const now = new Date();
+  // También recupera envíos que quedaron en SENDING (reinicio del servidor a mitad de proceso)
   const pendientes = await prisma.massNotification.findMany({
-    where: { status: 'SCHEDULED', scheduledAt: { lte: now } },
-    select: { id: true, title: true, message: true, targetType: true, targetZone: true },
+    where: {
+      OR: [
+        { status: 'SCHEDULED', scheduledAt: { lte: now } },
+        { status: 'SENDING' }, // retomar envíos interrumpidos
+      ],
+    },
+    select: { id: true, title: true, message: true, targetType: true, targetZone: true, sentCount: true },
   });
 
   for (const n of pendientes) {
     try {
       await prisma.massNotification.update({ where: { id: n.id }, data: { status: 'SENDING' } });
+
       const where: any = { isDeleted: { not: true } };
       if (n.targetType === 'clients') where.role = 'CLIENT';
       else if (n.targetType === 'caregivers') where.role = 'CAREGIVER';
-      else if (n.targetType === 'zone' && n.targetZone) where.caregiverProfile = { zone: n.targetZone };
-
-      const users = await prisma.user.findMany({ where, select: { id: true } });
-      let sentCount = 0;
-      let failCount = 0;
-      for (const user of users) {
-        try {
-          await prisma.notification.create({
-            data: { userId: user.id, title: n.title, message: n.message, type: 'SYSTEM' },
-          });
-          sendPushToUser(user.id, n.title, n.message).catch(() => {});
-          sentCount++;
-        } catch { failCount++; }
+      else if (n.targetType === 'zone' && n.targetZone) {
+        where.OR = [
+          { caregiverProfile: { zone: n.targetZone } },
+          { clientProfile: { addressZone: n.targetZone } },
+        ];
       }
+
+      let sentCount = n.sentCount; // retoma desde donde quedó si fue interrumpido
+      let failCount = 0;
+      let cursor: string | undefined;
+
+      while (true) {
+        const users = await prisma.user.findMany({
+          where,
+          select: { id: true },
+          take: BATCH_SIZE,
+          ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+          orderBy: { id: 'asc' },
+        });
+        if (users.length === 0) break;
+        cursor = users[users.length - 1]!.id;
+
+        try {
+          await prisma.notification.createMany({
+            data: users.map(u => ({ userId: u.id, title: n.title, message: n.message, type: 'SYSTEM' })),
+            skipDuplicates: true,
+          });
+          sentCount += users.length;
+          users.forEach(u => sendPushToUser(u.id, n.title, n.message).catch(() => {}));
+        } catch { failCount += users.length; }
+
+        if (users.length < BATCH_SIZE) break;
+      }
+
       await prisma.massNotification.update({
         where: { id: n.id },
         data: { status: 'SENT', sentAt: new Date(), sentCount, failCount },

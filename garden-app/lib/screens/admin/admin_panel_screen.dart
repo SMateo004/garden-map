@@ -4165,6 +4165,9 @@ class _AdminBannersViewState extends State<_AdminBannersView> {
   }
 
   @override Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: themeNotifier,
+      builder: (context, _) {
     final isDark = themeNotifier.isDark;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
@@ -4212,6 +4215,7 @@ class _AdminBannersViewState extends State<_AdminBannersView> {
                 )),
             ]),
     );
+    }); // AnimatedBuilder
   }
 }
 
@@ -4295,6 +4299,9 @@ class _AdminMassNotifViewState extends State<_AdminMassNotifView> {
   }
 
   @override Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: themeNotifier,
+      builder: (context, _) {
     final isDark = themeNotifier.isDark;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
@@ -4346,6 +4353,7 @@ class _AdminMassNotifViewState extends State<_AdminMassNotifView> {
                 }),
             ]),
     );
+    }); // AnimatedBuilder
   }
 }
 
@@ -4423,6 +4431,9 @@ class _AdminFeatureFlagsViewState extends State<_AdminFeatureFlagsView> {
   }
 
   @override Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: themeNotifier,
+      builder: (context, _) {
     final isDark = themeNotifier.isDark;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
@@ -4477,5 +4488,6 @@ class _AdminFeatureFlagsViewState extends State<_AdminFeatureFlagsView> {
                 }),
             ]),
     );
+    }); // AnimatedBuilder
   }
 }

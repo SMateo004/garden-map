@@ -311,6 +311,24 @@ app.get('/api/settings', async (_req, res) => {
   }
 });
 
+/** GET /api/settings/price-limits — límites de precio públicos para el wizard de onboarding */
+app.get('/api/settings/price-limits', async (_req, res) => {
+  try {
+    const keys = ['paseoMinPrice','paseoMaxPrice','hospedajeMinPrice','hospedajeMaxPrice','guarderiaMinPrice','guarderiaMaxPrice'];
+    const rows = await prisma.appSettings.findMany({ where: { key: { in: keys } } });
+    const defaults: Record<string, number> = {
+      paseoMinPrice: 10, paseoMaxPrice: 400,
+      hospedajeMinPrice: 10, hospedajeMaxPrice: 400,
+      guarderiaMinPrice: 10, guarderiaMaxPrice: 400,
+    };
+    const map: Record<string, number> = { ...defaults };
+    for (const r of rows) map[r.key] = Number(r.value) || (defaults[r.key] ?? 10);
+    res.json({ success: true, data: map });
+  } catch {
+    res.json({ success: true, data: { paseoMinPrice:10, paseoMaxPrice:400, hospedajeMinPrice:10, hospedajeMaxPrice:400, guarderiaMinPrice:10, guarderiaMaxPrice:400 } });
+  }
+});
+
 /** GET /api/banners — banners activos ordenados por posición (público, sin auth) */
 app.get('/api/banners', async (_req, res) => {
   try {

@@ -310,10 +310,14 @@ router.post('/banners', asyncHandler(async (req, res) => {
 
 /** PATCH /api/admin/banners/:id */
 router.patch('/banners/:id', asyncHandler(async (req, res) => {
-  const banner = await prisma.marketplaceBanner.update({
-    where: { id: req.params.id },
-    data: req.body as any,
-  });
+  const b = req.body as Record<string, unknown>;
+  // Filtrar solo campos editables — nunca permitir id, createdAt, updatedAt
+  const data: Record<string, unknown> = {};
+  const allowed = ['active','position','sortOrder','imageUrl','title','subtitle','buttonText','actionType','actionValue'];
+  for (const k of allowed) {
+    if (k in b) data[k] = b[k] ?? null;
+  }
+  const banner = await prisma.marketplaceBanner.update({ where: { id: req.params.id }, data: data as any });
   res.json({ success: true, data: banner });
 }));
 
@@ -370,36 +374,56 @@ router.delete('/mass-notifications/:id', asyncHandler(async (req, res) => {
 }));
 
 /** Helper interno: enviar push masivo y actualizar estado */
+const MASS_NOTIF_BATCH = 200; // filas por ciclo para no saturar la DB ni la memoria
+
 async function _sendMassNotification(
   id: string, title: string, message: string, targetType: string, targetZone: string | null
 ) {
+  const { sendPushToUser } = await import('../../services/firebase.service.js');
   try {
     // Construir where clause según segmentación
     const where: any = { isDeleted: { not: true } };
     if (targetType === 'clients') where.role = 'CLIENT';
     else if (targetType === 'caregivers') where.role = 'CAREGIVER';
     else if (targetType === 'zone' && targetZone) {
-      // Usuarios con perfil de cuidador en la zona dada
-      where.caregiverProfile = { zone: targetZone };
+      // Zona: cuidadores de esa zona + clientes con dirección en esa zona
+      where.OR = [
+        { caregiverProfile: { zone: targetZone } },
+        { clientProfile: { addressZone: targetZone } },
+      ];
     }
 
-    const users = await prisma.user.findMany({ where, select: { id: true } });
     let sentCount = 0;
     let failCount = 0;
+    let cursor: string | undefined;
 
-    for (const user of users) {
+    // Procesamiento por lotes — evita OOM con bases de usuarios grandes
+    while (true) {
+      const users = await prisma.user.findMany({
+        where,
+        select: { id: true },
+        take: MASS_NOTIF_BATCH,
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+        orderBy: { id: 'asc' },
+      });
+
+      if (users.length === 0) break;
+      cursor = users[users.length - 1]!.id;
+
       try {
-        // Notificación in-app
-        await prisma.notification.create({
-          data: { userId: user.id, title, message, type: 'SYSTEM' },
+        // createMany es ~10× más rápido que create en bucle
+        await prisma.notification.createMany({
+          data: users.map(u => ({ userId: u.id, title, message, type: 'SYSTEM' })),
+          skipDuplicates: true,
         });
-        // Push (fire-and-forget)
-        const { sendPushToUser } = await import('../../services/firebase.service.js');
-        sendPushToUser(user.id, title, message).catch(() => {});
-        sentCount++;
+        sentCount += users.length;
+        // Push en paralelo por lote (fire-and-forget)
+        users.forEach(u => sendPushToUser(u.id, title, message).catch(() => {}));
       } catch {
-        failCount++;
+        failCount += users.length;
       }
+
+      if (users.length < MASS_NOTIF_BATCH) break; // último lote
     }
 
     await prisma.massNotification.update({
@@ -444,6 +468,8 @@ router.post('/feature-flags', asyncHandler(async (req, res) => {
 
 /** DELETE /api/admin/feature-flags/:id */
 router.delete('/feature-flags/:id', asyncHandler(async (req, res) => {
+  const existing = await prisma.userFeatureFlag.findUnique({ where: { id: req.params.id } });
+  if (!existing) return res.status(404).json({ success: false, error: { message: 'Feature flag no encontrado' } });
   await prisma.userFeatureFlag.delete({ where: { id: req.params.id } });
   res.json({ success: true });
 }));

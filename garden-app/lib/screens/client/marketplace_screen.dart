@@ -1815,14 +1815,23 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final actionType = banner['actionType'] as String? ?? 'none';
     final actionValue = banner['actionValue'] as String?;
 
+    // Rutas internas permitidas para banners (whitelist de seguridad)
+    const _allowedRoutes = {
+      '/marketplace', '/my-bookings-tab', '/my-pets-tab',
+      '/service-selector', '/profile', '/wallet',
+    };
+
     Future<void> handleTap() async {
       if (actionType == 'url' && actionValue != null) {
         final uri = Uri.tryParse(actionValue);
-        if (uri != null && await canLaunchUrl(uri)) {
+        // Solo URLs con esquema http/https permitidas
+        if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http') && await canLaunchUrl(uri)) {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
         }
       } else if (actionType == 'screen' && actionValue != null) {
-        context.push(actionValue);
+        if (_allowedRoutes.contains(actionValue)) {
+          context.push(actionValue);
+        }
       }
     }
 

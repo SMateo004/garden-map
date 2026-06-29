@@ -138,8 +138,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
   Future<void> _loadPriceLimits() async {
     try {
+      // Endpoint público — no requiere rol admin
       final baseUrl = const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
-      final res = await http.get(Uri.parse('$baseUrl/admin/settings'), headers: {'Authorization': 'Bearer ${AuthState.token}'});
+      final res = await http.get(Uri.parse('$baseUrl/settings/price-limits'));
       if (res.statusCode == 200 && mounted) {
         final data = jsonDecode(res.body);
         final s = data['data'] as Map<String, dynamic>? ?? {};
