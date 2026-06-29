@@ -192,6 +192,13 @@ async function start() {
         // ── Política cancelación PASEO (numeric) ─────────────────────────────
         { key: 'paseoRefund100Horas',      value: '12'   },
         { key: 'paseoRefund50Horas',       value: '6'    },
+        // ── Límites de precio por tipo de servicio (numeric) ─────────────────
+        { key: 'paseoMinPrice',            value: '20'   },
+        { key: 'paseoMaxPrice',            value: '400'  },
+        { key: 'hospedajeMinPrice',        value: '40'   },
+        { key: 'hospedajeMaxPrice',        value: '400'  },
+        { key: 'guarderiaMinPrice',        value: '15'   },
+        { key: 'guarderiaMaxPrice',        value: '400'  },
       ],
       skipDuplicates: true, // No sobreescribe valores ya guardados por el admin
     });

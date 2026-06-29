@@ -39,6 +39,7 @@ model User {
   sentMessages                 ChatMessage[]
   walletTransactions           WalletTransaction[]
   donations                    Donation[]
+  featureFlags                 UserFeatureFlag[]   @relation("UserFeatureFlags")
   refreshTokens                RefreshToken[]
   passwordResets               PasswordReset[]
   passwordResetCodes           PasswordResetCode[]
@@ -1017,4 +1018,60 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+/// Banner configurable que aparece entre tarjetas de cuidadores en el marketplace.
+model MarketplaceBanner {
+  id          String   @id @default(uuid())
+  active      Boolean  @default(false)
+  position    Int      @default(0)           // índice de inserción en la lista de cuidadores (0 = antes del primero)
+  imageUrl    String?  @db.Text              // URL imagen de fondo (Cloudinary)
+  title       String   @db.VarChar(200)
+  subtitle    String?  @db.VarChar(400)
+  buttonText  String?  @db.VarChar(100)      // null = sin botón
+  actionType  String   @default("none")      // "url" | "screen" | "none"
+  actionValue String?  @db.Text              // URL externa o nombre de pantalla Flutter
+  sortOrder   Int      @default(0)           // para ordenar cuando hay varios activos
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active, position])
+  @@map("marketplace_banners")
+}
+
+/// Notificación push masiva con segmentación y soporte de programación.
+model MassNotification {
+  id          String    @id @default(uuid())
+  title       String    @db.VarChar(200)
+  message     String    @db.Text
+  /// "all" | "clients" | "caregivers" | "zone"
+  targetType  String    @default("all") @db.VarChar(20)
+  targetZone  String?   @db.VarChar(100)    // solo si targetType = "zone"
+  scheduledAt DateTime?                      // null = envío inmediato
+  sentAt      DateTime?
+  /// "DRAFT" | "SCHEDULED" | "SENDING" | "SENT" | "FAILED"
+  status      String    @default("DRAFT") @db.VarChar(20)
+  sentCount   Int       @default(0)
+  failCount   Int       @default(0)
+  createdBy   String    @db.VarChar(100)    // admin userId
+  createdAt   DateTime  @default(now())
+
+  @@index([status, scheduledAt])
+  @@map("mass_notifications")
+}
+
+/// Feature flag por usuario — activa funciones experimentales para usuarios específicos.
+model UserFeatureFlag {
+  id        String    @id @default(uuid())
+  userId    String
+  flagKey   String    @db.VarChar(100)     // ej: "beta_nueva_pantalla_pago"
+  enabled   Boolean   @default(true)
+  expiresAt DateTime?                       // null = sin expiración
+  createdAt DateTime  @default(now())
+  user      User      @relation("UserFeatureFlags", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, flagKey])
+  @@index([userId])
+  @@index([flagKey])
+  @@map("user_feature_flags")
 }

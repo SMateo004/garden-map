@@ -275,4 +275,181 @@ router.post('/donations/:id/disburse', asyncHandler(async (req, res) => {
   res.json({ success: true, data: donation });
 }));
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MARKETPLACE BANNERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** GET /api/admin/banners */
+router.get('/banners', asyncHandler(async (_req, res) => {
+  const banners = await prisma.marketplaceBanner.findMany({ orderBy: [{ position: 'asc' }, { sortOrder: 'asc' }] });
+  res.json({ success: true, data: banners });
+}));
+
+/** POST /api/admin/banners */
+router.post('/banners', asyncHandler(async (req, res) => {
+  const body = req.body as {
+    title: string; subtitle?: string; imageUrl?: string;
+    position?: number; sortOrder?: number; active?: boolean;
+    buttonText?: string; actionType?: string; actionValue?: string;
+  };
+  const banner = await prisma.marketplaceBanner.create({
+    data: {
+      title: body.title,
+      subtitle: body.subtitle ?? null,
+      imageUrl: body.imageUrl ?? null,
+      position: body.position ?? 0,
+      sortOrder: body.sortOrder ?? 0,
+      active: body.active ?? false,
+      buttonText: body.buttonText ?? null,
+      actionType: body.actionType ?? 'none',
+      actionValue: body.actionValue ?? null,
+    },
+  });
+  res.status(201).json({ success: true, data: banner });
+}));
+
+/** PATCH /api/admin/banners/:id */
+router.patch('/banners/:id', asyncHandler(async (req, res) => {
+  const banner = await prisma.marketplaceBanner.update({
+    where: { id: req.params.id },
+    data: req.body as any,
+  });
+  res.json({ success: true, data: banner });
+}));
+
+/** DELETE /api/admin/banners/:id */
+router.delete('/banners/:id', asyncHandler(async (req, res) => {
+  await prisma.marketplaceBanner.delete({ where: { id: req.params.id } });
+  res.json({ success: true });
+}));
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MASS NOTIFICATIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** GET /api/admin/mass-notifications */
+router.get('/mass-notifications', asyncHandler(async (_req, res) => {
+  const list = await prisma.massNotification.findMany({ orderBy: { createdAt: 'desc' }, take: 100 });
+  res.json({ success: true, data: list });
+}));
+
+/** POST /api/admin/mass-notifications — crear y opcionalmente enviar inmediatamente */
+router.post('/mass-notifications', asyncHandler(async (req, res) => {
+  const { title, message, targetType = 'all', targetZone, scheduledAt } = req.body as {
+    title: string; message: string; targetType?: string; targetZone?: string; scheduledAt?: string;
+  };
+  const adminId = (req.user as any)?.userId ?? 'admin';
+  const isImmediate = !scheduledAt;
+
+  const notif = await prisma.massNotification.create({
+    data: {
+      title, message, targetType,
+      targetZone: targetZone ?? null,
+      scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+      status: isImmediate ? 'SENDING' : 'SCHEDULED',
+      createdBy: adminId,
+    },
+  });
+
+  if (isImmediate) {
+    // Envío asíncrono — no bloquea la respuesta
+    _sendMassNotification(notif.id, title, message, targetType, targetZone ?? null).catch(() => {});
+  }
+
+  res.status(201).json({ success: true, data: notif });
+}));
+
+/** DELETE /api/admin/mass-notifications/:id — solo si DRAFT o SCHEDULED */
+router.delete('/mass-notifications/:id', asyncHandler(async (req, res) => {
+  const notif = await prisma.massNotification.findUnique({ where: { id: req.params.id } });
+  if (!notif || !['DRAFT', 'SCHEDULED'].includes(notif.status)) {
+    return res.status(400).json({ success: false, error: { message: 'Solo se pueden eliminar notificaciones no enviadas.' } });
+  }
+  await prisma.massNotification.delete({ where: { id: req.params.id } });
+  res.json({ success: true });
+}));
+
+/** Helper interno: enviar push masivo y actualizar estado */
+async function _sendMassNotification(
+  id: string, title: string, message: string, targetType: string, targetZone: string | null
+) {
+  try {
+    // Construir where clause según segmentación
+    const where: any = { isDeleted: { not: true } };
+    if (targetType === 'clients') where.role = 'CLIENT';
+    else if (targetType === 'caregivers') where.role = 'CAREGIVER';
+    else if (targetType === 'zone' && targetZone) {
+      // Usuarios con perfil de cuidador en la zona dada
+      where.caregiverProfile = { zone: targetZone };
+    }
+
+    const users = await prisma.user.findMany({ where, select: { id: true } });
+    let sentCount = 0;
+    let failCount = 0;
+
+    for (const user of users) {
+      try {
+        // Notificación in-app
+        await prisma.notification.create({
+          data: { userId: user.id, title, message, type: 'SYSTEM' },
+        });
+        // Push (fire-and-forget)
+        const { sendPushToUser } = await import('../../services/firebase.service.js');
+        sendPushToUser(user.id, title, message).catch(() => {});
+        sentCount++;
+      } catch {
+        failCount++;
+      }
+    }
+
+    await prisma.massNotification.update({
+      where: { id },
+      data: { status: 'SENT', sentAt: new Date(), sentCount, failCount },
+    });
+  } catch (err) {
+    await prisma.massNotification.update({
+      where: { id },
+      data: { status: 'FAILED' },
+    });
+    throw err;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// USER FEATURE FLAGS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** GET /api/admin/feature-flags — listar todos los flags activos */
+router.get('/feature-flags', asyncHandler(async (_req, res) => {
+  const flags = await prisma.userFeatureFlag.findMany({
+    include: { user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json({ success: true, data: flags });
+}));
+
+/** POST /api/admin/feature-flags — asignar flag a usuario */
+router.post('/feature-flags', asyncHandler(async (req, res) => {
+  const { userId, flagKey, enabled = true, expiresAt } = req.body as {
+    userId: string; flagKey: string; enabled?: boolean; expiresAt?: string;
+  };
+  const flag = await prisma.userFeatureFlag.upsert({
+    where: { userId_flagKey: { userId, flagKey } },
+    create: { userId, flagKey, enabled, expiresAt: expiresAt ? new Date(expiresAt) : null },
+    update: { enabled, expiresAt: expiresAt ? new Date(expiresAt) : null },
+    include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+  });
+  res.status(201).json({ success: true, data: flag });
+}));
+
+/** DELETE /api/admin/feature-flags/:id */
+router.delete('/feature-flags/:id', asyncHandler(async (req, res) => {
+  await prisma.userFeatureFlag.delete({ where: { id: req.params.id } });
+  res.json({ success: true });
+}));
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PUBLIC: banners activos para el marketplace (sin auth)
+// ═══════════════════════════════════════════════════════════════════════════
+
 export default router;

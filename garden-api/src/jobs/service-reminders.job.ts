@@ -206,7 +206,56 @@ async function procesarRecordatoriosCalificacion() {
   }
 }
 
+// ── Procesador de notificaciones masivas programadas ─────────────────────────
+// Corre cada minuto. Si hay MassNotifications con scheduledAt <= now y status SCHEDULED, las envía.
+
+async function procesarNotificacionesMasivasProgramadas() {
+  const now = new Date();
+  const pendientes = await prisma.massNotification.findMany({
+    where: { status: 'SCHEDULED', scheduledAt: { lte: now } },
+    select: { id: true, title: true, message: true, targetType: true, targetZone: true },
+  });
+
+  for (const n of pendientes) {
+    try {
+      await prisma.massNotification.update({ where: { id: n.id }, data: { status: 'SENDING' } });
+      const where: any = { isDeleted: { not: true } };
+      if (n.targetType === 'clients') where.role = 'CLIENT';
+      else if (n.targetType === 'caregivers') where.role = 'CAREGIVER';
+      else if (n.targetType === 'zone' && n.targetZone) where.caregiverProfile = { zone: n.targetZone };
+
+      const users = await prisma.user.findMany({ where, select: { id: true } });
+      let sentCount = 0;
+      let failCount = 0;
+      for (const user of users) {
+        try {
+          await prisma.notification.create({
+            data: { userId: user.id, title: n.title, message: n.message, type: 'SYSTEM' },
+          });
+          sendPushToUser(user.id, n.title, n.message).catch(() => {});
+          sentCount++;
+        } catch { failCount++; }
+      }
+      await prisma.massNotification.update({
+        where: { id: n.id },
+        data: { status: 'SENT', sentAt: new Date(), sentCount, failCount },
+      });
+      logger.info('[MASS-NOTIF] Enviada', { id: n.id, sentCount });
+    } catch (err) {
+      await prisma.massNotification.update({ where: { id: n.id }, data: { status: 'FAILED' } });
+      logger.error('[MASS-NOTIF] Error', { id: n.id, err });
+    }
+  }
+}
+
 export function iniciarJobServiceReminders() {
+  // Notificaciones masivas programadas — cada minuto
+  cron.schedule('* * * * *', () => {
+    procesarNotificacionesMasivasProgramadas().catch(err =>
+      logger.error('[MASS-NOTIF] Job falló', { err })
+    );
+  });
+
   // Recordatorios de inicio de servicio + avisos de fin de hospedaje + recordatorios de calificación
   cron.schedule('0 * * * *', async () => {
     await procesarRecordatoriosDeServicio();

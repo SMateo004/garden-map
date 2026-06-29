@@ -311,6 +311,40 @@ app.get('/api/settings', async (_req, res) => {
   }
 });
 
+/** GET /api/banners — banners activos ordenados por posición (público, sin auth) */
+app.get('/api/banners', async (_req, res) => {
+  try {
+    const banners = await prisma.marketplaceBanner.findMany({
+      where: { active: true },
+      orderBy: [{ position: 'asc' }, { sortOrder: 'asc' }],
+    });
+    res.json({ success: true, data: banners });
+  } catch {
+    res.json({ success: true, data: [] });
+  }
+});
+
+/** GET /api/my-feature-flags — feature flags del usuario autenticado */
+app.get('/api/my-feature-flags', async (req, res) => {
+  try {
+    const userId = (req as any).user?.userId;
+    if (!userId) return res.json({ success: true, data: {} });
+    const now = new Date();
+    const flags = await prisma.userFeatureFlag.findMany({
+      where: {
+        userId,
+        enabled: true,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+    });
+    const map: Record<string, boolean> = {};
+    for (const f of flags) map[f.flagKey] = f.enabled;
+    res.json({ success: true, data: map });
+  } catch {
+    res.json({ success: true, data: {} });
+  }
+});
+
 // ── Settings cache invalidation helper ───────────────────────────────────────
 import { invalidateSetting } from './utils/settings-cache.js';
 

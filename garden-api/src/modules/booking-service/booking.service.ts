@@ -358,6 +358,28 @@ export async function createBooking(
       totalAmount = Math.round(pricePerUnit * numDays * petMultiplier);
     }
 
+    // ── Validar límites de precio configurados por admin ──────────────────────
+    const [minKey, maxKey] = body.serviceType === ServiceType.HOSPEDAJE
+      ? ['hospedajeMinPrice', 'hospedajeMaxPrice']
+      : body.serviceType === ServiceType.GUARDERIA
+        ? ['guarderiaMinPrice', 'guarderiaMaxPrice']
+        : ['paseoMinPrice', 'paseoMaxPrice'];
+    const priceMin = await getNumericSetting(minKey, 10);
+    const priceMax = await getNumericSetting(maxKey, 9999);
+    // pricePerUnit aquí es el precio SIN comisión — comparamos contra la tarifa base del cuidador
+    if (pricePerUnit < priceMin) {
+      throw new BookingValidationError(
+        `El precio del cuidador (Bs ${pricePerUnit}) está por debajo del mínimo permitido (Bs ${priceMin}).`,
+        'BOOKING_VALIDATION', 'pricePerUnit'
+      );
+    }
+    if (pricePerUnit > priceMax) {
+      throw new BookingValidationError(
+        `El precio del cuidador (Bs ${pricePerUnit}) supera el máximo permitido (Bs ${priceMax}).`,
+        'BOOKING_VALIDATION', 'pricePerUnit'
+      );
+    }
+
     const subtotal = totalAmount;
     totalAmount = Math.round(subtotal * (1 + cfg.COMMISSION_RATE));
     const commissionAmount = totalAmount - subtotal;

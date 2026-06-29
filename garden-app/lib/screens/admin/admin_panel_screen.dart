@@ -772,6 +772,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     AdminGeneralScreen(adminToken: _adminToken),
                     AdminTechnicalScreen(adminToken: _adminToken),
                     AdminNotificationsScreen(adminToken: _adminToken),
+                    _buildBannersTab(surface, textColor, subtextColor, borderColor),
+                    _buildMassNotifTab(surface, textColor, subtextColor, borderColor),
+                    _buildFeatureFlagsTab(surface, textColor, subtextColor, borderColor),
                   ],
                 ),
               ),
@@ -797,6 +800,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       ('Administración', Icons.business_center_rounded),
       ('Técnica', Icons.developer_mode_rounded),
       ('Notificaciones', Icons.campaign_rounded),
+      ('Banners', Icons.view_carousel_rounded),
+      ('Push Masivo', Icons.send_rounded),
+      ('Feature Flags', Icons.flag_rounded),
     ];
     return Container(
       color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
@@ -4037,5 +4043,439 @@ class _LegendDot extends StatelessWidget {
       const SizedBox(width: 4),
       Text(label, style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.bold)),
     ]);
+  }
+}
+
+// ── Admin Banner Tab ──────────────────────────────────────────────────────────
+
+extension AdminBannersTab on _AdminPanelScreenState {
+  Widget _buildBannersTab(Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    return _AdminBannersView(adminToken: _adminToken);
+  }
+  Widget _buildMassNotifTab(Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    return _AdminMassNotifView(adminToken: _adminToken);
+  }
+  Widget _buildFeatureFlagsTab(Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    return _AdminFeatureFlagsView(adminToken: _adminToken);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// BANNERS
+// ────────────────────────────────────────────────────────────────────────────
+
+class _AdminBannersView extends StatefulWidget {
+  final String adminToken;
+  const _AdminBannersView({required this.adminToken});
+  @override State<_AdminBannersView> createState() => _AdminBannersViewState();
+}
+
+class _AdminBannersViewState extends State<_AdminBannersView> {
+  List<Map<String, dynamic>> _banners = [];
+  bool _loading = true;
+  String get _base => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
+  Map<String, String> get _h => {'Authorization': 'Bearer ${widget.adminToken}', 'Content-Type': 'application/json'};
+
+  @override void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final r = await http.get(Uri.parse('$_base/admin/banners'), headers: _h);
+      final d = jsonDecode(r.body);
+      if (mounted) setState(() { _banners = List<Map<String, dynamic>>.from(d['data'] ?? []); _loading = false; });
+    } catch (_) { if (mounted) setState(() => _loading = false); }
+  }
+
+  Future<void> _toggle(String id, bool active) async {
+    await http.patch(Uri.parse('$_base/admin/banners/$id'), headers: _h, body: jsonEncode({'active': active}));
+    _load();
+  }
+
+  Future<void> _delete(String id) async {
+    await http.delete(Uri.parse('$_base/admin/banners/$id'), headers: _h);
+    _load();
+  }
+
+  void _showForm([Map<String, dynamic>? existing]) {
+    final titleCtrl = TextEditingController(text: existing?['title'] ?? '');
+    final subtitleCtrl = TextEditingController(text: existing?['subtitle'] ?? '');
+    final imageCtrl = TextEditingController(text: existing?['imageUrl'] ?? '');
+    final btnCtrl = TextEditingController(text: existing?['buttonText'] ?? '');
+    final actionCtrl = TextEditingController(text: existing?['actionValue'] ?? '');
+    final posCtrl = TextEditingController(text: '${existing?['position'] ?? 0}');
+    String actionType = existing?['actionType'] ?? 'none';
+    bool active = existing?['active'] == true;
+
+    showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, ss) => AlertDialog(
+      title: Text(existing == null ? 'Nuevo Banner' : 'Editar Banner'),
+      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Título *')),
+        TextField(controller: subtitleCtrl, decoration: const InputDecoration(labelText: 'Subtítulo')),
+        TextField(controller: imageCtrl, decoration: const InputDecoration(labelText: 'URL imagen de fondo')),
+        TextField(controller: btnCtrl, decoration: const InputDecoration(labelText: 'Texto del botón')),
+        TextField(controller: posCtrl, decoration: const InputDecoration(labelText: 'Posición (0 = inicio)'), keyboardType: TextInputType.number),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: actionType,
+          decoration: const InputDecoration(labelText: 'Acción al tocar'),
+          items: const [
+            DropdownMenuItem(value: 'none', child: Text('Sin acción')),
+            DropdownMenuItem(value: 'url', child: Text('Abrir URL externa')),
+            DropdownMenuItem(value: 'screen', child: Text('Navegar a pantalla')),
+          ],
+          onChanged: (v) => ss(() => actionType = v ?? 'none'),
+        ),
+        if (actionType != 'none')
+          TextField(controller: actionCtrl, decoration: InputDecoration(
+            labelText: actionType == 'url' ? 'URL (https://...)' : 'Ruta de pantalla (/marketplace, etc.)',
+          )),
+        const SizedBox(height: 8),
+        Row(children: [
+          const Text('Activo'), const Spacer(),
+          Switch(value: active, onChanged: (v) => ss(() => active = v), activeColor: GardenColors.primary),
+        ]),
+      ])),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+        ElevatedButton(
+          onPressed: () async {
+            final body = jsonEncode({
+              'title': titleCtrl.text.trim(),
+              'subtitle': subtitleCtrl.text.trim().isEmpty ? null : subtitleCtrl.text.trim(),
+              'imageUrl': imageCtrl.text.trim().isEmpty ? null : imageCtrl.text.trim(),
+              'buttonText': btnCtrl.text.trim().isEmpty ? null : btnCtrl.text.trim(),
+              'actionType': actionType,
+              'actionValue': actionCtrl.text.trim().isEmpty ? null : actionCtrl.text.trim(),
+              'position': int.tryParse(posCtrl.text) ?? 0,
+              'active': active,
+            });
+            if (existing == null) {
+              await http.post(Uri.parse('$_base/admin/banners'), headers: _h, body: body);
+            } else {
+              await http.patch(Uri.parse('$_base/admin/banners/${existing['id']}'), headers: _h, body: body);
+            }
+            if (ctx.mounted) Navigator.pop(ctx);
+            _load();
+          },
+          child: const Text('Guardar'),
+        ),
+      ],
+    )));
+  }
+
+  @override Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    return Scaffold(
+      backgroundColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showForm,
+        backgroundColor: GardenColors.primary,
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('Nuevo Banner', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+          : ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), children: [
+              Text('Banners del Marketplace', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text('Aparecen entre tarjetas de cuidadores en la posición configurada.', style: TextStyle(color: subtextColor, fontSize: 12)),
+              const SizedBox(height: 16),
+              if (_banners.isEmpty)
+                Center(child: Padding(padding: const EdgeInsets.all(40), child: Text('Sin banners. Crea el primero.', style: TextStyle(color: subtextColor))))
+              else
+                ..._banners.map((b) => Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderColor)),
+                  child: Row(children: [
+                    if (b['imageUrl'] != null)
+                      ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(b['imageUrl'], width: 60, height: 60, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox(width: 60)))
+                    else
+                      Container(width: 60, height: 60, decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                        child: const Icon(Icons.image_outlined, color: GardenColors.primary)),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(b['title'] ?? '', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+                      if (b['subtitle'] != null) Text(b['subtitle'], style: TextStyle(color: subtextColor, fontSize: 12)),
+                      Text('Posición: ${b['position']} · Acción: ${b['actionType']}', style: TextStyle(color: subtextColor, fontSize: 11)),
+                    ])),
+                    Switch(value: b['active'] == true, onChanged: (v) => _toggle(b['id'], v), activeColor: GardenColors.primary),
+                    IconButton(icon: const Icon(Icons.edit_outlined, size: 18), onPressed: () => _showForm(b), color: subtextColor),
+                    IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 18, color: GardenColors.error), onPressed: () => _delete(b['id'])),
+                  ]),
+                )),
+            ]),
+    );
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// NOTIFICACIONES MASIVAS
+// ────────────────────────────────────────────────────────────────────────────
+
+class _AdminMassNotifView extends StatefulWidget {
+  final String adminToken;
+  const _AdminMassNotifView({required this.adminToken});
+  @override State<_AdminMassNotifView> createState() => _AdminMassNotifViewState();
+}
+
+class _AdminMassNotifViewState extends State<_AdminMassNotifView> {
+  List<Map<String, dynamic>> _notifs = [];
+  bool _loading = true;
+  String get _base => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
+  Map<String, String> get _h => {'Authorization': 'Bearer ${widget.adminToken}', 'Content-Type': 'application/json'};
+
+  @override void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final r = await http.get(Uri.parse('$_base/admin/mass-notifications'), headers: _h);
+      final d = jsonDecode(r.body);
+      if (mounted) setState(() { _notifs = List<Map<String, dynamic>>.from(d['data'] ?? []); _loading = false; });
+    } catch (_) { if (mounted) setState(() => _loading = false); }
+  }
+
+  void _showComposer() {
+    final titleCtrl = TextEditingController();
+    final msgCtrl = TextEditingController();
+    final schedCtrl = TextEditingController();
+    String target = 'all';
+    String zone = '';
+
+    showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, ss) => AlertDialog(
+      title: const Text('Nueva Notificación Masiva'),
+      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Título *')),
+        TextField(controller: msgCtrl, maxLines: 3, decoration: const InputDecoration(labelText: 'Mensaje *')),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: target,
+          decoration: const InputDecoration(labelText: 'Destinatarios'),
+          items: const [
+            DropdownMenuItem(value: 'all', child: Text('Todos los usuarios')),
+            DropdownMenuItem(value: 'clients', child: Text('Solo dueños de mascotas')),
+            DropdownMenuItem(value: 'caregivers', child: Text('Solo cuidadores')),
+            DropdownMenuItem(value: 'zone', child: Text('Por zona')),
+          ],
+          onChanged: (v) => ss(() => target = v ?? 'all'),
+        ),
+        if (target == 'zone')
+          TextField(controller: TextEditingController()..addListener(() => zone = ''), decoration: const InputDecoration(labelText: 'Zona (ej: EQUIPETROL)')),
+        const SizedBox(height: 8),
+        TextField(controller: schedCtrl, decoration: const InputDecoration(
+          labelText: 'Programar para (ISO, dejar vacío = envío inmediato)',
+          hintText: '2025-12-31T18:00:00',
+        )),
+      ])),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+        ElevatedButton(
+          onPressed: () async {
+            final body = jsonEncode({
+              'title': titleCtrl.text.trim(),
+              'message': msgCtrl.text.trim(),
+              'targetType': target,
+              if (target == 'zone' && zone.isNotEmpty) 'targetZone': zone,
+              if (schedCtrl.text.trim().isNotEmpty) 'scheduledAt': schedCtrl.text.trim(),
+            });
+            await http.post(Uri.parse('$_base/admin/mass-notifications'), headers: _h, body: body);
+            if (ctx.mounted) { Navigator.pop(ctx); _load(); }
+          },
+          child: const Text('Enviar / Programar'),
+        ),
+      ],
+    )));
+  }
+
+  @override Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    Color statusColor(String s) => s == 'SENT' ? GardenColors.success : s == 'FAILED' ? GardenColors.error : s == 'SENDING' ? GardenColors.warning : GardenColors.info;
+
+    return Scaffold(
+      backgroundColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showComposer,
+        backgroundColor: GardenColors.primary,
+        icon: const Icon(Icons.send_rounded, color: Colors.white),
+        label: const Text('Nueva Notificación', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+          : ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), children: [
+              Text('Notificaciones Masivas', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text('Push + in-app para grupos de usuarios. Se envían inmediatamente o en la fecha programada.', style: TextStyle(color: subtextColor, fontSize: 12)),
+              const SizedBox(height: 16),
+              if (_notifs.isEmpty)
+                Center(child: Padding(padding: const EdgeInsets.all(40), child: Text('Sin notificaciones enviadas.', style: TextStyle(color: subtextColor))))
+              else
+                ..._notifs.map((n) {
+                  final status = n['status'] as String? ?? 'DRAFT';
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderColor)),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        Expanded(child: Text(n['title'] ?? '', style: TextStyle(color: textColor, fontWeight: FontWeight.w700))),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: statusColor(status).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+                          child: Text(status, style: TextStyle(color: statusColor(status), fontSize: 11, fontWeight: FontWeight.w700)),
+                        ),
+                      ]),
+                      const SizedBox(height: 4),
+                      Text(n['message'] ?? '', style: TextStyle(color: subtextColor, fontSize: 13)),
+                      const SizedBox(height: 6),
+                      Text('Destino: ${n['targetType']} · Enviados: ${n['sentCount']} · Errores: ${n['failCount']}',
+                        style: TextStyle(color: subtextColor, fontSize: 11)),
+                    ]),
+                  );
+                }),
+            ]),
+    );
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// FEATURE FLAGS POR USUARIO
+// ────────────────────────────────────────────────────────────────────────────
+
+class _AdminFeatureFlagsView extends StatefulWidget {
+  final String adminToken;
+  const _AdminFeatureFlagsView({required this.adminToken});
+  @override State<_AdminFeatureFlagsView> createState() => _AdminFeatureFlagsViewState();
+}
+
+class _AdminFeatureFlagsViewState extends State<_AdminFeatureFlagsView> {
+  List<Map<String, dynamic>> _flags = [];
+  bool _loading = true;
+  String get _base => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
+  Map<String, String> get _h => {'Authorization': 'Bearer ${widget.adminToken}', 'Content-Type': 'application/json'};
+
+  @override void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final r = await http.get(Uri.parse('$_base/admin/feature-flags'), headers: _h);
+      final d = jsonDecode(r.body);
+      if (mounted) setState(() { _flags = List<Map<String, dynamic>>.from(d['data'] ?? []); _loading = false; });
+    } catch (_) { if (mounted) setState(() => _loading = false); }
+  }
+
+  Future<void> _delete(String id) async {
+    await http.delete(Uri.parse('$_base/admin/feature-flags/$id'), headers: _h);
+    _load();
+  }
+
+  void _showForm() {
+    final userIdCtrl = TextEditingController();
+    final flagCtrl = TextEditingController();
+    final expiresCtrl = TextEditingController();
+    bool enabled = true;
+
+    showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, ss) => AlertDialog(
+      title: const Text('Asignar Feature Flag'),
+      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: userIdCtrl, decoration: const InputDecoration(labelText: 'ID del usuario *')),
+        TextField(controller: flagCtrl, decoration: const InputDecoration(
+          labelText: 'Nombre del flag *',
+          hintText: 'ej: beta_nueva_pantalla',
+        )),
+        TextField(controller: expiresCtrl, decoration: const InputDecoration(
+          labelText: 'Expira (ISO, vacío = nunca)',
+          hintText: '2025-12-31T00:00:00',
+        )),
+        Row(children: [
+          const Text('Habilitado'), const Spacer(),
+          Switch(value: enabled, onChanged: (v) => ss(() => enabled = v), activeColor: GardenColors.primary),
+        ]),
+      ])),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+        ElevatedButton(
+          onPressed: () async {
+            await http.post(Uri.parse('$_base/admin/feature-flags'), headers: _h, body: jsonEncode({
+              'userId': userIdCtrl.text.trim(),
+              'flagKey': flagCtrl.text.trim(),
+              'enabled': enabled,
+              if (expiresCtrl.text.trim().isNotEmpty) 'expiresAt': expiresCtrl.text.trim(),
+            }));
+            if (ctx.mounted) { Navigator.pop(ctx); _load(); }
+          },
+          child: const Text('Guardar'),
+        ),
+      ],
+    )));
+  }
+
+  @override Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    return Scaffold(
+      backgroundColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showForm,
+        backgroundColor: GardenColors.primary,
+        icon: const Icon(Icons.flag_rounded, color: Colors.white),
+        label: const Text('Asignar Flag', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+          : ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), children: [
+              Text('Feature Flags por Usuario', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text('Activa funciones experimentales para usuarios específicos. La app los lee via /api/my-feature-flags.', style: TextStyle(color: subtextColor, fontSize: 12)),
+              const SizedBox(height: 16),
+              if (_flags.isEmpty)
+                Center(child: Padding(padding: const EdgeInsets.all(40), child: Text('Sin flags asignados.', style: TextStyle(color: subtextColor))))
+              else
+                ..._flags.map((f) {
+                  final user = f['user'] as Map<String, dynamic>?;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderColor)),
+                    child: Row(children: [
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(f['flagKey'] ?? '', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+                        Text('${user?['firstName'] ?? ''} ${user?['lastName'] ?? ''} · ${user?['email'] ?? f['userId']}',
+                          style: TextStyle(color: subtextColor, fontSize: 12)),
+                        if (f['expiresAt'] != null)
+                          Text('Expira: ${f['expiresAt']}', style: TextStyle(color: subtextColor, fontSize: 11)),
+                      ])),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: (f['enabled'] == true ? GardenColors.success : GardenColors.error).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(f['enabled'] == true ? 'ON' : 'OFF',
+                          style: TextStyle(color: f['enabled'] == true ? GardenColors.success : GardenColors.error, fontWeight: FontWeight.w800, fontSize: 12)),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 18, color: GardenColors.error), onPressed: () => _delete(f['id'])),
+                    ]),
+                  );
+                }),
+            ]),
+    );
   }
 }

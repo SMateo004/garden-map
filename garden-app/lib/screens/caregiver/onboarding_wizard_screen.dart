@@ -117,7 +117,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   // Paso 5: Precio (uno por cada servicio)
   double _precioHospedaje = 90.0;  // pricePerDay (por noche)
   double _precioPaseo = 90.0;      // pricePerWalk60 (por hora)
-  double _precioGuarderia = 90.0;        // pricePerGuarderia (por hora)
+  double _precioGuarderia = 90.0;  // pricePerGuarderia (por hora)
+  // Límites de precio cargados desde AppSettings del admin
+  double _paseoMin = 10.0;   double _paseoMax = 400.0;
+  double _hospMin  = 10.0;   double _hospMax  = 400.0;
+  double _guarMin  = 10.0;   double _guarMax  = 400.0;
   bool  _guarderiaIncludeWalk = false;   // ¿La guardería incluye un paseo?
   String _authToken = '';
   Map<String, dynamic>? _priceStats;
@@ -129,6 +133,26 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     _passwordController.text = widget.initialPassword;
     _loadToken();
     _loadPriceStats();
+    _loadPriceLimits();
+  }
+
+  Future<void> _loadPriceLimits() async {
+    try {
+      final baseUrl = const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
+      final res = await http.get(Uri.parse('$baseUrl/admin/settings'), headers: {'Authorization': 'Bearer ${AuthState.token}'});
+      if (res.statusCode == 200 && mounted) {
+        final data = jsonDecode(res.body);
+        final s = data['data'] as Map<String, dynamic>? ?? {};
+        setState(() {
+          _paseoMin = (s['paseoMinPrice'] as num?)?.toDouble() ?? 10;
+          _paseoMax = (s['paseoMaxPrice'] as num?)?.toDouble() ?? 400;
+          _hospMin  = (s['hospedajeMinPrice'] as num?)?.toDouble() ?? 10;
+          _hospMax  = (s['hospedajeMaxPrice'] as num?)?.toDouble() ?? 400;
+          _guarMin  = (s['guarderiaMinPrice'] as num?)?.toDouble() ?? 10;
+          _guarMax  = (s['guarderiaMaxPrice'] as num?)?.toDouble() ?? 400;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadPriceStats() async {
@@ -1747,14 +1771,16 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     required double value,
     required ValueChanged<double> onChanged,
     String? infoNote,
+    double sliderMinOverride = 10.0,
+    double sliderMaxOverride = 400.0,
   }) {
     final isDark = themeNotifier.isDark;
     // Fondo oscuro intencional en ambos modos (hace que el precio grande resalte)
     // Light: forest green profundo. Dark: bosque aún más oscuro.
     final cardBg = isDark ? GardenColors.darkSurface : GardenColors.forest;
 
-    const double sliderMin = 10.0;
-    const double sliderMax = 400.0;
+    final double sliderMin = sliderMinOverride;
+    final double sliderMax = sliderMaxOverride;
     final double sv = value.clamp(sliderMin, sliderMax);
     final double ratio = (sv - sliderMin) / (sliderMax - sliderMin);
     final String posicion = ratio < 0.25 ? 'ECONÓMICO' : ratio < 0.6 ? 'ESTÁNDAR' : 'PREMIUM';
@@ -1861,27 +1887,30 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           Row(children: [
             const Icon(Icons.info_outline, color: GardenColors.primary, size: 14),
             const SizedBox(width: 6),
-            Expanded(child: Text('Precio mínimo: Bs 10', style: TextStyle(fontSize: 12, color: subtextColor))),
+            Expanded(child: Text('Rango de precio configurado por GARDEN', style: TextStyle(fontSize: 12, color: subtextColor))),
           ]),
           const SizedBox(height: 24),
 
           if (offersHospedaje) ...[
-            _buildPriceCard(titulo: 'Hospedaje', unidad: '/ noche', emoji: '🏠', value: _precioHospedaje, onChanged: (v) => setState(() => _precioHospedaje = v)),
+            _buildPriceCard(titulo: 'Hospedaje', unidad: '/ noche', emoji: '🏠', value: _precioHospedaje,
+              sliderMinOverride: _hospMin, sliderMaxOverride: _hospMax,
+              onChanged: (v) => setState(() => _precioHospedaje = v)),
             const SizedBox(height: 20),
           ],
           if (offersPaseo) ...[
             _buildPriceCard(
-              titulo: 'Paseo',
-              unidad: '/ 1 hora',
-              emoji: '🦮',
+              titulo: 'Paseo', unidad: '/ 1 hora', emoji: '🦮',
               value: _precioPaseo,
+              sliderMinOverride: _paseoMin, sliderMaxOverride: _paseoMax,
               onChanged: (v) => setState(() => _precioPaseo = v),
               infoNote: '30 min = Bs ${(_precioPaseo / 2).toStringAsFixed(0)} · Este precio aparecerá en tu perfil',
             ),
             const SizedBox(height: 20),
           ],
           if (offersGuarderia) ...[
-            _buildPriceCard(titulo: 'Guardería', unidad: '/ hora', emoji: '🏡', value: _precioGuarderia, onChanged: (v) => setState(() => _precioGuarderia = v)),
+            _buildPriceCard(titulo: 'Guardería', unidad: '/ hora', emoji: '🏡', value: _precioGuarderia,
+              sliderMinOverride: _guarMin, sliderMaxOverride: _guarMax,
+              onChanged: (v) => setState(() => _precioGuarderia = v)),
             const SizedBox(height: 12),
             // Toggle: ¿La guardería incluye paseo?
             Container(

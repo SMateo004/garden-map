@@ -54,6 +54,7 @@ class MarketplaceScreen extends StatefulWidget {
 class _MarketplaceScreenState extends State<MarketplaceScreen> {
   // ── Data ──
   List<Map<String, dynamic>> _caregivers = [];
+  List<Map<String, dynamic>> _banners = [];
   bool _isLoading = true;
   bool _hasError = false;
   int _currentPage = 1;
@@ -203,6 +204,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     if (widget.initialPetType != null) _selectedPetType = widget.initialPetType!.toUpperCase();
 
     _loadInitialData();
+    _loadBanners();
     if (kIsWeb) _checkOnboarding();
     // Abrir mapa por defecto en desktop web
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -230,6 +232,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   // ── Data loading ──
+
+  Future<void> _loadBanners() async {
+    try {
+      final res = await http.get(Uri.parse('$_baseUrl/banners'));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['success'] == true && mounted) {
+          setState(() => _banners = List<Map<String, dynamic>>.from(data['data'] as List? ?? []));
+        }
+      }
+    } catch (_) {}
+  }
 
   Future<void> _loadInitialData() async {
     await _loadToken();
@@ -1760,19 +1774,125 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       );
     }
 
+    // Construir lista combinada: cuidadores + banners intercalados por position
+    // Cada elemento es {'type': 'caregiver'|'banner', 'data': {...}}
+    final List<Map<String, dynamic>> items = [];
+    for (int i = 0; i <= displayed.length; i++) {
+      // Insertar banners cuya posición == i (antes del cuidador i)
+      for (final b in _banners) {
+        final pos = (b['position'] as int? ?? 0).clamp(0, displayed.length);
+        if (pos == i) items.add({'type': 'banner', 'data': b});
+      }
+      if (i < displayed.length) {
+        items.add({'type': 'caregiver', 'data': displayed[i]});
+      }
+    }
+
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.all(16),
-      itemCount: displayed.length + (_hasMore ? 1 : 0),
+      itemCount: items.length + (_hasMore ? 1 : 0),
       itemBuilder: (context, i) {
-        if (i == displayed.length) {
+        if (i == items.length) {
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
             child: GardenLogoLoader(size: 120),
           );
         }
-        return _buildCaregiverCard(displayed[i]);
+        final item = items[i];
+        if (item['type'] == 'banner') return _buildBannerCard(item['data'] as Map<String, dynamic>);
+        return _buildCaregiverCard(item['data'] as Map<String, dynamic>);
       },
+    );
+  }
+
+  Widget _buildBannerCard(Map<String, dynamic> banner) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final imageUrl = banner['imageUrl'] as String?;
+    final title = banner['title'] as String? ?? '';
+    final subtitle = banner['subtitle'] as String?;
+    final buttonText = banner['buttonText'] as String?;
+    final actionType = banner['actionType'] as String? ?? 'none';
+    final actionValue = banner['actionValue'] as String?;
+
+    Future<void> handleTap() async {
+      if (actionType == 'url' && actionValue != null) {
+        final uri = Uri.tryParse(actionValue);
+        if (uri != null && await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      } else if (actionType == 'screen' && actionValue != null) {
+        context.push(actionValue);
+      }
+    }
+
+    return GestureDetector(
+      onTap: actionType != 'none' ? handleTap : null,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        height: 180, // mismo alto que tarjeta de cuidador
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+          image: imageUrl != null && imageUrl.isNotEmpty
+              ? DecorationImage(image: NetworkImage(imageUrl), fit: BoxFit.cover)
+              : null,
+          boxShadow: GardenShadows.card,
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.black.withValues(alpha: 0.15),
+                Colors.black.withValues(alpha: 0.65),
+              ],
+            ),
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text(title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
+                  shadows: [Shadow(color: Colors.black38, blurRadius: 4)],
+                )),
+              if (subtitle != null && subtitle.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(subtitle,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.88),
+                    fontSize: 13,
+                    height: 1.4,
+                  )),
+              ],
+              if (buttonText != null && buttonText.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: GardenColors.primary,
+                    borderRadius: BorderRadius.circular(GardenRadius.full),
+                  ),
+                  child: Text(buttonText,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    )),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 
