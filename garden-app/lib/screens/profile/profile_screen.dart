@@ -44,13 +44,19 @@ class _ProfileScreenState extends State<ProfileScreen>
   // ── Completeness checks ────────────────────────────────────────────────────
 
   /// True when the CLIENT's core data is missing at least one required field.
+  /// Phone must be a real Bolivian number — social-login pre-registration
+  /// (Google/Facebook) leaves a `social_pending_...` placeholder that never
+  /// matches this format, so accounts created that way are correctly flagged
+  /// incomplete until the user fills in the real value.
   bool get _isClientDataIncomplete {
     final u = _userData;
     if (u == null) return false;
+    final phone = (u['phone'] as String? ?? '').trim();
     return (u['firstName'] as String? ?? '').trim().isEmpty ||
         (u['lastName'] as String? ?? '').trim().isEmpty ||
-        (u['phone'] as String? ?? '').trim().isEmpty ||
-        (u['addressStreet'] as String? ?? '').trim().isEmpty;
+        !RegExp(r'^[67][0-9]{7}$').hasMatch(phone) ||
+        (u['addressStreet'] as String? ?? '').trim().isEmpty ||
+        (u['dateOfBirth'] == null);
   }
 
   /// True when the CAREGIVER profile is missing key info (bio).

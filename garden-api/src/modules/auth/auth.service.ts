@@ -16,6 +16,15 @@ import { getBoolSetting, getStringSetting } from '../../utils/settings-cache.js'
 
 const SALT_ROUNDS = 12;
 
+/** Edad en años cumplidos a partir de una fecha de nacimiento. */
+export function calculateAge(dateOfBirth: Date): number {
+  const today = new Date();
+  let age = today.getFullYear() - dateOfBirth.getFullYear();
+  const m = today.getMonth() - dateOfBirth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < dateOfBirth.getDate())) age--;
+  return age;
+}
+
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
@@ -135,7 +144,7 @@ export async function revokeAllRefreshTokens(userId: string): Promise<void> {
  *
  * When `betaInviteRequired` is false (the default) the function is a no-op.
  */
-async function assertBetaAccess(inviteCode?: string): Promise<void> {
+export async function assertBetaAccess(inviteCode?: string): Promise<void> {
   const required = await getBoolSetting('betaInviteRequired', false);
   if (!required) return;
 
@@ -1011,13 +1020,26 @@ export async function switchRole(userId: string, targetRole: UserRole): Promise<
 export async function initCaregiverProfile(userId: string): Promise<SwitchRoleResult> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, role: true, isDeleted: true },
+    select: { id: true, role: true, isDeleted: true, dateOfBirth: true },
   });
 
   if (!user || user.isDeleted) throw new UnauthorizedError('Usuario no encontrado');
 
   if (user.role !== UserRole.CLIENT) {
     throw new ForbiddenError('Solo cuentas de dueño de mascota pueden iniciar el proceso de cuidador.', 'WRONG_ROLE');
+  }
+
+  // Edad mínima 18 — un menor de edad solo puede ser dueño de mascota, nunca cuidador.
+  // dateOfBirth puede faltar (ej. cuentas creadas por login social): se trata igual
+  // que "menor de edad" hasta que el usuario lo complete en Mi Perfil.
+  if (!user.dateOfBirth) {
+    throw new BadRequestError(
+      'Completa tu fecha de nacimiento en Mi Perfil antes de convertirte en cuidador.',
+      'MISSING_DATE_OF_BIRTH'
+    );
+  }
+  if (calculateAge(user.dateOfBirth) < 18) {
+    throw new ForbiddenError('Debes tener al menos 18 años para registrarte como cuidador.', 'UNDERAGE_CAREGIVER');
   }
 
   const existing = await prisma.caregiverProfile.findUnique({ where: { userId } });

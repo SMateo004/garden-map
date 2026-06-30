@@ -26,18 +26,23 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
 
   // ── Completeness check ─────────────────────────────────────────────────────
 
-  bool _isClientDataIncomplete(Map<String, dynamic> u) =>
-      (u['firstName'] as String? ?? '').trim().isEmpty ||
-      (u['lastName'] as String? ?? '').trim().isEmpty ||
-      (u['phone'] as String? ?? '').trim().isEmpty ||
-      (u['addressStreet'] as String? ?? '').trim().isEmpty;
+  bool _isClientDataIncomplete(Map<String, dynamic> u) {
+    final phone = (u['phone'] as String? ?? '').trim();
+    return (u['firstName'] as String? ?? '').trim().isEmpty ||
+        (u['lastName'] as String? ?? '').trim().isEmpty ||
+        !RegExp(r'^[67][0-9]{7}$').hasMatch(phone) ||
+        (u['addressStreet'] as String? ?? '').trim().isEmpty ||
+        (u['dateOfBirth'] == null);
+  }
 
   List<String> _missingFields(Map<String, dynamic> u) {
     final missing = <String>[];
+    final phone = (u['phone'] as String? ?? '').trim();
     if ((u['firstName'] as String? ?? '').trim().isEmpty) missing.add('Nombre');
     if ((u['lastName'] as String? ?? '').trim().isEmpty) missing.add('Apellido');
-    if ((u['phone'] as String? ?? '').trim().isEmpty) missing.add('Teléfono');
+    if (!RegExp(r'^[67][0-9]{7}$').hasMatch(phone)) missing.add('Teléfono');
     if ((u['addressStreet'] as String? ?? '').trim().isEmpty) missing.add('Dirección');
+    if (u['dateOfBirth'] == null) missing.add('Fecha de nacimiento');
     return missing;
   }
 
@@ -158,6 +163,14 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
 
       if (!mounted) return;
 
+      if (meResponse.statusCode == 401) {
+        // Sesión expirada/inválida — no es un problema de red. Dispara el
+        // flujo global de sesión expirada (limpia tokens + redirige a login
+        // con el mensaje correcto) en vez de mostrar "error de conexión".
+        AuthState.handleUnauthorized();
+        return;
+      }
+
       if (meResponse.statusCode != 200) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Error de conexión. Verifica tu internet.'), backgroundColor: GardenColors.error),
@@ -186,6 +199,12 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
       ).timeout(const Duration(seconds: 15));
 
       if (!mounted) return;
+
+      if (response.statusCode == 401) {
+        AuthState.handleUnauthorized();
+        return;
+      }
+
       final data = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (response.statusCode == 200 && data['success'] == true) {

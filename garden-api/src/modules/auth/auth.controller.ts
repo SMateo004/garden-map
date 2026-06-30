@@ -240,6 +240,7 @@ export const registerClient = asyncHandler(async (req: Request, res: Response) =
         user: result.user,
         profileId: result.profileId,
         accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
         expiresIn: result.expiresIn,
       },
     });
@@ -293,6 +294,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     success: true,
     data: {
       accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
       expiresIn: result.expiresIn,
       user: result.user,
     },
@@ -339,7 +341,20 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
   const userData: Record<string, unknown> = {};
   if (firstName && firstName.trim()) userData.firstName = firstName.trim();
   if (lastName && lastName.trim()) userData.lastName = lastName.trim();
-  if (phone && phone.trim()) userData.phone = phone.trim();
+  if (phone && phone.trim()) {
+    const cleanPhone = phone.trim().replace(/\D/g, '').replace(/^591/, '');
+    if (!/^[67][0-9]{7}$/.test(cleanPhone)) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_PHONE', message: 'Teléfono inválido: 8 dígitos, debe empezar con 6 o 7.' },
+      });
+    }
+    const existingPhone = await prisma.user.findUnique({ where: { phone: cleanPhone }, select: { id: true } });
+    if (existingPhone && existingPhone.id !== userId) {
+      return res.status(409).json({ success: false, error: { code: 'PHONE_IN_USE', message: 'Ese teléfono ya está registrado en otra cuenta.' } });
+    }
+    userData.phone = cleanPhone;
+  }
   if (city !== undefined) userData.city = city?.trim() || null;
   if (country !== undefined) userData.country = country?.trim() || null;
   if (dateOfBirth !== undefined) {

@@ -41,7 +41,13 @@ class SocialLoginResult {
   final String? role;
   final String? activeRole;
   final String? userName;
-  // Populated when userExists == false (register flow)
+  // True when this call just created a brand-new CLIENT account via social
+  // pre-registration (phone/dateOfBirth/address still missing — must be
+  // completed from "Mi Perfil" before the user can book).
+  final bool isNewAccount;
+  // Populated when userExists == false AND the auto pre-registration itself
+  // failed (e.g. registrations paused, invalid invite code) — caller should
+  // show the error rather than silently falling back to the manual form.
   final SocialUserData? userData;
 
   const SocialLoginResult({
@@ -53,6 +59,7 @@ class SocialLoginResult {
     this.role,
     this.activeRole,
     this.userName,
+    this.isNewAccount = false,
     this.userData,
   });
 }
@@ -250,8 +257,15 @@ class SocialAuthService {
   // ── Backend login ─────────────────────────────────────────────────────────
 
   /// Verifica el token contra el backend.
-  /// - Si el usuario existe → devuelve tokens y role
-  /// - Si no existe → devuelve userData para pre-llenar el register
+  /// - Si el usuario existe → devuelve tokens y role (login normal)
+  /// - Si NO existe → crea automáticamente una cuenta CLIENT (dueño de
+  ///   mascota) con los datos que el proveedor entregue en este momento, y
+  ///   entra directo a la app. El teléfono/fecha de nacimiento/dirección
+  ///   quedan pendientes — se completan después desde "Mi Perfil".
+  ///   Los cuidadores NUNCA se crean por este camino: si alguien con
+  ///   intención de ser cuidador usa este botón, igual entra como dueño de
+  ///   mascota — para registrarse como cuidador hay que usar el formulario
+  ///   completo, que no muestra estos botones sociales.
   static Future<SocialLoginResult> loginWithBackend(
       SocialUserData data) async {
     if (data.idToken == null) {
@@ -273,50 +287,12 @@ class SocialAuthService {
       final body = jsonDecode(res.body) as Map<String, dynamic>;
 
       if (res.statusCode == 200 && body['success'] == true) {
-        final d = body['data'] as Map<String, dynamic>;
-        final user = d['user'] as Map<String, dynamic>;
-        final role = user['role'] as String;
-        final activeRole = user['activeRole'] as String?;
-        final name = '${user['firstName']} ${user['lastName']}';
-
-        // Persist tokens — usar SecureStorageService igual que AuthService
-        final accessToken  = d['accessToken']  as String;
-        final refreshToken = d['refreshToken'] as String;
-        await SecureStorageService.saveAccessToken(accessToken);
-        await SecureStorageService.saveRefreshToken(refreshToken);
-        // Actualizar caché en memoria para que AuthState.hasSession sea true
-        await AuthState.update(accessToken);
-
-        // Datos no-sensibles van a SharedPreferences
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('user_role',  role);
-        await prefs.setString('user_id',    user['id'] as String? ?? '');
-        await prefs.setString('user_name',  name);
-        await prefs.setString('user_photo', user['profilePicture'] as String? ?? '');
-        if (activeRole != null && activeRole.isNotEmpty && activeRole != role) {
-          await prefs.setString('active_role', activeRole);
-        } else {
-          await prefs.remove('active_role');
-        }
-
-        return SocialLoginResult(
-          success: true,
-          userExists: true,
-          accessToken: d['accessToken'] as String,
-          refreshToken: d['refreshToken'] as String,
-          role: role,
-          activeRole: activeRole,
-          userName: name,
-        );
+        return _persistAndBuildResult(body['data'] as Map<String, dynamic>, isNewAccount: false);
       }
 
       if (res.statusCode == 404) {
-        // Email not found → send user to register with pre-filled data
-        return SocialLoginResult(
-          success: true,
-          userExists: false,
-          userData: data,
-        );
+        // Cuenta no existe → crearla automáticamente como CLIENT (pre-registro)
+        return _registerClientWithBackend(data);
       }
 
       return SocialLoginResult(
@@ -328,5 +304,76 @@ class SocialAuthService {
       return const SocialLoginResult(
           success: false, userExists: false, error: 'Error de conexión');
     }
+  }
+
+  /// Crea una cuenta CLIENT instantánea con los datos mínimos del proveedor
+  /// social (nombre, apellido, email, foto) y loguea directo — sin pedir
+  /// teléfono ni fecha de nacimiento. Llamado solo desde [loginWithBackend]
+  /// cuando el email no tiene cuenta existente.
+  static Future<SocialLoginResult> _registerClientWithBackend(SocialUserData data) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/auth/social/register-client'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'provider': data.provider.name,
+          'idToken': data.idToken,
+        }),
+      );
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+
+      if (res.statusCode == 201 && body['success'] == true) {
+        return _persistAndBuildResult(body['data'] as Map<String, dynamic>, isNewAccount: true);
+      }
+
+      return SocialLoginResult(
+        success: false,
+        userExists: false,
+        error: (body['error'] as Map<String, dynamic>?)?['message'] as String? ??
+            'No se pudo crear tu cuenta. Intenta de nuevo.',
+      );
+    } catch (e) {
+      return const SocialLoginResult(
+          success: false, userExists: false, error: 'Error de conexión');
+    }
+  }
+
+  /// Guarda tokens + datos de usuario (común a login y registro social).
+  static Future<SocialLoginResult> _persistAndBuildResult(
+    Map<String, dynamic> d, {
+    required bool isNewAccount,
+  }) async {
+    final user = d['user'] as Map<String, dynamic>;
+    final role = user['role'] as String;
+    final activeRole = user['activeRole'] as String?;
+    final name = '${user['firstName']} ${user['lastName']}';
+
+    final accessToken  = d['accessToken']  as String;
+    final refreshToken = d['refreshToken'] as String;
+    await SecureStorageService.saveAccessToken(accessToken);
+    await SecureStorageService.saveRefreshToken(refreshToken);
+    await AuthState.update(accessToken);
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_role',  role);
+    await prefs.setString('user_id',    user['id'] as String? ?? '');
+    await prefs.setString('user_name',  name);
+    await prefs.setString('user_photo', user['profilePicture'] as String? ?? '');
+    if (activeRole != null && activeRole.isNotEmpty && activeRole != role) {
+      await prefs.setString('active_role', activeRole);
+    } else {
+      await prefs.remove('active_role');
+    }
+
+    return SocialLoginResult(
+      success: true,
+      userExists: true,
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      role: role,
+      activeRole: activeRole,
+      userName: name,
+      isNewAccount: isNewAccount,
+    );
   }
 }

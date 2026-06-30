@@ -2,7 +2,8 @@ import type { Request, Response, NextFunction } from 'express';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcrypt';
 import prisma from '../../config/database.js';
-import { signAccessToken, createRefreshToken } from './auth.service.js';
+import { signAccessToken, createRefreshToken, assertBetaAccess } from './auth.service.js';
+import { getBoolSetting } from '../../utils/settings-cache.js';
 import { NotFoundError, BadRequestError } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
 
@@ -138,34 +139,48 @@ export async function socialLogin(req: Request, res: Response, next: NextFunctio
   }
 }
 
+/** Genera un placeholder único para `User.phone` (columna NOT NULL + UNIQUE)
+ *  cuando el proveedor social no entrega teléfono. Formato reconocible y que
+ *  nunca matchea el regex de teléfono real (8 dígitos, empieza con 6/7), así
+ *  `_isClientDataIncomplete` en el frontend lo detecta como "falta completar". */
+function generatePendingPhonePlaceholder(): string {
+  return `social_pending_${randomBytes(6).toString('hex')}`;
+}
+
 /**
  * POST /api/auth/social/register-client
  *
- * Solo para clientes (dueños de mascotas).
- * Recibe datos del proveedor social + phone + dateOfBirth completados a mano.
- * Crea la cuenta y devuelve JWT.
+ * Solo para clientes (dueños de mascotas). Crea la cuenta INSTANTÁNEAMENTE
+ * con los datos que el proveedor social entregue en ese momento (nombre,
+ * apellido, email, foto) — sin pedir teléfono ni fecha de nacimiento.
+ * El usuario completa esos datos después desde "Mi Perfil" (resaltado en
+ * naranja vía _isClientDataIncomplete) y DEBE completarlos antes de poder
+ * reservar (ver gate en booking.service.ts createBooking).
  *
- * Body: {
- *   provider, idToken,
- *   firstName, lastName, phone,
- *   dateOfBirth?: string (YYYY-MM-DD)
- * }
+ * Los cuidadores NUNCA pasan por aquí — deben usar el formulario completo
+ * (este endpoint siempre crea role=CLIENT).
+ *
+ * Body: { provider, idToken, inviteCode? }
  */
 export async function socialRegisterClient(req: Request, res: Response, next: NextFunction) {
   try {
-    const { provider, idToken, firstName, lastName, phone, dateOfBirth } =
-      req.body as {
-        provider: string;
-        idToken: string;
-        firstName: string;
-        lastName: string;
-        phone: string;
-        dateOfBirth?: string;
-      };
+    // Same gates as POST /api/auth/client/register — social signup must not
+    // be a backdoor around "pause new registrations" or beta invite codes.
+    if (!await getBoolSetting('newRegistrationsEnabled', true)) {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'REGISTRATIONS_DISABLED', message: 'Los registros están temporalmente deshabilitados.' },
+      });
+    }
 
-    if (!provider || !idToken || !firstName || !lastName || !phone) {
+    const { provider, idToken, inviteCode } =
+      req.body as { provider: string; idToken: string; inviteCode?: string };
+
+    if (!provider || !idToken) {
       throw new BadRequestError('Faltan campos requeridos');
     }
+
+    await assertBetaAccess(inviteCode);
 
     const claims = await verifyFirebaseToken(idToken);
     if (!claims.email) {
@@ -180,20 +195,25 @@ export async function socialRegisterClient(req: Request, res: Response, next: Ne
       throw new BadRequestError('Ya existe una cuenta con este correo. Inicia sesión.');
     }
 
-    // Generar passwordHash aleatorio (cuenta social — sin contraseña manual)
+    // Generar passwordHash aleatorio (cuenta social — sin contraseña manual,
+    // la autenticación siempre pasa por el proveedor social vía idToken)
     const randomPassword = randomBytes(32).toString('hex');
     const passwordHash = await bcrypt.hash(randomPassword, 12);
+
+    const nameParts = (claims.name ?? '').trim().split(/\s+/).filter(Boolean);
+    const firstName = nameParts[0] ?? 'Usuario';
+    const lastName = nameParts.slice(1).join(' ') || '-';
 
     const user = await prisma.user.create({
       data: {
         email,
         passwordHash,
         role: 'CLIENT',
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        phone: phone.trim(),
+        firstName,
+        lastName,
+        phone: generatePendingPhonePlaceholder(), // completado luego en Mi Perfil
         emailVerified: true, // email verificado por el proveedor social
-        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+        // dateOfBirth queda null — se completa luego en Mi Perfil
         profilePicture: claims.picture ?? undefined,
       },
     });

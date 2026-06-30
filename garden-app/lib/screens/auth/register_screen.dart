@@ -51,7 +51,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   DateTime? _dateOfBirth;
 
   @override
-  @override
   void initState() {
     super.initState();
     if (widget.prefillFirstName != null) _firstNameController.text = widget.prefillFirstName!;
@@ -708,45 +707,49 @@ class _RegisterScreenState extends State<RegisterScreen> {
             const SizedBox(height: 12),
           ],
 
-          // Checkbox de términos
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: Checkbox(
-                  value: _acceptedTerms,
-                  onChanged: (v) => setState(() => _acceptedTerms = v ?? false),
-                  activeColor: GardenColors.primary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          // Checkbox de términos — solo para dueños: el flujo de cuidador
+          // captura la aceptación exclusivamente vía el modal de _showTermsDialog,
+          // este checkbox nunca se valida en esa rama (ver _handleRegister).
+          if (_selectedRole == 'owner') ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: Checkbox(
+                    value: _acceptedTerms,
+                    onChanged: (v) => setState(() => _acceptedTerms = v ?? false),
+                    activeColor: GardenColors.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Wrap(
-                  children: [
-                    Text('Acepto los ', style: TextStyle(color: subtextColor, fontSize: 13)),
-                    GestureDetector(
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const TermsOfServiceScreen()),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Wrap(
+                    children: [
+                      Text('Acepto los ', style: TextStyle(color: subtextColor, fontSize: 13)),
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const TermsOfServiceScreen()),
+                        ),
+                        child: const Text('Términos de Servicio', style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
                       ),
-                      child: const Text('Términos de Servicio', style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
-                    ),
-                    Text(' y la ', style: TextStyle(color: subtextColor, fontSize: 13)),
-                    GestureDetector(
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+                      Text(' y la ', style: TextStyle(color: subtextColor, fontSize: 13)),
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+                        ),
+                        child: const Text('Política de Privacidad', style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
                       ),
-                      child: const Text('Política de Privacidad', style: TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
-                    ),
-                    Text(' de Garden.', style: TextStyle(color: subtextColor, fontSize: 13)),
-                  ],
+                      Text(' de Garden.', style: TextStyle(color: subtextColor, fontSize: 13)),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
+              ],
+            ),
+            const SizedBox(height: 20),
+          ],
 
           // Botón registro
           GardenButton(
@@ -770,23 +773,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             const SizedBox(height: 14),
             _SocialRegisterButtons(
-              onSocialData: (data) {
-                // Pre-llenar el formulario con los datos del proveedor
-                if (data.firstName != null && data.firstName!.isNotEmpty) {
-                  _firstNameController.text = data.firstName!;
+              onResult: (result) {
+                if (!result.success) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(result.error ?? 'Error al registrarse'),
+                    backgroundColor: GardenColors.error,
+                  ));
+                  return;
                 }
-                if (data.lastName != null && data.lastName!.isNotEmpty) {
-                  _lastNameController.text = data.lastName!;
-                }
-                if (data.email != null && data.email!.isNotEmpty) {
-                  _emailController.text = data.email!;
-                }
-                setState(() {});
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Datos pre-llenados. Completa el teléfono y fecha de nacimiento.'),
+                // Cuenta creada (o ya existente) y logueada directo — sin
+                // pedir teléfono/fecha de nacimiento aquí. Se completan
+                // después desde "Mi Perfil" (resaltado hasta completarse).
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(result.isNewAccount
+                      ? '¡Bienvenido a GARDEN! Completa tu perfil en "Mi Perfil" antes de reservar.'
+                      : 'Ya tenías una cuenta — iniciando sesión.'),
                   backgroundColor: GardenColors.primary,
-                  duration: Duration(seconds: 3),
+                  duration: const Duration(seconds: 5),
                 ));
+                if (kIsWeb) {
+                  context.go('/marketplace');
+                } else {
+                  context.go('/service-selector');
+                }
               },
             ),
           ],
@@ -878,10 +887,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 }
 
-// ── Botones sociales para register (solo pre-llenado) ────────────────────────
+// ── Botones sociales para register — crean cuenta CLIENT y entran directo ────
 class _SocialRegisterButtons extends StatefulWidget {
-  final void Function(SocialUserData) onSocialData;
-  const _SocialRegisterButtons({required this.onSocialData});
+  final void Function(SocialLoginResult) onResult;
+  const _SocialRegisterButtons({required this.onResult});
 
   @override
   State<_SocialRegisterButtons> createState() => _SocialRegisterButtonsState();
@@ -908,7 +917,8 @@ class _SocialRegisterButtonsState extends State<_SocialRegisterButtons> {
         }
         return;
       }
-      if (mounted) widget.onSocialData(data);
+      final result = await SocialAuthService.loginWithBackend(data);
+      if (mounted) widget.onResult(result);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(

@@ -85,18 +85,17 @@ class _LoginScreenState extends State<LoginScreen> {
       ));
       return;
     }
-    if (result.userExists) {
-      _navigateAfterLogin(result.role ?? 'CLIENT', activeRole: result.activeRole);
-    } else {
-      // Email no registrado → ir al registro pre-llenado
-      final d = result.userData;
-      context.push('/register', extra: {
-        'firstName': d?.firstName ?? '',
-        'lastName': d?.lastName ?? '',
-        'email': d?.email ?? '',
-        'fromSocial': true,
-      });
+    if (result.isNewAccount) {
+      // Cuenta recién creada vía login social — falta completar teléfono,
+      // fecha de nacimiento y dirección antes de poder reservar. "Mi Perfil"
+      // ya resalta esos campos en naranja (_isClientDataIncomplete).
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('¡Bienvenido a GARDEN! Completa tu perfil en "Mi Perfil" antes de reservar.'),
+        backgroundColor: GardenColors.primary,
+        duration: Duration(seconds: 5),
+      ));
     }
+    _navigateAfterLogin(result.role ?? 'CLIENT', activeRole: result.activeRole);
   }
 
   void _handleLogin() async {

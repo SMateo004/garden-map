@@ -103,7 +103,10 @@ export async function createBooking(
   return prisma.$transaction(async (tx) => {
     const clientProfile = await tx.clientProfile.findUnique({
       where: { userId: clientId },
-      include: { pets: { select: { id: true } } },
+      include: {
+        pets: { select: { id: true } },
+        user: { select: { phone: true, dateOfBirth: true } },
+      },
     });
 
     if (!clientProfile) {
@@ -124,6 +127,17 @@ export async function createBooking(
       throw new ForbiddenError(
         'Debes completar el perfil de tu mascota primero',
         'CLIENT_PROFILE_INCOMPLETE'
+      );
+    }
+
+    // Datos personales (separado de la mascota arriba) — cuentas creadas vía
+    // login social pre-registran solo nombre/email; teléfono real, fecha de
+    // nacimiento y dirección se completan después en Mi Perfil.
+    const hasRealPhone = !!clientProfile.user.phone && /^[67][0-9]{7}$/.test(clientProfile.user.phone);
+    if (!hasRealPhone || !clientProfile.user.dateOfBirth || !clientProfile.addressStreet) {
+      throw new ForbiddenError(
+        'Completa tu teléfono, fecha de nacimiento y dirección en Mi Perfil antes de reservar.',
+        'CLIENT_PERSONAL_DATA_INCOMPLETE'
       );
     }
 

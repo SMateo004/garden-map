@@ -35,14 +35,27 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     }
     setState(() => _loading = true);
     try {
-      await http.post(
+      final res = await http.post(
         Uri.parse('$_baseUrl/auth/forgot-password/send-code'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email}),
       );
       if (!mounted) return;
-      // Siempre avanzamos — el API nunca revela si el email existe
-      context.push('/forgot-password/code', extra: email);
+      // 2xx (incluso si el email no existe) → el API nunca revela si existe,
+      // así que siempre avanzamos. Pero un error real (429 rate-limit, 5xx)
+      // significa que ningún código fue enviado — no tiene sentido avanzar.
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        context.push('/forgot-password/code', extra: email);
+      } else {
+        Map<String, dynamic>? data;
+        try { data = jsonDecode(res.body) as Map<String, dynamic>; } catch (_) {}
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            (data?['error'] as Map<String, dynamic>?)?['message'] as String? ??
+                'No se pudo enviar el código. Intenta de nuevo.',
+          ),
+        ));
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
