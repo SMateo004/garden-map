@@ -278,6 +278,10 @@ const PUBLIC_SETTING_KEYS = new Set([
   'preciosDinamicosEnabled',
   'meetGreetEnabled',
   'betaInviteRequired',
+  'minAppVersion',
+  'storeUrlIos',
+  'storeUrlAndroid',
+  'forceUpdateEnabled',
 ]);
 
 /** GET /api/settings — public endpoint, no auth required. Only exposes feature-flag keys. */
@@ -304,6 +308,10 @@ app.get('/api/settings', async (_req, res) => {
       preciosDinamicosEnabled: true,
       meetGreetEnabled: true,
       betaInviteRequired: false,
+      minAppVersion: '1.0.0',
+      storeUrlIos: '',
+      storeUrlAndroid: '',
+      forceUpdateEnabled: false,
     };
     res.json({ success: true, data: { ...defaults, ...map } });
   } catch {

@@ -38,6 +38,7 @@ import 'screens/onboarding/mobile_splash_screen.dart';
 import 'screens/onboarding/mobile_onboarding_screen.dart';
 import 'screens/onboarding/mobile_service_selector_screen.dart';
 import 'screens/onboarding/maintenance_screen.dart';
+import 'screens/onboarding/update_required_screen.dart';
 import 'screens/caregiver/mobile_verify_screen.dart';
 import 'screens/legal/legal_screen.dart';
 import 'screens/caregiver/professional_register_screen.dart';
@@ -53,7 +54,9 @@ import 'services/local_notification_service.dart';
 import 'services/fcm_service.dart';
 import 'services/auth_state.dart'; // sessionExpiredNotifier + AuthState
 import 'services/web_notification_service.dart';
+import 'services/global_http_client.dart'; // maintenanceNotifier + networkErrorNotifier
 import 'utils/web_redirect.dart';
+import 'package:http/http.dart' as http;
 
 // ── Build-time env (set via --dart-define) ─────────────────
 const _kSentryDsn    = String.fromEnvironment('SENTRY_DSN');
@@ -107,6 +110,7 @@ const _publicPaths = {
   '/about',
   '/become-caregiver',
   '/maintenance',
+  '/update-required',
   '/privacy',
   '/terms',
   '/sign-in/profesional',
@@ -155,6 +159,14 @@ final GoRouter _router = GoRouter(
       path: '/maintenance',
       name: 'maintenance',
       builder: (context, state) => const MaintenanceScreen(),
+    ),
+    GoRoute(
+      path: '/update-required',
+      name: 'updateRequired',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return UpdateRequiredScreen(storeUrl: extra?['storeUrl'] as String? ?? '');
+      },
     ),
     GoRoute(
       path: '/onboarding',
@@ -553,6 +565,14 @@ Future<void> _bootstrap() async {
 }
 
 void main() async {
+  // Injects GlobalHttpClient as the default client used by every top-level
+  // http.get/post/... call in the app (235+ call sites, none of which need
+  // to change). Lets us detect mid-session maintenance mode and network
+  // failures globally — see services/global_http_client.dart.
+  http.runWithClient(() => _runApp(), () => GlobalHttpClient());
+}
+
+Future<void> _runApp() async {
   // Sentry: error monitoring (solo si el DSN está configurado en build)
   if (_kSentryDsn.isNotEmpty) {
     await SentryFlutter.init(
@@ -580,6 +600,8 @@ class GardenApp extends StatefulWidget {
 }
 
 class _GardenAppState extends State<GardenApp> {
+  final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
   @override
   void initState() {
     super.initState();
@@ -587,11 +609,17 @@ class _GardenAppState extends State<GardenApp> {
     FcmService.setRouter(_router);
     // Escuchar sesión expirada globalmente: redirige al login desde cualquier pantalla.
     sessionExpiredNotifier.addListener(_onSessionExpired);
+    // Escuchar mantenimiento activado mid-sesión (no solo al abrir la app).
+    maintenanceNotifier.addListener(_onMaintenanceDetected);
+    // Escuchar errores de red para mostrar un banner global.
+    networkErrorNotifier.addListener(_onNetworkError);
   }
 
   @override
   void dispose() {
     sessionExpiredNotifier.removeListener(_onSessionExpired);
+    maintenanceNotifier.removeListener(_onMaintenanceDetected);
+    networkErrorNotifier.removeListener(_onNetworkError);
     super.dispose();
   }
 
@@ -604,7 +632,7 @@ class _GardenAppState extends State<GardenApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _router.go('/login');
-      ScaffoldMessenger.of(context).showSnackBar(
+      _scaffoldMessengerKey.currentState?.showSnackBar(
         const SnackBar(
           content: Text('Tu sesión ha expirado. Inicia sesión de nuevo.'),
           backgroundColor: Color(0xFFD32F2F),
@@ -612,6 +640,32 @@ class _GardenAppState extends State<GardenApp> {
         ),
       );
     });
+  }
+
+  void _onMaintenanceDetected() {
+    if (!maintenanceNotifier.value) return;
+    maintenanceNotifier.value = false; // reset para no re-disparar
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final current = _router.routerDelegate.currentConfiguration.uri.path;
+      if (current == '/maintenance') return; // ya estamos ahí
+      _router.go('/maintenance');
+    });
+  }
+
+  void _onNetworkError() {
+    final message = networkErrorNotifier.value;
+    if (message == null) return; // recovery: let the existing banner expire on its own
+    final messenger = _scaffoldMessengerKey.currentState;
+    if (messenger == null) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF424242),
+        duration: const Duration(seconds: 6),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
@@ -622,6 +676,7 @@ class _GardenAppState extends State<GardenApp> {
         return MaterialApp.router(
           title: 'GARDEN',
           debugShowCheckedModeBanner: false,
+          scaffoldMessengerKey: _scaffoldMessengerKey,
           routerConfig: _router,
           theme: gardenTheme(dark: themeNotifier.isDark),
           // Widget de error personalizado — evita la pantalla roja de Flutter en producción

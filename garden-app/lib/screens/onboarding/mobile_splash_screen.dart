@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_state.dart';
 
@@ -73,17 +75,25 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
 
       if (role == 'ADMIN') return const _NavTarget('/admin');
 
-      // Maintenance check + home resolution in parallel
+      // Maintenance + force-update check + home resolution in parallel
       final token = AuthState.token;
       debugPrint('[SPLASH] token=${token.isEmpty ? "VACÍO" : "presente"}');
 
       final futures = await Future.wait([
-        _checkMaintenance(),
+        _fetchSettings(),
         if (token.isNotEmpty && role != 'ADMIN') _fetchActiveBooking(token) else Future.value(null),
         if (token.isNotEmpty && role == 'CLIENT') _fetchPendingRating(token) else Future.value(null),
       ]);
 
-      final inMaintenance = futures[0] as bool;
+      final settings = futures[0] as Map<String, dynamic>;
+
+      // Force-update gate: only on native mobile (web always serves latest build).
+      if (!kIsWeb) {
+        final updateTarget = await _checkForceUpdate(settings);
+        if (updateTarget != null) return updateTarget;
+      }
+
+      final inMaintenance = settings['maintenanceMode'] == true;
       if (inMaintenance) return const _NavTarget('/maintenance');
 
       if (token.isEmpty) return const _NavTarget('/service-selector');
@@ -109,17 +119,61 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
     }
   }
 
-  Future<bool> _checkMaintenance() async {
+  Future<Map<String, dynamic>> _fetchSettings() async {
     try {
       final res = await http
           .get(Uri.parse('$_baseUrl/settings'))
           .timeout(const Duration(seconds: 3));
       final data = jsonDecode(res.body);
-      return data['data']?['maintenanceMode'] == true;
+      return (data['data'] as Map?)?.cast<String, dynamic>() ?? {};
     } catch (e) {
-      debugPrint('[SPLASH] _checkMaintenance error: $e');
-      return false;
+      debugPrint('[SPLASH] _fetchSettings error: $e');
+      return {};
     }
+  }
+
+  /// Returns an UpdateRequired nav target if either gate applies:
+  ///   - `forceUpdateEnabled` manual switch (admin forces everyone, instantly)
+  ///   - the installed version is below `minAppVersion`
+  /// Returns null if neither applies / the check failed (fail-open).
+  Future<_NavTarget?> _checkForceUpdate(Map<String, dynamic> settings) async {
+    try {
+      final forced = settings['forceUpdateEnabled'] == true;
+      final minVersion = settings['minAppVersion']?.toString();
+
+      final info = await PackageInfo.fromPlatform();
+      final current = info.version;
+
+      final belowMinVersion = minVersion != null &&
+          minVersion.isNotEmpty &&
+          _compareVersions(current, minVersion) < 0;
+
+      if (!forced && !belowMinVersion) return null; // up to date, no manual force
+
+      final storeUrl = (defaultTargetPlatform == TargetPlatform.iOS
+              ? settings['storeUrlIos']
+              : settings['storeUrlAndroid'])
+          ?.toString() ??
+          '';
+      debugPrint('[SPLASH] force-update: forced=$forced current=$current min=$minVersion');
+      return _NavTarget('/update-required', {'storeUrl': storeUrl});
+    } catch (e) {
+      debugPrint('[SPLASH] _checkForceUpdate error: $e');
+      return null;
+    }
+  }
+
+  /// Compares two semver-ish strings ("1.2.0"). Returns <0, 0, >0.
+  /// Tolerant of missing segments and non-numeric build suffixes.
+  int _compareVersions(String a, String b) {
+    final pa = a.split('+').first.split('.');
+    final pb = b.split('+').first.split('.');
+    for (var i = 0; i < 3; i++) {
+      final na = i < pa.length ? int.tryParse(pa[i]) ?? 0 : 0;
+      final nb = i < pb.length ? int.tryParse(pb[i]) ?? 0 : 0;
+      if (na != nb) return na - nb;
+    }
+    return 0;
   }
 
   /// Returns a [_NavTarget] if there is a booking that needs immediate attention,

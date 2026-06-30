@@ -377,6 +377,31 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                 ]),
                 const SizedBox(height: 16),
 
+                // ── Categoría: Versión de App (force-update) ──
+                _categoryHeader('📱 Versión de App', subtextColor),
+                Text('Usuarios con una versión menor a la mínima verán pantalla de actualización obligatoria al abrir la app.',
+                  style: TextStyle(color: subtextColor, fontSize: 12)),
+                const SizedBox(height: 8),
+                _settingsCard(surface, borderColor, [
+                  _buildBoolTile(icon: Icons.power_settings_new_rounded, iconColor: Colors.red,
+                    title: 'Forzar actualización ahora', subtitle: 'Manda a TODOS a la pantalla de actualización al instante, sin esperar a comparar versión',
+                    settingKey: 'forceUpdateEnabled', surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
+                  _buildStringTile(icon: Icons.system_update_rounded, iconColor: Colors.red,
+                    title: 'Versión mínima requerida', subtitle: 'Ej: 1.2.0 — formato semver',
+                    settingKey: 'minAppVersion', surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
+                  _buildStringTile(icon: Icons.apple_rounded, iconColor: Colors.grey,
+                    title: 'URL App Store', subtitle: 'Link de la app en App Store',
+                    settingKey: 'storeUrlIos', surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
+                  _buildStringTile(icon: Icons.android_rounded, iconColor: Colors.green,
+                    title: 'URL Play Store', subtitle: 'Link de la app en Google Play',
+                    settingKey: 'storeUrlAndroid', surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
+                ]),
+                const SizedBox(height: 16),
+
                 // ── Categoría: Pagos y Finanzas ────────────
                 _categoryHeader('💰 Pagos y Finanzas', subtextColor),
                 _settingsCard(surface, borderColor, [

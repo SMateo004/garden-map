@@ -199,6 +199,13 @@ async function start() {
         { key: 'hospedajeMaxPrice',        value: '400'  },
         { key: 'guarderiaMinPrice',        value: '15'   },
         { key: 'guarderiaMaxPrice',        value: '400'  },
+        // ── Versión mínima de app (force-update) ──────────────────────────────
+        { key: 'minAppVersion',            value: '1.0.0' },
+        { key: 'storeUrlIos',              value: '' },
+        { key: 'storeUrlAndroid',          value: '' },
+        // Interruptor manual: fuerza la pantalla de actualización a TODOS los
+        // usuarios al instante, sin depender de comparar minAppVersion.
+        { key: 'forceUpdateEnabled',       value: 'false' },
       ],
       skipDuplicates: true, // No sobreescribe valores ya guardados por el admin
     });

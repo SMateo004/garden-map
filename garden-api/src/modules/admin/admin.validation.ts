@@ -103,6 +103,7 @@ export const ALLOWED_SETTING_KEYS = [
   'qrValidityHours',
   'qrValidityMinutes',
   'autoReleasePaymentHoras',
+  'onHoldSlaHoras',
   // Política cancelación HOSPEDAJE (numeric)
   'hospedajeRefundAdminFeeBS',
   'hospedajeRefund100Horas',
@@ -110,11 +111,23 @@ export const ALLOWED_SETTING_KEYS = [
   // Política cancelación PASEO (numeric)
   'paseoRefund100Horas',
   'paseoRefund50Horas',
+  // Límites de precio por tipo de servicio (numeric)
+  'paseoMinPrice',
+  'paseoMaxPrice',
+  'hospedajeMinPrice',
+  'hospedajeMaxPrice',
+  'guarderiaMinPrice',
+  'guarderiaMaxPrice',
   // Zonas bloqueadas (JSON array)
   'blockedZones',
   // Registro profesional y empresas
   'professionalRegistrationCode',
   'companyRegistrationCode',
+  // Versión mínima de app (force-update)
+  'minAppVersion',
+  'storeUrlIos',
+  'storeUrlAndroid',
+  'forceUpdateEnabled',
 ] as const;
 
 export type AllowedSettingKey = typeof ALLOWED_SETTING_KEYS[number];
