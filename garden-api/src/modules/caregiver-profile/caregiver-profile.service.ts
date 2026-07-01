@@ -400,14 +400,14 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
 
   if (missing.length > 0) {
     const fieldLabels: Record<string, string> = {
-      bio: 'descripción del perfil (paso 1)',
-      zone: 'zona de servicio (paso 2)',
-      servicesOffered: 'servicios ofrecidos (paso 2)',
-      photos: 'fotos del cuidador en acción (paso 4) — mínimo 2',
-      placePhotoSala: 'foto de sala/área principal (paso 4)',
-      placePhotoDescanso: 'foto de zona de descanso (paso 4)',
-      placePhotoAlimentacion: 'foto de área de alimentación (paso 4)',
-      profilePhoto: 'foto de perfil (paso 6)',
+      bio: 'descripción del perfil (paso 7)',
+      zone: 'zona de servicio (paso 3)',
+      servicesOffered: 'servicios ofrecidos (paso 3)',
+      photos: 'fotos del cuidador en acción (paso 6) — mínimo 2',
+      placePhotoSala: 'foto de sala/área principal (paso 6)',
+      placePhotoDescanso: 'foto de zona de descanso (paso 6)',
+      placePhotoAlimentacion: 'foto de área de alimentación (paso 6)',
+      profilePhoto: 'foto de perfil (paso 2)',
       identityVerified: 'verificación de identidad (paso 8)',
       emailVerified: 'verificación de email (paso 10)',
       experienceYears: 'años de experiencia (paso 7)',

@@ -14,6 +14,7 @@ import '../../services/auth_service.dart';
 import 'caregiver_profile_data_screen.dart';
 import 'verification_screen.dart';
 import 'phone_verification_screen.dart';
+import 'email_verification_screen.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/address_map_picker.dart';
 import '../../widgets/address_section.dart';
@@ -403,6 +404,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       final phoneVerified = profile['phoneVerified'] == true;
       if (!phoneVerified) {
         setState(() => _currentStep = 8);
+        return;
+      }
+
+      // Step 9: Verificación de email
+      final emailVerified = profile['emailVerified'] == true ||
+          (profile['user'] as Map<String, dynamic>?)?['emailVerified'] == true;
+      if (!emailVerified) {
+        setState(() => _currentStep = 9);
         return;
       }
 
@@ -913,11 +922,15 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       final identityDone = identityStatus == 'VERIFIED' || identityStatus == 'APPROVED';
 
       final phoneVerified = profile['phoneVerified'] == true;
+      final emailVerified = profile['emailVerified'] == true ||
+          (profile['user'] as Map<String, dynamic>?)?['emailVerified'] == true;
 
       if (!identityDone) {
         setState(() => _currentStep = 7);
       } else if (!phoneVerified) {
         setState(() => _currentStep = 8);
+      } else if (!emailVerified) {
+        setState(() => _currentStep = 9);
       } else {
         await _completeWizard();
       }
@@ -943,8 +956,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
       if (status == 'VERIFIED' || status == 'APPROVED') {
         final phoneVerified = profile['phoneVerified'] == true;
+        final emailVerified = profile['emailVerified'] == true ||
+            (profile['user'] as Map<String, dynamic>?)?['emailVerified'] == true;
         if (!phoneVerified) {
           setState(() => _currentStep = 8);
+        } else if (!emailVerified) {
+          setState(() => _currentStep = 9);
         } else {
           await _completeWizard();
         }
@@ -964,8 +981,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     }
   }
 
-  /// Step 8 complete: phone verified, finish wizard.
+  /// Step 8 complete: phone verified — advance to email verification (step 9).
   Future<void> _onPhoneVerificationComplete() async {
+    setState(() => _currentStep = 9);
+  }
+
+  /// Step 9 complete: email verified — finish wizard.
+  Future<void> _onEmailVerificationComplete() async {
     await _completeWizard();
   }
 
@@ -2254,6 +2276,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           if (mounted) setState(() {}); // rebuild para que PhoneVerificationScreen reciba nuevo número
         },
       );
+    } else if (_currentStep == 9) {
+      postRegStep = EmailVerificationScreen(
+        showAppBar: false,
+        onComplete: _onEmailVerificationComplete,
+      );
     } else {
       postRegStep = const SizedBox.shrink();
     }
@@ -2268,6 +2295,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       postRegStep,     // 6: Perfil profesional
       postRegStep,     // 7: Verificación de identidad
       postRegStep,     // 8: Verificación de teléfono
+      postRegStep,     // 9: Verificación de email
     ];
 
     final stepTitles = [
@@ -2280,6 +2308,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       'Perfil profesional',
       'Verificación ID',
       'Verificar Teléfono',
+      'Verificar Email',
     ];
 
     // Steps 6-9 are embedded screens that manage their own "Continue" buttons.
@@ -2354,7 +2383,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(4),
                 child: LinearProgressIndicator(
-                  value: (_currentStep + 1) / 9,
+                  value: (_currentStep + 1) / 10,
                   backgroundColor: borderColor,
                   valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
                   minHeight: 4,
@@ -2394,7 +2423,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                                 ),
                                 const Spacer(),
                                 Text(
-                                  'Paso ${_currentStep + 1} de 9',
+                                  'Paso ${_currentStep + 1} de 10',
                                   style: TextStyle(color: subtextColor, fontSize: 12),
                                 ),
                                 const SizedBox(width: 10),
@@ -2415,7 +2444,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                             ClipRRect(
                               borderRadius: BorderRadius.circular(2),
                               child: LinearProgressIndicator(
-                                value: (_currentStep + 1) / 9,
+                                value: (_currentStep + 1) / 10,
                                 backgroundColor: borderColor,
                                 valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
                                 minHeight: 3,
@@ -2448,7 +2477,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                                 ),
                                 const SizedBox(height: 1),
                                 Text(
-                                  'Paso ${_currentStep + 1} de 9',
+                                  'Paso ${_currentStep + 1} de 10',
                                   style: TextStyle(color: subtextColor, fontSize: 11),
                                 ),
                               ],
@@ -2456,7 +2485,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                             // Dots: 9 pasos, llenos los completados
                             Row(
                               mainAxisSize: MainAxisSize.min,
-                              children: List.generate(9, (i) {
+                              children: List.generate(10, (i) {
                                 final done   = i < _currentStep;
                                 final active = i == _currentStep;
                                 return AnimatedContainer(
@@ -2479,7 +2508,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                         ClipRRect(
                           borderRadius: BorderRadius.circular(2),
                           child: LinearProgressIndicator(
-                            value: (_currentStep + 1) / 9,
+                            value: (_currentStep + 1) / 10,
                             backgroundColor: borderColor,
                             valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
                             minHeight: 3,
