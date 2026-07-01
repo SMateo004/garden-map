@@ -9,6 +9,7 @@ import { errorHandler } from './shared/error-handler.js';
 import prisma from './config/database.js';
 import { getRedisClient } from './config/redis.js';
 import { maintenanceMiddleware } from './middleware/maintenance.middleware.js';
+import { authMiddleware } from './middleware/auth.middleware.js';
 import caregiverRoutes from './modules/caregiver-service/caregiver.routes.js';
 import userRoutes from './modules/user-service/user.routes.js';
 import adminRoutes from './modules/admin/admin.routes.js';
@@ -184,6 +185,14 @@ app.use(
 app.use(express.json({ limit: '2mb' }));
 
 const uploadsDir = path.join(process.cwd(), 'uploads');
+
+// Verification uploads (selfies, cédulas, liveness) — auth required
+app.use('/uploads/verification', authMiddleware, (_req, res, next) => {
+  res.set('Cross-Origin-Resource-Policy', 'same-site');
+  next();
+}, express.static(path.join(uploadsDir, 'verification')));
+
+// All other uploads (caregiver photos, profile pics) — public, embeddable from Flutter
 app.use('/uploads', (_req, res, next) => {
   res.set('Cross-Origin-Resource-Policy', 'cross-origin');
   next();

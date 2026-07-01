@@ -6,6 +6,7 @@ import { asyncHandler } from '../../shared/async-handler.js';
 import { prisma } from '../../config/database.js';
 import multer from 'multer';
 import { uploadImage } from '../../services/storage.service.js';
+import { assertImageBuffer } from '../../shared/mime-validation.js';
 import logger from '../../shared/logger.js';
 
 const bankInfoSchema = z.object({
@@ -68,6 +69,7 @@ router.post('/profile/caregiver-photo', upload.single('caregiverPhoto'),
     const file = req.file;
     if (!file) return res.status(400).json({ success: false, error: { message: 'No se proporcionó foto' } });
     if (!file.mimetype.startsWith('image/')) return res.status(400).json({ success: false, error: { message: 'Solo se permiten imágenes (JPG/PNG)' } });
+    await assertImageBuffer(file.buffer);
 
     const profile = await prisma.caregiverProfile.findFirst({ where: { userId }, select: { caregiverPhotos: true } });
     if (!profile) return res.status(404).json({ success: false, error: { message: 'Perfil no encontrado' } });
@@ -112,6 +114,7 @@ router.post('/profile/place-photo', upload.single('placePhoto'),
 
     if (!file) return res.status(400).json({ success: false, error: { message: 'No se proporcionó foto' } });
     if (!file.mimetype.startsWith('image/')) return res.status(400).json({ success: false, error: { message: 'Solo se permiten imágenes (JPG/PNG)' } });
+    await assertImageBuffer(file.buffer);
     if (!PLACE_PHOTO_SECTIONS.includes(section as PlacePhotoSection)) {
       return res.status(400).json({ success: false, error: { message: `Sección inválida. Debe ser: ${PLACE_PHOTO_SECTIONS.join(', ')}` } });
     }
@@ -160,6 +163,7 @@ router.post('/profile/service-photo', upload.single('servicePhoto'),
     if (!file.mimetype.startsWith('image/')) {
       return res.status(400).json({ success: false, error: { message: 'Solo se permiten imágenes (JPG/PNG)' } });
     }
+    await assertImageBuffer(file.buffer);
 
     // Pre-flight count check (fast reject before uploading)
     const profile = await prisma.caregiverProfile.findFirst({ where: { userId }, select: { photos: true } });
@@ -192,6 +196,7 @@ router.post('/profile/walker-photo', authMiddleware, requireRole('CAREGIVER'),
     if (!file.mimetype.startsWith('image/')) {
       return res.status(400).json({ success: false, error: { message: 'Solo se permiten imágenes (JPG/PNG)' } });
     }
+    await assertImageBuffer(file.buffer);
 
     const profile = await prisma.caregiverProfile.findFirst({ where: { userId }, select: { walkerPhotos: true } });
     if (!profile) return res.status(404).json({ success: false, error: { message: 'Perfil no encontrado' } });

@@ -37,6 +37,9 @@ yarn-error.log*
 test_images/
 *.pdf
  *.ts.old
+gen_token.js
+garden-api/test_*.ts
+garden-api/test_*.js
 
  # Hardhat
  artifacts/

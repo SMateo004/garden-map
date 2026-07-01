@@ -72,8 +72,6 @@ export async function sendResetCode(email: string): Promise<void> {
 
     await prisma.passwordResetCode.create({ data: { userId: user.id, codeHash, expiresAt } });
 
-    logger.info(`[PasswordResetCode] Código para ${normalized}: [${code}]`);
-
     const html = buildCodeEmail(user.firstName, code, CODE_EXPIRY_MINUTES);
     await sendTransactionalEmail(normalized, 'GARDEN – Código para restablecer tu contraseña', html);
 }
