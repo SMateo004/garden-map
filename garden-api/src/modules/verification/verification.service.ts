@@ -104,7 +104,7 @@ export async function submitVerification(
   livenessSessionId?: string
 ): Promise<{
   similarity: number;
-  livenessScore: number | null;
+  livenessScore: number;
   documentConfidence: number;
   identityScore: number;
   status: string;
@@ -170,7 +170,7 @@ export async function submitVerification(
     }
 
     const user = session.user;
-    let livenessScore: number | null = null;
+    let livenessScore = 0;
     let livenessStatus: 'PASSED' | 'FAILED' = 'FAILED';
     let faceSimilarityValue = 0;
     let crossValResult: any = { documentConfidence: 0, ocrData: { fullName: null, documentNumber: null }, fraudFlags: [] };
@@ -194,11 +194,11 @@ export async function submitVerification(
         livenessScore = 95;
         livenessStatus = 'PASSED';
       } else if (!livenessSessionId) {
-        // Producción sin liveness session: señal ausente (null) — no penaliza, su peso
-        // se redistribuye entre face+OCR+doc. El sistema decide únicamente por biometría.
-        logger.warn('Liveness check skipped in production (no sessionId) — weight redistributed to other signals', { sessionId });
-        livenessScore = null;
-        livenessStatus = 'PASSED';
+        // En producción sin sessionId: liveness=0 penaliza el trust score.
+        // El sistema auto-decide VERIFIED/REJECTED según face+OCR — no hay revisión manual.
+        logger.warn('Liveness check skipped in production (no sessionId) — will auto-decide from face+OCR signals', { sessionId });
+        livenessScore = 0;
+        livenessStatus = 'PASSED'; // allow photo checks to run; liveness=0 penalizes trust score
       } else {
         logger.info('Starting liveness check', { sessionId, livenessSessionId });
         const livenessResult = await performLivenessCheck({ sessionId: livenessSessionId }, 'AWS_REKOGNITION');
@@ -262,8 +262,7 @@ export async function submitVerification(
       finalFraudFlags = [...crossValResult.fraudFlags];
 
       if (!docValidation.ok) finalFraudFlags.push('non_standard_document');
-      // Only flag suspect liveness when liveness was actually run and scored low — never when simply unavailable
-      if (livenessScore !== null && faceSimilarityValue >= 95 && livenessScore < 90) finalFraudFlags.push('suspect_liveness_quality');
+      if (faceSimilarityValue >= 95 && livenessScore < 90) finalFraudFlags.push('suspect_liveness_quality');
 
       // Anti-Spoofing: Resolution/Blur check (already in Rekognition quality)
       if (selfieFace.Quality?.Sharpness && selfieFace.Quality.Sharpness < 50) finalFraudFlags.push('low_resolution');
@@ -391,7 +390,7 @@ export async function submitVerification(
             status: finalStatus,
             similarity: faceSimilarityValue,
             similarityScore: faceSimilarityValue,
-            livenessScore: livenessScore ?? 0,
+            livenessScore,
             livenessStatus,
             faceScore: scoringResult.faceScore,
             ocrScore: scoringResult.ocrScore,

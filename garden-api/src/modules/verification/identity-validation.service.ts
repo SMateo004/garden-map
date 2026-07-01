@@ -30,9 +30,7 @@ const TRUST_WEIGHTS = {
 };
 
 const TRUST_THRESHOLDS = {
-  // 0.80 is achievable without liveness (weight redistributed). The hard block at faceScore<85
-  // already ensures low-biometric-match attempts are rejected regardless of this threshold.
-  APPROVED: 0.80,
+  APPROVED: 0.90, // Adjusted to 0.90 for better auto-acceptance (industry standard for high match)
 };
 
 export interface DetailedTrustScore {
@@ -47,46 +45,46 @@ export interface DetailedTrustScore {
 }
 
 /**
- * Combines scores into a final weighted score (0.0 to 1.0).
- * Both faceScore and livenessScore accept null to signal "unavailable" —
- * when null, that component's weight is redistributed proportionally among the rest.
+ * Combines scores into a final weighted score (0.0 to 1.0)
  */
 export function combineScores(params: {
   ocrScore: number;
   faceScore: number | null;
   behaviorScore: number;
   docScore: number;
-  livenessScore: number | null;
+  livenessScore: number;
 }): number {
-  const { ocrScore, faceScore, behaviorScore, docScore, livenessScore } = params;
+  let { ocrScore, faceScore, behaviorScore, docScore, livenessScore } = params;
 
+  // Normalize to 0-1
   const nOcr = Math.max(0, Math.min(100, ocrScore)) / 100;
   const nDoc = Math.max(0, Math.min(100, docScore)) / 100;
+  const nLiveness = Math.max(0, Math.min(100, livenessScore)) / 100;
   const nBehavior = Math.max(0, Math.min(100, behaviorScore)) / 100;
-  const nFace = faceScore !== null && faceScore !== undefined ? Math.max(0, Math.min(100, faceScore)) / 100 : null;
-  const nLiveness = livenessScore !== null && livenessScore !== undefined ? Math.max(0, Math.min(100, livenessScore)) / 100 : null;
 
-  // Determine which weights are active (only for available signals)
-  const activeWeights: Record<string, number> = {
-    ocr: TRUST_WEIGHTS.ocr,
-    document: TRUST_WEIGHTS.document,
-    behavior: TRUST_WEIGHTS.behavior,
-  };
-  if (nFace !== null) activeWeights['face'] = TRUST_WEIGHTS.face;
-  if (nLiveness !== null) activeWeights['liveness'] = TRUST_WEIGHTS.liveness;
+  if (faceScore === null || faceScore === undefined) {
+    // Redistribute face weight (50%) among others
+    const totalOtherWeight = TRUST_WEIGHTS.liveness + TRUST_WEIGHTS.ocr + TRUST_WEIGHTS.document + TRUST_WEIGHTS.behavior;
+    const score = (
+      (nLiveness * (TRUST_WEIGHTS.liveness / totalOtherWeight)) +
+      (nOcr * (TRUST_WEIGHTS.ocr / totalOtherWeight)) +
+      (nDoc * (TRUST_WEIGHTS.document / totalOtherWeight)) +
+      (nBehavior * (TRUST_WEIGHTS.behavior / totalOtherWeight))
+    );
+    return score;
+  }
 
-  // Normalize active weights so they sum to 1
-  const totalWeight = Object.values(activeWeights).reduce((a, b) => a + b, 0);
+  const nFace = Math.max(0, Math.min(100, faceScore)) / 100;
 
-  const score = (
-    (nFace !== null ? nFace * ((activeWeights['face'] ?? 0) / totalWeight) : 0) +
-    (nLiveness !== null ? nLiveness * ((activeWeights['liveness'] ?? 0) / totalWeight) : 0) +
-    nOcr * ((activeWeights['ocr'] ?? 0) / totalWeight) +
-    nDoc * ((activeWeights['document'] ?? 0) / totalWeight) +
-    nBehavior * ((activeWeights['behavior'] ?? 0) / totalWeight)
+  const baseScore = (
+    nFace * TRUST_WEIGHTS.face +
+    nLiveness * TRUST_WEIGHTS.liveness +
+    nOcr * TRUST_WEIGHTS.ocr +
+    nDoc * TRUST_WEIGHTS.document +
+    nBehavior * TRUST_WEIGHTS.behavior
   );
 
-  return score;
+  return baseScore;
 }
 
 /**
@@ -102,7 +100,7 @@ export function getVerificationDecision(score: number): 'VERIFIED' | 'REJECTED' 
  */
 export function calculateDetailedTrustScore(inputs: {
   faceSimilarity: number | null;
-  livenessScore: number | null;
+  livenessScore: number;
   nameSimilarity: number;
   ocrConfidence: number;
   docConfidence: number;
@@ -157,7 +155,7 @@ export function calculateDetailedTrustScore(inputs: {
 
   return {
     faceScore: faceScore !== null ? Math.round(faceScore) : 0,
-    livenessScore: inputs.livenessScore !== null ? Math.round(inputs.livenessScore) : 0,
+    livenessScore: Math.round(inputs.livenessScore),
     ocrScore: Math.round(ocrScore),
     docScore: Math.round(docScore),
     qualityScore: Math.round((Math.min(100, inputs.sharpness) + (100 - Math.abs(inputs.brightness - 50) * 2)) / 2),
