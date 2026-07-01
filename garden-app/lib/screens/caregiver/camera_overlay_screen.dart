@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import '../../theme/garden_theme.dart';
@@ -112,8 +111,9 @@ class _CameraOverlayScreenState extends State<CameraOverlayScreen>
     setState(() => _isCapturing = true);
     try {
       final xfile = await controller.takePicture();
+      final bytes = await xfile.readAsBytes();
       if (!mounted) return;
-      Navigator.of(context).pop(File(xfile.path));
+      Navigator.of(context).pop(bytes);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

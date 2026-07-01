@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -127,7 +126,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
     }
 
     try {
-      final File? file = await Navigator.of(context).push<File>(
+      final Uint8List? bytes = await Navigator.of(context).push<Uint8List>(
         MaterialPageRoute(
           fullscreenDialog: true,
           builder: (_) => CameraOverlayScreen(
@@ -139,9 +138,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
         ),
       );
 
-      if (file == null) return;
-
-      final bytes = await file.readAsBytes();
+      if (bytes == null) return;
 
       setState(() {
         if (type == 'selfie') {

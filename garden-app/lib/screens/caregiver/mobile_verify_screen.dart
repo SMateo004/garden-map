@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../theme/garden_theme.dart';
+import 'camera_overlay_screen.dart';
 
 /// Pantalla de verificación de identidad para móvil.
 /// Se accede escaneando el QR que muestra la web — el token llega como parámetro.
@@ -32,8 +33,6 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
   Uint8List? _selfieBytes;
   Uint8List? _ciFrontBytes;
   Uint8List? _ciBackBytes;
-
-  final ImagePicker _picker = ImagePicker();
 
   String get _baseUrl => const String.fromEnvironment(
       'API_URL', defaultValue: 'https://api.gardenbo.com/api');
@@ -109,32 +108,52 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
   }
 
   Future<void> _capturePhoto(String type) async {
+    final isSelfie = type == 'selfie';
+    final String title;
+    final String hint;
+    final CameraFrameShape frameShape;
+    final CameraLensDirection lensDir;
+
+    switch (type) {
+      case 'selfie':
+        title = 'Toma tu selfie';
+        hint = 'Centra tu rostro en el óvalo · Sin gafas · Buena iluminación';
+        frameShape = CameraFrameShape.oval;
+        lensDir = CameraLensDirection.front;
+      case 'ciFront':
+        title = 'CI — Anverso (frente)';
+        hint = 'Coloca el documento completo dentro del marco · Sin reflejos';
+        frameShape = CameraFrameShape.rectangle;
+        lensDir = CameraLensDirection.back;
+      default:
+        title = 'CI — Reverso (dorso)';
+        hint = 'Coloca el reverso del documento dentro del marco · Texto legible';
+        frameShape = CameraFrameShape.rectangle;
+        lensDir = CameraLensDirection.back;
+    }
+
     try {
-      final device = type == 'selfie' ? CameraDevice.front : CameraDevice.rear;
-      final XFile? photo = await _picker.pickImage(
-        source: ImageSource.camera,
-        preferredCameraDevice: device,
-        imageQuality: 85,
-        maxWidth: 1280,
-        maxHeight: 1280,
+      final Uint8List? bytes = await Navigator.of(context).push<Uint8List>(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => CameraOverlayScreen(
+            frameShape: frameShape,
+            title: title,
+            hint: hint,
+            lensDirection: lensDir,
+          ),
+        ),
       );
-      if (photo == null) return;
-      final bytes = await photo.readAsBytes();
+
+      if (bytes == null || !mounted) return;
       debugPrint('[MobileVerify] Foto capturada: $type — ${bytes.length} bytes');
-      if (mounted) setState(() {
-        if (type == 'selfie') _selfieBytes = bytes;
+      setState(() {
+        if (isSelfie) _selfieBytes = bytes;
         else if (type == 'ciFront') _ciFrontBytes = bytes;
         else _ciBackBytes = bytes;
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Foto capturada correctamente'),
-          backgroundColor: GardenColors.success,
-          duration: Duration(seconds: 2),
-        ));
-      }
     } catch (e) {
-      debugPrint('[MobileVerify] Error capturando foto: $e');
+      debugPrint('[MobileVerify] Error de cámara: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: const Text('No se pudo acceder a la cámara. Verifica los permisos.'),
