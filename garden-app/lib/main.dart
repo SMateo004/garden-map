@@ -215,6 +215,7 @@ final GoRouter _router = GoRouter(
           prefillLastName: extra?['lastName'] as String?,
           prefillEmail: extra?['email'] as String?,
           fromSocial: extra?['fromSocial'] as bool? ?? false,
+          caregiverOnly: extra?['caregiverOnly'] as bool? ?? false,
         );
       },
     ),

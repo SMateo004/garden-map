@@ -12,6 +12,11 @@ class RegisterScreen extends StatefulWidget {
   final String? prefillLastName;
   final String? prefillEmail;
   final bool fromSocial;
+  /// True solo cuando se llega desde /become-caregiver. Fuerza el registro
+  /// de cuidador y oculta por completo la opción de dueño — exclusividad
+  /// de ese embudo. Cualquier otro botón "Regístrate" de la app deja esto
+  /// en false y nunca muestra la opción de cuidador.
+  final bool caregiverOnly;
 
   const RegisterScreen({
     super.key,
@@ -19,6 +24,7 @@ class RegisterScreen extends StatefulWidget {
     this.prefillLastName,
     this.prefillEmail,
     this.fromSocial = false,
+    this.caregiverOnly = false,
   });
 
   @override
@@ -47,12 +53,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading     = false;
   bool _obscurePassword = true;
   bool _acceptedTerms = false;
-  String _selectedRole = 'owner'; // 'owner' o 'caregiver'
+  late String _selectedRole; // 'owner' o 'caregiver' — fijo según widget.caregiverOnly
   DateTime? _dateOfBirth;
 
   @override
   void initState() {
     super.initState();
+    _selectedRole = widget.caregiverOnly ? 'caregiver' : 'owner';
     if (widget.prefillFirstName != null) _firstNameController.text = widget.prefillFirstName!;
     if (widget.prefillLastName != null) _lastNameController.text = widget.prefillLastName!;
     if (widget.prefillEmail != null) _emailController.text = widget.prefillEmail!;
@@ -493,24 +500,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
           const SizedBox(height: 40),
           Text('Crear cuenta', style: TextStyle(color: textColor, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
           const SizedBox(height: 8),
-          Text('Únete a la comunidad GARDEN', style: TextStyle(color: subtextColor, fontSize: 15)),
-          const SizedBox(height: 32),
-
-          // Selector de rol
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: surfaceEl,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              children: [
-                Expanded(child: _rolePill('Soy dueño 🐾', 'owner', textColor, subtextColor)),
-                Expanded(child: _rolePill('Soy cuidador 🏠', 'caregiver', textColor, subtextColor)),
-              ],
-            ),
+          Text(
+            _selectedRole == 'caregiver'
+                ? 'Regístrate como cuidador en GARDEN'
+                : 'Únete a la comunidad GARDEN',
+            style: TextStyle(color: subtextColor, fontSize: 15),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 32),
 
           // Introducción para cuidadores
           if (_selectedRole == 'caregiver') ...[
@@ -817,29 +813,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ],
       ),
       ),
-      ),
-    );
-  }
-
-  Widget _rolePill(String label, String role, Color textColor, Color subtextColor) {
-    final selected = _selectedRole == role;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedRole = role),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: selected ? GardenColors.primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: selected ? [BoxShadow(color: GardenColors.primary.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 2))] : null,
-        ),
-        child: Center(
-          child: Text(label, style: TextStyle(
-            color: selected ? Colors.white : subtextColor,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-            fontSize: 14,
-          )),
-        ),
       ),
     );
   }

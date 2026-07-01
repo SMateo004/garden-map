@@ -150,8 +150,11 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
     try {
       final token = AuthState.token;
       if (token.isEmpty) {
+        // Visitante sin sesión — directo al registro exclusivo de cuidador
+        // (sin selector de rol, sin pasar por login). Esta es la única
+        // puerta de entrada al registro de cuidador nuevo en toda la app.
         if (!mounted) return;
-        context.go('/login');
+        context.go('/register', extra: {'caregiverOnly': true});
         return;
       }
 
