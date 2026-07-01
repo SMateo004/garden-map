@@ -111,6 +111,8 @@ export interface AdminCaregiverDetailDto {
     isOver18: boolean;
     createdAt: string;
     updatedAt: string;
+    phoneOtp: string | null;
+    phoneOtpExpiresAt: string | null;
   };
 
   // --- Perfil público / wizard ---

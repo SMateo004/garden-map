@@ -845,41 +845,55 @@ export const registerCompany = asyncHandler(async (req: Request, res: Response) 
   return res.status(201).json({ success: true, data: result });
 });
 
-// ── Phone Verification (Twilio Verify) ───────────────────────────────────────
+// ── Phone Verification ───────────────────────────────────────────────────────
+// El backend genera el código, lo persiste en users.phoneOtp, y lo envía por
+// Twilio SMS. El soporte admin puede consultar el último código emitido en el
+// panel de administración (campo phoneOtp del perfil del cuidador).
 
 /** POST /api/auth/caregiver/send-phone-otp
- *  Inicia verificación vía Twilio Verify Service: envía OTP por SMS. */
+ *  Genera un código de 6 dígitos, lo guarda en BD y lo envía por SMS. */
 export const sendCaregiverPhoneOtp = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-
-  const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_VERIFY_SERVICE_SID } = await import('../../config/env.js').then(m => m.env);
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_VERIFY_SERVICE_SID) {
-    return res.status(503).json({ success: false, error: { code: 'SMS_NOT_CONFIGURED', message: 'El servicio de SMS no está configurado.' } });
-  }
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { phone: true } });
   if (!user || !user.phone) {
     return res.status(400).json({ success: false, error: { code: 'NO_PHONE', message: 'No hay número de teléfono registrado en tu cuenta.' } });
   }
 
+  // Generar código y guardarlo en BD (10 min de vigencia)
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { phoneOtp: otp, phoneOtpExpiresAt: expiresAt },
+  });
+
   const toPhone = user.phone.startsWith('+') ? user.phone : `+591${user.phone}`;
 
-  const { default: twilio } = await import('twilio');
-  const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-
-  try {
-    await client.verify.v2.services(TWILIO_VERIFY_SERVICE_SID)
-      .verifications.create({ to: toPhone, channel: 'sms' });
-  } catch (err) {
-    logger.error(String(err), 'Twilio Verify send error');
-    return res.status(502).json({ success: false, error: { code: 'SMS_SEND_FAILED', message: 'No se pudo enviar el SMS. Intenta de nuevo.' } });
+  // Enviar por Twilio Verify usando nuestro propio código (customCode).
+  // Si Twilio falla, el código sigue guardado en BD — soporte puede darlo manualmente.
+  const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_VERIFY_SERVICE_SID } = await import('../../config/env.js').then(m => m.env);
+  if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_VERIFY_SERVICE_SID) {
+    try {
+      const { default: twilio } = await import('twilio');
+      const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+      await (client.verify.v2.services(TWILIO_VERIFY_SERVICE_SID).verifications.create as Function)({
+        to: toPhone,
+        channel: 'sms',
+        customCode: otp,
+      });
+    } catch (err) {
+      logger.error(String(err), 'Twilio Verify send error — code saved in DB for manual support');
+    }
+  } else {
+    logger.warn('Twilio not configured — OTP code saved in DB only');
   }
 
   return res.json({ success: true, message: `Código enviado a ${toPhone}.` });
 });
 
 /** POST /api/auth/caregiver/verify-phone — body: { code }
- *  Verifica el OTP con Twilio Verify y marca phoneVerified=true. */
+ *  Verifica el código contra el guardado en BD y marca phoneVerified=true. */
 export const verifyCaregiverPhone = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const { code } = req.body ?? {};
@@ -888,34 +902,31 @@ export const verifyCaregiverPhone = asyncHandler(async (req: Request, res: Respo
     return res.status(400).json({ success: false, error: { code: 'INVALID_CODE', message: 'El código debe ser de 6 dígitos.' } });
   }
 
-  const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_VERIFY_SERVICE_SID } = await import('../../config/env.js').then(m => m.env);
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_VERIFY_SERVICE_SID) {
-    return res.status(503).json({ success: false, error: { code: 'SMS_NOT_CONFIGURED', message: 'El servicio de SMS no está configurado.' } });
-  }
-
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { phone: true } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { phone: true, phoneOtp: true, phoneOtpExpiresAt: true },
+  });
   if (!user || !user.phone) {
     return res.status(400).json({ success: false, error: { code: 'NO_PHONE', message: 'No hay número de teléfono registrado.' } });
   }
 
-  const toPhone = user.phone.startsWith('+') ? user.phone : `+591${user.phone}`;
-
-  const { default: twilio } = await import('twilio');
-  const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-
-  let verificationStatus: string;
-  try {
-    const check = await client.verify.v2.services(TWILIO_VERIFY_SERVICE_SID)
-      .verificationChecks.create({ to: toPhone, code });
-    verificationStatus = check.status;
-  } catch (err) {
-    logger.error(String(err), 'Twilio Verify check error');
-    return res.status(502).json({ success: false, error: { code: 'VERIFY_CHECK_FAILED', message: 'Error al verificar el código. Intenta de nuevo.' } });
+  if (!user.phoneOtp || !user.phoneOtpExpiresAt) {
+    return res.status(400).json({ success: false, error: { code: 'NO_CODE', message: 'No hay un código activo. Solicita uno nuevo.' } });
   }
 
-  if (verificationStatus !== 'approved') {
-    return res.status(400).json({ success: false, error: { code: 'WRONG_CODE', message: 'Código incorrecto o expirado. Revisa el SMS e intenta de nuevo.' } });
+  if (new Date() > user.phoneOtpExpiresAt) {
+    return res.status(400).json({ success: false, error: { code: 'CODE_EXPIRED', message: 'El código expiró. Solicita uno nuevo.' } });
   }
+
+  if (user.phoneOtp !== code) {
+    return res.status(400).json({ success: false, error: { code: 'WRONG_CODE', message: 'Código incorrecto. Revisa el SMS e intenta de nuevo.' } });
+  }
+
+  // Limpiar el código ya usado
+  await prisma.user.update({
+    where: { id: userId },
+    data: { phoneOtp: null, phoneOtpExpiresAt: null },
+  });
 
   await prisma.caregiverProfile.updateMany({
     where: { userId },

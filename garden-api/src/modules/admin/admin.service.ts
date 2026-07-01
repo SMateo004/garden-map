@@ -76,6 +76,8 @@ export async function getCaregiverDetailForAdmin(profileId: string): Promise<Adm
       isOver18: u.isOver18,
       createdAt: u.createdAt.toISOString(),
       updatedAt: u.updatedAt.toISOString(),
+      phoneOtp: u.phoneOtp ?? null,
+      phoneOtpExpiresAt: u.phoneOtpExpiresAt ? u.phoneOtpExpiresAt.toISOString() : null,
     },
     bio: profile.bio,
     bioDetail: profile.bioDetail,

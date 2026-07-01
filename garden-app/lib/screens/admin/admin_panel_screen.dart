@@ -3548,6 +3548,66 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                         style: TextStyle(fontSize: 13, color: textColor),
                       )),
                     ]),
+                    // Último código OTP — visible solo para soporte
+                    Builder(builder: (_) {
+                      final otp = detail?['user']?['phoneOtp'] as String?;
+                      final expiresStr = detail?['user']?['phoneOtpExpiresAt'] as String?;
+                      if (otp == null || otp.isEmpty) return const SizedBox.shrink();
+                      final expires = expiresStr != null ? DateTime.tryParse(expiresStr) : null;
+                      final expired = expires != null && expires.isBefore(DateTime.now());
+                      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: expired
+                                ? Colors.grey.withValues(alpha: 0.08)
+                                : GardenColors.warning.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: expired
+                                  ? Colors.grey.withValues(alpha: 0.25)
+                                  : GardenColors.warning.withValues(alpha: 0.40),
+                            ),
+                          ),
+                          child: Row(children: [
+                            Icon(
+                              Icons.sms_rounded,
+                              size: 14,
+                              color: expired ? Colors.grey : GardenColors.warning,
+                            ),
+                            const SizedBox(width: 6),
+                            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(
+                                'ÚLTIMO CÓDIGO OTP${expired ? ' (EXPIRADO)' : ''}',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.8,
+                                  color: expired ? Colors.grey : GardenColors.warning,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              SelectableText(
+                                otp,
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 6,
+                                  color: expired ? Colors.grey : textColor,
+                                ),
+                              ),
+                            ]),
+                            const Spacer(),
+                            if (!expired && expires != null)
+                              Text(
+                                'exp. ${expires.hour.toString().padLeft(2,'0')}:${expires.minute.toString().padLeft(2,'0')}',
+                                style: const TextStyle(fontSize: 10, color: Colors.grey),
+                              ),
+                          ]),
+                        ),
+                      ]);
+                    }),
                   ])),
 
                   // COMPLETITUD
