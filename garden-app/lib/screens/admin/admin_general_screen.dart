@@ -788,14 +788,10 @@ class _FinancialTabState extends State<_FinancialTab>
 
           _finSection('Deducciones', textColor, borderColor, surface, [
             _finRow(
-              'Comisiones perdidas por devoluciones ($refundCount reservas)',
-              refundedComm, textColor, subtextColor, isNegative: true,
-            ),
-            _finRow(
               'Inversión marketing — códigos de regalo',
               mktExpense, textColor, subtextColor, isNegative: true,
             ),
-            _finRow('Total deducciones', refundedComm + mktExpense, textColor, subtextColor,
+            _finRow('Total deducciones', mktExpense, textColor, subtextColor,
                 isTotal: true, isNegative: true, highlight: true),
           ]),
           const SizedBox(height: 12),
@@ -804,6 +800,15 @@ class _FinancialTabState extends State<_FinancialTab>
             _finRow('Utilidad neta GARDEN', netIncome, textColor, subtextColor,
                 isTotal: true, highlight: true),
           ]),
+          const SizedBox(height: 12),
+
+          if (refundedComm > 0)
+            _finSection('Informativo — cancelaciones', textColor, borderColor, surface, [
+              _finRow(
+                'Comisión potencial perdida por cancelaciones ($refundCount)',
+                refundedComm, textColor, subtextColor, isNegative: true,
+              ),
+            ]),
           const SizedBox(height: 16),
 
           Container(
@@ -816,12 +821,13 @@ class _FinancialTabState extends State<_FinancialTab>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('⚠ Nota sobre devoluciones',
+                const Text('⚠ Nota sobre cancelaciones',
                     style: TextStyle(color: GardenColors.warning, fontWeight: FontWeight.w700, fontSize: 12)),
                 const SizedBox(height: 4),
                 Text(
-                  'Las devoluciones son dinero del dueño de mascota que se reintegra. '
-                  'No es pérdida de GARDEN — solo se pierde la comisión que ya habría cobrado si el servicio se completaba.',
+                  'Las cancelaciones son servicios que no se completaron. '
+                  'GARDEN devuelve el dinero al dueño. La comisión potencial se muestra como referencia '
+                  'pero no se descuenta del neto porque nunca fue cobrada.',
                   style: TextStyle(color: subtextColor, fontSize: 11),
                 ),
               ],

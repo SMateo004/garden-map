@@ -1150,8 +1150,9 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
       case 'APPROVED': color = GardenColors.success; label = 'Aprobado'; break;
       case 'PENDING_REVIEW': color = GardenColors.warning; label = 'Pendiente'; break;
       case 'REJECTED': color = GardenColors.error; label = 'Rechazado'; break;
-      case 'DRAFT': color = Colors.grey; label = 'Borrador'; break;
-      default: color = Colors.grey; label = status;
+      case 'DRAFT': color = GardenColors.textHint; label = 'Borrador'; break;
+      case 'SUSPENDED': color = GardenColors.error; label = 'Suspendido'; break;
+      default: color = GardenColors.textHint; label = 'Pendiente';
     }
     return GardenBadge(text: label, color: color, fontSize: 12);
   }

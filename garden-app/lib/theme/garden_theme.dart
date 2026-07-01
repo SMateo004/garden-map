@@ -1087,8 +1087,12 @@ GardenBadge bookingStatusBadge(String status) {
       return const GardenBadge(text: 'Cancelada', color: GardenColors.error);
     case 'REJECTED_BY_CAREGIVER':
       return const GardenBadge(text: 'Rechazada', color: GardenColors.error);
+    case 'MG_PASSED':
+      return const GardenBadge(text: 'M&G aprobado', color: GardenColors.success, icon: Icons.check_circle_outline);
+    case 'MG_FAILED':
+      return const GardenBadge(text: 'M&G no salió bien', color: GardenColors.error);
     default:
-      return GardenBadge(text: status, color: GardenColors.textSecondary);
+      return const GardenBadge(text: 'Pendiente', color: GardenColors.textSecondary);
   }
 }
 

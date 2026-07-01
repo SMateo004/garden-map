@@ -345,13 +345,13 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: Colors.amber.withValues(alpha: 0.1),
+                    color: GardenColors.warning.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                    border: Border.all(color: GardenColors.warning.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.info_outline, color: Colors.amber, size: 18),
+                      const Icon(Icons.info_outline, color: GardenColors.warning, size: 18),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(

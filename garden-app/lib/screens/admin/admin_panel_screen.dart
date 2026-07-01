@@ -2834,6 +2834,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   Widget _buildReservationsTab(Color surface, Color textColor, Color subtextColor, Color borderColor) {
     final filters = [
       ('Todas', 'todas'),
+      ('Esp. cuidador', 'WAITING_CAREGIVER_APPROVAL'),
       ('Confirmadas', 'CONFIRMED'),
       ('En curso', 'IN_PROGRESS'),
       ('Completadas', 'COMPLETED'),
@@ -2841,13 +2842,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ];
 
     String bookingStatusLabel(String s) => switch (s) {
-      'CONFIRMED'              => 'Confirmada',
-      'IN_PROGRESS'            => 'En curso',
-      'COMPLETED'              => 'Completada',
-      'CANCELLED'              => 'Cancelada',
+      'CONFIRMED'                  => 'Confirmada',
+      'IN_PROGRESS'                => 'En curso',
+      'COMPLETED'                  => 'Completada',
+      'CANCELLED'                  => 'Cancelada',
       'WAITING_CAREGIVER_APPROVAL' => 'Esperando cuidador',
-      'PENDING_PAYMENT'        => 'Pendiente pago',
-      _                        => s,
+      'PAYMENT_PENDING_APPROVAL'   => 'Por aprobar',
+      'PENDING_PAYMENT'            => 'Pendiente pago',
+      _                            => s,
     };
 
     Color bookingStatusColor(String s) => switch (s) {
@@ -4250,8 +4252,8 @@ class _AdminMassNotifViewState extends State<_AdminMassNotifView> {
     final titleCtrl = TextEditingController();
     final msgCtrl = TextEditingController();
     final schedCtrl = TextEditingController();
+    final zoneCtrl = TextEditingController();
     String target = 'all';
-    String zone = '';
 
     showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, ss) => AlertDialog(
       title: const Text('Nueva Notificación Masiva'),
@@ -4271,7 +4273,7 @@ class _AdminMassNotifViewState extends State<_AdminMassNotifView> {
           onChanged: (v) => ss(() => target = v ?? 'all'),
         ),
         if (target == 'zone')
-          TextField(controller: TextEditingController()..addListener(() => zone = ''), decoration: const InputDecoration(labelText: 'Zona (ej: EQUIPETROL)')),
+          TextField(controller: zoneCtrl, decoration: const InputDecoration(labelText: 'Zona (ej: EQUIPETROL)')),
         const SizedBox(height: 8),
         TextField(controller: schedCtrl, decoration: const InputDecoration(
           labelText: 'Programar para (ISO, dejar vacío = envío inmediato)',
@@ -4286,7 +4288,7 @@ class _AdminMassNotifViewState extends State<_AdminMassNotifView> {
               'title': titleCtrl.text.trim(),
               'message': msgCtrl.text.trim(),
               'targetType': target,
-              if (target == 'zone' && zone.isNotEmpty) 'targetZone': zone,
+              if (target == 'zone' && zoneCtrl.text.trim().isNotEmpty) 'targetZone': zoneCtrl.text.trim(),
               if (schedCtrl.text.trim().isNotEmpty) 'scheduledAt': schedCtrl.text.trim(),
             });
             await http.post(Uri.parse('$_base/admin/mass-notifications'), headers: _h, body: body);

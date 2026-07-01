@@ -148,7 +148,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                 ] else ...[
                                   _walletStat('Pagado', 'Bs ${(_walletData?['totalPaid'] ?? 0).toStringAsFixed(0)}', Colors.white70),
                                   const SizedBox(width: 20),
-                                  _walletStat('Reembolsos', 'Bs ${(_walletData?['totalEarned'] ?? 0).toStringAsFixed(0)}', GardenColors.success),
+                                  _walletStat('Reembolsos', 'Bs ${(_walletData?['totalRefunded'] ?? 0).toStringAsFixed(0)}', GardenColors.info),
                                 ],
                               ],
                             ),
@@ -754,11 +754,11 @@ class _WalletScreenState extends State<WalletScreen> {
         break;
       case 'WITHDRAWAL':
         icon = Icons.account_balance_rounded;
-        color = isPending ? GardenColors.warning : Colors.blueAccent;
+        color = isPending ? GardenColors.warning : GardenColors.info;
         break;
       case 'REFUND':
         icon = Icons.keyboard_return_rounded;
-        color = Colors.teal;
+        color = GardenColors.successDark;
         break;
       case 'COMMISSION':
         icon = Icons.percent_rounded;
@@ -770,7 +770,7 @@ class _WalletScreenState extends State<WalletScreen> {
         break;
       case 'GIFT':
         icon = Icons.card_giftcard_rounded;
-        color = Colors.purple;
+        color = GardenColors.accent;
         break;
       case 'OVERTIME_FEE':
         icon = Icons.timer_off_rounded;
@@ -844,7 +844,7 @@ class _WalletScreenState extends State<WalletScreen> {
                 '${isPositive ? '+' : '-'} Bs ${amount.toStringAsFixed(2)}',
                 style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 14),
               ),
-              Text('Bs ${(t['balance'] as num).toStringAsFixed(2)}',
+              Text('Bs ${((t['balance'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}',
                 style: TextStyle(color: subtextColor, fontSize: 10)),
             ],
           ),

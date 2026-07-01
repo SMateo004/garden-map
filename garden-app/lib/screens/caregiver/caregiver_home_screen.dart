@@ -29,10 +29,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   Map<String, dynamic>? _availability;
   List<Map<String, dynamic>> _bookings = [];
   bool _isLoading = true;
+  bool _isAbandoningConversion = false;
   bool _setupPending = false; // true = show resume-registration screen
   String _caregiverStatus = ''; // DRAFT | PENDING_REVIEW | REJECTED | APPROVED
   bool _conversionInProgress = false; // true = CLIENT→CAREGIVER in progress
-  bool _isAbandoningConversion = false;
   String _caregiverToken = '';
   Map<String, dynamic>? _caregiver;
   Map<String, dynamic>? _dashboardStats;
@@ -53,11 +53,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   void initState() {
     super.initState();
     _initData();
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
   }
 
   Future<void> _initData() async {
@@ -301,7 +296,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Horario ${enabled ? 'activado' : 'desactivado'}'),
-            backgroundColor: enabled ? Colors.green : Colors.orange,
+            backgroundColor: enabled ? GardenColors.success : GardenColors.warning,
           ),
         );
       } else {
@@ -310,7 +305,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
       );
     }
   }
@@ -337,14 +332,14 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(block ? 'Día bloqueado' : 'Día desbloqueado'),
-            backgroundColor: block ? Colors.red : Colors.green,
+            backgroundColor: block ? GardenColors.error : GardenColors.success,
           ),
         );
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
       );
     }
   }
@@ -423,7 +418,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
       );
     }
   }
@@ -445,7 +440,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(action == 'accept' ? 'Reserva aceptada' : 'Reserva rechazada'),
-            backgroundColor: action == 'accept' ? Colors.green : Colors.red.shade700,
+            backgroundColor: action == 'accept' ? GardenColors.success : GardenColors.error,
           ),
         );
       } else {
@@ -454,7 +449,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
       );
     }
   }
@@ -487,7 +482,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+          SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
         );
       }
     }
@@ -776,7 +771,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF1E2433), Color(0xFF2D3250)],
+          colors: [GardenColors.navy, GardenColors.navyDark],
         ),
         borderRadius: GardenRadius.xl_,
         border: Border.all(color: GardenColors.primary.withValues(alpha: 0.15)),
@@ -838,7 +833,15 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            status == 'APPROVED' ? 'Activo' : status,
+                            switch (status) {
+                              'APPROVED' => 'Activo',
+                              'PENDING_REVIEW' => 'En revisión',
+                              'NEEDS_REVISION' => 'Necesita ajustes',
+                              'DRAFT' => 'Borrador',
+                              'REJECTED' => 'Rechazado',
+                              'SUSPENDED' => 'Suspendido',
+                              _ => 'Pendiente',
+                            },
                             style: const TextStyle(
                               color: GardenColors.success, fontSize: 10, fontWeight: FontWeight.w600,
                             ),
@@ -1883,14 +1886,19 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(booking['petName'] as String? ?? 'Mascota', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
-                        Text(booking['serviceType'] as String? ?? '', style: TextStyle(color: subtextColor, fontSize: 12)),
+                        Text(switch (booking['serviceType'] as String? ?? '') {
+                          'PASEO' => 'Paseo',
+                          'HOSPEDAJE' => 'Hospedaje',
+                          'GUARDERIA' => 'Guardería',
+                          final s => s,
+                        }, style: TextStyle(color: subtextColor, fontSize: 12)),
                       ],
                     ),
                   ),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Bs ${_caregiverNet(booking)}', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 15)),
+                      Text('Bs ${_caregiverNetAmount(booking)}', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 15)),
                       if (canOpen) ...[
                         const SizedBox(width: 6),
                         const Icon(Icons.chevron_right_rounded, color: GardenColors.primary, size: 18),
@@ -1954,8 +1962,6 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       ),
     );
   }
-
-  String _caregiverNet(Map<String, dynamic> booking) => _caregiverNetAmount(booking);
 
   Widget _buildAvailability() {
     final isDark = themeNotifier.isDark;
@@ -2191,7 +2197,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+          SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
         );
       }
     }
@@ -2478,14 +2484,14 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         await _loadAvailability();
         _computeDayStatuses();
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Horario actualizado'), backgroundColor: Colors.green),
+          const SnackBar(content: Text('Horario actualizado'), backgroundColor: GardenColors.success),
         );
       } else {
         throw Exception(data['error']?['message'] ?? 'Error');
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
       );
     }
   }
@@ -2516,10 +2522,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       
       Color bgColor;
       switch (status) {
-        case 'blocked': bgColor = Colors.red.shade700; break;
+        case 'blocked': bgColor = GardenColors.error; break;
         case 'booked': bgColor = kPrimaryColor; break;
-        case 'partial': bgColor = Colors.orange; break;
-        default: bgColor = Colors.green.shade700;
+        case 'partial': bgColor = GardenColors.warning; break;
+        default: bgColor = GardenColors.success;
       }
       
       if (isPast) bgColor = kSurfaceColor;
@@ -3517,7 +3523,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Sí, cancelar', style: TextStyle(color: Colors.red)),
+            child: const Text('Sí, cancelar', style: TextStyle(color: GardenColors.error)),
           ),
         ],
       ),
@@ -3532,7 +3538,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
       if (data['success'] == true) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Reserva cancelada'), backgroundColor: Colors.orange),
+            const SnackBar(content: Text('Reserva cancelada'), backgroundColor: GardenColors.warning),
           );
         }
         widget.onRefresh?.call();
@@ -3542,7 +3548,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: Colors.red.shade700),
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error),
         );
       }
     }
@@ -3915,11 +3921,11 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                           OutlinedButton(
                             onPressed: () => _cancelMGBooking(booking['id'] as String),
                             style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Colors.red),
+                              side: const BorderSide(color: GardenColors.error),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               minimumSize: const Size(double.infinity, 40),
                             ),
-                            child: const Text('Cancelar — M&G no salió bien', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+                            child: const Text('Cancelar — M&G no salió bien', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.bold, fontSize: 12)),
                           ),
                         ],
                       ],

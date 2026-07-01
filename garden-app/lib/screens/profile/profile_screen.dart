@@ -439,8 +439,9 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget _profileTile({
     required IconData icon,
     required String title,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
     bool highlight = false,
+    Widget? trailing,
   }) {
     final isDark = themeNotifier.isDark;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
@@ -453,8 +454,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         builder: (context, _) {
           final t = _pulseAnim.value;
           final pulseBorder = Color.lerp(
-            const Color(0xFFD97706), // amber base
-            const Color(0xFFF59E0B), // amber bright
+            GardenColors.warning, // amber base
+            GardenColors.warning, // amber bright
             t,
           )!;
           final glowAlpha = 0.18 + 0.22 * t;
@@ -484,10 +485,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFD97706).withValues(alpha: 0.12 + 0.06 * t),
+                          color: GardenColors.warning.withValues(alpha: 0.12 + 0.06 * t),
                           borderRadius: BorderRadius.circular(GardenRadius.sm),
                         ),
-                        child: Icon(icon, color: const Color(0xFFD97706), size: 17),
+                        child: Icon(icon, color: GardenColors.warning, size: 17),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -504,7 +505,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                             Text(
                               'Completa tu perfil',
                               style: TextStyle(
-                                color: const Color(0xFFD97706).withValues(alpha: 0.85 + 0.15 * t),
+                                color: GardenColors.warning.withValues(alpha: 0.85 + 0.15 * t),
                                 fontWeight: FontWeight.w600,
                                 fontSize: 11,
                               ),
@@ -513,7 +514,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         ),
                       ),
                       Icon(Icons.chevron_right_rounded,
-                          color: const Color(0xFFD97706), size: 18),
+                          color: GardenColors.warning, size: 18),
                     ],
                   ),
                 ),
@@ -526,7 +527,9 @@ class _ProfileScreenState extends State<ProfileScreen>
 
     // Normal tile
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-    return Padding(
+    return Opacity(
+      opacity: onTap == null ? 0.55 : 1.0,
+      child: Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
         color: surface,
@@ -558,11 +561,12 @@ class _ProfileScreenState extends State<ProfileScreen>
                           fontWeight: FontWeight.w600,
                           fontSize: 14)),
                 ),
-                Icon(Icons.chevron_right_rounded, color: hintColor, size: 18),
+                trailing ?? Icon(Icons.chevron_right_rounded, color: hintColor, size: 18),
               ],
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -596,7 +600,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           _infoRow(Icons.calendar_today_outlined, 'Miembro desde', createdAt.isNotEmpty ? createdAt : 'N/A', textColor, subtextColor),
           if (walletAddress.isNotEmpty) ...[
             Divider(height: 1, color: borderColor),
-            _infoRow(Icons.account_balance_wallet_outlined, 'Wallet blockchain', '${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}', textColor, subtextColor),
+            _infoRow(Icons.account_balance_wallet_outlined, 'Wallet blockchain', walletAddress.length >= 10 ? '${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}' : walletAddress, textColor, subtextColor),
           ],
           Divider(height: 1, color: borderColor),
           _infoRow(Icons.fingerprint_outlined, 'ID de cuenta', (user['id'] as String? ?? '').isNotEmpty ? '${(user['id'] as String).substring(0, 8)}...' : 'N/A', textColor, subtextColor),
@@ -712,7 +716,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           const Text('Gestiona tus reservas, mascotas y configuración',
-              style: TextStyle(color: GardenColors.darkTextSecondary),
+              style: TextStyle(color: GardenColors.textHint),
               textAlign: TextAlign.center),
           const SizedBox(height: 32),
           GardenButton(label: 'Iniciar sesión', onPressed: () => context.push('/login')),
@@ -1014,7 +1018,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                     Text('Sesión', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
                     const SizedBox(height: 8),
                     _profileTile(icon: Icons.notifications_outlined, title: 'Notificaciones',
-                        onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Próximamente')))),
+                        trailing: Text('Próximamente', style: TextStyle(color: subtextColor, fontSize: 11)),
+                        onTap: null),
                     const SizedBox(height: 8),
                     // Logout button as a tile
                     Padding(

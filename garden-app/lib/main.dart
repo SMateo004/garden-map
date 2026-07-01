@@ -119,6 +119,8 @@ const _publicPaths = {
   '/client-welcome',
   '/service-selector', // accesible sin login (modo guest)
   '/marketplace',      // accesible sin login (modo guest)
+  '/mobile-verify',    // verificación de identidad vía QR — no requiere sesión
+  '/verify',           // alias legacy de /mobile-verify
 };
 
 // ── Router ─────────────────────────────────────────────────
@@ -478,6 +480,14 @@ final GoRouter _router = GoRouter(
         final token = state.uri.queryParameters['token'] ?? '';
         if (kDebugMode) debugPrint('[Router] /mobile-verify — token length: ${token.length}');
         return MobileVerifyScreen(token: token);
+      },
+    ),
+    // Alias legacy: el backend generaba /verify antes de la corrección
+    GoRoute(
+      path: '/verify',
+      redirect: (context, state) {
+        final token = state.uri.queryParameters['token'] ?? '';
+        return '/mobile-verify?token=${Uri.encodeComponent(token)}';
       },
     ),
     GoRoute(

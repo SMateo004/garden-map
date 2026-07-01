@@ -440,7 +440,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('El servidor no está disponible (${response.statusCode}). Intenta de nuevo en unos segundos.'),
-            backgroundColor: Colors.orange.shade800,
+            backgroundColor: GardenColors.warning,
             duration: const Duration(seconds: 5),
           ),
         );
@@ -460,7 +460,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errorMsg),
-            backgroundColor: Colors.red.shade700,
+            backgroundColor: GardenColors.error,
             duration: const Duration(seconds: 8),
           ),
         );
@@ -473,7 +473,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Sin conexión al servidor. Verifica tu internet e intenta de nuevo.'),
-          backgroundColor: Colors.red.shade700,
+          backgroundColor: GardenColors.error,
           duration: const Duration(seconds: 5),
         ),
       );
@@ -532,7 +532,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: Colors.red.shade700,
+      backgroundColor: GardenColors.error,
       duration: const Duration(seconds: 5),
       action: scrollTo?.currentContext != null
           ? SnackBarAction(
@@ -695,7 +695,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           setState(() => _isLoading = false);
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error foto perfil: $e'), backgroundColor: Colors.red.shade700),
+              SnackBar(content: Text('Error foto perfil: $e'), backgroundColor: GardenColors.error),
             );
           }
           return;
@@ -864,7 +864,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         context: context,
         builder: (_) => AlertDialog(
           title: const Row(children: [
-            Icon(Icons.error_outline, color: Colors.red),
+            Icon(Icons.error_outline, color: GardenColors.error),
             SizedBox(width: 8),
             Text('Error al registrarse'),
           ]),
@@ -952,7 +952,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: const Text('Debes completar y aprobar la verificación de identidad para continuar.'),
-            backgroundColor: Colors.red.shade700,
+            backgroundColor: GardenColors.error,
             duration: const Duration(seconds: 5),
           ));
         }
@@ -988,7 +988,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       final name = picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
       setState(() => _localCaregiverPhotos.add((bytes: bytes, name: name, mimeType: picked.mimeType ?? 'image/jpeg')));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red.shade700));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: GardenColors.error));
     }
   }
 
@@ -1014,7 +1014,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       }
       setState(() { _caregiverPhotoUrls.addAll(newUrls); _localCaregiverPhotos.clear(); });
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error subiendo foto: $e'), backgroundColor: Colors.red.shade700));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error subiendo foto: $e'), backgroundColor: GardenColors.error));
       rethrow;
     } finally {
       if (mounted) setState(() => _uploadingCaregiverPhotos = false);
@@ -1035,7 +1035,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         _localPlacePhotos[section] = [...(_localPlacePhotos[section] ?? []), (bytes: bytes, name: name, mimeType: picked.mimeType ?? 'image/jpeg')];
       });
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red.shade700));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: GardenColors.error));
     }
   }
 
@@ -1068,7 +1068,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         });
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error subiendo foto: $e'), backgroundColor: Colors.red.shade700));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error subiendo foto: $e'), backgroundColor: GardenColors.error));
       rethrow;
     } finally {
       if (mounted) setState(() => _uploadingPlacePhotos = false);
@@ -1415,7 +1415,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   Widget _buildPhotoCount(int total, int max, int min, bool hasPending, Color subtextColor) {
     return Text(
       '$total/$max fotos · Mínimo $min${hasPending ? " · pendientes de subir" : ""}',
-      style: TextStyle(color: hasPending ? Colors.orange.shade400 : subtextColor, fontSize: 12),
+      style: TextStyle(color: hasPending ? GardenColors.warning : subtextColor, fontSize: 12),
     );
   }
 
@@ -1446,7 +1446,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         ...local.asMap().entries.map((e) => _photoCell(
           child: Image.memory(e.value.bytes, fit: BoxFit.cover),
           badge: const Icon(Icons.cloud_upload_outlined, color: Colors.white, size: 12),
-          badgeColor: Colors.orange.shade700,
+          badgeColor: GardenColors.warning,
           onRemove: () => onRemoveLocal(e.key),
         )),
         if (uploaded.length + local.length < maxPhotos)
@@ -1492,7 +1492,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         child: SizedBox(width: 72, height: 72, child: _photoCell(
           child: Image.memory(e.value.bytes, fit: BoxFit.cover),
           badge: const Icon(Icons.cloud_upload_outlined, color: Colors.white, size: 11),
-          badgeColor: Colors.orange.shade700,
+          badgeColor: GardenColors.warning,
           onRemove: () => setState(() { final l = _localPlacePhotos[section]; l?.removeAt(e.key); }),
         )),
       )),
@@ -2150,7 +2150,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error leyendo imagen: $e'), backgroundColor: Colors.red.shade700));
+          SnackBar(content: Text('Error leyendo imagen: $e'), backgroundColor: GardenColors.error));
       }
     }
   }

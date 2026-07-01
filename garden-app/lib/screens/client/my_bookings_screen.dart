@@ -187,8 +187,8 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                 width: double.infinity,
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.red.shade600,
-                    side: BorderSide(color: Colors.red.shade400),
+                    foregroundColor: GardenColors.error,
+                    side: const BorderSide(color: GardenColors.error),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
@@ -333,17 +333,17 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
         children: [
           Container(
             width: 40, height: 4,
-            decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(2)),
+            decoration: BoxDecoration(color: GardenColors.textHint, borderRadius: BorderRadius.circular(2)),
           ),
           const SizedBox(height: 28),
           Container(
             width: 72, height: 72,
             decoration: BoxDecoration(
-              color: Colors.red.withValues(alpha: 0.1),
+              color: GardenColors.error.withValues(alpha: 0.1),
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.red.withValues(alpha: 0.3), width: 2),
+              border: Border.all(color: GardenColors.error.withValues(alpha: 0.3), width: 2),
             ),
-            child: const Icon(Icons.cancel_outlined, color: Colors.red, size: 40),
+            child: const Icon(Icons.cancel_outlined, color: GardenColors.error, size: 40),
           ),
           const SizedBox(height: 20),
           Text(
@@ -361,7 +361,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
             width: double.infinity,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
+                backgroundColor: GardenColors.error,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -730,7 +730,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                   GardenAvatar(
                     imageUrl: booking['caregiverPhoto'],
                     size: 52,
-                    initials: (booking['caregiverName'] as String? ?? 'C')[0],
+                    initials: (booking['caregiverName'] as String?)?.isNotEmpty == true
+                        ? (booking['caregiverName'] as String)[0]
+                        : 'C',
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -998,11 +1000,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                           OutlinedButton(
                             onPressed: () => _showMGDecisionSheet(booking['id'] as String),
                             style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Colors.red),
+                              side: const BorderSide(color: GardenColors.error),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               minimumSize: const Size(double.infinity, 40),
                             ),
-                            child: const Text('Cancelar — M&G no salió bien', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+                            child: const Text('Cancelar — M&G no salió bien', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.bold, fontSize: 12)),
                           ),
                         ],
                         const SizedBox(height: 8),
@@ -1054,12 +1056,12 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                           child: OutlinedButton(
                             onPressed: () => _cancelBooking(booking['id']),
                             style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Colors.red),
+                              side: const BorderSide(color: GardenColors.error),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               padding: const EdgeInsets.symmetric(vertical: 0),
                               minimumSize: const Size(0, 40),
                             ),
-                            child: const Text('Cancelar', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+                            child: const Text('Cancelar', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.bold, fontSize: 12)),
                           ),
                         ),
                       if (status == 'COMPLETED' && booking['ownerRating'] == null)

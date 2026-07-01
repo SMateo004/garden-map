@@ -88,6 +88,7 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
     final isDark = themeNotifier.isDark;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
     final passwordCtrl = TextEditingController();
     bool obscure = true;
@@ -114,10 +115,10 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                 const SizedBox(height: 16),
                 Text('Eliminar cuenta', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 10),
-                const Text(
+                Text(
                   'Esta accion es permanente. Tu perfil sera eliminado del marketplace y ya no podras iniciar sesion.\n\nTus reservas e historial se conservaran como datos historicos.\n\nSi tienes saldo en tu billetera, pasara a ser propiedad de GARDEN.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey, fontSize: 13, height: 1.5),
+                  style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
                 ),
                 const SizedBox(height: 20),
                 TextField(
@@ -126,7 +127,7 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                   style: TextStyle(color: textColor),
                   decoration: InputDecoration(
                     hintText: 'Ingresa tu contrasena',
-                    hintStyle: const TextStyle(color: Colors.grey),
+                    hintStyle: TextStyle(color: subtextColor),
                     errorText: errorMsg,
                     filled: true,
                     fillColor: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
@@ -136,7 +137,7 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                       borderSide: const BorderSide(color: GardenColors.error, width: 2),
                     ),
                     suffixIcon: IconButton(
-                      icon: Icon(obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: Colors.grey),
+                      icon: Icon(obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: subtextColor),
                       onPressed: () => setS(() => obscure = !obscure),
                     ),
                   ),

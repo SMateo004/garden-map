@@ -256,7 +256,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+          SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
         );
       }
     } finally {
@@ -398,7 +398,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         builder: (ctx) => AlertDialog(
           backgroundColor: surface,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('¿Crear nueva reserva?',
+          title: Text('¿Cancelar reserva?',
               style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 18)),
           content: Text(
             'Si vuelves, la reserva actual se cancelará y deberás crear una nueva con los términos que elijas.',
@@ -513,7 +513,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Meet & Greet: $errMsg'),
-            backgroundColor: Colors.orange.shade700,
+            backgroundColor: GardenColors.warning,
             duration: const Duration(seconds: 5),
           ),
         );
@@ -1052,13 +1052,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: _walletCoversAll
-                      ? Colors.green.withValues(alpha: 0.07)
-                      : Colors.orange.withValues(alpha: 0.07),
+                      ? GardenColors.success.withValues(alpha: 0.07)
+                      : GardenColors.warning.withValues(alpha: 0.07),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: _walletCoversAll
-                        ? Colors.green.withValues(alpha: 0.3)
-                        : Colors.orange.withValues(alpha: 0.3),
+                        ? GardenColors.success.withValues(alpha: 0.3)
+                        : GardenColors.warning.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Column(
@@ -1068,7 +1068,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         Icon(
                           _walletCoversAll ? Icons.check_circle_outline : Icons.info_outline,
                           size: 16,
-                          color: _walletCoversAll ? Colors.green : Colors.orange,
+                          color: _walletCoversAll ? GardenColors.success : GardenColors.warning,
                         ),
                         const SizedBox(width: 8),
                         Text(
@@ -1076,7 +1076,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                               ? 'Tu billetera cubre el monto total'
                               : 'Pago combinado: billetera + QR',
                           style: TextStyle(
-                            color: _walletCoversAll ? Colors.green : Colors.orange,
+                            color: _walletCoversAll ? GardenColors.success : GardenColors.warning,
                             fontWeight: FontWeight.w700,
                             fontSize: 13,
                           ),
@@ -1089,7 +1089,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     if (!_walletCoversAll) ...[
                       const SizedBox(height: 6),
                       _walletBreakdownRow('Pagar por QR',
-                          'Bs ${_remainingAfterWallet.toStringAsFixed(2)}', Colors.orange, subtextColor),
+                          'Bs ${_remainingAfterWallet.toStringAsFixed(2)}', GardenColors.warning, subtextColor),
                     ],
                   ],
                 ),
@@ -1230,7 +1230,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             children: [
               Icon(Icons.shield_outlined, size: 14, color: subtextColor),
               const SizedBox(width: 6),
-              Text('Pago protegido con escrow blockchain',
+              Text('Pago revisado y validado por GARDEN',
                   style: TextStyle(color: subtextColor, fontSize: 12)),
             ],
           ),
@@ -1266,11 +1266,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     width: 100,
                     height: 100,
                     decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.1),
+                      color: GardenColors.success.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.green.withValues(alpha: 0.5), width: 4),
+                      border: Border.all(color: GardenColors.success.withValues(alpha: 0.5), width: 4),
                     ),
-                    child: const Icon(Icons.check_rounded, color: Colors.green, size: 50),
+                    child: const Icon(Icons.check_rounded, color: GardenColors.success, size: 50),
                   ),
                 ),
               ),
@@ -1285,21 +1285,21 @@ class _PaymentScreenState extends State<PaymentScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
+                  color: GardenColors.success.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                  border: Border.all(color: GardenColors.success.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (_paidWithWallet) ...[
-                      const Icon(Icons.account_balance_wallet_rounded, color: Colors.green, size: 14),
+                      const Icon(Icons.account_balance_wallet_rounded, color: GardenColors.success, size: 14),
                       const SizedBox(width: 6),
                     ],
                     Text(
                       _paidWithWallet ? 'Deducido de tu billetera' : 'Pago aprobado',
                       style: const TextStyle(
-                          color: Colors.green, fontWeight: FontWeight.w700, fontSize: 13),
+                          color: GardenColors.success, fontWeight: FontWeight.w700, fontSize: 13),
                     ),
                   ],
                 ),
@@ -1333,11 +1333,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         children: [
                           CircleAvatar(
                             radius: 20,
-                            backgroundImage: _booking!['caregiverPhoto'] != null
-                                ? NetworkImage(_booking!['caregiverPhoto'])
+                            backgroundImage: (_booking!['caregiverPhoto'] as String?)?.isNotEmpty == true
+                                ? NetworkImage(_booking!['caregiverPhoto'] as String)
                                 : null,
                             backgroundColor: GardenColors.primary.withValues(alpha: 0.2),
-                            child: _booking!['caregiverPhoto'] == null
+                            child: (_booking!['caregiverPhoto'] as String?)?.isNotEmpty != true
                                 ? const Icon(Icons.person, color: GardenColors.primary)
                                 : null,
                           ),
@@ -1387,7 +1387,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                               subtextColor),
                       ],
                       const SizedBox(height: 12),
-                      _detailRow('Estado', 'Esperando al cuidador', Colors.green, subtextColor),
+                      _detailRow('Estado', 'Esperando al cuidador', GardenColors.success, subtextColor),
                     ],
                   ),
                 ),
@@ -1405,11 +1405,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     Text('Próximos pasos:',
                         style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
                     const SizedBox(height: 16),
-                    _stepRow('1', 'Pago verificado ✓', Colors.green, textColor),
+                    _stepRow('1', 'Pago verificado ✓', GardenColors.success, textColor),
                     const SizedBox(height: 12),
                     _stepRow('2', 'El cuidador acepta la reserva', GardenColors.primary, textColor),
                     const SizedBox(height: 12),
-                    _stepRow('3', '¡Reserva confirmada!', Colors.green, textColor),
+                    _stepRow('3', '¡Reserva confirmada!', GardenColors.success, textColor),
                   ],
                 ),
               ),
@@ -1450,11 +1450,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
               Container(
                 width: 100, height: 100,
                 decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.1),
+                  color: GardenColors.error.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.red.withValues(alpha: 0.4), width: 4),
+                  border: Border.all(color: GardenColors.error.withValues(alpha: 0.4), width: 4),
                 ),
-                child: const Icon(Icons.close_rounded, color: Colors.red, size: 50),
+                child: const Icon(Icons.close_rounded, color: GardenColors.error, size: 50),
               ),
               const SizedBox(height: 28),
               Text('Pago rechazado',
@@ -1471,15 +1471,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.08),
+                  color: GardenColors.warning.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                  border: Border.all(color: GardenColors.warning.withValues(alpha: 0.3)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(children: [
-                      const Icon(Icons.info_outline, size: 16, color: Colors.orange),
+                      const Icon(Icons.info_outline, size: 16, color: GardenColors.warning),
                       const SizedBox(width: 8),
                       Text('¿Qué puedes hacer?',
                           style: TextStyle(
@@ -1616,7 +1616,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               child: Container(
                 width: 40, height: 4,
                 decoration: BoxDecoration(
-                    color: Colors.grey.shade400, borderRadius: BorderRadius.circular(2)),
+                    color: GardenColors.textHint, borderRadius: BorderRadius.circular(2)),
               ),
             ),
             const SizedBox(height: 24),
@@ -1791,18 +1791,18 @@ class _PaymentSuccessOverlayState extends State<_PaymentSuccessOverlay>
                   width: 130,
                   height: 130,
                   decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.15),
+                    color: GardenColors.success.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.green, width: 5),
+                    border: Border.all(color: GardenColors.success, width: 5),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.green.withValues(alpha: 0.35),
+                        color: GardenColors.success.withValues(alpha: 0.35),
                         blurRadius: 40,
                         spreadRadius: 8,
                       ),
                     ],
                   ),
-                  child: const Icon(Icons.check_rounded, color: Colors.green, size: 72),
+                  child: const Icon(Icons.check_rounded, color: GardenColors.success, size: 72),
                 ),
                 const SizedBox(height: 28),
                 const Text(

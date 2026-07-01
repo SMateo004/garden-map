@@ -90,7 +90,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Foto capturada correctamente'),
-          backgroundColor: Colors.green,
+          backgroundColor: GardenColors.success,
           duration: Duration(seconds: 2),
         ));
       }
@@ -99,7 +99,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: const Text('No se pudo acceder a la cámara. Verifica los permisos.'),
-          backgroundColor: Colors.red.shade700,
+          backgroundColor: GardenColors.error,
         ));
       }
     }
@@ -144,7 +144,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
         setState(() => _step = 3);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(e.toString()),
-          backgroundColor: Colors.red.shade700,
+          backgroundColor: GardenColors.error,
         ));
       }
     }
@@ -229,7 +229,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.link_off_rounded, color: Colors.red, size: 80),
+            const Icon(Icons.link_off_rounded, color: GardenColors.error, size: 80),
             const SizedBox(height: 24),
             Text('Enlace inválido o expirado', style: TextStyle(color: _text, fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
@@ -347,7 +347,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
                       color: _surface,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: preview != null ? Colors.green : GardenColors.primary.withValues(alpha: 0.3),
+                        color: preview != null ? GardenColors.success : GardenColors.primary.withValues(alpha: 0.3),
                         width: 2,
                       ),
                     ),
@@ -371,7 +371,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
                           Positioned(
                             top: 10, right: 10,
                             child: Container(
-                              decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+                              decoration: const BoxDecoration(color: GardenColors.success, shape: BoxShape.circle),
                               padding: const EdgeInsets.all(2),
                               child: const Icon(Icons.check, color: Colors.white, size: 22),
                             ),
@@ -442,7 +442,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
               duration: const Duration(milliseconds: 600),
               builder: (_, v, __) => Transform.scale(
                 scale: v,
-                child: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 100),
+                child: const Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 100),
               ),
             ),
             const SizedBox(height: 28),
@@ -489,7 +489,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.cancel_rounded, color: Colors.red, size: 90),
+            const Icon(Icons.cancel_rounded, color: GardenColors.error, size: 90),
             const SizedBox(height: 24),
             Text('Verificación rechazada',
                 style: TextStyle(color: _text, fontSize: 22, fontWeight: FontWeight.bold)),

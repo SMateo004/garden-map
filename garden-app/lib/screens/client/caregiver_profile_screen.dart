@@ -204,7 +204,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: GardenColors.textHint, borderRadius: BorderRadius.circular(2))),
               const SizedBox(height: 20),
               Text('¿Qué servicio necesitas?', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
               const SizedBox(height: 20),
@@ -1546,7 +1546,7 @@ class _ServiceOption extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAF8),
+          color: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
         ),
@@ -1554,7 +1554,7 @@ class _ServiceOption extends StatelessWidget {
           Container(width: 44, height: 44, decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.1), shape: BoxShape.circle), child: Icon(icon, color: GardenColors.primary, size: 22)),
           const SizedBox(width: 16),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: TextStyle(color: isDark ? Colors.white : const Color(0xFF1A1A1A), fontSize: 16, fontWeight: FontWeight.w700)),
+            Text(label, style: TextStyle(color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
             Text(sublabel, style: const TextStyle(color: GardenColors.primary, fontSize: 14, fontWeight: FontWeight.w600)),
           ])),

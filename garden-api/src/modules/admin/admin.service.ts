@@ -994,6 +994,7 @@ export async function rejectExtensionPayment(
 const VALID_BOOKING_STATUSES = [
   'PENDING_PAYMENT',
   'PAYMENT_PENDING_APPROVAL',
+  'WAITING_CAREGIVER_APPROVAL',
   'CONFIRMED',
   'IN_PROGRESS',
   'COMPLETED',
@@ -1962,11 +1963,10 @@ export async function getFinancialStats() {
     (acc, gc) => acc + Number(gc.amount) * gc.usedBy.length,
     0,
   );
-  // Gasto real de marketing este mes: transacciones de tipo REFUND por código de regalo
+  // Gasto real de marketing este mes: transacciones de tipo GIFT (códigos de regalo canjeados)
   const monthGiftCodeTxns = await prisma.walletTransaction.aggregate({
     where: {
-      type: 'REFUND',
-      description: { contains: 'Código de regalo' },
+      type: 'GIFT',
       createdAt: { gte: startOfMonth },
     },
     _sum: { amount: true },
@@ -2014,7 +2014,10 @@ export async function getFinancialStats() {
   const caregiverPayouts   = grossBilled - gardenCommissions;                  // lo que reciben cuidadores
   const refundsToClients   = Number(refundStats._sum.refundAmount ?? 0);      // devoluciones (≠ ganancia)
   const refundCommLost     = Number(refundStats._sum.commissionAmount ?? 0);  // comisiones perdidas por cancelaciones
-  const netGardenIncome    = gardenCommissions - refundCommLost - totalGiftCodeMarketing;
+  // netGardenIncome: solo resta marketing real (gift codes). refundCommLost son comisiones
+  // de reservas CANCELADAS que nunca se contabilizaron en gardenCommissions, así que
+  // restarlas provocaría ingresos negativos falsos. Se muestran como dato informativo.
+  const netGardenIncome    = gardenCommissions - totalGiftCodeMarketing;
 
   const thisMonthGardenInc = Number(monthCompleted._sum.commissionAmount ?? 0);
   const lastMonthGardenInc = Number(lastMonthCompleted._sum.commissionAmount ?? 0);
@@ -2082,7 +2085,9 @@ export async function getFinancialStats() {
      * Estado de Resultados (Income Statement)
      * Ingresos: comisiones cobradas (10% por servicio)
      * Egresos: devoluciones de comisiones + inversión marketing
-     * Utilidad neta = comisiones − pérdidas por devoluciones − marketing
+     * Utilidad neta = comisiones − marketing (gift codes)
+     * refundCommLost: informativo — comisiones potenciales perdidas por cancelaciones,
+     * NO se restan del neto porque esas reservas nunca fueron COMPLETED.
      */
     incomeStatement: {
       revenues: {
@@ -2092,7 +2097,7 @@ export async function getFinancialStats() {
       expenses: {
         refundedCommissions: refundCommLost,
         marketingGiftCodes: totalGiftCodeMarketing,
-        total: refundCommLost + totalGiftCodeMarketing,
+        total: totalGiftCodeMarketing,
       },
       netIncome: netGardenIncome,
       companyFeeRate: 0.10,

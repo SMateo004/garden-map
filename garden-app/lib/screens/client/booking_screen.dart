@@ -1706,7 +1706,8 @@ class _BookingScreenState extends State<BookingScreen> {
     int occupiedPets = 0;
     for (final b in _bookedPaseos) {
       if (b['date'] != dateStr) continue;
-      final sp = (b['startTime'] as String).split(':');
+      final sp = (b['startTime'] as String?)?.split(':') ?? [];
+      if (sp.length < 2) continue;
       final bStart = int.parse(sp[0]) * 60 + int.parse(sp[1]);
       final bEnd = bStart + (b['duration'] as int? ?? 30) + 30;
       if (newStart < bEnd && newEnd > bStart) {

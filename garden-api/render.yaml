@@ -29,9 +29,9 @@ services:
       - key: EMAIL_FROM
         sync: false
       - key: FRONTEND_URL
-        value: https://garden-mvp-three.vercel.app
+        value: https://gardenbo.com
       - key: ALLOWED_ORIGINS
-        value: https://garden-mvp-three.vercel.app
+        value: https://gardenbo.com,https://www.gardenbo.com,https://garden-mvp-three.vercel.app
       - key: VERCEL_DOMAINS
         value: https://garden-mvp-three.vercel.app
       - key: API_PUBLIC_URL

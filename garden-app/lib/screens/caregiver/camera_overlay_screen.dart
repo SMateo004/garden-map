@@ -117,7 +117,7 @@ class _CameraOverlayScreenState extends State<CameraOverlayScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al capturar: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Error al capturar: $e'), backgroundColor: GardenColors.error),
         );
         setState(() => _isCapturing = false);
       }
@@ -223,7 +223,7 @@ class _CameraOverlayScreenState extends State<CameraOverlayScreen>
                         _torchOn
                             ? Icons.flashlight_on_rounded
                             : Icons.flashlight_off_rounded,
-                        color: _torchOn ? Colors.amber : Colors.white,
+                        color: _torchOn ? GardenColors.warning : Colors.white,
                         size: 28,
                       ),
                       tooltip: _torchOn ? 'Apagar linterna' : 'Encender linterna',

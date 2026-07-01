@@ -112,14 +112,14 @@ class _ChatScreenState extends State<ChatScreen> {
           await _chatService!.loadHistory(widget.bookingId);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(data['message'] ?? 'Error'), backgroundColor: Colors.red.shade700),
+            SnackBar(content: Text(data['message'] ?? 'Error'), backgroundColor: GardenColors.error),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red.shade700),
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error),
         );
       }
     } finally {
@@ -306,7 +306,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       onPressed: () async {
                         if (selectedDate == null || placeCtrl.text.trim().isEmpty) {
                           ScaffoldMessenger.of(ctx).showSnackBar(
-                            const SnackBar(content: Text('Completa fecha y lugar'), backgroundColor: Colors.orange),
+                            const SnackBar(content: Text('Completa fecha y lugar'), backgroundColor: GardenColors.warning),
                           );
                           return;
                         }
@@ -345,14 +345,14 @@ class _ChatScreenState extends State<ChatScreen> {
                               await _chatService!.loadHistory(widget.bookingId);
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(d['message'] ?? 'Error'), backgroundColor: Colors.red.shade700),
+                                SnackBar(content: Text(d['message'] ?? 'Error'), backgroundColor: GardenColors.error),
                               );
                             }
                           }
                         } catch (e) {
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red.shade700),
+                              SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error),
                             );
                           }
                         } finally {

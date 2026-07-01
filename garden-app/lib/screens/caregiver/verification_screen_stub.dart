@@ -93,7 +93,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+          SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
         );
       }
     } finally {
@@ -157,7 +157,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Foto capturada correctamente'),
-            backgroundColor: Colors.green,
+            backgroundColor: GardenColors.success,
             duration: Duration(seconds: 2),
           ),
         );
@@ -168,7 +168,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
           SnackBar(
             content: const Text(
                 'No se pudo acceder a la cámara. Verifica los permisos de la app.'),
-            backgroundColor: Colors.red.shade700,
+            backgroundColor: GardenColors.error,
             duration: const Duration(seconds: 4),
           ),
         );
@@ -253,7 +253,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
       setState(() => _currentStep = 3);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+          SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
         );
       }
     }
@@ -345,7 +345,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          const Icon(Icons.check_circle, color: Colors.green, size: 20),
+          const Icon(Icons.check_circle, color: GardenColors.success, size: 20),
           const SizedBox(width: 12),
           Expanded(child: Text(text, style: TextStyle(color: _textPrimary))),
         ],
@@ -425,7 +425,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                       borderRadius: BorderRadius.circular(GardenRadius.lg),
                       border: Border.all(
                         color: preview != null
-                            ? Colors.green
+                            ? GardenColors.success
                             : GardenColors.primary.withValues(alpha: 0.3),
                         width: 2,
                       ),
@@ -456,7 +456,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                             right: 12,
                             child: Container(
                               decoration: const BoxDecoration(
-                                color: Colors.green,
+                                color: GardenColors.success,
                                 shape: BoxShape.circle,
                               ),
                               padding: const EdgeInsets.all(2),
@@ -585,15 +585,15 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
     if (isApproved) {
       icon = Icons.check_circle;
-      iconColor = Colors.green;
+      iconColor = GardenColors.success;
       titleText = 'Verificacion exitosa!';
     } else if (isReview) {
       icon = Icons.schedule;
-      iconColor = Colors.orange;
+      iconColor = GardenColors.warning;
       titleText = 'En revision';
     } else {
       icon = Icons.cancel;
-      iconColor = Colors.red;
+      iconColor = GardenColors.error;
       titleText = 'Verificacion fallida';
     }
 
