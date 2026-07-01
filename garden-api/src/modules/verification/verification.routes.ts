@@ -13,11 +13,12 @@ const upload = multer({
 /** POST /api/verification/generate-link — auth CAREGIVER, returns { url, token, expiresIn } */
 router.post('/generate-link', authMiddleware, requireRole('CAREGIVER'), controller.generateLink);
 
-/** POST /api/verification/create-liveness-session — auth CAREGIVER.
+/** POST /api/verification/create-liveness-session — auth CAREGIVER *or* verification token.
  *  Creates an AWS Rekognition FaceLiveness session.
  *  Returns { sessionId } for use with the Amplify FaceLiveness Flutter SDK.
- *  Requires AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY env vars. */
-router.post('/create-liveness-session', authMiddleware, requireRole('CAREGIVER'), controller.createLivenessSession);
+ *  Requires AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY env vars.
+ *  Accepts x-verification-token header (QR mobile flow) or Bearer auth (native app flow). */
+router.post('/create-liveness-session', controller.createLivenessSession);
 
 /** GET /api/verification/validate?token= — public, returns { valid, userId?, message? } */
 router.get('/validate', controller.validate);

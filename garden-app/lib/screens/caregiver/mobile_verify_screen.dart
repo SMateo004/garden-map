@@ -24,6 +24,11 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
   bool _validating = true;
   String _validationError = '';
 
+  // Liveness detection
+  String? _livenessSessionId;
+  bool _livenessChecked = false;
+  bool _livenessAvailable = false;
+
   Uint8List? _selfieBytes;
   Uint8List? _ciFrontBytes;
   Uint8List? _ciBackBytes;
@@ -54,18 +59,52 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
       );
       final data = jsonDecode(res.body);
       debugPrint('[MobileVerify] validate response: ${res.statusCode} $data');
-      if (mounted) {
-        setState(() {
-          _tokenValid = data['valid'] == true || data['success'] == true;
-          _validating = false;
-          if (!_tokenValid) {
-            _validationError = data['message'] as String? ?? 'Token inválido o expirado';
-          }
-        });
-      }
+      if (!mounted) return;
+
+      final valid = data['valid'] == true || data['success'] == true;
+      setState(() {
+        _tokenValid = valid;
+        if (!valid) _validationError = data['message'] as String? ?? 'Token inválido o expirado';
+      });
+
+      if (valid) await _checkLiveness();
     } catch (e) {
       debugPrint('[MobileVerify] validate error: $e');
-      if (mounted) setState(() { _validating = false; _validationError = 'Error al validar: $e'; });
+      if (mounted) {
+        setState(() {
+          _validating = false;
+          _validationError = 'Error al validar: $e';
+        });
+      }
+    }
+  }
+
+  Future<void> _checkLiveness() async {
+    debugPrint('[MobileVerify] Verificando disponibilidad de liveness...');
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/verification/create-liveness-session'),
+        headers: {'x-verification-token': widget.token},
+      ).timeout(const Duration(seconds: 10));
+      final data = jsonDecode(res.body);
+      debugPrint('[MobileVerify] liveness session response: ${res.statusCode} $data');
+
+      if (res.statusCode == 200 && data['success'] == true) {
+        final sessionId = data['data']?['sessionId'] as String?;
+        if (mounted) {
+          setState(() {
+            _livenessSessionId = sessionId;
+            _livenessAvailable = sessionId != null;
+            _livenessChecked = true;
+            _validating = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() { _livenessAvailable = false; _livenessChecked = true; _validating = false; });
+      }
+    } catch (e) {
+      debugPrint('[MobileVerify] liveness check error: $e');
+      if (mounted) setState(() { _livenessAvailable = false; _livenessChecked = true; _validating = false; });
     }
   }
 
@@ -112,6 +151,9 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
       final uri = Uri.parse('$_baseUrl/verification/submit');
       final request = http.MultipartRequest('POST', uri);
       request.fields['token'] = widget.token;
+      if (_livenessSessionId != null) {
+        request.fields['livenessSessionId'] = _livenessSessionId!;
+      }
 
       for (final entry in [
         ('selfie', _selfieBytes!),
@@ -184,8 +226,9 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
   }
 
   Widget _buildBody() {
-    if (_validating) return _buildLoading('Validando sesión...');
+    if (_validating) return _buildLoading('Preparando verificación...');
     if (!_tokenValid) return _buildInvalidToken();
+    if (_livenessChecked && !_livenessAvailable) return _buildLivenessUnavailable();
     switch (_step) {
       case 0: return _buildIntro();
       case 1: return _buildCaptureStep('selfie', 'Toma tu selfie',
@@ -216,6 +259,75 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
             const SizedBox(height: 28),
             Text(msg, textAlign: TextAlign.center,
                 style: TextStyle(color: _text, fontSize: 16, height: 1.6)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLivenessUnavailable() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 88, height: 88,
+              decoration: BoxDecoration(
+                color: GardenColors.warning.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.videocam_off_rounded, color: GardenColors.warning, size: 46),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Detección de vida no disponible',
+              style: TextStyle(color: _text, fontSize: 20, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'El servicio de detección de vida en tiempo real no está disponible en este momento. '
+              'Este filtro es obligatorio para garantizar la seguridad del proceso de verificación.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: _subtext, height: 1.65, fontSize: 14),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: GardenColors.warning.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: GardenColors.warning.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded, color: GardenColors.warning, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Por favor, inténtalo de nuevo más tarde o contacta con soporte si el problema persiste.',
+                      style: TextStyle(color: _subtext, fontSize: 13, height: 1.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
+            OutlinedButton.icon(
+              onPressed: () {
+                setState(() { _livenessChecked = false; _validating = true; });
+                _checkLiveness();
+              },
+              icon: const Icon(Icons.refresh_rounded, color: GardenColors.primary),
+              label: const Text('Reintentar', style: TextStyle(color: GardenColors.primary)),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: GardenColors.primary),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
           ],
         ),
       ),

@@ -194,11 +194,12 @@ export async function submitVerification(
         livenessScore = 95;
         livenessStatus = 'PASSED';
       } else if (!livenessSessionId) {
-        // En producción sin sessionId: liveness=0 penaliza el trust score.
-        // El sistema auto-decide VERIFIED/REJECTED según face+OCR — no hay revisión manual.
-        logger.warn('Liveness check skipped in production (no sessionId) — will auto-decide from face+OCR signals', { sessionId });
-        livenessScore = 0;
-        livenessStatus = 'PASSED'; // allow photo checks to run; liveness=0 penalizes trust score
+        // Producción sin sessionId: el filtro de liveness es obligatorio — no se continúa.
+        logger.warn('Liveness required but sessionId missing in production', { sessionId });
+        throw new BadRequestError(
+          'El servicio de detección de vida no está disponible en este momento. ' +
+          'Por favor, inténtalo de nuevo más tarde o contacta con soporte.'
+        );
       } else {
         logger.info('Starting liveness check', { sessionId, livenessSessionId });
         const livenessResult = await performLivenessCheck({ sessionId: livenessSessionId }, 'AWS_REKOGNITION');
