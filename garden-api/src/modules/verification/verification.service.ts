@@ -45,7 +45,9 @@ export async function generateLink(userId: string): Promise<{ url: string; token
     type: 'identity_verification',
   };
   const token = jwt.sign(payload, env.JWT_SECRET, { expiresIn: JWT_EXPIRY } as jwt.SignOptions);
-  const url = `${env.FRONTEND_URL || 'http://localhost:5173'}/mobile-verify?token=${encodeURIComponent(token)}`;
+  const baseUrl = env.FRONTEND_URL || 'http://localhost:5173';
+  const appShell = baseUrl.includes('localhost') ? '' : '/app.html';
+  const url = `${baseUrl}${appShell}#/mobile-verify?token=${encodeURIComponent(token)}`;
   logger.info('Verification link generated', { verificationId: session.id, userId });
   return { url, token, expiresIn: JWT_EXPIRY };
 }

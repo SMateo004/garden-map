@@ -18,6 +18,12 @@
   if (flutterRoutes.some(function(r){ return p === r || p.startsWith(r + '/'); })) {
     window.location.replace('/app.html#' + p + window.location.search);
   }
+  // Hash-based Flutter routes: /#/mobile-verify, /#/verify → redirigir a app.html
+  var h = window.location.hash;
+  var flutterHashRoutes = ['/mobile-verify', '/verify'];
+  if (h && flutterHashRoutes.some(function(r){ return h === '#' + r || h.startsWith('#' + r + '?') || h.startsWith('#' + r + '/'); })) {
+    window.location.replace('/app.html' + h);
+  }
 })();
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
