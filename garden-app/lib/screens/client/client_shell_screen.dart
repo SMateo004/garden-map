@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_tutorial.dart';
 import 'marketplace_screen.dart';
 import 'my_bookings_screen.dart';
 import 'my_pets_screen.dart';
@@ -30,6 +32,54 @@ class _ClientShellScreenState extends State<ClientShellScreen> {
   void initState() {
     super.initState();
     _selectedTab = widget.initialTab;
+    // Dar tiempo al marketplace para renderizar antes de mostrar el tutorial
+    Future.delayed(const Duration(milliseconds: 900), () {
+      if (mounted) _maybeShowTutorial();
+    });
+  }
+
+  Future<void> _maybeShowTutorial() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('user_id') ?? 'anonymous';
+    if (!mounted) return;
+    GardenTutorial.maybeShow(
+      context,
+      prefKey: 'tutorial_client_v1_$userId',
+      stepsBuilder: (size, bottom) {
+        Offset nav(int i) => GardenTutorial.navItemOffset(i, 4, size, bottom);
+        return [
+          const TutorialStep(
+            emoji: '🌿',
+            title: '¡Bienvenido a GARDEN!',
+            body: 'Tu app para encontrar cuidadores de confianza para tu mascota. Te mostramos cómo funciona en segundos.',
+          ),
+          TutorialStep(
+            emoji: '🔍',
+            title: 'Encuentra cuidadores',
+            body: 'Busca y filtra cuidadores por servicio, zona y disponibilidad. Compara perfiles y reserva el que más te convenza.',
+            spotlightCenter: nav(0),
+          ),
+          TutorialStep(
+            emoji: '📅',
+            title: 'Tus reservas',
+            body: 'Sigue en tiempo real todas tus reservas: activas, pendientes de confirmación e historial de servicios pasados.',
+            spotlightCenter: nav(1),
+          ),
+          TutorialStep(
+            emoji: '🐾',
+            title: 'Tus mascotas',
+            body: 'Registra a tus peludos con su foto, vacunas y necesidades especiales para que el cuidador llegue preparado.',
+            spotlightCenter: nav(2),
+          ),
+          TutorialStep(
+            emoji: '👤',
+            title: 'Tu perfil',
+            body: 'Gestiona tu cuenta, tus datos y preferencias. ¡Todo listo para tu primera reserva! 🎉',
+            spotlightCenter: nav(3),
+          ),
+        ];
+      },
+    );
   }
 
   @override

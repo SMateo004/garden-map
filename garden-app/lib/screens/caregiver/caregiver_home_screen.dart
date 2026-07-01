@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/notification_bell.dart';
+import '../../widgets/garden_tutorial.dart';
 import '../../main.dart';
 import '../chat/chat_screen.dart';
 import '../service/service_execution_screen.dart';
@@ -92,6 +93,57 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+
+    // Tutorial de primera sesión (solo para cuidadores aprobados)
+    if (!_setupPending && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _maybeShowTutorial();
+      });
+    }
+  }
+
+  Future<void> _maybeShowTutorial() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('user_id') ?? 'anonymous';
+    if (!mounted) return;
+    GardenTutorial.maybeShow(
+      context,
+      prefKey: 'tutorial_caregiver_v1_$userId',
+      stepsBuilder: (size, bottom) {
+        Offset nav(int i) => GardenTutorial.navItemOffset(i, 4, size, bottom);
+        return [
+          const TutorialStep(
+            emoji: '🌿',
+            title: '¡Bienvenido a GARDEN!',
+            body: 'En unos pasos rápidos te mostramos todo lo que necesitas para empezar a recibir reservas y ganar dinero cuidando mascotas.',
+          ),
+          TutorialStep(
+            emoji: '🏠',
+            title: 'Tu panel de inicio',
+            body: 'Aquí ves tu resumen diario: reservas activas, estadísticas y alertas importantes.',
+            spotlightCenter: nav(0),
+          ),
+          TutorialStep(
+            emoji: '📅',
+            title: 'Tu disponibilidad',
+            body: 'Activa los días y horas en que puedes atender. Sin disponibilidad activa no apareces en el marketplace.',
+            spotlightCenter: nav(1),
+          ),
+          TutorialStep(
+            emoji: '📋',
+            title: 'Tus reservas',
+            body: 'Aquí llegan todas las solicitudes. Responde en menos de 2 horas para mejorar tu posición en las búsquedas.',
+            spotlightCenter: nav(2),
+          ),
+          TutorialStep(
+            emoji: '👤',
+            title: 'Tu perfil y billetera',
+            body: 'Edita tus fotos, precios y bio. En "Billetera" puedes ver tus ganancias y solicitar retiros cuando quieras.',
+            spotlightCenter: nav(3),
+          ),
+        ];
+      },
+    );
   }
 
   void _computeNextBookingWithin24h() {
