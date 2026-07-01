@@ -372,6 +372,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       // embedded, lo usamos como señal definitiva de "paso 6 guardado".
       final termsAccepted = profile['termsAccepted'] == true;
       final bio = (profile['bio'] as String? ?? '').trim();
+      final bioDetail = (profile['bioDetail'] as String? ?? '').trim();
+      final bioOk = bio.length >= 10 || bioDetail.length >= 10;
       final sizesAccepted = (profile['sizesAccepted'] as List?) ?? [];
       final animalTypes = (profile['animalTypes'] as List?) ?? [];
       final isAmateur = profile['isAmateur'] == true;
@@ -383,7 +385,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       );
 
       final step6Complete = termsAccepted &&
-          bio.length >= 10 &&
+          bioOk &&
           sizesAccepted.isNotEmpty &&
           animalTypes.isNotEmpty &&
           experienceOk;
@@ -907,7 +909,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     } catch (_) {}
   }
 
-  /// Step 6 → next: check backend to auto-skip steps 7/8 if already verified.
+  /// Step 6 → next: verify bio was saved, then auto-skip steps 7/8/9 if already done.
   Future<void> _afterStep6Save() async {
     setState(() => _isLoading = true);
     try {
@@ -917,6 +919,20 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       );
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       final profile = data['data'] as Map<String, dynamic>? ?? {};
+
+      // Catch missing bio HERE (paso 7) before advancing, not at final submit.
+      final bio = (profile['bio'] as String? ?? '').trim();
+      final bioDetail = (profile['bioDetail'] as String? ?? '').trim();
+      if (bio.length < 10 && bioDetail.length < 10) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Falta completar: descripción de tu perfil (mínimo 10 caracteres)'),
+            backgroundColor: GardenColors.error,
+            duration: Duration(seconds: 5),
+          ));
+        }
+        return; // Stay on step 6 (paso 7)
+      }
 
       final identityStatus = (profile['identityVerificationStatus'] as String? ?? '').toUpperCase();
       final identityDone = identityStatus == 'VERIFIED' || identityStatus == 'APPROVED';
