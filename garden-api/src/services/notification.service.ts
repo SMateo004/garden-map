@@ -552,6 +552,83 @@ export async function onServiceReminder(bookingId: string, hoursUntil: number): 
 }
 
 /**
+ * New caregiver approved — send welcome email + in-app notification.
+ * Called right after auto-approval in caregiver-profile.service.ts.
+ */
+export async function onCaregiverWelcome(userId: string): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, firstName: true, lastName: true },
+  });
+  if (!user) {
+    logger.warn('[NOTIFICATION] onCaregiverWelcome: user not found', { userId });
+    return;
+  }
+
+  const caregiverName = name(user.firstName, user.lastName, 'Cuidador');
+  const guideUrl = 'https://gardenbo.com/guia-cuidador';
+
+  const html = gardenEmail(
+    `¡Bienvenido a GARDEN, ${caregiverName}! 🌿`,
+    `<p style="color:#555;font-size:14px;margin:0 0 16px;">
+      Hola <strong>${caregiverName}</strong>, ¡tu perfil ha sido aprobado y ya eres parte de la familia GARDEN! 🎉
+    </p>
+    <p style="color:#555;font-size:14px;margin:0 0 20px;">
+      A partir de ahora puedes recibir solicitudes de reserva y empezar a ganar dinero haciendo lo que te apasiona: cuidar mascotas.
+    </p>
+
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px;margin:0 0 20px;">
+      <p style="color:#166534;font-weight:700;font-size:15px;margin:0 0 12px;">📋 Tus primeros pasos</p>
+      <ol style="color:#166534;font-size:14px;margin:0;padding-left:20px;line-height:1.9;">
+        <li>Activa tu <strong>disponibilidad</strong> en el calendario</li>
+        <li>Revisa tus <strong>precios</strong> para cada servicio</li>
+        <li>Completa o mejora tu <strong>bio y fotos</strong> para atraer más clientes</li>
+        <li>Responde <strong>rápido</strong> a las solicitudes — aumenta tu ranking</li>
+      </ol>
+    </div>
+
+    <div style="background:#f9fafb;border-radius:10px;padding:16px;margin:0 0 20px;">
+      <p style="color:#374151;font-weight:700;font-size:14px;margin:0 0 10px;">💰 ¿Cómo funciona el pago?</p>
+      <p style="color:#555;font-size:14px;margin:0;">
+        Tú fijas tus precios. GARDEN retiene el <strong>10%</strong> por reserva completada.
+        El <strong>90%</strong> restante entra automáticamente a tu billetera dentro de la app.
+        Puedes retirar a tu banco o Tigo Money cuando quieras (mínimo Bs 50).
+      </p>
+    </div>
+
+    <div style="background:#f9fafb;border-radius:10px;padding:16px;margin:0 0 24px;">
+      <p style="color:#374151;font-weight:700;font-size:14px;margin:0 0 10px;">🆘 Soporte GARDEN</p>
+      <p style="color:#555;font-size:14px;margin:0 0 4px;">
+        📱 WhatsApp: <a href="https://wa.me/59178081291" style="color:#16a34a;text-decoration:none;">+591 78081291</a>
+      </p>
+      <p style="color:#555;font-size:14px;margin:0;">
+        ✉️ Email: <a href="mailto:contactogardenbo@gmail.com" style="color:#16a34a;text-decoration:none;">contactogardenbo@gmail.com</a>
+      </p>
+    </div>
+
+    <p style="color:#555;font-size:14px;margin:0 0 4px;text-align:center;">
+      Hemos preparado una guía completa con todo lo que necesitas saber para empezar con el pie derecho. ¡No te la pierdas!
+    </p>` +
+    ctaButton('Ver guía del cuidador 🌿', guideUrl) +
+    `<p style="color:#9ca3af;font-size:12px;margin:16px 0 0;text-align:center;">
+      ¡Gracias por unirte a GARDEN! Cuidadores de confianza 🐾
+    </p>`
+  );
+
+  fireEmail(user.email, '¡Bienvenido a GARDEN! Tu guía para empezar 🌿', html, 'CAREGIVER_WELCOME');
+
+  // In-app notification
+  await prisma.notification.create({
+    data: {
+      userId,
+      title: '¡Bienvenido a GARDEN! 🌿',
+      message: `¡Hola ${caregiverName}! Tu perfil está aprobado. Lee la guía completa para cuidadores para saber cómo recibir reservas, cobrar y aprovechar al máximo la plataforma.`,
+      type: 'CAREGIVER_WELCOME',
+    },
+  });
+}
+
+/**
  * Refund processed / client info message.
  */
 export async function onRefundProcessed(bookingId: string, message: string): Promise<void> {

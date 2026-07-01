@@ -26,6 +26,7 @@ import 'screens/chat/chat_screen.dart';
 import 'screens/caregiver/caregiver_profile_data_screen.dart';
 import 'screens/caregiver/caregiver_setup_flow_screen.dart';
 import 'screens/caregiver/become_caregiver_screen.dart';
+import 'screens/caregiver/caregiver_guide_screen.dart';
 import 'screens/wallet/wallet_screen.dart';
 import 'screens/service/service_execution_screen.dart';
 import 'screens/service/meet_and_greet_screen.dart';
@@ -530,6 +531,11 @@ final GoRouter _router = GoRouter(
       path: '/sign-in/profesional',
       name: 'professionalRegister',
       builder: (context, state) => const ProfessionalRegisterScreen(),
+    ),
+    GoRoute(
+      path: '/guia-cuidador',
+      name: 'caregiverGuide',
+      builder: (context, state) => const CaregiverGuideScreen(),
     ),
   ],
 );

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../theme/garden_theme.dart';
 
@@ -484,6 +485,7 @@ class _NotificationRow extends StatelessWidget {
       case 'PROFILE_REJECTED': return Icons.gpp_bad_outlined;
       case 'WALLET_RECHARGE': return Icons.account_balance_wallet_outlined;
       case 'DISPUTE': return Icons.gavel_rounded;
+      case 'CAREGIVER_WELCOME': return Icons.waving_hand_rounded;
       default: return Icons.notifications_outlined;
     }
   }
@@ -504,6 +506,7 @@ class _NotificationRow extends StatelessWidget {
       case 'PROFILE_REJECTED': return GardenColors.error;
       case 'WALLET_RECHARGE': return GardenColors.accent;
       case 'DISPUTE': return GardenColors.warning;
+      case 'CAREGIVER_WELCOME': return GardenColors.success;
       default: return GardenColors.primary;
     }
   }
@@ -611,21 +614,45 @@ class _NotificationDetailDialog extends StatelessWidget {
               ),
             ),
             Divider(height: 1, color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
-            // Botón cerrar
+            // Botones de acción
             Padding(
               padding: const EdgeInsets.all(16),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: GardenColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Column(
+                children: [
+                  if (notif.type == 'CAREGIVER_WELCOME') ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: GardenColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: const Icon(Icons.menu_book_rounded, size: 18),
+                        label: const Text('Ver guía completa', style: TextStyle(fontWeight: FontWeight.w700)),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          context.push('/guia-cuidador');
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: GardenColors.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: const BorderSide(color: GardenColors.primary),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Cerrar', style: TextStyle(fontWeight: FontWeight.w700)),
+                    ),
                   ),
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cerrar', style: TextStyle(fontWeight: FontWeight.w700)),
-                ),
+                ],
               ),
             ),
           ],

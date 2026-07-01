@@ -19,6 +19,7 @@ import {
 import logger from '../../shared/logger.js';
 import { checkAndAutoSubmitProfile } from './caregiver-profile-completion.helper.js';
 import { blockchainService } from '../../services/blockchain.service.js';
+import { onCaregiverWelcome } from '../../services/notification.service.js';
 
 const ADMIN_NOTIFICATION_TYPE_SUBMIT = 'CAREGIVER_SUBMIT';
 
@@ -458,6 +459,11 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
       },
     });
   });
+
+  // Correo + notificación de bienvenida al nuevo cuidador
+  onCaregiverWelcome(userId).catch(err =>
+    logger.error('onCaregiverWelcome failed', { userId, err })
+  );
 
   // Blockchain: sync como verificado (completó todos los pasos)
   blockchainService.syncProfileOnChain(
