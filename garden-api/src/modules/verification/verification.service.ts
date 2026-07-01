@@ -101,7 +101,8 @@ export async function submitVerification(
   ciFrontBuffer: Buffer,
   ciBackBuffer: Buffer,
   deviceInfo?: DeviceInfo,
-  livenessSessionId?: string
+  livenessSessionId?: string,
+  blinkLivenessToken?: string
 ): Promise<{
   similarity: number;
   livenessScore: number;
@@ -186,35 +187,52 @@ export async function submitVerification(
     try {
 
       // 1. Advanced Liveness Check
-      logger.info('Step 1: Validating liveness', { sessionId, livenessSessionId });
+      logger.info('Step 1: Validating liveness', { sessionId, livenessSessionId, hasBlinkToken: !!blinkLivenessToken });
 
-      if (env.NODE_ENV === 'development' && !livenessSessionId) {
-        // Solo en desarrollo y sin sessionId real: bypass con score simulado
-        logger.warn('Liveness check bypassed (development mode, no sessionId)', { sessionId });
+      if (env.NODE_ENV === 'development' && !livenessSessionId && !blinkLivenessToken) {
+        // Solo en desarrollo y sin liveness: bypass con score simulado
+        logger.warn('Liveness check bypassed (development mode)', { sessionId });
         livenessScore = 95;
         livenessStatus = 'PASSED';
-      } else if (!livenessSessionId) {
-        // Producción sin sessionId: el filtro de liveness es obligatorio — no se continúa.
-        logger.warn('Liveness required but sessionId missing in production', { sessionId });
-        throw new BadRequestError(
-          'El servicio de detección de vida no está disponible en este momento. ' +
-          'Por favor, inténtalo de nuevo más tarde o contacta con soporte.'
-        );
-      } else {
-        logger.info('Starting liveness check', { sessionId, livenessSessionId });
+      } else if (blinkLivenessToken) {
+        // Web QR flow: blink liveness — verify the signed JWT issued by /check-blink
+        logger.info('Blink liveness token provided — verifying', { sessionId });
+        try {
+          const payload = (await import('jsonwebtoken')).default.verify(
+            blinkLivenessToken,
+            env.JWT_SECRET as string,
+          ) as { userId: string; type: string; score: number };
+
+          if (payload.type !== 'blink_liveness' || payload.userId !== user.id) {
+            throw new BadRequestError('Token de parpadeo inválido');
+          }
+          livenessScore = payload.score;
+          livenessStatus = 'PASSED';
+          logger.info('Blink liveness verified', { sessionId, score: livenessScore });
+        } catch (jwtErr: any) {
+          throw new BadRequestError('La prueba de parpadeo ha expirado o no es válida. Por favor, inténtalo de nuevo.');
+        }
+      } else if (livenessSessionId) {
+        // Native app flow: AWS Rekognition Face Liveness
+        logger.info('Starting AWS Face Liveness check', { sessionId, livenessSessionId });
         const livenessResult = await performLivenessCheck({ sessionId: livenessSessionId }, 'AWS_REKOGNITION');
         livenessScore = livenessResult.score;
         livenessStatus = livenessResult.status;
 
         if (livenessStatus !== 'PASSED' || livenessScore < 90) {
-          // Record failed attempt in profile
           await prisma.caregiverProfile.update({
             where: { userId: user.id },
             // @ts-ignore
             data: { verificationAttempts: { increment: 1 } }
           });
-          throw new BadRequestError(livenessResult.reason || 'Fallo en la prueba de vida (Real-time movement required)');
+          throw new BadRequestError(livenessResult.reason || 'Fallo en la prueba de vida');
         }
+      } else {
+        // Sin ninguna liveness — no continúa
+        logger.warn('No liveness proof provided in production', { sessionId });
+        throw new BadRequestError(
+          'La verificación requiere una prueba de vida. Por favor, inténtalo desde la app o a través del enlace QR.'
+        );
       }
 
 

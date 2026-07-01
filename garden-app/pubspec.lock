@@ -233,6 +233,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.12"
+  face_liveness_detector:
+    dependency: "direct main"
+    description:
+      name: face_liveness_detector
+      sha256: "9afb168a0c6a56226fe50d08d383a19bbd3e045438b3cad0486edeb9f4184c69"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.11"
   facebook_auth_desktop:
     dependency: transitive
     description:

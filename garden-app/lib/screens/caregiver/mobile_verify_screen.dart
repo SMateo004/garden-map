@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../../theme/garden_theme.dart';
+import 'blink_challenge_screen.dart';
 import 'camera_overlay_screen.dart';
 
 /// Pantalla de verificación de identidad para móvil.
@@ -25,10 +26,8 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
   bool _validating = true;
   String _validationError = '';
 
-  // Liveness detection
-  String? _livenessSessionId;
-  bool _livenessChecked = false;
-  bool _livenessAvailable = false;
+  // Blink liveness token — issued by /check-blink after the user passes the challenge
+  String? _blinkLivenessToken;
 
   Uint8List? _selfieBytes;
   Uint8List? _ciFrontBytes;
@@ -61,12 +60,13 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
       if (!mounted) return;
 
       final valid = data['valid'] == true || data['success'] == true;
-      setState(() {
-        _tokenValid = valid;
-        if (!valid) _validationError = data['message'] as String? ?? 'Token inválido o expirado';
-      });
-
-      if (valid) await _checkLiveness();
+      if (mounted) {
+        setState(() {
+          _tokenValid = valid;
+          _validating = false;
+          if (!valid) _validationError = data['message'] as String? ?? 'Token inválido o expirado';
+        });
+      }
     } catch (e) {
       debugPrint('[MobileVerify] validate error: $e');
       if (mounted) {
@@ -78,33 +78,26 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
     }
   }
 
-  Future<void> _checkLiveness() async {
-    debugPrint('[MobileVerify] Verificando disponibilidad de liveness...');
-    try {
-      final res = await http.post(
-        Uri.parse('$_baseUrl/verification/create-liveness-session'),
-        headers: {'x-verification-token': widget.token},
-      ).timeout(const Duration(seconds: 10));
-      final data = jsonDecode(res.body);
-      debugPrint('[MobileVerify] liveness session response: ${res.statusCode} $data');
-
-      if (res.statusCode == 200 && data['success'] == true) {
-        final sessionId = data['data']?['sessionId'] as String?;
-        if (mounted) {
-          setState(() {
-            _livenessSessionId = sessionId;
-            _livenessAvailable = sessionId != null;
-            _livenessChecked = true;
-            _validating = false;
-          });
-        }
-      } else {
-        if (mounted) setState(() { _livenessAvailable = false; _livenessChecked = true; _validating = false; });
-      }
-    } catch (e) {
-      debugPrint('[MobileVerify] liveness check error: $e');
-      if (mounted) setState(() { _livenessAvailable = false; _livenessChecked = true; _validating = false; });
+  /// Opens the blink challenge. On success stores the token and advances to selfie step.
+  Future<void> _startBlinkChallenge() async {
+    final token = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => BlinkChallengeScreen(
+          verificationToken: widget.token,
+          baseUrl: _baseUrl,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (token != null) {
+      setState(() {
+        _blinkLivenessToken = token;
+        _step = 1;
+      });
     }
+    // If null the user cancelled — they stay on the intro to retry.
   }
 
   Future<void> _capturePhoto(String type) async {
@@ -170,8 +163,8 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
       final uri = Uri.parse('$_baseUrl/verification/submit');
       final request = http.MultipartRequest('POST', uri);
       request.fields['token'] = widget.token;
-      if (_livenessSessionId != null) {
-        request.fields['livenessSessionId'] = _livenessSessionId!;
+      if (_blinkLivenessToken != null) {
+        request.fields['blinkLivenessToken'] = _blinkLivenessToken!;
       }
 
       for (final entry in [
@@ -214,6 +207,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
   void _reset() {
     setState(() {
       _step = 0;
+      _blinkLivenessToken = null;
       _selfieBytes = null;
       _ciFrontBytes = null;
       _ciBackBytes = null;
@@ -247,7 +241,6 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
   Widget _buildBody() {
     if (_validating) return _buildLoading('Preparando verificación...');
     if (!_tokenValid) return _buildInvalidToken();
-    if (_livenessChecked && !_livenessAvailable) return _buildLivenessUnavailable();
     switch (_step) {
       case 0: return _buildIntro();
       case 1: return _buildCaptureStep('selfie', 'Toma tu selfie',
@@ -278,75 +271,6 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
             const SizedBox(height: 28),
             Text(msg, textAlign: TextAlign.center,
                 style: TextStyle(color: _text, fontSize: 16, height: 1.6)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLivenessUnavailable() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 88, height: 88,
-              decoration: BoxDecoration(
-                color: GardenColors.warning.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.videocam_off_rounded, color: GardenColors.warning, size: 46),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Detección de vida no disponible',
-              style: TextStyle(color: _text, fontSize: 20, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 14),
-            Text(
-              'El servicio de detección de vida en tiempo real no está disponible en este momento. '
-              'Este filtro es obligatorio para garantizar la seguridad del proceso de verificación.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: _subtext, height: 1.65, fontSize: 14),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: GardenColors.warning.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: GardenColors.warning.withValues(alpha: 0.25)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline_rounded, color: GardenColors.warning, size: 18),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Por favor, inténtalo de nuevo más tarde o contacta con soporte si el problema persiste.',
-                      style: TextStyle(color: _subtext, fontSize: 13, height: 1.5),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-            OutlinedButton.icon(
-              onPressed: () {
-                setState(() { _livenessChecked = false; _validating = true; });
-                _checkLiveness();
-              },
-              icon: const Icon(Icons.refresh_rounded, color: GardenColors.primary),
-              label: const Text('Reintentar', style: TextStyle(color: GardenColors.primary)),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: GardenColors.primary),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            ),
           ],
         ),
       ),
@@ -398,7 +322,8 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
             style: TextStyle(color: _subtext, height: 1.6),
           ),
           const SizedBox(height: 28),
-          _req(Icons.face_rounded, 'Selfie de tu rostro'),
+          _req(Icons.face_rounded, 'Verificación de vida (parpadeo)'),
+          _req(Icons.photo_camera_rounded, 'Selfie de tu rostro'),
           _req(Icons.credit_card_rounded, 'Foto del anverso (frente) de tu CI'),
           _req(Icons.credit_card_outlined, 'Foto del reverso (dorso) de tu CI'),
           const SizedBox(height: 36),
@@ -411,7 +336,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              onPressed: () => setState(() => _step = 1),
+              onPressed: _startBlinkChallenge,
               child: const Text('Comenzar verificación', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             ),
           ),

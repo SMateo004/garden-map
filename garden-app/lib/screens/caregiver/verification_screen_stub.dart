@@ -1,13 +1,17 @@
 import 'dart:convert';
 import 'dart:typed_data';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import 'camera_overlay_screen.dart';
+import 'liveness_detector_native.dart'
+    if (dart.library.html) 'liveness_detector_web.dart';
 
 class VerificationScreen extends StatefulWidget {
   final VoidCallback? onComplete;
@@ -28,15 +32,18 @@ class _VerificationScreenState extends State<VerificationScreen> {
   String _verificationToken = '';
   bool _generatingToken = false;
 
+  // Liveness (AWS Rekognition Face Liveness)
+  String? _livenessSessionId;
+
   // Fotos capturadas
   Uint8List? _selfiePreview;
   Uint8List? _ciFrontPreview;
   Uint8List? _ciBackPreview;
 
   // Estado del proceso
-  // 0: intro, 1: selfie, 2: CI frontal, 3: CI trasero, 4: enviando, 5: resultado
+  // 0: intro  1: selfie  2: CI frontal  3: CI trasero  4: enviando  5: resultado
   int _currentStep = 0;
-  String _resultStatus = ''; // 'approved', 'review', 'rejected'
+  String _resultStatus = '';
   String _resultMessage = '';
 
   String get _baseUrl =>
@@ -73,28 +80,77 @@ class _VerificationScreenState extends State<VerificationScreen> {
     setState(() => _caregiverToken = token);
   }
 
-  Future<void> _generateVerificationToken() async {
+  /// Generates the short-lived verification token and creates an AWS
+  /// FaceLiveness session, then opens the liveness check as a full-screen
+  /// route. On success → proceeds to the selfie step.
+  Future<void> _startProcess() async {
     setState(() => _generatingToken = true);
     try {
-      final response = await http.post(
+      // 1. Generate verification token
+      final tokenRes = await http.post(
         Uri.parse('$_baseUrl/verification/generate-link'),
         headers: {'Authorization': 'Bearer $_caregiverToken'},
       );
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        setState(() {
-          _verificationToken = data['data']['token'];
-          _currentStep = 1;
-        });
-      } else {
-        throw Exception(data['error']?['message'] ?? 'Error al generar token');
+      final tokenData = jsonDecode(tokenRes.body);
+      if (tokenData['success'] != true) {
+        throw Exception(tokenData['error']?['message'] ?? 'Error al generar token');
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
+      final vToken = tokenData['data']['token'] as String;
+
+      // 2. Create FaceLiveness session
+      String? sessionId;
+      try {
+        final lsRes = await http.post(
+          Uri.parse('$_baseUrl/verification/create-liveness-session'),
+          headers: {'Authorization': 'Bearer $_caregiverToken'},
+        ).timeout(const Duration(seconds: 10));
+        final lsData = jsonDecode(lsRes.body);
+        if (lsData['success'] == true) {
+          sessionId = lsData['data']['sessionId'] as String?;
+        }
+      } catch (_) {
+        // Non-critical — handled below
+      }
+
+      if (!mounted) return;
+
+      if (sessionId == null) {
+        // AWS not configured or unreachable
+        _showSnack(
+          'El servicio de verificación de vida no está disponible. '
+          'Por favor intenta más tarde.',
+          isError: true,
+        );
+        return;
+      }
+
+      setState(() {
+        _verificationToken = vToken;
+        _livenessSessionId = sessionId;
+        _generatingToken = false;
+      });
+
+      // 3. Show liveness check full-screen
+      final passed = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => _LivenessCheckPage(sessionId: sessionId!),
+        ),
+      );
+
+      if (!mounted) return;
+
+      if (passed == true) {
+        setState(() => _currentStep = 1); // → selfie
+      } else {
+        _showSnack(
+          'La verificación de vida falló o fue cancelada. Inténtalo de nuevo.',
+          isError: true,
         );
       }
+    } catch (e) {
+      if (mounted) _showSnack(e.toString(), isError: true);
     } finally {
       if (mounted) setState(() => _generatingToken = false);
     }
@@ -161,65 +217,33 @@ class _VerificationScreenState extends State<VerificationScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-                'No se pudo acceder a la cámara. Verifica los permisos de la app.'),
-            backgroundColor: GardenColors.error,
-            duration: const Duration(seconds: 4),
-          ),
-        );
+        _showSnack('No se pudo acceder a la cámara. Verifica los permisos de la app.', isError: true);
       }
     }
   }
 
   Future<void> _submitVerification() async {
-    if (_selfiePreview == null ||
-        _ciFrontPreview == null ||
-        _ciBackPreview == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Captura las 3 fotos antes de continuar')),
-      );
+    if (_selfiePreview == null || _ciFrontPreview == null || _ciBackPreview == null) {
+      _showSnack('Captura las 3 fotos antes de continuar', isError: false);
       return;
     }
 
-    setState(() {
-      _currentStep = 4;
-    });
+    setState(() => _currentStep = 4);
 
     try {
-      // Try to get a real AWS FaceLiveness sessionId.
-      // If the server doesn't have AWS configured, this returns null and the
-      // submission continues without it (backend will flag for manual review).
-      String? livenessSessionId;
-      try {
-        final lsRes = await http.post(
-          Uri.parse('$_baseUrl/verification/create-liveness-session'),
-          headers: {'Authorization': 'Bearer $_caregiverToken'},
-        );
-        final lsData = jsonDecode(lsRes.body);
-        if (lsData['success'] == true) {
-          livenessSessionId = lsData['data']['sessionId'] as String?;
-        }
-      } catch (_) {
-        // Non-critical — proceed without liveness session
-      }
-
       final uri = Uri.parse('$_baseUrl/verification/submit');
       final request = http.MultipartRequest('POST', uri);
 
       request.fields['token'] = _verificationToken;
-      if (livenessSessionId != null) {
-        request.fields['livenessSessionId'] = livenessSessionId;
+      if (_livenessSessionId != null) {
+        request.fields['livenessSessionId'] = _livenessSessionId!;
       }
 
-      final imageData = [
+      for (final entry in [
         ('selfie', _selfiePreview),
         ('ciFront', _ciFrontPreview),
         ('ciBack', _ciBackPreview),
-      ];
-
-      for (final entry in imageData) {
+      ]) {
         if (entry.$2 == null) continue;
         request.files.add(http.MultipartFile.fromBytes(
           entry.$1,
@@ -237,31 +261,23 @@ class _VerificationScreenState extends State<VerificationScreen> {
       if (response.statusCode == 200 && data['success'] == true) {
         setState(() {
           _currentStep = 5;
-          _resultStatus =
-              (data['data']['status'] ?? 'review').toString().toLowerCase();
-          _resultMessage =
-              data['data']['message'] ?? 'Tu verificacion esta siendo procesada';
+          _resultStatus = (data['data']['status'] ?? 'review').toString().toLowerCase();
+          _resultMessage = data['data']['message'] ?? 'Tu verificacion esta siendo procesada';
         });
       } else {
-        throw Exception(
-            data['error']?['message'] ?? data['message'] ?? 'Error en verificacion');
+        throw Exception(data['error']?['message'] ?? data['message'] ?? 'Error en verificacion');
       }
     } catch (e) {
       setState(() => _currentStep = 3);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-        );
-      }
+      if (mounted) _showSnack(e.toString(), isError: true);
     }
   }
 
   Future<bool> _checkBlockchainBadge() async {
     try {
-      final token = AuthState.token;
       final response = await http.get(
         Uri.parse('$_baseUrl/caregiver/my-profile'),
-        headers: {'Authorization': 'Bearer $token'},
+        headers: {'Authorization': 'Bearer ${AuthState.token}'},
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
@@ -270,7 +286,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             data['data']?['verificationStatus'] == 'VERIFIED';
       }
       return false;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
@@ -281,6 +297,14 @@ class _VerificationScreenState extends State<VerificationScreen> {
     } else {
       context.go('/caregiver/home');
     }
+  }
+
+  void _showSnack(String msg, {required bool isError}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: isError ? GardenColors.error : GardenColors.success,
+    ));
   }
 
   // ── BUILD INTRO ──────────────────────────────────────────────────────────
@@ -295,11 +319,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
           const SizedBox(height: 24),
           Text(
             'Verifica tu identidad',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: _textPrimary,
-            ),
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: _textPrimary),
           ),
           const SizedBox(height: 12),
           Text(
@@ -308,9 +328,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
             style: TextStyle(color: _textSecondary, height: 1.5),
           ),
           const SizedBox(height: 32),
-          _buildRequirementItem('Toma una selfie nitida de tu rostro.'),
-          _buildRequirementItem('Foto del anverso (frente) de tu CI.'),
-          _buildRequirementItem('Foto del reverso (atras) de tu CI.'),
+          _buildRequirementItem(Icons.face_rounded, 'Verificación de vida en tiempo real.'),
+          _buildRequirementItem(Icons.photo_camera, 'Selfie nítida de tu rostro.'),
+          _buildRequirementItem(Icons.credit_card, 'Foto del anverso (frente) de tu CI.'),
+          _buildRequirementItem(Icons.credit_card_outlined, 'Foto del reverso (atrás) de tu CI.'),
           const SizedBox(height: 48),
           _generatingToken
               ? const CircularProgressIndicator(color: GardenColors.primary)
@@ -325,7 +346,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                         borderRadius: BorderRadius.circular(GardenRadius.md),
                       ),
                     ),
-                    onPressed: _generateVerificationToken,
+                    onPressed: _startProcess,
                     child: const Text(
                       'Comenzar verificacion',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -337,12 +358,12 @@ class _VerificationScreenState extends State<VerificationScreen> {
     );
   }
 
-  Widget _buildRequirementItem(String text) {
+  Widget _buildRequirementItem(IconData icon, String text) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          const Icon(Icons.check_circle, color: GardenColors.success, size: 20),
+          Icon(icon, color: GardenColors.primary, size: 22),
           const SizedBox(width: 12),
           Expanded(child: Text(text, style: TextStyle(color: _textPrimary))),
         ],
@@ -360,13 +381,12 @@ class _VerificationScreenState extends State<VerificationScreen> {
     VoidCallback onBack,
     VoidCallback onNext,
   ) {
-    final stepNumber = _currentStep; // 1, 2, or 3
+    final displayStep = _currentStep; // 1, 2, or 3
 
     return Column(
       children: [
-        // Progress indicator
         LinearProgressIndicator(
-          value: stepNumber / 3,
+          value: displayStep / 3,
           backgroundColor: _surfaceColor,
           color: GardenColors.primary,
           minHeight: 4,
@@ -377,16 +397,14 @@ class _VerificationScreenState extends State<VerificationScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 8),
-                // Step counter
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   decoration: BoxDecoration(
                     color: GardenColors.primary.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(GardenRadius.full),
                   ),
                   child: Text(
-                    'Paso $stepNumber de 3',
+                    'Paso $displayStep de 3',
                     style: const TextStyle(
                       color: GardenColors.primary,
                       fontSize: 13,
@@ -431,34 +449,28 @@ class _VerificationScreenState extends State<VerificationScreen> {
                     child: Stack(
                       children: [
                         if (preview != null)
-                          Positioned.fill(
-                            child: Image.memory(preview, fit: BoxFit.cover),
-                          )
+                          Positioned.fill(child: Image.memory(preview, fit: BoxFit.cover))
                         else
                           Center(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.camera_alt,
-                                    size: 64, color: GardenColors.primary),
+                                const Icon(Icons.camera_alt, size: 64, color: GardenColors.primary),
                                 const SizedBox(height: 12),
-                                Text('Toca para capturar',
-                                    style: TextStyle(color: _textSecondary)),
+                                Text('Toca para capturar', style: TextStyle(color: _textSecondary)),
                               ],
                             ),
                           ),
                         if (preview != null)
                           Positioned(
-                            top: 12,
-                            right: 12,
+                            top: 12, right: 12,
                             child: Container(
                               decoration: const BoxDecoration(
                                 color: GardenColors.success,
                                 shape: BoxShape.circle,
                               ),
                               padding: const EdgeInsets.all(2),
-                              child: const Icon(Icons.check,
-                                  color: Colors.white, size: 24),
+                              child: const Icon(Icons.check, color: Colors.white, size: 24),
                             ),
                           ),
                       ],
@@ -467,19 +479,14 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 ),
 
                 const SizedBox(height: 16),
-                // Retake hint
                 if (preview != null)
                   TextButton.icon(
                     onPressed: () => _capturePhoto(type),
-                    icon: const Icon(Icons.refresh,
-                        size: 18, color: GardenColors.primary),
-                    label: const Text('Volver a tomar',
-                        style: TextStyle(color: GardenColors.primary)),
+                    icon: const Icon(Icons.refresh, size: 18, color: GardenColors.primary),
+                    label: const Text('Volver a tomar', style: TextStyle(color: GardenColors.primary)),
                   ),
 
                 const SizedBox(height: 32),
-
-                // Navigation buttons
                 Row(
                   children: [
                     Expanded(
@@ -488,13 +495,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
                           side: BorderSide(color: _borderColor),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(GardenRadius.md),
+                            borderRadius: BorderRadius.circular(GardenRadius.md),
                           ),
                         ),
                         onPressed: onBack,
-                        child: Text('Atras',
-                            style: TextStyle(color: _textSecondary)),
+                        child: Text('Atras', style: TextStyle(color: _textSecondary)),
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -504,12 +509,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: GardenColors.primary,
                           foregroundColor: Colors.white,
-                          disabledBackgroundColor:
-                              GardenColors.primary.withValues(alpha: 0.3),
+                          disabledBackgroundColor: GardenColors.primary.withValues(alpha: 0.3),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(GardenRadius.md),
+                            borderRadius: BorderRadius.circular(GardenRadius.md),
                           ),
                         ),
                         onPressed: preview != null ? onNext : null,
@@ -539,28 +542,18 @@ class _VerificationScreenState extends State<VerificationScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const SizedBox(
-              width: 64,
-              height: 64,
-              child: CircularProgressIndicator(
-                color: GardenColors.primary,
-                strokeWidth: 3,
-              ),
+              width: 64, height: 64,
+              child: CircularProgressIndicator(color: GardenColors.primary, strokeWidth: 3),
             ),
             const SizedBox(height: 32),
             Text(
               'Analizando tus documentos con IA...',
-              style: TextStyle(
-                color: _textPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(color: _textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
-            Text(
-              'Esto puede tomar unos segundos',
-              style: TextStyle(color: _textSecondary, fontSize: 13),
-            ),
+            Text('Esto puede tomar unos segundos',
+                style: TextStyle(color: _textSecondary, fontSize: 13)),
           ],
         ),
       ),
@@ -570,10 +563,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
   // ── BUILD RESULT ─────────────────────────────────────────────────────────
 
   Widget _buildResult() {
-    final isApproved =
-        _resultStatus == 'approved' || _resultStatus == 'verified';
-    final isReview = _resultStatus == 'review' ||
-        _resultStatus == 'pending_review';
+    final isApproved = _resultStatus == 'approved' || _resultStatus == 'verified';
+    final isReview = _resultStatus == 'review' || _resultStatus == 'pending_review';
     final isRejected = _resultStatus == 'rejected';
 
     final IconData icon;
@@ -603,34 +594,23 @@ class _VerificationScreenState extends State<VerificationScreen> {
             TweenAnimationBuilder<double>(
               tween: Tween(begin: 0.0, end: 1.0),
               duration: const Duration(milliseconds: 600),
-              builder: (context, value, child) => Transform.scale(
-                scale: value,
-                child: Icon(icon, color: iconColor, size: 100),
-              ),
+              builder: (context, value, child) =>
+                  Transform.scale(scale: value, child: Icon(icon, color: iconColor, size: 100)),
             )
           else
             Icon(icon, color: iconColor, size: 100),
           const SizedBox(height: 32),
           Text(
             titleText,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: iconColor,
-            ),
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: iconColor),
           ),
           const SizedBox(height: 16),
           Text(
             _resultMessage,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: _textSecondary,
-              fontSize: 16,
-              height: 1.5,
-            ),
+            style: TextStyle(color: _textSecondary, fontSize: 16, height: 1.5),
           ),
 
-          // Blockchain badge (approved only)
           if (isApproved)
             FutureBuilder<bool>(
               future: _checkBlockchainBadge(),
@@ -642,24 +622,19 @@ class _VerificationScreenState extends State<VerificationScreen> {
                     decoration: BoxDecoration(
                       color: GardenColors.polygon.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(GardenRadius.md),
-                      border: Border.all(
-                          color: GardenColors.polygon.withValues(alpha: 0.5)),
+                      border: Border.all(color: GardenColors.polygon.withValues(alpha: 0.5)),
                     ),
                     child: Row(
                       children: [
                         Container(
-                          width: 32,
-                          height: 32,
+                          width: 32, height: 32,
                           decoration: BoxDecoration(
                             color: GardenColors.polygon.withValues(alpha: 0.2),
                             shape: BoxShape.circle,
                           ),
                           child: const Center(
-                            child: Text(
-                              '\u2B21',
-                              style: TextStyle(
-                                  color: GardenColors.polygon, fontSize: 16),
-                            ),
+                            child: Text('⬡',
+                                style: TextStyle(color: GardenColors.polygon, fontSize: 16)),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -670,15 +645,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
                               Text(
                                 'Badge registrado en Polygon',
                                 style: TextStyle(
-                                  color: _textPrimary,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
+                                    color: _textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                               ),
                               const Text(
                                 'Tu verificacion quedo registrada de forma inmutable en la blockchain',
-                                style: TextStyle(
-                                    color: GardenColors.polygon, fontSize: 11),
+                                style: TextStyle(color: GardenColors.polygon, fontSize: 11),
                               ),
                             ],
                           ),
@@ -702,13 +673,12 @@ class _VerificationScreenState extends State<VerificationScreen> {
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(GardenRadius.md),
-                      ),
+                          borderRadius: BorderRadius.circular(GardenRadius.md)),
                     ),
                     onPressed: () => setState(() {
                       _currentStep = 0;
                       _verificationToken = '';
+                      _livenessSessionId = null;
                       _selfiePreview = null;
                       _ciFrontPreview = null;
                       _ciBackPreview = null;
@@ -722,9 +692,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(GardenRadius.md),
-                      ),
+                          borderRadius: BorderRadius.circular(GardenRadius.md)),
                     ),
                     onPressed: _handleFinish,
                     child: const Text('Ir a mi panel',
@@ -798,5 +766,32 @@ class _VerificationScreenState extends State<VerificationScreen> {
       default:
         return _buildIntro();
     }
+  }
+}
+
+// ── Liveness full-screen page (embedded — avoids separate file) ─────────────
+
+class _LivenessCheckPage extends StatelessWidget {
+  final String sessionId;
+
+  const _LivenessCheckPage({required this.sessionId});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: buildLivenessWidget(
+          sessionId: sessionId,
+          onComplete: () => Navigator.of(context).pop(true),
+          onError: (code) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Error de verificación de vida ($code). Inténtalo de nuevo.'),
+              backgroundColor: GardenColors.error,
+            ));
+            Navigator.of(context).pop(false);
+          },
+        ),
+      ),
+    );
   }
 }

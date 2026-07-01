@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../shared/async-handler.js';
 import * as verificationService from './verification.service.js';
-import { createLivenessSession as awsCreateLivenessSession } from './liveness.service.js';
+import { createLivenessSession as awsCreateLivenessSession, checkBlinkLiveness } from './liveness.service.js';
 import logger from '../../shared/logger.js';
 
 /** POST /api/verification/generate-link — authenticated CAREGIVER. Returns URL with JWT (15min). */
@@ -69,13 +69,15 @@ export const submit = asyncHandler(async (req: Request, res: Response) => {
   const deviceInfo = getDeviceInfo(req);
 
   const livenessSessionId = req.body?.livenessSessionId as string | undefined;
+  const blinkLivenessToken = req.body?.blinkLivenessToken as string | undefined;
 
   logger.info('➡️ Incoming verification request', {
     token: effectiveToken.substring(0, 10) + '...',
     hasSelfie: !!selfie,
     hasCiFront: !!ciFront,
     hasCiBack: !!ciBack,
-    livenessSessionId
+    livenessSessionId,
+    hasBlinkToken: !!blinkLivenessToken,
   });
 
   const result = await verificationService.submitVerification(
@@ -84,7 +86,8 @@ export const submit = asyncHandler(async (req: Request, res: Response) => {
     ciFront.buffer,
     ciBack.buffer,
     deviceInfo,
-    livenessSessionId
+    livenessSessionId,
+    blinkLivenessToken,
   );
 
   logger.info('✅ Verification request processed', {
@@ -107,4 +110,42 @@ export const createLivenessSession = asyncHandler(async (_req: Request, res: Res
     });
   }
   res.json({ success: true, data: session });
+});
+
+/** POST /api/verification/check-blink — public (verification token required).
+ *  Blink liveness for Flutter web QR flow: accepts 2 frames (frameOpen, frameClosed)
+ *  and uses Rekognition to verify eye state changed → real person.
+ *  Returns { token } — a short-lived JWT that /submit accepts as blinkLivenessToken. */
+export const checkBlink = asyncHandler(async (req: Request, res: Response) => {
+  const files = req.files as { [k: string]: Express.Multer.File[] } | undefined;
+  const frameOpen = files?.frameOpen?.[0];
+  const frameClosed = files?.frameClosed?.[0];
+
+  if (!frameOpen || !frameClosed) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'MISSING_FRAMES', message: 'Se requieren los dos frames del parpadeo (frameOpen y frameClosed).' },
+    });
+  }
+
+  // Resolve userId from verification token in body/query
+  const token = (req.body?.token as string) ?? (req.query.token as string);
+  if (!token) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_TOKEN' } });
+  }
+
+  const { validateToken } = await import('./verification.service.js');
+  const session = await validateToken(token);
+  const userId = (session as any)?.userId ?? 'unknown';
+
+  const result = await checkBlinkLiveness(frameOpen.buffer, frameClosed.buffer, userId);
+
+  if (!result.passed) {
+    return res.status(422).json({
+      success: false,
+      error: { code: 'BLINK_FAILED', message: result.reason ?? 'El parpadeo no fue detectado correctamente.' },
+    });
+  }
+
+  res.json({ success: true, data: { blinkLivenessToken: result.token, score: result.score } });
 });

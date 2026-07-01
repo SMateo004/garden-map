@@ -60,6 +60,7 @@ dependencies:
   path_provider: ^2.1.4
   audioplayers: ^6.0.0
   package_info_plus: ^8.1.2
+  face_liveness_detector: ^0.2.11
 
 dev_dependencies:
   flutter_test:

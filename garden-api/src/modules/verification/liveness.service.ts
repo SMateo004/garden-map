@@ -1,6 +1,7 @@
 import logger from '../../shared/logger.js';
 import { BadRequestError } from '../../shared/errors.js';
-import { RekognitionClient, GetFaceLivenessSessionResultsCommand, CreateFaceLivenessSessionCommand } from '@aws-sdk/client-rekognition';
+import { RekognitionClient, GetFaceLivenessSessionResultsCommand, CreateFaceLivenessSessionCommand, DetectFacesCommand } from '@aws-sdk/client-rekognition';
+import jwt from 'jsonwebtoken';
 import { env } from '../../config/env.js';
 
 export type LivenessProvider = 'FACETEC' | 'ONFIDO' | 'AWS_REKOGNITION';
@@ -138,5 +139,72 @@ export async function createLivenessSession(): Promise<{ sessionId: string } | n
   } catch (error: any) {
     logger.error('Failed to create FaceLiveness session', { error: error.message });
     return null;
+  }
+}
+
+/**
+ * Blink liveness for Flutter web (QR flow).
+ * Accepts 2 frames: eyesOpen + eyesClosed.
+ * Uses Rekognition DetectFaces to verify eye state changed → real person.
+ * Returns a short-lived signed JWT that /submit accepts as livenessToken.
+ */
+export async function checkBlinkLiveness(
+  frameOpen: Buffer,
+  frameClosed: Buffer,
+  userId: string,
+): Promise<{ passed: boolean; score: number; token?: string; reason?: string }> {
+  const client = getRekognitionClient();
+  if (!client) {
+    return { passed: false, score: 0, reason: 'AWS no configurado' };
+  }
+
+  try {
+    const [resOpen, resClosed] = await Promise.all([
+      client.send(new DetectFacesCommand({ Image: { Bytes: frameOpen }, Attributes: ['ALL'] })),
+      client.send(new DetectFacesCommand({ Image: { Bytes: frameClosed }, Attributes: ['ALL'] })),
+    ]);
+
+    const faceOpen = resOpen.FaceDetails?.[0];
+    const faceClosed = resClosed.FaceDetails?.[0];
+
+    if (!faceOpen) return { passed: false, score: 0, reason: 'No se detectó rostro en el frame de ojos abiertos' };
+    if (!faceClosed) return { passed: false, score: 0, reason: 'No se detectó rostro en el frame de ojos cerrados' };
+
+    const openValue = faceOpen.EyesOpen?.Value === true;
+    const closedValue = faceClosed.EyesOpen?.Value === false;
+    const openConf = faceOpen.EyesOpen?.Confidence ?? 0;
+    const closedConf = faceClosed.EyesOpen?.Confidence ?? 0;
+
+    logger.info('Blink liveness check', {
+      userId,
+      eyesOpenFrame: { value: openValue, confidence: openConf },
+      eyesClosedFrame: { value: closedValue, confidence: closedConf },
+    });
+
+    // Both frames must show the expected eye state with >70% confidence
+    const passed = openValue && closedValue && openConf >= 70 && closedConf >= 70;
+    const score = passed ? Math.round((openConf + closedConf) / 2) : 0;
+
+    if (!passed) {
+      return {
+        passed: false,
+        score,
+        reason: !openValue
+          ? 'No se detectaron los ojos abiertos en el primer frame'
+          : 'No se detectó el parpadeo en el segundo frame',
+      };
+    }
+
+    // Issue a short-lived JWT so /submit can verify this blink check happened
+    const blinkToken = jwt.sign(
+      { userId, type: 'blink_liveness', score },
+      env.JWT_SECRET as string,
+      { expiresIn: '15m' },
+    );
+
+    return { passed: true, score, token: blinkToken };
+  } catch (error: any) {
+    logger.error('Blink liveness check failed', { userId, error: error.message });
+    return { passed: false, score: 0, reason: 'Error al analizar los frames' };
   }
 }

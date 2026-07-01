@@ -23,7 +23,17 @@ router.post('/create-liveness-session', controller.createLivenessSession);
 /** GET /api/verification/validate?token= — public, returns { valid, userId?, message? } */
 router.get('/validate', controller.validate);
 
-/** POST /api/verification/submit — public. Multipart: token, selfie, ciFront, livenessFrames (3–5) */
+/** POST /api/verification/check-blink — public (verification token). Blink liveness for web QR flow. */
+router.post(
+  '/check-blink',
+  upload.fields([
+    { name: 'frameOpen', maxCount: 1 },
+    { name: 'frameClosed', maxCount: 1 },
+  ]),
+  controller.checkBlink
+);
+
+/** POST /api/verification/submit — public. Multipart: token, selfie, ciFront, ciBack. */
 router.post(
   '/submit',
   upload.fields([
