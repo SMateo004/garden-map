@@ -114,7 +114,9 @@ export type RequiredSubmitField = (typeof REQUIRED_FIELDS_FOR_SUBMIT)[number];
 /** Devuelve los nombres de campos obligatorios que faltan o están vacíos en el perfil. */
 export function getMissingRequiredFieldsForSubmit(profile: any): RequiredSubmitField[] {
   const missing: RequiredSubmitField[] = [];
-  if (!profile.bio || profile.bio.trim().length < 10) missing.push('bio');
+  const bioText = (profile.bio ?? '').trim();
+  const bioDetailText = (profile.bioDetail ?? '').trim();
+  if (bioText.length < 10 && bioDetailText.length < 10) missing.push('bio');
   if (!profile.zone) missing.push('zone');
 
   const services = Array.isArray(profile.servicesOffered) ? profile.servicesOffered : [];
