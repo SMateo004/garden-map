@@ -42,6 +42,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
   Timer? _pollTimer;
   int _pollCount = 0;
+  DateTime? _qrGeneratedAt; // grace period: no detectar REJECTED los primeros 30s
 
   String get _baseUrl => const String.fromEnvironment(
       'API_URL', defaultValue: 'https://api.gardenbo.com/api');
@@ -94,6 +95,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
           _qrUrl = url;
           _step = 1;
           _pollCount = 0;
+          _qrGeneratedAt = DateTime.now();
         });
         _startPolling();
       } else {
@@ -153,9 +155,16 @@ class _VerificationScreenState extends State<VerificationScreen> {
           context.go('/caregiver/home');
         }
       } else if (status == 'REJECTED') {
-        _stopPolling();
-        debugPrint('[VerifyWeb] ❌ REJECTED — mostrando pantalla de reintento');
-        setState(() { _step = 2; });
+        final secondsSinceQr = _qrGeneratedAt == null
+            ? 999
+            : DateTime.now().difference(_qrGeneratedAt!).inSeconds;
+        if (secondsSinceQr < 30) {
+          debugPrint('[VerifyWeb] REJECTED ignorado — grace period (${secondsSinceQr}s < 30s)');
+        } else {
+          _stopPolling();
+          debugPrint('[VerifyWeb] ❌ REJECTED — mostrando pantalla de reintento');
+          setState(() { _step = 2; });
+        }
       }
       // REVIEW y PENDING → seguir esperando
     } catch (e) {

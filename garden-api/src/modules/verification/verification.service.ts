@@ -39,6 +39,11 @@ export async function generateLink(userId: string): Promise<{ url: string; token
   const session = await prisma.identityVerificationSession.create({
     data: { userId, status: 'PENDING', expiresAt },
   });
+  // Reset profile status so polling doesn't immediately re-trigger REJECTED from a prior attempt
+  await prisma.caregiverProfile.updateMany({
+    where: { userId, identityVerificationStatus: 'REJECTED' },
+    data: { identityVerificationStatus: 'PENDING' },
+  });
   const payload: VerificationJwtPayload = {
     verificationId: session.id,
     userId,
