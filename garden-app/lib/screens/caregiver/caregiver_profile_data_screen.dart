@@ -49,6 +49,7 @@ class CaregiverProfileDataScreen extends StatefulWidget {
 class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isEditing = false;
   String _caregiverToken = '';
   int _completionPercentage = 0;
 
@@ -475,6 +476,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
       final expYears = int.tryParse(expYearsText) ?? 0;
 
+      // Precios según los servicios ofrecidos
+      final pricePerDay = double.tryParse(_pricePerDayController.text);
+      final pricePerWalk30 = double.tryParse(_pricePerWalk30Controller.text);
+      final pricePerWalk60 = double.tryParse(_pricePerWalk60Controller.text);
+      final pricePerGuarderia = double.tryParse(_pricePerGuarderiaController.text);
+
       final body = <String, dynamic>{
         'bio': _bioController.text.trim(),
         'bioDetail': _bioDetailController.text.trim(),
@@ -488,6 +495,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         'acceptSeniors': _acceptSeniors,
         'sizesAccepted': _acceptedSizes,
         'animalTypes': _acceptedPetTypes,
+        if (pricePerDay != null && pricePerDay > 0) 'pricePerDay': pricePerDay,
+        if (pricePerWalk30 != null && pricePerWalk30 > 0) 'pricePerWalk30': pricePerWalk30,
+        if (pricePerWalk60 != null && pricePerWalk60 > 0) 'pricePerWalk60': pricePerWalk60,
+        if (pricePerGuarderia != null && pricePerGuarderia > 0) 'pricePerGuarderia': pricePerGuarderia,
         'serviceDetails': {
           'allowsLargePets': _allowsLargePets,
           'allowsMultiplePets': _allowsMultiplePets,
@@ -547,13 +558,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
           ),
         );
         _computeCompletion();
-        await Future.delayed(const Duration(seconds: 1));
+        setState(() => _isEditing = false);
         if (!mounted) return;
         if (widget.embeddedMode && widget.onSaveComplete != null) {
           widget.onSaveComplete!();
-        } else {
-          Navigator.pop(context);
         }
+        // In standalone mode: stay on screen in view mode instead of popping
       } else {
         final err = jsonDecode(response.body)['error']?['message'] ?? 'Error desconocido';
         throw Exception(err);
@@ -753,17 +763,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         title: const Text('Perfil profesional'),
         actions: [
           if (_isSaving)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.only(right: 16),
-                child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary)),
-              ),
-            )
-          else
-            TextButton(
-              onPressed: _saveAllData,
-              child: const Text('Guardar', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.bold, fontSize: 15)),
-            ),
+            const Center(child: Padding(padding: EdgeInsets.only(right: 16), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))))
+          else if (_isEditing) ...[
+            TextButton(onPressed: () { setState(() => _isEditing = false); _loadData(); }, child: Text('Cancelar', style: TextStyle(color: textColor))),
+            TextButton(onPressed: _saveAllData, child: const Text('Guardar', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.bold, fontSize: 15))),
+          ] else
+            TextButton(onPressed: () => setState(() => _isEditing = true), child: const Text('Editar', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.bold, fontSize: 15))),
         ],
       ),
       body: _buildBody(textColor, subtextColor, surface, borderColor, isDark),
@@ -826,11 +831,29 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                 const SizedBox(width: 12),
                 if (_isSaving)
                   const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))
-                else
+                else if (_isEditing) ...[
+                  TextButton(
+                    onPressed: () { setState(() => _isEditing = false); _loadData(); },
+                    child: Text('Cancelar', style: TextStyle(color: subtextColor, fontSize: 13)),
+                  ),
+                  const SizedBox(width: 8),
                   ElevatedButton.icon(
                     onPressed: _saveAllData,
                     icon: const Icon(Icons.save_rounded, size: 15),
                     label: const Text('Guardar cambios', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GardenColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                  ),
+                ] else
+                  ElevatedButton.icon(
+                    onPressed: () => setState(() => _isEditing = true),
+                    icon: const Icon(Icons.edit_rounded, size: 15),
+                    label: const Text('Editar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: GardenColors.primary,
                       foregroundColor: Colors.white,
@@ -856,8 +879,67 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                       // LEFT column — description, services, prices, photos
                       Expanded(
                         flex: 55,
-                        child: Column(
+                        child: AbsorbPointer(
+                          absorbing: !_isEditing,
+                          child: Opacity(
+                            opacity: _isEditing ? 1.0 : 0.85,
+                            child: Column(
                           children: [
+                            // ── Servicios y precios ──────────────────────────
+                            _webSection(surface, borderColor, textColor,
+                              title: 'Servicios y precios',
+                              icon: Icons.monetization_on_outlined,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Servicios que ofreces', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 8),
+                                  AbsorbPointer(
+                                    absorbing: true,
+                                    child: Wrap(
+                                      spacing: 8,
+                                      runSpacing: 6,
+                                      children: _effectiveServices.map((s) {
+                                        final label = s == 'PASEO' ? '🦮 Paseo' : s == 'HOSPEDAJE' ? '🏠 Hospedaje' : '🐾 Guardería';
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: GardenColors.primary.withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(20),
+                                            border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4)),
+                                          ),
+                                          child: Text(label, style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 13)),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                  if (_effectiveServices.contains('PASEO')) ...[
+                                    const SizedBox(height: 14),
+                                    Text('Precio por paseo', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 8),
+                                    Row(children: [
+                                      Expanded(child: _priceField('Paseo 30 min (Bs.)', _pricePerWalk30Controller, borderColor, textColor)),
+                                      const SizedBox(width: 10),
+                                      Expanded(child: _priceField('Paseo 60 min (Bs.)', _pricePerWalk60Controller, borderColor, textColor)),
+                                    ]),
+                                  ],
+                                  if (_effectiveServices.contains('HOSPEDAJE')) ...[
+                                    const SizedBox(height: 14),
+                                    Text('Precio por hospedaje', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 8),
+                                    _priceField('Precio por día (Bs.)', _pricePerDayController, borderColor, textColor),
+                                  ],
+                                  if (_effectiveServices.contains('GUARDERIA')) ...[
+                                    const SizedBox(height: 14),
+                                    Text('Precio por guardería', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 8),
+                                    _priceField('Precio por día (Bs.)', _pricePerGuarderiaController, borderColor, textColor),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+
                             _webSection(surface, borderColor, textColor,
                               title: 'Sobre ti',
                               icon: Icons.edit_note_rounded,
@@ -943,6 +1025,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                             ],
                           ],
                         ),
+                          ),
+                        ),
                       ),
 
                       const SizedBox(width: 16),
@@ -950,7 +1034,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                       // RIGHT column — pets, FAQ, experience, policies
                       Expanded(
                         flex: 45,
-                        child: Column(
+                        child: AbsorbPointer(
+                          absorbing: !_isEditing,
+                          child: Opacity(
+                            opacity: _isEditing ? 1.0 : 0.85,
+                            child: Column(
                           children: [
                             _webSection(surface, borderColor, textColor,
                               title: 'Mascotas que aceptas',
@@ -1088,6 +1176,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                             const SizedBox(height: 32),
                           ],
                         ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -1097,6 +1187,26 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _priceField(String hint, TextEditingController controller, Color borderColor, Color textColor) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      style: TextStyle(color: textColor, fontSize: 14),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: textColor.withValues(alpha: 0.4), fontSize: 13),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        isDense: true,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: borderColor)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: borderColor)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: GardenColors.primary)),
+        prefixText: 'Bs. ',
+        prefixStyle: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 13),
+      ),
+      onChanged: (_) => _computeCompletion(),
     );
   }
 

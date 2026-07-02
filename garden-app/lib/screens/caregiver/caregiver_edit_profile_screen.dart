@@ -21,6 +21,7 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
   Map<String, dynamic>? _profile;
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isEditing = false;
   String _caregiverToken = '';
   Uint8List? _newPhotoBytes;
   String? _newPhotoName;
@@ -212,9 +213,8 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
             duration: Duration(seconds: 2),
           ),
         );
-        await Future.delayed(const Duration(seconds: 2));
+        setState(() => _isEditing = false);
         if (!mounted) return;
-        Navigator.pop(context, true);
       } else {
         throw Exception(data['error']?['message'] ?? 'Error al guardar');
       }
@@ -298,16 +298,20 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
             actions: [
               if (_isSaving)
                 const Center(child: Padding(padding: EdgeInsets.only(right: 16.0), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))))
-              else
-                TextButton(
-                  onPressed: _saveProfile,
-                  child: const Text('Guardar', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.bold)),
-                ),
+              else if (_isEditing) ...[
+                TextButton(onPressed: () { setState(() => _isEditing = false); _loadProfile(); }, child: Text('Cancelar', style: TextStyle(color: textColor))),
+                TextButton(onPressed: _saveProfile, child: const Text('Guardar', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.bold))),
+              ] else
+                TextButton(onPressed: () => setState(() => _isEditing = true), child: const Text('Editar', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.bold))),
             ],
           ),
           body: _isLoading
               ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
-              : SingleChildScrollView(
+              : AbsorbPointer(
+                  absorbing: !_isEditing,
+                  child: Opacity(
+                    opacity: _isEditing ? 1.0 : 0.9,
+                    child: SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -427,6 +431,8 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                     ],
                   ),
                 ),
+                  ),
+                ),
         );
       },
     );
@@ -475,22 +481,25 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                 ),
                 const Spacer(),
                 if (_isSaving)
-                  const SizedBox(
-                    width: 18, height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary),
-                  )
-                else
+                  const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))
+                else if (_isEditing) ...[
+                  TextButton(
+                    onPressed: () { setState(() => _isEditing = false); _loadProfile(); },
+                    child: Text('Cancelar', style: TextStyle(color: subtextColor, fontSize: 13)),
+                  ),
+                  const SizedBox(width: 8),
                   ElevatedButton.icon(
                     onPressed: _saveProfile,
                     icon: const Icon(Icons.save_rounded, size: 15),
                     label: const Text('Guardar cambios', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: GardenColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 0,
-                    ),
+                    style: ElevatedButton.styleFrom(backgroundColor: GardenColors.primary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: 0),
+                  ),
+                ] else
+                  ElevatedButton.icon(
+                    onPressed: () => setState(() => _isEditing = true),
+                    icon: const Icon(Icons.edit_rounded, size: 15),
+                    label: const Text('Editar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(backgroundColor: GardenColors.primary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: 0),
                   ),
               ],
             ),
@@ -500,7 +509,11 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
-                : SingleChildScrollView(
+                : AbsorbPointer(
+                    absorbing: !_isEditing,
+                    child: Opacity(
+                      opacity: _isEditing ? 1.0 : 0.9,
+                      child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
                     child: Center(
                       child: ConstrainedBox(
@@ -631,6 +644,8 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                           ],
                         ),
                       ),
+                    ),
+                  ),
                     ),
                   ),
           ),
