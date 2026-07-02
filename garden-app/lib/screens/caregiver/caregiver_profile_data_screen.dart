@@ -57,10 +57,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   final _keyBio = GlobalKey();
   final _keyBioDetail = GlobalKey();
   final _keyAddress = GlobalKey();
+  final _keyServicesPrices = GlobalKey();
   final _keySpaceType = GlobalKey();
   final _keyPetTypes = GlobalKey();
   final _keySizes = GlobalKey();
   final _keyPhotos = GlobalKey();
+  final _keyPlacePhotos = GlobalKey();
   final _keyFaq = GlobalKey();
   final _keyExperience = GlobalKey();
   final _keyPolicies = GlobalKey();
@@ -438,6 +440,58 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     }
     if (_acceptedSizes.isEmpty) {
       return _showValidationError('Selecciona al menos un tamaño de mascota aceptado', scrollTo: _keySizes);
+    }
+
+    // Servicios y precios — si un servicio está activo, su precio y demás
+    // secciones que aparecen para él NO pueden guardarse vacías.
+    final activeServices = _effectiveServices;
+    if (activeServices.isEmpty) {
+      return _showValidationError('Selecciona al menos un servicio que ofreces', scrollTo: _keyServicesPrices);
+    }
+    final offersPaseo = activeServices.contains('PASEO');
+    final offersHospedaje = activeServices.contains('HOSPEDAJE');
+    final offersGuarderia = activeServices.contains('GUARDERIA');
+    final needsSpace = offersHospedaje || offersGuarderia;
+
+    if (offersPaseo) {
+      final w30 = double.tryParse(_pricePerWalk30Controller.text) ?? 0;
+      final w60 = double.tryParse(_pricePerWalk60Controller.text) ?? 0;
+      if (w30 <= 0 && w60 <= 0) {
+        return _showValidationError('Configura al menos un precio de paseo (30 o 60 minutos)', scrollTo: _keyServicesPrices);
+      }
+    }
+    if (offersHospedaje) {
+      final dayPrice = double.tryParse(_pricePerDayController.text) ?? 0;
+      if (dayPrice <= 0) {
+        return _showValidationError('Configura el precio por noche de hospedaje', scrollTo: _keyServicesPrices);
+      }
+    }
+    if (offersGuarderia) {
+      final guarderiaPrice = double.tryParse(_pricePerGuarderiaController.text) ?? 0;
+      if (guarderiaPrice <= 0) {
+        return _showValidationError('Configura el precio por día de guardería', scrollTo: _keyServicesPrices);
+      }
+    }
+
+    // Tu espacio — solo aparece (y solo se exige) si ofrece hospedaje o guardería
+    if (needsSpace) {
+      if (_selectedHomeTypes.isEmpty) {
+        return _showValidationError('Selecciona el tipo de espacio donde recibes a las mascotas', scrollTo: _keySpaceType);
+      }
+      final missingPlaceSection = _placeSections
+          .where((s) => s.$3) // solo las secciones requeridas: sala, descanso, alimentación
+          .any((s) => (_placePhotoUrls[s.$1]?.isEmpty ?? true));
+      if (missingPlaceSection) {
+        return _showValidationError('Sube al menos una foto en cada sección requerida de "Fotos del espacio"', scrollTo: _keyPlacePhotos);
+      }
+    }
+
+    // Fotos del cuidador — mínimo según servicios (2 si solo paseo, 4 en otro caso)
+    if (widget.showPhotos) {
+      final minPhotos = activeServices.length == 1 && offersPaseo ? 2 : 4;
+      if (_caregiverPhotoUrls.length < minPhotos) {
+        return _showValidationError('Sube al menos $minPhotos fotos tuyas en acción con mascotas', scrollTo: _keyPhotos);
+      }
     }
 
     // FAQ
@@ -971,6 +1025,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
+                                      SizedBox(key: _keyPlacePhotos, height: 0),
                                       Text('Muestra el espacio donde cuidas a las mascotas',
                                         style: TextStyle(color: subtextColor, fontSize: 12)),
                                       const SizedBox(height: 12),
@@ -1179,6 +1234,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     ];
 
     return Column(
+      key: _keyServicesPrices,
       children: allServices.map((s) {
         final info = serviceData[s]!;
         final (emoji, name) = info;
