@@ -3,6 +3,32 @@
 <head>
   <base href="$FLUTTER_BASE_HREF">
 
+  <!-- Kill switch: elimina Service Workers viejos (offline-first) ANTES de
+       que flutter_bootstrap.js pida main.dart.js, y fuerza un único reload
+       para que la carga siguiente ya no tenga ningún SW controlando la página. -->
+  <script>
+  (function () {
+    if (!('serviceWorker' in navigator)) return;
+    if (sessionStorage.getItem('gardenSwPurged') === '1') return;
+    navigator.serviceWorker.getRegistrations().then(function (regs) {
+      if (regs.length === 0) {
+        sessionStorage.setItem('gardenSwPurged', '1');
+        return;
+      }
+      Promise.all(regs.map(function (r) { return r.unregister(); }))
+        .then(function () {
+          return ('caches' in window) ? caches.keys().then(function (keys) {
+            return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+          }) : Promise.resolve();
+        })
+        .finally(function () {
+          sessionStorage.setItem('gardenSwPurged', '1');
+          window.location.reload();
+        });
+    });
+  })();
+  </script>
+
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="Garden — Cuidadores de mascotas de confianza">
@@ -123,13 +149,6 @@
       });
       observer.observe(document.body, { childList: true, subtree: true });
     })();
-
-    // Unregister stale service workers para que builds nuevos carguen fresco
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function (regs) {
-        regs.forEach(function (r) { r.unregister(); });
-      });
-    }
   </script>
 
   <script src="flutter_bootstrap.js" async></script>
