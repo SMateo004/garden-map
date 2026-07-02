@@ -111,26 +111,53 @@ export async function checkAndAutoSubmitProfile(userId: string) {
 }
 
 function calculatePercentage(profile: any, minPhotos: number): number {
+    const services: string[] = Array.isArray(profile.servicesOffered) ? profile.servicesOffered : [];
+    const offersPaseo     = services.includes('PASEO');
+    const offersHospedaje = services.includes('HOSPEDAJE');
+    const offersGuarderia = services.includes('GUARDERIA');
+    const needsSpace      = offersHospedaje || offersGuarderia;
+
+    // Precio según servicio
+    const hasPaseoPrice     = offersPaseo     ? (profile.pricePerWalk30 != null || profile.pricePerWalk60 != null) : true;
+    const hasHospedajePrice = offersHospedaje ? (profile.pricePerDay != null && profile.pricePerDay > 0)           : true;
+    const hasGuarderiaPrice = offersGuarderia ? (profile.pricePerGuarderia != null && profile.pricePerGuarderia > 0) : true;
+
+    // Fotos del lugar (solo si ofrece hospedaje/guarderia)
+    const placePhotos = profile.placePhotos ?? {};
+    const hasPlacePhotos = needsSpace
+        ? (['sala', 'descanso', 'alimentacion'].every((s: string) => Array.isArray(placePhotos[s]) && placePhotos[s].length > 0))
+        : true;
+
+    // Fotos del cuidador en acción (campo nuevo)
+    const caregiverPhotos = Array.isArray(profile.caregiverPhotos) ? profile.caregiverPhotos : [];
+    const hasPhotos = caregiverPhotos.length >= minPhotos;
+
     const fields = [
-        profile.user?.firstName && profile.user?.lastName,
-        profile.user?.phone,
-        profile.user?.emailVerified || profile.emailVerified,
-        profile.identityVerificationStatus === 'VERIFIED',
-        profile.bio && profile.bio.length >= 50,
-        profile.bioDetail && profile.bioDetail.length >= 3,
+        // Descripción
+        (profile.bioDetail && profile.bioDetail.length >= 3) || (profile.bio && profile.bio.length >= 10),
+        // Servicios y zona
+        services.length > 0,
         profile.zone,
-        profile.servicesOffered?.length > 0,
-        profile.photos?.length >= minPhotos,
-        profile.profilePhoto,
-        profile.experienceYears,
+        // Precios según servicio
+        hasPaseoPrice,
+        hasHospedajePrice,
+        hasGuarderiaPrice,
+        // Fotos
+        hasPhotos,
+        hasPlacePhotos,
+        // Experiencia
+        profile.experienceYears != null,
         profile.experienceDescription?.length >= 15,
+        // Preguntas clave
         profile.whyCaregiver?.length >= 3,
         profile.whatDiffers?.length >= 3,
-        profile.animalTypes?.length > 0,
-        profile.sizesAccepted?.length > 0,
-        profile.acceptAggressive !== null,
-        profile.acceptPuppies !== null,
-        profile.acceptSeniors !== null
+        // Tipos y tamaños
+        Array.isArray(profile.animalTypes) && profile.animalTypes.length > 0,
+        Array.isArray(profile.sizesAccepted) && profile.sizesAccepted.length > 0,
+        // Políticas
+        profile.acceptAggressive !== null && profile.acceptAggressive !== undefined,
+        profile.acceptPuppies   !== null && profile.acceptPuppies   !== undefined,
+        profile.acceptSeniors   !== null && profile.acceptSeniors   !== undefined,
     ];
     const completed = fields.filter(Boolean).length;
     return Math.round((completed / fields.length) * 100);

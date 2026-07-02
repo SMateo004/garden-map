@@ -342,29 +342,49 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   }
 
   void _computeCompletion() {
-    int score = 0;
-    const total = 10;
+    final services = _effectiveServices;
+    final offersPaseo     = services.contains('PASEO');
+    final offersHospedaje = services.contains('HOSPEDAJE');
+    final offersGuarderia = services.contains('GUARDERIA');
+    final needsSpace      = offersHospedaje || offersGuarderia;
 
-    if (_bioDetailController.text.isNotEmpty) score++;
-    if (_selectedHomeTypes.isNotEmpty) score++;
-    if (_acceptedPetTypes.isNotEmpty) score++;
-    if (_acceptedSizes.isNotEmpty) score++;
-    if (_photos.length >= 2) score++;
-    if (_includesController.text.isNotEmpty) score++;
-    if (_requirementsController.text.isNotEmpty) score++;
+    // Precio según servicio
+    final hasPaseoPrice     = !offersPaseo     || (double.tryParse(_pricePerWalk30Controller.text) ?? 0) > 0 || (double.tryParse(_pricePerWalk60Controller.text) ?? 0) > 0;
+    final hasHospedajePrice = !offersHospedaje || (double.tryParse(_pricePerDayController.text) ?? 0) > 0;
+    final hasGuarderiaPrice = !offersGuarderia || (double.tryParse(_pricePerGuarderiaController.text) ?? 0) > 0;
 
+    // Fotos del lugar
+    final hasPlacePhotos = !needsSpace || (['sala', 'descanso', 'alimentacion'].every((s) => (_placePhotoUrls[s]?.isNotEmpty ?? false)));
+
+    // Fotos del cuidador
+    final minPhotos = services.length == 1 && offersPaseo ? 2 : 4;
+    final hasPhotos = _caregiverPhotoUrls.length >= minPhotos;
+
+    // Experiencia
     final expYears = int.tryParse(_experienceYearsController.text.replaceAll('+', '')) ?? -1;
-    if (expYears >= 0) score++; // años seleccionados
-    if (!_isAmateur) {
-      // Preguntas adicionales solo para no-amateurs
-      if (_experienceDescController.text.length >= 10) score++;
-      if (_selectedAnxiousOptions.isNotEmpty && _selectedEmergencyOptions.isNotEmpty) score++;
-    } else {
-      // Amateur: las 2 secciones de follow-up se consideran completadas automáticamente
-      score += 2;
-    }
 
-    setState(() => _completionPercentage = ((score / total) * 100).round().clamp(0, 100));
+    final fields = [
+      _bioDetailController.text.trim().length >= 3,
+      services.isNotEmpty,
+      _effectiveServices.isNotEmpty, // zona implícita si ya hay servicios (se valida al guardar)
+      hasPaseoPrice,
+      hasHospedajePrice,
+      hasGuarderiaPrice,
+      hasPhotos,
+      hasPlacePhotos,
+      expYears >= 0,
+      _isAmateur || _experienceDescController.text.length >= 10,
+      _whyCaregiverController.text.trim().length >= 3,
+      _whatDiffersController.text.trim().length >= 3,
+      _acceptedPetTypes.isNotEmpty,
+      _acceptedSizes.isNotEmpty,
+      true, // acceptAggressive (tiene valor por defecto)
+      true, // acceptPuppies
+      true, // acceptSeniors
+    ];
+
+    final completed = fields.where((f) => f).length;
+    setState(() => _completionPercentage = ((completed / fields.length) * 100).round().clamp(0, 100));
   }
 
   void _showValidationError(String msg, {GlobalKey? scrollTo}) {
@@ -786,22 +806,23 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                   style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700),
                 ),
                 const Spacer(),
-                // Completion badge
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: (_completionPercentage >= 80 ? GardenColors.success : GardenColors.primary).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '$_completionPercentage% completo',
-                    style: TextStyle(
-                      color: _completionPercentage >= 80 ? GardenColors.success : GardenColors.primary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                // Completion badge — oculto al llegar a 100%
+                if (_completionPercentage < 100)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: (_completionPercentage >= 80 ? GardenColors.success : GardenColors.primary).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '$_completionPercentage% completo',
+                      style: TextStyle(
+                        color: _completionPercentage >= 80 ? GardenColors.success : GardenColors.primary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ),
                 const SizedBox(width: 12),
                 if (_isSaving)
                   const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))
@@ -1117,9 +1138,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          // Sección 1 — Banner
-          _buildCompletionBanner(),
+          // Sección 1 — Banner (solo si incompleto)
+          if (_completionPercentage < 100) ...[
+            _buildCompletionBanner(),
             const SizedBox(height: 32),
+          ],
 
             // Sección 2 — Sobre ti
             SizedBox(key: _keyBio, height: 0),
