@@ -8,8 +8,11 @@ class TutorialStep {
   final String emoji;
   final String title;
   final String body;
-  /// null → centred welcome card (no spotlight)
+  /// Pre-calculated center (mobile bottom nav). Null → centred welcome card.
   final Offset? spotlightCenter;
+  /// Alternative to spotlightCenter: resolved at render time from a GlobalKey.
+  /// Useful for web elements whose position isn't known until layout.
+  final GlobalKey? targetKey;
   final double spotlightRadius;
 
   const TutorialStep({
@@ -17,6 +20,7 @@ class TutorialStep {
     required this.title,
     required this.body,
     this.spotlightCenter,
+    this.targetKey,
     this.spotlightRadius = 54,
   });
 }
@@ -26,9 +30,7 @@ class TutorialStep {
 class GardenTutorial {
   GardenTutorial._();
 
-  /// Displays the tutorial overlay once per user.
-  /// [prefKey] should be unique per role, e.g. 'tutorial_caregiver_v1_$userId'.
-  /// Silently skips if the key has already been set in SharedPreferences.
+  /// Shows the tutorial overlay exactly once per user (keyed by [prefKey]).
   static Future<void> maybeShow(
     BuildContext context, {
     required String prefKey,
@@ -54,8 +56,8 @@ class GardenTutorial {
     Overlay.of(context).insert(entry);
   }
 
-  /// Returns the screen-space centre of a bottom-nav item.
-  /// Works with LiquidGlassNavBar (outer padding 20+20, GlassBox 4+4, nav h ≈ 40 above safe area).
+  /// Returns the screen-space centre of a LiquidGlassNavBar tab (mobile).
+  /// Outer padding 20+20, GlassBox 4+4; nav visual height ≈ 42 above safe area.
   static Offset navItemOffset(int index, int total, Size size, double bottomPad) {
     final itemWidth = (size.width - 48) / total;
     final x = 24 + itemWidth * (index + 0.5);
@@ -109,6 +111,18 @@ class _TutorialOverlayState extends State<_TutorialOverlay>
     super.dispose();
   }
 
+  /// Resolves the spotlight center from either a pre-calculated Offset
+  /// or a GlobalKey (reads the RenderBox position at render time).
+  Offset? _center(TutorialStep step) {
+    if (step.spotlightCenter != null) return step.spotlightCenter;
+    final ctx = step.targetKey?.currentContext;
+    if (ctx == null) return null;
+    final box = ctx.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return null;
+    final pos = box.localToGlobal(Offset.zero);
+    return pos + Offset(box.size.width / 2, box.size.height / 2);
+  }
+
   void _next() {
     if (_step < widget.steps.length - 1) {
       _fadeCtrl.reverse().then((_) {
@@ -133,7 +147,8 @@ class _TutorialOverlayState extends State<_TutorialOverlay>
     final bottom = MediaQuery.of(context).padding.bottom;
     final step = widget.steps[_step];
     final isLast = _step == widget.steps.length - 1;
-    final hasSpot = step.spotlightCenter != null;
+    final center = _center(step);
+    final hasSpot = center != null;
 
     return Material(
       type: MaterialType.transparency,
@@ -141,7 +156,7 @@ class _TutorialOverlayState extends State<_TutorialOverlay>
         opacity: _fadeAnim,
         child: Stack(
           children: [
-            // ── Dark overlay + spotlight ──────────────────────────────────
+            // ── Overlay + spotlight ───────────────────────────────────────
             if (hasSpot)
               AnimatedBuilder(
                 animation: _pulseAnim,
@@ -149,7 +164,7 @@ class _TutorialOverlayState extends State<_TutorialOverlay>
                   size: size,
                   child: CustomPaint(
                     painter: _SpotlightPainter(
-                      center: step.spotlightCenter!,
+                      center: center,
                       innerRadius: step.spotlightRadius,
                       glowRadius: step.spotlightRadius * _pulseAnim.value,
                     ),
@@ -161,7 +176,7 @@ class _TutorialOverlayState extends State<_TutorialOverlay>
 
             // ── Card ─────────────────────────────────────────────────────
             if (hasSpot)
-              _buildPositionedCard(step, size, bottom, isLast)
+              _buildPositionedCard(step, center, size, bottom, isLast)
             else
               _buildCenteredCard(step, isLast),
           ],
@@ -171,12 +186,27 @@ class _TutorialOverlayState extends State<_TutorialOverlay>
   }
 
   Widget _buildPositionedCard(
-      TutorialStep step, Size size, double bottom, bool isLast) {
-    final c = step.spotlightCenter!;
+      TutorialStep step, Offset c, Size size, double bottom, bool isLast) {
     final r = step.spotlightRadius;
-    const cardH = 196.0;
-    const gap = 22.0;
+    const cardH = 200.0;
+    const gap = 20.0;
 
+    // Left-side element (sidebar, web): place card to the right
+    if (c.dx < size.width * 0.35) {
+      final top = (c.dy - cardH / 2).clamp(16.0, size.height - cardH - 16.0);
+      return Positioned(
+        top: top,
+        left: c.dx + r + gap,
+        right: 16,
+        child: _StepCard(
+          step: step, current: _step, total: widget.steps.length,
+          isLast: isLast, onNext: _next, onSkip: _dismiss,
+        ),
+      );
+    }
+
+    // Top-area element (header tabs, web): place card below
+    // Bottom-area element (mobile nav): place card above
     final belowTop = c.dy + r + gap;
     final aboveTop = c.dy - r - gap - cardH;
     final topPos =
@@ -187,12 +217,8 @@ class _TutorialOverlayState extends State<_TutorialOverlay>
       left: 16,
       right: 16,
       child: _StepCard(
-        step: step,
-        current: _step,
-        total: widget.steps.length,
-        isLast: isLast,
-        onNext: _next,
-        onSkip: _dismiss,
+        step: step, current: _step, total: widget.steps.length,
+        isLast: isLast, onNext: _next, onSkip: _dismiss,
       ),
     );
   }
@@ -202,12 +228,8 @@ class _TutorialOverlayState extends State<_TutorialOverlay>
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 28),
         child: _StepCard(
-          step: step,
-          current: _step,
-          total: widget.steps.length,
-          isLast: isLast,
-          onNext: _next,
-          onSkip: _dismiss,
+          step: step, current: _step, total: widget.steps.length,
+          isLast: isLast, onNext: _next, onSkip: _dismiss,
           centered: true,
         ),
       ),
@@ -215,7 +237,7 @@ class _TutorialOverlayState extends State<_TutorialOverlay>
   }
 }
 
-// ── Painter ───────────────────────────────────────────────────────────────────
+// ── Spotlight painter ─────────────────────────────────────────────────────────
 
 class _SpotlightPainter extends CustomPainter {
   final Offset center;
@@ -230,26 +252,30 @@ class _SpotlightPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Glow halo behind overlay
-    final glowPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          GardenColors.primary.withValues(alpha: 0.50),
-          GardenColors.primary.withValues(alpha: 0.0),
-        ],
-        stops: const [0.48, 1.0],
-      ).createShader(Rect.fromCircle(center: center, radius: glowRadius));
-    canvas.drawCircle(center, glowRadius, glowPaint);
+    // Glow halo (drawn before the overlay so it shows through the cutout)
+    canvas.drawCircle(
+      center,
+      glowRadius,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            GardenColors.primary.withValues(alpha: 0.50),
+            GardenColors.primary.withValues(alpha: 0.0),
+          ],
+          stops: const [0.48, 1.0],
+        ).createShader(Rect.fromCircle(center: center, radius: glowRadius)),
+    );
 
-    // Dark overlay with circular cutout
-    final overlayPaint = Paint()..color = const Color(0xCC000000);
-    final path = Path()
-      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
-      ..addOval(Rect.fromCircle(center: center, radius: innerRadius))
-      ..fillType = PathFillType.evenOdd;
-    canvas.drawPath(path, overlayPaint);
+    // Dark overlay with circular cutout (even-odd fill rule)
+    canvas.drawPath(
+      Path()
+        ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
+        ..addOval(Rect.fromCircle(center: center, radius: innerRadius))
+        ..fillType = PathFillType.evenOdd,
+      Paint()..color = const Color(0xCC000000),
+    );
 
-    // Green ring
+    // Green ring on the spotlight edge
     canvas.drawCircle(
       center,
       innerRadius,

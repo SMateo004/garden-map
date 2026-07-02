@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_tutorial.dart';
 import '../../widgets/notification_bell.dart';
 import 'marketplace_screen.dart';
 import 'my_bookings_screen.dart';
@@ -40,6 +41,11 @@ class _WebShellScreenState extends State<WebShellScreen> {
   String? _userName;
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
+  // GlobalKeys para el tutorial web
+  final GlobalKey _reservasKey = GlobalKey();
+  final GlobalKey _mascotasKey = GlobalKey();
+  final GlobalKey _profileKey = GlobalKey();
+
   // Tab 0 (Inicio/Marketplace) se activa con el logo — no aparece en el nav
   static const _tabs = [
     _NavTab(icon: Icons.list_alt_outlined, activeIcon: Icons.list_alt_rounded, label: 'Reservas'),
@@ -71,6 +77,55 @@ class _WebShellScreenState extends State<WebShellScreen> {
     if (token.isNotEmpty) {
       await _checkPendingPayment(token);
     }
+    // Tutorial primera sesión (solo usuarios logueados)
+    if (token.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _maybeShowTutorial();
+      });
+    }
+  }
+
+  Future<void> _maybeShowTutorial() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('user_id') ?? 'anonymous';
+    if (!mounted) return;
+    GardenTutorial.maybeShow(
+      context,
+      prefKey: 'tutorial_client_web_v1_$userId',
+      stepsBuilder: (_, __) => [
+        const TutorialStep(
+          emoji: '🌿',
+          title: '¡Bienvenido a GARDEN!',
+          body: 'Tu plataforma para encontrar cuidadores de confianza para tu mascota. Te mostramos cómo funciona en segundos.',
+        ),
+        const TutorialStep(
+          emoji: '🔍',
+          title: 'Encuentra cuidadores',
+          body: 'En el panel principal puedes buscar y filtrar cuidadores por servicio, zona y disponibilidad. Compara perfiles y reserva el mejor.',
+        ),
+        TutorialStep(
+          emoji: '📅',
+          title: 'Tus reservas',
+          body: 'Sigue en tiempo real todas tus reservas: activas, pendientes de confirmación e historial de servicios pasados.',
+          targetKey: _reservasKey,
+          spotlightRadius: 36,
+        ),
+        TutorialStep(
+          emoji: '🐾',
+          title: 'Tus mascotas',
+          body: 'Registra a tus peludos con su foto, vacunas y necesidades especiales para que el cuidador llegue siempre preparado.',
+          targetKey: _mascotasKey,
+          spotlightRadius: 36,
+        ),
+        TutorialStep(
+          emoji: '👤',
+          title: 'Tu perfil',
+          body: 'Gestiona tu cuenta, tus datos y preferencias. ¡Todo listo para tu primera reserva! 🎉',
+          targetKey: _profileKey,
+          spotlightRadius: 36,
+        ),
+      ],
+    );
   }
 
   Future<void> _checkPendingPayment(String token) async {
@@ -205,14 +260,19 @@ class _WebShellScreenState extends State<WebShellScreen> {
                             final tab = _tabs[i];
                             final tabIndex = i + 1;
                             final isActive = _selectedTab == tabIndex;
-                            return Padding(
-                              padding: const EdgeInsets.only(left: 4),
-                              child: _WebNavButton(
-                                icon: isActive ? tab.activeIcon : tab.icon,
-                                label: tab.label,
-                                isActive: isActive,
-                                isDark: isDark,
-                                onTap: () => setState(() => _selectedTab = tabIndex),
+                            // Keys: i==0 → Reservas, i==1 → Mascotas
+                            final navKey = i == 0 ? _reservasKey : _mascotasKey;
+                            return SizedBox(
+                              key: navKey,
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 4),
+                                child: _WebNavButton(
+                                  icon: isActive ? tab.activeIcon : tab.icon,
+                                  label: tab.label,
+                                  isActive: isActive,
+                                  isDark: isDark,
+                                  onTap: () => setState(() => _selectedTab = tabIndex),
+                                ),
                               ),
                             );
                           }),
@@ -222,7 +282,9 @@ class _WebShellScreenState extends State<WebShellScreen> {
                           onTap: () => _authToken.isNotEmpty
                               ? context.push('/profile')
                               : context.push('/login'),
-                          child: Container(
+                          child: SizedBox(
+                            key: _profileKey,
+                            child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
                               border: Border.all(color: GardenColors.primary.withValues(alpha: 0.4)),
@@ -246,6 +308,7 @@ class _WebShellScreenState extends State<WebShellScreen> {
                             ]),
                           ),
                         ),
+                      ),
                       ],
                     ],
                   ),

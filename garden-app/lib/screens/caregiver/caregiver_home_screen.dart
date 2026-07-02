@@ -44,6 +44,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   int _selectedTab = 0; // 0: Inicio, 1: Disponibilidad, 2: Reservas
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
+  // GlobalKeys para el tutorial web (sidebar nav items)
+  final List<GlobalKey> _webNavKeys = List.generate(4, (_) => GlobalKey());
+
   // Calendario e interactividad
   DateTime _calendarMonth = DateTime.now();
   DateTime? _selectedDay;
@@ -106,12 +109,13 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     final userId = prefs.getString('user_id') ?? 'anonymous';
     if (!mounted) return;
-    GardenTutorial.maybeShow(
-      context,
-      prefKey: 'tutorial_caregiver_v1_$userId',
-      stepsBuilder: (size, bottom) {
-        Offset nav(int i) => GardenTutorial.navItemOffset(i, 4, size, bottom);
-        return [
+
+    if (kIsWeb) {
+      // Web: spotlight usa GlobalKeys del sidebar (resueltos en tiempo de render)
+      GardenTutorial.maybeShow(
+        context,
+        prefKey: 'tutorial_caregiver_web_v1_$userId',
+        stepsBuilder: (_, __) => [
           const TutorialStep(
             emoji: '🌿',
             title: '¡Bienvenido a GARDEN!',
@@ -121,29 +125,73 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             emoji: '🏠',
             title: 'Tu panel de inicio',
             body: 'Aquí ves tu resumen diario: reservas activas, estadísticas y alertas importantes.',
-            spotlightCenter: nav(0),
+            targetKey: _webNavKeys[0],
+            spotlightRadius: 44,
           ),
           TutorialStep(
             emoji: '📅',
             title: 'Tu disponibilidad',
             body: 'Activa los días y horas en que puedes atender. Sin disponibilidad activa no apareces en el marketplace.',
-            spotlightCenter: nav(1),
+            targetKey: _webNavKeys[1],
+            spotlightRadius: 44,
           ),
           TutorialStep(
             emoji: '📋',
             title: 'Tus reservas',
             body: 'Aquí llegan todas las solicitudes. Responde en menos de 2 horas para mejorar tu posición en las búsquedas.',
-            spotlightCenter: nav(2),
+            targetKey: _webNavKeys[2],
+            spotlightRadius: 44,
           ),
           TutorialStep(
             emoji: '👤',
             title: 'Tu perfil y billetera',
             body: 'Edita tus fotos, precios y bio. En "Billetera" puedes ver tus ganancias y solicitar retiros cuando quieras.',
-            spotlightCenter: nav(3),
+            targetKey: _webNavKeys[3],
+            spotlightRadius: 44,
           ),
-        ];
-      },
-    );
+        ],
+      );
+    } else {
+      // Mobile: posición calculada desde geometría del bottom nav
+      GardenTutorial.maybeShow(
+        context,
+        prefKey: 'tutorial_caregiver_v1_$userId',
+        stepsBuilder: (size, bottom) {
+          Offset nav(int i) => GardenTutorial.navItemOffset(i, 4, size, bottom);
+          return [
+            const TutorialStep(
+              emoji: '🌿',
+              title: '¡Bienvenido a GARDEN!',
+              body: 'En unos pasos rápidos te mostramos todo lo que necesitas para empezar a recibir reservas y ganar dinero cuidando mascotas.',
+            ),
+            TutorialStep(
+              emoji: '🏠',
+              title: 'Tu panel de inicio',
+              body: 'Aquí ves tu resumen diario: reservas activas, estadísticas y alertas importantes.',
+              spotlightCenter: nav(0),
+            ),
+            TutorialStep(
+              emoji: '📅',
+              title: 'Tu disponibilidad',
+              body: 'Activa los días y horas en que puedes atender. Sin disponibilidad activa no apareces en el marketplace.',
+              spotlightCenter: nav(1),
+            ),
+            TutorialStep(
+              emoji: '📋',
+              title: 'Tus reservas',
+              body: 'Aquí llegan todas las solicitudes. Responde en menos de 2 horas para mejorar tu posición en las búsquedas.',
+              spotlightCenter: nav(2),
+            ),
+            TutorialStep(
+              emoji: '👤',
+              title: 'Tu perfil y billetera',
+              body: 'Edita tus fotos, precios y bio. En "Billetera" puedes ver tus ganancias y solicitar retiros cuando quieras.',
+              spotlightCenter: nav(3),
+            ),
+          ];
+        },
+      );
+    }
   }
 
   void _computeNextBookingWithin24h() {
@@ -3212,7 +3260,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             final i = entry.key;
             final tab = entry.value;
             final isActive = _selectedTab == i;
-            return Padding(
+            return SizedBox(
+              key: _webNavKeys[i],
+              child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
               child: InkWell(
                 onTap: () => _onTabTap(i),
@@ -3243,7 +3293,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                   ]),
                 ),
               ),
-            );
+            ));
           }),
 
           const Spacer(),
