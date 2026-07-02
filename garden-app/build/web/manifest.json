@@ -1,0 +1,35 @@
+{
+    "name": "GARDEN — Cuidado de Mascotas",
+    "short_name": "GARDEN",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#4A7C23",
+    "theme_color": "#4A7C23",
+    "description": "Conecta con cuidadores de mascotas de confianza cerca de ti.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

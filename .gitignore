@@ -12,6 +12,10 @@ out/
 .flutter-plugins
 .flutter-plugins-dependencies
 build/
+# Excepción: Flutter web build output se commitea para Vercel
+!garden-app/build/
+!garden-app/build/web/
+!garden-app/build/web/**
 
 # Environment files
 .env

@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "outputDirectory": "garden-app/build/web",
+  "builds": [
+    {
+      "src": "garden-app/build/web/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}

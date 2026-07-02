@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Garden · Encuentra quien cuide a tu mascota</title>
+<!-- Unregister stale Flutter service workers + fallback route guard -->
+<script>
+(function () {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function (regs) {
+      regs.forEach(function (r) { r.unregister(); });
+    });
+  }
+  // Fallback: si alguien llega directo a /login, /marketplace, etc. redirigir a Flutter
+  var p = window.location.pathname;
+  var flutterRoutes = ['/login', '/register', '/marketplace', '/become-caregiver', '/booking', '/profile', '/admin'];
+  if (flutterRoutes.some(function(r){ return p === r || p.startsWith(r + '/'); })) {
+    window.location.replace('/app.html#' + p + window.location.search);
+  }
+  // Hash-based Flutter routes: /#/mobile-verify, /#/verify → redirigir a app.html
+  var h = window.location.hash;
+  var flutterHashRoutes = ['/mobile-verify', '/verify'];
+  if (h && flutterHashRoutes.some(function(r){ return h === '#' + r || h.startsWith('#' + r + '?') || h.startsWith('#' + r + '/'); })) {
+    window.location.replace('/app.html' + h);
+  }
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,800;1,900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --primary:#778C43; --primary-dark:#5C6E32; --primary-light:#8FA353;
+  --accent:#58E262; --lime:#D9EF9F; --beige:#DBD0C4; --splash:#3D6B1A;
+  --forest:#0D1A07; --forest-surf:#162610;
+  --bg:#F5F2EC; --surface:#FFFFFF; --surface-elev:#F8FBF3;
+  --text:#1E2D0F; --text-sec:#5C7238; --text-hint:#99AC75; --border:#DBD0C4;
+  --warning:#FFB020;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden;}
+.mono{font-family:'JetBrains Mono',monospace;}
+button{font-family:inherit;cursor:pointer;border:none;background:none;}
+a{color:inherit;text-decoration:none;}
+::selection{background:var(--lime);color:var(--text);}
+::-webkit-scrollbar{width:10px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--beige);border-radius:5px;}
+
+/* reveal on scroll */
+.reveal{opacity:0;transform:translateY(36px);transition:opacity .7s cubic-bezier(.2,.7,.3,1),transform .7s cubic-bezier(.2,.7,.3,1);}
+.reveal.in{opacity:1;transform:none;}
+@media (prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none;}}
+</style>
+</head>
+<body>
+<template id="__bundler_thumbnail" data-bg-color="#F5F2EC">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#F5F2EC"/>
+    <g transform="translate(600 340) scale(2.6) translate(-60 -60)">
+      <ellipse cx="30" cy="48" rx="10" ry="14" fill="#778C43" transform="rotate(-25 30 48)"/>
+      <ellipse cx="50" cy="30" rx="9" ry="13" fill="#778C43" transform="rotate(-8 50 30)"/>
+      <ellipse cx="72" cy="30" rx="9" ry="13" fill="#778C43" transform="rotate(8 72 30)"/>
+      <ellipse cx="92" cy="48" rx="10" ry="14" fill="#778C43" transform="rotate(25 92 48)"/>
+      <path d="M60 60c-18 0-30 12-30 26 0 10 8 18 18 18 6 0 10-3 12-7 2 4 6 7 12 7 10 0 18-8 18-18 0-14-12-26-30-26z" fill="#778C43"/>
+      <path d="M60 64v38" stroke="#58E262" stroke-width="2.5" stroke-linecap="round"/>
+    </g>
+    <text x="600" y="560" font-family="Nunito, sans-serif" font-weight="900" font-size="96" letter-spacing="-3" fill="#1E2D0F" text-anchor="middle">garden</text>
+  </svg>
+</template>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+// ─── App store links ────────────────────────────────────────
+const APP_STORE_URL  = 'https://apps.apple.com/app/garden-cuidadores/id000000000';
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.garden.bolivia';
+
+// Flutter usa hash URL strategy → todas las rutas van a app.html#/ruta
+const FLUTTER = '/app.html';
+const flutterUrl = (route, params) => {
+  const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+  return FLUTTER + '#' + route + qs;
+};
+
+// ─── App store badges ──────────────────────────────────────
+const AppStoreBadge = ({ width = 140 }) => (
+  <svg width={width} height={Math.round(width*10/3/10)} viewBox="0 0 120 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Download on the App Store">
+    <rect width="120" height="40" rx="7" fill="#000"/>
+    <path d="M26.8 20.1c0-3.4 2.8-5 2.9-5.1-1.6-2.3-4-2.6-4.9-2.7-2.1-.2-4 1.2-5.1 1.2-1 0-2.7-1.2-4.4-1.2-2.2 0-4.3 1.3-5.5 3.3-2.3 4-.6 10 1.7 13.2 1.1 1.6 2.4 3.4 4.2 3.3 1.7-.1 2.3-1.1 4.3-1.1s2.6 1.1 4.4 1 3-1.6 4.1-3.2c1.3-1.8 1.8-3.6 1.9-3.7-.1 0-3.6-1.4-3.6-5z" fill="#fff"/>
+    <path d="M24.3 10.9c.9-1.1 1.5-2.7 1.3-4.2-1.3.1-2.9.9-3.8 1.9-.8.9-1.6 2.5-1.4 3.9 1.5.1 3-.7 3.9-1.6z" fill="#fff"/>
+    <text x="38" y="14" fill="#fff" fontSize="6.5" fontFamily="'-apple-system',sans-serif" fontWeight="400" letterSpacing="0.3">Download on the</text>
+    <text x="38" y="26" fill="#fff" fontSize="13" fontFamily="'-apple-system',sans-serif" fontWeight="600" letterSpacing="-0.3">App Store</text>
+  </svg>
+);
+
+const PlayStoreBadge = ({ width = 140 }) => (
+  <svg width={width} height={Math.round(width*10/3/10)} viewBox="0 0 120 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Get it on Google Play">
+    <rect width="120" height="40" rx="7" fill="#000"/>
+    <path d="M9.5 7.2c-.3.3-.5.8-.5 1.4v23c0 .6.2 1.1.5 1.4l.1.1 12.9-12.9v-.3L9.6 7.1l-.1.1z" fill="url(#pg)"/>
+    <path d="M26.8 24.5l-4.3-4.3v-.3l4.3-4.3.1.1 5.1 2.9c1.5.8 1.5 2.2 0 3l-5.2 2.9z" fill="url(#py)"/>
+    <path d="M27 24.6l-4.4-4.4-13.1 13.1c.5.5 1.3.6 2.2.1l15.3-8.8z" fill="url(#pr)"/>
+    <path d="M27 15.6L11.7 6.8c-.9-.5-1.7-.4-2.2.1l13.1 13.1 4.4-4.4z" fill="url(#pb)"/>
+    <defs>
+      <linearGradient id="pg" x1="18.3" y1="8.7" x2="5" y2="21" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#00A0FF"/><stop offset="1" stopColor="#00F"/></linearGradient>
+      <linearGradient id="py" x1="33.8" y1="20" x2="9.6" y2="20" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#FFD800"/><stop offset="1" stopColor="#FF8A00"/></linearGradient>
+      <linearGradient id="pr" x1="24.8" y1="22.3" x2="5.3" y2="41.5" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#FF3A44"/><stop offset="1" stopColor="#C31162"/></linearGradient>
+      <linearGradient id="pb" x1="7.3" y1="1.1" x2="17.5" y2="11.3" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#32A071"/><stop offset="1" stopColor="#2DA771"/></linearGradient>
+    </defs>
+    <text x="38" y="14" fill="#fff" fontSize="6" fontFamily="sans-serif" fontWeight="400" letterSpacing="0.5">GET IT ON</text>
+    <text x="38" y="26" fill="#fff" fontSize="12.5" fontFamily="sans-serif" fontWeight="600" letterSpacing="-0.2">Google Play</text>
+  </svg>
+);
+
+// ─── Paw Leaf logo ─────────────────────────────────────────
+const PawLeaf = ({ size = 40, color = '#778C43', accent = '#58E262' }) => (
+  <svg viewBox="0 0 120 120" width={size} height={size} xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="30" cy="48" rx="10" ry="14" fill={color} transform="rotate(-25 30 48)"/>
+    <ellipse cx="50" cy="30" rx="9" ry="13" fill={color} transform="rotate(-8 50 30)"/>
+    <ellipse cx="72" cy="30" rx="9" ry="13" fill={color} transform="rotate(8 72 30)"/>
+    <ellipse cx="92" cy="48" rx="10" ry="14" fill={color} transform="rotate(25 92 48)"/>
+    <path d="M60 60c-18 0-30 12-30 26 0 10 8 18 18 18 6 0 10-3 12-7 2 4 6 7 12 7 10 0 18-8 18-18 0-14-12-26-30-26z" fill={color}/>
+    <path d="M60 64v38" stroke={accent} strokeWidth="2.5" strokeLinecap="round"/>
+    <path d="M60 78c-4-2-7-5-9-9M60 78c4-2 7-5 9-9M60 90c-4-2-7-5-9-9M60 90c4-2 7-5 9-9" stroke={accent} strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+  </svg>
+);
+
+// ─── tiny line icons ───────────────────────────────────────
+const Ico = ({ d, size = 22, stroke = 'currentColor', sw = 1.9, fill = 'none', extra }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={stroke} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+    {Array.isArray(d) ? d.map((p,i)=><path key={i} d={p}/>) : <path d={d}/>}
+    {extra}
+  </svg>
+);
+const IcoWalk = (p)=><Ico {...p} d={["M13 4a2 2 0 1 0 0-.01","M10 21l1-7-3-2 2-5 3 1 2 3 3 1","M7 14l1-3"]}/>;
+const IcoHome = (p)=><Ico {...p} d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2z"/>;
+const IcoSun  = (p)=><Ico {...p} d={["M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"]} extra={<circle cx="12" cy="12" r="4"/>}/>;
+const IcoVisit= (p)=><Ico {...p} d={["M9 22V12h6v10","M3 10l9-7 9 7"]} extra={<rect x="3" y="10" width="18" height="12" rx="1"/>}/>;
+const IcoPin  = (p)=><Ico {...p} d="M20 10c0 6-8 13-8 13S4 16 4 10a8 8 0 0 1 16 0z" extra={<circle cx="12" cy="10" r="3"/>}/>;
+const IcoCal  = (p)=><Ico {...p} d={["M16 2v4M8 2v4M3 10h18"]} extra={<rect x="3" y="4" width="18" height="18" rx="2"/>}/>;
+const IcoPaw  = (p)=><Ico {...p} d="M11 14c-3 0-5 2-5 4.5S8 22 11 22s5-1.5 5-3.5S14 14 11 14z" extra={<g><circle cx="5" cy="11" r="1.6"/><circle cx="9" cy="7" r="1.6"/><circle cx="15" cy="7" r="1.6"/><circle cx="18" cy="11" r="1.6"/></g>}/>;
+const IcoShield=(p)=><Ico {...p} d={["M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z","m9 12 2 2 4-4"]}/>;
+const IcoSearch=(p)=><Ico {...p} d="m20 20-4.3-4.3" extra={<circle cx="11" cy="11" r="7"/>}/>;
+
+// ─── data ──────────────────────────────────────────────────
+const SERVICES = [
+  { id:'paseo', label:'Paseo', desc:'Salidas con seguimiento GPS', Icon:IcoWalk },
+  { id:'hospedaje', label:'Hospedaje', desc:'En casa del cuidador', Icon:IcoHome },
+  { id:'guarderia', label:'Guardería de día', desc:'Mientras trabajás', Icon:IcoSun },
+];
+// key = clave interna Flutter (uppercase, se lowercase antes del API call),
+// label = lo que ve el usuario
+const ZONES = [
+  { key:'EQUIPETROL', label:'Equipetrol' },
+  { key:'LAS_PALMAS', label:'Las Palmas' },
+  { key:'NORTE',      label:'Zona Norte' },
+  { key:'URUBO_NORTE',label:'Urubó' },
+  { key:'CENTRO',     label:'Centro' },
+  { key:'SUR',        label:'Sur' },
+  { key:'REMANZO',    label:'Remanzo' },
+];
+const WHENS = ['Hoy','Mañana','Este fin de semana','Elegir fechas'];
+const PETS = [
+  { id:'p-s', label:'Perro pequeño', sub:'Hasta 10 kg', emoji:'🐕' },
+  { id:'p-m', label:'Perro mediano', sub:'10–25 kg', emoji:'🐕' },
+  { id:'p-l', label:'Perro grande', sub:'+25 kg', emoji:'🐕‍🦺' },
+  { id:'gato', label:'Gato', sub:'Cualquier edad', emoji:'🐈' },
+];
+
+// ─── NAV ───────────────────────────────────────────────────
+const navSectionHref = (t) => {
+  if (t === 'Conviértete en cuidador') return flutterUrl('/become-caregiver');
+  const slug = t.toLowerCase()
+    .normalize('NFD').replace(/[^\x00-\xFF]/g,'')
+    .replace(/\s+/g, '-');
+  return '#' + slug;
+};
+
+const Nav = ({ scrolled }) => (
+  <nav style={{
+    position:'fixed', top:0, left:0, right:0, zIndex:60,
+    padding: scrolled ? '14px 5vw' : '22px 5vw',
+    background: scrolled ? 'rgba(245,242,236,0.82)' : 'transparent',
+    backdropFilter: scrolled ? 'blur(18px)' : 'none',
+    borderBottom: scrolled ? '1px solid var(--border)' : '1px solid transparent',
+    display:'flex', alignItems:'center', justifyContent:'space-between',
+    transition:'all .35s cubic-bezier(.2,.7,.3,1)',
+  }}>
+    <a href="/" style={{ display:'flex', alignItems:'center', gap:10 }}>
+      <PawLeaf size={34} color="var(--primary)"/>
+      <span style={{ fontWeight:900, fontSize:26, letterSpacing:'-0.03em', color:'var(--text)' }}>garden</span>
+    </a>
+    <div style={{ display:'flex', alignItems:'center', gap:6 }} className="navlinks">
+      {['Servicios','Cómo funciona','Conviértete en cuidador'].map(t=>(
+        <a key={t} href={navSectionHref(t)}
+          style={{ padding:'10px 16px', borderRadius:999, fontWeight:700, fontSize:15.5, color:'var(--text-sec)' }}
+          onMouseEnter={e=>e.currentTarget.style.background='rgba(217,239,159,0.5)'}
+          onMouseLeave={e=>e.currentTarget.style.background='transparent'}>{t}</a>
+      ))}
+      {/* Iniciar sesión */}
+      <a href={flutterUrl('/login')} className="nav-login" style={{ padding:'10px 16px', borderRadius:999, fontWeight:700, fontSize:15.5, color:'var(--text-sec)' }}
+        onMouseEnter={e=>e.currentTarget.style.background='rgba(217,239,159,0.5)'}
+        onMouseLeave={e=>e.currentTarget.style.background='transparent'}>Iniciar sesión</a>
+      {/* Registrarse */}
+      <a href={flutterUrl('/register')} className="nav-register" style={{
+        padding:'10px 20px', borderRadius:999, fontWeight:800, fontSize:15.5,
+        color:'var(--primary)', border:'1.5px solid var(--primary)',
+      }}
+        onMouseEnter={e=>{e.currentTarget.style.background='var(--lime)';}}
+        onMouseLeave={e=>{e.currentTarget.style.background='transparent';}}>Registrarse</a>
+      <a href="#descargar" style={{
+        marginLeft:6, padding:'12px 22px', borderRadius:999,
+        background:'var(--primary)', color:'var(--bg)', fontWeight:800, fontSize:15.5,
+        boxShadow:'0 6px 18px rgba(119,140,67,0.28)',
+      }}>Descargar app</a>
+    </div>
+  </nav>
+);
+
+// ─── floating decorative leaves ────────────────────────────
+const FloatBits = () => {
+  const bits = [
+    { top:'14%', left:'6%', s:60, dur:9, delay:0, op:0.5 },
+    { top:'26%', right:'9%', s:42, dur:11, delay:1.5, op:0.4 },
+    { top:'62%', left:'12%', s:34, dur:8, delay:0.8, op:0.35 },
+    { top:'72%', right:'14%', s:54, dur:12, delay:2.2, op:0.45 },
+  ];
+  return (
+    <div style={{ position:'absolute', inset:0, pointerEvents:'none', overflow:'hidden' }}>
+      {bits.map((b,i)=>(
+        <div key={i} style={{
+          position:'absolute', top:b.top, left:b.left, right:b.right,
+          opacity:b.op,
+          animation:`float${i%2} ${b.dur}s ${b.delay}s ease-in-out infinite`,
+        }}>
+          <PawLeaf size={b.s} color="var(--primary-light)" accent="var(--accent)"/>
+        </div>
+      ))}
+      <style>{`
+        @keyframes float0{0%,100%{transform:translateY(0) rotate(-6deg)}50%{transform:translateY(-22px) rotate(6deg)}}
+        @keyframes float1{0%,100%{transform:translateY(0) rotate(5deg)}50%{transform:translateY(-30px) rotate(-5deg)}}
+      `}</style>
+    </div>
+  );
+};
+
+// ─── SEARCH BAR (Airbnb-style segmented) ───────────────────
+const DOG_SIZES = [
+  { id:'p-s', label:'Perro pequeño', sub:'Hasta 10 kg', emoji:'🐕' },
+  { id:'p-m', label:'Perro mediano', sub:'10–25 kg', emoji:'🐕' },
+  { id:'p-l', label:'Perro grande', sub:'+25 kg', emoji:'🐕‍🦺' },
+];
+
+const SearchBar = ({ onSearch }) => {
+  const [open, setOpen] = useState(null); // 'service'|'where'|'when'|'pet'|null
+  const [service, setService] = useState(null);
+  const [zone, setZone] = useState(null);
+  const [when, setWhen] = useState(null);
+  const [pet, setPet] = useState(null);
+  const [petStep, setPetStep] = useState('species'); // 'species'|'size'
+  const wrapRef = useRef(null);
+
+  useEffect(()=>{
+    const h = (e)=>{ if(wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(null); };
+    document.addEventListener('mousedown', h);
+    return ()=>document.removeEventListener('mousedown', h);
+  },[]);
+
+  const svcLabel = service ? SERVICES.find(s=>s.id===service).label : 'Elegí un servicio';
+  const canSearch = service || zone || when || pet;
+
+  const Seg = ({ id, label, value, placeholder, first, onOpen }) => {
+    const active = open === id;
+    return (
+      <button className="seg-btn" onClick={()=>{ if(!active && onOpen) onOpen(); setOpen(active?null:id); }} style={{
+        flex:1, textAlign:'left', padding:'16px 24px', borderRadius:999,
+        background: active ? 'var(--surface)' : 'transparent',
+        boxShadow: active ? '0 10px 30px rgba(30,45,15,0.16)' : 'none',
+        transition:'all .25s ease', position:'relative', minWidth:0,
+      }}>
+        <div className="mono" style={{ fontSize:11, letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--text-hint)', fontWeight:600 }}>{label}</div>
+        <div style={{ fontSize:16, fontWeight:value?800:600, color:value?'var(--text)':'var(--text-hint)', marginTop:3, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+          {value || placeholder}
+        </div>
+      </button>
+    );
+  };
+
+  const Divider = () => <div style={{ width:1, height:34, background:'var(--border)', flexShrink:0, alignSelf:'center' }}/>;
+
+  return (
+    <div ref={wrapRef} style={{ position:'relative', width:'100%', maxWidth:940 }}>
+      <div className="searchbar" style={{
+        display:'flex', alignItems:'center', gap:4,
+        background:'var(--surface)', borderRadius:999,
+        border:'1px solid var(--border)',
+        boxShadow:'0 18px 50px rgba(30,45,15,0.14)',
+        padding:6,
+      }}>
+        <Seg id="service" label="Servicio" value={service?svcLabel:null} placeholder="Elegí un servicio" first/>
+        <Divider/>
+        <Seg id="where" label="Dónde" value={zone ? ZONES.find(z=>z.key===zone)?.label : null} placeholder="Tu zona en SCZ"/>
+        <Divider/>
+        <Seg id="when" label="Cuándo" value={when} placeholder="Agregá fecha"/>
+        <Divider/>
+        <Seg id="pet" label="Mascota" value={pet?PETS.find(p=>p.id===pet)?.label:null} placeholder="¿Quién va?" onOpen={()=>setPetStep('species')}/>
+        <button className="search-btn" onClick={()=>onSearch({service,zone,when,pet})} style={{
+          flexShrink:0, display:'flex', alignItems:'center', gap:10,
+          background: canSearch ? 'var(--primary)' : 'var(--primary-light)',
+          color:'var(--bg)', borderRadius:999, padding:'16px 26px', fontWeight:800, fontSize:16,
+          transition:'all .25s ease', boxShadow:'0 8px 20px rgba(119,140,67,0.3)',
+        }}>
+          <IcoSearch size={20} stroke="var(--bg)"/>
+          <span className="searchword">Buscar</span>
+        </button>
+      </div>
+
+      {/* dropdown panels */}
+      {open && (
+        <div className="search-dropdown" style={{
+          position:'absolute', top:'calc(100% + 14px)', left:0, right:0,
+          background:'var(--surface)', borderRadius:28,
+          border:'1px solid var(--border)', boxShadow:'0 24px 60px rgba(30,45,15,0.2)',
+          padding:28, zIndex:20,
+          animation:'pop .28s cubic-bezier(.2,.7,.3,1) both',
+        }}>
+          <style>{`@keyframes pop{from{opacity:0;transform:translateY(-10px) scale(.98)}to{opacity:1;transform:none}}`}</style>
+
+          {open==='service' && (
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              {SERVICES.map(s=>{
+                const on = service===s.id;
+                return (
+                  <button key={s.id} onClick={()=>{setService(s.id);setOpen('where');}} style={{
+                    display:'flex', alignItems:'center', gap:12, padding:'14px 16px', borderRadius:16,
+                    background: on?'var(--lime)':'var(--surface-elev)',
+                    border:`1.5px solid ${on?'var(--primary)':'var(--border)'}`,
+                    textAlign:'left', transition:'all .2s ease',
+                  }}>
+                    <div className="svc-opt-icon" style={{ width:40, height:40, borderRadius:12, background:on?'var(--surface)':'var(--lime)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                      <s.Icon size={20} stroke="var(--primary-dark)"/>
+                    </div>
+                    <div>
+                      <div style={{ fontWeight:800, fontSize:15 }}>{s.label}</div>
+                      <div style={{ fontSize:12.5, color:'var(--text-sec)' }}>{s.desc}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {open==='where' && (
+            <div>
+              <div className="mono" style={{ fontSize:12, letterSpacing:'0.1em', textTransform:'uppercase', color:'var(--text-hint)', marginBottom:16, fontWeight:600 }}>Zonas de Santa Cruz de la Sierra</div>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
+                {ZONES.map(z=>{
+                  const on = zone===z.key;
+                  return <button key={z.key} onClick={()=>{setZone(z.key);setOpen('when');}} style={{
+                    display:'flex', alignItems:'center', gap:8, padding:'12px 18px', borderRadius:999,
+                    background:on?'var(--primary)':'var(--surface-elev)', color:on?'var(--bg)':'var(--text)',
+                    border:`1.5px solid ${on?'var(--primary)':'var(--border)'}`, fontWeight:700, fontSize:15,
+                    transition:'all .2s ease',
+                  }}><IcoPin size={16} stroke={on?'var(--bg)':'var(--primary)'}/>{z.label}</button>;
+                })}
+              </div>
+            </div>
+          )}
+
+          {open==='when' && (
+            <div>
+              <div className="mono" style={{ fontSize:12, letterSpacing:'0.1em', textTransform:'uppercase', color:'var(--text-hint)', marginBottom:16, fontWeight:600 }}>¿Cuándo lo necesitás?</div>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
+                {WHENS.map(w=>{
+                  const on = when===w;
+                  return <button key={w} onClick={()=>{setWhen(w);setOpen('pet');}} style={{
+                    padding:'14px 22px', borderRadius:14,
+                    background:on?'var(--primary)':'var(--surface-elev)', color:on?'var(--bg)':'var(--text)',
+                    border:`1.5px solid ${on?'var(--primary)':'var(--border)'}`, fontWeight:700, fontSize:16,
+                    transition:'all .2s ease',
+                  }}>{w}</button>;
+                })}
+              </div>
+            </div>
+          )}
+
+          {open==='pet' && (
+            petStep==='species' ? (
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                <button onClick={()=>setPetStep('size')} style={{
+                  display:'flex', alignItems:'center', gap:12, padding:'14px 16px', borderRadius:16,
+                  background:'var(--surface-elev)', border:'1.5px solid var(--border)',
+                  textAlign:'left', transition:'all .2s ease',
+                }}>
+                  <span className="pet-emoji" style={{ fontSize:24, flexShrink:0 }}>🐶</span>
+                  <div>
+                    <div style={{ fontWeight:800, fontSize:15 }}>Perro</div>
+                    <div style={{ fontSize:12.5, color:'var(--text-sec)' }}>Elegí el tamaño →</div>
+                  </div>
+                </button>
+                <button onClick={()=>{setPet('gato');setOpen(null);}} style={{
+                  display:'flex', alignItems:'center', gap:12, padding:'14px 16px', borderRadius:16,
+                  background:pet==='gato'?'var(--lime)':'var(--surface-elev)',
+                  border:`1.5px solid ${pet==='gato'?'var(--primary)':'var(--border)'}`,
+                  textAlign:'left', transition:'all .2s ease',
+                }}>
+                  <span className="pet-emoji" style={{ fontSize:24, flexShrink:0 }}>🐱</span>
+                  <div>
+                    <div style={{ fontWeight:800, fontSize:15 }}>Gato</div>
+                    <div style={{ fontSize:12.5, color:'var(--text-sec)' }}>Cualquier edad</div>
+                  </div>
+                </button>
+              </div>
+            ) : (
+              <div>
+                <button onClick={()=>setPetStep('species')} style={{
+                  display:'flex', alignItems:'center', gap:6, marginBottom:12, padding:'4px 0',
+                  background:'none', border:'none', color:'var(--text-sec)', fontSize:13,
+                  fontWeight:600, cursor:'pointer',
+                }}>← Volver</button>
+                <div style={{ fontWeight:700, fontSize:12, color:'var(--text-sec)', marginBottom:10, textTransform:'uppercase', letterSpacing:'0.09em' }}>Tamaño del perro</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
+                  {DOG_SIZES.map(p=>{
+                    const on = pet===p.id;
+                    return <button key={p.id} onClick={()=>{setPet(p.id);setOpen(null);}} style={{
+                      display:'flex', flexDirection:'column', alignItems:'center', gap:5,
+                      padding:'14px 10px', borderRadius:16,
+                      background:on?'var(--lime)':'var(--surface-elev)',
+                      border:`1.5px solid ${on?'var(--primary)':'var(--border)'}`,
+                      textAlign:'center', transition:'all .2s ease',
+                    }}>
+                      <span className="pet-emoji" style={{ fontSize:22 }}>{p.emoji}</span>
+                      <div style={{ fontWeight:800, fontSize:13 }}>{p.label.replace('Perro ','')}</div>
+                      <div style={{ fontSize:11.5, color:'var(--text-sec)' }}>{p.sub}</div>
+                    </button>;
+                  })}
+                </div>
+              </div>
+            )
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── SEARCH RESULT OVERLAY ─────────────────────────────────
+const SearchReveal = ({ query, onClose }) => {
+  const [phase, setPhase] = useState(0);
+  const zone = query.zone || 'tu zona';
+  const count = 12 + ((zone.length * 3) % 18);
+
+  // Build marketplace URL with filters
+  const marketplaceUrl = (() => {
+    const params = new URLSearchParams();
+    if (query.service) params.set('service', query.service);
+    if (query.zone)    params.set('zone', query.zone);
+    if (query.when)    params.set('when', query.when);
+    if (query.pet)     params.set('pet', query.pet);
+    const qs = params.toString();
+    return '/marketplace' + (qs ? '?' + qs : '');
+  })();
+
+  useEffect(()=>{ const t=setTimeout(()=>setPhase(1), 2200); return ()=>clearTimeout(t); },[]);
+
+  return (
+    <div style={{
+      position:'fixed', inset:0, zIndex:100, background:'rgba(13,26,7,0.6)', backdropFilter:'blur(8px)',
+      display:'flex', alignItems:'center', justifyContent:'center', padding:24,
+      animation:'fade .3s both',
+    }}>
+      <style>{`
+        @keyframes fade{from{opacity:0}to{opacity:1}}
+        @keyframes stem{from{height:0}to{height:64px}}
+        @keyframes leafpop{0%{transform:scale(0) rotate(-30deg);opacity:0}60%{transform:scale(1.15) rotate(8deg)}100%{transform:scale(1) rotate(0);opacity:1}}
+        @keyframes cardup{from{opacity:0;transform:translateY(20px) scale(.96)}to{opacity:1;transform:none}}
+        @keyframes ring{0%{transform:scale(.6);opacity:.6}100%{transform:scale(1.8);opacity:0}}
+      `}</style>
+      <div style={{
+        background:'var(--surface)', borderRadius:34, padding:'56px 48px',
+        maxWidth:560, width:'100%', textAlign:'center', position:'relative',
+        boxShadow:'0 40px 100px rgba(0,0,0,0.4)',
+      }}>
+        <button onClick={onClose} style={{ position:'absolute', top:22, right:24, width:40, height:40, borderRadius:999, background:'var(--surface-elev)', border:'1px solid var(--border)', fontSize:18, color:'var(--text-sec)' }}>×</button>
+
+        {phase===0 ? (
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:24, padding:'20px 0' }}>
+            <div style={{ position:'relative', width:120, height:120, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
+              <div style={{ position:'absolute', bottom:8, width:80, height:80, borderRadius:999, border:'2px solid var(--accent)', animation:'ring 1.6s ease-out infinite' }}/>
+              <div style={{ width:4, background:'var(--primary)', borderRadius:4, animation:'stem .9s cubic-bezier(.2,.7,.3,1) both' }}/>
+              <div style={{ position:'absolute', bottom:54, left:'50%', transform:'translateX(-50%)', animation:'leafpop .6s .7s cubic-bezier(.2,.7,.3,1) both' }}>
+                <PawLeaf size={64} color="var(--primary)" accent="var(--accent)"/>
+              </div>
+            </div>
+            <div>
+              <div style={{ fontWeight:900, fontSize:26, letterSpacing:'-0.02em' }}>Cultivando tu búsqueda…</div>
+              <div style={{ fontSize:16, color:'var(--text-sec)', marginTop:8 }}>Buscando cuidadores verificados cerca de {zone}</div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ animation:'cardup .5s both' }}>
+            <div style={{ width:84, height:84, borderRadius:999, background:'var(--lime)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 22px' }}>
+              <IcoShield size={42} stroke="var(--primary-dark)"/>
+            </div>
+            <div className="mono" style={{ fontSize:13, letterSpacing:'0.14em', textTransform:'uppercase', color:'var(--primary)', fontWeight:600 }}>Buenas noticias</div>
+            <div style={{ fontWeight:900, fontSize:40, letterSpacing:'-0.03em', marginTop:10, lineHeight:1.05 }}>
+              Encontramos <span style={{ color:'var(--primary)' }}>{count} cuidadores</span> verificados cerca de {zone}.
+            </div>
+            <p style={{ fontSize:17, color:'var(--text-sec)', marginTop:16, lineHeight:1.5 }}>
+              Conocelos, leé sus reseñas y reservá con pago protegido — todo desde Garden.
+            </p>
+            <div style={{ display:'flex', flexDirection:'column', gap:12, marginTop:30 }}>
+              {/* >>> Ver en el marketplace web */}
+              <a href={marketplaceUrl} style={{ background:'var(--primary)', color:'var(--bg)', padding:'18px', borderRadius:16, fontWeight:800, fontSize:17, boxShadow:'0 10px 28px rgba(119,140,67,0.3)', display:'block' }}>
+                Ver cuidadores disponibles
+              </a>
+              <div style={{ display:'flex', gap:10 }}>
+                <a href={APP_STORE_URL} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <AppStoreBadge/>
+                </a>
+                <a href={PLAY_STORE_URL} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <PlayStoreBadge/>
+                </a>
+              </div>
+              <button onClick={onClose} style={{ color:'var(--text-sec)', fontWeight:700, fontSize:15, padding:8 }}>Seguir explorando</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── HERO ──────────────────────────────────────────────────
+const Hero = ({ onSearch }) => (
+  <header id="top" className="hero-section" style={{ position:'relative', minHeight:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'140px 5vw 80px', textAlign:'center' }}>
+    <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse 70% 60% at 50% 0%, rgba(217,239,159,0.55), transparent 70%)' }}/>
+    <div style={{ position:'absolute', top:'-10%', right:'-8%', width:'45vw', height:'45vw', maxWidth:680, maxHeight:680, borderRadius:'50%', background:'radial-gradient(circle, rgba(119,140,67,0.10), transparent 70%)' }}/>
+    <FloatBits/>
+
+    <div style={{ position:'relative', maxWidth:1000 }}>
+      <h1 className="hero-h1" style={{ fontWeight:900, fontSize:'clamp(44px,7vw,96px)', letterSpacing:'-0.045em', lineHeight:0.98, textWrap:'balance' }}>
+        Cuidamos a quien<br/>vos más <span style={{ color:'var(--primary)', fontStyle:'italic' }}>querés</span>.
+      </h1>
+      <p className="hero-sub" style={{ fontSize:'clamp(18px,2.2vw,24px)', color:'var(--text-sec)', maxWidth:640, margin:'24px auto 0', lineHeight:1.5, textWrap:'pretty' }}>
+        Paseadores, cuidadores y hospedaje para tu mascota — <strong style={{ color:'var(--text)' }}>verificados</strong>, cerca de tu casa y con pago protegido.
+      </p>
+    </div>
+
+    <div className="hero-search-wrap" style={{ position:'relative', marginTop:52, width:'100%', display:'flex', justifyContent:'center' }}>
+      <SearchBar onSearch={onSearch}/>
+    </div>
+
+    <div className="hero-trust" style={{ position:'relative', marginTop:30, display:'flex', gap:28, flexWrap:'wrap', justifyContent:'center', alignItems:'center', color:'var(--text-sec)', fontSize:15, fontWeight:600 }}>
+      <span style={{ display:'flex', alignItems:'center', gap:8 }}><IcoShield size={18} stroke="var(--primary)"/>Identidad verificada</span>
+      <span style={{ display:'flex', alignItems:'center', gap:8 }}><Ico size={18} d="M3 11l18-5v12L3 14v-3z" stroke="var(--primary)"/>Pago protegido</span>
+      <span style={{ display:'flex', alignItems:'center', gap:8 }}><IcoPaw size={18} stroke="var(--primary)"/>+500 mascotas felices</span>
+    </div>
+  </header>
+);
+
+// ─── SERVICES SECTION ──────────────────────────────────────
+const Reveal = ({ children, delay=0, style={} }) => {
+  const ref = useRef(null);
+  useEffect(()=>{
+    const el = ref.current;
+    const o = new IntersectionObserver(([e])=>{ if(e.isIntersecting){ el.classList.add('in'); o.disconnect(); } }, { threshold:0.15 });
+    o.observe(el); return ()=>o.disconnect();
+  },[]);
+  return <div ref={ref} className="reveal" style={{ transitionDelay:`${delay}s`, ...style }}>{children}</div>;
+};
+
+const Services = () => (
+  <section id="servicios" className="sec-pad" style={{ padding:'120px 5vw', maxWidth:1320, margin:'0 auto' }}>
+    <Reveal><div className="mono" style={{ fontSize:13, letterSpacing:'0.16em', textTransform:'uppercase', color:'var(--primary)', fontWeight:600 }}>Servicios</div></Reveal>
+    <Reveal delay={0.05}><h2 style={{ fontWeight:900, fontSize:'clamp(34px,5vw,60px)', letterSpacing:'-0.035em', marginTop:14, maxWidth:780, lineHeight:1.04 }}>Todo lo que tu mascota necesita, en un solo jardín.</h2></Reveal>
+
+    <div className="svc-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(270px,1fr))', gap:22, marginTop:56 }}>
+      {SERVICES.map((s,i)=>(
+        <Reveal key={s.id} delay={i*0.08}>
+          <a href={flutterUrl('/marketplace', {service: s.id})} style={{ display:'block', height:'100%' }}>
+            <div className="svc-card" style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:26, padding:36, height:'100%', transition:'transform .3s cubic-bezier(.2,.7,.3,1), box-shadow .3s', cursor:'pointer' }}
+              onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-8px)';e.currentTarget.style.boxShadow='0 22px 50px rgba(30,45,15,0.14)';}}
+              onMouseLeave={e=>{e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none';}}>
+              <div style={{ width:64, height:64, borderRadius:18, background:'var(--lime)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <s.Icon size={30} stroke="var(--primary-dark)"/>
+              </div>
+              <h3 style={{ fontWeight:800, fontSize:24, marginTop:24, letterSpacing:'-0.02em' }}>{s.label}</h3>
+              <p style={{ fontSize:16.5, color:'var(--text-sec)', marginTop:8, lineHeight:1.5 }}>{s.desc}. Cuidadores verificados y reseñados por otras familias.</p>
+              <div style={{ marginTop:22, display:'inline-flex', alignItems:'center', gap:8, color:'var(--primary)', fontWeight:800, fontSize:15.5 }}>
+                Buscar ahora <span style={{ transition:'transform .2s' }}>→</span>
+              </div>
+            </div>
+          </a>
+        </Reveal>
+      ))}
+    </div>
+  </section>
+);
+
+// ─── HOW IT WORKS ──────────────────────────────────────────
+const How = () => {
+  const steps = [
+    { n:'01', t:'Buscá', d:'Elegí servicio, zona y fecha. Te mostramos solo cuidadores verificados cerca tuyo.', Icon:IcoSearch },
+    { n:'02', t:'Conocé', d:'Mirá perfiles, reseñas reales y respondé tus dudas por chat antes de reservar.', Icon:IcoPaw },
+    { n:'03', t:'Reservá', d:'Pagás por QR y el dinero queda protegido hasta confirmar que todo salió bien.', Icon:IcoShield },
+    { n:'04', t:'Relajate', d:'Recibí fotos y seguimiento en tiempo real. Tu mascota en las mejores manos.', Icon:IcoSun },
+  ];
+  return (
+    <section id="como-funciona" className="sec-pad" style={{ padding:'120px 5vw', background:'var(--forest)', color:'var(--bg)', position:'relative', overflow:'hidden' }}>
+      <div style={{ position:'absolute', top:'-15%', left:'-10%', width:560, height:560, borderRadius:'50%', background:'radial-gradient(circle, rgba(119,140,67,0.18), transparent 70%)' }}/>
+      <div style={{ maxWidth:1320, margin:'0 auto', position:'relative' }}>
+        <Reveal><div className="mono" style={{ fontSize:13, letterSpacing:'0.16em', textTransform:'uppercase', color:'var(--accent)', fontWeight:600 }}>Cómo funciona</div></Reveal>
+        <Reveal delay={0.05}><h2 style={{ fontWeight:900, fontSize:'clamp(34px,5vw,60px)', letterSpacing:'-0.035em', marginTop:14, maxWidth:820, lineHeight:1.04, color:'var(--bg)' }}>Cuatro pasos entre vos y la tranquilidad.</h2></Reveal>
+
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(250px,1fr))', gap:20, marginTop:60 }}>
+          {steps.map((s,i)=>(
+            <Reveal key={s.n} delay={i*0.1}>
+              <div style={{ background:'var(--forest-surf)', border:'1px solid #334D24', borderRadius:24, padding:34, height:'100%' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                  <div style={{ width:56, height:56, borderRadius:15, background:'rgba(88,226,98,0.14)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <s.Icon size={26} stroke="var(--accent)"/>
+                  </div>
+                  <span className="mono" style={{ fontSize:30, fontWeight:600, color:'rgba(140,171,106,0.5)', letterSpacing:'-0.02em' }}>{s.n}</span>
+                </div>
+                <h3 style={{ fontWeight:800, fontSize:24, marginTop:24, color:'var(--bg)', letterSpacing:'-0.02em' }}>{s.t}</h3>
+                <p style={{ fontSize:16, color:'#8CAB6A', marginTop:8, lineHeight:1.55 }}>{s.d}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// ─── TRUST ─────────────────────────────────────────────────
+const Trust = () => (
+  <section id="confianza" className="sec-pad" style={{ padding:'120px 5vw', maxWidth:1320, margin:'0 auto' }}>
+    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:64, alignItems:'center' }} className="trust-grid">
+      <Reveal>
+        <div className="mono" style={{ fontSize:13, letterSpacing:'0.16em', textTransform:'uppercase', color:'var(--primary)', fontWeight:600 }}>Confianza</div>
+        <h2 style={{ fontWeight:900, fontSize:'clamp(34px,5vw,58px)', letterSpacing:'-0.035em', marginTop:14, lineHeight:1.04 }}>No es buena onda.<br/>Es <span style={{ color:'var(--primary)', fontStyle:'italic' }}>verificación real</span>.</h2>
+        <p style={{ fontSize:19, color:'var(--text-sec)', marginTop:20, lineHeight:1.55, maxWidth:520 }}>
+          Cada cuidador pasa por verificación de identidad con IA y queda registrado de forma permanente. Tu pago queda protegido hasta que confirmás que todo salió bien.
+        </p>
+        <div style={{ display:'flex', flexDirection:'column', gap:16, marginTop:32 }}>
+          {[
+            ['Identidad verificada','Reconocimiento facial + carnet, registro inmutable.'],
+            ['Pago protegido','El dinero se libera solo al completar el servicio.'],
+            ['Reseñas reales','Solo quien reservó y completó puede calificar.'],
+          ].map(([t,d])=>(
+            <div key={t} style={{ display:'flex', gap:16, alignItems:'flex-start' }}>
+              <div style={{ width:36, height:36, borderRadius:10, background:'var(--lime)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                <Ico size={18} d="m5 12 4 4 10-10" stroke="var(--primary-dark)" sw={2.4}/>
+              </div>
+              <div><div style={{ fontWeight:800, fontSize:18 }}>{t}</div><div style={{ fontSize:15.5, color:'var(--text-sec)', marginTop:2 }}>{d}</div></div>
+            </div>
+          ))}
+        </div>
+      </Reveal>
+
+      <Reveal delay={0.12}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:18 }}>
+          {[
+            ['+500','mascotas cuidadas','var(--surface)','var(--text)'],
+            ['100%','identidades verificadas','var(--primary)','var(--bg)'],
+            ['4.9★','calificación promedio','var(--lime)','var(--text)'],
+            ['24h','soporte para vos','var(--forest)','var(--bg)'],
+          ].map(([n,l,bg,col],i)=>(
+            <div key={i} style={{ background:bg, color:col, borderRadius:24, padding:'36px 30px', minHeight:180, display:'flex', flexDirection:'column', justifyContent:'space-between', border: bg==='var(--surface)'?'1px solid var(--border)':'none', transform:i%2?'translateY(24px)':'none' }}>
+              <div className="mono" style={{ fontSize:54, fontWeight:600, letterSpacing:'-0.03em', lineHeight:1 }}>{n}</div>
+              <div style={{ fontSize:16, fontWeight:600, opacity:0.85, lineHeight:1.35 }}>{l}</div>
+            </div>
+          ))}
+        </div>
+      </Reveal>
+    </div>
+  </section>
+);
+
+// ─── DOWNLOAD CTA ──────────────────────────────────────────
+const Download = () => (
+  <section id="descargar" className="download-section" style={{ padding:'40px 5vw 120px', maxWidth:1320, margin:'0 auto' }}>
+    <Reveal>
+      <div style={{ background:'linear-gradient(150deg, var(--primary), var(--primary-dark))', borderRadius:40, padding:'72px 7vw', position:'relative', overflow:'hidden', textAlign:'center' }}>
+        <div style={{ position:'absolute', right:-60, bottom:-60, opacity:0.12 }}><PawLeaf size={320} color="#fff" accent="#fff"/></div>
+        <div style={{ position:'absolute', left:-40, top:-40, opacity:0.1 }}><PawLeaf size={200} color="#fff" accent="#fff"/></div>
+        <div style={{ position:'relative' }}>
+          <h2 style={{ fontWeight:900, fontSize:'clamp(34px,5vw,62px)', letterSpacing:'-0.04em', color:'var(--bg)', lineHeight:1.02, textWrap:'balance' }}>
+            Llevá Garden en tu bolsillo.
+          </h2>
+          <p style={{ fontSize:'clamp(17px,2vw,21px)', color:'rgba(245,242,236,0.85)', marginTop:18, maxWidth:560, margin:'18px auto 0', lineHeight:1.5 }}>
+            Buscá, reservá y seguí a tu mascota en tiempo real. Gratis en iOS y Android.
+          </p>
+          <div style={{ display:'flex', gap:14, justifyContent:'center', marginTop:38, flexWrap:'wrap' }}>
+            <a href={APP_STORE_URL}
+              onMouseEnter={e=>e.currentTarget.style.transform='translateY(-3px) scale(1.03)'}
+              onMouseLeave={e=>e.currentTarget.style.transform='none'}
+              style={{ transition:'transform .2s', display:'inline-block' }}>
+              <AppStoreBadge width={160}/>
+            </a>
+            <a href={PLAY_STORE_URL}
+              onMouseEnter={e=>e.currentTarget.style.transform='translateY(-3px) scale(1.03)'}
+              onMouseLeave={e=>e.currentTarget.style.transform='none'}
+              style={{ transition:'transform .2s', display:'inline-block' }}>
+              <PlayStoreBadge width={160}/>
+            </a>
+          </div>
+        </div>
+      </div>
+    </Reveal>
+  </section>
+);
+
+// ─── FOOTER ────────────────────────────────────────────────
+const footerLinks = {
+  'Producto': [
+    ['Servicios', '#servicios'],
+    ['Cómo funciona', '#como-funciona'],
+    ['Descargar app', '#descargar'],
+  ],
+  'Empresa': [
+    ['Sobre Garden', '/'],
+    ['Conviértete en cuidador', flutterUrl('/become-caregiver')],
+    ['Contacto', 'mailto:hola@gardenbo.com'],
+    ['Trabajá con nosotros', flutterUrl('/become-caregiver')],
+  ],
+};
+
+const Footer = () => (
+  <footer className="footer-inner" style={{ background:'var(--forest)', color:'var(--bg)', padding:'72px 5vw 40px' }}>
+    <div style={{ maxWidth:1320, margin:'0 auto' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:40 }}>
+        <div style={{ maxWidth:320 }}>
+          <a href="/" style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <PawLeaf size={36} color="var(--primary-light)"/>
+            <span style={{ fontWeight:900, fontSize:28, letterSpacing:'-0.03em' }}>garden</span>
+          </a>
+          <p style={{ fontSize:15.5, color:'#8CAB6A', marginTop:16, lineHeight:1.55 }}>El primer marketplace verificado de servicios para mascotas en Bolivia.</p>
+        </div>
+        <div style={{ display:'flex', gap:64, flexWrap:'wrap' }}>
+          {Object.entries(footerLinks).map(([h,items])=>(
+            <div key={h}>
+              <div className="mono" style={{ fontSize:12, letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--accent)', fontWeight:600, marginBottom:16 }}>{h}</div>
+              {items.map(([label, href])=>(
+                <a key={label} href={href} style={{ display:'block', fontSize:15.5, color:'#8CAB6A', marginBottom:11, fontWeight:600 }}>{label}</a>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ marginTop:56, paddingTop:28, borderTop:'1px solid #334D24', display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:16 }}>
+        <span className="mono" style={{ fontSize:13, color:'#8CAB6A', letterSpacing:'0.06em' }}>GARDEN · Santa Cruz de la Sierra · www.gardenbo.com</span>
+        <span className="mono" style={{ fontSize:13, color:'rgba(140,171,106,0.6)' }}>© 2026 Garden</span>
+      </div>
+    </div>
+  </footer>
+);
+
+// ─── APP ───────────────────────────────────────────────────
+function App() {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(()=>{
+    const h=()=>setScrolled(window.scrollY>30);
+    window.addEventListener('scroll',h,{passive:true}); h();
+    return ()=>window.removeEventListener('scroll',h);
+  },[]);
+
+  const handleSearch = (params) => {
+    const p = {};
+    // service: visita no existe en el API, omitir para mostrar todos
+    if (params.service && params.service !== 'visita') p.service = params.service;
+    // zone: clave uppercase para que Flutter la pre-seleccione en la UI
+    if (params.zone) p.zone = params.zone;
+    // mascota → petType + size (Flutter usa SMALL/MEDIUM/LARGE internamente)
+    if (params.pet === 'gato') {
+      p.petType = 'CATS';
+    } else if (params.pet === 'p-s') {
+      p.petType = 'DOGS'; p.size = 'SMALL';
+    } else if (params.pet === 'p-m') {
+      p.petType = 'DOGS'; p.size = 'MEDIUM';
+    } else if (params.pet === 'p-l') {
+      p.petType = 'DOGS'; p.size = 'LARGE';
+    }
+    window.location.href = flutterUrl('/marketplace', Object.keys(p).length ? p : null);
+  };
+
+  return (
+    <div>
+      <Nav scrolled={scrolled}/>
+      <Hero onSearch={handleSearch}/>
+      <Services/>
+      <How/>
+      <Trust/>
+      <Download/>
+      <Footer/>
+      {/* Banner fijo en mobile para recomendar la app */}
+      <div className="app-banner-mobile">
+        <div style={{ display:'flex', alignItems:'center', gap:10, flex:1, minWidth:0 }}>
+          <span style={{ fontSize:28, flexShrink:0 }}>🐾</span>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontWeight:800, fontSize:13.5, color:'var(--text)', lineHeight:1.2 }}>Mejor experiencia en la app</div>
+            <div style={{ fontSize:12, color:'var(--text-sec)', marginTop:2 }}>Reservas, GPS y notificaciones</div>
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:8, flexShrink:0 }}>
+          <a href={APP_STORE_URL} style={{ background:'#000', color:'#fff', padding:'9px 14px', borderRadius:10, fontSize:12, fontWeight:700, whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:5 }}>
+            <span style={{ fontSize:14 }}></span> iOS
+          </a>
+          <a href={PLAY_STORE_URL} style={{ background:'#000', color:'#fff', padding:'9px 14px', borderRadius:10, fontSize:12, fontWeight:700, whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:5 }}>
+            <span style={{ fontSize:13 }}>▶</span> Android
+          </a>
+        </div>
+      </div>
+      <style>{`
+        /* ── Tablet (≤860px) ─────────────────── */
+        @media (max-width:860px){
+          .navlinks a:not([href="#descargar"]):not(.nav-register):not(.nav-login){display:none;}
+          .nav-login{display:none !important;}
+          .searchbar{flex-direction:column;border-radius:28px;padding:10px;gap:2px;}
+          .searchbar > div[style*="width: 1px"]{display:none;}
+          .searchbar button{border-radius:18px !important;}
+          .searchword{display:inline;}
+          .trust-grid{grid-template-columns:1fr !important;gap:48px !important;}
+          .sec-pad{padding-top:80px !important;padding-bottom:80px !important;}
+        }
+        /* ── Mobile (≤620px) ─────────────────── */
+        @media (max-width:620px){
+          .nav-register{display:none !important;}
+          .navlinks a[href="#descargar"]{display:none !important;}
+
+          /* Searchbar: layout 2×2 horizontal en vez de columna */
+          .searchbar{
+            flex-direction:row !important;
+            flex-wrap:wrap !important;
+            border-radius:20px !important;
+            padding:6px !important;
+            gap:0 !important;
+            align-items:stretch !important;
+          }
+          .searchbar .seg-btn{
+            flex:none !important;
+            width:50% !important;
+            border-radius:14px !important;
+            padding:12px 14px !important;
+          }
+          .searchbar .seg-btn .mono{ font-size:10px !important; }
+          .searchbar .seg-btn > div:last-child{ font-size:14px !important; margin-top:2px !important; }
+          .searchbar .search-btn{
+            flex:none !important;
+            width:100% !important;
+            border-radius:14px !important;
+            justify-content:center !important;
+            padding:13px !important;
+            margin-top:4px !important;
+            font-size:15px !important;
+          }
+          /* Dropdown: más compacto, 1 columna en móvil */
+          .search-dropdown{ padding:16px !important; border-radius:20px !important; }
+          .search-dropdown > div{ grid-template-columns:1fr !important; gap:8px !important; }
+          .svc-opt-icon{ width:32px !important; height:32px !important; border-radius:10px !important; }
+          .pet-emoji{ font-size:20px !important; }
+          .searchword{display:none;}
+
+          /* Hero compacto: búsqueda visible sin hacer scroll */
+          .hero-section{
+            min-height:auto !important;
+            padding:90px 5vw 32px !important;
+          }
+          .hero-h1{font-size:clamp(36px,10vw,52px) !important;}
+          .hero-sub{font-size:16px !important;margin-top:16px !important;}
+          .hero-trust{flex-direction:column;gap:10px;align-items:flex-start;margin-top:20px !important;}
+          .hero-search-wrap{margin-top:28px !important;}
+
+          /* Secciones: menos espacio vertical */
+          .sec-pad{padding-top:60px !important;padding-bottom:60px !important;}
+
+          /* Tarjetas de servicio: 1 columna */
+          .svc-grid{grid-template-columns:1fr !important;}
+
+          /* Sección download: espacio extra abajo para el banner fijo */
+          .download-section{padding-bottom:110px !important;}
+
+          /* Footer: extra bottom padding */
+          .footer-inner{padding-bottom:100px !important;}
+
+          /* Banner app fijo */
+          .app-banner-mobile{display:flex !important;}
+        }
+
+        /* Banner app fijo — oculto en desktop */
+        .app-banner-mobile{
+          display:none;
+          position:fixed;
+          bottom:0;left:0;right:0;
+          background:var(--surface);
+          border-top:1px solid var(--border);
+          padding:12px 16px 20px;
+          align-items:center;
+          gap:12px;
+          z-index:100;
+          box-shadow:0 -8px 32px rgba(30,45,15,0.12);
+          padding-bottom:calc(12px + env(safe-area-inset-bottom, 0px));
+        }
+      `}</style>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
