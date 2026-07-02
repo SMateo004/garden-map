@@ -176,7 +176,7 @@ const PETS = [
 
 // ─── NAV ───────────────────────────────────────────────────
 const navSectionHref = (t) => {
-  if (t === 'Cuidadores') return flutterUrl('/become-caregiver');
+  if (t === 'Conviértete en cuidador') return flutterUrl('/become-caregiver');
   const slug = t.toLowerCase()
     .normalize('NFD').replace(/[^\x00-\xFF]/g,'')
     .replace(/\s+/g, '-');
@@ -198,7 +198,7 @@ const Nav = ({ scrolled }) => (
       <span style={{ fontWeight:900, fontSize:26, letterSpacing:'-0.03em', color:'var(--text)' }}>garden</span>
     </a>
     <div style={{ display:'flex', alignItems:'center', gap:6 }} className="navlinks">
-      {['Servicios','Cómo funciona','Confianza','Cuidadores'].map(t=>(
+      {['Servicios','Cómo funciona','Conviértete en cuidador'].map(t=>(
         <a key={t} href={navSectionHref(t)}
           style={{ padding:'10px 16px', borderRadius:999, fontWeight:700, fontSize:15.5, color:'var(--text-sec)' }}
           onMouseEnter={e=>e.currentTarget.style.background='rgba(217,239,159,0.5)'}
@@ -725,12 +725,11 @@ const footerLinks = {
   'Producto': [
     ['Servicios', '#servicios'],
     ['Cómo funciona', '#como-funciona'],
-    ['Confianza', '#confianza'],
     ['Descargar app', '#descargar'],
   ],
   'Empresa': [
     ['Sobre Garden', '/'],
-    ['Cuidadores', flutterUrl('/become-caregiver')],
+    ['Conviértete en cuidador', flutterUrl('/become-caregiver')],
     ['Contacto', 'mailto:hola@gardenbo.com'],
     ['Trabajá con nosotros', flutterUrl('/become-caregiver')],
   ],
