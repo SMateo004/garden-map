@@ -41,7 +41,7 @@ flutter pub get --no-example
 flutter build web \
   --release \
   --dart-define=API_URL="${API_URL:-https://api.gardenbo.com/api}" \
-  --pwa-strategy offline-first
+  --pwa-strategy none
 
 # ── 5. Patch flutter_bootstrap.js — force local CanvasKit ───────────────────
 # Flutter loads CanvasKit from gstatic.com by default (~2MB external fetch).
