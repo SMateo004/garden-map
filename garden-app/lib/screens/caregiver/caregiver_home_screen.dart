@@ -1835,7 +1835,14 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             : GardenColors.success;
 
     return GestureDetector(
-      onTap: () => context.push('/caregiver/profile-data'),
+      onTap: () async {
+        // Refresca el dashboard al volver — si el cuidador completó todo en
+        // "Datos del cuidador", este botón debe dejar de brillar de inmediato
+        // en vez de esperar a un pull-to-refresh manual.
+        await context.push('/caregiver/profile-data');
+        if (!mounted) return;
+        await Future.wait([_loadDashboardStats(), _loadBookings()]);
+      },
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
