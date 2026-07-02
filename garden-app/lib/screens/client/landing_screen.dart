@@ -316,8 +316,7 @@ class _NavDelegate extends SliverPersistentHeaderDelegate {
               if (!mobile) ...[
                 _NavLink('Servicios',    onServices),
                 _NavLink('Cómo funciona', onHowItWorks),
-                _NavLink('Confianza',    onTrust),
-                _NavLink('Cuidadores',   onCaregivers),
+                _NavLink('Conviértete en cuidador', onCaregivers),
                 const SizedBox(width: 16),
                 // Iniciar sesión
                 TextButton(
@@ -428,8 +427,7 @@ class _MobileDrawer extends StatelessWidget {
           const SizedBox(height: 32),
           _DrawerLink('Servicios',    onServices),
           _DrawerLink('Cómo funciona', onHowItWorks),
-          _DrawerLink('Confianza',    onTrust),
-          _DrawerLink('Cuidadores',   onCaregiver),
+          _DrawerLink('Conviértete en cuidador', onCaregiver),
           const SizedBox(height: 24),
           const Divider(color: _beige),
           const SizedBox(height: 24),
@@ -1224,14 +1222,13 @@ class _Footer extends StatelessWidget {
     final links1 = [
       ('Servicios',     onServices),
       ('Cómo funciona', onHowItWorks),
-      ('Confianza',     onTrust),
       ('Descargar app', onLogoTap),
     ];
     final links2 = [
-      ('Sobre Garden',          onLogoTap),
-      ('Cuidadores',            onCaregiver),
-      ('Contacto',              onContact),
-      ('Trabajá con nosotros',  onCaregiver),
+      ('Sobre Garden',              onLogoTap),
+      ('Conviértete en cuidador',  onCaregiver),
+      ('Contacto',                  onContact),
+      ('Trabajá con nosotros',      onCaregiver),
     ];
 
     return Container(
