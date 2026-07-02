@@ -439,17 +439,17 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
 
     return Scaffold(
       backgroundColor: bg,
-      bottomNavigationBar: _buildEditBarSimple(surface, borderColor, subtextColor),
       body: Column(
         children: [
-          // ── Top bar ────────────────────────────────────────────────────────
+          // ── Top bar con botones ────────────────────────────────────────────
           Container(
-            height: 56,
+            height: 64,
             decoration: BoxDecoration(
               color: surface,
               border: Border(bottom: BorderSide(color: borderColor)),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 2))],
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
                 IconButton(
@@ -457,9 +457,48 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                   onPressed: () => Navigator.pop(context),
                   tooltip: 'Volver',
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 4),
                 Text('Editar perfil',
                   style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+                const Spacer(),
+                if (_isSaving)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary)),
+                  )
+                else if (_isEditing) ...[
+                  TextButton(
+                    onPressed: () { setState(() => _isEditing = false); _loadProfile(); },
+                    style: TextButton.styleFrom(foregroundColor: subtextColor, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
+                    child: const Text('Cancelar', style: TextStyle(fontSize: 13)),
+                  ),
+                  const SizedBox(width: 6),
+                  ElevatedButton.icon(
+                    onPressed: _saveProfile,
+                    icon: const Icon(Icons.check_rounded, size: 16),
+                    label: const Text('Guardar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GardenColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                  ),
+                ] else
+                  ElevatedButton.icon(
+                    onPressed: () => setState(() => _isEditing = true),
+                    icon: const Icon(Icons.edit_rounded, size: 16),
+                    label: const Text('Editar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GardenColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                  ),
+                const SizedBox(width: 8),
               ],
             ),
           ),

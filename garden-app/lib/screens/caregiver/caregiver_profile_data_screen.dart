@@ -226,6 +226,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   /// Does NOT call setState — callers are responsible for wrapping in
   /// setState when appropriate (or calling directly in initState).
   void _applyProfile(Map<String, dynamic> profile) {
+    // Usar el porcentaje ya calculado por el backend (más preciso que el local)
+    final onboardingPct = (profile['onboardingStatus'] as Map<String, dynamic>?)?['percentage'] as int?;
+    if (onboardingPct != null) _completionPercentage = onboardingPct;
+
     final details = profile['serviceDetails'] ?? {};
     final faq = details['faq'] ?? {};
     final availability = details['availability'] ?? {};
@@ -489,6 +493,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         'spaceType': _selectedHomeTypes,
         'hasYard': _hasYard,
         'photos': _photos,
+        'servicesOffered': _apiServicesOffered,
         'experienceYears': expYears,
         'acceptAggressive': _acceptAggressive,
         'acceptPuppies': _acceptPuppies,
@@ -523,11 +528,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         },
       };
 
-      // Preguntas de experiencia avanzada: solo si no es amateur
+      // whyCaregiver y whatDiffers — siempre se guardan
+      body['whyCaregiver'] = _whyCaregiverController.text.trim();
+      body['whatDiffers'] = _whatDiffersController.text.trim();
+      // experienceDescription, handleAnxious, emergencyResponse — solo para no-amateurs
       if (!_isAmateur) {
         body['experienceDescription'] = _experienceDescController.text.trim();
-        body['whyCaregiver'] = _whyCaregiverController.text.trim();
-        body['whatDiffers'] = _whatDiffersController.text.trim();
         body['handleAnxious'] = _selectedAnxiousOptions.join(', ');
         body['emergencyResponse'] = _selectedEmergencyOptions.join(', ');
       }
@@ -788,18 +794,17 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
     return Scaffold(
       backgroundColor: bg,
-      // Barra sticky al fondo — siempre visible, no hay que buscarla en el header
-      bottomNavigationBar: _buildEditBar(surface, borderColor, textColor, subtextColor),
       body: Column(
         children: [
-          // ── Top bar ────────────────────────────────────────────────────────
+          // ── Top bar con botones Editar / Guardar ──────────────────────────
           Container(
-            height: 56,
+            height: 64,
             decoration: BoxDecoration(
               color: surface,
               border: Border(bottom: BorderSide(color: borderColor)),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 2))],
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
                 IconButton(
@@ -807,25 +812,67 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                   onPressed: () => Navigator.pop(context),
                   tooltip: 'Volver',
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 4),
                 Text('Datos del cuidador',
                   style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
                 const Spacer(),
-                if (_completionPercentage < 100)
+                // Badge de completitud (oculto al llegar a 100%)
+                if (_completionPercentage < 100) ...[
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                     decoration: BoxDecoration(
                       color: (_completionPercentage >= 80 ? GardenColors.success : GardenColors.warning).withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      '$_completionPercentage% completo',
+                      '$_completionPercentage%',
                       style: TextStyle(
                         color: _completionPercentage >= 80 ? GardenColors.success : GardenColors.warning,
-                        fontSize: 12, fontWeight: FontWeight.w700,
+                        fontSize: 11, fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
+                  const SizedBox(width: 10),
+                ],
+                // Botones Editar / Guardar / Cancelar — siempre en el header
+                if (_isSaving)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary)),
+                  )
+                else if (_isEditing) ...[
+                  TextButton(
+                    onPressed: () { setState(() => _isEditing = false); _loadData(); },
+                    style: TextButton.styleFrom(foregroundColor: subtextColor, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
+                    child: const Text('Cancelar', style: TextStyle(fontSize: 13)),
+                  ),
+                  const SizedBox(width: 6),
+                  ElevatedButton.icon(
+                    onPressed: _saveAllData,
+                    icon: const Icon(Icons.check_rounded, size: 16),
+                    label: const Text('Guardar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GardenColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                  ),
+                ] else
+                  ElevatedButton.icon(
+                    onPressed: () => setState(() => _isEditing = true),
+                    icon: const Icon(Icons.edit_rounded, size: 16),
+                    label: const Text('Editar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GardenColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                  ),
+                const SizedBox(width: 8),
               ],
             ),
           ),
@@ -974,13 +1021,20 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                               title: 'Preguntas frecuentes',
                               icon: Icons.help_outline_rounded,
                               child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   SizedBox(key: _keyFaq, height: 0),
-                                  _viewOrInput(_includesController, '¿Qué incluye tu servicio?', maxLines: 2,
-                                    textColor: textColor, subtextColor: subtextColor, surface: surface, borderColor: borderColor),
-                                  const SizedBox(height: 10),
-                                  _viewOrInput(_requirementsController, '¿Qué necesitas del dueño?', maxLines: 2,
-                                    textColor: textColor, subtextColor: subtextColor, surface: surface, borderColor: borderColor),
+                                  Text('¿Qué incluye tu servicio?',
+                                    style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 6),
+                                  _viewOrInput(_includesController, 'Ej: Paseos diarios, fotos del recorrido, reportes de salud...',
+                                    maxLines: 2, textColor: textColor, subtextColor: subtextColor, surface: surface, borderColor: borderColor),
+                                  const SizedBox(height: 14),
+                                  Text('¿Qué necesitas del dueño?',
+                                    style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 6),
+                                  _viewOrInput(_requirementsController, 'Ej: Correa, vacunas al día, bolsas para recoger...',
+                                    maxLines: 2, textColor: textColor, subtextColor: subtextColor, surface: surface, borderColor: borderColor),
                                 ],
                               ),
                             ),
@@ -1018,32 +1072,35 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                       }).toList(),
                                     ),
                                   ),
-                                  if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
+                                  if (_experienceYearsController.text.isNotEmpty) ...[
                                     const SizedBox(height: 12),
-                                    _sectionField(_lExpDesc, _experienceDescController, _lExpDescHint, maxLines: 3),
-                                    const SizedBox(height: 10),
+                                    // Info para principiantes
+                                    if (_isAmateur) ...[
+                                      Container(
+                                        margin: const EdgeInsets.only(bottom: 12),
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: GardenColors.primary.withValues(alpha: 0.07),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+                                        ),
+                                        child: Row(children: [
+                                          const Icon(Icons.info_outline_rounded, color: GardenColors.primary, size: 15),
+                                          const SizedBox(width: 8),
+                                          Expanded(child: Text(
+                                            'Empezas como cuidador nuevo — completa los campos abajo para presentarte a los dueños.',
+                                            style: TextStyle(color: textColor, fontSize: 12),
+                                          )),
+                                        ]),
+                                      ),
+                                    ] else ...[
+                                      _sectionField(_lExpDesc, _experienceDescController, _lExpDescHint, maxLines: 3),
+                                      const SizedBox(height: 10),
+                                    ],
+                                    // whyCaregiver y whatDiffers — siempre visibles
                                     _sectionField(_lWhyLabel, _whyCaregiverController, _lWhyHint, maxLines: 2),
                                     const SizedBox(height: 10),
                                     _sectionField(_lDiffersLabel, _whatDiffersController, _lDiffersHint, maxLines: 2),
-                                  ],
-                                  if (_isAmateur && _experienceYearsController.text == '0') ...[
-                                    const SizedBox(height: 10),
-                                    Container(
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: GardenColors.primary.withValues(alpha: 0.07),
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
-                                      ),
-                                      child: Row(children: [
-                                        const Icon(Icons.info_outline_rounded, color: GardenColors.primary, size: 16),
-                                        const SizedBox(width: 8),
-                                        Expanded(child: Text(
-                                          'Puedes empezar como cuidador nuevo. Completarás los videos de capacitación antes de tu primer servicio.',
-                                          style: TextStyle(color: textColor, fontSize: 12),
-                                        )),
-                                      ]),
-                                    ),
                                   ],
                                 ],
                               ),
@@ -1152,20 +1209,17 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     );
   }
 
-  // ── SERVICIOS Y PRECIOS — redesign con card por servicio ─────────────────
+  // ── SERVICIOS Y PRECIOS — muestra los 3 servicios siempre ────────────────
   Widget _buildServicesPricesSection(Color surface, Color borderColor, Color textColor, Color subtextColor) {
-    if (_effectiveServices.isEmpty) {
-      return Text('No se han configurado servicios', style: TextStyle(color: subtextColor, fontSize: 13));
-    }
+    const allServices = ['PASEO', 'HOSPEDAJE', 'GUARDERIA'];
     const serviceData = {
-      'PASEO': ('🦮', 'Paseo de mascotas'),
-      'HOSPEDAJE': ('🏠', 'Hospedaje'),
-      'GUARDERIA': ('🐾', 'Guardería diurna'),
+      'PASEO':      ('🦮', 'Paseo de mascotas'),
+      'HOSPEDAJE':  ('🏠', 'Hospedaje'),
+      'GUARDERIA':  ('🐾', 'Guardería diurna'),
     };
-    // Precio label → controller
     final List<(String, TextEditingController)> paseoRows = [
       ('Paseo de 30 minutos  (media hora)', _pricePerWalk30Controller),
-      ('Paseo de 60 minutos  (una hora)', _pricePerWalk60Controller),
+      ('Paseo de 60 minutos  (una hora completa)', _pricePerWalk60Controller),
     ];
     final List<(String, TextEditingController)> hospedajeRows = [
       ('Precio por noche', _pricePerDayController),
@@ -1175,70 +1229,110 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     ];
 
     return Column(
-      children: _effectiveServices.map((s) {
-        final info = serviceData[s];
-        if (info == null) return const SizedBox.shrink();
+      children: allServices.map((s) {
+        final info = serviceData[s]!;
         final (emoji, name) = info;
+        final isActive = _effectiveServices.contains(s);
         final rows = s == 'PASEO' ? paseoRows : s == 'HOSPEDAJE' ? hospedajeRows : guarderiaRows;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
-            color: GardenColors.primary.withValues(alpha: 0.04),
+            color: isActive
+                ? GardenColors.primary.withValues(alpha: 0.04)
+                : surface.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
+            border: Border.all(
+              color: isActive
+                  ? GardenColors.primary.withValues(alpha: 0.2)
+                  : borderColor.withValues(alpha: 0.5),
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Encabezado del servicio
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
                 child: Row(children: [
-                  Text(emoji, style: const TextStyle(fontSize: 20)),
+                  Text(emoji, style: TextStyle(fontSize: 20, color: isActive ? null : Colors.grey)),
                   const SizedBox(width: 10),
-                  Text(name, style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+                  Text(name, style: TextStyle(
+                    color: isActive ? textColor : subtextColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  )),
                   const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: GardenColors.success.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(20),
+                  if (_isEditing) ...[
+                    // Toggle en modo edición
+                    Transform.scale(
+                      scale: 0.85,
+                      child: Switch(
+                        value: isActive,
+                        activeColor: GardenColors.primary,
+                        onChanged: (v) => setState(() {
+                          if (v) {
+                            _apiServicesOffered = [..._apiServicesOffered, s];
+                          } else {
+                            _apiServicesOffered = _apiServicesOffered.where((x) => x != s).toList();
+                          }
+                        }),
+                      ),
                     ),
-                    child: const Text('Activo', style: TextStyle(color: GardenColors.success, fontSize: 11, fontWeight: FontWeight.w600)),
-                  ),
+                  ] else
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: (isActive ? GardenColors.success : subtextColor).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        isActive ? 'Activo' : 'No ofrecido',
+                        style: TextStyle(
+                          color: isActive ? GardenColors.success : subtextColor,
+                          fontSize: 11, fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                 ]),
               ),
-              Divider(height: 1, color: borderColor.withValues(alpha: 0.5)),
-              // Filas de precio
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: Column(
-                  children: rows.map((row) {
-                    final rowLabel = row.$1;
-                    final rowCtrl  = row.$2;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            flex: 6,
-                            child: Text(rowLabel, style: TextStyle(color: subtextColor, fontSize: 13, height: 1.3)),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            flex: 4,
-                            child: _isEditing
-                              ? _priceField(rowCtrl, borderColor, textColor)
-                              : _priceReadOnly(rowCtrl.text, textColor, subtextColor),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
+              if (isActive) ...[
+                Divider(height: 1, color: borderColor.withValues(alpha: 0.5)),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Column(
+                    children: rows.map((row) {
+                      final rowLabel = row.$1;
+                      final rowCtrl  = row.$2;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              flex: 6,
+                              child: Text(rowLabel, style: TextStyle(color: subtextColor, fontSize: 13, height: 1.3)),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              flex: 4,
+                              child: _isEditing
+                                ? _priceField(rowCtrl, borderColor, textColor)
+                                : _priceReadOnly(rowCtrl.text, textColor, subtextColor),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
                 ),
-              ),
+              ] else if (!isActive && _isEditing)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                  child: Text(
+                    'Activa este servicio con el interruptor para configurar su precio.',
+                    style: TextStyle(color: subtextColor, fontSize: 12, fontStyle: FontStyle.italic),
+                  ),
+                ),
             ],
           ),
         );
