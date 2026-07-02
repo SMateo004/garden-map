@@ -295,23 +295,11 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
               style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
             ),
             iconTheme: IconThemeData(color: textColor),
-            actions: [
-              if (_isSaving)
-                const Center(child: Padding(padding: EdgeInsets.only(right: 16.0), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))))
-              else if (_isEditing) ...[
-                TextButton(onPressed: () { setState(() => _isEditing = false); _loadProfile(); }, child: Text('Cancelar', style: TextStyle(color: textColor))),
-                TextButton(onPressed: _saveProfile, child: const Text('Guardar', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.bold))),
-              ] else
-                TextButton(onPressed: () => setState(() => _isEditing = true), child: const Text('Editar', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.bold))),
-            ],
           ),
+          bottomNavigationBar: _buildEditBarSimple(surface, borderColor, subtextColor),
           body: _isLoading
               ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
-              : AbsorbPointer(
-                  absorbing: !_isEditing,
-                  child: Opacity(
-                    opacity: _isEditing ? 1.0 : 0.9,
-                    child: SingleChildScrollView(
+              : SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -427,10 +415,8 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                           _statusBadge(_profile?['status'] ?? ''),
                         ],
                       ),
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 100),
                     ],
-                  ),
-                ),
                   ),
                 ),
         );
@@ -453,6 +439,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
 
     return Scaffold(
       backgroundColor: bg,
+      bottomNavigationBar: _buildEditBarSimple(surface, borderColor, subtextColor),
       body: Column(
         children: [
           // ── Top bar ────────────────────────────────────────────────────────
@@ -471,50 +458,18 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                   tooltip: 'Volver',
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  'Editar perfil',
-                  style: TextStyle(
-                    color: textColor,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const Spacer(),
-                if (_isSaving)
-                  const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))
-                else if (_isEditing) ...[
-                  TextButton(
-                    onPressed: () { setState(() => _isEditing = false); _loadProfile(); },
-                    child: Text('Cancelar', style: TextStyle(color: subtextColor, fontSize: 13)),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    onPressed: _saveProfile,
-                    icon: const Icon(Icons.save_rounded, size: 15),
-                    label: const Text('Guardar cambios', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                    style: ElevatedButton.styleFrom(backgroundColor: GardenColors.primary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: 0),
-                  ),
-                ] else
-                  ElevatedButton.icon(
-                    onPressed: () => setState(() => _isEditing = true),
-                    icon: const Icon(Icons.edit_rounded, size: 15),
-                    label: const Text('Editar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                    style: ElevatedButton.styleFrom(backgroundColor: GardenColors.primary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: 0),
-                  ),
+                Text('Editar perfil',
+                  style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
               ],
             ),
           ),
 
-          // ── Body ───────────────────────────────────────────────────────────
+          // ── Body — sin AbsorbPointer ───────────────────────────────────────
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
-                : AbsorbPointer(
-                    absorbing: !_isEditing,
-                    child: Opacity(
-                      opacity: _isEditing ? 1.0 : 0.9,
-                      child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.only(top: 28, left: 24, right: 24, bottom: 100),
                     child: Center(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 940),
@@ -533,7 +488,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  // LEFT — bio + address + walker photos
+                                  // LEFT — bio + address
                                   Expanded(
                                     flex: 52,
                                     child: Column(
@@ -550,6 +505,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                                               TextField(
                                                 controller: _bioController,
                                                 maxLines: 4,
+                                                readOnly: !_isEditing,
                                                 style: TextStyle(color: textColor, fontSize: 13),
                                                 decoration: _inputDecoration('Cuéntanos sobre tu experiencia cuidando mascotas...', isDark),
                                               ),
@@ -561,40 +517,43 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                                           surface, borderColor, textColor,
                                           title: 'Ubicación',
                                           icon: Icons.location_on_outlined,
-                                          child: Theme(
-                                            data: Theme.of(context).copyWith(
-                                              inputDecorationTheme: InputDecorationTheme(
-                                                filled: true,
-                                                fillColor: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
-                                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
-                                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
-                                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 2)),
-                                                hintStyle: TextStyle(color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
-                                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                          child: IgnorePointer(
+                                            ignoring: !_isEditing,
+                                            child: Theme(
+                                              data: Theme.of(context).copyWith(
+                                                inputDecorationTheme: InputDecorationTheme(
+                                                  filled: true,
+                                                  fillColor: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
+                                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
+                                                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
+                                                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 2)),
+                                                  hintStyle: TextStyle(color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+                                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                                ),
                                               ),
-                                            ),
-                                            child: AddressSection(
-                                              isDark: isDark,
-                                              textColor: textColor,
-                                              subtextColor: subtextColor,
-                                              borderColor: borderColor,
-                                              surfaceEl: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
-                                              streetController: _streetCtrl,
-                                              numberController: _numberCtrl,
-                                              apartmentController: _apartmentCtrl,
-                                              condominioController: _condominioCtrl,
-                                              referenceController: _referenceCtrl,
-                                              selectedZone: _addressZone,
-                                              onZoneChanged: (val) => setState(() => _addressZone = val),
-                                              addressLat: _addressLat,
-                                              addressLng: _addressLng,
-                                              isApartment: _isApartment,
-                                              purposeText: 'Tu dirección define en qué zona ofreces servicios. Solo se muestra la zona (no la calle exacta) a los dueños.',
-                                              onMapResult: (result) => setState(() {
-                                                _addressLat = result.lat;
-                                                _addressLng = result.lng;
-                                              }),
-                                              onApartmentToggle: (val) => setState(() => _isApartment = val),
+                                              child: AddressSection(
+                                                isDark: isDark,
+                                                textColor: textColor,
+                                                subtextColor: subtextColor,
+                                                borderColor: borderColor,
+                                                surfaceEl: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
+                                                streetController: _streetCtrl,
+                                                numberController: _numberCtrl,
+                                                apartmentController: _apartmentCtrl,
+                                                condominioController: _condominioCtrl,
+                                                referenceController: _referenceCtrl,
+                                                selectedZone: _addressZone,
+                                                onZoneChanged: (val) => setState(() => _addressZone = val),
+                                                addressLat: _addressLat,
+                                                addressLng: _addressLng,
+                                                isApartment: _isApartment,
+                                                purposeText: 'Tu dirección define en qué zona ofreces servicios. Solo se muestra la zona (no la calle exacta) a los dueños.',
+                                                onMapResult: (result) => setState(() {
+                                                  _addressLat = result.lat;
+                                                  _addressLng = result.lng;
+                                                }),
+                                                onApartmentToggle: (val) => setState(() => _isApartment = val),
+                                              ),
                                             ),
                                           ),
                                         ),
@@ -612,14 +571,20 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                                           surface, borderColor, textColor,
                                           title: 'Información personal',
                                           icon: Icons.person_outline_rounded,
-                                          child: _buildPersonalInfoSection(textColor, subtextColor, isDark),
+                                          child: IgnorePointer(
+                                            ignoring: !_isEditing,
+                                            child: _buildPersonalInfoSection(textColor, subtextColor, isDark),
+                                          ),
                                         ),
                                         const SizedBox(height: 16),
                                         _webCard(
                                           surface, borderColor, textColor,
                                           title: 'Datos de cobro',
                                           icon: Icons.account_balance_rounded,
-                                          child: _buildBankSection(textColor, subtextColor, surface, borderColor, isDark, showHeader: false),
+                                          child: IgnorePointer(
+                                            ignoring: !_isEditing,
+                                            child: _buildBankSection(textColor, subtextColor, surface, borderColor, isDark, showHeader: false),
+                                          ),
                                         ),
                                         const SizedBox(height: 16),
                                         _webCard(
@@ -646,9 +611,66 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                       ),
                     ),
                   ),
-                    ),
-                  ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditBarSimple(Color surface, Color borderColor, Color subtextColor) {
+    return Container(
+      height: 70,
+      decoration: BoxDecoration(
+        color: surface,
+        border: Border(top: BorderSide(color: borderColor)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 12, offset: const Offset(0, -3))],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Row(
+        children: [
+          if (_isSaving) ...[
+            const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary)),
+            const SizedBox(width: 12),
+            Text('Guardando...', style: TextStyle(color: subtextColor, fontSize: 13)),
+          ] else if (_isEditing) ...[
+            TextButton(
+              onPressed: () { setState(() => _isEditing = false); _loadProfile(); },
+              style: TextButton.styleFrom(foregroundColor: subtextColor),
+              child: const Text('Cancelar', style: TextStyle(fontSize: 14)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _saveProfile,
+                icon: const Icon(Icons.check_rounded, size: 18),
+                label: const Text('Guardar cambios', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: GardenColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ] else ...[
+            Expanded(
+              child: Text('Modo vista — información de tu perfil',
+                style: TextStyle(color: subtextColor, fontSize: 13)),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => setState(() => _isEditing = true),
+              icon: const Icon(Icons.edit_rounded, size: 17),
+              label: const Text('Editar perfil', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: GardenColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 13),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                elevation: 0,
+              ),
+            ),
+          ],
         ],
       ),
     );
