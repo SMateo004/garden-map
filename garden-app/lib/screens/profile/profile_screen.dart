@@ -59,11 +59,15 @@ class _ProfileScreenState extends State<ProfileScreen>
         (u['dateOfBirth'] == null);
   }
 
-  /// True when the CAREGIVER profile is missing key info (bio).
+  /// True when "Datos del cuidador" is missing any required field.
+  /// Usa el % ya calculado por el backend (onboardingStatus.percentage,
+  /// recalculado en cada GET /my-profile) — misma fuente de verdad que el
+  /// resto de la app, en vez de un chequeo local que puede desincronizarse.
   bool get _isCaregiverDataIncomplete {
     final p = _caregiverProfile;
     if (p == null) return false;
-    return (p['bio'] as String? ?? '').trim().isEmpty;
+    final percentage = (p['onboardingStatus'] as Map<String, dynamic>?)?['percentage'] as int?;
+    return (percentage ?? 0) < 100;
   }
 
   @override
@@ -95,6 +99,25 @@ class _ProfileScreenState extends State<ProfileScreen>
       await _loadProfile();
     } else {
       setState(() => _isLoading = false);
+    }
+  }
+
+  /// Refresca solo _caregiverProfile (sin spinner de página completa) — usado
+  /// al volver de "Datos del cuidador" para que el pulso se apague de
+  /// inmediato si el cuidador completó todo, sin esperar a un reload manual.
+  Future<void> _refreshCaregiverProfile() async {
+    if (_token.isEmpty) return;
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/caregiver/my-profile'),
+        headers: {'Authorization': 'Bearer $_token'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true && mounted) {
+        setState(() => _caregiverProfile = data['data']);
+      }
+    } catch (e) {
+      debugPrint('Error refreshing caregiver profile: $e');
     }
   }
 
@@ -978,7 +1001,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                     if (_effectiveRole == 'CAREGIVER') ...[
                       _profileTile(icon: Icons.assignment_outlined, title: 'Datos del cuidador',
                           highlight: _isCaregiverDataIncomplete,
-                          onTap: () => context.push('/caregiver/profile-data')),
+                          onTap: () async {
+                            await context.push('/caregiver/profile-data');
+                            await _refreshCaregiverProfile();
+                          }),
                       _profileTile(icon: Icons.edit_outlined, title: 'Editar perfil',
                           onTap: () => context.push('/caregiver/edit-profile')),
                       _profileTile(icon: Icons.home_outlined, title: 'Mi panel',
@@ -1219,7 +1245,10 @@ class _ProfileScreenState extends State<ProfileScreen>
             icon: Icons.assignment_outlined,
             title: 'Datos del cuidador',
             highlight: _isCaregiverDataIncomplete,
-            onTap: () => context.push('/caregiver/profile-data'),
+            onTap: () async {
+              await context.push('/caregiver/profile-data');
+              await _refreshCaregiverProfile();
+            },
           ),
           _profileTile(icon: Icons.edit_outlined, title: 'Editar perfil', onTap: () => context.push('/caregiver/edit-profile')),
           _profileTile(icon: Icons.home_outlined, title: 'Mi panel', onTap: () => context.push('/caregiver/home')),
