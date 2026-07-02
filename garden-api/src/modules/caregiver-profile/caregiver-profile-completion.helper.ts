@@ -132,12 +132,19 @@ function calculatePercentage(profile: any, minPhotos: number): number {
     const caregiverPhotos = Array.isArray(profile.caregiverPhotos) ? profile.caregiverPhotos : [];
     const hasPhotos = caregiverPhotos.length >= minPhotos;
 
+    // Cuidador principiante (0 años) — no se le exige descripción larga de experiencia,
+    // igual que en la UI de "Datos del cuidador" donde ese campo ni se muestra.
+    const isAmateur = profile.experienceYears === 0;
+    const hasExperienceDesc = isAmateur || (profile.experienceDescription?.length >= 15);
+
     const fields = [
         // Descripción
         (profile.bioDetail && profile.bioDetail.length >= 3) || (profile.bio && profile.bio.length >= 10),
-        // Servicios y zona
+        // Servicios
+        // Nota: no se exige profile.zone aquí — no es un campo editable dentro
+        // de "Datos del cuidador" (vive en "Editar perfil" → Ubicación), así que
+        // no debe contar para la completitud de esta sección.
         services.length > 0,
-        profile.zone,
         // Precios según servicio
         hasPaseoPrice,
         hasHospedajePrice,
@@ -147,7 +154,7 @@ function calculatePercentage(profile: any, minPhotos: number): number {
         hasPlacePhotos,
         // Experiencia
         profile.experienceYears != null,
-        profile.experienceDescription?.length >= 15,
+        hasExperienceDesc,
         // Preguntas clave
         profile.whyCaregiver?.length >= 3,
         profile.whatDiffers?.length >= 3,

@@ -316,8 +316,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
+        // _applyProfile ya toma el % directo de onboardingStatus (fuente de
+        // verdad del backend, recalculada en cada GET /my-profile) — no lo
+        // pisamos con la estimación local para evitar el badge desincronizado.
         setState(() => _applyProfile(data['data']));
-        _computeCompletion();
       }
     } catch (e) {
       debugPrint('Error loading data: $e');
@@ -339,7 +341,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       final data = jsonDecode(response.body);
       if (data['success'] == true && mounted) {
         setState(() => _applyProfile(data['data']));
-        _computeCompletion();
       }
     } catch (e) {
       debugPrint('Background profile refresh error: $e');
@@ -368,22 +369,25 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     // Experiencia
     final expYears = int.tryParse(_experienceYearsController.text.replaceAll('+', '')) ?? -1;
 
+    // Este arreglo debe reflejar EXACTAMENTE los mismos 16 campos que
+    // calculatePercentage() en caregiver-profile-completion.helper.ts (backend),
+    // mismo orden, mismos umbrales — si difieren, el badge local puede mostrar
+    // 100% mientras el dashboard sigue "iluminado" (o viceversa).
     final fields = [
       _bioDetailController.text.trim().length >= 3,
       services.isNotEmpty,
-      _effectiveServices.isNotEmpty, // zona implícita si ya hay servicios (se valida al guardar)
       hasPaseoPrice,
       hasHospedajePrice,
       hasGuarderiaPrice,
       hasPhotos,
       hasPlacePhotos,
       expYears >= 0,
-      _isAmateur || _experienceDescController.text.length >= 10,
+      _isAmateur || _experienceDescController.text.trim().length >= 15,
       _whyCaregiverController.text.trim().length >= 3,
       _whatDiffersController.text.trim().length >= 3,
       _acceptedPetTypes.isNotEmpty,
       _acceptedSizes.isNotEmpty,
-      true, // acceptAggressive (tiene valor por defecto)
+      true, // acceptAggressive (bool no-nullable en Dart, siempre "definido")
       true, // acceptPuppies
       true, // acceptSeniors
     ];
@@ -452,8 +456,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
     // Preguntas de follow-up: solo requeridas cuando NO es amateur (experienceYears >= 1)
     if (!_isAmateur) {
-      if (_experienceDescController.text.trim().length < 5) {
-        return _showValidationError('Describe tu experiencia (mínimo 5 caracteres)', scrollTo: _keyExperience);
+      if (_experienceDescController.text.trim().length < 15) {
+        return _showValidationError('Describe tu experiencia con más detalle (mínimo 15 caracteres)', scrollTo: _keyExperience);
       }
       if (_whyCaregiverController.text.trim().length < 3) {
         return _showValidationError('Explica por qué eres cuidador', scrollTo: _keyExperience);
@@ -563,7 +567,9 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             duration: Duration(seconds: 2),
           ),
         );
-        _computeCompletion();
+        // Recalcula desde el backend (fuente de verdad) en vez de confiar en la
+        // estimación local, para que el badge refleje el % real tras guardar.
+        await _refreshFromApi();
         setState(() => _isEditing = false);
         if (!mounted) return;
         if (widget.embeddedMode && widget.onSaveComplete != null) {
