@@ -54,7 +54,7 @@ jobs:
           flutter build web \
             --release \
             --dart-define=API_URL=${{ secrets.API_URL }} \
-            --pwa-strategy offline-first
+            --pwa-strategy none
 
       - name: Build web (Preview)
         if: github.event_name == 'pull_request'
@@ -63,7 +63,7 @@ jobs:
           flutter build web \
             --release \
             --dart-define=API_URL=${{ secrets.API_URL_PREVIEW || secrets.API_URL }} \
-            --pwa-strategy offline-first
+            --pwa-strategy none
 
       # ── 5. Install Vercel CLI ─────────────────────────────────────────────
       - name: Install Vercel CLI
@@ -87,7 +87,8 @@ jobs:
             "version": 3,
             "routes": [
               { "src": "/flutter_service_worker.js", "headers": { "Cache-Control": "no-cache, no-store, must-revalidate" }, "continue": true },
-              { "src": "/main.dart.js", "headers": { "Cache-Control": "public, max-age=31536000, immutable" }, "continue": true },
+              { "src": "/main.dart.js", "headers": { "Cache-Control": "no-cache, must-revalidate" }, "continue": true },
+              { "src": "/index.html", "headers": { "Cache-Control": "no-cache, must-revalidate" }, "continue": true },
               { "src": "/assets/(.*)", "headers": { "Cache-Control": "public, max-age=31536000, immutable" }, "continue": true },
               { "src": "/canvaskit/(.*)", "headers": { "Cache-Control": "public, max-age=31536000, immutable" }, "continue": true },
               { "handle": "filesystem" },

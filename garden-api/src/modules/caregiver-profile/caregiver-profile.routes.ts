@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
 import * as caregiverProfileController from './caregiver-profile.controller.js';
 import { asyncHandler } from '../../shared/async-handler.js';
+import { checkAndAutoSubmitProfile } from './caregiver-profile-completion.helper.js';
 import { prisma } from '../../config/database.js';
 import multer from 'multer';
 import { uploadImage } from '../../services/storage.service.js';
@@ -352,8 +353,18 @@ router.get('/dashboard-stats', authMiddleware, requireRole('CAREGIVER'),
       startTime: nextBookingRaw.startTime ?? null,
     } : null;
 
-    // Completitud del perfil
-    const profileCompleteness = (profile.onboardingStatus as any)?.percentage ?? 0;
+    // Completitud del perfil — recalcula en background si no está al 100%
+    let profileCompleteness = (profile.onboardingStatus as any)?.percentage ?? 0;
+    if (profileCompleteness < 100) {
+      try {
+        await checkAndAutoSubmitProfile(userId);
+        const refreshed = await prisma.caregiverProfile.findUnique({
+          where: { userId },
+          select: { onboardingStatus: true },
+        });
+        profileCompleteness = (refreshed?.onboardingStatus as any)?.percentage ?? profileCompleteness;
+      } catch (_) { /* no bloquea la respuesta */ }
+    }
 
     res.json({
       success: true,

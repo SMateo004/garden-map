@@ -30,8 +30,6 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
-# Excepción: el output web compilado se commitea para que Vercel lo sirva directamente
-!/build/web/
 
 # Symbolication related
 app.*.symbols
