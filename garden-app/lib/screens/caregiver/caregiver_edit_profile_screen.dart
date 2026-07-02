@@ -480,6 +480,8 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                     style: ElevatedButton.styleFrom(
                       backgroundColor: GardenColors.primary,
                       foregroundColor: Colors.white,
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       elevation: 0,
@@ -493,6 +495,8 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                     style: ElevatedButton.styleFrom(
                       backgroundColor: GardenColors.primary,
                       foregroundColor: Colors.white,
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       elevation: 0,
@@ -686,6 +690,8 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                 style: ElevatedButton.styleFrom(
                   backgroundColor: GardenColors.primary,
                   foregroundColor: Colors.white,
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   padding: const EdgeInsets.symmetric(vertical: 13),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   elevation: 0,
@@ -704,6 +710,8 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
               style: ElevatedButton.styleFrom(
                 backgroundColor: GardenColors.primary,
                 foregroundColor: Colors.white,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 13),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 elevation: 0,

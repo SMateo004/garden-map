@@ -854,6 +854,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                     style: ElevatedButton.styleFrom(
                       backgroundColor: GardenColors.primary,
                       foregroundColor: Colors.white,
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       elevation: 0,
@@ -867,6 +869,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                     style: ElevatedButton.styleFrom(
                       backgroundColor: GardenColors.primary,
                       foregroundColor: Colors.white,
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       elevation: 0,
@@ -1144,66 +1148,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  // ── BARRA STICKY EDITAR / GUARDAR ─────────────────────────────────────────
-  Widget _buildEditBar(Color surface, Color borderColor, Color textColor, Color subtextColor) {
-    return Container(
-      height: 70,
-      decoration: BoxDecoration(
-        color: surface,
-        border: Border(top: BorderSide(color: borderColor)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 12, offset: const Offset(0, -3))],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      child: Row(
-        children: [
-          if (_isSaving) ...[
-            const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary)),
-            const SizedBox(width: 12),
-            Text('Guardando cambios...', style: TextStyle(color: subtextColor, fontSize: 13)),
-          ] else if (_isEditing) ...[
-            TextButton(
-              onPressed: () { setState(() => _isEditing = false); _loadData(); },
-              style: TextButton.styleFrom(foregroundColor: subtextColor),
-              child: const Text('Cancelar', style: TextStyle(fontSize: 14)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: _saveAllData,
-                icon: const Icon(Icons.check_rounded, size: 18),
-                label: const Text('Guardar cambios', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: GardenColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
-                ),
-              ),
-            ),
-          ] else ...[
-            Expanded(
-              child: Text('Modo vista — tus datos profesionales',
-                style: TextStyle(color: subtextColor, fontSize: 13)),
-            ),
-            ElevatedButton.icon(
-              onPressed: () => setState(() => _isEditing = true),
-              icon: const Icon(Icons.edit_rounded, size: 17),
-              label: const Text('Editar perfil', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: GardenColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 13),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                elevation: 0,
-              ),
-            ),
-          ],
         ],
       ),
     );
