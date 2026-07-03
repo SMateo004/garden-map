@@ -165,8 +165,17 @@ class _VerificationScreenState extends State<VerificationScreen> {
           debugPrint('[VerifyWeb] ❌ REJECTED — mostrando pantalla de reintento');
           setState(() { _step = 2; });
         }
+      } else if (status == 'REVIEW') {
+        // El backend intentó auto-resolver (VERIFIED/REJECTED) y no pudo —
+        // queda en revisión manual de un admin. Antes esto caía en el
+        // "seguir esperando" silencioso: la pantalla quedaba con el spinner
+        // de "Esperando verificación..." indefinidamente, sin decirle al
+        // usuario que ya no depende de escanear nada más y puede tardar.
+        _stopPolling();
+        debugPrint('[VerifyWeb] ⏳ REVIEW — verificación en revisión manual');
+        setState(() { _step = 3; });
       }
-      // REVIEW y PENDING → seguir esperando
+      // PENDING → seguir esperando
     } catch (e) {
       debugPrint('[VerifyWeb] poll error (no crítico): $e');
     }
@@ -200,8 +209,45 @@ class _VerificationScreenState extends State<VerificationScreen> {
       case 0: return _buildIntro();
       case 1: return _buildQrScreen();
       case 2: return _buildRejected();
+      case 3: return _buildReviewPending();
       default: return _buildIntro();
     }
+  }
+
+  // ── EN REVISIÓN MANUAL ──────────────────────────────────────────────────────
+
+  Widget _buildReviewPending() {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 72, height: 72,
+              decoration: BoxDecoration(color: GardenColors.warning.withValues(alpha: 0.12), shape: BoxShape.circle),
+              child: const Icon(Icons.hourglass_top_rounded, color: GardenColors.warning, size: 36),
+            ),
+            const SizedBox(height: 20),
+            Text('Tu verificación está en revisión',
+                style: TextStyle(color: _text, fontSize: 20, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            Text(
+              'No pudimos confirmar tu identidad automáticamente, así que un miembro de nuestro equipo la revisará manualmente. '
+              'Te avisaremos por notificación en cuanto tengamos una respuesta — no necesitas hacer nada más por ahora.',
+              style: TextStyle(color: _subtext, fontSize: 13, height: 1.5),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 28),
+            GardenButton(
+              label: 'Volver al inicio',
+              onPressed: () => context.go('/caregiver/home'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ── INTRO ────────────────────────────────────────────────────────────────

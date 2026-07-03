@@ -142,7 +142,16 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         setState(() => _disputes = (data['data'] as List).cast<Map<String, dynamic>>());
       }
     } catch (e) {
+      // Antes era solo debugPrint: si esto fallaba, el admin veía una lista
+      // vacía sin saber si es un error de red o si realmente no hay
+      // disputas — riesgo de creer que ya no hay nada pendiente por resolver.
       debugPrint('Error loading disputes: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('No se pudieron cargar las disputas. Desliza para reintentar.'),
+          backgroundColor: GardenColors.error,
+        ));
+      }
     } finally {
       setState(() => _isLoadingDisputes = false);
     }
@@ -575,8 +584,22 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         if (data['success'] == true) {
           await _loadCaregivers();
           if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cuidador suspendido'), backgroundColor: GardenColors.warning));
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(data['error']?['message'] ?? 'Error al suspender cuidador'),
+            backgroundColor: GardenColors.error,
+          ));
         }
-      } catch (e) { debugPrint(e.toString()); }
+      } catch (e) {
+        // Antes era solo debugPrint: el admin creía haber suspendido al
+        // cuidador sin ninguna confirmación de que la acción realmente falló.
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Error de conexión al suspender: $e'),
+            backgroundColor: GardenColors.error,
+          ));
+        }
+      }
     }
   }
 
@@ -621,8 +644,22 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         if (data['success'] == true) {
           await _loadCaregivers();
           if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Perfil puesto bajo revisión'), backgroundColor: Color(0xFFE65100)));
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(data['error']?['message'] ?? 'Error al marcar para revisión'),
+            backgroundColor: GardenColors.error,
+          ));
         }
-      } catch (e) { debugPrint(e.toString()); }
+      } catch (e) {
+        // Antes era solo debugPrint: el admin creía haber marcado el perfil
+        // para revisión sin confirmación de que la acción realmente falló.
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Error de conexión al marcar para revisión: $e'),
+            backgroundColor: GardenColors.error,
+          ));
+        }
+      }
     }
   }
 
@@ -1523,7 +1560,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     }
 
     return GestureDetector(
-      onTap: () => _showDisputeDetailSheet(d),
+      // La lista de disputas se cargaba una sola vez — si el admin resolvía
+      // una disputa desde el detalle y volvía, la lista seguía mostrando el
+      // estado viejo, con riesgo de intentar resolver la misma dos veces.
+      onTap: () async {
+        await _showDisputeDetailSheet(d);
+        if (mounted) await _loadDisputes();
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1600,7 +1643,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     );
   }
 
-  void _showDisputeDetailSheet(Map<String, dynamic> d) {
+  Future<void> _showDisputeDetailSheet(Map<String, dynamic> d) async {
     final isDark = themeNotifier.isDark;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
@@ -1641,7 +1684,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         verdictIcon = Icons.hourglass_top_rounded;
     }
 
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -2569,6 +2612,64 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   }
 
   Future<void> _approvePayment(String bookingId) async {
+    // A diferencia de _rejectPayment (que sí pedía confirmación), esta acción
+    // se ejecutaba con un solo tap — sin poder revisar monto/destinatario
+    // antes de aprobar un pago real. Mismo patrón de confirmación que reject.
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = themeNotifier.isDark;
+        return Container(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+          decoration: BoxDecoration(
+            color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(child: Container(width: 36, height: 4,
+                decoration: BoxDecoration(color: GardenColors.darkBorder, borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 16),
+              const Icon(Icons.check_circle_outline_rounded, color: GardenColors.success, size: 40),
+              const SizedBox(height: 12),
+              Text('¿Aprobar este pago?', style: TextStyle(
+                color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
+                fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text('Esta acción libera el pago y no se puede deshacer desde aquí.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary, fontSize: 14)),
+              const SizedBox(height: 24),
+              SizedBox(width: double.infinity, child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: GardenColors.success, foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Sí, aprobar pago', style: TextStyle(fontWeight: FontWeight.bold)),
+              )),
+              const SizedBox(height: 10),
+              SizedBox(width: double.infinity, child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text('Cancelar', style: TextStyle(
+                  color: isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary,
+                  fontWeight: FontWeight.bold)),
+              )),
+            ],
+          ),
+        );
+      },
+    );
+    if (confirmed != true) return;
+
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/admin/bookings/$bookingId/approve-payment'),

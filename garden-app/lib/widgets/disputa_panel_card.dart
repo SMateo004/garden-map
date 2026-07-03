@@ -135,6 +135,43 @@ class _DisputaPanelCardState extends State<DisputaPanelCard>
     );
   }
 
+  // A diferencia de "Aplicar recomendación" (que ya pedía confirmación),
+  // "Decidir manualmente" ejecutaba directamente sin ninguna confirmación —
+  // esta acción también ajusta el escrow con dinero real, así que merece
+  // la misma protección.
+  void _mostrarConfirmacionManual() {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return GardenGlassDialog(
+          title: const Text("Confirmar decisión manual"),
+          content: const Text(
+            "¿Confirmas descartar la recomendación de GARDEN IA y decidir manualmente? Esta acción ajustará el escrow de forma definitiva.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text("Cancelar"),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: GardenColors.warning,
+              ),
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                widget.onVeredictAplicado('manual');
+              },
+              child: const Text(
+                "Confirmar",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildSkeletonLoader() {
     return AnimatedBuilder(
       animation: _pulseAnimation,
@@ -387,9 +424,7 @@ class _DisputaPanelCardState extends State<DisputaPanelCard>
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          onPressed: () {
-            widget.onVeredictAplicado('manual');
-          },
+          onPressed: _mostrarConfirmacionManual,
           child: const Text(
             "Decidir manualmente",
             style: TextStyle(

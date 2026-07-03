@@ -216,7 +216,13 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           nearest = b;
           nearestDiff = diff;
         }
-      } catch (_) {}
+      } catch (e) {
+        // Antes era completamente silencioso: si walkDate/startTime venía
+        // malformado, esa reserva simplemente se excluía del banner de
+        // "servicio en menos de 24h" sin ningún rastro — el cuidador podía
+        // no enterarse de un servicio inminente por un dato mal formado.
+        debugPrint('Error calculando urgencia de reserva ${b['id']}: $e');
+      }
     }
     if (mounted) setState(() => _nextBookingWithin24h = nearest);
   }

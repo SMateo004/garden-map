@@ -116,6 +116,42 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
   double _precioHospedaje  = 90.0;
   double _precioPaseo      = 90.0;
   double _precioGuarderia  = 90.0;
+  // Límites reales configurados por el admin (mismo endpoint que usa el
+  // wizard de cuidador individual) — antes esta pantalla usaba un rango fijo
+  // 10-500 sin relación con lo que el admin configura ni con lo que valida
+  // el backend, permitiendo precios muy por fuera de lo esperado.
+  double _paseoMin = 10.0;   double _paseoMax = 400.0;
+  double _hospMin  = 10.0;   double _hospMax  = 400.0;
+  double _guarMin  = 10.0;   double _guarMax  = 400.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPriceLimits();
+  }
+
+  Future<void> _loadPriceLimits() async {
+    try {
+      final res = await http.get(Uri.parse('$_baseUrl/settings/price-limits'));
+      final data = jsonDecode(res.body);
+      if (data['success'] == true && mounted) {
+        final s = data['data'];
+        setState(() {
+          _paseoMin = (s['paseoMinPrice'] as num?)?.toDouble() ?? 10;
+          _paseoMax = (s['paseoMaxPrice'] as num?)?.toDouble() ?? 400;
+          _hospMin  = (s['hospedajeMinPrice'] as num?)?.toDouble() ?? 10;
+          _hospMax  = (s['hospedajeMaxPrice'] as num?)?.toDouble() ?? 400;
+          _guarMin  = (s['guarderiaMinPrice'] as num?)?.toDouble() ?? 10;
+          _guarMax  = (s['guarderiaMaxPrice'] as num?)?.toDouble() ?? 400;
+          _precioHospedaje = _precioHospedaje.clamp(_hospMin, _hospMax);
+          _precioPaseo = _precioPaseo.clamp(_paseoMin, _paseoMax);
+          _precioGuarderia = _precioGuarderia.clamp(_guarMin, _guarMax);
+        });
+      }
+    } catch (_) {
+      // mantiene los valores por defecto (10-400) si falla la carga
+    }
+  }
 
   // ── Paso 7: Logo ───────────────────────────────────────────────────────────
   String? _logoUrl;
@@ -297,8 +333,14 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         if (!_morning && !_afternoon && !_night) { _showError('Selecciona al menos un horario'); return false; }
         return true;
       case 5:
+        // Debe coincidir con minPhotos del backend (caregiver-profile-completion.helper.ts):
+        // 2 si SOLO ofrece Paseo, 4 en cualquier otro caso. Antes esta pantalla
+        // siempre pedía 2 aunque la empresa ofreciera Hospedaje/Guardería,
+        // dejando el registro pasar con menos fotos de las que exige el backend.
+        final onlyPaseo = _services.length == 1 && _services.contains('PASEO');
+        final minCaregiverPhotos = onlyPaseo ? 2 : 4;
         final totalCaregiver = _caregiverPhotoUrls.length + _localCaregiverPhotos.length;
-        if (totalCaregiver < 2) { _showError('Sube al menos 2 fotos de servicios'); return false; }
+        if (totalCaregiver < minCaregiverPhotos) { _showError('Sube al menos $minCaregiverPhotos fotos de servicios'); return false; }
         if (_needsPlacePhotos) {
           for (final (key, label, req) in _placeSections) {
             if (!req) continue;
@@ -769,7 +811,8 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         // Caregiver photos = service photos for companies
         Text('📸 Fotos de servicios', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
         const SizedBox(height: 4),
-        Text('Muestra tu empresa en acción (mín. 2, máx. 6)',
+        Text('Muestra tu empresa en acción '
+            '(mín. ${_services.length == 1 && _services.contains('PASEO') ? 2 : 4}, máx. 6)',
             style: TextStyle(color: subtextColor, fontSize: 13)),
         const SizedBox(height: 12),
         if (_uploadingCaregiverPhoto) const LinearProgressIndicator(color: GardenColors.primary),
@@ -907,18 +950,23 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
             style: TextStyle(color: subtextColor, fontSize: 14)),
         const SizedBox(height: 24),
         if (_services.contains('HOSPEDAJE'))
-          _buildPriceCard('Hospedaje', '/ noche', '🏠', _precioHospedaje, (v) => setState(() => _precioHospedaje = v), textColor, subtextColor, surface, borderColor),
+          _buildPriceCard('Hospedaje', '/ noche', '🏠', _precioHospedaje, (v) => setState(() => _precioHospedaje = v), textColor, subtextColor, surface, borderColor,
+              min: _hospMin, max: _hospMax),
         if (_services.contains('PASEO'))
           _buildPriceCard('Paseo (1 hora)', '/ hora', '🦮', _precioPaseo, (v) => setState(() => _precioPaseo = v), textColor, subtextColor, surface, borderColor,
+              min: _paseoMin, max: _paseoMax,
               note: 'El precio de 30 min será la mitad: Bs ${(_precioPaseo / 2).round()}'),
         if (_services.contains('GUARDERIA'))
-          _buildPriceCard('Guardería', '/ día', '🏡', _precioGuarderia, (v) => setState(() => _precioGuarderia = v), textColor, subtextColor, surface, borderColor),
+          _buildPriceCard('Guardería', '/ día', '🏡', _precioGuarderia, (v) => setState(() => _precioGuarderia = v), textColor, subtextColor, surface, borderColor,
+              min: _guarMin, max: _guarMax),
       ],
     );
   }
 
   Widget _buildPriceCard(String titulo, String unidad, String emoji, double value,
-      ValueChanged<double> onChanged, Color textColor, Color subtextColor, Color surface, Color borderColor, {String? note}) {
+      ValueChanged<double> onChanged, Color textColor, Color subtextColor, Color surface, Color borderColor,
+      {String? note, double min = 10, double max = 400}) {
+    final clampedValue = value.clamp(min, max);
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(16),
@@ -931,14 +979,14 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
             const SizedBox(width: 8),
             Text(titulo, style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
             const Spacer(),
-            Text('Bs ${value.round()}', style: const TextStyle(color: GardenColors.primary, fontSize: 20, fontWeight: FontWeight.w800)),
+            Text('Bs ${clampedValue.round()}', style: const TextStyle(color: GardenColors.primary, fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(width: 4),
             Text(unidad, style: TextStyle(color: subtextColor, fontSize: 12)),
           ]),
           const SizedBox(height: 10),
           Slider(
-            min: 10, max: 500, divisions: 98,
-            value: value,
+            min: min, max: max, divisions: (max - min).round().clamp(1, 200),
+            value: clampedValue,
             activeColor: GardenColors.primary,
             onChanged: onChanged,
           ),
