@@ -187,6 +187,26 @@ class _MyDataScreenState extends State<MyDataScreen> {
         const SnackBar(content: Text('Nombre y apellido son requeridos')));
       return;
     }
+    // Estos campos son EXACTAMENTE los que revisa _isClientDataIncomplete en
+    // profile_screen.dart para apagar el indicador de "perfil incompleto" —
+    // antes no se exigían aquí, así que el usuario podía guardar y seguir
+    // viendo el pulso encendido sin entender por qué.
+    final phone = _phoneCtrl.text.trim();
+    if (!RegExp(r'^[67][0-9]{7}$').hasMatch(phone)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingresa un número de celular boliviano válido (ej: 71234567)')));
+      return;
+    }
+    if (_streetCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La dirección (calle) es requerida')));
+      return;
+    }
+    if (_dateOfBirth == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecciona tu fecha de nacimiento')));
+      return;
+    }
     setState(() => _saving = true);
     try {
       final emailVerified = _userData?['emailVerified'] == true;

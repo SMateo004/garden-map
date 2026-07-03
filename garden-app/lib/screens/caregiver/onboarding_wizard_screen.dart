@@ -615,17 +615,23 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           return false;
         }
         return true;
-      case 3: // Precio
-        if (_servicesOffered.contains('HOSPEDAJE') && _precioHospedaje < 10) {
-          _showStepError('El precio mínimo de Hospedaje es Bs 10');
+      case 3: // Precio — usa los mínimos/máximos reales cargados de AppSettings,
+        // no un valor fijo (el admin puede configurar mínimos distintos a Bs 10,
+        // y el slider ya usa _hospMin/_paseoMin/_guarMin — la validación debe
+        // coincidir exactamente o el usuario puede quedar atascado sin explicación).
+        if (_servicesOffered.contains('HOSPEDAJE') &&
+            (_precioHospedaje < _hospMin || _precioHospedaje > _hospMax)) {
+          _showStepError('El precio de Hospedaje debe estar entre Bs ${_hospMin.toStringAsFixed(0)} y Bs ${_hospMax.toStringAsFixed(0)}');
           return false;
         }
-        if (_servicesOffered.contains('PASEO') && _precioPaseo < 10) {
-          _showStepError('El precio mínimo de Paseo es Bs 10');
+        if (_servicesOffered.contains('PASEO') &&
+            (_precioPaseo < _paseoMin || _precioPaseo > _paseoMax)) {
+          _showStepError('El precio de Paseo debe estar entre Bs ${_paseoMin.toStringAsFixed(0)} y Bs ${_paseoMax.toStringAsFixed(0)}');
           return false;
         }
-        if (_servicesOffered.contains('GUARDERIA') && _precioGuarderia < 10) {
-          _showStepError('El precio mínimo de Guardería es Bs 10');
+        if (_servicesOffered.contains('GUARDERIA') &&
+            (_precioGuarderia < _guarMin || _precioGuarderia > _guarMax)) {
+          _showStepError('El precio de Guardería debe estar entre Bs ${_guarMin.toStringAsFixed(0)} y Bs ${_guarMax.toStringAsFixed(0)}');
           return false;
         }
         return true;
@@ -640,8 +646,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         }
         return true;
       case 5: // Fotos del cuidador + lugar
-        if (_caregiverPhotoUrls.length + _localCaregiverPhotos.length < 2) {
-          _showStepError('Sube al menos 2 fotos tuyas en acción para continuar');
+        // Debe coincidir con minPhotos del backend (caregiver-profile-completion.helper.ts):
+        // 2 si SOLO ofrece Paseo, 4 en cualquier otro caso — antes esta pantalla
+        // siempre pedía 2, dejando cuidadores con Hospedaje/Guardería atascados
+        // más adelante sin saber por qué (el backend exigía 4).
+        final onlyPaseo = _servicesOffered.length == 1 && _servicesOffered.contains('PASEO');
+        final minCaregiverPhotos = onlyPaseo ? 2 : 4;
+        if (_caregiverPhotoUrls.length + _localCaregiverPhotos.length < minCaregiverPhotos) {
+          _showStepError('Sube al menos $minCaregiverPhotos fotos tuyas en acción para continuar');
           return false;
         }
         final needsPlace = _servicesOffered.contains('HOSPEDAJE') || _servicesOffered.contains('GUARDERIA');
@@ -1289,7 +1301,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           _buildPhotoSectionHeader(
             emoji: '📸',
             title: 'Fotos tuyas en acción',
-            subtitle: 'Paseando, jugando, cuidando mascotas — muéstrate como cuidador (mínimo 2, máximo 6)',
+            subtitle: 'Paseando, jugando, cuidando mascotas — muéstrate como cuidador '
+                '(mínimo ${_servicesOffered.length == 1 && _servicesOffered.contains('PASEO') ? 2 : 4}, máximo 6)',
             isRequired: true,
             textColor: textColor,
             subtextColor: subtextColor,

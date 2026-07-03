@@ -54,6 +54,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Timer? _expiryTimer;
   Timer? _countdownTicker;
   Duration _countdownRemaining = Duration.zero;
+  int _pollFailureCount = 0;
+  bool _pollFailureWarningShown = false;
 
   // QR capture key for "Guardar QR"
   final GlobalKey _qrBoundaryKey = GlobalKey();
@@ -172,8 +174,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
           _walletLoaded = true;
         });
       }
-    } catch (_) {
-      // silencioso
+    } catch (e) {
+      // Antes era silencioso: si esta carga inicial fallaba (sin red al abrir
+      // la pantalla), el usuario quedaba viendo una pantalla de pago vacía
+      // sin saldo de wallet ni forma de saber qué pasó, sin poder reintentar.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('No se pudo cargar tu información de pago. Revisa tu conexión.'),
+          backgroundColor: GardenColors.error,
+          duration: const Duration(seconds: 6),
+          action: SnackBarAction(label: 'Reintentar', textColor: Colors.white, onPressed: _loadData),
+        ));
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -333,6 +345,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
       );
       final data = jsonDecode(response.body);
       if (!mounted) return;
+      // Respuesta recibida — resetea el contador de fallas de red.
+      _pollFailureCount = 0;
       if (data['success'] == true) {
         final bookingData = data['data'] as Map<String, dynamic>;
         final status = bookingData['status'] as String?;
@@ -365,7 +379,21 @@ class _PaymentScreenState extends State<PaymentScreen> {
           setState(() => _paymentRejected = true);
         }
       }
-    } catch (_) {}
+    } catch (_) {
+      // El polling corre cada 5s — un fallo aislado de red es normal y no debe
+      // interrumpir ni alarmar. Pero si se acumulan varios fallos seguidos
+      // (~15s sin poder confirmar el pago), el usuario merece saberlo en vez
+      // de quedarse mirando el QR sin ninguna señal de que algo anda mal.
+      _pollFailureCount++;
+      if (_pollFailureCount >= 3 && !_pollFailureWarningShown && mounted) {
+        _pollFailureWarningShown = true;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Problemas de conexión al verificar tu pago. Seguimos intentando…'),
+          backgroundColor: GardenColors.warning,
+          duration: Duration(seconds: 6),
+        ));
+      }
+    }
   }
 
   // ── Cancel booking ──────────────────────────────────────────────────────────
@@ -518,7 +546,21 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ),
         );
       }
-    } catch (_) {}
+    } catch (e) {
+      // Antes este catch estaba vacío: si fallaba la red, el pago se
+      // confirmaba igual pero la propuesta de M&G nunca se creaba y el
+      // usuario nunca se enteraba — quedaba esperando una respuesta del
+      // cuidador que jamás iba a llegar.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo enviar tu propuesta de Meet & Greet ($e). Contacta soporte si el cuidador no responde.'),
+            backgroundColor: GardenColors.warning,
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
+    }
   }
 
   // ── Build ────────────────────────────────────────────────────────────────────
@@ -680,7 +722,23 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     fillColor: Colors.white,
                   ),
                   onChanged: (v) {
-                    final val = double.tryParse(v) ?? 0;
+                    // Tope de seguridad: sin límite, un typo (ej. "5000" en vez
+                    // de "50") podía donar accidentalmente todo el saldo de la
+                    // wallet sin ninguna confirmación ni advertencia.
+                    const maxDonation = 500.0;
+                    var val = double.tryParse(v) ?? 0;
+                    if (val > maxDonation) {
+                      val = maxDonation;
+                      _donationController.value = TextEditingValue(
+                        text: maxDonation.toStringAsFixed(0),
+                        selection: TextSelection.collapsed(offset: maxDonation.toStringAsFixed(0).length),
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('El monto máximo de donación es Bs 500'),
+                        backgroundColor: GardenColors.warning,
+                        duration: Duration(seconds: 3),
+                      ));
+                    }
                     setState(() => _donationAmount = val);
                   },
                 ),

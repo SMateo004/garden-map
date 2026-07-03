@@ -1119,7 +1119,11 @@ export async function initPayment(
     }
 
     const totalAmount = Number(booking.totalAmount);
-    const effectiveDonation = Math.max(0, donationAmount);
+    // Tope de seguridad (debe coincidir con el límite del frontend en
+    // payment_screen.dart): sin esto, un request directo al API (bypaseando
+    // la UI) podía donar cualquier monto sin límite, incluyendo typos como
+    // "5000" en vez de "50" que vacían la wallet del cliente por accidente.
+    const effectiveDonation = Math.min(Math.max(0, donationAmount), 500);
 
     // ── Deuda previa del cliente (saldo negativo) ─────────────────────────────
     // Si el cliente tiene saldo negativo (por cargo de overtime de un servicio anterior),

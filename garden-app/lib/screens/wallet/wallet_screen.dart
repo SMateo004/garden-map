@@ -98,7 +98,15 @@ class _WalletScreenState extends State<WalletScreen> {
                 ),
               Expanded(child: _isLoading
               ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
-              : SingleChildScrollView(
+              : RefreshIndicator(
+                // El saldo se carga una sola vez en initState — si el usuario paga
+                // algo desde otra pantalla y vuelve a la wallet, no hay ningún
+                // refresh automático. Pull-to-refresh es el escape manual mínimo
+                // hasta que la app tenga un RouteObserver para refrescar solo.
+                onRefresh: _loadWallet,
+                color: GardenColors.primary,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(20),
                   child: Center(child: ConstrainedBox(
                     constraints: BoxConstraints(maxWidth: kIsWeb ? 680.0 : double.infinity),
@@ -262,6 +270,7 @@ class _WalletScreenState extends State<WalletScreen> {
                     ],
                   ),
                 )),
+                ),
               )),
             ],
           ),
