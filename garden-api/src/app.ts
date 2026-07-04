@@ -346,6 +346,20 @@ app.get('/api/settings/price-limits', async (_req, res) => {
   }
 });
 
+/** GET /api/settings/blocked-zones — zonas temporalmente deshabilitadas por un admin
+ * (público, sin auth) — usado por el mapa, filtros del marketplace y selectores de
+ * zona en registro/edición de perfil, para que ninguna de esas pantallas permita
+ * elegir o mostrar una zona que el admin desactivó. */
+app.get('/api/settings/blocked-zones', async (_req, res) => {
+  try {
+    const { getBlockedZonesList } = await import('./modules/admin/admin.service.js');
+    const blockedZones = await getBlockedZonesList();
+    res.json({ success: true, data: { blockedZones } });
+  } catch {
+    res.json({ success: true, data: { blockedZones: [] } });
+  }
+});
+
 /** GET /api/banners — banners activos ordenados por posición (público, sin auth) */
 app.get('/api/banners', async (_req, res) => {
   try {

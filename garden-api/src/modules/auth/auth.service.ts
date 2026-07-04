@@ -161,11 +161,30 @@ export async function assertBetaAccess(inviteCode?: string): Promise<void> {
   }
 }
 
+/**
+ * Rechaza el registro/edición si la zona elegida fue deshabilitada por un
+ * admin (AppSettings.blockedZones). Sin esto, un cuidador podía registrarse
+ * o cambiar su zona a una que el mapa y los filtros ya no muestran —
+ * quedando "invisible" para los clientes sin que él lo supiera.
+ */
+async function assertZoneNotBlocked(zone: string | null | undefined): Promise<void> {
+  if (!zone) return;
+  const { isZoneBlocked } = await import('../admin/admin.service.js');
+  if (await isZoneBlocked(zone)) {
+    throw new BadRequestError(
+      'Esta zona no está disponible temporalmente. Elige otra zona para continuar.',
+      'ZONE_BLOCKED',
+      'zone'
+    );
+  }
+}
+
 export async function registerCaregiver(body: RegisterCaregiverBody): Promise<RegisterCaregiverResult> {
   const { user: userInput, profile: profileInput } = body;
 
   // Beta access gate — no-op when betaInviteRequired=false
   await assertBetaAccess(body.inviteCode);
+  await assertZoneNotBlocked(profileInput.zone);
 
   const [existingEmail, existingPhone] = await Promise.all([
     prisma.user.findUnique({ where: { email: userInput.email.toLowerCase() } }),
@@ -608,6 +627,7 @@ export async function updateCaregiverProfile(
   if (!profile) {
     throw new BadRequestError('No tienes perfil de cuidador', 'CAREGIVER_PROFILE_NOT_FOUND');
   }
+  if (body.zone !== undefined) await assertZoneNotBlocked(body.zone);
 
   const updateData: Record<string, unknown> = {};
   if (body.bio !== undefined) updateData.bio = body.bio;
@@ -719,6 +739,7 @@ export async function registerProfessional(body: RegisterProfessionalBody): Prom
       'INVALID_PROFESSIONAL_CODE'
     );
   }
+  await assertZoneNotBlocked((body as any).zone);
 
   const [existingEmail, existingPhone] = await Promise.all([
     prisma.user.findUnique({ where: { email: body.email.toLowerCase() } }),
@@ -847,6 +868,7 @@ export async function registerCompany(body: RegisterCompanyBody): Promise<Regist
   if (!valid) {
     throw new BadRequestError('Código de registro de empresa inválido.', 'INVALID_COMPANY_CODE');
   }
+  await assertZoneNotBlocked((body as any).zone);
 
   const [existingEmail, existingPhone] = await Promise.all([
     prisma.user.findUnique({ where: { email: body.email.toLowerCase() } }),

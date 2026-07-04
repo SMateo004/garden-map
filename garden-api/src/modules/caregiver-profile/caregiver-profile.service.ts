@@ -210,6 +210,20 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
     );
   }
 
+  // Rechaza el cambio si la zona elegida fue deshabilitada por un admin —
+  // sin esto, un cuidador podía mover su zona a una que el mapa y los
+  // filtros ya no muestran, quedando "invisible" para clientes sin saberlo.
+  if (body.zone !== undefined && body.zone) {
+    const { isZoneBlocked } = await import('../admin/admin.service.js');
+    if (await isZoneBlocked(body.zone)) {
+      throw new BadRequestError(
+        'Esta zona no está disponible temporalmente. Elige otra zona para continuar.',
+        'ZONE_BLOCKED',
+        'zone'
+      );
+    }
+  }
+
   const updateData: Record<string, unknown> = {};
   if (body.bio !== undefined) updateData.bio = body.bio;
   if (body.bioDetail !== undefined) updateData.bioDetail = body.bioDetail;

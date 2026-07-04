@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import '../constants/zones.dart';
+import '../services/zones_service.dart';
 import 'address_map_picker.dart';
 
 /// Sección de dirección reutilizable: abre el mapa picker primero,
@@ -252,6 +253,15 @@ class _ZoneDropdownWithMap extends StatefulWidget {
 class _ZoneDropdownWithMapState extends State<_ZoneDropdownWithMap> {
   bool _showMap = false;
   final MapController _mapController = MapController();
+  Set<String> _blockedZones = {};
+
+  @override
+  void initState() {
+    super.initState();
+    ZonesService.getBlockedZones().then((blocked) {
+      if (mounted) setState(() => _blockedZones = blocked);
+    });
+  }
 
   @override
   void didUpdateWidget(_ZoneDropdownWithMap oldWidget) {
@@ -307,9 +317,15 @@ class _ZoneDropdownWithMapState extends State<_ZoneDropdownWithMap> {
                     style: TextStyle(color: widget.subtextColor, fontSize: 14)),
               ]),
               items: kZoneLabels.entries.map((e) {
-                final color = kZoneColors[e.key] ?? const Color(0xFF16a34a);
+                final blocked = _blockedZones.contains(e.key);
+                final color = blocked ? Colors.grey.shade400 : (kZoneColors[e.key] ?? const Color(0xFF16a34a));
                 return DropdownMenuItem(
                   value: e.key,
+                  // Zonas bloqueadas por el admin no se pueden elegir — se
+                  // muestran en gris con una etiqueta clara en vez de
+                  // desaparecer, para que el usuario entienda por qué no
+                  // está disponible en lugar de pensar que es un error.
+                  enabled: !blocked,
                   child: Row(children: [
                     Container(
                       width: 12,
@@ -321,7 +337,22 @@ class _ZoneDropdownWithMapState extends State<_ZoneDropdownWithMap> {
                     ),
                     const SizedBox(width: 10),
                     Text(e.value,
-                        style: TextStyle(color: widget.textColor, fontSize: 14)),
+                        style: TextStyle(
+                          color: blocked ? Colors.grey.shade400 : widget.textColor,
+                          fontSize: 14,
+                        )),
+                    if (blocked) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text('No disponible',
+                            style: TextStyle(color: Colors.grey.shade700, fontSize: 10, fontWeight: FontWeight.w600)),
+                      ),
+                    ],
                   ]),
                 );
               }).toList(),

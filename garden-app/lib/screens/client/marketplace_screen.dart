@@ -9,6 +9,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../constants/zones.dart';
+import '../../services/zones_service.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_logo_loader.dart';
@@ -59,6 +60,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   bool _hasError = false;
   int _currentPage = 1;
   bool _hasMore = true;
+
+  // Zonas deshabilitadas temporalmente por un admin — no deben aparecer
+  // como opción en el filtro ni dibujarse en el mapa.
+  Set<String> _blockedZones = {};
 
   // ── Filters (API) ──
   String _selectedService = 'todos';
@@ -205,6 +210,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
     _loadInitialData();
     _loadBanners();
+    ZonesService.getBlockedZones().then((blocked) {
+      if (!mounted) return;
+      setState(() {
+        _blockedZones = blocked;
+        // Si la zona ya elegida (ej. desde un link/preset) se bloqueó
+        // mientras tanto, la limpiamos para no dejar un filtro "fantasma"
+        // aplicado a una zona que ya no existe en la UI.
+        if (_selectedZone != null && blocked.contains(_selectedZone)) {
+          _selectedZone = null;
+        }
+      });
+    });
     if (kIsWeb) _checkOnboarding();
     // Abrir mapa por defecto en desktop web
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1440,10 +1457,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       ]),
                     ),
                   ),
-                  // Zone pills
+                  // Zone pills — las zonas que un admin deshabilitó no se
+                  // muestran como opción de filtro.
                   Wrap(
                     spacing: 6, runSpacing: 6,
-                    children: _kZoneLabels.entries.map((e) {
+                    children: _kZoneLabels.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
                       final isSelected = _selectedZone == e.key;
                       final color = _kZoneColors[e.key] ?? GardenColors.primary;
                       return GestureDetector(
@@ -2119,7 +2137,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
-    final polygons = _kZonePolygons.entries.map((e) {
+    // Las zonas deshabilitadas por un admin desaparecen del mapa — ni su
+    // polígono ni su marcador se dibujan mientras estén bloqueadas.
+    final polygons = _kZonePolygons.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
       final color = _kZoneColors[e.key] ?? GardenColors.primary;
       final isSelected = _selectedZone == e.key;
       return Polygon(
@@ -2130,7 +2150,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       );
     }).toList();
 
-    final markers = _kZoneCenters.entries.map((e) {
+    final markers = _kZoneCenters.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
       final color = _kZoneColors[e.key] ?? GardenColors.primary;
       final label = _kZoneLabels[e.key] ?? e.key;
       final isSelected = _selectedZone == e.key;
@@ -2217,12 +2237,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           ),
           Container(height: 1, color: border),
 
-          // Zone legend
+          // Zone legend — misma exclusión de zonas bloqueadas
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
-              children: _kZoneLabels.entries.map((e) {
+              children: _kZoneLabels.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
                 final color = _kZoneColors[e.key] ?? GardenColors.primary;
                 final isSelected = _selectedZone == e.key;
                 return GestureDetector(
