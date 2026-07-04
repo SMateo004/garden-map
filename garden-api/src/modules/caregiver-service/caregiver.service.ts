@@ -495,6 +495,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     acceptAggressive: profile.acceptAggressive,
     acceptPuppies: profile.acceptPuppies,
     acceptSeniors: profile.acceptSeniors,
+    requireMeetAndGreet: (profile as any).requireMeetAndGreet ?? false,
     sizesAccepted: profile.sizesAccepted,
     animalTypes: profile.animalTypes,
     acceptMedication: profile.acceptMedication,
@@ -1149,6 +1150,7 @@ function mapProfileToListItem(profile: any, markupRate: number): CaregiverListIt
     acceptAggressive: profile.acceptAggressive,
     acceptPuppies: profile.acceptPuppies,
     acceptSeniors: profile.acceptSeniors,
+    requireMeetAndGreet: (profile as any).requireMeetAndGreet ?? false,
     sizesAccepted: profile.sizesAccepted,
   };
 }

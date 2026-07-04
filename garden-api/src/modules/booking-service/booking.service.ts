@@ -175,7 +175,7 @@ export async function createBooking(
         id: { in: uniquePetIds },
         clientProfile: { userId: clientId },
       },
-      select: { id: true, name: true, breed: true, age: true, size: true, specialNeeds: true },
+      select: { id: true, name: true, breed: true, age: true, size: true, specialNeeds: true, animalType: true, isAggressive: true },
     });
 
     if (petsData.length !== uniquePetIds.length) {
@@ -208,6 +208,11 @@ export async function createBooking(
         servicesOffered: true,
         maxPets: true,
         sizesAccepted: true,
+        animalTypes: true,
+        acceptAggressive: true,
+        acceptPuppies: true,
+        acceptSeniors: true,
+        requireMeetAndGreet: true,
       },
     });
 
@@ -245,6 +250,68 @@ export async function createBooking(
           'petIds'
         );
       }
+    }
+
+    // Validar ESPECIE (perro/gato) contra CaregiverProfile.animalTypes — solo
+    // si el cuidador configuró tipos aceptados y la mascota tiene especie
+    // registrada (evita romper mascotas antiguas que nunca la llenaron).
+    const animalTypesAccepted = Array.isArray(caregiver.animalTypes) ? caregiver.animalTypes : [];
+    if (animalTypesAccepted.length > 0) {
+      const wrongSpeciesPet = orderedPets.find((p) => p.animalType && !animalTypesAccepted.includes(p.animalType));
+      if (wrongSpeciesPet) {
+        const speciesLabel = wrongSpeciesPet.animalType === 'DOGS' ? 'perros' : 'gatos';
+        throw new BadRequestError(
+          `Este cuidador no acepta ${speciesLabel} (${wrongSpeciesPet.name}). Elige otro cuidador para esta mascota.`,
+          'PET_TYPE_NOT_ACCEPTED',
+          'petIds'
+        );
+      }
+    }
+
+    // Validar políticas especiales: mascota agresiva, cachorro (< 1 año) o
+    // mayor (>= 8 años) contra lo que el cuidador acepta. Antes ninguna de
+    // estas políticas se verificaba al crear la reserva — el cuidador solo
+    // se enteraba de la incompatibilidad al ver la reserva ya confirmada.
+    if (caregiver.acceptAggressive === false) {
+      const aggressivePet = orderedPets.find((p) => p.isAggressive);
+      if (aggressivePet) {
+        throw new BadRequestError(
+          `Este cuidador no acepta mascotas agresivas (${aggressivePet.name}). Elige otro cuidador.`,
+          'PET_AGGRESSIVE_NOT_ACCEPTED',
+          'petIds'
+        );
+      }
+    }
+    if (caregiver.acceptPuppies === false) {
+      const puppyPet = orderedPets.find((p) => p.age != null && p.age < 1);
+      if (puppyPet) {
+        throw new BadRequestError(
+          `Este cuidador no acepta cachorros (${puppyPet.name}, menos de 1 año). Elige otro cuidador.`,
+          'PET_PUPPY_NOT_ACCEPTED',
+          'petIds'
+        );
+      }
+    }
+    if (caregiver.acceptSeniors === false) {
+      const seniorPet = orderedPets.find((p) => p.age != null && p.age >= 8);
+      if (seniorPet) {
+        throw new BadRequestError(
+          `Este cuidador no acepta mascotas mayores (${seniorPet.name}, 8+ años). Elige otro cuidador.`,
+          'PET_SENIOR_NOT_ACCEPTED',
+          'petIds'
+        );
+      }
+    }
+
+    // Meet & Greet obligatorio: si el cuidador lo exige, la reserva debe
+    // incluir mgData (propuesta de M&G) — no se puede crear una reserva
+    // "directa" saltándose ese paso.
+    if (caregiver.requireMeetAndGreet && !mgData) {
+      throw new BadRequestError(
+        'Este cuidador requiere completar un Meet & Greet antes de confirmar el servicio. Actívalo para continuar con la reserva.',
+        'MEET_AND_GREET_REQUIRED',
+        'mgData'
+      );
     }
 
     // Restricción: un cuidador no puede reservarse a sí mismo

@@ -61,6 +61,7 @@ export interface PatchCaregiverProfileBody {
   acceptMedication?: any[];
   acceptPuppies?: boolean;
   acceptSeniors?: boolean;
+  requireMeetAndGreet?: boolean;
   sizesAccepted?: any[];
   noAcceptBreeds?: boolean;
   breedsWhy?: string;

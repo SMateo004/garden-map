@@ -1,4 +1,4 @@
-import { PetSize } from '@prisma/client';
+import { PetSize, AnimalType } from '@prisma/client';
 import prisma from '../../config/database.js';
 import { BadRequestError, NotFoundError } from '../../shared/errors.js';
 import { ensureAbsoluteUrl } from '../../shared/upload-utils.js';
@@ -29,6 +29,8 @@ export type PetListItem = {
   breed: string | null;
   age: number | null;
   size: PetSize | null;
+  animalType: AnimalType | null;
+  isAggressive: boolean;
   photoUrl: string | null;
   specialNeeds: string | null;
   notes: string | null;
@@ -58,6 +60,8 @@ export async function getPetsByUserId(userId: string): Promise<PetListItem[]> {
           breed: true,
           age: true,
           size: true,
+          animalType: true,
+          isAggressive: true,
           photoUrl: true,
           specialNeeds: true,
           notes: true,
@@ -109,6 +113,8 @@ export async function createPet(userId: string, body: CreatePetBody): Promise<Pe
       breed: body.breed ?? null,
       age: body.age ?? null,
       size: body.size ?? null,
+      animalType: body.animalType ?? null,
+      isAggressive: body.isAggressive ?? false,
       photoUrl,
       specialNeeds: body.specialNeeds ?? null,
       notes: body.notes ?? null,
@@ -151,6 +157,8 @@ export async function createPet(userId: string, body: CreatePetBody): Promise<Pe
     breed: pet.breed,
     age: pet.age,
     size: pet.size,
+    animalType: pet.animalType,
+    isAggressive: pet.isAggressive,
     photoUrl: pet.photoUrl,
     specialNeeds: pet.specialNeeds,
     notes: pet.notes ?? null,
@@ -196,6 +204,8 @@ export async function updatePet(
       ...(body.breed !== undefined && { breed: body.breed }),
       ...(body.age !== undefined && { age: body.age }),
       ...(body.size !== undefined && { size: body.size }),
+      ...(body.animalType !== undefined && { animalType: body.animalType }),
+      ...(body.isAggressive !== undefined && { isAggressive: body.isAggressive }),
       ...(photoUrlValue !== undefined && { photoUrl: photoUrlValue }),
       ...(body.specialNeeds !== undefined && { specialNeeds: body.specialNeeds }),
       ...(body.notes !== undefined && { notes: body.notes }),
@@ -232,6 +242,8 @@ export async function updatePet(
     breed: updated.breed,
     age: updated.age,
     size: updated.size,
+    animalType: updated.animalType,
+    isAggressive: updated.isAggressive,
     photoUrl: updated.photoUrl,
     specialNeeds: updated.specialNeeds,
     notes: updated.notes,

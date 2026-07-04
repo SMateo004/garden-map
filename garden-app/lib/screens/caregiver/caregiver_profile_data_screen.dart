@@ -91,6 +91,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   bool _acceptAggressive = false;
   bool _acceptPuppies = false;
   bool _acceptSeniors = false;
+  bool _requireMeetAndGreet = false;
 
   // Selecciones
   List<String> _selectedHomeTypes = [];
@@ -295,6 +296,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     _acceptAggressive = profile['acceptAggressive'] as bool? ?? false;
     _acceptPuppies = profile['acceptPuppies'] as bool? ?? false;
     _acceptSeniors = profile['acceptSeniors'] as bool? ?? false;
+    _requireMeetAndGreet = profile['requireMeetAndGreet'] as bool? ?? false;
 
     // Mapear texto guardado a chips predefinidas
     final anxiousText = profile['handleAnxious'] as String? ?? '';
@@ -556,6 +558,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         'acceptAggressive': _acceptAggressive,
         'acceptPuppies': _acceptPuppies,
         'acceptSeniors': _acceptSeniors,
+        'requireMeetAndGreet': _requireMeetAndGreet,
         'sizesAccepted': _acceptedSizes,
         'animalTypes': _acceptedPetTypes,
         if (pricePerDay != null && pricePerDay > 0) 'pricePerDay': pricePerDay,
@@ -1184,6 +1187,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                   IgnorePointer(ignoring: !_isEditing, child: _acceptSwitch('¿Aceptas cachorros?', _acceptPuppies, (v) => setState(() => _acceptPuppies = v), textColor, subtextColor, surface, borderColor)),
                                   const SizedBox(height: 8),
                                   IgnorePointer(ignoring: !_isEditing, child: _acceptSwitch('¿Aceptas mascotas mayores?', _acceptSeniors, (v) => setState(() => _acceptSeniors = v), textColor, subtextColor, surface, borderColor)),
+                                  const SizedBox(height: 8),
+                                  IgnorePointer(ignoring: !_isEditing, child: _acceptSwitch('¿Exiges Meet & Greet antes del primer servicio?', _requireMeetAndGreet, (v) => setState(() => _requireMeetAndGreet = v), textColor, subtextColor, surface, borderColor)),
                                   if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
                                     const SizedBox(height: 16),
                                     SizedBox(key: _keyHandleAnxious, height: 0),
@@ -1660,6 +1665,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             _acceptSwitch('¿Aceptas cachorros?', _acceptPuppies, (val) => setState(() => _acceptPuppies = val), textColor, subtextColor, surface, borderColor),
             const SizedBox(height: 8),
             _acceptSwitch('¿Aceptas mascotas mayores?', _acceptSeniors, (val) => setState(() => _acceptSeniors = val), textColor, subtextColor, surface, borderColor),
+            const SizedBox(height: 8),
+            _acceptSwitch('¿Exiges Meet & Greet antes del primer servicio?', _requireMeetAndGreet, (val) => setState(() => _requireMeetAndGreet = val), textColor, subtextColor, surface, borderColor),
 
             // Situaciones especiales — solo para no-amateurs
             if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[

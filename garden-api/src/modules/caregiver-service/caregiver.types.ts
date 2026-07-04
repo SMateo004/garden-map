@@ -33,6 +33,8 @@ export interface CaregiverListItem {
   acceptAggressive: boolean | null;
   acceptPuppies: boolean | null;
   acceptSeniors: boolean | null;
+  /** Si es true, el cuidador exige un Meet & Greet antes de cualquier reserva nueva. */
+  requireMeetAndGreet?: boolean;
   sizesAccepted: any[] | null;
 }
 

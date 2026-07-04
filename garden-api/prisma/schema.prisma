@@ -128,6 +128,9 @@ model CaregiverProfile {
   acceptMedication                MedicationType[]
   acceptPuppies                   Boolean?
   acceptSeniors                   Boolean?
+  /// Si es true, el cuidador exige completar un Meet & Greet antes de
+  /// confirmar cualquier reserva nueva con un cliente.
+  requireMeetAndGreet             Boolean            @default(false)
   sizesAccepted                   String[]
   noAcceptBreeds                  Boolean?
   breedsWhy                       String?            @db.VarChar(500)
@@ -470,6 +473,13 @@ model Pet {
   breed           String?       @db.VarChar(100)
   age             Int?
   size            PetSize?
+  /// Especie de la mascota — solo DOGS o CATS (mismos valores que
+  /// CaregiverProfile.animalTypes), para poder validar contra los tipos que
+  /// el cuidador acepta al momento de crear una reserva.
+  animalType      AnimalType?
+  /// Reportado por el dueño — se valida contra CaregiverProfile.acceptAggressive
+  /// al crear una reserva.
+  isAggressive    Boolean       @default(false)
   photoUrl        String?
   specialNeeds    String?
   notes           String?

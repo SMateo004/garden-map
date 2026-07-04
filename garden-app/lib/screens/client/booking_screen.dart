@@ -128,6 +128,9 @@ class _BookingScreenState extends State<BookingScreen> {
           _selectedService = services.first;
         }
         if (_pets.isNotEmpty) _selectedPetIds = [_pets.first['id'] as String];
+        // Si el cuidador exige Meet & Greet, se activa solo y no se puede
+        // desactivar — ver _buildMeetAndGreetSection.
+        if (_caregiver!['requireMeetAndGreet'] == true) _includeMG = true;
       });
       // Precargar disponibilidad real del cuidador (para filtrar días no disponibles)
       _loadMultiDayData();
@@ -167,6 +170,7 @@ class _BookingScreenState extends State<BookingScreen> {
              } else if (services.isNotEmpty) {
                _selectedService = services.first;
              }
+             if (_caregiver!['requireMeetAndGreet'] == true) _includeMG = true;
           });
           // Precargar disponibilidad real del cuidador (para filtrar días no disponibles)
           _loadMultiDayData();
@@ -494,6 +498,37 @@ class _BookingScreenState extends State<BookingScreen> {
     return total;
   }
 
+  /// Devuelve el motivo por el que esta mascota NO es compatible con el
+  /// cuidador seleccionado (tamaño, especie, agresividad, cachorro, mayor),
+  /// o null si es compatible. Refleja exactamente las mismas reglas que
+  /// valida booking.service.ts al crear la reserva — mostrarlo aquí evita
+  /// que el cliente llene todo el formulario y recién al final se entere.
+  String? _petIncompatibilityReason(Map<String, dynamic> pet) {
+    if (_caregiver == null) return null;
+    final sizesAccepted = (_caregiver!['sizesAccepted'] as List?)?.cast<String>() ?? [];
+    final petSize = pet['size'] as String?;
+    if (sizesAccepted.isNotEmpty && petSize != null && !sizesAccepted.contains(petSize)) {
+      return 'Tamaño no aceptado';
+    }
+    final animalTypesAccepted = (_caregiver!['animalTypes'] as List?)?.cast<String>() ?? [];
+    final petType = pet['animalType'] as String?;
+    if (animalTypesAccepted.isNotEmpty && petType != null && !animalTypesAccepted.contains(petType)) {
+      return petType == 'DOGS' ? 'No acepta perros' : 'No acepta gatos';
+    }
+    final isAggressive = pet['isAggressive'] as bool? ?? false;
+    if (isAggressive && _caregiver!['acceptAggressive'] == false) {
+      return 'No acepta agresivos';
+    }
+    final age = pet['age'] as int?;
+    if (age != null && age < 1 && _caregiver!['acceptPuppies'] == false) {
+      return 'No acepta cachorros';
+    }
+    if (age != null && age >= 8 && _caregiver!['acceptSeniors'] == false) {
+      return 'No acepta mayores';
+    }
+    return null;
+  }
+
   double? _calculatePrice() {
     if (_caregiver == null || _selectedService == null) return null;
     final petMult = _petPriceMultiplier;
@@ -784,12 +819,12 @@ class _BookingScreenState extends State<BookingScreen> {
                       final petIndex = _selectedPetIds.indexOf(petId); // -1 if not selected
                       final isSelected = petIndex >= 0;
                       final atMax = _selectedPetIds.length >= _caregiverMaxPets;
-                      // Tamaño no aceptado por este cuidador — antes se podía
-                      // seleccionar igual y recién el backend lo rechazaba al
-                      // crear la reserva, después de llenar todo el formulario.
-                      final sizesAccepted = (_caregiver?['sizesAccepted'] as List?)?.cast<String>() ?? [];
-                      final petSize = pet['size'] as String?;
-                      final sizeNotAccepted = sizesAccepted.isNotEmpty && petSize != null && !sizesAccepted.contains(petSize);
+                      // Mascota no compatible con este cuidador (tamaño, especie,
+                      // agresividad, cachorro o mayor) — antes se podía seleccionar
+                      // igual y recién el backend lo rechazaba al crear la reserva,
+                      // después de llenar todo el formulario.
+                      final incompatReason = _petIncompatibilityReason(pet);
+                      final sizeNotAccepted = incompatReason != null;
                       // Discount label for this pet if selected
                       String? discountLabel;
                       if (isSelected && petIndex == 1) discountLabel = '-25%';
@@ -876,7 +911,7 @@ class _BookingScreenState extends State<BookingScreen> {
                                   ),
                                 ),
                               ),
-                              if (sizeNotAccepted)
+                              if (incompatReason != null)
                                 Container(
                                   margin: const EdgeInsets.only(right: 6),
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
@@ -884,8 +919,8 @@ class _BookingScreenState extends State<BookingScreen> {
                                     color: GardenColors.error.withValues(alpha: 0.12),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
-                                  child: const Text('Tamaño no aceptado',
-                                      style: TextStyle(color: GardenColors.error, fontSize: 10, fontWeight: FontWeight.w700)),
+                                  child: Text(incompatReason,
+                                      style: const TextStyle(color: GardenColors.error, fontSize: 10, fontWeight: FontWeight.w700)),
                                 ),
                               if (discountLabel != null)
                                 Container(
@@ -2505,6 +2540,9 @@ class _BookingScreenState extends State<BookingScreen> {
     final isDark = themeNotifier.isDark;
     final bookingStart = _bookingStartDate;
     final locked = !_hasServiceDateSelected;
+    // Si el cuidador exige M&G (caregiver-profile: requireMeetAndGreet), el
+    // switch queda encendido y bloqueado — no es opcional para este cuidador.
+    final mgRequired = _caregiver?['requireMeetAndGreet'] == true;
 
     // Locked colours — muted when no service date is picked yet
     final lockedBorder = isDark
@@ -2533,15 +2571,31 @@ class _BookingScreenState extends State<BookingScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Meet & Greet',
-                        style: TextStyle(
-                            color: locked ? lockedText : textColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15)),
+                    Row(children: [
+                      Text('Meet & Greet',
+                          style: TextStyle(
+                              color: locked ? lockedText : textColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15)),
+                      if (mgRequired && !locked) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: GardenColors.warning.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text('Obligatorio',
+                              style: TextStyle(color: GardenColors.warning, fontSize: 10, fontWeight: FontWeight.w800)),
+                        ),
+                      ],
+                    ]),
                     Text(
                       locked
                           ? 'Selecciona primero la fecha del servicio'
-                          : 'Conoce al cuidador antes del servicio',
+                          : mgRequired
+                              ? 'Este cuidador exige conocerte antes del primer servicio'
+                              : 'Conoce al cuidador antes del servicio',
                       style: TextStyle(color: lockedText, fontSize: 12),
                     ),
                   ],
@@ -2549,7 +2603,7 @@ class _BookingScreenState extends State<BookingScreen> {
               ),
               Switch(
                 value: _includeMG,
-                onChanged: locked ? null : (v) => setState(() => _includeMG = v),
+                onChanged: (locked || mgRequired) ? null : (v) => setState(() => _includeMG = v),
                 activeColor: GardenColors.primary,
               ),
             ],

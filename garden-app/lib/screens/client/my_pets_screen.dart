@@ -246,6 +246,8 @@ class _PetCard extends StatelessWidget {
     final age = pet['age'];
     final size = pet['size'] as String?;
     final specialNeeds = pet['specialNeeds'] as String?;
+    final animalType = pet['animalType'] as String?;
+    final isAggressive = pet['isAggressive'] as bool? ?? false;
     final gender = pet['gender'] as String?;
     final weight = pet['weight'];
     final sterilized = pet['sterilized'] as bool?;
@@ -310,9 +312,12 @@ class _PetCard extends StatelessWidget {
               ],
               const SizedBox(height: 8),
               Wrap(spacing: 6, runSpacing: 4, children: [
+                if (animalType == 'DOGS') _pill('🐕 Perro', GardenColors.info),
+                if (animalType == 'CATS') _pill('🐈 Gato', GardenColors.accent),
                 if (age != null) _pill('$age años', GardenColors.primary),
                 if (size != null && sizeLabels.containsKey(size))
                   _pill(sizeLabels[size]!, GardenColors.primaryLight),
+                if (isAggressive) _pill('⚡ Agresiva', GardenColors.error),
                 if (gender == 'MALE') _pill('♂ Macho', GardenColors.info),
                 if (gender == 'FEMALE') _pill('♀ Hembra', GardenColors.accent),
                 if (weight != null) _pill('${weight}kg', GardenColors.textSecondary),
@@ -377,6 +382,8 @@ class _PetFormSheetState extends State<_PetFormSheet> {
   late TextEditingController _microchipCtrl;
   late TextEditingController _specialCtrl;
   String? _size;
+  String? _animalType;
+  bool _isAggressive = false;
   String? _gender;
   bool? _sterilized;
   String? _photoUrl;
@@ -403,6 +410,8 @@ class _PetFormSheetState extends State<_PetFormSheet> {
     _microchipCtrl = TextEditingController(text: p?['microchipNumber'] as String? ?? '');
     _specialCtrl = TextEditingController(text: p?['specialNeeds'] as String? ?? '');
     _size = p?['size'] as String?;
+    _animalType = p?['animalType'] as String?;
+    _isAggressive = p?['isAggressive'] as bool? ?? false;
     _gender = p?['gender'] as String?;
     _sterilized = p?['sterilized'] as bool?;
     _photoUrl = p?['photoUrl'] as String?;
@@ -543,6 +552,8 @@ class _PetFormSheetState extends State<_PetFormSheet> {
       if (_colorCtrl.text.trim().isNotEmpty) body['color'] = _colorCtrl.text.trim();
       if (_microchipCtrl.text.trim().isNotEmpty) body['microchipNumber'] = _microchipCtrl.text.trim();
       if (_size != null) body['size'] = _size;
+      if (_animalType != null) body['animalType'] = _animalType;
+      body['isAggressive'] = _isAggressive;
       if (_gender != null) body['gender'] = _gender;
       if (_sterilized != null) body['sterilized'] = _sterilized;
       if (_specialCtrl.text.trim().isNotEmpty) body['specialNeeds'] = _specialCtrl.text.trim();
@@ -737,6 +748,26 @@ class _PetFormSheetState extends State<_PetFormSheet> {
               validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null,
             ),
             const SizedBox(height: 12),
+            // Especie — usado para saber qué cuidadores aceptan esta mascota
+            // (CaregiverProfile.animalTypes) al momento de reservar.
+            Text('Tipo de mascota', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(child: _GenderChip(
+                value: 'DOGS', label: '🐕 Perro',
+                selected: _animalType == 'DOGS',
+                isDark: isDark, borderColor: borderColor,
+                onTap: () => setState(() => _animalType = _animalType == 'DOGS' ? null : 'DOGS'),
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: _GenderChip(
+                value: 'CATS', label: '🐈 Gato',
+                selected: _animalType == 'CATS',
+                isDark: isDark, borderColor: borderColor,
+                onTap: () => setState(() => _animalType = _animalType == 'CATS' ? null : 'CATS'),
+              )),
+            ]),
+            const SizedBox(height: 12),
             Row(children: [
               Expanded(child: TextFormField(
                 controller: _breedCtrl,
@@ -827,6 +858,40 @@ class _PetFormSheetState extends State<_PetFormSheet> {
                     style: TextStyle(
                       color: _sterilized == true ? GardenColors.success : textColor,
                       fontWeight: FontWeight.w600, fontSize: 14)),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 10),
+            // Usado por Garden para validar contra las políticas del
+            // cuidador (acceptAggressive) al momento de crear una reserva.
+            GestureDetector(
+              onTap: () => setState(() => _isAggressive = !_isAggressive),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: _isAggressive
+                      ? GardenColors.warning.withValues(alpha: 0.08)
+                      : surfaceEl,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _isAggressive
+                        ? GardenColors.warning.withValues(alpha: 0.4)
+                        : borderColor,
+                  ),
+                ),
+                child: Row(children: [
+                  Icon(
+                    _isAggressive ? Icons.check_circle_rounded : Icons.circle_outlined,
+                    color: _isAggressive ? GardenColors.warning : subtextColor,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text('Puede mostrar agresividad con extraños',
+                      style: TextStyle(
+                        color: _isAggressive ? GardenColors.warning : textColor,
+                        fontWeight: FontWeight.w600, fontSize: 14)),
+                  ),
                 ]),
               ),
             ),
