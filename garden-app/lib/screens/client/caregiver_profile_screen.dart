@@ -259,11 +259,33 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
       );
     }
 
+    // caregiverPhotos es el campo ACTUAL donde se guardan las fotos que el
+    // cuidador sube en "Datos del cuidador" — photos/walkerPhotos son legados
+    // de un flujo anterior. Antes esta pantalla solo leía photos/walkerPhotos,
+    // así que casi ningún cuidador nuevo mostraba sus fotos en el marketplace
+    // (solo la foto de perfil), aunque las hubiera subido correctamente.
+    final caregiverPhotos = (_caregiver!['caregiverPhotos'] as List?)?.cast<String>() ?? [];
     final photos = (_caregiver!['photos'] as List?)?.cast<String>() ?? [];
     final walkerPhotos = (_caregiver!['walkerPhotos'] as List?)?.cast<String>() ?? [];
     final services = (_caregiver!['services'] as List?)?.cast<String>() ?? [];
-    final isPaseoOnly = services.length == 1 && services.contains('PASEO');
-    final displayPhotos = isPaseoOnly && walkerPhotos.isNotEmpty ? walkerPhotos : photos;
+    final displayPhotos = caregiverPhotos.isNotEmpty
+        ? caregiverPhotos
+        : (walkerPhotos.isNotEmpty ? walkerPhotos : photos);
+    final placePhotosRaw = _caregiver!['placePhotos'] as Map?;
+    final placePhotos = placePhotosRaw?.map(
+      (k, v) => MapEntry(k as String, (v as List?)?.cast<String>() ?? <String>[]),
+    ) ?? <String, List<String>>{};
+    const placeSectionLabels = {
+      'sala': '🛋️ Sala / Área principal',
+      'descanso': '🛏️ Zona de descanso',
+      'alimentacion': '🍽️ Área de alimentación',
+      'jardin': '🌿 Jardín / Patio',
+      'juego': '🎾 Área de juego',
+    };
+    final placePhotoSections = placeSectionLabels.entries
+        .where((e) => (placePhotos[e.key]?.isNotEmpty ?? false))
+        .map((e) => (e.key, e.value, placePhotos[e.key]!))
+        .toList();
     final name = '${_caregiver!['firstName']} ${_caregiver!['lastName']}';
     final rating = (_caregiver!['rating'] as num? ?? 0).toStringAsFixed(1);
     final reviewCount = _caregiver!['reviewCount'] as int? ?? 0;
@@ -289,7 +311,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
         return _buildWideLayout(
           context: context, isDark: isDark, bg: bg, surface: surface,
           textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
-          photos: displayPhotos, services: services, name: name, rating: rating,
+          photos: displayPhotos, placePhotoSections: placePhotoSections, services: services, name: name, rating: rating,
           reviewCount: reviewCount, zone: zone, bio: bio, bioDetail: bioDetail,
           verified: verified, pricePerWalk60: pricePerWalk60, pricePerWalk30: pricePerWalk30, pricePerDay: pricePerDay,
           offersHospedaje: offersHospedaje, offersPaseo: offersPaseo, priceDisplay: priceDisplay,
@@ -298,7 +320,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
       return _buildNarrowLayout(
         context: context, isDark: isDark, bg: bg, surface: surface,
         textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
-        photos: displayPhotos, services: services, name: name, rating: rating,
+        photos: displayPhotos, placePhotoSections: placePhotoSections, services: services, name: name, rating: rating,
         reviewCount: reviewCount, zone: zone, bio: bio, bioDetail: bioDetail,
         verified: verified, pricePerWalk60: pricePerWalk60, pricePerWalk30: pricePerWalk30, pricePerDay: pricePerDay,
         offersHospedaje: offersHospedaje, offersPaseo: offersPaseo, priceDisplay: priceDisplay,
@@ -312,7 +334,9 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     required BuildContext context,
     required bool isDark, required Color bg, required Color surface,
     required Color textColor, required Color subtextColor, required Color borderColor,
-    required List<String> photos, required List<String> services, required String name,
+    required List<String> photos,
+    required List<(String, String, List<String>)> placePhotoSections,
+    required List<String> services, required String name,
     required String rating, required int reviewCount, required String zone,
     required String bio, required String bioDetail, required bool verified,
     required dynamic pricePerWalk60, required dynamic pricePerWalk30, required dynamic pricePerDay,
@@ -571,6 +595,24 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           _buildPhotoGrid(photos, borderColor),
                         ],
 
+                        // Fotos del lugar (sala, descanso, alimentación, etc. — hospedaje/guardería)
+                        if (placePhotoSections.isNotEmpty) ...[
+                          const SizedBox(height: 32),
+                          Divider(color: borderColor),
+                          const SizedBox(height: 28),
+                          Text('Fotos del lugar',
+                            style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 14),
+                          for (final (_, label, sectionPhotos) in placePhotoSections) ...[
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(label, style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                            ),
+                            _buildPhotoGrid(sectionPhotos, borderColor),
+                            const SizedBox(height: 18),
+                          ],
+                        ],
+
                         // Reseñas
                         const SizedBox(height: 32),
                         Divider(color: borderColor),
@@ -752,7 +794,9 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     required BuildContext context,
     required bool isDark, required Color bg, required Color surface,
     required Color textColor, required Color subtextColor, required Color borderColor,
-    required List<String> photos, required List<String> services, required String name,
+    required List<String> photos,
+    required List<(String, String, List<String>)> placePhotoSections,
+    required List<String> services, required String name,
     required String rating, required int reviewCount, required String zone,
     required String bio, required String bioDetail, required bool verified,
     required dynamic pricePerWalk60, required dynamic pricePerWalk30, required dynamic pricePerDay,
@@ -984,6 +1028,39 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           ),
                         ),
                         const SizedBox(height: 24),
+                        Divider(color: borderColor),
+                        const SizedBox(height: 20),
+                      ],
+                      if (placePhotoSections.isNotEmpty) ...[
+                        Text('Fotos del lugar',
+                          style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 12),
+                        for (final (_, label, sectionPhotos) in placePhotoSections) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(label, style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                          ),
+                          SizedBox(
+                            height: 110,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: sectionPhotos.length,
+                              itemBuilder: (_, index) => GestureDetector(
+                                onTap: () => _openPhotoViewer(sectionPhotos, index),
+                                child: Container(
+                                  margin: const EdgeInsets.only(right: 10),
+                                  width: 130,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: borderColor),
+                                  ),
+                                  child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(fixImageUrl(sectionPhotos[index]), fit: BoxFit.cover)),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                         Divider(color: borderColor),
                         const SizedBox(height: 20),
                       ],

@@ -9,6 +9,10 @@ export interface CaregiverListItem {
   photos: string[];
   /** Fotos del paseador (solo cuidadores PASEO). */
   walkerPhotos: string[];
+  /** Fotos del cuidador en acción — campo actual (photos/walkerPhotos son legados). */
+  caregiverPhotos: string[];
+  /** Fotos del lugar por sección: sala, descanso, alimentacion, jardin, juego. */
+  placePhotos: Record<string, string[]> | null;
   zone: string;
   services: ServiceType[];
   rating: number;
