@@ -3925,6 +3925,53 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                 ),
               ],
 
+              // Mascotas #2 y #3 de una reserva multi-mascota — antes esta
+              // información (nombre, raza, necesidades especiales de cada
+              // una) se guardaba en el backend pero nunca llegaba aquí; el
+              // cuidador solo veía los datos de la primera mascota.
+              if ((booking['additionalPets'] as List?)?.isNotEmpty ?? false)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: (booking['additionalPets'] as List).map((raw) {
+                      final p = raw as Map<String, dynamic>;
+                      final needs = p['specialNeeds'] as String?;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: GardenColors.warning.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: GardenColors.warning.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.pets_rounded, size: 14, color: GardenColors.warning),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${p['petName'] ?? 'Mascota'}${p['petBreed'] != null ? ' · ${p['petBreed']}' : ''}',
+                                    style: TextStyle(color: widget.textColor, fontSize: 12, fontWeight: FontWeight.w700),
+                                  ),
+                                  if (needs != null && needs.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(needs, style: TextStyle(color: widget.subtextColor, fontSize: 12)),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+
               Divider(height: 1, color: widget.borderColor),
 
               // Datos del dueño

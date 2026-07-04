@@ -2644,6 +2644,7 @@ export async function getMyBookings(
         },
         dispute: true,
         meetAndGreet: true,
+        bookingPets: true,
       },
       orderBy: { createdAt: 'desc' },
       skip,
@@ -2707,6 +2708,7 @@ export async function getBookingById(
       },
       dispute: true,
       meetAndGreet: true,
+      bookingPets: true,
     },
   });
 
@@ -2766,6 +2768,7 @@ export async function getBookingsByCaregiverUserId(
         },
         dispute: true,
         meetAndGreet: true,
+        bookingPets: true,
       },
       orderBy: { createdAt: 'desc' },
       skip,
@@ -3938,7 +3941,14 @@ export async function getPendingRatingBooking(clientId: string) {
 
 /**
  * Auto-desembolso: libera el pago al cuidador si el dueño no calificó en 48h tras
- * que el cuidador marcó el servicio como completado (proxy: updatedAt con status COMPLETED).
+ * que el cuidador marcó el servicio como completado.
+ *
+ * Antes usaba `updatedAt` como proxy de "cuándo se completó" — pero updatedAt
+ * se actualiza en CUALQUIER cambio a la fila (no solo al completar), así que
+ * un update no relacionado (ej. otro proceso tocando la reserva) reiniciaba
+ * silenciosamente la ventana de 48h sin que el cliente lo supiera. Ahora usa
+ * serviceEndedAt, que solo se setea una vez, exactamente cuando el cuidador
+ * concluye el servicio (ver línea ~3283, concludeService).
  */
 export async function autoPayoutExpiredReviews() {
   const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
@@ -3947,7 +3957,13 @@ export async function autoPayoutExpiredReviews() {
       status: BookingStatus.COMPLETED,
       ownerRated: false,
       payoutStatus: 'PENDING',
-      updatedAt: { lt: cutoff },
+      OR: [
+        { serviceEndedAt: { lt: cutoff } },
+        // Fallback defensivo: si por algún camino alterno una reserva llegó
+        // a COMPLETED sin que se seteara serviceEndedAt, no debe quedar
+        // huérfana para siempre — usa updatedAt como respaldo en ese caso.
+        { serviceEndedAt: null, updatedAt: { lt: cutoff } },
+      ],
     },
     include: { caregiver: { select: { userId: true } } },
   });

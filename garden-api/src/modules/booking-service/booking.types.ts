@@ -73,6 +73,19 @@ export interface BookingCreateResult {
   meetAndGreet?: any;
   walletPaymentAmount?: number;
   serviceReport?: any;
+  /** Mascotas #2 y #3 de una reserva multi-mascota (petIndex 2, 3) — la
+   * mascota #1 ya viene en petName/petBreed/petAge/specialNeeds arriba.
+   * Antes esta info se guardaba en BookingPet pero nunca se devolvía al
+   * cuidador, así que las necesidades especiales de la 2ª/3ª mascota
+   * (ej. alergias, medicación) nunca le llegaban. */
+  additionalPets?: Array<{
+    petIndex: number;
+    petName: string;
+    petBreed: string | null;
+    petAge: number | null;
+    petSize: string | null;
+    specialNeeds: string | null;
+  }>;
 }
 
 export function bookingToResponse(b: any): BookingCreateResult {
@@ -122,6 +135,23 @@ export function bookingToResponse(b: any): BookingCreateResult {
     walletPaymentAmount: Number(b.walletPaymentAmount ?? 0),
     serviceReport: b.serviceReport ?? null,
   };
+
+  // petIndex 1 es la mascota principal (ya está en petName/specialNeeds
+  // arriba) — solo exponemos la 2ª y 3ª aquí para no duplicar.
+  if (Array.isArray(b.bookingPets)) {
+    const additional = b.bookingPets
+      .filter((bp: any) => bp.petIndex > 1)
+      .sort((a: any, c: any) => a.petIndex - c.petIndex)
+      .map((bp: any) => ({
+        petIndex: bp.petIndex,
+        petName: bp.petName,
+        petBreed: bp.petBreed ?? null,
+        petAge: bp.petAge ?? null,
+        petSize: bp.petSize ?? null,
+        specialNeeds: bp.specialNeeds ?? null,
+      }));
+    if (additional.length > 0) res.additionalPets = additional;
+  }
 
   if (b.caregiver) {
     res.caregiverName = `${b.caregiver.user.firstName} ${b.caregiver.user.lastName}`;
