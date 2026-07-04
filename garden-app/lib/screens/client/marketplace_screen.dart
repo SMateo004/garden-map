@@ -1325,32 +1325,43 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 children: [
 
                   // ── Tipo de servicio ──
+                  // Chips de ancho natural + scroll horizontal en vez de
+                  // Expanded a partes iguales: con 4 opciones de largo muy
+                  // distinto ("Todos" vs "Hospedaje 🏠"), forzar el mismo
+                  // ancho partía el texto en dos líneas. Así siempre quedan
+                  // en una sola línea, tanto en el sidebar web como en mobile.
                   _sectionTitle('Tipo de servicio', textColor),
                   const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      _serviceChip('Todos', 'todos', textColor),
-                      const SizedBox(width: 6),
-                      _serviceChip('Paseo 🦮', 'paseo', textColor),
-                      const SizedBox(width: 6),
-                      _serviceChip('Hospedaje 🏠', 'hospedaje', textColor),
-                      const SizedBox(width: 6),
-                      _serviceChip('Guardería 🏡', 'guarderia', textColor),
-                    ],
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _serviceChip('Todos', 'todos', textColor),
+                        const SizedBox(width: 8),
+                        _serviceChip('🦮 Paseo', 'paseo', textColor),
+                        const SizedBox(width: 8),
+                        _serviceChip('🏠 Hospedaje', 'hospedaje', textColor),
+                        const SizedBox(width: 8),
+                        _serviceChip('🏡 Guardería', 'guarderia', textColor),
+                      ],
+                    ),
                   ),
                   _divider(border),
 
                   // ── Tipo de mascota ──
                   _sectionTitle('Tipo de mascota', textColor),
                   const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      _petTypeChip(null, 'Todos 🐾', textColor),
-                      const SizedBox(width: 6),
-                      _petTypeChip('DOGS', 'Perro 🐕', textColor),
-                      const SizedBox(width: 6),
-                      _petTypeChip('CATS', 'Gato 🐱', textColor),
-                    ],
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _petTypeChip(null, '🐾 Todos', textColor),
+                        const SizedBox(width: 8),
+                        _petTypeChip('DOGS', '🐕 Perro', textColor),
+                        const SizedBox(width: 8),
+                        _petTypeChip('CATS', '🐱 Gato', textColor),
+                      ],
+                    ),
                   ),
                   _divider(border),
 
@@ -1607,38 +1618,34 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   Widget _serviceChip(String label, String value, Color textColor) {
     final selected = _selectedService == value;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() => _selectedService = value);
-          _refreshSheet?.call();
-          _loadCaregivers(reset: true);
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: selected ? GardenColors.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: selected ? GardenColors.primary : GardenColors.darkBorder.withValues(alpha: 0.3)),
-          ),
-          child: Center(
-            child: Text(label,
-                style: TextStyle(
-                  color: selected ? Colors.white : textColor,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  fontSize: 12,
-                )),
-          ),
+    return GestureDetector(
+      onTap: () {
+        setState(() => _selectedService = value);
+        _refreshSheet?.call();
+        _loadCaregivers(reset: true);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? GardenColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: selected ? GardenColors.primary : GardenColors.darkBorder.withValues(alpha: 0.3)),
         ),
+        child: Text(label,
+            softWrap: false,
+            style: TextStyle(
+              color: selected ? Colors.white : textColor,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              fontSize: 12,
+            )),
       ),
     );
   }
 
   Widget _petTypeChip(String? val, String label, Color textColor) {
     final selected = _selectedPetType == val;
-    return Expanded(
-      child: GestureDetector(
+    return GestureDetector(
         onTap: () {
           setState(() => _selectedPetType = val);
           _refreshSheet?.call();
@@ -1646,22 +1653,20 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
             color: selected ? GardenColors.primary : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: selected ? GardenColors.primary : GardenColors.darkBorder.withValues(alpha: 0.3)),
           ),
-          child: Center(
-            child: Text(label,
-                style: TextStyle(
-                  color: selected ? Colors.white : textColor,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  fontSize: 12,
-                )),
-          ),
+          child: Text(label,
+              softWrap: false,
+              style: TextStyle(
+                color: selected ? Colors.white : textColor,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                fontSize: 12,
+              )),
         ),
-      ),
     );
   }
 
