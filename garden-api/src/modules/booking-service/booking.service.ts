@@ -3133,7 +3133,7 @@ export async function getGpsTrack(bookingId: string, userId: string): Promise<an
 }
 
 // ── Helper: calcular overtime al finalizar un servicio ──────────────────────
-function calcOvertimeMinutes(
+export function calcOvertimeMinutes(
   serviceType: ServiceType,
   serviceStartedAt: Date | null,
   duration: number | null,
@@ -3160,6 +3160,54 @@ function calcOvertimeMinutes(
   const diffMs = concludedAt.getTime() - expectedEndMs;
   const diffMins = Math.max(0, Math.floor(diffMs / 60_000));
   return Math.max(0, diffMins - GRACE_MINUTES);
+}
+
+/**
+ * El dueño marca (desde su lado) que el servicio ya terminó. No concluye la
+ * reserva ni libera el pago — el cuidador sigue teniendo que subir sus fotos
+ * en concludeService() para eso — pero congela el reloj del overtime en este
+ * instante (ver uso de clientMarkedEndAt en concludeService).
+ */
+export async function markServiceEndedByClient(
+  bookingId: string,
+  clientId: string
+): Promise<BookingCreateResult> {
+  const markedAt = new Date();
+
+  return prisma.$transaction(async (tx) => {
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, clientId },
+      include: { caregiver: { select: { userId: true } } },
+    });
+    if (!booking) throw new BookingNotFoundError(bookingId);
+    if (booking.status !== BookingStatus.IN_PROGRESS) {
+      throw new BadRequestError('El servicio debe estar en curso para marcarlo como terminado');
+    }
+    if (booking.clientMarkedEndAt) {
+      throw new BadRequestError('Ya marcaste este servicio como terminado');
+    }
+
+    const updated = await tx.booking.update({
+      where: { id: bookingId },
+      data: { clientMarkedEndAt: markedAt },
+    });
+
+    await tx.notification.create({
+      data: {
+        userId: booking.caregiver.userId,
+        title: 'El dueño marcó el servicio como terminado',
+        message: `El dueño de ${booking.petName ?? 'la mascota'} indicó que el servicio ya terminó. Sube tus fotos finales para cerrar el servicio y recibir tu pago.`,
+        type: 'SYSTEM',
+      },
+    });
+    sendPushToUser(
+      booking.caregiver.userId,
+      'El dueño marcó el servicio como terminado',
+      'Sube tus fotos finales para cerrar el servicio y cobrar'
+    ).catch(() => {});
+
+    return bookingToResponse(updated);
+  });
 }
 
 export async function concludeService(
@@ -3196,12 +3244,18 @@ export async function concludeService(
     const gpsDistance = booking.serviceType === ServiceType.PASEO ? calcGpsDistance(tracking) : null;
 
     // ── Calcular overtime ──────────────────────────────────────────────────────
+    // Si el dueño marcó "servicio terminado" (markServiceEndedByClient) antes de
+    // que el cuidador suba sus fotos, el overtime se congela en ese instante —
+    // el cuidador puede tardar en subir fotos sin que eso siga generando cargo.
+    const overtimeClockEnd = booking.clientMarkedEndAt && booking.clientMarkedEndAt < concludedAt
+      ? booking.clientMarkedEndAt
+      : concludedAt;
     const overtimeMins = calcOvertimeMinutes(
       booking.serviceType,
       booking.serviceStartedAt,
       booking.duration,
       booking.endDate,
-      concludedAt
+      overtimeClockEnd
     );
 
     let overtimeFeeGross = 0;
@@ -3491,6 +3545,15 @@ export async function autoReleasePayment(
     });
     if (!booking) return; // ya procesado o estado cambió (race-safe)
 
+    // Atomic claim ANTES de tocar el balance — evita doble pago si este job
+    // corre superpuesto con autoPayoutExpiredReviews() u otro release para
+    // la misma reserva (ambos leen con guard pero antes escribían sin él).
+    const claimed = await tx.booking.updateMany({
+      where: { id: bookingId, status: BookingStatus.COMPLETED, ownerRated: false, payoutStatus: 'PENDING' },
+      data: { payoutStatus: 'PAID', ownerRated: true },
+    });
+    if (claimed.count === 0) return; // otro proceso ya lo liberó
+
     const amount = Number(booking.totalAmount) - Number(booking.commissionAmount);
 
     const caregiverProfileAR = await tx.caregiverProfile.findUnique({
@@ -3515,11 +3578,6 @@ export async function autoReleasePayment(
         bookingId: booking.id,
         status: 'COMPLETED',
       },
-    });
-
-    await tx.booking.update({
-      where: { id: bookingId },
-      data: { payoutStatus: 'PAID', ownerRated: true },
     });
 
     // Crear reseña de sistema para mantener historial completo.
@@ -3972,6 +4030,15 @@ export async function autoPayoutExpiredReviews() {
     try {
       const amount = Number(booking.totalAmount) - Number(booking.commissionAmount);
       await prisma.$transaction(async (tx) => {
+        // Atomic claim ANTES de tocar el balance — evita doble pago si este job
+        // corre superpuesto con autoReleasePayment() (cron horario, 24h por
+        // defecto) para la misma reserva.
+        const claimed = await tx.booking.updateMany({
+          where: { id: booking.id, payoutStatus: 'PENDING' },
+          data: { payoutStatus: 'PAID' },
+        });
+        if (claimed.count === 0) return; // otro proceso ya lo liberó
+
         const updatedUser = await tx.user.update({
           where: { id: booking.caregiver.userId },
           data: { balance: { increment: amount } },
@@ -3987,10 +4054,6 @@ export async function autoPayoutExpiredReviews() {
             bookingId: booking.id,
             status: 'COMPLETED',
           },
-        });
-        await tx.booking.update({
-          where: { id: booking.id },
-          data: { payoutStatus: 'PAID' },
         });
       });
       logger.info('[AutoPayout] Desembolso automático completado', { bookingId: booking.id, amount });

@@ -212,6 +212,14 @@ router.post(
   serviceExecutionController.confirmReceipt
 );
 
+/** POST /api/bookings/:id/mark-ended — el dueño marca que el servicio ya terminó (congela el overtime). */
+router.post(
+  '/:id/mark-ended',
+  authMiddleware,
+  requireRole('CLIENT'),
+  serviceExecutionController.markEndedByClient
+);
+
 /** CAREGIVER ACTIONS */
 
 router.post(

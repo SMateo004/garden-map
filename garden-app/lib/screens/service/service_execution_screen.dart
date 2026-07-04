@@ -53,6 +53,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   int _allowedExtensionDays = 0;
   double _hospedajePricePerDay = 0;
   bool _loadingExtension = false;
+  bool _markingEnd = false;
 
   // Photo/video upload state
   bool _isSendingPhoto = false;
@@ -2338,6 +2339,46 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     const SizedBox(height: 20),
                   ],
 
+                  // ── Marcar servicio como terminado (dueño) ──────────────────
+                  if (_booking?['clientMarkedEndAt'] == null) ...[
+                    OutlinedButton.icon(
+                      onPressed: _markingEnd ? null : _confirmMarkServiceEnded,
+                      icon: _markingEnd
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.success))
+                          : const Icon(Icons.check_circle_outline_rounded, size: 18),
+                      label: const Text('Marcar servicio como terminado', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: GardenColors.success,
+                        side: const BorderSide(color: GardenColors.success),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.md)),
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ] else ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: GardenColors.success.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(GardenRadius.md),
+                        border: Border.all(color: GardenColors.success.withValues(alpha: 0.25)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Marcaste el servicio como terminado. Esperando que el cuidador suba sus fotos finales.',
+                              style: TextStyle(color: textColor, fontSize: 12.5, height: 1.4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
                   // ── Fotos del servicio ──────────────────────────────────────
                   if (_serviceEvents.isNotEmpty) ...[
                     Row(
@@ -2665,6 +2706,30 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── Aviso: el dueño ya marcó el servicio como terminado ──
+                  if (_booking?['clientMarkedEndAt'] != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: GardenColors.warning.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(GardenRadius.md),
+                        border: Border.all(color: GardenColors.warning.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.notifications_active_rounded, color: GardenColors.warning, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'El dueño marcó que el servicio ya terminó. Sube tus fotos finales y concluye para cobrar.',
+                              style: TextStyle(color: textColor, fontSize: 12.5, height: 1.4, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
                   // ── Progreso fotos (barra compacta arriba) ──────────────
                   Container(
                     padding: const EdgeInsets.all(14),
@@ -3605,6 +3670,62 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       }
     } catch (e) {
       debugPrint('Error requesting photo: $e');
+    }
+  }
+
+  Future<void> _confirmMarkServiceEnded() async {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.xl)),
+        title: Text('¿Ya terminó el servicio?', style: TextStyle(color: textColor, fontWeight: FontWeight.w800)),
+        content: Text(
+          'Esto avisa al cuidador que puede subir sus fotos finales y cerrar el servicio. Úsalo solo si el servicio realmente ya terminó.',
+          style: TextStyle(color: subtextColor, fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sí, ya terminó')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _markServiceEnded();
+  }
+
+  Future<void> _markServiceEnded() async {
+    setState(() => _markingEnd = true);
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/mark-ended'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+      );
+      final data = jsonDecode(response.body);
+      if (!mounted) return;
+      if (data['success'] == true) {
+        setState(() => _booking = data['data']);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ Avisamos al cuidador que el servicio terminó'), backgroundColor: GardenColors.success),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['message'] ?? 'No se pudo marcar el servicio'), backgroundColor: GardenColors.error),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error de conexión'), backgroundColor: GardenColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _markingEnd = false);
     }
   }
 

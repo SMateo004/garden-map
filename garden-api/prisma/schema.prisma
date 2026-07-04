@@ -289,6 +289,16 @@ model Booking {
   serviceEndedAt            DateTime?
   serviceStartPhoto         String?
   serviceEndPhoto           String?
+  /// Momento en que el DUEÑO marca (desde su lado) que el servicio ya terminó.
+  /// Si esto ocurre antes de que el cuidador concluya oficialmente (con fotos),
+  /// el overtime se congela en este instante en vez de seguir corriendo hasta
+  /// que el cuidador finalmente suba sus fotos — evita que el overtime dependa
+  /// solo de cuándo el cuidador decide cerrar el servicio.
+  clientMarkedEndAt         DateTime?
+  /// Último recordatorio push enviado a ambas partes cuando el servicio sigue
+  /// IN_PROGRESS pasado el horario acordado + gracia y nadie lo marcó como
+  /// terminado. Throttle para no reenviar en cada corrida del job.
+  lastEndReminderAt         DateTime?
   serviceTrackingData       Json?            @db.JsonB
   gpsDistance               Float?
   serviceEvents             Json?            @db.JsonB

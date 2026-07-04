@@ -8,7 +8,7 @@ import prisma from '../config/database.js';
 import { onServiceReminder } from '../services/notification.service.js';
 import { sendPushToUser } from '../services/firebase.service.js';
 import logger from '../shared/logger.js';
-import { autoPayoutExpiredReviews } from '../modules/booking-service/booking.service.js';
+import { autoPayoutExpiredReviews, calcOvertimeMinutes } from '../modules/booking-service/booking.service.js';
 
 async function procesarRecordatoriosDeServicio() {
   const now = new Date();
@@ -206,6 +206,63 @@ async function procesarRecordatoriosCalificacion() {
   }
 }
 
+// ── Recordatorio de fin de servicio sin marcar (ningún lado lo cerró) ────────
+// Corre cada hora. Cubre los 3 tipos de servicio (paseo, guardería, hospedaje):
+// si ya pasó el horario acordado + los 15 min de gracia y nadie (ni cuidador
+// concluyendo, ni dueño marcando fin) cerró el servicio, insiste con push a
+// ambos hasta que uno de los dos actúe. Throttle de 30 min via lastEndReminderAt
+// para no reenviar en cada corrida del cron.
+const REMINDER_THROTTLE_MS = 30 * 60 * 1000;
+
+async function procesarRecordatoriosFinServicioSinMarcar() {
+  const now = new Date();
+
+  const enCurso = await prisma.booking.findMany({
+    where: { status: 'IN_PROGRESS', clientMarkedEndAt: null },
+    select: {
+      id: true, clientId: true, petName: true, serviceType: true,
+      serviceStartedAt: true, duration: true, endDate: true,
+      lastEndReminderAt: true,
+      caregiver: { select: { userId: true } },
+    },
+  });
+
+  for (const b of enCurso) {
+    try {
+      const overtimeMins = calcOvertimeMinutes(b.serviceType, b.serviceStartedAt, b.duration, b.endDate, now);
+      if (overtimeMins <= 0) continue; // aún dentro del horario + gracia
+
+      if (b.lastEndReminderAt && now.getTime() - b.lastEndReminderAt.getTime() < REMINDER_THROTTLE_MS) {
+        continue; // ya se envió un recordatorio reciente
+      }
+
+      await prisma.booking.update({ where: { id: b.id }, data: { lastEndReminderAt: now } });
+
+      const svcLabel = b.serviceType === 'PASEO' ? 'paseo' : b.serviceType === 'GUARDERIA' ? 'guardería' : 'hospedaje';
+
+      const clientTitle = '⏰ ¿Ya terminó el servicio?';
+      const clientMsg = `El ${svcLabel} de ${b.petName ?? 'tu mascota'} ya pasó su horario acordado. Si ya terminó, márcalo en la app para evitar cargos de tiempo extra.`;
+      await prisma.notification.create({
+        data: { userId: b.clientId, title: clientTitle, message: clientMsg, type: 'SYSTEM' },
+      });
+      sendPushToUser(b.clientId, clientTitle, clientMsg).catch(() => {});
+
+      if (b.caregiver?.userId) {
+        const caregiverTitle = '⏰ Cierra el servicio';
+        const caregiverMsg = `El ${svcLabel} de ${b.petName ?? 'la mascota'} ya pasó su horario acordado. Sube tus fotos y concluye el servicio para cobrar.`;
+        await prisma.notification.create({
+          data: { userId: b.caregiver.userId, title: caregiverTitle, message: caregiverMsg, type: 'SYSTEM' },
+        });
+        sendPushToUser(b.caregiver.userId, caregiverTitle, caregiverMsg).catch(() => {});
+      }
+
+      logger.info('[END-REMINDER] Recordatorio enviado', { bookingId: b.id, overtimeMins });
+    } catch (err: any) {
+      logger.error('[END-REMINDER] Error', { bookingId: b.id, error: err?.message });
+    }
+  }
+}
+
 // ── Procesador de notificaciones masivas programadas ─────────────────────────
 // Corre cada minuto. Si hay MassNotifications con scheduledAt <= now y status SCHEDULED, las envía.
 
@@ -293,6 +350,9 @@ export function iniciarJobServiceReminders() {
     );
     await procesarRecordatoriosCalificacion().catch(err =>
       logger.error('[RATING-REMINDER] Job falló', { err })
+    );
+    await procesarRecordatoriosFinServicioSinMarcar().catch(err =>
+      logger.error('[END-REMINDER] Job falló', { err })
     );
   });
 

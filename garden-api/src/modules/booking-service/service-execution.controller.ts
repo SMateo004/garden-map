@@ -135,6 +135,14 @@ export const confirmReceipt = asyncHandler(async (req: Request, res: Response) =
     res.json({ success: true, data: booking });
 });
 
+export const markEndedByClient = asyncHandler(async (req: Request, res: Response) => {
+    const bookingId = req.params.id!;
+    const clientId = req.user!.userId;
+
+    const booking = await bookingService.markServiceEndedByClient(bookingId, clientId);
+    res.json({ success: true, data: booking });
+});
+
 export const rateOwner = asyncHandler(async (req: Request, res: Response) => {
     const bookingId = req.params.id!;
     const caregiverUserId = req.user!.userId;

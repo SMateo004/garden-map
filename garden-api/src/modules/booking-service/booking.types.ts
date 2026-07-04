@@ -39,6 +39,7 @@ export interface BookingCreateResult {
   clientPhoto?: string | null;
   serviceStartedAt?: string | null;
   serviceEndedAt?: string | null;
+  clientMarkedEndAt?: string | null;
   serviceEvents?: any[] | null;
   gpsTrack?: any[] | null;
   gpsDistance?: number | null;
@@ -121,6 +122,7 @@ export function bookingToResponse(b: any): BookingCreateResult {
     paidAt: b.paidAt?.toISOString() ?? null,
     serviceStartedAt: b.serviceStartedAt?.toISOString() ?? null,
     serviceEndedAt: b.serviceEndedAt?.toISOString() ?? null,
+    clientMarkedEndAt: b.clientMarkedEndAt?.toISOString() ?? null,
     serviceEvents: b.serviceEvents ?? [],
     gpsTrack: b.serviceTrackingData ?? [],
     gpsDistance: b.gpsDistance ?? null,
