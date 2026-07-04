@@ -271,7 +271,13 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     final displayPhotos = caregiverPhotos.isNotEmpty
         ? caregiverPhotos
         : (walkerPhotos.isNotEmpty ? walkerPhotos : photos);
-    final placePhotosRaw = _caregiver!['placePhotos'] as Map?;
+    // Solo mostrar fotos del lugar si el cuidador OFRECE ACTUALMENTE Hospedaje
+    // o Guardería — si en algún momento activó uno de esos servicios, subió
+    // fotos, y luego cambió a solo Paseo, esas fotos quedan guardadas en la
+    // DB (placePhotos no se limpia al cambiar de servicio) pero ya no
+    // deberían mostrarse en el perfil público como si el lugar existiera hoy.
+    final needsSpaceDisplay = services.contains('HOSPEDAJE') || services.contains('GUARDERIA');
+    final placePhotosRaw = needsSpaceDisplay ? _caregiver!['placePhotos'] as Map? : null;
     final placePhotos = placePhotosRaw?.map(
       (k, v) => MapEntry(k as String, (v as List?)?.cast<String>() ?? <String>[]),
     ) ?? <String, List<String>>{};
@@ -589,7 +595,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           const SizedBox(height: 32),
                           Divider(color: borderColor),
                           const SizedBox(height: 28),
-                          Text(offersHospedaje ? 'Fotos del espacio' : 'Fotos del paseador',
+                          Text('Fotos del cuidador',
                             style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
                           const SizedBox(height: 14),
                           _buildPhotoGrid(photos, borderColor),
@@ -1005,7 +1011,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                       const SizedBox(height: 24),
                       if (photos.isNotEmpty) ...[
                         Divider(color: borderColor), const SizedBox(height: 20),
-                        Text(offersHospedaje ? 'Fotos del espacio' : 'Fotos del paseador',
+                        Text('Fotos del cuidador',
                           style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 12),
                         SizedBox(
