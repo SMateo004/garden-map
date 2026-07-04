@@ -835,15 +835,16 @@ model GiftCode {
   @@map("gift_codes")
 }
 
-/// Reunión previa al servicio (conocerse). Flujo: PENDING_PROPOSAL → PROPOSED → CONFIRMED | CANCELLED.
-/// modalidad: PRESENCIAL | VIRTUAL. proposedBy: CLIENT | CAREGIVER.
+/// Reunión previa al servicio (conocerse). Flujo real (ver meet-and-greet.service.ts):
+/// PROPOSED → ACCEPTED → COMPLETED (con approved:true|false) | CANCELLED.
+/// modalidad: IN_PERSON | VIDEO_CALL. proposedBy: userId del cliente o del cuidador.
 model MeetAndGreet {
   id             String    @id @default(uuid())
   bookingId      String    @unique
   booking        Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  status         String    @default("PENDING_PROPOSAL") // PENDING_PROPOSAL | PROPOSED | CONFIRMED | CANCELLED
-  proposedBy     String    // CLIENT | CAREGIVER
-  modalidad      String    // PRESENCIAL | VIRTUAL
+  status         String    @default("PENDING_PROPOSAL") // PROPOSED | ACCEPTED | COMPLETED | CANCELLED
+  proposedBy     String    // userId (cliente o cuidador)
+  modalidad      String    // IN_PERSON | VIDEO_CALL
   proposedDate   DateTime?
   confirmedDate  DateTime?
   meetingPoint   String?   @db.Text

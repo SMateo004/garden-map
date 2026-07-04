@@ -50,6 +50,20 @@ async function sendNotif(userId: string, title: string, body: string) {
   }
 }
 
+/**
+ * Solo el cliente o el cuidador DE ESA RESERVA pueden proponer/aceptar/
+ * cancelar su Meet & Greet. Antes solo se validaba "no aceptes tu propia
+ * propuesta" — cualquier otro usuario autenticado del sistema (ajeno a la
+ * reserva) podía proponer, aceptar o cancelar el M&G de una reserva que no
+ * le pertenecía, ya que las rutas solo exigen estar logueado (authMiddleware),
+ * sin requireRole ni verificación de pertenencia.
+ */
+function assertBelongsToBooking(booking: { clientId: string; caregiver: { userId: string } }, userId: string) {
+  if (userId !== booking.clientId && userId !== booking.caregiver.userId) {
+    throw new AppError('No tienes acceso a esta reserva', 403, 'FORBIDDEN');
+  }
+}
+
 export async function getMeetAndGreet(bookingId: string) {
   return prisma.meetAndGreet.findUnique({ where: { bookingId } });
 }
@@ -71,6 +85,7 @@ export async function propose(bookingId: string, proposedBy: string, body: {
   });
 
   if (!booking) throw new AppError('Reserva no encontrada', 404, 'NOT_FOUND');
+  assertBelongsToBooking(booking, proposedBy);
 
   // Funciona para PASEO y HOSPEDAJE
   // Permitido en WAITING_CAREGIVER_APPROVAL y CONFIRMED
@@ -90,6 +105,17 @@ export async function propose(bookingId: string, proposedBy: string, body: {
   const proposedDate = new Date(body.proposedDate);
   if (isNaN(proposedDate.getTime())) {
     throw new AppError('Fecha inválida', 400, 'BAD_REQUEST');
+  }
+  if (proposedDate.getTime() <= Date.now()) {
+    throw new AppError('La fecha del Meet & Greet debe ser en el futuro', 400, 'BAD_REQUEST');
+  }
+  // El M&G debe ocurrir ANTES de que empiece el servicio — antes no se
+  // validaba esto: se podía proponer una fecha durante o después del
+  // hospedaje/paseo ya reservado, lo cual no tiene sentido (el propósito
+  // es conocerse ANTES de que el servicio comience).
+  const serviceDate = (booking as any).startDate ?? (booking as any).walkDate;
+  if (serviceDate && proposedDate.getTime() >= new Date(serviceDate).getTime()) {
+    throw new AppError('El Meet & Greet debe ser antes de la fecha del servicio reservado', 400, 'BAD_REQUEST');
   }
 
   let mg;
@@ -163,6 +189,7 @@ export async function accept(bookingId: string, userId: string) {
     },
   });
   if (!booking?.meetAndGreet) throw new AppError('No hay propuesta de Meet & Greet', 404, 'NOT_FOUND');
+  assertBelongsToBooking(booking, userId);
   if (booking.meetAndGreet.status !== 'PROPOSED') {
     throw new AppError('No hay propuesta pendiente', 400, 'BAD_REQUEST');
   }
@@ -287,6 +314,7 @@ export async function cancel(bookingId: string, userId: string) {
     },
   });
   if (!booking?.meetAndGreet) throw new AppError('Meet & Greet no encontrado', 404, 'NOT_FOUND');
+  assertBelongsToBooking(booking, userId);
   if (!['PROPOSED', 'ACCEPTED'].includes(booking.meetAndGreet.status)) {
     throw new AppError('No se puede cancelar en este estado', 400, 'BAD_REQUEST');
   }

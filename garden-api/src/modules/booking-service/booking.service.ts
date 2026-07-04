@@ -1109,6 +1109,17 @@ export async function proceedToPayment(
   if (!mg || !mg.proposedDate) {
     throw new BookingValidationError('No hay Meet & Greet asociado a esta reserva');
   }
+  // Antes solo se validaba que la FECHA propuesta ya hubiera pasado, sin
+  // importar si el cuidador realmente aceptó el Meet & Greet — un cliente
+  // podía simplemente esperar a que pasara la fecha (sin que el cuidador
+  // respondiera nunca) y avanzar al pago igual, como si el M&G hubiera
+  // ocurrido. Ahora se exige que el estado sea ACCEPTED explícitamente.
+  if (mg.status === 'CANCELLED') {
+    throw new BookingValidationError('El Meet & Greet fue cancelado. Esta reserva ya no puede continuar — cancélala para liberar el pago.');
+  }
+  if (mg.status !== 'ACCEPTED') {
+    throw new BookingValidationError('El cuidador aún no aceptó tu propuesta de Meet & Greet. Espera su respuesta antes de continuar con el pago.');
+  }
   if (new Date(mg.proposedDate) > new Date()) {
     throw new BookingValidationError('El Meet & Greet aún no ha ocurrido. Podrás continuar con el pago después de la fecha programada.');
   }
