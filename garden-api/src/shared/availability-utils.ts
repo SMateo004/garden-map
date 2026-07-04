@@ -1,5 +1,23 @@
 import { TimeSlot } from '@prisma/client';
 
+/**
+ * Feriados nacionales de Bolivia (ISO strings) — ÚNICA fuente de verdad.
+ * Antes existían dos copias de esta lista (booking.service.ts y
+ * caregiver.service.ts) que divergieron: una tenía Carnaval 2025 el 24-25 de
+ * febrero, la otra el 17-18. Eso permitía que el mapa de disponibilidad
+ * mostrara un día como libre mientras crear la reserva lo rechazaba (o
+ * viceversa), dependiendo de qué endpoint se consultara. Cualquier código
+ * que necesite esta lista debe importarla de aquí, nunca declarar su propia
+ * copia.
+ */
+export const BOLIVIA_HOLIDAYS = new Set([
+  '2025-01-01', '2025-01-22', '2025-02-24', '2025-02-25', '2025-04-18', '2025-04-19',
+  '2025-05-01', '2025-06-19', '2025-06-21', '2025-08-06', '2025-10-12', '2025-11-02',
+  '2025-12-25', '2026-01-01', '2026-01-22', '2026-02-16', '2026-02-17', '2026-04-03',
+  '2026-04-04', '2026-05-01', '2026-06-11', '2026-06-21', '2026-08-06', '2026-10-12',
+  '2026-11-02', '2026-12-25',
+]);
+
 export interface PaseoSlot {
     slot: TimeSlot;
     enabled: boolean;

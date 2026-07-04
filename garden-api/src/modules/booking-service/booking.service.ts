@@ -31,7 +31,7 @@ import type {
 } from './booking.validation.js';
 import type { BookingCreateResult } from './booking.types.js';
 import { bookingToResponse } from './booking.types.js';
-import { parseTimeBlocks } from '../../shared/availability-utils.js';
+import { parseTimeBlocks, BOLIVIA_HOLIDAYS } from '../../shared/availability-utils.js';
 
 /** Helper: HH:mm strings to minutes since midnight. */
 function timeToMins(t: string | null | undefined): number {
@@ -207,6 +207,7 @@ export async function createBooking(
         pricePerGuarderia: true,
         servicesOffered: true,
         maxPets: true,
+        sizesAccepted: true,
       },
     });
 
@@ -226,6 +227,24 @@ export async function createBooking(
         'MAX_PETS_EXCEEDED',
         'petIds'
       );
+    }
+
+    // Validar que el cuidador acepte el TAMAÑO de cada mascota seleccionada —
+    // antes no se validaba ninguna, así que se podía reservar una mascota
+    // GIANT con un cuidador que solo aceptaba SMALL/MEDIUM, y este se
+    // enteraba recién al ver la reserva ya confirmada. Solo se aplica si el
+    // cuidador configuró sizesAccepted (evita romper perfiles antiguos que
+    // nunca llenaron ese campo).
+    const sizesAccepted = Array.isArray(caregiver.sizesAccepted) ? caregiver.sizesAccepted : [];
+    if (sizesAccepted.length > 0) {
+      const incompatiblePet = orderedPets.find((p) => p.size && !sizesAccepted.includes(p.size));
+      if (incompatiblePet) {
+        throw new BadRequestError(
+          `Este cuidador no acepta mascotas de tamaño ${incompatiblePet.size} (${incompatiblePet.name}). Elige otro cuidador o revisa el tamaño registrado de tu mascota.`,
+          'PET_SIZE_NOT_ACCEPTED',
+          'petIds'
+        );
+      }
     }
 
     // Restricción: un cuidador no puede reservarse a sí mismo
@@ -525,15 +544,6 @@ export async function createBooking(
     return bookingToResponse(booking);
   });
 }
-
-// Bolivian public holidays (ISO strings) — kept in sync with the caregiver home screen list
-const BOLIVIA_HOLIDAYS = new Set([
-  '2025-01-01','2025-01-22','2025-02-24','2025-02-25','2025-04-18','2025-04-19',
-  '2025-05-01','2025-06-19','2025-06-21','2025-08-06','2025-10-12','2025-11-02',
-  '2025-12-25','2026-01-01','2026-01-22','2026-02-16','2026-02-17','2026-04-03',
-  '2026-04-04','2026-05-01','2026-06-11','2026-06-21','2026-08-06','2026-10-12',
-  '2026-11-02','2026-12-25',
-]);
 
 /**
  * Returns true if the given date is allowed by the caregiver's day-type flags

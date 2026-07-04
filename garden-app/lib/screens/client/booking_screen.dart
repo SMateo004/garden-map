@@ -784,12 +784,18 @@ class _BookingScreenState extends State<BookingScreen> {
                       final petIndex = _selectedPetIds.indexOf(petId); // -1 if not selected
                       final isSelected = petIndex >= 0;
                       final atMax = _selectedPetIds.length >= _caregiverMaxPets;
+                      // Tamaño no aceptado por este cuidador — antes se podía
+                      // seleccionar igual y recién el backend lo rechazaba al
+                      // crear la reserva, después de llenar todo el formulario.
+                      final sizesAccepted = (_caregiver?['sizesAccepted'] as List?)?.cast<String>() ?? [];
+                      final petSize = pet['size'] as String?;
+                      final sizeNotAccepted = sizesAccepted.isNotEmpty && petSize != null && !sizesAccepted.contains(petSize);
                       // Discount label for this pet if selected
                       String? discountLabel;
                       if (isSelected && petIndex == 1) discountLabel = '-25%';
                       if (isSelected && petIndex == 2) discountLabel = '-50%';
                       return GestureDetector(
-                        onTap: () => setState(() {
+                        onTap: sizeNotAccepted ? null : () => setState(() {
                           if (isSelected) {
                             _selectedPetIds.remove(petId);
                           } else if (!atMax) {
@@ -814,17 +820,17 @@ class _BookingScreenState extends State<BookingScreen> {
                                   border: Border.all(color: GardenColors.primary, width: 1.5),
                                 )
                               : BoxDecoration(
-                                  color: (atMax && !isSelected)
+                                  color: ((atMax && !isSelected) || sizeNotAccepted)
                                       ? (isDark ? Colors.white.withValues(alpha: 0.02) : const Color(0xFFF5F5F5))
                                       : (isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFFAF7F2).withValues(alpha: 0.90)),
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: (atMax && !isSelected) ? borderColor.withValues(alpha: 0.4) : borderColor, width: 1.0),
+                                  border: Border.all(color: ((atMax && !isSelected) || sizeNotAccepted) ? borderColor.withValues(alpha: 0.4) : borderColor, width: 1.0),
                                 ),
                           child: Row(
                             children: [
                               // Foto
                               Opacity(
-                                opacity: (atMax && !isSelected) ? 0.4 : 1.0,
+                                opacity: ((atMax && !isSelected) || sizeNotAccepted) ? 0.4 : 1.0,
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(10),
                                   child: SizedBox(
@@ -844,7 +850,7 @@ class _BookingScreenState extends State<BookingScreen> {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Opacity(
-                                  opacity: (atMax && !isSelected) ? 0.4 : 1.0,
+                                  opacity: ((atMax && !isSelected) || sizeNotAccepted) ? 0.4 : 1.0,
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -870,6 +876,17 @@ class _BookingScreenState extends State<BookingScreen> {
                                   ),
                                 ),
                               ),
+                              if (sizeNotAccepted)
+                                Container(
+                                  margin: const EdgeInsets.only(right: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: GardenColors.error.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Text('Tamaño no aceptado',
+                                      style: TextStyle(color: GardenColors.error, fontSize: 10, fontWeight: FontWeight.w700)),
+                                ),
                               if (discountLabel != null)
                                 Container(
                                   margin: const EdgeInsets.only(right: 6),
@@ -882,7 +899,7 @@ class _BookingScreenState extends State<BookingScreen> {
                                 ),
                               isSelected
                                   ? const Icon(Icons.check_circle_rounded, color: GardenColors.primary, size: 20)
-                                  : Icon(Icons.radio_button_unchecked, color: (atMax && !isSelected) ? borderColor.withValues(alpha: 0.4) : subtextColor, size: 20),
+                                  : Icon(Icons.radio_button_unchecked, color: ((atMax && !isSelected) || sizeNotAccepted) ? borderColor.withValues(alpha: 0.4) : subtextColor, size: 20),
                             ],
                           ),
                         ),
