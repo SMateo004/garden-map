@@ -41,7 +41,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 3, vsync: this);
+    _tabCtrl = TabController(length: 4, vsync: this);
     _tabCtrl.addListener(() {
       if (_tabCtrl.index == 1 && _loadingScheduled) _loadScheduled();
       if (_tabCtrl.index == 2 && _loadingHistory) _loadHistory();
@@ -314,6 +314,8 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
                 unselectedLabelColor: subtextColor,
                 labelStyle: const TextStyle(
                     fontSize: 12, fontWeight: FontWeight.w700),
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
                 tabs: const [
                   Tab(icon: Icon(Icons.send_rounded, size: 16), text: 'Enviar'),
                   Tab(
@@ -322,6 +324,9 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
                   Tab(
                       icon: Icon(Icons.history_rounded, size: 16),
                       text: 'Historial'),
+                  Tab(
+                      icon: Icon(Icons.groups_rounded, size: 16),
+                      text: 'Masivo'),
                 ],
               ),
             ],
@@ -336,6 +341,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
               _buildComposeTab(bg, surface, textColor, subtextColor, borderColor),
               _buildScheduledTab(bg, surface, textColor, subtextColor, borderColor),
               _buildHistoryTab(bg, surface, textColor, subtextColor, borderColor),
+              _AdminMassNotifView(adminToken: widget.adminToken),
             ],
           ),
         ),
@@ -970,4 +976,142 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
                 fontSize: 10,
                 fontWeight: FontWeight.w600)),
       );
+}
+
+/// Movido desde admin_panel_screen.dart — antes vivía como pestaña separada
+/// "Push Masivo" en el panel principal; ahora es la 4ta pestaña de esta
+/// pantalla ("Masivo") para tener todo lo de mensajería en un solo lugar.
+/// Mismo endpoint (/admin/mass-notifications), sin cambios de lógica.
+class _AdminMassNotifView extends StatefulWidget {
+  final String adminToken;
+  const _AdminMassNotifView({required this.adminToken});
+  @override State<_AdminMassNotifView> createState() => _AdminMassNotifViewState();
+}
+
+class _AdminMassNotifViewState extends State<_AdminMassNotifView> {
+  List<Map<String, dynamic>> _notifs = [];
+  bool _loading = true;
+  String get _base => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
+  Map<String, String> get _h => {'Authorization': 'Bearer ${widget.adminToken}', 'Content-Type': 'application/json'};
+
+  @override void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final r = await http.get(Uri.parse('$_base/admin/mass-notifications'), headers: _h);
+      final d = jsonDecode(r.body);
+      if (mounted) setState(() { _notifs = List<Map<String, dynamic>>.from(d['data'] ?? []); _loading = false; });
+    } catch (_) { if (mounted) setState(() => _loading = false); }
+  }
+
+  void _showComposer() {
+    final titleCtrl = TextEditingController();
+    final msgCtrl = TextEditingController();
+    final schedCtrl = TextEditingController();
+    final zoneCtrl = TextEditingController();
+    String target = 'all';
+
+    showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, ss) => AlertDialog(
+      title: const Text('Nueva Notificación Masiva'),
+      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Título *')),
+        TextField(controller: msgCtrl, maxLines: 3, decoration: const InputDecoration(labelText: 'Mensaje *')),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: target,
+          decoration: const InputDecoration(labelText: 'Destinatarios'),
+          items: const [
+            DropdownMenuItem(value: 'all', child: Text('Todos los usuarios')),
+            DropdownMenuItem(value: 'clients', child: Text('Solo dueños de mascotas')),
+            DropdownMenuItem(value: 'caregivers', child: Text('Solo cuidadores')),
+            DropdownMenuItem(value: 'zone', child: Text('Por zona')),
+          ],
+          onChanged: (v) => ss(() => target = v ?? 'all'),
+        ),
+        if (target == 'zone')
+          TextField(controller: zoneCtrl, decoration: const InputDecoration(labelText: 'Zona (ej: EQUIPETROL)')),
+        const SizedBox(height: 8),
+        TextField(controller: schedCtrl, decoration: const InputDecoration(
+          labelText: 'Programar para (ISO, dejar vacío = envío inmediato)',
+          hintText: '2025-12-31T18:00:00',
+        )),
+      ])),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+        ElevatedButton(
+          onPressed: () async {
+            final body = jsonEncode({
+              'title': titleCtrl.text.trim(),
+              'message': msgCtrl.text.trim(),
+              'targetType': target,
+              if (target == 'zone' && zoneCtrl.text.trim().isNotEmpty) 'targetZone': zoneCtrl.text.trim(),
+              if (schedCtrl.text.trim().isNotEmpty) 'scheduledAt': schedCtrl.text.trim(),
+            });
+            await http.post(Uri.parse('$_base/admin/mass-notifications'), headers: _h, body: body);
+            if (ctx.mounted) { Navigator.pop(ctx); _load(); }
+          },
+          child: const Text('Enviar / Programar'),
+        ),
+      ],
+    )));
+  }
+
+  @override Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: themeNotifier,
+      builder: (context, _) {
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    Color statusColor(String s) => s == 'SENT' ? GardenColors.success : s == 'FAILED' ? GardenColors.error : s == 'SENDING' ? GardenColors.warning : GardenColors.info;
+
+    return Scaffold(
+      backgroundColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showComposer,
+        backgroundColor: GardenColors.primary,
+        icon: const Icon(Icons.send_rounded, color: Colors.white),
+        label: const Text('Nueva Notificación', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+          : ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), children: [
+              Text('Notificaciones Masivas', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text('Push + in-app para grupos de usuarios. Se envían inmediatamente o en la fecha programada.', style: TextStyle(color: subtextColor, fontSize: 12)),
+              const SizedBox(height: 16),
+              if (_notifs.isEmpty)
+                Center(child: Padding(padding: const EdgeInsets.all(40), child: Text('Sin notificaciones enviadas.', style: TextStyle(color: subtextColor))))
+              else
+                ..._notifs.map((n) {
+                  final status = n['status'] as String? ?? 'DRAFT';
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderColor)),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        Expanded(child: Text(n['title'] ?? '', style: TextStyle(color: textColor, fontWeight: FontWeight.w700))),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: statusColor(status).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+                          child: Text(status, style: TextStyle(color: statusColor(status), fontSize: 11, fontWeight: FontWeight.w700)),
+                        ),
+                      ]),
+                      const SizedBox(height: 4),
+                      Text(n['message'] ?? '', style: TextStyle(color: subtextColor, fontSize: 13)),
+                      const SizedBox(height: 6),
+                      Text('Destino: ${n['targetType']} · Enviados: ${n['sentCount']} · Errores: ${n['failCount']}',
+                        style: TextStyle(color: subtextColor, fontSize: 11)),
+                    ]),
+                  );
+                }),
+            ]),
+    );
+    }); // AnimatedBuilder
+  }
 }

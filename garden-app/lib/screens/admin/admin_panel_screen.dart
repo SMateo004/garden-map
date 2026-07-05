@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -20,7 +21,9 @@ class AdminPanelScreen extends StatefulWidget {
 }
 
 class _AdminPanelScreenState extends State<AdminPanelScreen> {
-  int _selectedTab = 0;
+  // Administración (índice 10) → su primera sub-pestaña es "En Vivo", el
+  // dashboard en tiempo real — es lo primero que el admin debe ver al entrar.
+  int _selectedTab = 10;
   List<Map<String, dynamic>> _caregivers = [];
   List<Map<String, dynamic>> _identityReviews = [];
   List<Map<String, dynamic>> _withdrawals = [];
@@ -789,58 +792,156 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               ),
             ],
           ),
-          body: Column(
-            children: [
-              _buildTabBar(surface, textColor, subtextColor, borderColor, isDark),
-              Expanded(
-                child: IndexedStack(
-                  index: _selectedTab,
+          body: kIsWeb
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _buildCaregiversList(surface, textColor, subtextColor, borderColor),
-                    _buildRequestsTab(surface, textColor, subtextColor, borderColor),
-                    _buildReservationsTab(surface, textColor, subtextColor, borderColor),
-                    _buildPaymentsTab(),
-                    _buildIdentityList(surface, textColor, subtextColor, borderColor),
-                    _buildDisputesTab(surface, textColor, subtextColor, borderColor),
-                    _buildWithdrawalsTab(surface, textColor, subtextColor, borderColor),
-                    _buildGiftCodesTab(surface, textColor, subtextColor, borderColor),
-                    AdminOwnersScreen(adminToken: _adminToken),
-                    AdminVetsScreen(adminToken: _adminToken),
-                    AdminGeneralScreen(adminToken: _adminToken),
-                    AdminTechnicalScreen(adminToken: _adminToken),
-                    AdminNotificationsScreen(adminToken: _adminToken),
-                    _buildBannersTab(surface, textColor, subtextColor, borderColor),
-                    _buildMassNotifTab(surface, textColor, subtextColor, borderColor),
-                    _buildFeatureFlagsTab(surface, textColor, subtextColor, borderColor),
+                    _buildWebSidebar(surface, textColor, subtextColor, borderColor, isDark),
+                    Container(width: 1, color: borderColor),
+                    Expanded(
+                      child: _buildIndexedStackBody(surface, textColor, subtextColor, borderColor),
+                    ),
+                  ],
+                )
+              : Column(
+                  children: [
+                    _buildTabBar(surface, textColor, subtextColor, borderColor, isDark),
+                    Expanded(
+                      child: _buildIndexedStackBody(surface, textColor, subtextColor, borderColor),
+                    ),
                   ],
                 ),
-              ),
-            ],
-          ),
         );
       },
     );
   }
 
+  // Fuente única de verdad para las 15 secciones — usada tanto por el chip
+  // bar horizontal (mobile) como por el sidebar agrupado (web). El índice de
+  // cada entrada es el mismo que su posición en _buildIndexedStackBody().
+  static const List<(String, IconData)> _tabs = [
+    ('Cuidadores', Icons.person_search_rounded),
+    ('Solicitudes', Icons.pending_actions_rounded),
+    ('Reservas', Icons.calendar_month_outlined),
+    ('Pagos', Icons.price_check_rounded),
+    ('Identidad', Icons.verified_user_outlined),
+    ('Disputas', Icons.gavel_rounded),
+    ('Retiros', Icons.account_balance_rounded),
+    ('Códigos', Icons.card_giftcard_outlined),
+    ('Dueños', Icons.pets_rounded),
+    ('Veterinarias', Icons.local_hospital_rounded),
+    ('Administración', Icons.business_center_rounded),
+    ('Técnica', Icons.developer_mode_rounded),
+    ('Notificaciones', Icons.campaign_rounded),
+    ('Banners', Icons.view_carousel_rounded),
+    ('Feature Flags', Icons.flag_rounded),
+  ];
+
+  // Agrupación del sidebar web — cada grupo es (título, ícono, índices de _tabs).
+  static const List<(String, IconData, List<int>)> _webNavGroups = [
+    ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5]),
+    ('Finanzas', Icons.attach_money_rounded, [3, 6, 7]),
+    ('Personas', Icons.groups_outlined, [8, 9]),
+    ('Comunicación', Icons.forum_outlined, [12, 13]),
+    ('Sistema', Icons.settings_outlined, [10, 11, 14]),
+  ];
+
+  Widget _buildIndexedStackBody(Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    return IndexedStack(
+      index: _selectedTab,
+      children: [
+        _buildCaregiversList(surface, textColor, subtextColor, borderColor),
+        _buildRequestsTab(surface, textColor, subtextColor, borderColor),
+        _buildReservationsTab(surface, textColor, subtextColor, borderColor),
+        _buildPaymentsTab(),
+        _buildIdentityList(surface, textColor, subtextColor, borderColor),
+        _buildDisputesTab(surface, textColor, subtextColor, borderColor),
+        _buildWithdrawalsTab(surface, textColor, subtextColor, borderColor),
+        _buildGiftCodesTab(surface, textColor, subtextColor, borderColor),
+        AdminOwnersScreen(adminToken: _adminToken),
+        AdminVetsScreen(adminToken: _adminToken),
+        AdminGeneralScreen(adminToken: _adminToken),
+        AdminTechnicalScreen(adminToken: _adminToken),
+        AdminNotificationsScreen(adminToken: _adminToken),
+        _buildBannersTab(surface, textColor, subtextColor, borderColor),
+        _buildFeatureFlagsTab(surface, textColor, subtextColor, borderColor),
+      ],
+    );
+  }
+
+  Widget _buildWebSidebar(Color surface, Color textColor, Color subtextColor, Color borderColor, bool isDark) {
+    return Container(
+      width: 248,
+      color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: _webNavGroups.map((group) {
+            final (groupTitle, groupIcon, indices) = group;
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Row(children: [
+                      Icon(groupIcon, size: 13, color: subtextColor),
+                      const SizedBox(width: 6),
+                      Text(groupTitle.toUpperCase(),
+                        style: TextStyle(color: subtextColor, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.6)),
+                    ]),
+                  ),
+                  const SizedBox(height: 2),
+                  ...indices.map((i) {
+                    final (label, icon) = _tabs[i];
+                    final selected = _selectedTab == i;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 1.5),
+                      child: Material(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(10),
+                          onTap: () => setState(() => _selectedTab = i),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: selected ? GardenColors.primary.withValues(alpha: 0.12) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(10),
+                              border: selected ? Border.all(color: GardenColors.primary.withValues(alpha: 0.4)) : null,
+                            ),
+                            child: Row(children: [
+                              Icon(icon, size: 18, color: selected ? GardenColors.primary : subtextColor),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(label,
+                                  style: TextStyle(
+                                    color: selected ? GardenColors.primary : textColor,
+                                    fontSize: 13,
+                                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ]),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
   Widget _buildTabBar(Color surface, Color textColor, Color subtextColor, Color borderColor, bool isDark) {
-    final tabs = [
-      ('Cuidadores', Icons.person_search_rounded),
-      ('Solicitudes', Icons.pending_actions_rounded),
-      ('Reservas', Icons.calendar_month_outlined),
-      ('Pagos', Icons.price_check_rounded),
-      ('Identidad', Icons.verified_user_outlined),
-      ('Disputas', Icons.gavel_rounded),
-      ('Retiros', Icons.account_balance_rounded),
-      ('Códigos', Icons.card_giftcard_outlined),
-      ('Dueños', Icons.pets_rounded),
-      ('Veterinarias', Icons.local_hospital_rounded),
-      ('Administración', Icons.business_center_rounded),
-      ('Técnica', Icons.developer_mode_rounded),
-      ('Notificaciones', Icons.campaign_rounded),
-      ('Banners', Icons.view_carousel_rounded),
-      ('Push Masivo', Icons.send_rounded),
-      ('Feature Flags', Icons.flag_rounded),
-    ];
+    final tabs = _tabs;
     return Container(
       color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -4215,9 +4316,6 @@ extension AdminBannersTab on _AdminPanelScreenState {
   Widget _buildBannersTab(Color surface, Color textColor, Color subtextColor, Color borderColor) {
     return _AdminBannersView(adminToken: _adminToken);
   }
-  Widget _buildMassNotifTab(Color surface, Color textColor, Color subtextColor, Color borderColor) {
-    return _AdminMassNotifView(adminToken: _adminToken);
-  }
   Widget _buildFeatureFlagsTab(Color surface, Color textColor, Color subtextColor, Color borderColor) {
     return _AdminFeatureFlagsView(adminToken: _adminToken);
   }
@@ -4376,144 +4474,6 @@ class _AdminBannersViewState extends State<_AdminBannersView> {
                     IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 18, color: GardenColors.error), onPressed: () => _delete(b['id'])),
                   ]),
                 )),
-            ]),
-    );
-    }); // AnimatedBuilder
-  }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// NOTIFICACIONES MASIVAS
-// ────────────────────────────────────────────────────────────────────────────
-
-class _AdminMassNotifView extends StatefulWidget {
-  final String adminToken;
-  const _AdminMassNotifView({required this.adminToken});
-  @override State<_AdminMassNotifView> createState() => _AdminMassNotifViewState();
-}
-
-class _AdminMassNotifViewState extends State<_AdminMassNotifView> {
-  List<Map<String, dynamic>> _notifs = [];
-  bool _loading = true;
-  String get _base => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
-  Map<String, String> get _h => {'Authorization': 'Bearer ${widget.adminToken}', 'Content-Type': 'application/json'};
-
-  @override void initState() { super.initState(); _load(); }
-
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    try {
-      final r = await http.get(Uri.parse('$_base/admin/mass-notifications'), headers: _h);
-      final d = jsonDecode(r.body);
-      if (mounted) setState(() { _notifs = List<Map<String, dynamic>>.from(d['data'] ?? []); _loading = false; });
-    } catch (_) { if (mounted) setState(() => _loading = false); }
-  }
-
-  void _showComposer() {
-    final titleCtrl = TextEditingController();
-    final msgCtrl = TextEditingController();
-    final schedCtrl = TextEditingController();
-    final zoneCtrl = TextEditingController();
-    String target = 'all';
-
-    showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, ss) => AlertDialog(
-      title: const Text('Nueva Notificación Masiva'),
-      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Título *')),
-        TextField(controller: msgCtrl, maxLines: 3, decoration: const InputDecoration(labelText: 'Mensaje *')),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: target,
-          decoration: const InputDecoration(labelText: 'Destinatarios'),
-          items: const [
-            DropdownMenuItem(value: 'all', child: Text('Todos los usuarios')),
-            DropdownMenuItem(value: 'clients', child: Text('Solo dueños de mascotas')),
-            DropdownMenuItem(value: 'caregivers', child: Text('Solo cuidadores')),
-            DropdownMenuItem(value: 'zone', child: Text('Por zona')),
-          ],
-          onChanged: (v) => ss(() => target = v ?? 'all'),
-        ),
-        if (target == 'zone')
-          TextField(controller: zoneCtrl, decoration: const InputDecoration(labelText: 'Zona (ej: EQUIPETROL)')),
-        const SizedBox(height: 8),
-        TextField(controller: schedCtrl, decoration: const InputDecoration(
-          labelText: 'Programar para (ISO, dejar vacío = envío inmediato)',
-          hintText: '2025-12-31T18:00:00',
-        )),
-      ])),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-        ElevatedButton(
-          onPressed: () async {
-            final body = jsonEncode({
-              'title': titleCtrl.text.trim(),
-              'message': msgCtrl.text.trim(),
-              'targetType': target,
-              if (target == 'zone' && zoneCtrl.text.trim().isNotEmpty) 'targetZone': zoneCtrl.text.trim(),
-              if (schedCtrl.text.trim().isNotEmpty) 'scheduledAt': schedCtrl.text.trim(),
-            });
-            await http.post(Uri.parse('$_base/admin/mass-notifications'), headers: _h, body: body);
-            if (ctx.mounted) { Navigator.pop(ctx); _load(); }
-          },
-          child: const Text('Enviar / Programar'),
-        ),
-      ],
-    )));
-  }
-
-  @override Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: themeNotifier,
-      builder: (context, _) {
-    final isDark = themeNotifier.isDark;
-    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
-    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
-    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
-    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-
-    Color statusColor(String s) => s == 'SENT' ? GardenColors.success : s == 'FAILED' ? GardenColors.error : s == 'SENDING' ? GardenColors.warning : GardenColors.info;
-
-    return Scaffold(
-      backgroundColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showComposer,
-        backgroundColor: GardenColors.primary,
-        icon: const Icon(Icons.send_rounded, color: Colors.white),
-        label: const Text('Nueva Notificación', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
-          : ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), children: [
-              Text('Notificaciones Masivas', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 4),
-              Text('Push + in-app para grupos de usuarios. Se envían inmediatamente o en la fecha programada.', style: TextStyle(color: subtextColor, fontSize: 12)),
-              const SizedBox(height: 16),
-              if (_notifs.isEmpty)
-                Center(child: Padding(padding: const EdgeInsets.all(40), child: Text('Sin notificaciones enviadas.', style: TextStyle(color: subtextColor))))
-              else
-                ..._notifs.map((n) {
-                  final status = n['status'] as String? ?? 'DRAFT';
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderColor)),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(children: [
-                        Expanded(child: Text(n['title'] ?? '', style: TextStyle(color: textColor, fontWeight: FontWeight.w700))),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(color: statusColor(status).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
-                          child: Text(status, style: TextStyle(color: statusColor(status), fontSize: 11, fontWeight: FontWeight.w700)),
-                        ),
-                      ]),
-                      const SizedBox(height: 4),
-                      Text(n['message'] ?? '', style: TextStyle(color: subtextColor, fontSize: 13)),
-                      const SizedBox(height: 6),
-                      Text('Destino: ${n['targetType']} · Enviados: ${n['sentCount']} · Errores: ${n['failCount']}',
-                        style: TextStyle(color: subtextColor, fontSize: 11)),
-                    ]),
-                  );
-                }),
             ]),
     );
     }); // AnimatedBuilder
