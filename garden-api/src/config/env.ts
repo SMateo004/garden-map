@@ -66,7 +66,39 @@ const envSchema = z.object({
 .refine(
   data => data.NODE_ENV !== 'production' || !!data.ANTHROPIC_API_KEY,
   { message: 'ANTHROPIC_API_KEY is required in production', path: ['ANTHROPIC_API_KEY'] }
-);
+)
+.superRefine((data, ctx) => {
+  if (!data.SIP_ENABLED) return;
+  // Falla rápido al arrancar en vez de descubrirlo en producción cuando generaQr()
+  // ya cayó silenciosamente — todas estas vars son obligatorias si SIP está activo.
+  const required: Array<[keyof typeof data, string]> = [
+    ['SIP_API_URL', 'SIP_API_URL'],
+    ['SIP_APIKEY', 'SIP_APIKEY'],
+    ['SIP_USERNAME', 'SIP_USERNAME'],
+    ['SIP_PASSWORD', 'SIP_PASSWORD'],
+    ['SIP_APIKEY_SERVICIO', 'SIP_APIKEY_SERVICIO'],
+    ['SIP_CALLBACK_USER', 'SIP_CALLBACK_USER'],
+    ['SIP_CALLBACK_PASS', 'SIP_CALLBACK_PASS'],
+  ];
+  for (const [key, path] of required) {
+    if (!data[key]) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${path} es requerido cuando SIP_ENABLED=true`,
+        path: [path],
+      });
+    }
+  }
+  // El banco exige que el password del callback tenga mayúscula, minúscula y carácter especial.
+  const pass = data.SIP_CALLBACK_PASS;
+  if (pass && !(/[A-Z]/.test(pass) && /[a-z]/.test(pass) && /[^A-Za-z0-9]/.test(pass))) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'SIP_CALLBACK_PASS debe contener mayúscula, minúscula y carácter especial (requisito del banco)',
+      path: ['SIP_CALLBACK_PASS'],
+    });
+  }
+});
 
 const parsed = envSchema.safeParse(process.env);
 if (!parsed.success) {

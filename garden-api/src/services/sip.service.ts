@@ -13,6 +13,7 @@
 
 import { env } from '../config/env.js';
 import logger from '../shared/logger.js';
+import prisma from '../config/database.js';
 
 // ── Tipos de respuesta SIP ───────────────────────────────────────────────────
 
@@ -50,6 +51,18 @@ export class SipDisabledError extends Error {
   constructor() {
     super('SIP_ENABLED=false — usando QR placeholder local');
     this.name = 'SipDisabledError';
+  }
+}
+
+/**
+ * El doc SIP indica explícitamente que el token puede invalidarse en cualquier
+ * momento y el banco responde 401 Unauthorized — hay que regenerar el token y
+ * reintentar, no tratarlo como un error genérico.
+ */
+export class SipUnauthorizedError extends Error {
+  constructor(path: string) {
+    super(`SIP ${path} → 401 Unauthorized (token inválido)`);
+    this.name = 'SipUnauthorizedError';
   }
 }
 
@@ -91,12 +104,33 @@ async function sipPost<T>(
     body: JSON.stringify(body),
   });
 
+  if (res.status === 401) {
+    throw new SipUnauthorizedError(path);
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`SIP ${path} → HTTP ${res.status}: ${text}`);
   }
 
   return res.json() as Promise<T>;
+}
+
+/**
+ * Ejecuta una llamada autenticada a SIP; si el token cacheado resultó inválido
+ * (401), lo descarta, pide uno nuevo y reintenta UNA vez antes de propagar el error.
+ */
+async function withTokenRetry<T>(fn: (token: string) => Promise<T>): Promise<T> {
+  const token = await getToken();
+  try {
+    return await fn(token);
+  } catch (err) {
+    if (!(err instanceof SipUnauthorizedError)) throw err;
+    logger.warn('[SIP] Token inválido (401) — regenerando y reintentando una vez');
+    cachedToken = null;
+    tokenExpiresAt = 0;
+    const freshToken = await getToken();
+    return fn(freshToken);
+  }
 }
 
 // ── 1. Obtener / cachear token ───────────────────────────────────────────────
@@ -135,8 +169,6 @@ export async function generateQr(
 ): Promise<SipQrResult> {
   assertEnabled();
 
-  const token = await getToken();
-
   // SIP solo acepta granularidad de día (dd/mm/yyyy), no horas/minutos.
   // Usamos la fecha de HOY como fechaVencimiento — es la red de seguridad del banco.
   // La invalidación real a los 15 min la hace nuestro job via disableQr().
@@ -157,13 +189,11 @@ export async function generateQr(
     objeto: SipQrResult;
   }
 
-  const data = await sipPost<SipGenerateQrResponse>(
-    '/api/v1/generaQr',
-    body,
-    {
+  const data = await withTokenRetry((token) =>
+    sipPost<SipGenerateQrResponse>('/api/v1/generaQr', body, {
       Authorization: `Bearer ${token}`,
       apikeyServicio: env.SIP_APIKEY_SERVICIO!,
-    }
+    })
   );
 
   if (data.codigo !== '0000' || !data.objeto) {
@@ -179,17 +209,13 @@ export async function generateQr(
 export async function disableQr(alias: string): Promise<void> {
   assertEnabled();
 
-  const token = await getToken();
-
   interface SipDisableResponse { codigo: string; mensaje: string; objeto: null }
 
-  const data = await sipPost<SipDisableResponse>(
-    '/api/v1/inhabilitarPago',
-    { alias },
-    {
+  const data = await withTokenRetry((token) =>
+    sipPost<SipDisableResponse>('/api/v1/inhabilitarPago', { alias }, {
       Authorization: `Bearer ${token}`,
       apikeyServicio: env.SIP_APIKEY_SERVICIO!,
-    }
+    })
   );
 
   if (data.codigo !== '0000') {
@@ -206,21 +232,17 @@ export async function disableQr(alias: string): Promise<void> {
 export async function getTransactionStatus(alias: string): Promise<SipTransactionStatus> {
   assertEnabled();
 
-  const token = await getToken();
-
   interface SipStatusResponse {
     codigo: string;
     mensaje: string;
     objeto: SipTransactionStatus;
   }
 
-  const data = await sipPost<SipStatusResponse>(
-    '/api/v1/estadoTransaccion',
-    { alias },
-    {
+  const data = await withTokenRetry((token) =>
+    sipPost<SipStatusResponse>('/api/v1/estadoTransaccion', { alias }, {
       Authorization: `Bearer ${token}`,
       apikeyServicio: env.SIP_APIKEY_SERVICIO!,
-    }
+    })
   );
 
   if (data.codigo !== '0000' || !data.objeto) {
@@ -228,4 +250,38 @@ export async function getTransactionStatus(alias: string): Promise<SipTransactio
   }
 
   return data.objeto;
+}
+
+// ── Alerta a admins cuando SIP falla en producción ──────────────────────────
+// Antes esto fallaba en silencio y el sistema mostraba un QR placeholder falso
+// al cliente. Ahora, además de bloquear el pago con un error claro, avisamos
+// a todos los administradores por email — igual que hace el propio banco
+// cuando su callback de confirmación falla.
+
+export async function notifyAdminsSipFailure(context: string, bookingId: string, err: unknown): Promise<void> {
+  try {
+    const message = err instanceof Error ? err.message : String(err);
+    const admins = await prisma.user.findMany({
+      where: { role: 'ADMIN' },
+      select: { email: true },
+    });
+    if (admins.length === 0) {
+      logger.error('[SIP] Falla crítica sin admins registrados para notificar', { context, bookingId, message });
+      return;
+    }
+    const { sendTransactionalEmail } = await import('../modules/auth/email.service.js');
+    const subject = `⚠️ Falla del banco (SIP) — ${context}`;
+    const html = `
+      <p>La integración bancaria SIP falló al ejecutar <b>${context}</b> para la reserva <b>${bookingId}</b>.</p>
+      <p>El pago fue bloqueado (no se mostró un QR falso al cliente). Revisa las credenciales SIP y el estado del servicio del banco.</p>
+      <p><b>Error:</b> ${message}</p>
+    `;
+    await Promise.all(
+      admins.map((a) => sendTransactionalEmail(a.email, subject, html).catch((e) =>
+        logger.error('[SIP] No se pudo enviar email de alerta a admin', { email: a.email, e })
+      ))
+    );
+  } catch (notifyErr) {
+    logger.error('[SIP] Error notificando falla crítica a admins', { context, bookingId, notifyErr });
+  }
 }

@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import type { Booking } from '@prisma/client';
 import prisma from '../../config/database.js';
 import {
+  AppError,
   AvailabilityConflictError,
   BadRequestError,
   BookingNotFoundError,
@@ -1073,12 +1074,23 @@ export async function generateQR(
         sipTransaccionId: result.idTransaccion,
       };
     } catch (err) {
-      logger.error('[SIP] Error generando QR — cayendo a placeholder', { bookingId, err });
-      // No propagar el error; caemos al placeholder para no bloquear al usuario
+      // SIP está activo pero falló (red, credenciales, banco caído, etc.).
+      // Antes esto caía en silencio a un QR placeholder falso — el cliente
+      // veía un código que no conecta a ningún riel bancario real, sin que
+      // nadie se enterara de que el banco falló. Ahora bloqueamos el pago
+      // con un error claro y alertamos a los admins, igual que hace el
+      // propio banco cuando su callback de confirmación falla.
+      logger.error('[SIP] Error generando QR — bloqueando pago (no se usa placeholder en producción)', { bookingId, err });
+      sipService.notifyAdminsSipFailure('generarQr', bookingId, err).catch(() => {});
+      throw new AppError(
+        'No pudimos generar tu código de pago en este momento. Intenta nuevamente en unos minutos.',
+        503,
+        'SIP_UNAVAILABLE'
+      );
     }
   }
 
-  // Modo local / fallback
+  // Modo local / fallback — SOLO cuando SIP_ENABLED=false (dev/CI)
   const qrId = crypto.randomUUID();
   const qrImageUrl = `https://api.garden.bo/qr/placeholder/${qrId}`;
   logger.info('QR generado (placeholder local)', { bookingId, qrId, validityMinutes });
