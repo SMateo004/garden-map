@@ -2275,6 +2275,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     );
   }
 
+  /// Transición entre pasos del wizard: fade + leve deslizamiento vertical,
+  /// en vez del fade plano por defecto de AnimatedSwitcher.
+  Widget _stepTransitionBuilder(Widget child, Animation<double> animation) {
+    final slide = Tween<Offset>(begin: const Offset(0, 0.03), end: Offset.zero).animate(animation);
+    return FadeTransition(opacity: animation, child: SlideTransition(position: slide, child: child));
+  }
+
   @override
   Widget build(BuildContext context) {
     // ─── Steps 6-9 are post-registration embedded screens ───────────────────
@@ -2411,11 +2418,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               automaticallyImplyLeading: _currentStep < 5,
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(4),
-                child: LinearProgressIndicator(
+                child: _AnimatedStepProgressBar(
                   value: (_currentStep + 1) / 10,
                   backgroundColor: borderColor,
-                  valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
-                  minHeight: 4,
+                  height: 4,
                 ),
               ),
             ),
@@ -2456,15 +2462,20 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                                   style: TextStyle(color: subtextColor, fontSize: 12),
                                 ),
                                 const SizedBox(width: 10),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: GardenColors.primary.withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    stepTitles[_currentStep],
-                                    style: const TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w700),
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 260),
+                                  transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: FadeTransition(opacity: anim, child: child)),
+                                  child: Container(
+                                    key: ValueKey(_currentStep),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: GardenColors.primary.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      stepTitles[_currentStep],
+                                      style: const TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w700),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -2472,11 +2483,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                             const SizedBox(height: 10),
                             ClipRRect(
                               borderRadius: BorderRadius.circular(2),
-                              child: LinearProgressIndicator(
+                              child: _AnimatedStepProgressBar(
                                 value: (_currentStep + 1) / 10,
                                 backgroundColor: borderColor,
-                                valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
-                                minHeight: 3,
+                                height: 3,
                               ),
                             ),
                             const SizedBox(height: 14),
@@ -2500,9 +2510,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  stepTitles[_currentStep],
-                                  style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w800),
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 240),
+                                  transitionBuilder: _stepTransitionBuilder,
+                                  child: Text(
+                                    stepTitles[_currentStep],
+                                    key: ValueKey(_currentStep),
+                                    style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w800),
+                                  ),
                                 ),
                                 const SizedBox(height: 1),
                                 Text(
@@ -2518,15 +2533,19 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                                 final done   = i < _currentStep;
                                 final active = i == _currentStep;
                                 return AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
+                                  duration: const Duration(milliseconds: 260),
+                                  curve: Curves.easeOutCubic,
                                   margin: const EdgeInsets.symmetric(horizontal: 2),
-                                  width:  active ? 18 : 6,
+                                  width:  active ? 20 : 6,
                                   height: 6,
                                   decoration: BoxDecoration(
                                     color: done || active
                                         ? GardenColors.primary
                                         : borderColor,
                                     borderRadius: BorderRadius.circular(3),
+                                    boxShadow: active
+                                      ? [BoxShadow(color: GardenColors.primary.withValues(alpha: 0.5), blurRadius: 5, spreadRadius: 0.5)]
+                                      : null,
                                   ),
                                 );
                               }),
@@ -2536,11 +2555,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                         const SizedBox(height: 10),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(2),
-                          child: LinearProgressIndicator(
+                          child: _AnimatedStepProgressBar(
                             value: (_currentStep + 1) / 10,
                             backgroundColor: borderColor,
-                            valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
-                            minHeight: 3,
+                            height: 3,
                           ),
                         ),
                         const SizedBox(height: 1),
@@ -2557,7 +2575,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 640),
                             child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 200),
+                              duration: const Duration(milliseconds: 320),
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              transitionBuilder: _stepTransitionBuilder,
                               child: KeyedSubtree(
                                 key: ValueKey(_currentStep),
                                 child: steps[_currentStep],
@@ -2566,7 +2587,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                           ),
                         )
                       : AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 250),
+                          duration: const Duration(milliseconds: 320),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          transitionBuilder: _stepTransitionBuilder,
                           child: KeyedSubtree(
                             key: ValueKey(_currentStep),
                             child: steps[_currentStep],
@@ -2612,6 +2636,51 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                   ),
                 ],
               ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Barra de progreso del wizard con transición suave entre valores (en vez del
+/// salto abrupto de LinearProgressIndicator) + un leve resplandor mientras avanza.
+class _AnimatedStepProgressBar extends StatelessWidget {
+  final double value;
+  final Color backgroundColor;
+  final double height;
+
+  const _AnimatedStepProgressBar({
+    required this.value,
+    required this.backgroundColor,
+    this.height = 4,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: value),
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+      builder: (context, animatedValue, _) {
+        return Container(
+          height: height,
+          decoration: BoxDecoration(color: backgroundColor),
+          child: FractionallySizedBox(
+            alignment: Alignment.centerLeft,
+            widthFactor: animatedValue.clamp(0.0, 1.0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: GardenColors.primary,
+                boxShadow: [
+                  BoxShadow(
+                    color: GardenColors.primary.withValues(alpha: 0.55),
+                    blurRadius: 6,
+                    spreadRadius: 0.5,
+                  ),
+                ],
+              ),
             ),
           ),
         );

@@ -9,6 +9,7 @@ import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/notification_bell.dart';
 import '../../widgets/garden_tutorial.dart';
+import '../../widgets/tap_scale.dart';
 import '../../main.dart';
 import '../chat/chat_screen.dart';
 import '../service/service_execution_screen.dart';
@@ -2124,7 +2125,19 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           ).toList(),
         ),
         const SizedBox(height: 6),
-        _buildCalendarGrid(),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 260),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            final slide = Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(animation);
+            return FadeTransition(opacity: animation, child: SlideTransition(position: slide, child: child));
+          },
+          child: KeyedSubtree(
+            key: ValueKey(_calendarMonth),
+            child: _buildCalendarGrid(),
+          ),
+        ),
         const SizedBox(height: 8),
         Center(child: Text('Toca un día para ver detalles o bloquearlo', style: TextStyle(color: subtextColor, fontSize: 11))),
       ],
@@ -2247,37 +2260,46 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         final isEnabled = item['value'] as bool;
 
         return Expanded(
-          child: GestureDetector(
+          child: TapScale(
             onTap: () => _toggleDayType(item['key'] as String, !isEnabled),
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              margin: EdgeInsets.only(right: i < 2 ? 8 : 0),
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+              margin: EdgeInsets.only(right: i < 2 ? 10 : 0),
+              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 10),
               decoration: BoxDecoration(
                 color: isEnabled
-                  ? GardenColors.success.withValues(alpha: 0.1)
+                  ? GardenColors.success.withValues(alpha: 0.12)
                   : surface,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: isEnabled
-                    ? GardenColors.success.withValues(alpha: 0.55)
+                    ? GardenColors.success.withValues(alpha: 0.6)
                     : borderColor,
                   width: isEnabled ? 1.5 : 1,
                 ),
+                boxShadow: isEnabled
+                  ? [BoxShadow(color: GardenColors.success.withValues(alpha: 0.18), blurRadius: 14, offset: const Offset(0, 4))]
+                  : null,
               ),
               child: Column(
                 children: [
-                  Icon(item['icon'] as IconData,
-                    color: isEnabled ? GardenColors.success : subtextColor, size: 22),
-                  const SizedBox(height: 8),
+                  AnimatedScale(
+                    scale: isEnabled ? 1.08 : 1.0,
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutBack,
+                    child: Icon(item['icon'] as IconData,
+                      color: isEnabled ? GardenColors.success : subtextColor, size: 26),
+                  ),
+                  const SizedBox(height: 10),
                   Text(item['label'] as String,
                     style: TextStyle(
                       color: isEnabled ? textColor : subtextColor,
-                      fontSize: 12, fontWeight: FontWeight.w600,
+                      fontSize: 13, fontWeight: FontWeight.w700,
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   _miniToggle(isEnabled, GardenColors.success),
                 ],
               ),
@@ -2329,13 +2351,14 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   }
 
   Widget _calNavBtn(IconData icon, VoidCallback onTap) {
-    return GestureDetector(
+    return TapScale(
+      pressedScale: 0.88,
       onTap: onTap,
       child: Container(
-        width: 32, height: 32,
+        width: 34, height: 34,
         decoration: BoxDecoration(
           color: GardenColors.primary.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(9),
         ),
         child: Icon(icon, color: GardenColors.primary, size: 20),
       ),
@@ -2381,19 +2404,23 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
 
         return Expanded(
           child: Container(
-            margin: EdgeInsets.only(right: i < 2 ? 8 : 0),
-            child: GestureDetector(
+            margin: EdgeInsets.only(right: i < 2 ? 10 : 0),
+            child: TapScale(
               onTap: () => _toggleTimeBlock(key, !isEnabled),
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                padding: const EdgeInsets.all(14),
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: isEnabled ? color.withValues(alpha: 0.1) : surface,
-                  borderRadius: BorderRadius.circular(16),
+                  color: isEnabled ? color.withValues(alpha: 0.12) : surface,
+                  borderRadius: BorderRadius.circular(18),
                   border: Border.all(
-                    color: isEnabled ? color.withValues(alpha: 0.55) : borderColor,
+                    color: isEnabled ? color.withValues(alpha: 0.6) : borderColor,
                     width: isEnabled ? 1.5 : 1,
                   ),
+                  boxShadow: isEnabled
+                    ? [BoxShadow(color: color.withValues(alpha: 0.2), blurRadius: 14, offset: const Offset(0, 4))]
+                    : null,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2401,40 +2428,52 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Icon(icon, color: isEnabled ? color : subtextColor, size: 20),
+                        AnimatedScale(
+                          scale: isEnabled ? 1.1 : 1.0,
+                          duration: const Duration(milliseconds: 260),
+                          curve: Curves.easeOutBack,
+                          child: Icon(icon, color: isEnabled ? color : subtextColor, size: 23),
+                        ),
                         _miniToggle(isEnabled, color),
                       ],
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     Text(b['label'] as String,
                       style: TextStyle(
                         color: isEnabled ? textColor : subtextColor,
-                        fontWeight: FontWeight.w700, fontSize: 13,
+                        fontWeight: FontWeight.w700, fontSize: 14,
                       )),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 4),
                     Text('${block['start']} - ${block['end']}',
                       style: TextStyle(
                         color: isEnabled ? color : subtextColor,
-                        fontSize: 11, fontWeight: FontWeight.w500,
+                        fontSize: 12, fontWeight: FontWeight.w600,
                       )),
-                    if (isEnabled) ...[
-                      const SizedBox(height: 10),
-                      GestureDetector(
-                        onTap: () => _showEditBlockSheet(key, block),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(Icons.access_time, size: 10, color: color),
-                            const SizedBox(width: 4),
-                            Text('Editar hora', style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
-                          ]),
-                        ),
-                      ),
-                    ],
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      alignment: Alignment.topLeft,
+                      child: isEnabled
+                        ? Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: TapScale(
+                              onTap: () => _showEditBlockSheet(key, block),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(7),
+                                ),
+                                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                  Icon(Icons.access_time, size: 11, color: color),
+                                  const SizedBox(width: 4),
+                                  Text('Editar hora', style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
+                                ]),
+                              ),
+                            ),
+                          )
+                        : const SizedBox(width: double.infinity),
+                    ),
                   ],
                 ),
               ),
@@ -2648,7 +2687,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         date.day == DateTime.now().day;
 
       cells.add(
-        GestureDetector(
+        TapScale(
+          pressedScale: 0.9,
           onTap: isPast ? null : () {
             setState(() => _selectedDay = date);
             showModalBottomSheet(
@@ -2659,13 +2699,17 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               builder: (ctx) => _buildDayPanel(ctx, date),
             );
           },
-          child: Container(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
             margin: const EdgeInsets.all(2),
             decoration: BoxDecoration(
-              color: bgColor.withValues(alpha: isPast ? 0.3 : 0.8),
-              borderRadius: BorderRadius.circular(8),
+              color: bgColor.withValues(alpha: isPast ? 0.3 : 0.85),
+              borderRadius: BorderRadius.circular(9),
               border: isToday
                 ? Border.all(color: Colors.white, width: 2)
+                : null,
+              boxShadow: isToday
+                ? [BoxShadow(color: bgColor.withValues(alpha: 0.5), blurRadius: 8, offset: const Offset(0, 2))]
                 : null,
             ),
             child: Center(
