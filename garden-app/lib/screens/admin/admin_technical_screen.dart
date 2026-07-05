@@ -188,46 +188,81 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
     if (mounted) setState(() => _savingSetting = false);
   }
 
+  // Cada botón de emergencia controla un setting real (el mismo que su
+  // switch normal en Configuración). "pausedValue" es el valor del setting
+  // cuando la acción de emergencia está "activada" (ej. maintenanceMode=true
+  // significa mantenimiento ACTIVO, pero paymentsEnabled=false significa
+  // pagos PAUSADOS — cada uno con su propia polaridad).
+  static const Map<String, ({String key, bool pausedValue, String activeLabel, String pausedLabel})> _emergencyConfig = {
+    'pause_payments': (
+      key: 'paymentsEnabled', pausedValue: false,
+      activeLabel: '⏸ Pausar pagos', pausedLabel: '▶️ Reanudar pagos',
+    ),
+    'maintenance': (
+      key: 'maintenanceMode', pausedValue: true,
+      activeLabel: '🔧 Modo mantenimiento', pausedLabel: '✅ Quitar mantenimiento',
+    ),
+    'disable_marketplace': (
+      key: 'marketplaceEnabled', pausedValue: false,
+      activeLabel: '🛒 Pausar marketplace', pausedLabel: '▶️ Reactivar marketplace',
+    ),
+    'disable_registrations': (
+      key: 'newRegistrationsEnabled', pausedValue: false,
+      activeLabel: '🔒 Bloquear registros', pausedLabel: '🔓 Permitir registros',
+    ),
+  };
+
+  /// true si la acción de emergencia está actualmente "activada" (ej. modo
+  /// mantenimiento prendido, o pagos pausados) — determina si el botón debe
+  /// activar o revertir la acción la próxima vez que se toque.
+  bool _isEmergencyActionEngaged(String action) {
+    final cfg = _emergencyConfig[action]!;
+    final current = _settings.containsKey(cfg.key)
+        ? _settings[cfg.key] == true
+        : (_boolDefaults[cfg.key] ?? false);
+    return current == cfg.pausedValue;
+  }
+
+  String _emergencyBtnLabel(String action) {
+    final cfg = _emergencyConfig[action]!;
+    return _isEmergencyActionEngaged(action) ? cfg.pausedLabel : cfg.activeLabel;
+  }
+
   Future<void> _emergencyAction(String action) async {
+    final cfg = _emergencyConfig[action]!;
+    final engaged = _isEmergencyActionEngaged(action);
+    // Si ya está activada, esta acción la revierte; si no, la activa.
+    final newValue = engaged ? !cfg.pausedValue : cfg.pausedValue;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Row(children: [
-          const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+          Icon(engaged ? Icons.check_circle_outline : Icons.warning_amber_rounded,
+              color: engaged ? GardenColors.success : Colors.orange),
           const SizedBox(width: 8),
-          const Text('Acción de emergencia'),
+          Text(engaged ? 'Revertir acción' : 'Acción de emergencia'),
         ]),
         content: Text(
-            'Confirmas ejecutar: "$action"?\n\nEsta acción afecta a TODOS los usuarios activos.'),
+            engaged
+              ? '¿Quitar "${cfg.activeLabel}" y volver todo a la normalidad?\n\nEsta acción afecta a TODOS los usuarios activos.'
+              : '¿Confirmas ejecutar: "${cfg.activeLabel}"?\n\nEsta acción afecta a TODOS los usuarios activos.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancelar')),
           ElevatedButton(
-            style:
-                ElevatedButton.styleFrom(backgroundColor: GardenColors.error),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: engaged ? GardenColors.success : GardenColors.error),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Confirmar',
-                style: TextStyle(color: Colors.white)),
+            child: Text(engaged ? 'Revertir' : 'Confirmar',
+                style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
     if (confirmed != true) return;
-    switch (action) {
-      case 'pause_payments':
-        await _updateSetting('paymentsEnabled', false);
-        break;
-      case 'maintenance':
-        await _updateSetting('maintenanceMode', true);
-        break;
-      case 'disable_marketplace':
-        await _updateSetting('marketplaceEnabled', false);
-        break;
-      case 'disable_registrations':
-        await _updateSetting('newRegistrationsEnabled', false);
-        break;
-    }
+    await _updateSetting(cfg.key, newValue);
   }
 
   Future<void> _sendInstruction() async {
@@ -515,13 +550,17 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                 style: TextStyle(color: subtextColor, fontSize: 12)),
             const SizedBox(height: 12),
             Wrap(spacing: 10, runSpacing: 10, children: [
-              _emergencyBtn('⏸ Pausar pagos', Colors.orange,
+              _emergencyBtn(_emergencyBtnLabel('pause_payments'),
+                  _isEmergencyActionEngaged('pause_payments') ? GardenColors.success : Colors.orange,
                   () => _emergencyAction('pause_payments')),
-              _emergencyBtn('🔧 Modo mantenimiento', Colors.red.shade700,
+              _emergencyBtn(_emergencyBtnLabel('maintenance'),
+                  _isEmergencyActionEngaged('maintenance') ? GardenColors.success : Colors.red.shade700,
                   () => _emergencyAction('maintenance')),
-              _emergencyBtn('🛒 Pausar marketplace', Colors.purple,
+              _emergencyBtn(_emergencyBtnLabel('disable_marketplace'),
+                  _isEmergencyActionEngaged('disable_marketplace') ? GardenColors.success : Colors.purple,
                   () => _emergencyAction('disable_marketplace')),
-              _emergencyBtn('🔒 Bloquear registros', Colors.deepOrange,
+              _emergencyBtn(_emergencyBtnLabel('disable_registrations'),
+                  _isEmergencyActionEngaged('disable_registrations') ? GardenColors.success : Colors.deepOrange,
                   () => _emergencyAction('disable_registrations')),
             ]),
 
