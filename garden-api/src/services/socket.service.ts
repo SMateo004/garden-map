@@ -144,6 +144,22 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
 
         socket.on('mark_read', async (bookingId: string) => {
             try {
+                // A diferencia de join_booking/send_message, este handler no
+                // verificaba que el socket perteneciera a la reserva — cualquier
+                // usuario autenticado podía marcar como leídos los mensajes de
+                // CUALQUIER booking adivinando/enumerando el bookingId.
+                const booking = await prisma.booking.findFirst({
+                    where: {
+                        id: bookingId,
+                        OR: [
+                            { clientId: socket.data.userId },
+                            { caregiver: { userId: socket.data.userId } },
+                        ],
+                    },
+                    select: { id: true },
+                }).catch(() => null);
+                if (!booking) return;
+
                 await prisma.chatMessage.updateMany({
                     where: {
                         bookingId,

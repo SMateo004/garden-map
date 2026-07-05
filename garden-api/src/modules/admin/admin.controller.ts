@@ -357,19 +357,25 @@ export const completeWithdrawal = asyncHandler(async (req: Request, res: Respons
       if (!userRecord) {
         throw Object.assign(new Error('NO_PROFILE'), { code: 'NO_PROFILE' });
       }
-      if (Number(userRecord.balance) < Number(tx.amount)) {
+
+      // Atomic conditional decrement — the earlier read-then-compare against
+      // userRecord.balance was check-then-act: two withdrawal requests for
+      // the same user, each individually within balance, could both pass this
+      // check before either's decrement committed (two admins approving
+      // concurrently, or one admin double-clicking). The `balance: gte` guard
+      // makes the check and the decrement a single atomic operation.
+      const decremented = await prismaTx.user.updateMany({
+        where: { id: tx.userId, balance: { gte: tx.amount } },
+        data: { balance: { decrement: tx.amount } },
+      });
+      if (decremented.count === 0) {
         throw Object.assign(
           new Error(`Saldo insuficiente. Tiene Bs ${userRecord.balance}, solicita Bs ${tx.amount}`),
           { code: 'INSUFFICIENT_BALANCE' }
         );
       }
-
-      const updatedUser = await prismaTx.user.update({
-        where: { id: tx.userId },
-        data: { balance: { decrement: tx.amount } },
-        select: { balance: true },
-      });
-      const newBalance = Number(updatedUser.balance);
+      const updatedUser = await prismaTx.user.findUnique({ where: { id: tx.userId }, select: { balance: true } });
+      const newBalance = Number(updatedUser!.balance);
 
       await prismaTx.walletTransaction.update({
         where: { id },

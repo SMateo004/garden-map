@@ -46,12 +46,15 @@ router.post('/:bookingId/client-report', authMiddleware, requireRole('CLIENT'),
       });
     }
 
-    // Prevent re-opening an already-resolved dispute
+    // Prevent re-opening a dispute that's already resolved OR actively being
+    // resolved by the AI right now (overwriting clientReasons mid-resolution
+    // would leave the final `resolution` text out of sync with what actually
+    // got decided/paid).
     const existingDispute = await (prisma as any).dispute.findUnique({ where: { bookingId } });
-    if (existingDispute?.status === 'RESOLVED') {
+    if (existingDispute?.status === 'RESOLVED' || existingDispute?.status === 'PENDING_AI') {
       return res.status(409).json({
         success: false,
-        error: { message: 'Esta disputa ya fue resuelta y no puede reabrirse.' },
+        error: { message: 'Esta disputa ya fue resuelta o está siendo evaluada y no puede modificarse.' },
       });
     }
 
@@ -96,10 +99,19 @@ router.post('/:bookingId/caregiver-response', authMiddleware, requireRole('CAREG
       return res.status(404).json({ success: false, error: { message: 'No hay disputa activa' } });
     }
 
-    await prisma.dispute.update({
-      where: { bookingId },
+    // Atomic claim — evita que un doble-click o un reintento de red dispare
+    // el juicio de IA (y por lo tanto applyResolution) dos veces para la
+    // misma disputa. Solo una request gana la carrera; la otra ve count=0.
+    const claimedResponse = await prisma.dispute.updateMany({
+      where: { bookingId, status: 'PENDING_CAREGIVER' },
       data: { caregiverResponse: responses, status: 'PENDING_AI' },
     });
+    if (claimedResponse.count === 0) {
+      return res.status(409).json({
+        success: false,
+        error: { message: 'Esta disputa ya fue respondida o está siendo evaluada.' },
+      });
+    }
 
     // ── Recopilar toda la evidencia disponible para el agente ────────────────
     const [chatMessages, review, fullBooking] = await Promise.all([
@@ -174,7 +186,14 @@ router.post('/:bookingId/caregiver-response', authMiddleware, requireRole('CAREG
       evidence,
     );
 
-    await applyResolution(bookingId!, resolution, booking);
+    try {
+      await applyResolution(bookingId!, resolution, booking);
+    } catch (err: any) {
+      if (err.code === 'DISPUTE_ALREADY_RESOLVED') {
+        return res.status(409).json({ success: false, error: { message: err.message } });
+      }
+      throw err;
+    }
 
     res.json({ success: true, data: resolution });
   })
@@ -366,6 +385,19 @@ async function applyResolution(bookingId: string, resolution: any, booking: any)
   const clientId = booking.clientId;
 
   await (prisma as any).$transaction(async (tx: any) => {
+    // Atomic claim — la disputa solo puede pagarse UNA vez. Sin esto, dos
+    // llamadas a applyResolution() para la misma reserva (ej. race del
+    // caregiver-response, o el job de onHoldSlaHoras liberando el pago justo
+    // antes de que la IA resuelva) moverían dinero dos veces sobre el mismo
+    // totalAmount. Cada rama de abajo sigue seteando el payoutStatus final
+    // (PAID/REFUNDED) al terminar — este claim solo protege el punto de partida.
+    const claimed = await tx.booking.updateMany({
+      where: { id: bookingId, payoutStatus: 'ON_HOLD' },
+      data: { payoutStatus: 'RESOLVING_DISPUTE' },
+    });
+    if (claimed.count === 0) {
+      throw Object.assign(new Error('La disputa ya fue resuelta o el pago ya no está retenido'), { code: 'DISPUTE_ALREADY_RESOLVED' });
+    }
 
     if (resolution.verdict === 'CAREGIVER_WINS') {
       // ── Pago completo al cuidador (90% del total) ──────────────────────────

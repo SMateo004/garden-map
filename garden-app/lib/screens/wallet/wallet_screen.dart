@@ -347,7 +347,11 @@ class _WalletScreenState extends State<WalletScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ingresa un monto válido')));
                         return;
                       }
-                      if (amount > (_walletData?['balance'] ?? 0)) {
+                      // availableBalance = balance - retiros ya pendientes. Comparar
+                      // contra el balance bruto dejaba pasar la validación del cliente
+                      // cuando ya había un retiro pendiente (el backend lo bloqueaba
+                      // igual, pero con un mensaje genérico en vez de este).
+                      if (amount > (_walletData?['availableBalance'] ?? _walletData?['balance'] ?? 0)) {
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fondos insuficientes'), backgroundColor: GardenColors.error));
                         return;
                       }

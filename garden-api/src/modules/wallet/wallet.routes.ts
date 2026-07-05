@@ -169,6 +169,14 @@ router.post(
 
     try {
       await prisma.$transaction(async (tx) => {
+        // Lock this user's row for the rest of the transaction — without this,
+        // two near-simultaneous withdrawal requests (double-tap, retry, two
+        // devices) can both read "no pending withdrawal yet" under Postgres's
+        // default Read Committed isolation and both proceed to create one,
+        // exceeding the real balance. The lock serializes them: the second
+        // request blocks here until the first commits, then re-reads fresh state.
+        await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${userId} FOR UPDATE`;
+
         const user = await tx.user.findUnique({
           where: { id: userId },
           select: { balance: true, bankName: true, bankAccount: true, bankHolder: true, bankType: true },

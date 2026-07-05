@@ -401,6 +401,19 @@ export async function submitVerification(
       // Non-fatal: verification result can still be persisted without image URLs
     }
 
+    // Si un cuidador YA APROBADO se re-verifica (ej. reintenta tras un
+    // REJECTED previo) y esta vez también sale REJECTED, hay que sacarlo de
+    // operación — de lo contrario status se queda en APPROVED para siempre
+    // (submitVerification nunca lo tocaba) mientras identityVerificationStatus
+    // pasa a REJECTED, y todos los gates de marketplace/reservas solo miran
+    // status, así que seguía apareciendo y aceptando reservas sin que ningún
+    // admin se enterara.
+    const profileBeforeSubmit = await prisma.caregiverProfile.findUnique({
+      where: { userId: session.userId },
+      select: { status: true },
+    });
+    const shouldSuspendOnReject = finalStatus === 'REJECTED' && profileBeforeSubmit?.status === 'APPROVED';
+
     try {
       await prisma.$transaction([
         prisma.identityVerificationSession.update({
@@ -444,9 +457,22 @@ export async function submitVerification(
             ciReversoUrl: ciBackUrl,
             ...(crossValResult.ocrData.documentNumber ? { ciNumber: crossValResult.ocrData.documentNumber } : {}),
             verificationAttempts: { increment: 1 },
+            ...(shouldSuspendOnReject ? { status: 'SUSPENDED', suspended: true, suspendedAt: new Date() } : {}),
           } as any,
         }),
       ]);
+
+      if (shouldSuspendOnReject) {
+        logger.warn('[Verification] Cuidador APROBADO suspendido tras re-verificación rechazada', { userId: session.userId });
+        await prisma.notification.create({
+          data: {
+            userId: session.userId,
+            title: '⚠️ Cuenta suspendida — verificación de identidad',
+            message: 'Tu nueva verificación de identidad no pudo confirmarse. Tu perfil fue suspendido temporalmente. Contacta a soporte para más información.',
+            type: 'SYSTEM',
+          },
+        }).catch(() => {});
+      }
 
       // Update identityVerified on user (non-blocking)
       prisma.user.update({
