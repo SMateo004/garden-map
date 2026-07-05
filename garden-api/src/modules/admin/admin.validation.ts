@@ -100,7 +100,6 @@ export const ALLOWED_SETTING_KEYS = [
   // Pagos y finanzas (numeric)
   'platformCommissionPct',
   'montoMinimoRetiro',
-  'qrValidityHours',
   'qrValidityMinutes',
   'autoReleasePaymentHoras',
   'onHoldSlaHoras',

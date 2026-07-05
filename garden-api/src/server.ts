@@ -183,8 +183,7 @@ async function start() {
         // ── Pagos y finanzas (numeric) ───────────────────────────────────────
         { key: 'platformCommissionPct',    value: '10'    },
         { key: 'montoMinimoRetiro',        value: '50'    },
-        { key: 'qrValidityMinutes',        value: '15'    }, // usado actualmente
-        { key: 'qrValidityHours',          value: '24'    }, // legado, ya no activo
+        { key: 'qrValidityMinutes',        value: '15'    },
         { key: 'autoReleasePaymentHoras',  value: '24'    },
         { key: 'onHoldSlaHoras',           value: '72'    }, // ← faltaba seed
         // ── Política cancelación HOSPEDAJE (numeric) ─────────────────────────
