@@ -40,7 +40,10 @@ export async function checkAndAutoSubmitProfile(userId: string) {
     const services = Array.isArray(profile.servicesOffered) ? profile.servicesOffered : [];
     const onlyPaseo = services.length === 1 && services.includes(ServiceType.PASEO);
     const minPhotos = onlyPaseo ? 2 : 4;
-    const photos = Array.isArray(profile.photos) ? profile.photos : [];
+    // profile.photos es un campo legacy que ya no escribe el wizard (usa
+    // caregiverPhotos) — con "photos" esto siempre daba length 0 sin importar
+    // cuántas fotos subiera el cuidador, dejando caregiverProfileComplete mal.
+    const photos = Array.isArray(profile.caregiverPhotos) ? profile.caregiverPhotos : [];
 
     // Validaciones detalladas para evitar fallos silenciosos
     const hasBio = Boolean(profile.bio && profile.bio.trim().length >= 50); // Matches submitProfile minimum (50 chars)

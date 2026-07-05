@@ -55,7 +55,7 @@ export const toggleFavorite = asyncHandler(async (req: Request, res: Response) =
 export const getMyReviews = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const reviews = await prisma.review.findMany({
-    where: { clientId: userId },
+    where: { clientId: userId, isSystemGenerated: false },
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,

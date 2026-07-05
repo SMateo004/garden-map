@@ -53,6 +53,10 @@ class ChatService extends ChangeNotifier {
   int _unreadCount = 0;
   bool _isDisposed = false;
   String? _pendingBookingId;
+  // El ChatScreen setea esto en didChangeAppLifecycleState — evita mostrar una
+  // notificación local por un mensaje que ya se ve en pantalla porque el chat
+  // está abierto y en primer plano ahora mismo.
+  bool isForeground = true;
 
   List<ChatMessage> get messages => _messages;
   bool get connected => _connected;
@@ -113,10 +117,15 @@ class ChatService extends ChangeNotifier {
           _messages.add(msg);
           if (msg.senderId != _currentUserId) {
             _unreadCount++;
-            LocalNotificationService.show(
-              title: msg.senderName,
-              body: msg.message,
-            );
+            // Solo notificar si el chat NO está en primer plano — si está
+            // abierto y visible el mensaje ya aparece en la lista, una
+            // notificación local ahí encima es puro ruido duplicado.
+            if (!isForeground) {
+              LocalNotificationService.show(
+                title: msg.senderName,
+                body: msg.message,
+              );
+            }
           }
           notifyListeners();
         } catch (e) {
@@ -148,18 +157,22 @@ class ChatService extends ChangeNotifier {
     // If not yet connected, onConnect will auto-join using _pendingBookingId
   }
 
-  // Envía siempre por HTTP (confiable), el backend broadcastea via socket al receptor
-  Future<void> sendMessage(String bookingId, String message) async {
-    if (message.trim().isEmpty) return;
+  // Envía siempre por HTTP (confiable), el backend broadcastea via socket al receptor.
+  // Devuelve true/false para que la UI pueda avisar al usuario y permitir reintentar
+  // en vez de que el mensaje simplemente desaparezca si falla (sin conexión, timeout, etc).
+  Future<bool> sendMessage(String bookingId, String message) async {
+    if (message.trim().isEmpty) return false;
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/chat/$bookingId/messages'),
-        headers: {
-          'Authorization': 'Bearer $_token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({'message': message.trim()}),
-      );
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/chat/$bookingId/messages'),
+            headers: {
+              'Authorization': 'Bearer $_token',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({'message': message.trim()}),
+          )
+          .timeout(const Duration(seconds: 15));
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         final msg = ChatMessage.fromJson(Map<String, dynamic>.from(data['data'] as Map));
@@ -168,9 +181,12 @@ class ChatService extends ChangeNotifier {
           _messages.add(msg);
           if (!_isDisposed) notifyListeners();
         }
+        return true;
       }
+      return false;
     } catch (e) {
       debugPrint('Chat: Error enviando mensaje: $e');
+      return false;
     }
   }
 

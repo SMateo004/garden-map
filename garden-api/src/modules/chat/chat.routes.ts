@@ -42,14 +42,19 @@ router.get('/:bookingId/messages', authMiddleware, asyncHandler(async (req: Requ
         return res.status(403).json({ success: false, error: { message: 'Sin acceso' } });
     }
 
-    const messages = await prisma.chatMessage.findMany({
+    // Traer los ÚLTIMOS 100 (desc + take), no los primeros 100 — con orderBy
+    // asc + take:100, una conversación con más de 100 mensajes escondía todo
+    // lo posterior al mensaje #100 en cada carga fresca del chat. Se revierte
+    // después para mantener el orden cronológico esperado por el cliente.
+    const messagesDesc = await prisma.chatMessage.findMany({
         where: { bookingId },
         include: {
             sender: { select: { id: true, firstName: true, lastName: true } },
         },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'desc' },
         take: 100,
     });
+    const messages = messagesDesc.reverse();
 
     // Marcar como leídos los mensajes del otro usuario
     await prisma.chatMessage.updateMany({

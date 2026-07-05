@@ -336,6 +336,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
       include: {
         user: { select: { firstName: true, lastName: true, profilePicture: true } },
         reviews: {
+          where: { isSystemGenerated: false },
           take: 10,
           orderBy: { createdAt: 'desc' },
           include: {
@@ -371,6 +372,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
         include: {
           user: { select: { firstName: true, lastName: true, profilePicture: true } },
           reviews: {
+            where: { isSystemGenerated: false },
             take: 10,
             orderBy: { createdAt: 'desc' },
             include: {

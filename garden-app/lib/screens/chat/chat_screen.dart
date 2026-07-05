@@ -32,7 +32,7 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   ChatService? _chatService;
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
@@ -48,7 +48,27 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initChat();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_chatService == null) return;
+    if (state == AppLifecycleState.resumed) {
+      _chatService!.isForeground = true;
+      // Un socket desconectado (fondo/red) no reintenta el historial perdido
+      // al reconectar — sin esto, mensajes enviados mientras la app estaba en
+      // segundo plano quedaban ausentes hasta cerrar y reabrir la pantalla.
+      _chatService!.loadHistory(widget.bookingId).then((_) {
+        if (mounted) {
+          _chatService!.markRead(widget.bookingId);
+          _scrollToBottom();
+        }
+      });
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _chatService!.isForeground = false;
+    }
   }
 
   Future<void> _initChat() async {
@@ -407,15 +427,27 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  void _sendMessage() {
+  Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
     _messageController.clear(); // Limpiar inmediatamente para mejor UX
-    _chatService?.sendMessage(widget.bookingId, text);
+
+    final ok = await _chatService?.sendMessage(widget.bookingId, text) ?? false;
+    if (!ok && mounted) {
+      // Restaurar el texto — sin esto el mensaje simplemente desaparecía si
+      // fallaba el envío (sin conexión, timeout), sin ninguna señal ni forma
+      // de reintentar salvo volver a escribirlo de memoria.
+      _messageController.text = text;
+      _messageController.selection = TextSelection.collapsed(offset: text.length);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo enviar el mensaje. Revisa tu conexión e intenta de nuevo.')),
+      );
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _chatService?.removeListener(_onChatUpdate);
     _chatService?.dispose();
     _messageController.dispose();

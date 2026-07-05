@@ -3902,15 +3902,23 @@ export async function rateOwner(
     throw new BadRequestError('Ya calificaste a este dueño para esta reserva');
   }
 
-  const updated = await prisma.booking.update({
-    where: { id: bookingId },
+  // Atomic claim — el chequeo de arriba era leer-comparar-escribir en pasos
+  // separados; dos llamadas concurrentes (doble-tap, reintento) podían pasar
+  // ambas el chequeo antes de que la primera escribiera, y la segunda
+  // pisaba en silencio la calificación de la primera sin ningún error.
+  const claimed = await prisma.booking.updateMany({
+    where: { id: bookingId, caregiverId: caregiverProfile.id, caregiverRated: false },
     data: {
       caregiverRated: true,
       caregiverRating: ratingNum,
       caregiverComment: comment ?? null,
     },
   });
+  if (claimed.count === 0) {
+    throw new BadRequestError('Ya calificaste a este dueño para esta reserva');
+  }
 
+  const updated = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
   return bookingToResponse(updated);
 }
 
