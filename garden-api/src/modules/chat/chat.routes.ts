@@ -196,4 +196,27 @@ router.get('/unread-count', authMiddleware, asyncHandler(async (req: Request, re
     res.json({ success: true, data: { count } });
 }));
 
+// GET /api/chat/unread-counts - Desglose por reserva (para mostrar el badge en la lista de reservas)
+router.get('/unread-counts', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
+    const userId = (req as any).user.userId;
+    const unread = await prisma.chatMessage.findMany({
+        where: {
+            read: false,
+            senderId: { not: userId },
+            booking: {
+                OR: [
+                    { clientId: userId },
+                    { caregiver: { userId } },
+                ],
+            },
+        },
+        select: { bookingId: true },
+    });
+    const counts: Record<string, number> = {};
+    for (const m of unread) {
+        counts[m.bookingId] = (counts[m.bookingId] ?? 0) + 1;
+    }
+    res.json({ success: true, data: { counts } });
+}));
+
 export default router;

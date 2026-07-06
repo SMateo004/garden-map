@@ -455,27 +455,46 @@ class LiquidGlassNavBar extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 240),
-                        curve: Curves.easeInOut,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? GardenColors.primary.withValues(alpha: 0.13)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(16),
-                          border: selected
-                              ? Border.all(
-                                  color: GardenColors.primary.withValues(alpha: 0.22),
-                                  width: 1.0,
-                                )
-                              : null,
-                        ),
-                        child: Icon(
-                          selected ? item.activeIcon : item.icon,
-                          color: iconColor,
-                          size: 22,
-                        ),
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 240),
+                            curve: Curves.easeInOut,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? GardenColors.primary.withValues(alpha: 0.13)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(16),
+                              border: selected
+                                  ? Border.all(
+                                      color: GardenColors.primary.withValues(alpha: 0.22),
+                                      width: 1.0,
+                                    )
+                                  : null,
+                            ),
+                            child: Icon(
+                              selected ? item.activeIcon : item.icon,
+                              color: iconColor,
+                              size: 22,
+                            ),
+                          ),
+                          if (item.showDot)
+                            Positioned(
+                              top: 4,
+                              right: 10,
+                              child: Container(
+                                width: 9,
+                                height: 9,
+                                decoration: BoxDecoration(
+                                  color: GardenColors.error,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: isDark ? GardenColors.darkSurface : Colors.white, width: 1.5),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 3),
                       AnimatedDefaultTextStyle(
@@ -506,7 +525,9 @@ class GardenNavItem {
   final IconData icon;
   final IconData activeIcon;
   final String label;
-  const GardenNavItem(this.icon, this.activeIcon, this.label);
+  /// Muestra un punto rojo sobre el ícono — ej. mensajes de chat sin leer.
+  final bool showDot;
+  const GardenNavItem(this.icon, this.activeIcon, this.label, {this.showDot = false});
 }
 
 // ── LIQUID GLASS DIALOG ────────────────────────────────────────────────────

@@ -43,6 +43,8 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
 
 
   int _selectedTab = 0; // 0: Inicio, 1: Disponibilidad, 2: Reservas
+  bool _hasUnreadChats = false;
+  Timer? _unreadChatsTimer;
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   // GlobalKeys para el tutorial web (sidebar nav items)
@@ -104,6 +106,34 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         if (mounted) _maybeShowTutorial();
       });
     }
+
+    _loadUnreadChatsStatus();
+    _unreadChatsTimer?.cancel();
+    _unreadChatsTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) _loadUnreadChatsStatus();
+    });
+  }
+
+  Future<void> _loadUnreadChatsStatus() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/chat/unread-count'),
+        headers: {'Authorization': 'Bearer $_caregiverToken'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true && mounted) {
+        final count = data['data']['count'] as int? ?? 0;
+        if (count > 0 != _hasUnreadChats) setState(() => _hasUnreadChats = count > 0);
+      }
+    } catch (_) {
+      // No bloquear el home si esto falla — es solo un indicador informativo
+    }
+  }
+
+  @override
+  void dispose() {
+    _unreadChatsTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _maybeShowTutorial() async {
@@ -3245,11 +3275,11 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           bottomNavigationBar: _setupPending ? null : LiquidGlassNavBar(
             selectedIndex: _selectedTab,
             onTap: _onTabTap,
-            items: const [
-              GardenNavItem(Icons.home_outlined,            Icons.home_rounded,            'Inicio'),
-              GardenNavItem(Icons.calendar_month_outlined,  Icons.calendar_month_rounded,  'Disponibilidad'),
-              GardenNavItem(Icons.list_alt_outlined,        Icons.list_alt_rounded,        'Reservas'),
-              GardenNavItem(Icons.person_outline_rounded,   Icons.person_rounded,          'Mi Perfil'),
+            items: [
+              const GardenNavItem(Icons.home_outlined,            Icons.home_rounded,            'Inicio'),
+              const GardenNavItem(Icons.calendar_month_outlined,  Icons.calendar_month_rounded,  'Disponibilidad'),
+              GardenNavItem(Icons.list_alt_outlined,        Icons.list_alt_rounded,        'Reservas', showDot: _hasUnreadChats),
+              const GardenNavItem(Icons.person_outline_rounded,   Icons.person_rounded,          'Mi Perfil'),
             ],
           ),
         );

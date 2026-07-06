@@ -53,6 +53,7 @@ import { iniciarJobServiceReminders } from './jobs/service-reminders.job.js';
 import { iniciarJobQrExpiry } from './jobs/qr-expiry.job.js';
 import { iniciarJobMgExpiry } from './jobs/mg-expiry.job.js';
 import { iniciarJobSlotConflictExpiry } from './jobs/slot-conflict-expiry.job.js';
+import { iniciarJobChatRetention } from './jobs/chat-retention.job.js';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
@@ -229,6 +230,7 @@ async function start() {
     iniciarJobQrExpiry();
     iniciarJobMgExpiry();
     iniciarJobSlotConflictExpiry();
+    iniciarJobChatRetention();
   }, 10000);
 
   // Auto-release payment after service ends if owner hasn't reviewed

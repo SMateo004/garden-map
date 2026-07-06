@@ -30,6 +30,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   String? _highlightBookingId;
   Timer? _highlightClearTimer;
   Timer? _refreshTimer;
+  Map<String, int> _unreadCounts = {};
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
@@ -65,14 +66,34 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
 
     setState(() => _clientToken = token);
     await _loadBookings();
+    await _loadUnreadCounts();
     _startAutoRefresh();
   }
 
   void _startAutoRefresh() {
     _refreshTimer?.cancel();
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) _loadBookings(silent: true);
+      if (mounted) {
+        _loadBookings(silent: true);
+        _loadUnreadCounts();
+      }
     });
+  }
+
+  Future<void> _loadUnreadCounts() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/chat/unread-counts'),
+        headers: {'Authorization': 'Bearer $_clientToken'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true && mounted) {
+        final counts = Map<String, dynamic>.from(data['data']['counts'] ?? {});
+        setState(() => _unreadCounts = counts.map((k, v) => MapEntry(k, v as int)));
+      }
+    } catch (_) {
+      // No bloquear la lista de reservas si esto falla — es solo un badge informativo
+    }
   }
 
   @override
@@ -1076,24 +1097,51 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                   // Chat button — visible for all active statuses
                   if (status == 'WAITING_CAREGIVER_APPROVAL' || status == 'CONFIRMED' || status == 'IN_PROGRESS') ...[
                     const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(
-                        builder: (_) => ChatScreen(
-                          bookingId: booking['id'] as String,
-                          otherPersonName: booking['caregiverName'] as String? ?? 'Cuidador',
-                          token: _clientToken,
-                          role: 'CLIENT',
-                          bookingStatus: status,
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () async {
+                            await Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => ChatScreen(
+                                bookingId: booking['id'] as String,
+                                otherPersonName: booking['caregiverName'] as String? ?? 'Cuidador',
+                                token: _clientToken,
+                                role: 'CLIENT',
+                                bookingStatus: status,
+                              ),
+                            ));
+                            if (mounted) _loadUnreadCounts();
+                          },
+                          icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+                          label: const Text('Abrir chat', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: GardenColors.primary,
+                            side: const BorderSide(color: GardenColors.primary),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            minimumSize: const Size(double.infinity, 40),
+                          ),
                         ),
-                      )),
-                      icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
-                      label: const Text('Abrir chat', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: GardenColors.primary,
-                        side: const BorderSide(color: GardenColors.primary),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        minimumSize: const Size(double.infinity, 40),
-                      ),
+                        if ((_unreadCounts[booking['id']] ?? 0) > 0)
+                          Positioned(
+                            top: -6,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              constraints: const BoxConstraints(minWidth: 18),
+                              decoration: BoxDecoration(
+                                color: GardenColors.error,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: Colors.white, width: 1.5),
+                              ),
+                              child: Text(
+                                '${_unreadCounts[booking['id']]}',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                   // Ampliar tiempo — solo PASEO IN_PROGRESS
