@@ -62,3 +62,60 @@ export async function callClaude(
         throw new Error(`Claude devolvió JSON inválido: ${(parseErr as Error).message}`);
     }
 }
+
+/** Igual que callClaude pero adjunta una imagen (visión) junto al texto del mensaje. */
+export async function callClaudeVision(
+    systemPrompt: string,
+    userMessage: string,
+    imageBuffer: Buffer,
+    mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+    maxTokens: number = 512
+): Promise<any> {
+    const response = await getClient().messages.create({
+        model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
+        max_tokens: maxTokens,
+        system: [
+            {
+                type: 'text',
+                text: systemPrompt,
+                cache_control: { type: 'ephemeral' },
+            },
+        ],
+        messages: [
+            {
+                role: 'user',
+                content: [
+                    {
+                        type: 'image',
+                        source: {
+                            type: 'base64',
+                            media_type: mediaType,
+                            data: imageBuffer.toString('base64'),
+                        },
+                    },
+                    { type: 'text', text: userMessage },
+                ],
+            },
+        ],
+    } as any);
+
+    const content = response.content[0];
+    if (!content || content.type !== 'text') {
+        throw new Error('Respuesta inesperada de Claude: sin bloque de texto');
+    }
+
+    const clean = content.text
+        .replace(/```json\n?/g, '')
+        .replace(/```\n?/g, '')
+        .trim();
+
+    try {
+        return JSON.parse(clean);
+    } catch (parseErr) {
+        logger.error('[Claude Vision] JSON parse failed', {
+            raw: clean.slice(0, 300),
+            error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+        });
+        throw new Error(`Claude devolvió JSON inválido: ${(parseErr as Error).message}`);
+    }
+}

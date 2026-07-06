@@ -8,6 +8,10 @@ export interface BookingCreateResult {
   commissionAmount: string;
   qrId: string | null;
   qrImageUrl: string | null;
+  /** Derivado de qrImageUrl — dice al cliente cómo renderizarlo: 'base64'
+   * (SIP real), 'url' (imagen provisional subida por admin) o 'generated'
+   * (placeholder viejo sin QR provisional — el cliente genera uno local). */
+  qrImageType: 'base64' | 'url' | 'generated' | null;
   qrExpiresAt: string | null;
   serviceType: ServiceType;
   startDate?: string | null;
@@ -89,6 +93,16 @@ export interface BookingCreateResult {
   }>;
 }
 
+/** Misma lógica usada en generateQR() (booking.service.ts) al construir la
+ * respuesta inicial — reconstruida aquí porque este helper no tiene acceso
+ * al qrImageType calculado en ese momento, solo al qrImageUrl ya persistido. */
+function deriveQrImageType(qrImageUrl: string | null | undefined): 'base64' | 'url' | 'generated' | null {
+  if (!qrImageUrl) return null;
+  if (qrImageUrl.startsWith('data:image')) return 'base64';
+  if (qrImageUrl.startsWith('https://api.garden.bo/qr/placeholder/')) return 'generated';
+  return 'url';
+}
+
 export function bookingToResponse(b: any): BookingCreateResult {
   const res: BookingCreateResult = {
     id: b.id,
@@ -98,6 +112,7 @@ export function bookingToResponse(b: any): BookingCreateResult {
     commissionAmount: String(b.commissionAmount),
     qrId: b.qrId,
     qrImageUrl: b.qrImageUrl,
+    qrImageType: deriveQrImageType(b.qrImageUrl),
     qrExpiresAt: b.qrExpiresAt?.toISOString() ?? null,
     serviceType: b.serviceType,
     startDate: b.startDate?.toISOString().slice(0, 10) ?? null,

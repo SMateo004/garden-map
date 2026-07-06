@@ -5,10 +5,20 @@
  */
 
 import { Request, Response } from 'express';
+import multer from 'multer';
+import { ServiceType } from '@prisma/client';
 import { asyncHandler } from '../../shared/async-handler.js';
 import prisma from '../../config/database.js';
 import * as adminService from './admin.service.js';
+import * as paymentQrService from '../../services/payment-qr.service.js';
+import { uploadImage } from '../../services/storage.service.js';
+import { assertImageBuffer } from '../../shared/mime-validation.js';
 import { auditLog } from '../../services/audit.service.js';
+
+const paymentQrUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+});
 import {
   reviewCaregiverBodySchema,
   pendingCaregiversQuerySchema,
@@ -832,3 +842,29 @@ export const getNotificationHistory = asyncHandler(async (req: Request, res: Res
   });
   res.json({ success: true, data: items });
 });
+
+// ── QR de pago provisional (mientras SIP_ENABLED=false) ─────────────────────
+
+/** GET /api/admin/payment-qr — URLs actuales de los 3 QR provisionales (o null si no se subió). */
+export const getPaymentQrImages = asyncHandler(async (req: Request, res: Response) => {
+  const urls = await paymentQrService.getAllPaymentQrImageUrls();
+  res.json({ success: true, data: urls });
+});
+
+/** POST /api/admin/payment-qr/:serviceType — multipart 'qr'. Reemplaza el QR de ese servicio. */
+export const uploadPaymentQrHandler = [
+  paymentQrUpload.single('qr'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const serviceType = req.params.serviceType as string;
+    if (!Object.values(ServiceType).includes(serviceType as ServiceType)) {
+      return res.status(400).json({ success: false, error: { code: 'INVALID_SERVICE_TYPE', message: 'Tipo de servicio inválido' } });
+    }
+    const file = req.file;
+    if (!file) return res.status(400).json({ success: false, error: { code: 'MISSING_FILE', message: 'Se requiere una imagen (campo "qr")' } });
+    await assertImageBuffer(file.buffer);
+
+    const url = await uploadImage(file.buffer, { folder: 'payment-qr', name: `qr-${serviceType}-${Date.now()}` });
+    await paymentQrService.setPaymentQrImageUrl(serviceType as ServiceType, url, req.user!.userId);
+    res.json({ success: true, data: { serviceType, url } });
+  }),
+];

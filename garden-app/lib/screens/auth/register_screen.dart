@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart' show TextInputFormatter;
 import 'package:go_router/go_router.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
 import '../../services/social_auth_service.dart';
 import '../legal/legal_screen.dart';
 import '../../widgets/address_section.dart';
+import '../../utils/input_formatters.dart';
 
 class RegisterScreen extends StatefulWidget {
   final String? prefillFirstName;
@@ -341,11 +343,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
           addressZone: _addressZone,
         );
         if (!mounted) return;
-        if (kIsWeb) {
-          context.go('/client-welcome');
-        } else {
-          context.go('/service-selector');
-        }
+        // El registro normal nunca pide foto — siempre falta en este punto,
+        // así que el paso obligatorio de foto va antes del destino final.
+        final nextRoute = kIsWeb ? '/client-welcome' : '/service-selector';
+        context.go('/upload-profile-photo', extra: {'nextRoute': nextRoute});
       }
     } catch (e) {
       if (!mounted) return;
@@ -564,7 +565,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     children: [
                       _fieldLabel('Nombre', textColor),
                       const SizedBox(height: 8),
-                      _textField(controller: _firstNameController, hint: 'Tu nombre', icon: Icons.person_outlined, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                      _textField(controller: _firstNameController, hint: 'Tu nombre', icon: Icons.person_outlined, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor, inputFormatters: [noDigitsFormatter]),
                     ],
                   ),
                 ),
@@ -575,7 +576,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     children: [
                       _fieldLabel('Apellido', textColor),
                       const SizedBox(height: 8),
-                      _textField(controller: _lastNameController, hint: 'Tu apellido', icon: Icons.person_outline, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                      _textField(controller: _lastNameController, hint: 'Tu apellido', icon: Icons.person_outline, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor, inputFormatters: [noDigitsFormatter]),
                     ],
                   ),
                 ),
@@ -640,6 +641,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               onMapResult: (result) => setState(() {
                 _addressLat = result.lat;
                 _addressLng = result.lng;
+                if (result.formattedAddress != null && result.formattedAddress!.isNotEmpty) {
+                  _addressStreetController.text = result.formattedAddress!;
+                }
               }),
               onApartmentToggle: (val) => setState(() => _isApartment = val),
             ),
@@ -787,10 +791,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   backgroundColor: GardenColors.primary,
                   duration: const Duration(seconds: 5),
                 ));
-                if (kIsWeb) {
-                  context.go('/marketplace');
+                final nextRoute = kIsWeb ? '/marketplace' : '/service-selector';
+                if (result.profilePicture == null || result.profilePicture!.isEmpty) {
+                  context.go('/upload-profile-photo', extra: {'nextRoute': nextRoute});
                 } else {
-                  context.go('/service-selector');
+                  context.go(nextRoute);
                 }
               },
             ),
@@ -841,10 +846,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     required Color subtextColor,
     required Color borderColor,
     TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
       style: TextStyle(color: textColor),
       decoration: InputDecoration(
         hintText: hint,

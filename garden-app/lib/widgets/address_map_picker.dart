@@ -9,8 +9,11 @@ import 'package:http/http.dart' as http;
 class AddressMapResult {
   final double lat;
   final double lng;
+  /// Dirección legible (reverse geocoding), si se pudo calcular — usada para
+  /// pre-llenar el campo "Calle / Avenida" sin que el usuario la re-escriba.
+  final String? formattedAddress;
 
-  const AddressMapResult({required this.lat, required this.lng});
+  const AddressMapResult({required this.lat, required this.lng, this.formattedAddress});
 }
 
 /// Modal fullscreen con mapa de OpenStreetMap y pin arrastrable.
@@ -59,6 +62,10 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
   late MapController _mapController;
   bool _locating = false;
   String? _reverseAddress;
+  /// Solo el nombre de la calle/avenida (de `address.road` en la respuesta de
+  /// Nominatim) — para prellenar el campo "Calle / Avenida", a diferencia de
+  /// [_reverseAddress] que es la dirección completa mostrada como preview.
+  String? _reverseStreet;
   bool _reversing = false;
 
   @override
@@ -115,6 +122,7 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
     setState(() {
       _reversing = true;
       _reverseAddress = null;
+      _reverseStreet = null;
     });
     try {
       final url = Uri.parse(
@@ -127,8 +135,17 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final display = data['display_name'] as String?;
+        final address = data['address'] as Map<String, dynamic>?;
+        final road = address?['road'] as String? ?? address?['pedestrian'] as String?;
+        final houseNumber = address?['house_number'] as String?;
+        final street = road == null
+            ? null
+            : (houseNumber != null ? '$road $houseNumber' : road);
         if (mounted && display != null) {
-          setState(() => _reverseAddress = display);
+          setState(() {
+            _reverseAddress = display;
+            _reverseStreet = street;
+          });
         }
       }
     } catch (_) {
@@ -341,6 +358,7 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
                           AddressMapResult(
                             lat: _pinPosition.latitude,
                             lng: _pinPosition.longitude,
+                            formattedAddress: _reverseStreet,
                           ),
                         ),
                       ),

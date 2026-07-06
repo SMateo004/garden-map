@@ -8,6 +8,7 @@ import { prisma } from '../../config/database.js';
 import multer from 'multer';
 import { uploadImage } from '../../services/storage.service.js';
 import { assertImageBuffer } from '../../shared/mime-validation.js';
+import { validarFoto } from '../../agents/foto-validacion.agent.js';
 import logger from '../../shared/logger.js';
 
 const bankInfoSchema = z.object({
@@ -115,9 +116,21 @@ router.post('/profile/place-photo', upload.single('placePhoto'),
 
     if (!file) return res.status(400).json({ success: false, error: { message: 'No se proporcionó foto' } });
     if (!file.mimetype.startsWith('image/')) return res.status(400).json({ success: false, error: { message: 'Solo se permiten imágenes (JPG/PNG)' } });
-    await assertImageBuffer(file.buffer);
+    const detectedMime = await assertImageBuffer(file.buffer);
     if (!PLACE_PHOTO_SECTIONS.includes(section as PlacePhotoSection)) {
       return res.status(400).json({ success: false, error: { message: `Sección inválida. Debe ser: ${PLACE_PHOTO_SECTIONS.join(', ')}` } });
+    }
+    if (['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(detectedMime)) {
+      const resultado = await validarFoto({
+        imageBuffer: file.buffer,
+        mediaType: detectedMime as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+        categoria: 'ESPACIO_HOGAR',
+        userId,
+        contexto: `place-photo:${section}`,
+      });
+      if (!resultado.valida) {
+        return res.status(422).json({ success: false, error: { code: 'FOTO_NO_VALIDA', message: resultado.razon } });
+      }
     }
 
     const profile = await prisma.caregiverProfile.findFirst({ where: { userId }, select: { placePhotos: true } });

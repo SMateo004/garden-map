@@ -9,11 +9,34 @@ import multer from 'multer';
 import { randomUUID } from 'crypto';
 import { uploadImage, uploadImages } from '../../services/storage.service.js';
 import { assertImageBuffer } from '../../shared/mime-validation.js';
+import { validarFoto, type CategoriaFoto } from '../../agents/foto-validacion.agent.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 },
 });
+
+const CLAUDE_VISION_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
+/**
+ * Valida que la foto corresponda a la categoría esperada — lanza un error
+ * claro (que el frontend muestra y deja reintentar) si no. Formatos que
+ * Claude no soporta en visión (avif/heic/heif) se dejan pasar sin revisar
+ * (fail-open, igual que un error técnico del agente).
+ */
+async function assertFotoValida(buffer: Buffer, mime: string, categoria: CategoriaFoto, userId?: string, contexto?: string) {
+  if (!CLAUDE_VISION_MIMES.has(mime)) return;
+  const resultado = await validarFoto({
+    imageBuffer: buffer,
+    mediaType: mime as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+    categoria,
+    userId,
+    contexto,
+  });
+  if (!resultado.valida) {
+    throw new AppError(resultado.razon, 422, 'FOTO_NO_VALIDA');
+  }
+}
 
 /** POST /api/upload/registration-photos — multipart 'photos' (4-6). No auth. */
 export const uploadRegistrationPhotosHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -27,7 +50,11 @@ export const uploadRegistrationPhotosHandler = asyncHandler(async (req: Request,
   }
 
   // Validate magic bytes for every file to prevent MIME spoofing
-  await Promise.all(files.map((f) => assertImageBuffer(f.buffer)));
+  const mimes = await Promise.all(files.map((f) => assertImageBuffer(f.buffer)));
+  // Estas son fotos del espacio/hogar del cuidador (living, patio, etc.) —
+  // no rostro ni mascota. Se validan todas antes de subir cualquiera, para
+  // no dejar fotos "huérfanas" en Cloudinary si una del lote es inválida.
+  await Promise.all(files.map((f, i) => assertFotoValida(f.buffer, mimes[i]!, 'ESPACIO_HOGAR', undefined, 'registration-photos')));
 
   const tempId = randomUUID();
   const buffers = files.map((f) => f.buffer);
@@ -47,7 +74,8 @@ export const uploadProfilePhotoHandler = [
     if (!file) throw new CaregiverProfileValidationError('Se requiere una foto (campo profilePhoto)');
     if (file.size > 20 * 1024 * 1024) throw new CaregiverProfileValidationError('La foto no debe superar 20 MB');
     // Magic bytes check — client-supplied MIME headers cannot be trusted
-    await assertImageBuffer(file.buffer);
+    const mime = await assertImageBuffer(file.buffer);
+    await assertFotoValida(file.buffer, mime, 'ROSTRO_HUMANO', userId, 'profile-photo');
 
     const profile = await prisma.caregiverProfile.findUnique({ where: { userId } });
     if (!profile) throw new CaregiverProfileValidationError('No tienes perfil de cuidador.');
@@ -72,7 +100,8 @@ export const uploadPetPhotoHandler = [
     const userId = req.user!.userId;
 
     if (!file) throw new CaregiverProfileValidationError('Se requiere una foto (JPG/PNG, máx. 5MB)');
-    await assertImageBuffer(file.buffer);
+    const mime = await assertImageBuffer(file.buffer);
+    await assertFotoValida(file.buffer, mime, 'MASCOTA', userId, 'pet-photo');
 
     const url = await uploadImage(file.buffer, { folder: 'pets', name: `pet-${userId}-${Date.now()}` });
 
@@ -94,7 +123,12 @@ export const uploadServicePhotoHandler = [
     const userId = req.user!.userId;
 
     if (!file) throw new CaregiverProfileValidationError('Se requiere una foto (JPG/PNG, máx. 5MB)');
-    await assertImageBuffer(file.buffer);
+    const mime = await assertImageBuffer(file.buffer);
+    // Este endpoint genérico no conoce la reserva/servicio — se asume MASCOTA
+    // (evidencia del animal), a diferencia de addEvent en service-execution
+    // (booking-service) que sí sabe el tipo de servicio y elige entre
+    // MASCOTA/ESPACIO_HOGAR según corresponda.
+    await assertFotoValida(file.buffer, mime, 'MASCOTA', userId, 'service-photo');
 
     const url = await uploadImage(file.buffer, { folder: 'service-events', name: `svc-${userId}-${Date.now()}` });
     logger.info('Foto servicio subida', { url, userId });
@@ -123,7 +157,8 @@ export const uploadUserPhotoHandler = [
     const userId = req.user!.userId;
 
     if (!file) throw new CaregiverProfileValidationError('Se requiere una foto (JPG/PNG, máx. 5MB)');
-    await assertImageBuffer(file.buffer);
+    const mime = await assertImageBuffer(file.buffer);
+    await assertFotoValida(file.buffer, mime, 'ROSTRO_HUMANO', userId, 'user-photo');
 
     const url = await uploadImage(file.buffer, { folder: 'users', name: `user-${userId}-${Date.now()}` });
 

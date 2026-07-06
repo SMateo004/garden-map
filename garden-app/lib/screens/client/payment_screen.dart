@@ -166,7 +166,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
             } else {
               _walletContributionUsed =
                   double.tryParse(bk['walletPaymentAmount']?.toString() ?? '0') ?? 0.0;
-              setState(() => _qrResponse = {'qrId': existingQrId});
+              setState(() => _qrResponse = {
+                'qrId': existingQrId,
+                'qrImageUrl': bk['qrImageUrl'],
+                'qrImageType': bk['qrImageType'],
+              });
               _startPollingWithRemainingTime(remaining);
             }
           }
@@ -856,6 +860,45 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   // ── QR view ─────────────────────────────────────────────────────────────────
 
+  /// Con SIP real, o mientras SIP_ENABLED=false con un QR provisional subido
+  /// por un admin, el backend manda una imagen real para mostrar (base64 del
+  /// banco, o URL del QR provisional). Sin ninguna de las dos (nadie subió un
+  /// QR provisional aún) cae al QR generado localmente como antes.
+  Widget _buildQrVisual() {
+    final qrImageType = _qrResponse?['qrImageType'] as String?;
+    final qrImageUrl = _qrResponse?['qrImageUrl'] as String?;
+
+    if (qrImageType == 'base64' && qrImageUrl != null && qrImageUrl.contains(',')) {
+      try {
+        final bytes = base64Decode(qrImageUrl.split(',').last);
+        return Image.memory(bytes, width: 250, height: 250, fit: BoxFit.contain);
+      } catch (_) {
+        // Cae al QR generado localmente si el base64 viene corrupto.
+      }
+    } else if (qrImageType == 'url' && qrImageUrl != null && qrImageUrl.isNotEmpty) {
+      return Image.network(
+        qrImageUrl,
+        width: 250,
+        height: 250,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => _buildGeneratedQr(),
+      );
+    }
+    return _buildGeneratedQr();
+  }
+
+  Widget _buildGeneratedQr() {
+    return QrImageView(
+      data: (_qrResponse!['qrId'] as String? ?? _bookingId ?? ''),
+      version: QrVersions.auto,
+      size: 250,
+      eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Color(0xFF1A1A1A)),
+      dataModuleStyle: const QrDataModuleStyle(
+          dataModuleShape: QrDataModuleShape.square, color: Color(0xFF1A1A1A)),
+      errorCorrectionLevel: QrErrorCorrectLevel.M,
+    );
+  }
+
   Widget _buildQrView(Color textColor, Color subtextColor) {
     return Center(
       child: SingleChildScrollView(
@@ -884,15 +927,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         offset: const Offset(0, 10)),
                   ],
                 ),
-                child: QrImageView(
-                  data: (_qrResponse!['qrId'] as String? ?? _bookingId ?? ''),
-                  version: QrVersions.auto,
-                  size: 250,
-                  eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Color(0xFF1A1A1A)),
-                  dataModuleStyle: const QrDataModuleStyle(
-                      dataModuleShape: QrDataModuleShape.square, color: Color(0xFF1A1A1A)),
-                  errorCorrectionLevel: QrErrorCorrectLevel.M,
-                ),
+                child: _buildQrVisual(),
               ),
             ),
 

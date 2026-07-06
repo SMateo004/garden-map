@@ -478,4 +478,10 @@ router.delete('/feature-flags/:id', asyncHandler(async (req, res) => {
 // PUBLIC: banners activos para el marketplace (sin auth)
 // ═══════════════════════════════════════════════════════════════════════════
 
+/** GET /api/admin/payment-qr — URLs actuales de los 3 QR provisionales de pago. */
+router.get('/payment-qr', adminController.getPaymentQrImages);
+
+/** POST /api/admin/payment-qr/:serviceType — multipart 'qr'. Sube/reemplaza el QR provisional de ese servicio. */
+router.post('/payment-qr/:serviceType', ...adminController.uploadPaymentQrHandler);
+
 export default router;

@@ -24,6 +24,7 @@ import 'package:image_picker/image_picker.dart' as image_picker_pkg;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart' show fixImageUrl, GardenColors, GardenButton, themeNotifier;
 import '../../services/auth_service.dart';
+import '../../utils/input_formatters.dart';
 import 'caregiver_profile_data_screen.dart';
 
 class ProfessionalRegisterScreen extends StatefulWidget {
@@ -613,9 +614,11 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           SizedBox(key: _keyStep1Name, height: 0),
           Row(children: [
             Expanded(child: TextFormField(controller: _firstNameController, style: TextStyle(color: textColor),
+                inputFormatters: [noDigitsFormatter],
                 decoration: field('Nombre', Icons.person_outlined))),
             const SizedBox(width: 12),
             Expanded(child: TextFormField(controller: _lastNameController, style: TextStyle(color: textColor),
+                inputFormatters: [noDigitsFormatter],
                 decoration: field('Apellido', Icons.person_outline))),
           ]),
           const SizedBox(height: 16),

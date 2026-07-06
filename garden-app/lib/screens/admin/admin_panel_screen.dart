@@ -11,6 +11,7 @@ import 'admin_general_screen.dart';
 import 'admin_technical_screen.dart';
 import 'admin_notifications_screen.dart';
 import 'admin_vets_screen.dart';
+import 'payment_qr_admin_screen.dart';
 import '../../services/auth_state.dart';
 
 class AdminPanelScreen extends StatefulWidget {
@@ -835,12 +836,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ('Notificaciones', Icons.campaign_rounded),
     ('Banners', Icons.view_carousel_rounded),
     ('Feature Flags', Icons.flag_rounded),
+    ('QR de Pago', Icons.qr_code_2_rounded),
   ];
 
   // Agrupación del sidebar web — cada grupo es (título, ícono, índices de _tabs).
   static const List<(String, IconData, List<int>)> _webNavGroups = [
     ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5]),
-    ('Finanzas', Icons.attach_money_rounded, [3, 6, 7]),
+    ('Finanzas', Icons.attach_money_rounded, [3, 6, 7, 15]),
     ('Personas', Icons.groups_outlined, [8, 9]),
     ('Comunicación', Icons.forum_outlined, [12, 13]),
     ('Sistema', Icons.settings_outlined, [10, 11, 14]),
@@ -865,6 +867,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         AdminNotificationsScreen(adminToken: _adminToken),
         _buildBannersTab(surface, textColor, subtextColor, borderColor),
         _buildFeatureFlagsTab(surface, textColor, subtextColor, borderColor),
+        PaymentQrAdminScreen(adminToken: _adminToken),
       ],
     );
   }

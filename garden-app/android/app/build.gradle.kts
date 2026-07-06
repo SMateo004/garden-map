@@ -8,7 +8,9 @@ plugins {
 
 android {
     namespace = "com.garden.bolivia"
-    compileSdk = flutter.compileSdkVersion
+    // flutter_facebook_auth y androidx.browser (dependencia de amplify liveness) exigen
+    // compileSdk 36 — flutter.compileSdkVersion todavía resuelve a 35 en este canal.
+    compileSdk = 36
     ndkVersion = "30.0.14904198"
 
     compileOptions {
@@ -26,7 +28,7 @@ android {
         applicationId = "com.garden.bolivia"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 23 // posthog-android 3.41+ requires API 23+
+        minSdk = 24 // face_liveness_detector (AWS Amplify) requires API 24+ (posthog-android needs 23+, satisfied)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -46,5 +48,6 @@ flutter {
 }
 
 dependencies {
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // face_liveness_detector y amplify liveness exigen 2.1.5+
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }

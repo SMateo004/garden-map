@@ -49,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _navigateAfterLogin(String role, {String? activeRole}) {
+  void _navigateAfterLogin(String role, {String? activeRole, bool needsProfilePhoto = false}) {
     FcmService.registerAfterLogin();
     // Check if we came from a guest tap on a caregiver profile
     final extra = GoRouterState.of(context).extra;
@@ -73,7 +73,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (effectiveRole == 'ADMIN') {
       context.go('/admin');
     } else if (effectiveRole == 'CLIENT') {
-      kIsWeb ? context.go('/marketplace') : context.go('/service-selector');
+      final nextRoute = kIsWeb ? '/marketplace' : '/service-selector';
+      if (needsProfilePhoto) {
+        context.go('/upload-profile-photo', extra: {'nextRoute': nextRoute});
+      } else {
+        context.go(nextRoute);
+      }
     } else if (effectiveRole == 'CAREGIVER') {
       context.go('/caregiver/home');
     } else {
@@ -99,7 +104,9 @@ class _LoginScreenState extends State<LoginScreen> {
         duration: Duration(seconds: 5),
       ));
     }
-    _navigateAfterLogin(result.role ?? 'CLIENT', activeRole: result.activeRole);
+    final needsPhoto = (result.role ?? 'CLIENT') == 'CLIENT' &&
+        (result.profilePicture == null || result.profilePicture!.isEmpty);
+    _navigateAfterLogin(result.role ?? 'CLIENT', activeRole: result.activeRole, needsProfilePhoto: needsPhoto);
   }
 
   void _handleLogin() async {

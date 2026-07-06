@@ -8,7 +8,8 @@ import 'package:image_picker/image_picker.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/address_section.dart';
-import '../../widgets/address_map_picker.dart';
+import '../../constants/geo_data.dart';
+import '../../utils/input_formatters.dart';
 
 class MyDataScreen extends StatefulWidget {
   const MyDataScreen({super.key});
@@ -28,8 +29,8 @@ class _MyDataScreenState extends State<MyDataScreen> {
   late TextEditingController _lastCtrl;
   late TextEditingController _emailCtrl;
   late TextEditingController _phoneCtrl;
-  late TextEditingController _cityCtrl;
-  late TextEditingController _countryCtrl;
+  String _selectedCity = kBoliviaDepartments.first; // 'Santa Cruz' por defecto
+  String _selectedCountry = kLatamCountries.first; // 'Bolivia' por defecto
   late TextEditingController _addressCtrl;
   late TextEditingController _bioCtrl;
   DateTime? _dateOfBirth;
@@ -54,8 +55,6 @@ class _MyDataScreenState extends State<MyDataScreen> {
     _lastCtrl = TextEditingController();
     _emailCtrl = TextEditingController();
     _phoneCtrl = TextEditingController();
-    _cityCtrl = TextEditingController();
-    _countryCtrl = TextEditingController();
     _addressCtrl = TextEditingController();
     _bioCtrl = TextEditingController();
     _streetCtrl = TextEditingController();
@@ -72,8 +71,6 @@ class _MyDataScreenState extends State<MyDataScreen> {
     _lastCtrl.dispose();
     _emailCtrl.dispose();
     _phoneCtrl.dispose();
-    _cityCtrl.dispose();
-    _countryCtrl.dispose();
     _addressCtrl.dispose();
     _bioCtrl.dispose();
     _streetCtrl.dispose();
@@ -82,6 +79,18 @@ class _MyDataScreenState extends State<MyDataScreen> {
     _condominioCtrl.dispose();
     _referenceCtrl.dispose();
     super.dispose();
+  }
+
+  /// Coincidencia insensible a mayúsculas/acentos con la lista de opciones del
+  /// dropdown; si el valor guardado no coincide con ninguna (dato legado, typo),
+  /// cae al primer elemento en vez de dejar el selector en un estado inválido.
+  String _matchOption(String? value, List<String> options) {
+    if (value == null || value.trim().isEmpty) return options.first;
+    final normalized = value.trim().toLowerCase();
+    for (final o in options) {
+      if (o.toLowerCase() == normalized) return o;
+    }
+    return options.first;
   }
 
   Future<void> _loadData() async {
@@ -100,8 +109,8 @@ class _MyDataScreenState extends State<MyDataScreen> {
           _lastCtrl.text = user['lastName'] as String? ?? '';
           _emailCtrl.text = user['email'] as String? ?? '';
           _phoneCtrl.text = user['phone'] as String? ?? '';
-          _cityCtrl.text = user['city'] as String? ?? '';
-          _countryCtrl.text = user['country'] as String? ?? '';
+          _selectedCity = _matchOption(user['city'] as String?, kBoliviaDepartments);
+          _selectedCountry = _matchOption(user['country'] as String?, kLatamCountries);
           _addressCtrl.text = user['address'] as String? ?? '';
           _bioCtrl.text = user['bio'] as String? ?? '';
           _streetCtrl.text = user['addressStreet'] as String? ?? '';
@@ -154,7 +163,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Foto actualizada'), backgroundColor: GardenColors.success));
       } else {
-        throw Exception(data['message'] ?? 'Error al subir foto');
+        throw Exception((data['error'] as Map<String, dynamic>?)?['message'] ?? data['message'] ?? 'Error al subir foto');
       }
     } catch (e) {
       if (mounted) {
@@ -214,8 +223,8 @@ class _MyDataScreenState extends State<MyDataScreen> {
         'firstName': fn,
         'lastName': ln,
         'phone': _phoneCtrl.text.trim(),
-        'city': _cityCtrl.text.trim(),
-        'country': _countryCtrl.text.trim(),
+        'city': _selectedCity,
+        'country': _selectedCountry,
         'address': _buildFullAddress(),
         'bio': _bioCtrl.text.trim(),
         if (_dateOfBirth != null) 'dateOfBirth': _dateOfBirth!.toIso8601String(),
@@ -369,9 +378,11 @@ class _MyDataScreenState extends State<MyDataScreen> {
             const SizedBox(height: 6),
             Row(children: [
               Expanded(child: TextField(controller: _firstCtrl, style: TextStyle(color: textColor),
+                  inputFormatters: [noDigitsFormatter],
                   decoration: fieldDeco('Nombre *', Icons.person_outline))),
               const SizedBox(width: 12),
               Expanded(child: TextField(controller: _lastCtrl, style: TextStyle(color: textColor),
+                  inputFormatters: [noDigitsFormatter],
                   decoration: fieldDeco('Apellido *', Icons.person_outlined))),
             ]),
             const SizedBox(height: 16),
@@ -389,23 +400,39 @@ class _MyDataScreenState extends State<MyDataScreen> {
               Text('Ubicación', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               Row(children: [
-                Expanded(child: TextField(controller: _cityCtrl, style: TextStyle(color: textColor),
-                    decoration: fieldDeco('Ciudad', Icons.location_city_outlined))),
+                Expanded(child: DropdownButtonFormField<String>(
+                    value: _selectedCity,
+                    style: TextStyle(color: textColor),
+                    decoration: fieldDeco('Ciudad', Icons.location_city_outlined),
+                    items: kBoliviaDepartments.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                    onChanged: (v) { if (v != null) setState(() => _selectedCity = v); })),
                 const SizedBox(width: 12),
-                Expanded(child: TextField(controller: _countryCtrl, style: TextStyle(color: textColor),
-                    decoration: fieldDeco('País', Icons.public_outlined))),
+                Expanded(child: DropdownButtonFormField<String>(
+                    value: _selectedCountry,
+                    style: TextStyle(color: textColor),
+                    decoration: fieldDeco('País', Icons.public_outlined),
+                    items: kLatamCountries.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                    onChanged: (v) { if (v != null) setState(() => _selectedCountry = v); })),
               ]),
               const SizedBox(height: 16),
             ] else ...[
               Text('Ciudad', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
-              TextField(controller: _cityCtrl, style: TextStyle(color: textColor),
-                  decoration: fieldDeco('Tu ciudad', Icons.location_city_outlined)),
+              DropdownButtonFormField<String>(
+                  value: _selectedCity,
+                  style: TextStyle(color: textColor),
+                  decoration: fieldDeco('Tu ciudad', Icons.location_city_outlined),
+                  items: kBoliviaDepartments.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                  onChanged: (v) { if (v != null) setState(() => _selectedCity = v); }),
               const SizedBox(height: 16),
               Text('País', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
-              TextField(controller: _countryCtrl, style: TextStyle(color: textColor),
-                  decoration: fieldDeco('Tu país', Icons.public_outlined)),
+              DropdownButtonFormField<String>(
+                  value: _selectedCountry,
+                  style: TextStyle(color: textColor),
+                  decoration: fieldDeco('Tu país', Icons.public_outlined),
+                  items: kLatamCountries.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  onChanged: (v) { if (v != null) setState(() => _selectedCountry = v); }),
               const SizedBox(height: 16),
             ],
 
@@ -432,6 +459,9 @@ class _MyDataScreenState extends State<MyDataScreen> {
               onMapResult: (result) => setState(() {
                 _addressLat = result.lat;
                 _addressLng = result.lng;
+                if (result.formattedAddress != null && result.formattedAddress!.isNotEmpty) {
+                  _streetCtrl.text = result.formattedAddress!;
+                }
               }),
               onApartmentToggle: (val) => setState(() => _isApartment = val),
             ),

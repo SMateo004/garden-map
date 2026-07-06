@@ -56,7 +56,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         (u['lastName'] as String? ?? '').trim().isEmpty ||
         !RegExp(r'^[67][0-9]{7}$').hasMatch(phone) ||
         (u['addressStreet'] as String? ?? '').trim().isEmpty ||
-        (u['dateOfBirth'] == null);
+        (u['dateOfBirth'] == null) ||
+        (u['profilePicture'] as String? ?? '').trim().isEmpty;
   }
 
   /// True when "Datos del cuidador" is missing any required field.

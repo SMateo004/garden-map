@@ -4,6 +4,7 @@ import 'firebase_options.dart';
 import 'package:go_router/go_router.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
+import 'screens/auth/upload_profile_photo_screen.dart';
 import 'screens/client/client_welcome_screen.dart';
 import 'screens/client/about_screen.dart';
 import 'screens/caregiver/onboarding_wizard_screen.dart';
@@ -249,6 +250,14 @@ final GoRouter _router = GoRouter(
       path: '/client-welcome',
       name: 'clientWelcome',
       builder: (context, state) => const ClientWelcomeScreen(),
+    ),
+    GoRoute(
+      path: '/upload-profile-photo',
+      name: 'uploadProfilePhoto',
+      builder: (context, state) {
+        final nextRoute = (state.extra as Map?)?['nextRoute'] as String? ?? '/service-selector';
+        return UploadProfilePhotoScreen(nextRoute: nextRoute);
+      },
     ),
     GoRoute(
       path: '/marketplace',

@@ -45,6 +45,9 @@ class SocialLoginResult {
   // pre-registration (phone/dateOfBirth/address still missing — must be
   // completed from "Mi Perfil" before the user can book).
   final bool isNewAccount;
+  // Google's profile photo, if it provided one — used to decide whether the
+  // mandatory-photo gate (CLIENT role) needs to intercept navigation.
+  final String? profilePicture;
   // Populated when userExists == false AND the auto pre-registration itself
   // failed (e.g. registrations paused, invalid invite code) — caller should
   // show the error rather than silently falling back to the manual form.
@@ -60,6 +63,7 @@ class SocialLoginResult {
     this.activeRole,
     this.userName,
     this.isNewAccount = false,
+    this.profilePicture,
     this.userData,
   });
 }
@@ -374,6 +378,7 @@ class SocialAuthService {
       activeRole: activeRole,
       userName: name,
       isNewAccount: isNewAccount,
+      profilePicture: user['profilePicture'] as String?,
     );
   }
 }

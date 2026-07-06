@@ -9,11 +9,17 @@
 /* Begin PBXBuildFile section */
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		1584A9552FB147F200ED9403 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 1584A9542FB147F200ED9403 /* GoogleService-Info.plist */; };
+		1597F3222FFC2048005A60EA /* AWSCognitoAuthPlugin in Frameworks */ = {isa = PBXBuildFile; productRef = 1597F3212FFC2048005A60EA /* AWSCognitoAuthPlugin */; };
+		1597F3242FFC2048005A60EA /* Amplify in Frameworks */ = {isa = PBXBuildFile; productRef = 1597F3232FFC2048005A60EA /* Amplify */; };
+		1597F3272FFC20A7005A60EA /* FaceLiveness in Frameworks */ = {isa = PBXBuildFile; productRef = 1597F3262FFC20A7005A60EA /* FaceLiveness */; };
 		15C1388D2FE62C33009DE069 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 15C1388C2FE62C33009DE069 /* WidgetKit.framework */; };
 		15C1388F2FE62C33009DE069 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 15C1388E2FE62C33009DE069 /* SwiftUI.framework */; };
 		15C1389E2FE62C34009DE069 /* GardenActivityWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 15C1388B2FE62C32009DE069 /* GardenActivityWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		15C138A92FE62E8C009DE069 /* GardenServiceAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15C138A82FE62E8C009DE069 /* GardenServiceAttributes.swift */; };
 		15C138AA2FE62E8C009DE069 /* GardenLiveActivityHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15C138A72FE62E8C009DE069 /* GardenLiveActivityHandler.swift */; };
+		15D1F0B92FFC28DE0058E9DB /* Amplify in Frameworks */ = {isa = PBXBuildFile; productRef = 15D1F0B82FFC28DE0058E9DB /* Amplify */; };
+		15D1F0BB2FFC28EF0058E9DB /* AWSCognitoAuthPlugin in Frameworks */ = {isa = PBXBuildFile; productRef = 15D1F0BA2FFC28EF0058E9DB /* AWSCognitoAuthPlugin */; };
+		15D1F0BD2FFC28FF0058E9DB /* FaceLiveness in Frameworks */ = {isa = PBXBuildFile; productRef = 15D1F0BC2FFC28FF0058E9DB /* FaceLiveness */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
@@ -142,7 +148,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1597F3272FFC20A7005A60EA /* FaceLiveness in Frameworks */,
+				15D1F0B92FFC28DE0058E9DB /* Amplify in Frameworks */,
+				15D1F0BD2FFC28FF0058E9DB /* FaceLiveness in Frameworks */,
+				1597F3242FFC2048005A60EA /* Amplify in Frameworks */,
 				82F380E1C7F29D7D04B9F9DF /* Pods_Runner.framework in Frameworks */,
+				1597F3222FFC2048005A60EA /* AWSCognitoAuthPlugin in Frameworks */,
+				15D1F0BB2FFC28EF0058E9DB /* AWSCognitoAuthPlugin in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -347,6 +359,10 @@
 				Base,
 			);
 			mainGroup = 97C146E51CF9000F007C117D;
+			packageReferences = (
+				1597F3202FFC2048005A60EA /* XCRemoteSwiftPackageReference "amplify-swift" */,
+				1597F3252FFC20A7005A60EA /* XCRemoteSwiftPackageReference "amplify-ui-swift-liveness" */,
+			);
 			productRefGroup = 97C146EF1CF9000F007C117D /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -776,7 +792,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -909,7 +925,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
@@ -962,7 +978,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -1071,6 +1087,58 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		1597F3202FFC2048005A60EA /* XCRemoteSwiftPackageReference "amplify-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/aws-amplify/amplify-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.58.4;
+			};
+		};
+		1597F3252FFC20A7005A60EA /* XCRemoteSwiftPackageReference "amplify-ui-swift-liveness" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/aws-amplify/amplify-ui-swift-liveness";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.4.4;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		1597F3212FFC2048005A60EA /* AWSCognitoAuthPlugin */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1597F3202FFC2048005A60EA /* XCRemoteSwiftPackageReference "amplify-swift" */;
+			productName = AWSCognitoAuthPlugin;
+		};
+		1597F3232FFC2048005A60EA /* Amplify */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1597F3202FFC2048005A60EA /* XCRemoteSwiftPackageReference "amplify-swift" */;
+			productName = Amplify;
+		};
+		1597F3262FFC20A7005A60EA /* FaceLiveness */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1597F3252FFC20A7005A60EA /* XCRemoteSwiftPackageReference "amplify-ui-swift-liveness" */;
+			productName = FaceLiveness;
+		};
+		15D1F0B82FFC28DE0058E9DB /* Amplify */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1597F3202FFC2048005A60EA /* XCRemoteSwiftPackageReference "amplify-swift" */;
+			productName = Amplify;
+		};
+		15D1F0BA2FFC28EF0058E9DB /* AWSCognitoAuthPlugin */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1597F3202FFC2048005A60EA /* XCRemoteSwiftPackageReference "amplify-swift" */;
+			productName = AWSCognitoAuthPlugin;
+		};
+		15D1F0BC2FFC28FF0058E9DB /* FaceLiveness */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1597F3252FFC20A7005A60EA /* XCRemoteSwiftPackageReference "amplify-ui-swift-liveness" */;
+			productName = FaceLiveness;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 97C146E61CF9000F007C117D /* Project object */;
 }

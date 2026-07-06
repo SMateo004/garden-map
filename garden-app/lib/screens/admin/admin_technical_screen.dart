@@ -642,7 +642,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  'ALL', 'MONITOR', 'PRECIO', 'CALIFICACION', 'DISPUTA', 'CUSTOM'
+                  'ALL', 'MONITOR', 'PRECIO', 'CALIFICACION', 'DISPUTA', 'FOTO_VALIDACION', 'CUSTOM'
                 ].map((type) {
                   final sel = _selectedAgentType == type;
                   final count = type == 'ALL'
@@ -1266,6 +1266,9 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
         break;
       case 'MONITOR':
         agentColor = Colors.green;
+        break;
+      case 'FOTO_VALIDACION':
+        agentColor = Colors.pink;
         break;
       default:
         agentColor = Colors.grey;

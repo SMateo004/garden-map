@@ -2,6 +2,10 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '../../shared/async-handler.js';
 import * as bookingService from './booking.service.js';
 import { uploadImage, uploadRawFile } from '../../services/storage.service.js';
+import { assertImageBuffer } from '../../shared/mime-validation.js';
+import { validarFoto, type CategoriaFoto } from '../../agents/foto-validacion.agent.js';
+import prisma from '../../config/database.js';
+import { AppError } from '../../shared/errors.js';
 import {
   startServiceBodySchema,
   trackLocationBodySchema,
@@ -40,6 +44,25 @@ export const addEvent = asyncHandler(async (req: Request, res: Response) => {
                 name: `video_${bookingId}_${Date.now()}`,
             }, mime);
         } else {
+            // Magic-bytes check (el mimetype de arriba es el header del cliente,
+            // no confiable) + validación de contenido: en PASEO se espera evidencia
+            // de la mascota; en HOSPEDAJE/GUARDERIA, del espacio del hogar donde
+            // se la cuida.
+            const detectedMime = await assertImageBuffer(req.file.buffer);
+            if (['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(detectedMime)) {
+                const booking = await prisma.booking.findUnique({ where: { id: bookingId }, select: { serviceType: true } });
+                const categoria: CategoriaFoto = booking?.serviceType === 'PASEO' ? 'MASCOTA' : 'ESPACIO_HOGAR';
+                const resultado = await validarFoto({
+                    imageBuffer: req.file.buffer,
+                    mediaType: detectedMime as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+                    categoria,
+                    userId: caregiverUserId,
+                    contexto: 'service-event',
+                });
+                if (!resultado.valida) {
+                    throw new AppError(resultado.razon, 422, 'FOTO_NO_VALIDA');
+                }
+            }
             uploadedPhotoUrl = await uploadImage(req.file.buffer, {
                 folder: 'service-events',
                 name: `event_${bookingId}_${Date.now()}`,

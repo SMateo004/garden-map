@@ -26,9 +26,12 @@ const ALLOWED_IMAGE_MIMES = new Set([
 
 /**
  * Throws a 400 AppError if the buffer does not start with the magic bytes of
- * a recognised image format.
+ * a recognised image format. Returns the detected MIME type (from magic
+ * bytes, not the client-supplied header) — callers that need to know the
+ * real type (e.g. to pass to Claude vision, which only accepts a subset of
+ * these) can use it instead of re-detecting.
  */
-export async function assertImageBuffer(buffer: Buffer): Promise<void> {
+export async function assertImageBuffer(buffer: Buffer): Promise<string> {
   const type = await fileTypeFromBuffer(buffer);
 
   if (!type || !ALLOWED_IMAGE_MIMES.has(type.mime)) {
@@ -38,4 +41,5 @@ export async function assertImageBuffer(buffer: Buffer): Promise<void> {
       'INVALID_FILE_TYPE',
     );
   }
+  return type.mime;
 }

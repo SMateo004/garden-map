@@ -24,6 +24,7 @@ import { blockchainService } from '../../services/blockchain.service.js';
 import { sendPushToUser } from '../../services/firebase.service.js';
 import { getIO } from '../../services/socket.service.js';
 import * as sipService from '../../services/sip.service.js';
+import * as paymentQrService from '../../services/payment-qr.service.js';
 import { env } from '../../config/env.js';
 import type {
   CreateBookingBody,
@@ -1034,7 +1035,8 @@ export async function checkExtensionAvailability(
 
 export interface GenerateQRResult {
   qrId: string;
-  qrImageUrl: string;  // Base64 "data:image/png;base64,..." con SIP, URL placeholder en dev
+  qrImageUrl: string;  // Base64 "data:image/png;base64,..." con SIP, URL de Cloudinary (o placeholder) sin SIP
+  qrImageType: 'base64' | 'url' | 'generated';
   qrExpiresAt: Date;
   sipQrId?: string;          // idQr de SIP (solo cuando SIP_ENABLED=true)
   sipTransaccionId?: string; // idTransaccion de SIP (solo cuando SIP_ENABLED=true)
@@ -1043,7 +1045,9 @@ export interface GenerateQRResult {
 /**
  * Genera QR de pago.
  * - Con SIP_ENABLED=true: llama a la API bancaria SIP y devuelve imagen Base64 real.
- * - Con SIP_ENABLED=false: genera un UUID local y URL placeholder (modo dev/CI).
+ * - Con SIP_ENABLED=false: usa el QR provisional subido por un admin para ese
+ *   tipo de servicio (imagen real de una cuenta bancaria, pero SIN conexión al
+ *   riel SIP) — o cae a un placeholder si el admin aún no subió ninguno.
  *
  * El alias enviado a SIP es el bookingId, que SIP nos devolverá en el callback
  * para que podamos identificar qué reserva se pagó.
@@ -1051,7 +1055,8 @@ export interface GenerateQRResult {
 export async function generateQR(
   bookingId: string,
   validityMinutes: number = 24 * 60,
-  monto?: number
+  monto?: number,
+  serviceType?: ServiceType
 ): Promise<GenerateQRResult> {
   const qrExpiresAt = new Date(Date.now() + validityMinutes * 60 * 1000);
 
@@ -1069,6 +1074,7 @@ export async function generateQR(
       return {
         qrId: bookingId,                             // alias = bookingId
         qrImageUrl: `data:image/png;base64,${result.imagenQr}`,
+        qrImageType: 'base64',
         qrExpiresAt,
         sipQrId: result.idQr,
         sipTransaccionId: result.idTransaccion,
@@ -1092,9 +1098,14 @@ export async function generateQR(
 
   // Modo local / fallback — SOLO cuando SIP_ENABLED=false (dev/CI)
   const qrId = crypto.randomUUID();
+  const uploadedQrUrl = serviceType ? await paymentQrService.getPaymentQrImageUrl(serviceType) : null;
+  if (uploadedQrUrl) {
+    logger.info('QR generado (provisional subido por admin)', { bookingId, qrId, serviceType });
+    return { qrId, qrImageUrl: uploadedQrUrl, qrImageType: 'url', qrExpiresAt };
+  }
   const qrImageUrl = `https://api.garden.bo/qr/placeholder/${qrId}`;
-  logger.info('QR generado (placeholder local)', { bookingId, qrId, validityMinutes });
-  return { qrId, qrImageUrl, qrExpiresAt };
+  logger.info('QR generado (placeholder local, sin QR provisional subido)', { bookingId, qrId, validityMinutes, serviceType });
+  return { qrId, qrImageUrl, qrImageType: 'generated', qrExpiresAt };
 }
 
 /**
@@ -1196,7 +1207,7 @@ export async function initPayment(
   walletContribution: number = 0,
   donationAmount: number = 0
 ): Promise<{
-  qrId?: string; qrImageUrl?: string; qrExpiresAt?: string; status: string;
+  qrId?: string; qrImageUrl?: string; qrImageType?: string; qrExpiresAt?: string; status: string;
   walletDeducted?: number; remainingAmount?: number; paidWithWallet?: boolean;
 }> {
   const cfg = await getBookingSettings();
@@ -1209,6 +1220,7 @@ export async function initPayment(
         caregiverId: true,
         totalAmount: true,
         commissionAmount: true,
+        serviceType: true,
       },
     });
     if (!booking) throw new BookingNotFoundError(bookingId);
@@ -1433,7 +1445,7 @@ export async function initPayment(
       // QR incluye el monto restante del servicio + donación completa + deuda previa
       const remainingAmount = Math.round(totalAmount - effectiveWalletContribution);
       const qrMonto = remainingAmount + effectiveDonation + debtAmount;
-      const qrResult = await generateQR(bookingId, cfg.QR_VALIDITY_MINUTES_PAYMENT, qrMonto);
+      const qrResult = await generateQR(bookingId, cfg.QR_VALIDITY_MINUTES_PAYMENT, qrMonto, booking.serviceType);
       await tx.booking.update({
         where: { id: bookingId },
         data: {
@@ -1450,6 +1462,7 @@ export async function initPayment(
       return {
         qrId: qrResult.qrId,
         qrImageUrl: qrResult.qrImageUrl,
+        qrImageType: qrResult.qrImageType,
         qrExpiresAt: qrResult.qrExpiresAt.toISOString(),
         status: BookingStatus.PENDING_PAYMENT,
         walletDeducted: effectiveWalletContribution,
@@ -1461,7 +1474,7 @@ export async function initPayment(
     // ── PAGO QR COMPLETO (sin billetera) — QR incluye donación + deuda previa ─
     if (method === 'qr') {
       const qrMonto = totalAmount + effectiveDonation + debtAmount;
-      const qrResult = await generateQR(bookingId, cfg.QR_VALIDITY_MINUTES_PAYMENT, qrMonto);
+      const qrResult = await generateQR(bookingId, cfg.QR_VALIDITY_MINUTES_PAYMENT, qrMonto, booking.serviceType);
       await tx.booking.update({
         where: { id: bookingId },
         data: {
@@ -1478,6 +1491,7 @@ export async function initPayment(
       return {
         qrId: qrResult.qrId,
         qrImageUrl: qrResult.qrImageUrl,
+        qrImageType: qrResult.qrImageType,
         qrExpiresAt: qrResult.qrExpiresAt.toISOString(),
         status: BookingStatus.PENDING_PAYMENT,
       };
@@ -2113,7 +2127,7 @@ export async function requestWalkExtensionPayment(
   const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
 
   if (method === 'qr') {
-    const qrResult = await generateQR(bookingId, 15, extraTotal); // 15 min de validez para extensiones
+    const qrResult = await generateQR(bookingId, 15, extraTotal, booking.serviceType); // 15 min de validez para extensiones
     events.push({
       type: 'EXTENSION_PENDING_PAYMENT',
       extensionId,
@@ -2122,6 +2136,7 @@ export async function requestWalkExtensionPayment(
       method: 'qr',
       qrId: qrResult.qrId,
       qrImageUrl: qrResult.qrImageUrl,
+      qrImageType: qrResult.qrImageType,
       qrExpiresAt: qrResult.qrExpiresAt.toISOString(),
       sipQrId: qrResult.sipQrId,
       sipTransaccionId: qrResult.sipTransaccionId,
@@ -2331,7 +2346,7 @@ export async function requestHospedajeExtensionPayment(
   }
 
   if (method === 'qr') {
-    const qrResult = await generateQR(bookingId, 15, extraTotal);
+    const qrResult = await generateQR(bookingId, 15, extraTotal, booking.serviceType);
     events.push({
       type: 'EXTENSION_PENDING_PAYMENT',
       extensionId,
@@ -2340,6 +2355,7 @@ export async function requestHospedajeExtensionPayment(
       method: 'qr',
       qrId: qrResult.qrId,
       qrImageUrl: qrResult.qrImageUrl,
+      qrImageType: qrResult.qrImageType,
       qrExpiresAt: qrResult.qrExpiresAt.toISOString(),
       sipQrId: qrResult.sipQrId,
       sipTransaccionId: qrResult.sipTransaccionId,

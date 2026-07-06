@@ -18,6 +18,7 @@ import 'email_verification_screen.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/address_map_picker.dart';
 import '../../widgets/address_section.dart';
+import '../../utils/input_formatters.dart';
 
 class OnboardingWizardScreen extends StatefulWidget {
   final String initialEmail;
@@ -1155,9 +1156,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           SizedBox(key: _keyStep0Name, height: 0),
           Row(children: [
             Expanded(child: TextFormField(controller: _firstNameController, style: TextStyle(color: textColor),
+                inputFormatters: [noDigitsFormatter],
                 decoration: _field('Nombre', Icons.person_outlined))),
             const SizedBox(width: 12),
             Expanded(child: TextFormField(controller: _lastNameController, style: TextStyle(color: textColor),
+                inputFormatters: [noDigitsFormatter],
                 decoration: _field('Apellido', Icons.person_outline))),
           ]),
           const SizedBox(height: 16),
@@ -1204,6 +1207,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             onMapResult: (result) => setState(() {
               _addressLat = result.lat;
               _addressLng = result.lng;
+              if (result.formattedAddress != null && result.formattedAddress!.isNotEmpty) {
+                _addressStreetController.text = result.formattedAddress!;
+              }
             }),
             onApartmentToggle: (val) => setState(() => _isApartment = val),
           ),
