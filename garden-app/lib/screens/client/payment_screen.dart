@@ -47,6 +47,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _paymentConfirmed = false;
   bool _paymentRejected = false;
   bool _qrExpired = false;
+
+  // Fallback manual — solo aparece si SIP (banco) no puede generar el QR.
+  // El cliente puede pedir que un admin verifique y apruebe el pago a mano
+  // (ej. transferencia bancaria fuera de la app) en vez de quedar bloqueado.
+  bool _sipUnavailable = false;
+  bool _manualRequested = false;
+  bool _requestingManual = false;
   bool _isCheckingNow = false; // feedback when user presses the button
   bool _isSavingQr = false;
 
@@ -262,8 +269,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
           // Auto-start polling as soon as QR is shown
           _startPolling();
         }
+      } else if (data['error']?['code'] == 'SIP_UNAVAILABLE') {
+        // El banco (SIP) no pudo generar el QR — ofrecer verificación manual
+        // en vez de solo mostrar un error y dejar al cliente sin salida.
+        setState(() => _sipUnavailable = true);
       } else {
-        throw Exception(data['message'] ?? 'Error al iniciar pago');
+        throw Exception(data['error']?['message'] ?? data['message'] ?? 'Error al iniciar pago');
       }
     } catch (e) {
       if (mounted) {
@@ -273,6 +284,40 @@ class _PaymentScreenState extends State<PaymentScreen> {
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  /// El banco no pudo generar el QR — el cliente pide que un admin verifique
+  /// y apruebe el pago manualmente (ej. transferencia bancaria fuera de la
+  /// app). No hay comprobante adjunto: el admin debe confirmar el pago con
+  /// el cliente por otro medio antes de aprobar.
+  Future<void> _requestManualPayment() async {
+    if (_bookingId == null || _requestingManual) return;
+    setState(() => _requestingManual = true);
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/bookings/$_bookingId/payment'),
+        headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'method': 'manual'}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        setState(() => _manualRequested = true);
+        _pollTimer?.cancel();
+        _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _checkPaymentStatus());
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['error']?['message'] ?? 'No se pudo enviar la solicitud'), backgroundColor: GardenColors.error),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error de conexión: $e'), backgroundColor: GardenColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _requestingManual = false);
     }
   }
 
@@ -374,9 +419,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
         } else if (status == 'CANCELLED') {
           _stopPolling();
           setState(() => _paymentRejected = true);
-        } else if (status == 'PENDING_PAYMENT' && qrId == null && _qrResponse != null) {
+        } else if (status == 'PENDING_PAYMENT' && qrId == null && (_qrResponse != null || _manualRequested)) {
+          // También cubre el caso de solicitud manual rechazada por el admin
+          // (rejectPayment vuelve el booking a PENDING_PAYMENT sin qrId) —
+          // sin el flag _manualRequested aquí, el polling nunca lo detectaba
+          // porque _qrResponse nunca se setea en el flujo manual.
           _stopPolling();
-          setState(() => _paymentRejected = true);
+          setState(() {
+            _manualRequested = false;
+            _paymentRejected = true;
+          });
         }
       }
     } catch (_) {
@@ -583,6 +635,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         }
 
         if (_paymentConfirmed) return _buildSuccessScreen();
+        if (_manualRequested) return _buildManualPendingScreen();
         if (_paymentRejected) return _buildRejectionScreen();
         if (_qrExpired) return _buildExpiredScreen();
 
@@ -1281,6 +1334,48 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 : Icons.qr_code_2_outlined,
             onPressed: _isSubmitting ? null : _initPayment,
           ),
+
+          if (_sipUnavailable) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: GardenColors.warning.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: GardenColors.warning.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    const Icon(Icons.info_outline_rounded, color: GardenColors.warning, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text('No pudimos generar tu código de pago en este momento.',
+                        style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                    ),
+                  ]),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: _requestingManual ? null : _requestManualPayment,
+                    icon: _requestingManual
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.warning))
+                        : const Icon(Icons.support_agent_rounded, size: 16),
+                    label: const Text('Solicitar aprobación manual', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: GardenColors.warning,
+                      side: const BorderSide(color: GardenColors.warning),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      minimumSize: const Size(double.infinity, 44),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text('Un administrador verificará tu pago manualmente. Esto puede tardar más que el pago por QR.',
+                    style: TextStyle(color: subtextColor, fontSize: 11)),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
 
           Row(
@@ -1582,6 +1677,55 @@ class _PaymentScreenState extends State<PaymentScreen> {
               TextButton(
                 onPressed: () => context.go('/marketplace'),
                 child: Text('Volver al inicio', style: TextStyle(color: subtextColor)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Manual approval pending screen ───────────────────────────────────────────
+
+  Widget _buildManualPendingScreen() {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+    return Scaffold(
+      backgroundColor: bg,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 48),
+          child: Column(
+            children: [
+              Container(
+                width: 100, height: 100,
+                decoration: BoxDecoration(
+                  color: GardenColors.warning.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4), width: 4),
+                ),
+                child: const Icon(Icons.support_agent_rounded, color: GardenColors.warning, size: 50),
+              ),
+              const SizedBox(height: 28),
+              Text('Esperando aprobación',
+                  style: TextStyle(
+                      fontSize: 26, fontWeight: FontWeight.w900, color: textColor, letterSpacing: -0.5),
+                  textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              Text(
+                'Enviamos tu solicitud a un administrador de GARDEN. Te avisaremos apenas se confirme tu pago — no cierres ni canceles la reserva mientras tanto.',
+                style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              const CircularProgressIndicator(color: GardenColors.warning),
+              const SizedBox(height: 24),
+              TextButton(
+                onPressed: () => context.go('/my-bookings-tab'),
+                child: Text('Ver mis reservas', style: TextStyle(color: subtextColor)),
               ),
             ],
           ),

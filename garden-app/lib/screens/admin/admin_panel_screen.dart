@@ -2136,6 +2136,22 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               ]),
               const SizedBox(height: 10),
               _idBadge('ID', p['id'].toString().toUpperCase().substring(0, 8)),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: GardenColors.error.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.warning_amber_rounded, size: 14, color: GardenColors.error),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(
+                    'Sin comprobante adjunto — verifica el pago con el cliente por otro medio antes de aprobar.',
+                    style: TextStyle(color: GardenColors.error, fontSize: 10.5, fontWeight: FontWeight.w600),
+                  )),
+                ]),
+              ),
               const SizedBox(height: 12),
               Row(children: [
                 Expanded(child: GardenButton(
