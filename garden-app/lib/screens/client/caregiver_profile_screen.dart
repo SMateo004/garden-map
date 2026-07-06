@@ -28,6 +28,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   bool _isLoading = true;
   bool _loadError = false;
   List<dynamic> _clientPets = [];
+  bool _petsLoading = true;
   String _authToken = '';
   int _selectedPhotoIndex = 0;
   bool _showAllReviews = false;
@@ -49,6 +50,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   Future<void> _loadAll() async {
     final token = AuthState.token;
     if (mounted) setState(() => _authToken = token);
+    if (token.isEmpty && mounted) setState(() => _petsLoading = false);
     await Future.wait([
       _fetchCaregiver(),
       if (token.isNotEmpty) _fetchClientPets(token),
@@ -89,7 +91,10 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
       if (data['success'] == true && mounted) {
         setState(() => _clientPets = data['data'] as List? ?? []);
       }
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _petsLoading = false);
+    }
   }
 
   Future<void> _fetchFavoriteStatus(String token) async {
@@ -147,6 +152,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   }
 
   void _onReserve() {
+    if (_petsLoading) return; // button is disabled while this is true; guard against races
     final token = _authToken;
     if (token.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -740,9 +746,11 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                       elevation: 0,
                                     ),
-                                    icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                                    icon: _petsLoading
+                                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                        : const Icon(Icons.calendar_today_outlined, size: 18),
                                     label: const Text('Reservar ahora', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                                    onPressed: _onReserve,
+                                    onPressed: _petsLoading ? null : _onReserve,
                                   ),
                                 ),
                               ),
@@ -1098,7 +1106,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                   ]),
                   const SizedBox(width: 20),
                 ],
-                Expanded(child: GardenButton(label: 'Reservar ahora', icon: Icons.calendar_today_outlined, onPressed: _onReserve)),
+                Expanded(child: GardenButton(label: 'Reservar ahora', icon: Icons.calendar_today_outlined, loading: _petsLoading, onPressed: _petsLoading ? null : _onReserve)),
               ]),
             ),
           ),

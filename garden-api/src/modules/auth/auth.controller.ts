@@ -37,8 +37,12 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
         error: { code: 'USER_NOT_FOUND', message: 'Usuario no encontrado' }
       });
     }
+    // Usa el rol activo (usuarios dual-role pueden operar como CLIENT aunque su
+    // rol base sea CAREGIVER, o viceversa) — leer/escribir por user.role haría
+    // que un caregiver-que-actúa-como-cliente nunca vea/edite su clientProfile.
+    const effectiveRole = (req.user as { activeRole?: string })?.activeRole ?? user.role;
     // Para CLIENT, incluir clientProfile con datos extendidos
-    if (user.role === 'CLIENT') {
+    if (effectiveRole === 'CLIENT') {
       const clientProfile = await prisma.clientProfile.findUnique({
         where: { userId: user.id },
         select: {
@@ -75,7 +79,7 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
     }
 
     // Para CAREGIVER, incluir dirección detallada + profilePhoto
-    if (user.role === 'CAREGIVER') {
+    if (effectiveRole === 'CAREGIVER') {
       const caregiverProfile = await prisma.caregiverProfile.findUnique({
         where: { userId: user.id },
         select: {
@@ -390,14 +394,17 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
     return res.status(400).json({ success: false, error: { code: 'EMPTY_BODY', message: 'Nada que actualizar' } });
   }
 
+  // Rol ACTIVO, no el rol base (ver mismo fix en `me` arriba) — evita que un
+  // dual-role usuario guarde/lea su dirección en la tabla equivocada según
+  // cuál rol tenía cuando se emitió el JWT.
+  const effectiveRole = (req.user as { activeRole?: string })?.activeRole ?? req.user?.role;
+
   let updated: { firstName: string; lastName: string; phone: string; city: string | null; country: string | null; dateOfBirth: Date | null } | null = null;
   if (Object.keys(userData).length > 0) {
     updated = await prisma.user.update({ where: { id: userId }, data: userData });
   }
   if (Object.keys(profileData).length > 0) {
-    // Guardar en el perfil correspondiente según el rol
-    const userRole = (req as any).user?.role;
-    if (userRole === 'CAREGIVER') {
+    if (effectiveRole === 'CAREGIVER') {
       await prisma.caregiverProfile.upsert({
         where: { userId },
         update: profileData,
@@ -416,10 +423,9 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
     where: { id: userId },
     select: { firstName: true, lastName: true, phone: true, city: true, country: true, dateOfBirth: true },
   });
-  const freshProfile = await prisma.clientProfile.findUnique({
-    where: { userId },
-    select: { address: true, bio: true },
-  });
+  const freshProfile = effectiveRole === 'CAREGIVER'
+    ? await prisma.caregiverProfile.findUnique({ where: { userId }, select: { address: true, bio: true } })
+    : await prisma.clientProfile.findUnique({ where: { userId }, select: { address: true, bio: true } });
   res.json({ success: true, data: {
     firstName: freshUser?.firstName,
     lastName: freshUser?.lastName,

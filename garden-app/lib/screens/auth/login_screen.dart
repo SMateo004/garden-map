@@ -56,11 +56,15 @@ class _LoginScreenState extends State<LoginScreen> {
     if (extra is Map<String, dynamic> && extra.containsKey('returnTo')) {
       final returnTo = extra['returnTo'] as String;
       final caregiverData = extra['caregiverData'];
+      // Capture the router before go() — it unmounts LoginScreen in this same
+      // frame, so a later `context.push` gated on `mounted` never fires. The
+      // router reference itself stays valid regardless of this widget's lifecycle.
+      final router = GoRouter.of(context);
       // go() establishes service-selector as the base, then push() puts
       // the caregiver profile on top so the back button returns to it.
-      context.go('/service-selector');
+      router.go('/service-selector');
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) context.push(returnTo, extra: caregiverData);
+        router.push(returnTo, extra: caregiverData);
       });
       return;
     }
