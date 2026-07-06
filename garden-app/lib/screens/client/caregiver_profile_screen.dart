@@ -170,7 +170,14 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
             TextButton(
-              onPressed: () { Navigator.pop(ctx); context.push('/my-pets'); },
+              onPressed: () async {
+                Navigator.pop(ctx);
+                // Espera a volver de /my-pets y refresca la lista al instante —
+                // así, si el usuario ya agregó una mascota, puede tocar
+                // "Reservar ahora" de inmediato sin reiniciar la app.
+                await context.push('/my-pets');
+                if (mounted) _fetchClientPets(_authToken);
+              },
               child: const Text('Agregar mascota', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700)),
             ),
           ],

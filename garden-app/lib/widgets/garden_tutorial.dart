@@ -8,8 +8,10 @@ class TutorialStep {
   final String emoji;
   final String title;
   final String body;
+
   /// Pre-calculated center (mobile bottom nav). Null → centred welcome card.
   final Offset? spotlightCenter;
+
   /// Alternative to spotlightCenter: resolved at render time from a GlobalKey.
   /// Useful for web elements whose position isn't known until layout.
   final GlobalKey? targetKey;
@@ -34,7 +36,8 @@ class GardenTutorial {
   static Future<void> maybeShow(
     BuildContext context, {
     required String prefKey,
-    required List<TutorialStep> Function(Size size, double bottomPad) stepsBuilder,
+    required List<TutorialStep> Function(Size size, double bottomPad)
+    stepsBuilder,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     if (prefs.getBool(prefKey) == true) return;
@@ -48,17 +51,21 @@ class GardenTutorial {
 
     OverlayEntry? entry;
     entry = OverlayEntry(
-      builder: (_) => _TutorialOverlay(
-        steps: steps,
-        onDismiss: () => entry?.remove(),
-      ),
+      builder:
+          (_) =>
+              _TutorialOverlay(steps: steps, onDismiss: () => entry?.remove()),
     );
     Overlay.of(context).insert(entry);
   }
 
   /// Returns the screen-space centre of a LiquidGlassNavBar tab (mobile).
   /// Outer padding 20+20, GlassBox 4+4; nav visual height ≈ 42 above safe area.
-  static Offset navItemOffset(int index, int total, Size size, double bottomPad) {
+  static Offset navItemOffset(
+    int index,
+    int total,
+    Size size,
+    double bottomPad,
+  ) {
     final itemWidth = (size.width - 48) / total;
     final x = 24 + itemWidth * (index + 0.5);
     final y = size.height - bottomPad - 42;
@@ -93,9 +100,10 @@ class _TutorialOverlayState extends State<_TutorialOverlay>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 1.0, end: 1.22).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
-    );
+    _pulseAnim = Tween<double>(
+      begin: 1.0,
+      end: 1.22,
+    ).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
 
     _fadeCtrl = AnimationController(
       vsync: this,
@@ -160,16 +168,17 @@ class _TutorialOverlayState extends State<_TutorialOverlay>
             if (hasSpot)
               AnimatedBuilder(
                 animation: _pulseAnim,
-                builder: (_, __) => SizedBox.fromSize(
-                  size: size,
-                  child: CustomPaint(
-                    painter: _SpotlightPainter(
-                      center: center,
-                      innerRadius: step.spotlightRadius,
-                      glowRadius: step.spotlightRadius * _pulseAnim.value,
+                builder:
+                    (_, __) => SizedBox.fromSize(
+                      size: size,
+                      child: CustomPaint(
+                        painter: _SpotlightPainter(
+                          center: center,
+                          innerRadius: step.spotlightRadius,
+                          glowRadius: step.spotlightRadius * _pulseAnim.value,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
               )
             else
               Container(color: const Color(0xCC000000)),
@@ -186,51 +195,101 @@ class _TutorialOverlayState extends State<_TutorialOverlay>
   }
 
   Widget _buildPositionedCard(
-      TutorialStep step, Offset c, Size size, double bottom, bool isLast) {
+    TutorialStep step,
+    Offset c,
+    Size size,
+    double bottom,
+    bool isLast,
+  ) {
     final r = step.spotlightRadius;
-    const cardH = 200.0;
     const gap = 20.0;
+    // Real content height is dynamic (varies with text length/screen width) —
+    // never assume a fixed card height for positioning. Instead cap the card
+    // at the space actually available so it can shrink-to-fit or scroll
+    // internally, but can never push its button row off-screen.
+    final maxCardHeight = size.height - bottom - 32;
 
     // Left-side element (sidebar, web): place card to the right
     if (c.dx < size.width * 0.35) {
-      final top = (c.dy - cardH / 2).clamp(16.0, size.height - cardH - 16.0);
       return Positioned(
-        top: top,
+        top: 16,
+        bottom: bottom + 16,
         left: c.dx + r + gap,
         right: 16,
-        child: _StepCard(
-          step: step, current: _step, total: widget.steps.length,
-          isLast: isLast, onNext: _next, onSkip: _dismiss,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: _StepCard(
+            step: step,
+            current: _step,
+            total: widget.steps.length,
+            isLast: isLast,
+            onNext: _next,
+            onSkip: _dismiss,
+            maxHeight: maxCardHeight,
+          ),
         ),
       );
     }
 
-    // Top-area element (header tabs, web): place card below
-    // Bottom-area element (mobile nav): place card above
+    // Top-area element (header tabs, web): place card below, anchored by its
+    // top edge (grows downward — safe since we cap maxHeight above).
+    // Bottom-area element (mobile nav): place card above, anchored by its
+    // BOTTOM edge so it grows upward from the spotlight regardless of its
+    // real height, instead of computing `top` from a guessed height.
     final belowTop = c.dy + r + gap;
-    final aboveTop = c.dy - r - gap - cardH;
-    final topPos =
-        (belowTop + cardH < size.height - bottom - 16) ? belowTop : aboveTop;
+    final roomBelow = size.height - bottom - 16 - belowTop;
+    final placeBelow =
+        roomBelow >= 120; // enough room for at least a compact card
 
+    if (placeBelow) {
+      return Positioned(
+        top: belowTop,
+        left: 16,
+        right: 16,
+        child: _StepCard(
+          step: step,
+          current: _step,
+          total: widget.steps.length,
+          isLast: isLast,
+          onNext: _next,
+          onSkip: _dismiss,
+          maxHeight: roomBelow,
+        ),
+      );
+    }
+
+    final bottomPos = size.height - (c.dy - r - gap);
     return Positioned(
-      top: topPos,
+      bottom: bottomPos,
       left: 16,
       right: 16,
       child: _StepCard(
-        step: step, current: _step, total: widget.steps.length,
-        isLast: isLast, onNext: _next, onSkip: _dismiss,
+        step: step,
+        current: _step,
+        total: widget.steps.length,
+        isLast: isLast,
+        onNext: _next,
+        onSkip: _dismiss,
+        maxHeight: c.dy - r - gap - 16,
       ),
     );
   }
 
   Widget _buildCenteredCard(TutorialStep step, bool isLast) {
+    final size = MediaQuery.of(context).size;
+    final bottom = MediaQuery.of(context).padding.bottom;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 28),
         child: _StepCard(
-          step: step, current: _step, total: widget.steps.length,
-          isLast: isLast, onNext: _next, onSkip: _dismiss,
+          step: step,
+          current: _step,
+          total: widget.steps.length,
+          isLast: isLast,
+          onNext: _next,
+          onSkip: _dismiss,
           centered: true,
+          maxHeight: size.height - bottom - 64,
         ),
       ),
     );
@@ -304,6 +363,10 @@ class _StepCard extends StatelessWidget {
   final VoidCallback onNext;
   final VoidCallback onSkip;
 
+  /// Hard cap so the card can never push its button row off-screen — if the
+  /// title/body content doesn't fit, only that section scrolls internally.
+  final double maxHeight;
+
   const _StepCard({
     required this.step,
     required this.current,
@@ -311,115 +374,138 @@ class _StepCard extends StatelessWidget {
     required this.isLast,
     required this.onNext,
     required this.onSkip,
+    required this.maxHeight,
     this.centered = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.28),
-            blurRadius: 28,
-            offset: const Offset(0, 8),
-          ),
-        ],
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: maxHeight.clamp(120.0, double.infinity),
       ),
-      padding: EdgeInsets.fromLTRB(20, 20, 20, centered ? 24 : 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Emoji + progress dots
-          Row(
-            children: [
-              Text(step.emoji, style: const TextStyle(fontSize: 30)),
-              const Spacer(),
-              Row(
-                children: List.generate(total, (i) => AnimatedContainer(
-                  duration: const Duration(milliseconds: 260),
-                  margin: const EdgeInsets.only(left: 5),
-                  width: i == current ? 20 : 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: i == current
-                        ? GardenColors.primary
-                        : GardenColors.primary.withValues(alpha: 0.20),
-                    borderRadius: BorderRadius.circular(4),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.28),
+              blurRadius: 28,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        padding: EdgeInsets.fromLTRB(20, 20, 20, centered ? 24 : 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Emoji + progress dots
+            Row(
+              children: [
+                Text(step.emoji, style: const TextStyle(fontSize: 30)),
+                const Spacer(),
+                Row(
+                  children: List.generate(
+                    total,
+                    (i) => AnimatedContainer(
+                      duration: const Duration(milliseconds: 260),
+                      margin: const EdgeInsets.only(left: 5),
+                      width: i == current ? 20 : 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color:
+                            i == current
+                                ? GardenColors.primary
+                                : GardenColors.primary.withValues(alpha: 0.20),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
                   ),
-                )),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      step.title,
+                      style: const TextStyle(
+                        color: Color(0xFF111827),
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      step.body,
+                      style: const TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontSize: 13.5,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            step.title,
-            style: const TextStyle(
-              color: Color(0xFF111827),
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              height: 1.2,
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            step.body,
-            style: const TextStyle(
-              color: Color(0xFF6B7280),
-              fontSize: 13.5,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              if (!isLast)
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                if (!isLast)
+                  GestureDetector(
+                    onTap: onSkip,
+                    child: const Padding(
+                      padding: EdgeInsets.only(right: 8),
+                      child: Text(
+                        'Saltar',
+                        style: TextStyle(
+                          color: Color(0xFF9CA3AF),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                const Spacer(),
                 GestureDetector(
-                  onTap: onSkip,
-                  child: const Padding(
-                    padding: EdgeInsets.only(right: 8),
+                  onTap: onNext,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 11,
+                    ),
+                    decoration: BoxDecoration(
+                      color: GardenColors.primary,
+                      borderRadius: BorderRadius.circular(11),
+                      boxShadow: [
+                        BoxShadow(
+                          color: GardenColors.primary.withValues(alpha: 0.35),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
                     child: Text(
-                      'Saltar',
-                      style: TextStyle(
-                        color: Color(0xFF9CA3AF),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
+                      isLast ? '¡Entendido! ✓' : 'Siguiente →',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
                       ),
                     ),
                   ),
                 ),
-              const Spacer(),
-              GestureDetector(
-                onTap: onNext,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
-                  decoration: BoxDecoration(
-                    color: GardenColors.primary,
-                    borderRadius: BorderRadius.circular(11),
-                    boxShadow: [
-                      BoxShadow(
-                        color: GardenColors.primary.withValues(alpha: 0.35),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Text(
-                    isLast ? '¡Entendido! ✓' : 'Siguiente →',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

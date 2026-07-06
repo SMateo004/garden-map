@@ -410,12 +410,18 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
         update: profileData,
         create: { userId, ...profileData },
       });
+      // Es la misma persona/dirección física — si también tiene un perfil de
+      // cliente (dual-role), replica la dirección ahí para que no tenga que
+      // volver a escribirla al reservar un servicio como dueño de mascota.
+      // `update` (no upsert): no crear un clientProfile de la nada solo por esto.
+      await prisma.clientProfile.update({ where: { userId }, data: profileData }).catch(() => {});
     } else {
       await prisma.clientProfile.upsert({
         where: { userId },
         update: profileData,
         create: { userId, ...profileData },
       });
+      await prisma.caregiverProfile.update({ where: { userId }, data: profileData }).catch(() => {});
     }
   }
 
