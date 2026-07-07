@@ -131,6 +131,12 @@ router.get('/disputes', adminController.getDisputes);
 /** POST /api/admin/disputes/:bookingId/resolve-manual — resolución forzada, con contraseña. */
 router.post('/disputes/:bookingId/resolve-manual', adminController.resolveDisputeManual);
 
+/** POST /api/admin/bookings/:id/resolve-incident — reanuda el reloj tras una emergencia. */
+router.post('/bookings/:id/resolve-incident', adminController.resolveIncidentAdmin);
+
+/** GET /api/admin/bookings/:id/track — track GPS del paseo, sin restricción de ownership. */
+router.get('/bookings/:id/track', adminController.getBookingGpsTrackAdmin);
+
 // ── Owners ────────────────────────────────────────────────────────────────
 router.get('/owners', adminController.getOwnersList);
 router.get('/owners/:id', adminController.getOwnerDetail);

@@ -3458,10 +3458,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                         final rSvcType = r['serviceType'] as String? ?? '';
                         final isPaseo = rSvcType == 'PASEO';
                         final isGuarderia = rSvcType == 'GUARDERIA';
+                        final hasIncident = r['hasActiveIncident'] == true;
                         final date = (isPaseo || isGuarderia)
                             ? (r['walkDate'] ?? '—')
                             : '${r['startDate'] ?? '?'} – ${r['endDate'] ?? '?'}';
-                        return GestureDetector(
+                        return _PulsingIncidentBorder(
+                          active: hasIncident,
+                          child: GestureDetector(
                           onTap: () => context.push('/admin/reservations/${r['id']}'),
                           child: Container(
                             margin: const EdgeInsets.only(bottom: 10),
@@ -3469,11 +3472,23 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                             decoration: BoxDecoration(
                               color: surface,
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: borderColor),
+                              border: hasIncident ? null : Border.all(color: borderColor),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                if (hasIncident) ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                                      Icon(Icons.warning_amber_rounded, size: 14, color: GardenColors.error),
+                                      SizedBox(width: 5),
+                                      Text('EMERGENCIA ACTIVA', style: TextStyle(color: GardenColors.error, fontSize: 11, fontWeight: FontWeight.w800)),
+                                    ]),
+                                  ),
+                                  const SizedBox(height: 8),
+                                ],
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
@@ -3510,6 +3525,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                 ]),
                               ],
                             ),
+                          ),
                           ),
                         );
                       },
@@ -4624,6 +4640,54 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
         style: TextStyle(color: subtextColor, fontSize: 10, fontFamily: 'monospace'))),
     ]),
   );
+}
+
+/// Marco rojo que palpita alrededor de una reserva con emergencia activa —
+/// para que sea imposible pasarla por alto en la lista de Reservas.
+class _PulsingIncidentBorder extends StatefulWidget {
+  final bool active;
+  final Widget child;
+  const _PulsingIncidentBorder({required this.active, required this.child});
+
+  @override
+  State<_PulsingIncidentBorder> createState() => _PulsingIncidentBorderState();
+}
+
+class _PulsingIncidentBorderState extends State<_PulsingIncidentBorder> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+    _anim = Tween<double>(begin: 0.35, end: 1.0).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.active) return widget.child;
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (context, child) => Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: GardenColors.error.withValues(alpha: _anim.value), width: 2.5),
+          boxShadow: [
+            BoxShadow(color: GardenColors.error.withValues(alpha: _anim.value * 0.3), blurRadius: 10, spreadRadius: 1),
+          ],
+        ),
+        child: child,
+      ),
+      child: widget.child,
+    );
+  }
 }
 
 /// Small color + label legend dot used in dispute detail split bar.

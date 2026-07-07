@@ -1021,6 +1021,65 @@ export async function resolveDisputeManually(
 }
 
 // ---------------------------------------------------------------------------
+// Incidentes/emergencias en servicio activo
+// ---------------------------------------------------------------------------
+
+/** POST /api/admin/bookings/:id/resolve-incident — el admin también puede
+ *  resolver una emergencia (además del cuidador, desde su app) — lo que
+ *  llegue primero. Reanuda el reloj del servicio y avisa a ambas partes. */
+export async function resolveIncidentAdmin(
+  bookingId: string,
+  adminId: string
+): Promise<{ id: string; totalPausedMinutes: number }> {
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { caregiver: { select: { userId: true } } },
+  });
+  if (!booking) throw new NotFoundError('Reserva no encontrada');
+  if (!booking.pausedAt) throw new BadRequestError('Esta reserva no tiene ninguna emergencia activa');
+
+  const pausedMinutes = Math.round((Date.now() - booking.pausedAt.getTime()) / 60000);
+  const totalPausedMinutes = booking.totalPausedMinutes + pausedMinutes;
+
+  const events = (booking.serviceEvents as any[]) || [];
+  events.push({
+    type: 'INCIDENT_RESOLVED',
+    description: 'Emergencia marcada como resuelta por un administrador',
+    photoUrl: null,
+    videoUrl: null,
+    incidentType: null,
+    timestamp: new Date().toISOString(),
+  });
+
+  await prisma.booking.update({
+    where: { id: bookingId },
+    data: { pausedAt: null, totalPausedMinutes, serviceEvents: events },
+  });
+
+  await prisma.adminAction.create({
+    data: { adminId, actionType: 'INCIDENT_RESOLVED_ADMIN', targetId: bookingId, notes: `${pausedMinutes} min pausados` },
+  });
+
+  sendPushToUser(booking.clientId, '✅ Todo en orden', 'La novedad reportada durante el servicio ya fue resuelta. El servicio continúa con normalidad.').catch(() => {});
+  if (booking.caregiver?.userId) {
+    sendPushToUser(booking.caregiver.userId, '✅ Emergencia resuelta', 'Garden marcó la emergencia como resuelta. Puedes continuar o concluir el servicio.').catch(() => {});
+  }
+
+  logger.info('Admin: incidente resuelto', { bookingId, adminId, pausedMinutes });
+  return { id: bookingId, totalPausedMinutes };
+}
+
+/** GET /api/admin/bookings/:id/track — track GPS de un paseo, sin restricción
+ *  de ownership (a diferencia de getGpsTrack, que solo deja ver al cliente o
+ *  cuidador de esa reserva) — para que el admin pueda ubicar al cuidador en
+ *  tiempo real durante una emergencia. */
+export async function getBookingGpsTrackAdmin(bookingId: string): Promise<any[]> {
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+  if (!booking) throw new NotFoundError('Reserva no encontrada');
+  return (booking.serviceTrackingData as any[]) || [];
+}
+
+// ---------------------------------------------------------------------------
 // Pagos de extensión de paseo — aprobación/rechazo manual
 // ---------------------------------------------------------------------------
 
@@ -1278,6 +1337,7 @@ export async function getReservations(
     clientEmail: b.client?.email,
     donationAmount: Number(b.donationAmount ?? 0),
     walletPaymentAmount: Number(b.walletPaymentAmount ?? 0),
+    hasActiveIncident: b.pausedAt != null,
     caregiverName:
       b.caregiver?.user != null
         ? `${b.caregiver.user.firstName} ${b.caregiver.user.lastName}`.trim()
@@ -1363,6 +1423,8 @@ export async function getReservationDetail(bookingId: string) {
     serviceEndPhoto: booking.serviceEndPhoto,
     serviceTrackingData: booking.serviceTrackingData,
     serviceEvents: booking.serviceEvents,
+    pausedAt: booking.pausedAt?.toISOString() ?? null,
+    totalPausedMinutes: booking.totalPausedMinutes,
     // Pet
     petId: booking.petId,
     petName: booking.petName,

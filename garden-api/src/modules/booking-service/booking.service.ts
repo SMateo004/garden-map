@@ -3009,7 +3009,7 @@ export async function startService(bookingId: string, caregiverUserId: string, p
 }
 
 /** Allowed event types from caregiver during a service. */
-const ALLOWED_EVENT_TYPES = ['INCIDENT', 'ACCIDENT', 'ILLNESS', 'COMPLICATION', 'NOTE', 'PHOTO', 'WALK_UPDATE'] as const;
+const ALLOWED_EVENT_TYPES = ['INCIDENT', 'ACCIDENT', 'ILLNESS', 'COMPLICATION', 'NOTE', 'PHOTO', 'WALK_UPDATE', 'INCIDENT_RESOLVED'] as const;
 
 export async function addServiceEvent(
   bookingId: string,
@@ -3046,6 +3046,9 @@ export async function addServiceEvent(
   if (booking.status !== BookingStatus.IN_PROGRESS) {
     throw new BadRequestError('Solo se pueden agregar eventos a servicios en curso');
   }
+  if (type === 'INCIDENT_RESOLVED' && !booking.pausedAt) {
+    throw new BadRequestError('No hay ninguna emergencia activa que resolver en esta reserva');
+  }
 
   const events = (booking.serviceEvents as any[]) || [];
   events.push({
@@ -3057,24 +3060,49 @@ export async function addServiceEvent(
     timestamp: new Date().toISOString(),
   });
 
+  // Datos de pausa a persistir junto al evento — única excepción donde el
+  // tiempo del servicio se congela (ver calcOvertimeMinutes).
+  const pauseData: { pausedAt?: Date | null; totalPausedMinutes?: number } = {};
+  if ((type === 'INCIDENT' || type === 'ACCIDENT') && !booking.pausedAt) {
+    pauseData.pausedAt = new Date();
+  } else if (type === 'INCIDENT_RESOLVED' && booking.pausedAt) {
+    const pausedMinutes = Math.round((Date.now() - booking.pausedAt.getTime()) / 60000);
+    pauseData.pausedAt = null;
+    pauseData.totalPausedMinutes = booking.totalPausedMinutes + pausedMinutes;
+  }
+
   const updated = await prisma.booking.update({
     where: { id: bookingId },
-    data: { serviceEvents: events },
+    data: { serviceEvents: events, ...pauseData },
   });
 
-  // Si es un incidente o accidente, notificar al dueño en tiempo real
+  // Si es un incidente o accidente: notificar de URGENCIA al admin (quien
+  // debe actuar), y al dueño con lenguaje tranquilo — no queremos generar
+  // pánico en el dueño con algo que aún no sabemos qué tan grave es.
   if (type === 'INCIDENT' || type === 'ACCIDENT') {
     await prisma.notification.create({
       data: {
         userId: booking.clientId,
-        title: '⚠️ Tu cuidador reportó un incidente',
-        message: description || 'Tu cuidador ha reportado un incidente durante el servicio. El equipo GARDEN está al tanto.',
+        title: '🐾 Novedad con tu mascota',
+        message: description || 'Tu cuidador reportó una novedad durante el servicio. El equipo GARDEN ya está al tanto y acompañando la situación.',
         type: 'SERVICE_INCIDENT',
       },
     });
+    sendPushToUser(
+      booking.clientId,
+      '🐾 Novedad con tu mascota',
+      'Tu cuidador reportó algo durante el servicio y GARDEN ya está al tanto. Abre la app para ver los detalles.'
+    ).catch(() => {});
 
-    // Push notification urgente al dueño
-    await sendPushToUser(booking.clientId, '🚨 Emergencia durante el servicio', `${incidentType ? `[${incidentType}] ` : ''}${description}. Abre la app para contactar al cuidador.`);
+    // Admin: lenguaje urgente — es quien debe intervenir si hace falta.
+    await prisma.adminNotification.create({
+      data: { type: 'SERVICE_INCIDENT_URGENT', caregiverId: booking.caregiverId, bookingId: booking.id },
+    }).catch(() => {});
+    sendPushToAdmins(
+      '🚨 URGENTE: incidente en servicio activo',
+      `Reserva ${bookingId.slice(0, 8).toUpperCase()} — ${incidentType ? `[${incidentType}] ` : ''}${description}`.slice(0, 180),
+      { type: 'SERVICE_INCIDENT_URGENT', bookingId }
+    ).catch(() => {});
 
     // Emitir al booking room (si el dueño está en el chat o en la pantalla del servicio)
     const io = getIO();
@@ -3086,7 +3114,16 @@ export async function addServiceEvent(
       });
     }
 
-    logger.info('Incident reported and client notified', { bookingId, clientId: booking.clientId });
+    logger.info('Incident reported — admin notified urgently, client notified calmly, service timer paused', { bookingId, clientId: booking.clientId });
+  }
+
+  if (type === 'INCIDENT_RESOLVED') {
+    sendPushToUser(
+      booking.clientId,
+      '✅ Todo en orden',
+      'La novedad reportada durante el servicio ya fue resuelta. El servicio continúa con normalidad.'
+    ).catch(() => {});
+    logger.info('Incident resolved — service timer resumed', { bookingId, totalPausedMinutes: pauseData.totalPausedMinutes });
   }
 
   return bookingToResponse(updated);
@@ -3180,7 +3217,8 @@ export function calcOvertimeMinutes(
   serviceStartedAt: Date | null,
   duration: number | null,
   endDate: Date | null,
-  concludedAt: Date
+  concludedAt: Date,
+  pausedMinutes: number = 0
 ): number {
   const GRACE_MINUTES = 15;
 
@@ -3192,7 +3230,7 @@ export function calcOvertimeMinutes(
     // Usamos endDate + 24h como "inicio del día siguiente en UTC" — momento de checkout.
     const checkoutUTC = new Date(endDate.getTime() + 24 * 60 * 60 * 1000); // 00:00 UTC del día después
     const diffMs = concludedAt.getTime() - checkoutUTC.getTime();
-    const diffMins = Math.max(0, Math.floor(diffMs / 60_000));
+    const diffMins = Math.max(0, Math.floor(diffMs / 60_000) - pausedMinutes);
     return Math.max(0, diffMins - GRACE_MINUTES);
   }
 
@@ -3200,7 +3238,7 @@ export function calcOvertimeMinutes(
   if (!serviceStartedAt || !duration) return 0;
   const expectedEndMs = serviceStartedAt.getTime() + duration * 60_000;
   const diffMs = concludedAt.getTime() - expectedEndMs;
-  const diffMins = Math.max(0, Math.floor(diffMs / 60_000));
+  const diffMins = Math.max(0, Math.floor(diffMs / 60_000) - pausedMinutes);
   return Math.max(0, diffMins - GRACE_MINUTES);
 }
 
@@ -3292,12 +3330,18 @@ export async function concludeService(
     const overtimeClockEnd = booking.clientMarkedEndAt && booking.clientMarkedEndAt < concludedAt
       ? booking.clientMarkedEndAt
       : concludedAt;
+    // Si sigue pausado por una emergencia sin resolver al momento de concluir,
+    // ese tramo (desde que se pausó hasta ahora) tampoco cuenta como overtime.
+    const activePauseMinutes = booking.pausedAt
+      ? Math.max(0, Math.round((overtimeClockEnd.getTime() - booking.pausedAt.getTime()) / 60_000))
+      : 0;
     const overtimeMins = calcOvertimeMinutes(
       booking.serviceType,
       booking.serviceStartedAt,
       booking.duration,
       booking.endDate,
-      overtimeClockEnd
+      overtimeClockEnd,
+      booking.totalPausedMinutes + activePauseMinutes
     );
 
     let overtimeFeeGross = 0;

@@ -222,14 +222,17 @@ async function procesarRecordatoriosFinServicioSinMarcar() {
     select: {
       id: true, clientId: true, petName: true, serviceType: true,
       serviceStartedAt: true, duration: true, endDate: true,
-      lastEndReminderAt: true,
+      lastEndReminderAt: true, pausedAt: true, totalPausedMinutes: true,
       caregiver: { select: { userId: true } },
     },
   });
 
   for (const b of enCurso) {
     try {
-      const overtimeMins = calcOvertimeMinutes(b.serviceType, b.serviceStartedAt, b.duration, b.endDate, now);
+      // No molestar a nadie con "¿ya terminó?" mientras hay una emergencia
+      // activa sin resolver — el tiempo está congelado a propósito.
+      if (b.pausedAt) continue;
+      const overtimeMins = calcOvertimeMinutes(b.serviceType, b.serviceStartedAt, b.duration, b.endDate, now, b.totalPausedMinutes);
       if (overtimeMins <= 0) continue; // aún dentro del horario + gracia
 
       if (b.lastEndReminderAt && now.getTime() - b.lastEndReminderAt.getTime() < REMINDER_THROTTLE_MS) {

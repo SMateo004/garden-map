@@ -41,6 +41,7 @@ export interface AdminReservationItem {
   caregiverName?: string;
   donationAmount?: number;
   walletPaymentAmount?: number;
+  hasActiveIncident?: boolean;
 }
 
 export interface AdminReservationsResult {

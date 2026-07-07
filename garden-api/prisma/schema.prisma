@@ -306,6 +306,13 @@ model Booking {
   serviceTrackingData       Json?            @db.JsonB
   gpsDistance               Float?
   serviceEvents             Json?            @db.JsonB
+  /// Momento en que empezó la pausa actual por emergencia (INCIDENT/ACCIDENT
+  /// reportado por el cuidador) — null si no está pausado ahora mismo. Única
+  /// excepción donde el tiempo del servicio se congela (ver calcOvertimeMinutes).
+  pausedAt                  DateTime?
+  /// Minutos acumulados pausados durante toda la vida del booking (puede haber
+  /// más de una emergencia) — se resta del cálculo de overtime.
+  totalPausedMinutes        Int              @default(0)
   ownerRated                Boolean          @default(false)
   ownerRating               Int?
   ownerComment              String?          @db.Text

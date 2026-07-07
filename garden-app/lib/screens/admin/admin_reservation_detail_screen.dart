@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 
@@ -204,6 +207,49 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
         }
       } else {
         throw Exception(data['error']?['message'] ?? 'Error al reembolsar');
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error));
+    }
+  }
+
+  Future<void> _resolveIncident() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final isDark = themeNotifier.isDark;
+        final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+        final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+        return AlertDialog(
+          backgroundColor: surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('¿Resolver emergencia?', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 17)),
+          content: Text('Se reanudará el tiempo del servicio y se notificará al cuidador y al cliente que todo está en orden.',
+              style: TextStyle(color: textColor, fontSize: 13, height: 1.4)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: GardenColors.success),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Resolver'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirm != true) return;
+
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/admin/bookings/${widget.bookingId}/resolve-incident'),
+        headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] == true) {
+        await _load();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Emergencia resuelta — tiempo reanudado'), backgroundColor: GardenColors.success));
+      } else {
+        throw Exception(data['error']?['message'] ?? 'Error al resolver la emergencia');
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error));
@@ -653,6 +699,9 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
     final events = d['serviceEvents'] is List ? (d['serviceEvents'] as List) : null;
     final startPhoto = d['serviceStartPhoto'] as String?;
     final endPhoto = d['serviceEndPhoto'] as String?;
+    final isPaseo = d['serviceType'] == 'PASEO';
+    final isPaused = d['pausedAt'] != null;
+    final isServiceActive = startedAt != null && endedAt == null;
 
     Duration? serviceDuration;
     if (startedAt != null && endedAt != null) {
@@ -662,6 +711,53 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
     }
 
     return ListView(padding: const EdgeInsets.all(16), children: [
+
+      // Emergencia activa
+      if (isPaused) ...[
+        Container(
+          padding: const EdgeInsets.all(14),
+          margin: const EdgeInsets.only(bottom: 14),
+          decoration: BoxDecoration(
+            color: GardenColors.error.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: GardenColors.error, width: 1.5),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const Icon(Icons.warning_rounded, color: GardenColors.error),
+              const SizedBox(width: 8),
+              Expanded(child: Text('EMERGENCIA ACTIVA — tiempo del servicio pausado',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: GardenColors.error))),
+            ]),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error, foregroundColor: Colors.white),
+                onPressed: _resolveIncident,
+                icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                label: const Text('Resolver emergencia'),
+              ),
+            ),
+          ]),
+        ),
+      ],
+
+      // Mapa en tiempo real (solo paseos activos)
+      if (isPaseo && isServiceActive) ...[
+        _sectionTitle('UBICACIÓN EN TIEMPO REAL', Icons.map_rounded),
+        _card(surface, borderColor, child: SizedBox(
+          height: 260,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: _AdminLiveTrackMap(
+              bookingId: widget.bookingId,
+              token: _adminToken,
+              baseUrl: _baseUrl,
+            ),
+          ),
+        )),
+      ],
 
       // Tiempos
       _card(surface, borderColor, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1325,5 +1421,101 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
 
   void _snack(String msg) {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 1)));
+  }
+}
+
+/// Mapa de solo lectura para el admin: hace polling del track GPS del cuidador
+/// cada 5s vía GET /admin/bookings/:id/track (sin socket, no necesita mantener
+/// conexión abierta mientras el admin navega el panel).
+class _AdminLiveTrackMap extends StatefulWidget {
+  final String bookingId;
+  final String token;
+  final String baseUrl;
+
+  const _AdminLiveTrackMap({required this.bookingId, required this.token, required this.baseUrl});
+
+  @override
+  State<_AdminLiveTrackMap> createState() => _AdminLiveTrackMapState();
+}
+
+class _AdminLiveTrackMapState extends State<_AdminLiveTrackMap> {
+  final MapController _mapController = MapController();
+  List<LatLng> _track = [];
+  Timer? _pollTimer;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchTrack();
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _fetchTrack());
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchTrack() async {
+    try {
+      final res = await http.get(
+        Uri.parse('${widget.baseUrl}/admin/bookings/${widget.bookingId}/track'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] == true && mounted) {
+        final raw = data['data'] as List? ?? [];
+        final pts = raw
+            .whereType<Map>()
+            .map((p) => LatLng((p['lat'] as num).toDouble(), (p['lng'] as num).toDouble()))
+            .toList();
+        setState(() {
+          _track = pts;
+          _loading = false;
+          _error = null;
+        });
+        if (pts.isNotEmpty) {
+          try { _mapController.move(pts.last, _mapController.camera.zoom); } catch (_) {}
+        }
+      }
+    } catch (e) {
+      if (mounted) setState(() { _loading = false; _error = 'No se pudo cargar la ubicación'; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_track.isEmpty) {
+      return Center(
+        child: Text(_error ?? 'Aún no hay datos de ubicación para este paseo',
+            style: TextStyle(color: GardenColors.lightTextSecondary, fontSize: 12), textAlign: TextAlign.center),
+      );
+    }
+    final current = _track.last;
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(initialCenter: current, initialZoom: 16),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.garden.app',
+        ),
+        if (_track.length > 1)
+          PolylineLayer(polylines: [
+            Polyline(points: _track, strokeWidth: 4, color: GardenColors.primary),
+          ]),
+        MarkerLayer(markers: [
+          Marker(
+            point: current,
+            width: 40,
+            height: 40,
+            child: const Icon(Icons.pets_rounded, color: GardenColors.error, size: 34),
+          ),
+        ]),
+      ],
+    );
   }
 }

@@ -37,11 +37,15 @@ export async function procesarVencimientoPaseos() {
                 duration: true,
                 serviceEvents: true,
                 serviceStartedAt: true,
+                pausedAt: true,
             },
         });
 
         for (const booking of activos) {
             try {
+                // No avisar "se acaba tu tiempo" mientras hay una emergencia activa
+                // sin resolver — el reloj está congelado a propósito.
+                if (booking.pausedAt) continue;
                 // Calcular fin basado en serviceStartedAt real (más preciso que startTime)
                 let endTime: Date;
                 if (booking.serviceStartedAt) {

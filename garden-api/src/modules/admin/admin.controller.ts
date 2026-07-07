@@ -673,6 +673,25 @@ export const resolveDisputeManual = asyncHandler(async (req: Request, res: Respo
   res.json({ success: true, data: result });
 });
 
+/** POST /api/admin/bookings/:id/resolve-incident — reanuda el reloj del
+ *  servicio tras una emergencia. Sin contraseña (no mueve dinero, y la
+ *  velocidad importa más que la fricción en una emergencia real). */
+export const resolveIncidentAdmin = asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params.id!;
+  const adminId = req.user!.userId;
+  const result = await adminService.resolveIncidentAdmin(id, adminId);
+  res.json({ success: true, data: result });
+});
+
+/** GET /api/admin/bookings/:id/track — track GPS del paseo (sin restricción
+ *  de ownership) — para ubicar al cuidador en tiempo real durante una
+ *  emergencia u otra situación que lo requiera. */
+export const getBookingGpsTrackAdmin = asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params.id!;
+  const track = await adminService.getBookingGpsTrackAdmin(id);
+  res.json({ success: true, data: track });
+});
+
 // ─── Owners ──────────────────────────────────────────────────────────────────
 
 /** GET /api/admin/owners */

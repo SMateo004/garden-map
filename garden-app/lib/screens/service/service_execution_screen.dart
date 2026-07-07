@@ -2670,7 +2670,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.25),
+                            color: _isServicePaused
+                                ? GardenColors.error.withValues(alpha: 0.35)
+                                : Colors.black.withValues(alpha: 0.25),
                             borderRadius: BorderRadius.circular(GardenRadius.lg),
                             border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
                           ),
@@ -2685,7 +2687,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                 ),
                               ),
                               Text(
-                                isHospedaje ? 'cuidando' : 'en curso',
+                                _isServicePaused ? 'pausado' : (isHospedaje ? 'cuidando' : 'en curso'),
                                 style: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 10),
                               ),
                             ],
@@ -2706,6 +2708,45 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── Emergencia activa: tiempo pausado ────────────────────
+                  if (_isServicePaused) ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: GardenColors.error.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(GardenRadius.md),
+                        border: Border.all(color: GardenColors.error, width: 1.5),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.pause_circle_filled_rounded, color: GardenColors.error, size: 20),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Emergencia activa — el tiempo del servicio está pausado',
+                                  style: TextStyle(color: textColor, fontSize: 12.5, height: 1.4, fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error, foregroundColor: Colors.white),
+                              onPressed: _resolveIncidentCaregiver,
+                              icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                              label: const Text('Resolver emergencia'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
                   // ── Aviso: el dueño ya marcó el servicio como terminado ──
                   if (_booking?['clientMarkedEndAt'] != null) ...[
                     Container(
@@ -4080,6 +4121,58 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         ));
       }
     } catch (_) {}
+  }
+
+  bool get _isServicePaused => _booking?['pausedAt'] != null;
+
+  Future<void> _resolveIncidentCaregiver() async {
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/event'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({'type': 'INCIDENT_RESOLVED'}),
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] == true && mounted) {
+        setState(() {
+          if (_booking != null) _booking!['pausedAt'] = null;
+        });
+        _showResolvedChoiceDialog();
+      }
+    } catch (_) {}
+  }
+
+  void _showResolvedChoiceDialog() {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Emergencia resuelta', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 17)),
+        content: Text('El tiempo del servicio se reanudó. ¿Deseas continuar con el servicio o terminar la reserva ahora?',
+            style: TextStyle(color: subtextColor, fontSize: 13, height: 1.4)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Continuar servicio'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error, foregroundColor: Colors.white),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _showFinishConfirmation();
+            },
+            child: const Text('Terminar reserva'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<List<Map<String, dynamic>>> _fetchNearestVets() async {

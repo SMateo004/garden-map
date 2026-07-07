@@ -38,7 +38,12 @@ async function getMessaging(): Promise<any> {
  * Sends a push notification to a single FCM token.
  * Never throws — push is best-effort and must not block business logic.
  */
-export async function sendPush(fcmToken: string, title: string, body: string): Promise<void> {
+export async function sendPush(
+  fcmToken: string,
+  title: string,
+  body: string,
+  data?: Record<string, string>
+): Promise<void> {
   if (!fcmToken) return;
   const messaging = await getMessaging();
   if (!messaging) return;
@@ -47,6 +52,7 @@ export async function sendPush(fcmToken: string, title: string, body: string): P
     await messaging.send({
       token: fcmToken,
       notification: { title, body },
+      ...(data ? { data } : {}),
       android: {
         priority: 'high',
         notification: { sound: 'default', channelId: 'garden_main' },
@@ -83,7 +89,11 @@ export async function sendPushToUser(userId: string, title: string, body: string
  * Usado para alertas que requieren atención inmediata (ej. un pago quedó
  * pendiente de aprobación manual) — nunca bloquea el flujo que la dispara.
  */
-export async function sendPushToAdmins(title: string, body: string): Promise<void> {
+export async function sendPushToAdmins(
+  title: string,
+  body: string,
+  data?: Record<string, string>
+): Promise<void> {
   try {
     const admins = await prisma.user.findMany({
       where: { role: 'ADMIN', fcmToken: { not: null } },
@@ -93,7 +103,7 @@ export async function sendPushToAdmins(title: string, body: string): Promise<voi
       admins
         .map((a) => a.fcmToken)
         .filter((t): t is string => !!t)
-        .map((token) => sendPush(token, title, body))
+        .map((token) => sendPush(token, title, body, data))
     );
   } catch (err: any) {
     logger.warn('[FCM] sendPushToAdmins error', { error: err.message });

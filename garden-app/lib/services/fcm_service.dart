@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
+import 'package:audioplayers/audioplayers.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode, debugPrint;
 import 'package:go_router/go_router.dart';
@@ -50,6 +51,9 @@ class FcmService {
           body: notification.body ?? '',
         );
       }
+      if (message.data['type'] == 'SERVICE_INCIDENT_URGENT') {
+        _playEmergencyAlertSound();
+      }
     });
 
     // Tap en notificación con app en segundo plano
@@ -64,6 +68,17 @@ class FcmService {
 
     // Renovar token si cambia (reinstalación, etc.)
     _fcm.onTokenRefresh.listen((t) => _saveTokenToBackend(t));
+  }
+
+  /// Alarma sonora adicional para emergencias urgentes (incidente reportado
+  /// por un cuidador) — suena aunque el admin tenga la app abierta y no vea
+  /// la notificación del sistema. Silencioso si falta el asset.
+  static Future<void> _playEmergencyAlertSound() async {
+    try {
+      final player = AudioPlayer();
+      await player.play(AssetSource('sounds/emergency_alert.mp3'));
+      player.onPlayerComplete.first.then((_) => player.dispose());
+    } catch (_) {}
   }
 
   /// Navega a la pantalla correcta según el payload de la notificación.
