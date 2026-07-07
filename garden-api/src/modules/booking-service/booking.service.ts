@@ -21,7 +21,7 @@ import { track } from '../../shared/analytics.js';
 import { auditLog } from '../../services/audit.service.js';
 import * as notificationService from '../../services/notification.service.js';
 import { blockchainService } from '../../services/blockchain.service.js';
-import { sendPushToUser } from '../../services/firebase.service.js';
+import { sendPushToUser, sendPushToAdmins } from '../../services/firebase.service.js';
 import { getIO } from '../../services/socket.service.js';
 import * as sipService from '../../services/sip.service.js';
 import * as paymentQrService from '../../services/payment-qr.service.js';
@@ -1211,7 +1211,7 @@ export async function initPayment(
   walletDeducted?: number; remainingAmount?: number; paidWithWallet?: boolean;
 }> {
   const cfg = await getBookingSettings();
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const booking = await tx.booking.findFirst({
       where: { id: bookingId, clientId },
       select: {
@@ -1527,6 +1527,17 @@ export async function initPayment(
     });
     return { status: BookingStatus.PAYMENT_PENDING_APPROVAL, qrId: manualPaymentId };
   });
+
+  // Push fuera de la transacción — nunca debe alargar los locks de fila
+  // esperando una llamada de red a FCM, y sendPushToAdmins ya es fire-and-forget
+  // (nunca lanza), así que no bloquea la respuesta al cliente.
+  if (result.status === BookingStatus.PAYMENT_PENDING_APPROVAL) {
+    sendPushToAdmins(
+      '💳 Pago pendiente de aprobación',
+      `Reserva ${bookingId.slice(0, 8).toUpperCase()} necesita revisión manual.`
+    ).catch(() => {});
+  }
+  return result;
 }
 
 /**

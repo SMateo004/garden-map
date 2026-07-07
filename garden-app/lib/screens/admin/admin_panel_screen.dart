@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -47,6 +48,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   final TextEditingController _caregiverSearchCtrl = TextEditingController();
   final TextEditingController _reservationsSearchCtrl = TextEditingController();
   final TextEditingController _paymentsSearchCtrl = TextEditingController();
+  Timer? _paymentsRefreshTimer;
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
@@ -54,6 +56,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   void initState() {
     super.initState();
     _initAdmin();
+    // Pagos pendientes de aprobación manual deben verse sin que el admin
+    // tenga que refrescar la página — solo consulta mientras esa pestaña
+    // está activa, para no pegarle al backend de fondo sin necesidad.
+    _paymentsRefreshTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (_selectedTab == 3 && mounted) _loadPayments();
+    });
   }
 
   Future<void> _initAdmin() async {
@@ -72,6 +80,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
   @override
   void dispose() {
+    _paymentsRefreshTimer?.cancel();
     _caregiverSearchCtrl.dispose();
     _reservationsSearchCtrl.dispose();
     _paymentsSearchCtrl.dispose();
@@ -2326,6 +2335,20 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+
+          // ── Header + refrescar manual (además del auto-refresco cada 20s) ──
+          Row(children: [
+            Icon(Icons.price_check_rounded, color: GardenColors.primary, size: 20),
+            const SizedBox(width: 8),
+            Text('Pagos', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: _isLoadingPayments ? null : _loadPayments,
+              icon: Icon(Icons.refresh_rounded, size: 16, color: GardenColors.primary),
+              label: const Text('Actualizar', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700)),
+            ),
+          ]),
+          const SizedBox(height: 12),
 
           // ── KPI STATS ──────────────────────────────────────────
           if (_paymentsHistory.isNotEmpty) ...[

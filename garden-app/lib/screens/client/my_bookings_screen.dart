@@ -298,7 +298,12 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
-        if (mounted) context.push('/payment/$bookingId');
+        if (mounted) {
+          await context.push('/payment/$bookingId');
+          // Refresca siempre al volver (se canceló, se pagó, o no cambió
+          // nada) — más simple y seguro que confiar en el timer de 30s.
+          if (mounted) _loadBookings();
+        }
       } else {
         throw Exception(data['error']?['message'] ?? 'Error al continuar con el pago');
       }
@@ -791,20 +796,26 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                       label: 'Elegir nueva hora',
                       height: 36,
                       color: GardenColors.error,
-                      onPressed: () => context.push(
-                        '/slot-conflict/${booking['id']}',
-                        extra: {
-                          'serviceType': booking['serviceType'] ?? 'PASEO',
-                          'caregiverId': booking['caregiverId'] ?? '',
-                        },
-                      ),
+                      onPressed: () async {
+                        await context.push(
+                          '/slot-conflict/${booking['id']}',
+                          extra: {
+                            'serviceType': booking['serviceType'] ?? 'PASEO',
+                            'caregiverId': booking['caregiverId'] ?? '',
+                          },
+                        );
+                        if (mounted) _loadBookings();
+                      },
                     ),
                   if (status == 'PENDING_PAYMENT')
                     GardenButton(
                       label: _hasActiveQr(booking) ? 'Ver QR' : 'Pagar',
                       height: 36,
                       width: _hasActiveQr(booking) ? 90 : 80,
-                      onPressed: () => context.push('/payment/${booking['id']}'),
+                      onPressed: () async {
+                        await context.push('/payment/${booking['id']}');
+                        if (mounted) _loadBookings();
+                      },
                     ),
                 ],
               ),

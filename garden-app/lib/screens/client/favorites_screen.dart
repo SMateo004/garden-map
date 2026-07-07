@@ -122,7 +122,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     final profilePicture = c['profilePicture'] as String?;
 
     return GestureDetector(
-      onTap: () => context.push('/caregiver/${c['id']}'),
+      onTap: () async {
+        await context.push('/caregiver/${c['id']}');
+        if (mounted) _loadFavorites();
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
@@ -253,7 +256,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                         ),
                       ),
                       GestureDetector(
-                        onTap: () => context.push('/booking/${c['id']}'),
+                        onTap: () async {
+                          await context.push('/booking/${c['id']}');
+                          if (mounted) _loadFavorites();
+                        },
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                           decoration: BoxDecoration(

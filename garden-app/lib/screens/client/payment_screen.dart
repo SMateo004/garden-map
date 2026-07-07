@@ -506,7 +506,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
       if (confirm == true && mounted) {
         _stopPolling();
         await _cancelBooking();
-        if (mounted) context.go('/marketplace');
+        if (!mounted) return;
+        // pop(true) en vez de go('/marketplace'): así (a) se vuelve a donde
+        // el usuario realmente estaba (ej. "Mis Reservas"), no siempre al
+        // marketplace, y (b) el resultado le avisa a esa pantalla que debe
+        // refrescar — go() reemplaza todo el stack y nunca "completa" el
+        // push original, dejando la lista con el dato viejo (bug reportado:
+        // la reserva cancelada seguía apareciendo hasta refrescar a mano).
+        if (context.canPop()) {
+          context.pop(true);
+        } else {
+          context.go('/marketplace');
+        }
       }
     } else {
       // No hay QR activo — volver normalmente

@@ -77,3 +77,25 @@ export async function sendPushToUser(userId: string, title: string, body: string
     logger.warn('[FCM] sendPushToUser error', { userId, error: err.message });
   }
 }
+
+/**
+ * Notifica a TODOS los usuarios con rol ADMIN (los que tengan token registrado).
+ * Usado para alertas que requieren atención inmediata (ej. un pago quedó
+ * pendiente de aprobación manual) — nunca bloquea el flujo que la dispara.
+ */
+export async function sendPushToAdmins(title: string, body: string): Promise<void> {
+  try {
+    const admins = await prisma.user.findMany({
+      where: { role: 'ADMIN', fcmToken: { not: null } },
+      select: { fcmToken: true },
+    });
+    await Promise.all(
+      admins
+        .map((a) => a.fcmToken)
+        .filter((t): t is string => !!t)
+        .map((token) => sendPush(token, title, body))
+    );
+  } catch (err: any) {
+    logger.warn('[FCM] sendPushToAdmins error', { error: err.message });
+  }
+}
