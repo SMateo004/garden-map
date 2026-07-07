@@ -77,6 +77,7 @@ export interface BookingCreateResult {
   disputeReasons?: string[];
   meetAndGreet?: any;
   walletPaymentAmount?: number;
+  donationAmount?: number;
   serviceReport?: any;
   /** Mascotas #2 y #3 de una reserva multi-mascota (petIndex 2, 3) — la
    * mascota #1 ya viene en petName/petBreed/petAge/specialNeeds arriba.
@@ -150,6 +151,7 @@ export function bookingToResponse(b: any): BookingCreateResult {
     disputeReasons: b.dispute?.clientReasons ?? [],
     meetAndGreet: b.meetAndGreet ?? null,
     walletPaymentAmount: Number(b.walletPaymentAmount ?? 0),
+    donationAmount: Number(b.donationAmount ?? 0),
     serviceReport: b.serviceReport ?? null,
   };
 

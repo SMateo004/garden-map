@@ -13,6 +13,7 @@ import 'admin_technical_screen.dart';
 import 'admin_notifications_screen.dart';
 import 'admin_vets_screen.dart';
 import 'payment_qr_admin_screen.dart';
+import 'audit_screen.dart';
 import '../../services/auth_state.dart';
 
 class AdminPanelScreen extends StatefulWidget {
@@ -316,16 +317,78 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     } catch (e) { debugPrint(e.toString()); }
   }
 
+  /// Diálogo reutilizable de contraseña de admin — usado en cualquier acción
+  /// sensible (retiros, disputas, reembolsos) para exigir confirmación.
+  Future<String?> _askAdminPassword({required String title, required String message, Color dangerColor = GardenColors.error}) async {
+    final passwordController = TextEditingController();
+    bool obscure = true;
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          backgroundColor: surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 17)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message, style: TextStyle(color: dangerColor, fontSize: 13, height: 1.4)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                obscureText: obscure,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Tu contraseña de admin',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  suffixIcon: IconButton(
+                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () => setS(() => obscure = !obscure),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: dangerColor, foregroundColor: Colors.white),
+              onPressed: () {
+                if (passwordController.text.isEmpty) return;
+                Navigator.pop(ctx, passwordController.text);
+              },
+              child: const Text('Confirmar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _completeWithdrawal(String id) async {
+    final password = await _askAdminPassword(
+      title: '¿Completar retiro?',
+      message: 'Esto descuenta el saldo del cuidador de inmediato. Requiere tu contraseña.',
+      dangerColor: GardenColors.success,
+    );
+    if (password == null) return;
     try {
       final response = await http.patch(
         Uri.parse('$_baseUrl/admin/withdrawals/$id/complete'),
-        headers: {'Authorization': 'Bearer $_adminToken'},
+        headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'adminPassword': password}),
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         await _loadWithdrawals();
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Retiro completado exitosamente'), backgroundColor: GardenColors.success));
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error']?['message'] ?? 'Error'), backgroundColor: GardenColors.error));
       }
     } catch (e) { debugPrint(e.toString()); }
   }
@@ -352,20 +415,27 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       ),
     );
 
-    if (confirm == true) {
-      try {
-        final response = await http.patch(
-          Uri.parse('$_baseUrl/admin/withdrawals/$id/reject'),
-          headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
-          body: jsonEncode({'reason': reasonController.text.trim()}),
-        );
-        final data = jsonDecode(response.body);
-        if (data['success'] == true) {
-          await _loadWithdrawals();
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Retiro rechazado'), backgroundColor: GardenColors.error));
-        }
-      } catch (e) { debugPrint(e.toString()); }
-    }
+    if (confirm != true) return;
+    final password = await _askAdminPassword(
+      title: 'Confirma tu contraseña',
+      message: 'Rechazar este retiro requiere tu contraseña de admin.',
+    );
+    if (password == null) return;
+
+    try {
+      final response = await http.patch(
+        Uri.parse('$_baseUrl/admin/withdrawals/$id/reject'),
+        headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'reason': reasonController.text.trim(), 'adminPassword': password}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadWithdrawals();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Retiro rechazado'), backgroundColor: GardenColors.error));
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error']?['message'] ?? 'Error'), backgroundColor: GardenColors.error));
+      }
+    } catch (e) { debugPrint(e.toString()); }
   }
 
   Future<void> _reviewCaregiver(String id, String action, {bool force = false}) async {
@@ -591,8 +661,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       ),
     );
     if (confirm == true && reasonCtrl.text.trim().isNotEmpty) {
+      final password = await _askAdminPassword(
+        title: 'Confirma tu contraseña',
+        message: 'Suspender a este cuidador requiere tu contraseña de admin.',
+        dangerColor: GardenColors.warning,
+      );
+      if (password == null) return;
       try {
-        final response = await http.patch(Uri.parse('$_baseUrl/admin/caregivers/$id/suspend'), headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'}, body: jsonEncode({'reason': reasonCtrl.text.trim()}));
+        final response = await http.patch(Uri.parse('$_baseUrl/admin/caregivers/$id/suspend'), headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'}, body: jsonEncode({'reason': reasonCtrl.text.trim(), 'adminPassword': password}));
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
           await _loadCaregivers();
@@ -613,6 +689,106 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           ));
         }
       }
+    }
+  }
+
+  Future<void> _activateCaregiver(String id) async {
+    final password = await _askAdminPassword(
+      title: '¿Reactivar cuidador?',
+      message: 'El perfil vuelve a estar visible en el marketplace. Requiere tu contraseña.',
+      dangerColor: GardenColors.success,
+    );
+    if (password == null) return;
+    try {
+      final response = await http.patch(
+        Uri.parse('$_baseUrl/admin/caregivers/$id/activate'),
+        headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'adminPassword': password}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadCaregivers();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cuidador reactivado'), backgroundColor: GardenColors.success));
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error']?['message'] ?? 'Error al reactivar'), backgroundColor: GardenColors.error));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error de conexión: $e'), backgroundColor: GardenColors.error));
+    }
+  }
+
+  /// Auditoría visible (no solo en logs) — quién suspendió/reactivó a este
+  /// cuidador y cuándo, en un diálogo simple.
+  Future<void> _showCaregiverAuditLog(String id, String name) async {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    List<Map<String, dynamic>> entries = [];
+    String? error;
+    try {
+      final response = await http.get(Uri.parse('$_baseUrl/admin/caregivers/$id/audit-log'), headers: {'Authorization': 'Bearer $_adminToken'});
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        entries = (data['data'] as List).cast<Map<String, dynamic>>();
+      } else {
+        error = data['error']?['message'] ?? 'Error al cargar historial';
+      }
+    } catch (e) {
+      error = e.toString();
+    }
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Historial — $name', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
+        content: SizedBox(
+          width: 360,
+          child: error != null
+              ? Text(error, style: const TextStyle(color: GardenColors.error))
+              : entries.isEmpty
+                  ? const Text('Sin acciones registradas.')
+                  : SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: entries.map((e) {
+                          final action = e['actionType'] as String? ?? '';
+                          final label = action == 'CAREGIVER_SUSPEND'
+                              ? '🔴 Suspendido'
+                              : action == 'CAREGIVER_ACTIVATE'
+                                  ? '🟢 Reactivado'
+                                  : action == 'CAREGIVER_FLAG_REVIEW'
+                                      ? '🟠 Puesto en revisión'
+                                      : action;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
+                              Text('${e['adminName']} · ${_fmtAuditDate(e['createdAt'] as String?)}',
+                                  style: TextStyle(color: textColor.withValues(alpha: 0.6), fontSize: 11)),
+                              if ((e['notes'] as String?)?.isNotEmpty == true)
+                                Text(e['notes'] as String, style: TextStyle(color: textColor.withValues(alpha: 0.8), fontSize: 12)),
+                            ]),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar'))],
+      ),
+    );
+  }
+
+  String _fmtAuditDate(String? iso) {
+    if (iso == null) return '—';
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return iso;
     }
   }
 
@@ -846,6 +1022,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ('Banners', Icons.view_carousel_rounded),
     ('Feature Flags', Icons.flag_rounded),
     ('QR de Pago', Icons.qr_code_2_rounded),
+    ('Auditoría', Icons.fact_check_outlined),
   ];
 
   // Agrupación del sidebar web — cada grupo es (título, ícono, índices de _tabs).
@@ -854,7 +1031,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ('Finanzas', Icons.attach_money_rounded, [3, 6, 7, 15]),
     ('Personas', Icons.groups_outlined, [8, 9]),
     ('Comunicación', Icons.forum_outlined, [12, 13]),
-    ('Sistema', Icons.settings_outlined, [10, 11, 14]),
+    ('Sistema', Icons.settings_outlined, [10, 11, 14, 16]),
   ];
 
   Widget _buildIndexedStackBody(Color surface, Color textColor, Color subtextColor, Color borderColor) {
@@ -877,6 +1054,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         _buildBannersTab(surface, textColor, subtextColor, borderColor),
         _buildFeatureFlagsTab(surface, textColor, subtextColor, borderColor),
         PaymentQrAdminScreen(adminToken: _adminToken),
+        AuditScreen(adminToken: _adminToken),
       ],
     );
   }
@@ -1192,6 +1370,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     final status = caregiver['status'] as String? ?? '';
     final canReview = status == 'PENDING_REVIEW' || status == 'NEEDS_REVISION' || status == 'DRAFT';
     final isApproved = status == 'APPROVED';
+    final isSuspended = status == 'SUSPENDED';
     final isProfessional = caregiver['isProfessional'] == true;
 
     return Container(
@@ -1283,6 +1462,29 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     color: GardenColors.warning,
                     outline: true,
                     onPressed: () => _suspendCaregiver(caregiver['id'] as String),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ] else if (isSuspended) ...[
+                Expanded(
+                  child: GardenButton(
+                    label: 'Reactivar',
+                    icon: Icons.check_circle_outline,
+                    height: 38,
+                    color: GardenColors.success,
+                    outline: true,
+                    onPressed: () => _activateCaregiver(caregiver['id'] as String),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GardenButton(
+                    label: 'Historial',
+                    icon: Icons.history_rounded,
+                    height: 38,
+                    color: GardenColors.primary,
+                    outline: true,
+                    onPressed: () => _showCaregiverAuditLog(caregiver['id'] as String, '${caregiver['firstName'] ?? ''} ${caregiver['lastName'] ?? ''}'.trim()),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1756,6 +1958,31 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     );
   }
 
+  Future<void> _resolveDisputeManual(String bookingId, String verdict) async {
+    final password = await _askAdminPassword(
+      title: verdict == 'CAREGIVER_WINS' ? '¿Resolver a favor del cuidador?' : '¿Resolver a favor del dueño?',
+      message: 'Esto anula el veredicto del agente de IA y mueve el dinero de inmediato (pago al cuidador o reembolso al dueño). No se puede deshacer.',
+      dangerColor: verdict == 'CAREGIVER_WINS' ? GardenColors.success : GardenColors.error,
+    );
+    if (password == null) return;
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/admin/disputes/$bookingId/resolve-manual'),
+        headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'adminPassword': password, 'verdict': verdict}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadDisputes();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Disputa resuelta manualmente'), backgroundColor: GardenColors.success));
+      } else {
+        throw Exception(data['error']?['message'] ?? 'Error al resolver');
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error));
+    }
+  }
+
   Future<void> _showDisputeDetailSheet(Map<String, dynamic> d) async {
     final isDark = themeNotifier.isDark;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
@@ -1763,6 +1990,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
+    final status = d['status'] as String? ?? '';
     final verdict = d['aiVerdict'] as String?;
     final analysis = d['aiAnalysis'] as String?;
     final resolution = d['resolution'] as String?;
@@ -2006,6 +2234,46 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 )),
               ],
 
+              if (status != 'RESOLVED') ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: GardenColors.warning.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: GardenColors.warning.withValues(alpha: 0.3)),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      const Icon(Icons.gavel_rounded, size: 14, color: GardenColors.warning),
+                      const SizedBox(width: 6),
+                      Text('RESOLUCIÓN MANUAL FORZADA', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: GardenColors.warning, letterSpacing: 1)),
+                    ]),
+                    const SizedBox(height: 4),
+                    Text('Anula el veredicto del agente de IA. Requiere tu contraseña.', style: TextStyle(fontSize: 11, color: subtextColor)),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(side: const BorderSide(color: GardenColors.success), minimumSize: const Size(0, 40)),
+                        onPressed: () async {
+                          Navigator.pop(context);
+                          await _resolveDisputeManual(d['bookingId'] as String, 'CAREGIVER_WINS');
+                        },
+                        child: const Text('A favor del cuidador', style: TextStyle(color: GardenColors.success, fontSize: 12)),
+                      )),
+                      const SizedBox(width: 8),
+                      Expanded(child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(side: const BorderSide(color: GardenColors.error), minimumSize: const Size(0, 40)),
+                        onPressed: () async {
+                          Navigator.pop(context);
+                          await _resolveDisputeManual(d['bookingId'] as String, 'CLIENT_WINS');
+                        },
+                        child: const Text('A favor del dueño', style: TextStyle(color: GardenColors.error, fontSize: 12)),
+                      )),
+                    ]),
+                  ]),
+                ),
+              ],
               const SizedBox(height: 12),
               // Ver reserva
               OutlinedButton.icon(
@@ -2048,6 +2316,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     double revenueThisMonth = 0;
     final now = DateTime.now();
     for (final p in _paymentsHistory) {
+      // Reembolsado = ya no es ingreso real; se excluye del resumen para que
+      // el total cuadre con lo que Garden efectivamente conservó.
+      if (p['refundStatus'] == 'PROCESSED') continue;
       final amount = double.tryParse(p['totalAmount']?.toString() ?? '0') ?? 0;
       // commissionAmount = 10% del precio del cuidador (ya calculado en el backend al crear la reserva)
       // totalAmount = precioDelCuidador + commissionAmount
@@ -2249,6 +2520,21 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     const Text('Pagado', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: GardenColors.success)),
                   ]),
                 ),
+                if (p['refundStatus'] == 'PROCESSED') ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: GardenColors.error.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.replay_circle_filled_rounded, size: 10, color: GardenColors.error),
+                      SizedBox(width: 3),
+                      Text('Reembolsado', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: GardenColors.error)),
+                    ]),
+                  ),
+                ],
                 const Spacer(),
                 Text(dateStr, style: TextStyle(fontSize: 11, color: subtextColor)),
               ]),
@@ -3213,6 +3499,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                 _infoRow(Icons.supervisor_account_outlined, r['caregiverName'] ?? '—', subtextColor),
                                 _infoRow(Icons.calendar_today_outlined, date, subtextColor),
                                 _infoRow(Icons.attach_money_outlined, 'Bs ${r['totalAmount'] ?? '0'}', GardenColors.primary),
+                                if ((double.tryParse(r['donationAmount']?.toString() ?? '0') ?? 0) > 0)
+                                  _infoRow(Icons.favorite_outline, 'Donación: Bs ${r['donationAmount']}', Colors.amber.shade700),
+                                if ((double.tryParse(r['walletPaymentAmount']?.toString() ?? '0') ?? 0) > 0)
+                                  _infoRow(Icons.account_balance_wallet_outlined, 'Billetera: Bs ${r['walletPaymentAmount']}', GardenColors.primary),
                                 const SizedBox(height: 4),
                                 Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                                   Icon(Icons.chevron_right, size: 14, color: subtextColor),

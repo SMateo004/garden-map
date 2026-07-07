@@ -1,6 +1,7 @@
 import { BookingStatus, CaregiverStatus, Prisma, VerificationStatus } from '@prisma/client';
 import prisma from '../../config/database.js';
 import * as bookingService from '../booking-service/booking.service.js';
+import { applyResolution as applyDisputeResolution } from '../dispute/dispute.routes.js';
 import { BadRequestError, CaregiverNotFoundError, NotFoundError, UnauthorizedError } from '../../shared/errors.js';
 import * as caregiverProfileService from '../caregiver-profile/caregiver-profile.service.js';
 import { checkAndAutoSubmitProfile } from '../caregiver-profile/caregiver-profile-completion.helper.js';
@@ -793,6 +794,233 @@ export async function rejectPayment(bookingId: string, adminId: string): Promise
 }
 
 // ---------------------------------------------------------------------------
+// Control de casos especiales — aprobar pago (con contraseña + ventana 24h) y reembolso
+// ---------------------------------------------------------------------------
+
+export async function assertAdminPassword(adminId: string, adminPassword: string): Promise<void> {
+  const admin = await prisma.user.findUnique({ where: { id: adminId } });
+  if (!admin) throw new UnauthorizedError('Admin no encontrado');
+  const { comparePassword } = await import('../auth/auth.service.js');
+  const isValid = await comparePassword(adminPassword, admin.passwordHash);
+  if (!isValid) throw new UnauthorizedError('Contraseña de administrador incorrecta', 'INVALID_ADMIN_PASSWORD');
+}
+
+const APPROVAL_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** POST /api/admin/bookings/:id/approve-payment-secure — mismo efecto que approvePayment
+ *  (booking.controller aprueba directo, sin contraseña, desde la pestaña Pagos), pero
+ *  accesible también desde el detalle de la reserva, exige contraseña de admin, y solo
+ *  dentro de las 24h desde que el pago quedó pendiente de aprobación (control de casos
+ *  especiales — evita aprobar algo "viejo" sin refrescar el contexto primero). */
+export async function approvePaymentSecure(
+  bookingId: string,
+  adminId: string,
+  adminPassword: string
+): Promise<{ id: string; status: string }> {
+  await assertAdminPassword(adminId, adminPassword);
+
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+  if (!booking) throw new NotFoundError('Reserva no encontrada');
+  if (booking.status !== BookingStatus.PAYMENT_PENDING_APPROVAL && booking.status !== BookingStatus.PENDING_PAYMENT) {
+    throw new BadRequestError('La reserva no está en un estado válido para aprobación de pago');
+  }
+  if (!booking.paymentApprovalRequestedAt) {
+    throw new BadRequestError('Esta reserva no tiene una solicitud de pago con ventana de aprobación registrada.');
+  }
+  const elapsed = Date.now() - booking.paymentApprovalRequestedAt.getTime();
+  if (elapsed > APPROVAL_WINDOW_MS) {
+    throw new BadRequestError('La ventana de 24 horas para aprobar este pago ya expiró.');
+  }
+
+  const caregiverProfile = await prisma.caregiverProfile.findUnique({
+    where: { id: booking.caregiverId },
+    select: { userId: true },
+  });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.booking.update({
+      where: { id: bookingId },
+      data: { status: BookingStatus.WAITING_CAREGIVER_APPROVAL, paidAt: new Date() },
+    });
+    await tx.adminAction.create({
+      data: {
+        adminId,
+        actionType: 'APPROVE_PAYMENT_SECURE',
+        targetId: bookingId,
+        notes: `Pago aprobado (control de casos especiales, con contraseña) desde detalle de reserva. Booking ${bookingId} → WAITING_CAREGIVER_APPROVAL`,
+      },
+    });
+    if (caregiverProfile) {
+      await tx.notification.create({
+        data: {
+          userId: caregiverProfile.userId,
+          title: 'Nueva reserva confirmada',
+          message: 'El pago fue verificado. Tienes una nueva reserva esperando tu aceptación.',
+          type: 'NEW_BOOKING',
+        },
+      });
+    }
+  });
+
+  if (caregiverProfile) {
+    sendPushToUser(
+      caregiverProfile.userId,
+      'Nueva reserva confirmada',
+      'El pago fue verificado. Tienes una nueva reserva esperando tu aceptación.'
+    ).catch(() => {});
+  }
+
+  logger.info('Admin: pago aprobado (secure, con contraseña)', { bookingId, adminId });
+  return { id: bookingId, status: BookingStatus.WAITING_CAREGIVER_APPROVAL };
+}
+
+export type RefundDestination = 'WALLET' | 'COUPON' | 'MANUAL_TRANSACTION';
+
+/** POST /api/admin/bookings/:id/refund — reembolsa el precio del SERVICIO (no la
+ *  donación voluntaria, que no se revierte) al dueño, por el destino elegido, y
+ *  cancela la reserva (el dinero ya no corresponde a un servicio que va a ocurrir).
+ *  Exige contraseña de admin; se desactiva sola una vez refundStatus queda PROCESSED. */
+export async function refundBooking(
+  bookingId: string,
+  adminId: string,
+  adminPassword: string,
+  destination: RefundDestination
+): Promise<{ id: string; status: string; refundAmount: number; destination: RefundDestination; couponCode?: string }> {
+  await assertAdminPassword(adminId, adminPassword);
+
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+  if (!booking) throw new NotFoundError('Reserva no encontrada');
+  if (booking.status === BookingStatus.COMPLETED) {
+    throw new BadRequestError('No se puede reembolsar una reserva cuyo servicio ya se completó.');
+  }
+  if (booking.refundStatus === 'PROCESSED') {
+    throw new BadRequestError('Esta reserva ya fue reembolsada.');
+  }
+  // Refund = precio del servicio (totalAmount) — la donación voluntaria no se revierte.
+  const refundAmount = Number(booking.totalAmount);
+  if (refundAmount <= 0) {
+    throw new BadRequestError('Esta reserva no tiene un monto de servicio pagado para reembolsar.');
+  }
+
+  let couponCode: string | undefined;
+
+  await prisma.$transaction(async (tx) => {
+    if (destination === 'WALLET') {
+      const updatedUser = await tx.user.update({
+        where: { id: booking.clientId },
+        data: { balance: { increment: refundAmount } },
+        select: { balance: true },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          userId: booking.clientId,
+          type: 'REFUND',
+          amount: refundAmount,
+          balance: Number(updatedUser.balance),
+          description: `Reembolso admin — reserva ${bookingId.slice(0, 8)} (control de casos especiales)`,
+          bookingId,
+          status: 'COMPLETED',
+        },
+      });
+    } else if (destination === 'COUPON') {
+      couponCode = `REEMBOLSO-${bookingId.slice(0, 6).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+      await tx.giftCode.create({
+        data: {
+          code: couponCode,
+          amount: refundAmount,
+          maxUses: 1,
+        },
+      });
+    }
+    // MANUAL_TRANSACTION: sin movimiento de dinero en el sistema — el admin ya
+    // transfirió por fuera; esto solo deja la marca contable (refundStatus/refundAmount).
+
+    await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        refundStatus: 'PROCESSED',
+        refundAmount,
+        status: BookingStatus.CANCELLED,
+        cancelledAt: new Date(),
+        cancellationReason: `Reembolso procesado por admin (${destination === 'WALLET' ? 'billetera' : destination === 'COUPON' ? 'cupón' : 'transacción manual'})`,
+        cancellationSource: 'ADMIN_REFUND',
+      },
+    });
+
+    await tx.adminAction.create({
+      data: {
+        adminId,
+        actionType: 'REFUND_BOOKING',
+        targetId: bookingId,
+        notes: `Reembolso de Bs ${refundAmount.toFixed(2)} vía ${destination}${couponCode ? ` (código ${couponCode})` : ''}. Reserva cancelada.`,
+      },
+    });
+  });
+
+  const notifMessage = destination === 'WALLET'
+    ? `Se reembolsaron Bs ${refundAmount.toFixed(2)} a tu billetera Garden.`
+    : destination === 'COUPON'
+      ? `Tu reembolso de Bs ${refundAmount.toFixed(2)} está disponible como cupón: ${couponCode}.`
+      : `Tu reembolso de Bs ${refundAmount.toFixed(2)} fue procesado por transferencia.`;
+  prisma.notification.create({
+    data: { userId: booking.clientId, title: 'Reembolso procesado', message: notifMessage, type: 'PAYMENT' },
+  }).catch((err) => logger.warn('Failed to notify client of refund', { bookingId, err }));
+
+  logger.info('Admin: reembolso procesado', { bookingId, adminId, refundAmount, destination, couponCode });
+  return { id: bookingId, status: BookingStatus.CANCELLED, refundAmount, destination, couponCode };
+}
+
+/** POST /api/admin/disputes/:bookingId/resolve-manual — resolución manual forzada
+ *  (a favor de dueño o cuidador), para casos donde el agente de IA no decide claro
+ *  o el admin necesita anular el resultado. Reutiliza applyResolution() (mismo
+ *  código que usa la resolución automática) para que el efecto de dinero/estado
+ *  sea IDÉNTICO a un veredicto normal — solo cambia quién decide. Exige contraseña. */
+export async function resolveDisputeManually(
+  bookingId: string,
+  adminId: string,
+  adminPassword: string,
+  verdict: 'CLIENT_WINS' | 'CAREGIVER_WINS',
+  notes?: string
+): Promise<{ id: string; verdict: string }> {
+  await assertAdminPassword(adminId, adminPassword);
+
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId },
+    include: { caregiver: { include: { user: true } }, dispute: true } as any,
+  });
+  if (!booking) throw new NotFoundError('Reserva no encontrada');
+  if (!(booking as any).dispute) throw new BadRequestError('Esta reserva no tiene una disputa activa');
+  if ((booking as any).dispute.status === 'RESOLVED') throw new BadRequestError('Esta disputa ya fue resuelta');
+
+  const resolution = {
+    verdict,
+    analysis: `Resolución manual forzada por administración${notes ? `: ${notes}` : '.'}`,
+    recommendations: [],
+  };
+
+  try {
+    await applyDisputeResolution(bookingId, resolution, booking);
+  } catch (err: any) {
+    if (err.code === 'DISPUTE_ALREADY_RESOLVED') {
+      throw new BadRequestError('La disputa ya fue resuelta o el pago ya no está retenido');
+    }
+    throw err;
+  }
+
+  await prisma.adminAction.create({
+    data: {
+      adminId,
+      actionType: 'DISPUTE_RESOLVED_MANUAL',
+      targetId: bookingId,
+      notes: `Disputa resuelta manualmente: ${verdict}${notes ? ` — ${notes}` : ''}`,
+    },
+  });
+
+  logger.info('Admin: disputa resuelta manualmente', { bookingId, adminId, verdict });
+  return { id: bookingId, verdict };
+}
+
+// ---------------------------------------------------------------------------
 // Pagos de extensión de paseo — aprobación/rechazo manual
 // ---------------------------------------------------------------------------
 
@@ -1048,6 +1276,8 @@ export async function getReservations(
     caregiverId: b.caregiverId,
     createdAt: b.createdAt.toISOString(),
     clientEmail: b.client?.email,
+    donationAmount: Number(b.donationAmount ?? 0),
+    walletPaymentAmount: Number(b.walletPaymentAmount ?? 0),
     caregiverName:
       b.caregiver?.user != null
         ? `${b.caregiver.user.firstName} ${b.caregiver.user.lastName}`.trim()
@@ -1148,10 +1378,12 @@ export async function getReservationDetail(bookingId: string) {
     commissionPercent: 10,
     caregiverPayoutAmount: caregiverPayout,
     walletPaymentAmount: Number((booking as any).walletPaymentAmount ?? 0),
+    donationAmount: Number(booking.donationAmount ?? 0),
     paidAt: booking.paidAt?.toISOString() ?? null,
     paymentMethod: (booking as any).paymentMethod ?? null,
     payoutStatus: booking.payoutStatus,
     qrId: booking.qrId,
+    paymentApprovalRequestedAt: booking.paymentApprovalRequestedAt?.toISOString() ?? null,
     refundAmount: booking.refundAmount ? Number(booking.refundAmount) : null,
     refundStatus: booking.refundStatus,
     cancelledAt: booking.cancelledAt?.toISOString() ?? null,
@@ -1285,6 +1517,8 @@ export async function getPaymentsHistory(page = 1, limit = 50) {
         stripePaymentIntentId: true,
         payoutStatus: true,
         clientId: true,
+        refundStatus: true,
+        refundAmount: true,
         client: { select: { firstName: true, lastName: true, email: true } },
         caregiver: { include: { user: { select: { firstName: true, lastName: true } } } },
       },
@@ -1311,6 +1545,10 @@ export async function getPaymentsHistory(page = 1, limit = 50) {
       endDate: b.endDate?.toISOString() ?? null,
       walkDate: b.walkDate?.toISOString() ?? null,
       payoutStatus: b.payoutStatus,
+      // El admin necesita saber si esto fue reembolsado para no contarlo
+      // como ingreso real en el resumen financiero (ver admin_panel_screen.dart).
+      refundStatus: b.refundStatus,
+      refundAmount: b.refundAmount ? Number(b.refundAmount) : null,
       clientName: `${b.client.firstName} ${b.client.lastName}`,
       clientEmail: b.client.email,
       caregiverName: `${b.caregiver.user.firstName} ${b.caregiver.user.lastName}`,
@@ -1555,8 +1793,10 @@ export async function activateCaregiver(
     where: { id: profileId },
     data: {
       suspended: false,
-      suspendedAt: null,
-      suspensionReason: null,
+      // suspendedAt/suspensionReason YA NO se borran — se conservan como
+      // registro histórico de la última suspensión (auditoría visible en el
+      // detalle del cuidador, no solo en logs). El flag `suspended: false`
+      // ya es suficiente para saber que está activo hoy.
       status: CaregiverStatus.APPROVED, // Asumimos que vuelve a aprobado si se activa
     },
   });

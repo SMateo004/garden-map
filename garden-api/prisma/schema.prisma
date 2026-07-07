@@ -276,6 +276,10 @@ model Booking {
   qrId                      String?          @unique
   qrImageUrl                String?          @db.Text  // Base64 image from SIP or URL
   qrExpiresAt               DateTime?
+  /// Se marca cada vez que se genera un QR o se pide aprobación manual —
+  /// arranca la ventana de 24h en la que el admin puede usar "Aprobar pago"
+  /// desde el detalle de la reserva (control de casos especiales).
+  paymentApprovalRequestedAt DateTime?
   sipQrId                   String?          // idQr returned by SIP after generating QR
   sipTransaccionId          String?          // idTransaccion returned by SIP
   paidAt                    DateTime?

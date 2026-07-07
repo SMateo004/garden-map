@@ -39,6 +39,8 @@ export interface AdminReservationItem {
   createdAt: string;
   clientEmail?: string;
   caregiverName?: string;
+  donationAmount?: number;
+  walletPaymentAmount?: number;
 }
 
 export interface AdminReservationsResult {

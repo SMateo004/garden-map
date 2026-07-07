@@ -100,22 +100,52 @@ class _PaymentScreenState extends State<PaymentScreen> {
       return;
     }
 
-    // In params mode: no booking exists yet — only load wallet balance.
+    // Params mode: booking doesn't exist server-side yet. Create it NOW (not
+    // when the user presses "Generar QR de pago") so the real total is known
+    // immediately — the whole "Método de pago" section (billetera, donación,
+    // etc.) needs the actual price to mean anything, and it must be visible
+    // BEFORE the QR, since it's what determines the final amount the QR asks
+    // for. If the user backs out without paying, _handleBack cancels this
+    // booking automatically (see below) so it doesn't block the caregiver's
+    // calendar slot indefinitely.
     if (widget.bookingParams != null && widget.bookingId == null) {
       try {
-        final walletRes = await http.get(
-          Uri.parse('$_baseUrl/wallet'),
-          headers: {'Authorization': 'Bearer $_clientToken'},
-        );
-        final walletData = jsonDecode(walletRes.body);
-        if (walletData['success'] == true) {
+        final results = await Future.wait([
+          http.post(
+            Uri.parse('$_baseUrl/bookings'),
+            headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
+            body: jsonEncode(widget.bookingParams),
+          ),
+          http.get(Uri.parse('$_baseUrl/wallet'), headers: {'Authorization': 'Bearer $_clientToken'}),
+        ]);
+
+        final createData = jsonDecode(results[0].body);
+        if (results[0].statusCode != 201 || createData['success'] != true) {
+          final errors = (createData['errors'] as List?)?.map((e) => e['message'] as String).join(', ');
+          throw Exception(errors ?? createData['error']?['message'] ?? 'Error al crear la reserva');
+        }
+        final bk = createData['data'] as Map<String, dynamic>;
+        _bookingId = bk['id'] as String;
+
+        final walletData = jsonDecode(results[1].body);
+        if (mounted) {
           setState(() {
-            _walletBalance =
-                double.tryParse(walletData['data']?['balance']?.toString() ?? '0') ?? 0.0;
+            _booking = bk;
+            if (walletData['success'] == true) {
+              _walletBalance = double.tryParse(walletData['data']?['balance']?.toString() ?? '0') ?? 0.0;
+            }
             _walletLoaded = true;
           });
         }
-      } catch (_) {}
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: GardenColors.error,
+            duration: const Duration(seconds: 6),
+          ));
+        }
+      }
       if (mounted) setState(() => _isLoading = false);
       return;
     }
@@ -214,6 +244,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool get _walletCoversAll => _useWallet && _totalAmount > 0 && _walletBalance >= _totalAmount;
   double get _walletCoverage => _useWallet ? _walletBalance.clamp(0, _totalAmount) : 0.0;
   double get _remainingAfterWallet => (_totalAmount - _walletCoverage).clamp(0, double.infinity);
+
+  /// Monto real a pagar por QR — a diferencia de _remainingAfterWallet (que
+  /// depende de los toggles en pantalla, solo válidos MIENTRAS se elige el
+  /// método), esto sigue siendo correcto al retomar un QR ya generado en
+  /// otra sesión: en ese caso _donationAmount/_useWallet vuelven a su
+  /// default (0/false) porque nunca se restauran del servidor, así que se
+  /// usa el donationAmount YA PERSISTIDO en la reserva si existe.
+  double get _qrAmountToPay {
+    final persistedDonation = (_booking?['donationAmount'] as num?)?.toDouble();
+    final donation = (persistedDonation != null && persistedDonation > 0) ? persistedDonation : _donationAmount;
+    return (_serviceAmount + donation - _walletContributionUsed).clamp(0, double.infinity);
+  }
 
   // ── Payment ─────────────────────────────────────────────────────────────────
 
@@ -470,7 +512,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
   /// Called when user presses back while the QR is visible.
   /// Shows a confirmation dialog; on confirm cancels the booking and pops.
   Future<void> _handleBack() async {
-    if (_qrResponse != null && !_paymentConfirmed) {
+    // En modo "params" la reserva se crea apenas se entra a esta pantalla
+    // (para poder mostrar el monto real en "Método de pago" antes del QR) —
+    // por eso, a diferencia del modo normal (reserva ya existente, solo
+    // reintentando el pago desde "Mis Reservas"), aquí SIEMPRE hay que
+    // confirmar/cancelar al volver, incluso sin QR generado todavía, o
+    // quedaría una reserva huérfana bloqueando el horario del cuidador.
+    final bookingOwnedByThisScreen = widget.bookingParams != null && _bookingId != null;
+    if ((bookingOwnedByThisScreen || _qrResponse != null) && !_paymentConfirmed) {
       final isDark = themeNotifier.isDark;
       final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
       final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
@@ -654,11 +703,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
         if (_paymentRejected) return _buildRejectionScreen();
         if (_qrExpired) return _buildExpiredScreen();
 
-        // Intercept back ONLY when QR is being shown
+        // Intercept back when QR is being shown OR when this screen already
+        // created the booking itself (modo params) — same condition as
+        // _handleBack, so the system back gesture behaves the same as the
+        // AppBar's back button instead of silently discarding it.
+        final interceptBack = _qrResponse != null ||
+            (widget.bookingParams != null && _bookingId != null && !_paymentConfirmed);
         return PopScope(
-          canPop: _qrResponse == null,
+          canPop: !interceptBack,
           onPopInvokedWithResult: (didPop, _) {
-            if (!didPop && _qrResponse != null) _handleBack();
+            if (!didPop && interceptBack) _handleBack();
           },
           child: Scaffold(
             backgroundColor: bg,
@@ -671,7 +725,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               elevation: 0,
               leading: IconButton(
                 icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 20),
-                onPressed: _qrResponse != null ? _handleBack : () => context.pop(),
+                onPressed: interceptBack ? _handleBack : () => context.pop(),
               ),
             ),
             body: _buildPaymentBody(),
@@ -921,7 +975,46 @@ class _PaymentScreenState extends State<PaymentScreen> {
               style: TextStyle(
                   color: textColor, fontWeight: FontWeight.w900, fontSize: 24, letterSpacing: -0.5),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 16),
+
+            // ── Monto específico a transferir — como el QR es provisional
+            // (no bancario real), quien paga debe escribir el monto a mano
+            // en su app del banco; si no coincide exacto, el admin no puede
+            // verificar el pago automáticamente contra la reserva.
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                color: GardenColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                children: [
+                  Text('Monto a transferir',
+                      style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Text('Bs ${_qrAmountToPay.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                          color: GardenColors.primary, fontSize: 28, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.info_outline_rounded, size: 13, color: GardenColors.warning),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Coloca este monto exacto al transferir — un monto distinto puede retrasar la aprobación.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: subtextColor, fontSize: 11.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
 
             // ── QR image (wrapped for screenshot capture) ──────────────────
             RepaintBoundary(
@@ -1136,13 +1229,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Resumen',
-              style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 16),
-          summaryCard,
-          const SizedBox(height: 28),
-
-          if (_booking != null) ...[
+          // Toda esta sección (billetera, QR bancario, seguridad, donación)
+          // debe verse SIEMPRE antes de generar el QR — es lo que determina
+          // el monto final que se le pide al banco (servicio + donación −
+          // lo cubierto por billetera). Ya no depende de _booking != null
+          // porque ahora la reserva se crea al entrar a esta pantalla (ver
+          // _loadData), no al presionar el botón.
           Text('Método de pago',
               style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
@@ -1361,10 +1453,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
           // ── Donación voluntaria ─────────────────────────────────────────────
           _buildDonationSection(textColor, subtextColor, surface, borderColor),
-          const SizedBox(height: 20),
+          const SizedBox(height: 28),
 
-          ], // end if (_booking != null)
-          if (_booking == null) const SizedBox(height: 20),
+          // ── Resumen — ahora debajo de "Método de pago" para que primero se
+          // decida billetera/donación y recién después se vea el resumen final ──
+          Text('Resumen',
+              style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 16),
+          summaryCard,
+          const SizedBox(height: 20),
 
           GardenButton(
             label: _isSubmitting

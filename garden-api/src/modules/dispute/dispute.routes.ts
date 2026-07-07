@@ -377,7 +377,7 @@ Responde SOLO en este formato JSON exacto (sin texto adicional):
 // ---------------------------------------------------------------------------
 // Aplicar resolución automáticamente según las reglas definidas
 // ---------------------------------------------------------------------------
-async function applyResolution(bookingId: string, resolution: any, booking: any) {
+export async function applyResolution(bookingId: string, resolution: any, booking: any) {
   const totalAmount = Number(booking.totalAmount);
   const commission = Number(booking.commissionAmount ?? totalAmount * 0.10);
   const netAmount = totalAmount - commission; // 90% del total

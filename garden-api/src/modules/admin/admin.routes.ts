@@ -28,6 +28,9 @@ router.patch('/caregivers/:id/suspend', adminController.suspendCaregiver);
 /** PATCH /api/admin/caregivers/:id/activate — restore profile. */
 router.patch('/caregivers/:id/activate', adminController.activateCaregiver);
 
+/** GET /api/admin/caregivers/:id/audit-log — historial visible de suspensiones/reactivaciones. */
+router.get('/caregivers/:id/audit-log', adminController.getCaregiverAuditLog);
+
 /** PATCH /api/admin/caregivers/:id/flag-review — poner bajo revisión por actividad sospechosa. */
 router.patch('/caregivers/:id/flag-review', adminController.flagCaregiverForReview);
 
@@ -57,6 +60,12 @@ router.post('/bookings/:id/reject-payment', adminController.rejectPayment);
 
 /** POST /api/admin/bookings/:id/approve-payment — aprobar pago manual. */
 router.post('/bookings/:id/approve-payment', adminController.approvePayment);
+
+/** POST /api/admin/bookings/:id/approve-payment-secure — igual, con contraseña + ventana 24h. */
+router.post('/bookings/:id/approve-payment-secure', adminController.approvePaymentSecure);
+
+/** POST /api/admin/bookings/:id/refund — reembolsa el servicio y cancela la reserva. */
+router.post('/bookings/:id/refund', adminController.refundBooking);
 
 /** GET /api/admin/extension-payments-pending — extensiones de paseo pendientes de aprobación. */
 router.get('/extension-payments-pending', adminController.getExtensionPaymentsPending);
@@ -118,6 +127,9 @@ router.patch('/gift-codes/:id/toggle', adminController.toggleGiftCode);
 
 /** GET /api/admin/disputes — listar todas las disputas */
 router.get('/disputes', adminController.getDisputes);
+
+/** POST /api/admin/disputes/:bookingId/resolve-manual — resolución forzada, con contraseña. */
+router.post('/disputes/:bookingId/resolve-manual', adminController.resolveDisputeManual);
 
 // ── Owners ────────────────────────────────────────────────────────────────
 router.get('/owners', adminController.getOwnersList);

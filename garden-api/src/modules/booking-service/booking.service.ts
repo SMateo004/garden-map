@@ -1456,6 +1456,7 @@ export async function initPayment(
           sipTransaccionId: qrResult.sipTransaccionId ?? null,
           donationAmount: effectiveDonation > 0 ? effectiveDonation : null,
           debtRecoveryAmount: debtAmount,
+          paymentApprovalRequestedAt: new Date(),
         },
       });
       logger.info('Pago parcial con billetera + QR', { bookingId, clientId, walletContribution: effectiveWalletContribution, remainingAmount, effectiveDonation, debtAmount, qrMonto });
@@ -1485,6 +1486,7 @@ export async function initPayment(
           sipTransaccionId: qrResult.sipTransaccionId ?? null,
           donationAmount: effectiveDonation > 0 ? effectiveDonation : null,
           debtRecoveryAmount: debtAmount,
+          paymentApprovalRequestedAt: new Date(),
         },
       });
       logger.info('Pago QR iniciado', { bookingId, clientId, qrId: qrResult.qrId, totalAmount, effectiveDonation, debtAmount, qrMonto });
@@ -1503,7 +1505,8 @@ export async function initPayment(
       where: { id: bookingId },
       data: {
         status: BookingStatus.PAYMENT_PENDING_APPROVAL,
-        qrId: manualPaymentId
+        qrId: manualPaymentId,
+        paymentApprovalRequestedAt: new Date(),
       },
     });
     await tx.adminNotification.create({

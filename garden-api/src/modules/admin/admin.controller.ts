@@ -66,22 +66,57 @@ export const reviewCaregiver = asyncHandler(async (req: Request, res: Response) 
   res.json({ success: true, data: result });
 });
 
-/** PATCH /api/admin/caregivers/:id/suspend — suspend profile. */
+/** PATCH /api/admin/caregivers/:id/suspend — suspend profile. Requiere contraseña de admin. */
 export const suspendCaregiver = asyncHandler(async (req: Request, res: Response) => {
   const profileId = req.params.id!;
   const { reason } = suspendCaregiverSchema.parse(req.body);
+  const { adminPassword } = req.body as { adminPassword?: string };
+  if (!adminPassword) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_PASSWORD', message: 'Se requiere la contraseña de admin' } });
+  }
   const adminId = req.user!.userId;
+  await adminService.assertAdminPassword(adminId, adminPassword);
   const result = await adminService.suspendCaregiver(profileId, adminId, reason);
   res.json({ success: true, data: result });
 });
 
-/** PATCH /api/admin/caregivers/:id/activate — restore profile. */
+/** PATCH /api/admin/caregivers/:id/activate — restore profile. Requiere contraseña de admin. */
 export const activateCaregiver = asyncHandler(async (req: Request, res: Response) => {
   const profileId = req.params.id!;
   const { notes } = activateCaregiverSchema.parse(req.body);
+  const { adminPassword } = req.body as { adminPassword?: string };
+  if (!adminPassword) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_PASSWORD', message: 'Se requiere la contraseña de admin' } });
+  }
   const adminId = req.user!.userId;
+  await adminService.assertAdminPassword(adminId, adminPassword);
   const result = await adminService.activateCaregiver(profileId, adminId, notes);
   res.json({ success: true, data: result });
+});
+
+/** GET /api/admin/caregivers/:id/audit-log — historial visible de acciones admin sobre este cuidador
+ *  (suspensiones, reactivaciones, etc.) — antes solo vivía en logs, ahora se puede ver en su detalle. */
+export const getCaregiverAuditLog = asyncHandler(async (req: Request, res: Response) => {
+  const profileId = req.params.id!;
+  const actions = await prisma.adminAction.findMany({
+    where: { targetId: profileId, actionType: { in: ['CAREGIVER_SUSPEND', 'CAREGIVER_ACTIVATE', 'CAREGIVER_FLAG_REVIEW', 'CAREGIVER_DELETE'] } },
+    orderBy: { createdAt: 'desc' },
+  });
+  const adminIds = [...new Set(actions.map((a) => a.adminId))];
+  const admins = adminIds.length
+    ? await prisma.user.findMany({ where: { id: { in: adminIds } }, select: { id: true, firstName: true, lastName: true } })
+    : [];
+  const adminNameById = Object.fromEntries(admins.map((a) => [a.id, `${a.firstName} ${a.lastName}`.trim()]));
+  res.json({
+    success: true,
+    data: actions.map((a) => ({
+      id: a.id,
+      actionType: a.actionType,
+      notes: a.notes,
+      createdAt: a.createdAt.toISOString(),
+      adminName: adminNameById[a.adminId] ?? 'Admin',
+    })),
+  });
 });
 
 /** PATCH /api/admin/caregivers/:id/flag-review — poner perfil aprobado bajo revisión por actividad sospechosa. */
@@ -215,6 +250,38 @@ export const approvePayment = asyncHandler(async (req: Request, res: Response) =
   res.json({ success: true, data: { status: 'WAITING_CAREGIVER_APPROVAL' } });
 });
 
+/** POST /api/admin/bookings/:id/approve-payment-secure — igual que approve-payment,
+ *  pero exige contraseña de admin y solo dentro de la ventana de 24h. Control de
+ *  casos especiales desde el detalle de la reserva. */
+export const approvePaymentSecure = asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params.id!;
+  const adminId = req.user!.userId;
+  const { adminPassword } = req.body as { adminPassword?: string };
+  if (!adminPassword) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_PASSWORD', message: 'Se requiere la contraseña de admin' } });
+  }
+  const result = await adminService.approvePaymentSecure(id, adminId, adminPassword);
+  auditLog({ userId: adminId, action: 'PAYMENT_APPROVED_SECURE', entity: 'Booking', entityId: id, ip: req.ip });
+  res.json({ success: true, data: result });
+});
+
+/** POST /api/admin/bookings/:id/refund — reembolsa el precio del servicio (billetera,
+ *  cupón, o marca de transacción manual) y cancela la reserva. Exige contraseña admin. */
+export const refundBooking = asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params.id!;
+  const adminId = req.user!.userId;
+  const { adminPassword, destination } = req.body as { adminPassword?: string; destination?: string };
+  if (!adminPassword) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_PASSWORD', message: 'Se requiere la contraseña de admin' } });
+  }
+  if (!['WALLET', 'COUPON', 'MANUAL_TRANSACTION'].includes(destination ?? '')) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_DESTINATION', message: 'Destino de reembolso inválido' } });
+  }
+  const result = await adminService.refundBooking(id, adminId, adminPassword, destination as 'WALLET' | 'COUPON' | 'MANUAL_TRANSACTION');
+  auditLog({ userId: adminId, action: 'BOOKING_REFUNDED', entity: 'Booking', entityId: id, ip: req.ip });
+  res.json({ success: true, data: result });
+});
+
 /** GET /api/admin/extension-payments-pending — extensiones de paseo pendientes de aprobación */
 export const getExtensionPaymentsPending = asyncHandler(async (req: Request, res: Response) => {
   const result = await adminService.getExtensionPaymentsPending();
@@ -340,6 +407,11 @@ export const processWithdrawal = asyncHandler(async (req: Request, res: Response
 
 export const completeWithdrawal = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
+  const { adminPassword } = req.body as { adminPassword?: string };
+  if (!adminPassword) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_PASSWORD', message: 'Se requiere la contraseña de admin' } });
+  }
+  await adminService.assertAdminPassword(req.user!.userId, adminPassword);
 
   // Fast pre-check outside the transaction (avoids a DB round-trip on completed items)
   const txPre = await prisma.walletTransaction.findUnique({ where: { id } });
@@ -428,6 +500,11 @@ export const rejectWithdrawal = asyncHandler(async (req: Request, res: Response)
     return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.errors } });
   }
   const { reason } = parsed.data;
+  const { adminPassword } = req.body as { adminPassword?: string };
+  if (!adminPassword) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_PASSWORD', message: 'Se requiere la contraseña de admin' } });
+  }
+  await adminService.assertAdminPassword(req.user!.userId, adminPassword);
 
   const tx = await prisma.walletTransaction.findUnique({ where: { id } });
   if (!tx || tx.type !== 'WITHDRAWAL') {
@@ -578,6 +655,22 @@ export const getDisputes = asyncHandler(async (req: Request, res: Response) => {
       };
     }),
   });
+});
+
+/** POST /api/admin/disputes/:bookingId/resolve-manual — resolución forzada, con contraseña. */
+export const resolveDisputeManual = asyncHandler(async (req: Request, res: Response) => {
+  const { bookingId } = req.params;
+  const adminId = req.user!.userId;
+  const { adminPassword, verdict, notes } = req.body as { adminPassword?: string; verdict?: string; notes?: string };
+  if (!adminPassword) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_PASSWORD', message: 'Se requiere la contraseña de admin' } });
+  }
+  if (!['CLIENT_WINS', 'CAREGIVER_WINS'].includes(verdict ?? '')) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_VERDICT', message: 'Veredicto inválido' } });
+  }
+  const result = await adminService.resolveDisputeManually(bookingId!, adminId, adminPassword, verdict as 'CLIENT_WINS' | 'CAREGIVER_WINS', notes);
+  auditLog({ userId: adminId, action: 'DISPUTE_RESOLVED_MANUAL', entity: 'Dispute', entityId: bookingId, ip: req.ip });
+  res.json({ success: true, data: result });
 });
 
 // ─── Owners ──────────────────────────────────────────────────────────────────

@@ -60,6 +60,156 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
     }
   }
 
+  // ── Control de casos especiales: contraseña de admin ──────────────────────
+
+  /// Diálogo genérico que pide la contraseña de admin para confirmar una
+  /// acción sensible (reembolso, aprobación fuera del flujo normal). Devuelve
+  /// la contraseña ingresada, o null si el usuario canceló.
+  Future<String?> _askAdminPassword({required String title, required String message, required Color dangerColor}) async {
+    final passwordController = TextEditingController();
+    bool obscure = true;
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+
+    final password = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          backgroundColor: surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 17)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message, style: TextStyle(color: dangerColor, fontSize: 13, height: 1.4)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                obscureText: obscure,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Tu contraseña de admin',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  suffixIcon: IconButton(
+                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () => setS(() => obscure = !obscure),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: dangerColor, foregroundColor: Colors.white),
+              onPressed: () {
+                if (passwordController.text.isEmpty) return;
+                Navigator.pop(ctx, passwordController.text);
+              },
+              child: const Text('Confirmar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    return password;
+  }
+
+  Future<void> _approvePaymentSecure() async {
+    final password = await _askAdminPassword(
+      title: '¿Aprobar este pago?',
+      message: 'Esto confirma el pago manualmente y libera la reserva al cuidador. Requiere tu contraseña.',
+      dangerColor: GardenColors.success,
+    );
+    if (password == null) return;
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/admin/bookings/${widget.bookingId}/approve-payment-secure'),
+        headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'adminPassword': password}),
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] == true) {
+        await _load();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Pago aprobado'), backgroundColor: GardenColors.success));
+      } else {
+        throw Exception(data['error']?['message'] ?? 'Error al aprobar');
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error));
+    }
+  }
+
+  Future<void> _refundBooking() async {
+    final destination = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final isDark = themeNotifier.isDark;
+        final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+        final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+        return AlertDialog(
+          backgroundColor: surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('Reembolsar reserva', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 17)),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('Se reembolsa el precio del servicio (no la donación). La reserva se cancelará.',
+                style: TextStyle(color: GardenColors.warning, fontSize: 13, height: 1.4)),
+            const SizedBox(height: 12),
+            ListTile(
+              leading: const Icon(Icons.account_balance_wallet_rounded, color: GardenColors.primary),
+              title: const Text('A la billetera Garden'),
+              onTap: () => Navigator.pop(ctx, 'WALLET'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.card_giftcard_rounded, color: GardenColors.warning),
+              title: const Text('Como cupón'),
+              onTap: () => Navigator.pop(ctx, 'COUPON'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.sync_alt_rounded, color: GardenColors.success),
+              title: const Text('Ya transferí manualmente (solo registrar)'),
+              onTap: () => Navigator.pop(ctx, 'MANUAL_TRANSACTION'),
+            ),
+          ]),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar'))],
+        );
+      },
+    );
+    if (destination == null) return;
+
+    final password = await _askAdminPassword(
+      title: '¿Confirmar reembolso?',
+      message: 'Esta acción cancela la reserva y no se puede deshacer. Requiere tu contraseña.',
+      dangerColor: GardenColors.error,
+    );
+    if (password == null) return;
+
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/admin/bookings/${widget.bookingId}/refund'),
+        headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'adminPassword': password, 'destination': destination}),
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] == true) {
+        await _load();
+        final code = data['data']?['couponCode'] as String?;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(code != null ? '✅ Reembolso procesado — cupón: $code' : '✅ Reembolso procesado'),
+            backgroundColor: GardenColors.success,
+          ));
+        }
+      } else {
+        throw Exception(data['error']?['message'] ?? 'Error al reembolsar');
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -309,6 +459,72 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
     ]);
   }
 
+  /// Botones de control de casos especiales — "Aprobar pago" (contraseña +
+  /// ventana de 24h desde que se pidió la aprobación) y "Reembolso"
+  /// (contraseña, se desactiva solo una vez procesado). Ambos se ocultan si
+  /// el servicio ya se completó — a esa altura ya no son casos "especiales".
+  Widget _buildSpecialCaseControls(Color surface, Color textColor, Color subtextColor, Color borderColor) {
+    final d = _data!;
+    final status = d['status'] as String? ?? '';
+    if (status == 'COMPLETED') return const SizedBox.shrink();
+
+    final refundStatus = d['refundStatus'] as String?;
+    final alreadyRefunded = refundStatus == 'PROCESSED';
+
+    final approvalRequestedAtStr = d['paymentApprovalRequestedAt'] as String?;
+    final canShowApprove = status == 'PAYMENT_PENDING_APPROVAL' || status == 'PENDING_PAYMENT';
+    bool approveWithinWindow = false;
+    Duration? remaining;
+    if (canShowApprove && approvalRequestedAtStr != null) {
+      final requestedAt = DateTime.tryParse(approvalRequestedAtStr);
+      if (requestedAt != null) {
+        remaining = const Duration(hours: 24) - DateTime.now().difference(requestedAt);
+        approveWithinWindow = remaining > Duration.zero;
+      }
+    }
+
+    if (!canShowApprove && alreadyRefunded) return const SizedBox.shrink();
+
+    return _card(surface, borderColor, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Row(children: [
+        Icon(Icons.shield_outlined, size: 16, color: GardenColors.warning),
+        SizedBox(width: 6),
+        Text('CONTROL DE CASOS ESPECIALES', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: GardenColors.warning, letterSpacing: 1)),
+      ]),
+      const SizedBox(height: 4),
+      Text('Requieren tu contraseña de admin. Se ocultan cuando el servicio se completa.',
+          style: TextStyle(fontSize: 11, color: subtextColor)),
+      const SizedBox(height: 14),
+      if (canShowApprove) ...[
+        GardenButton(
+          label: approveWithinWindow
+              ? 'Aprobar pago (${remaining!.inHours}h ${remaining.inMinutes % 60}m restantes)'
+              : 'Aprobar pago (ventana de 24h expirada)',
+          icon: Icons.check_circle_outline_rounded,
+          color: GardenColors.success,
+          onPressed: approveWithinWindow ? _approvePaymentSecure : null,
+        ),
+        const SizedBox(height: 10),
+      ],
+      if (!alreadyRefunded)
+        GardenButton(
+          label: 'Reembolso',
+          icon: Icons.replay_circle_filled_outlined,
+          color: GardenColors.error,
+          outline: true,
+          onPressed: _refundBooking,
+        )
+      else
+        GardenButton(
+          label: 'Ya reembolsado',
+          icon: Icons.check_rounded,
+          color: GardenColors.success,
+          outline: true,
+          onPressed: null,
+        ),
+    ]));
+  }
+
   // ── TAB 2: PAGO ─────────────────────────────────────────────
   Widget _buildPaymentTab(Color surface, Color textColor, Color subtextColor, Color borderColor, Color bg) {
     final d = _data!;
@@ -393,6 +609,9 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
         if (d['refundAmount'] != null) _dataRow('Monto de reembolso', 'Bs ${(d['refundAmount'] as num).toStringAsFixed(2)}', textColor, GardenColors.warning),
         if (d['refundStatus'] != null) _dataRow('Estado reembolso', d['refundStatus'] as String, textColor, subtextColor),
       ])),
+
+      // ── Control de casos especiales (admin) ──────────────────────
+      _buildSpecialCaseControls(surface, textColor, subtextColor, borderColor),
 
       // Transacciones en billetera
       if (txs.isNotEmpty) ...[
