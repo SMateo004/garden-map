@@ -644,6 +644,12 @@ export const getDisputes = asyncHandler(async (req: Request, res: Response) => {
         aiRecommendations,
         resolution: d.resolution,
         discountCodeId: d.discountCodeId ?? null,
+        appealedBy: d.appealedBy ?? null,
+        appealReason: d.appealReason ?? null,
+        appealedAt: d.appealedAt ?? null,
+        appealResolution: d.appealResolution ?? null,
+        appealVerdict: d.appealVerdict ?? null,
+        appealResolvedAt: d.appealResolvedAt ?? null,
         createdAt: d.createdAt,
         updatedAt: d.updatedAt,
         clientName: `${d.booking.client.firstName} ${d.booking.client.lastName}`,
@@ -670,6 +676,53 @@ export const resolveDisputeManual = asyncHandler(async (req: Request, res: Respo
   }
   const result = await adminService.resolveDisputeManually(bookingId!, adminId, adminPassword, verdict as 'CLIENT_WINS' | 'CAREGIVER_WINS', notes);
   auditLog({ userId: adminId, action: 'DISPUTE_RESOLVED_MANUAL', entity: 'Dispute', entityId: bookingId, ip: req.ip });
+  res.json({ success: true, data: result });
+});
+
+/** GET /api/admin/disputes/appeals — disputas con status='APPEALED', pendientes de revisión humana. */
+export const getDisputeAppeals = asyncHandler(async (_req: Request, res: Response) => {
+  const data = await adminService.listDisputeAppeals();
+  res.json({ success: true, data });
+});
+
+/** POST /api/admin/disputes/:bookingId/resolve-appeal — decisión final de un admin humano sobre una apelación. */
+export const resolveDisputeAppeal = asyncHandler(async (req: Request, res: Response) => {
+  const { bookingId } = req.params;
+  const adminId = req.user!.userId;
+  const { verdict, resolution } = req.body as { verdict?: string; resolution?: string };
+  if (!['CLIENT_WINS', 'CAREGIVER_WINS', 'PARTIAL'].includes(verdict ?? '')) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_VERDICT', message: 'Veredicto inválido' } });
+  }
+  if (!resolution || typeof resolution !== 'string' || resolution.trim().length < 5) {
+    return res.status(400).json({ success: false, error: { message: 'Escribe la resolución de la apelación.' } });
+  }
+  const result = await adminService.resolveDisputeAppeal(bookingId!, adminId, verdict as 'CLIENT_WINS' | 'CAREGIVER_WINS' | 'PARTIAL', resolution);
+  auditLog({ userId: adminId, action: 'DISPUTE_APPEAL_RESOLVED', entity: 'Dispute', entityId: bookingId, ip: req.ip });
+  res.json({ success: true, data: result });
+});
+
+/** GET /api/admin/chat-reports — listado de reportes de chat, ?status= opcional. */
+export const getChatReports = asyncHandler(async (req: Request, res: Response) => {
+  const status = req.query.status as string | undefined;
+  const data = await adminService.listChatReports(status);
+  res.json({ success: true, data });
+});
+
+/** POST /api/admin/chat-reports/:id/resolve — resolver un reporte de chat (ACTION_TAKEN | DISMISSED). */
+export const resolveChatReport = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const adminId = req.user!.userId;
+  const { status, adminNotes, suspendUser } = req.body as { status?: string; adminNotes?: string; suspendUser?: boolean };
+
+  if (!['ACTION_TAKEN', 'DISMISSED'].includes(status ?? '')) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_STATUS', message: 'status inválido' } });
+  }
+  if (!adminNotes || typeof adminNotes !== 'string' || adminNotes.trim().length < 3) {
+    return res.status(400).json({ success: false, error: { message: 'Escribe una nota antes de resolver el reporte.' } });
+  }
+
+  const result = await adminService.resolveChatReport(id!, adminId, status as 'ACTION_TAKEN' | 'DISMISSED', adminNotes.trim(), !!suspendUser);
+  auditLog({ userId: adminId, action: 'CHAT_REPORT_RESOLVED', entity: 'ChatReport', entityId: id, details: { status }, ip: req.ip });
   res.json({ success: true, data: result });
 });
 
@@ -980,3 +1033,35 @@ export const uploadPaymentQrHandler = [
     res.json({ success: true, data: { serviceType, url } });
   }),
 ];
+
+// ── Verificación telefónica manual (fallback WhatsApp/SMS) ──────────────────
+
+/** GET /api/admin/phone-otp-requests — cuidadores que pidieron código y aún no verifican. */
+export const getPendingPhoneOtpRequests = asyncHandler(async (req: Request, res: Response) => {
+  const data = await adminService.listPendingPhoneOtpRequests();
+  res.json({ success: true, data });
+});
+
+/** POST /api/admin/phone-otp-requests/:userId/message — (re)genera el código y el mensaje listo para copiar. */
+export const generatePhoneOtpMessage = asyncHandler(async (req: Request, res: Response) => {
+  const { userId } = req.params;
+  const data = await adminService.generatePhoneOtpMessage(userId!);
+  auditLog({ userId: req.user!.userId, action: 'PHONE_OTP_MANUAL_MESSAGE_GENERATED', entity: 'User', entityId: userId, ip: req.ip });
+  res.json({ success: true, data });
+});
+
+// ── Verificación de correo manual (fallback — solo si Resend falla) ─────────
+
+/** GET /api/admin/email-otp-requests — usuarios a los que Resend no pudo enviarles el código. */
+export const getPendingEmailOtpRequests = asyncHandler(async (req: Request, res: Response) => {
+  const data = await adminService.listPendingEmailOtpRequests();
+  res.json({ success: true, data });
+});
+
+/** POST /api/admin/email-otp-requests/:userId/message — genera el código y el mensaje listo para copiar. */
+export const generateEmailOtpMessage = asyncHandler(async (req: Request, res: Response) => {
+  const { userId } = req.params;
+  const data = await adminService.generateEmailOtpMessage(userId!);
+  auditLog({ userId: req.user!.userId, action: 'EMAIL_OTP_MANUAL_MESSAGE_GENERATED', entity: 'User', entityId: userId, ip: req.ip });
+  res.json({ success: true, data });
+});

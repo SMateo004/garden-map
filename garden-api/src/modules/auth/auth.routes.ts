@@ -90,6 +90,25 @@ const passwordResetActionLimiter = rateLimit({
   message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados intentos. Espera 15 minutos.' } },
 });
 
+// 3 envíos de OTP por hora — previene spam de WhatsApp/SMS (cada envío tiene costo)
+const phoneOtpSendLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados envíos de código. Espera 1 hora.' } },
+});
+
+// 10 intentos de verificación por 15 min — evita fuerza bruta sobre el código de 6 dígitos
+const otpVerifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados intentos. Espera 15 minutos.' } },
+});
+
 // ── Rutas ────────────────────────────────────────────────────────────────────
 const router = Router();
 
@@ -114,7 +133,7 @@ router.post('/logout', authMiddleware, authController.logout);
 router.post('/send-verification-email', authMiddleware, emailCodeLimiter, authController.sendVerificationEmail);
 
 /** POST /api/auth/verify-email — body: { code }. Validates code, marks user verified. */
-router.post('/verify-email', authMiddleware, authController.verifyEmail);
+router.post('/verify-email', authMiddleware, otpVerifyLimiter, authController.verifyEmail);
 
 /** DELETE /api/auth/account — authenticated user deletes their own account */
 router.delete('/account', authMiddleware, authController.deleteAccount);
@@ -174,9 +193,9 @@ router.post('/forgot-password/set-password', passwordResetActionLimiter, authCon
 
 // ── Phone Verification (Twilio SMS OTP) ──────────────────────────────────────
 /** POST /api/auth/caregiver/send-phone-otp — Envía OTP de 6 dígitos al teléfono del usuario. */
-router.post('/caregiver/send-phone-otp', authMiddleware, authController.sendCaregiverPhoneOtp);
+router.post('/caregiver/send-phone-otp', authMiddleware, phoneOtpSendLimiter, authController.sendCaregiverPhoneOtp);
 
 /** POST /api/auth/caregiver/verify-phone — body: { code }. Verifica OTP y marca phoneVerified=true. */
-router.post('/caregiver/verify-phone', authMiddleware, authController.verifyCaregiverPhone);
+router.post('/caregiver/verify-phone', authMiddleware, otpVerifyLimiter, authController.verifyCaregiverPhone);
 
 export default router;

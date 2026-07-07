@@ -1,6 +1,8 @@
 /**
  * Notification service: real Resend emails for all booking events.
- * WhatsApp remains a placeholder pending Twilio integration.
+ * WhatsApp remains a placeholder for booking-event messages — the real
+ * WhatsApp Business Cloud API integration lives in otp-delivery.service.ts
+ * (used today for phone OTP only).
  */
 
 import prisma from '../config/database.js';
@@ -8,7 +10,8 @@ import logger from '../shared/logger.js';
 import { sendTransactionalEmail } from '../modules/auth/email.service.js';
 
 // ---------------------------------------------------------------------------
-// WhatsApp placeholder (Twilio integration TBD)
+// WhatsApp placeholder (booking-event notifications — not yet wired to a
+// real send; see otp-delivery.service.ts for the real WhatsApp integration)
 // ---------------------------------------------------------------------------
 
 export function sendWhatsAppPlaceholder(
@@ -599,7 +602,7 @@ export async function onCaregiverWelcome(userId: string): Promise<void> {
     <div style="background:#f9fafb;border-radius:10px;padding:16px;margin:0 0 24px;">
       <p style="color:#374151;font-weight:700;font-size:14px;margin:0 0 10px;">🆘 Soporte GARDEN</p>
       <p style="color:#555;font-size:14px;margin:0 0 4px;">
-        📱 WhatsApp: <a href="https://wa.me/59178081291" style="color:#16a34a;text-decoration:none;">+591 78081291</a>
+        📱 WhatsApp: <a href="https://wa.me/59175933133" style="color:#16a34a;text-decoration:none;">+591 75933133</a>
       </p>
       <p style="color:#555;font-size:14px;margin:0;">
         ✉️ Email: <a href="mailto:contactogardenbo@gmail.com" style="color:#16a34a;text-decoration:none;">contactogardenbo@gmail.com</a>

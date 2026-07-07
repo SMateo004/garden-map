@@ -76,3 +76,22 @@ export const getMyReviews = asyncHandler(async (req: Request, res: Response) => 
   });
   res.json({ success: true, data: reviews });
 });
+
+/** GET /api/client/my-donations — resumen de donaciones del cliente logueado
+ *  (tarjeta de "Donador" en el perfil — 100% simbólico/visual, pero con el
+ *  monto real acumulado en la tabla Donation). */
+export const getMyDonationsSummary = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const agg = await prisma.donation.aggregate({
+    where: { clientId: userId },
+    _sum: { amount: true },
+    _count: { _all: true },
+  });
+  res.json({
+    success: true,
+    data: {
+      totalAmount: Number(agg._sum.amount ?? 0),
+      count: agg._count._all,
+    },
+  });
+});

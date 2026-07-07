@@ -42,6 +42,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Map<String, dynamic>? _mg;
   bool _mgLoading = false;
 
+  // Bloqueo/reporte de chat
+  String? _otherPersonId;
+  bool _iBlockedThem = false;
+  bool _theyBlockedMe = false;
+  bool _sendBlockedByServer = false; // se activa si un envío devuelve 403 USER_BLOCKED
+
   String get _baseUrl => const String.fromEnvironment(
     'API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
@@ -97,12 +103,31 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     await _chatService!.loadHistory(widget.bookingId);
     await _loadMG();
+    await _loadOtherParticipant();
 
     if (!mounted) return;
 
     _chatService!.markRead(widget.bookingId);
     setState(() => _initialized = true);
     _scrollToBottom();
+  }
+
+  Future<void> _loadOtherParticipant() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/chat/${widget.bookingId}/other-participant'),
+        headers: {'Authorization': 'Bearer $_token'},
+      );
+      final data = jsonDecode(response.body);
+      if (mounted && data['success'] == true) {
+        final d = data['data'] as Map<String, dynamic>;
+        setState(() {
+          _otherPersonId = d['userId'] as String?;
+          _iBlockedThem = d['blockedByMe'] as bool? ?? false;
+          _theyBlockedMe = d['blockedMe'] as bool? ?? false;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadMG() async {
@@ -439,9 +464,194 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       // de reintentar salvo volver a escribirlo de memoria.
       _messageController.text = text;
       _messageController.selection = TextSelection.collapsed(offset: text.length);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo enviar el mensaje. Revisa tu conexión e intenta de nuevo.')),
+      if (_chatService?.blockedError == true) {
+        setState(() => _sendBlockedByServer = true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo enviar el mensaje. Revisa tu conexión e intenta de nuevo.')),
+        );
+      }
+    }
+  }
+
+  bool get _conversationBlocked => _iBlockedThem || _theyBlockedMe || _sendBlockedByServer;
+
+  Future<void> _confirmBlockUser() async {
+    if (_otherPersonId == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => GardenGlassDialog(
+        title: Text('¿Bloquear a ${widget.otherPersonName}?'),
+        content: Text('Ya no podrá enviarte mensajes en esta conversación. Puedes desbloquearlo más tarde desde tu perfil.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Bloquear', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/chat/block'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({'userId': _otherPersonId}),
       );
+      final data = jsonDecode(response.body);
+      if (mounted && data['success'] == true) {
+        setState(() => _iBlockedThem = true);
+        GardenSnackBar.success(context, '${widget.otherPersonName} ha sido bloqueado.');
+      } else if (mounted) {
+        GardenSnackBar.error(context, 'No se pudo bloquear al usuario.');
+      }
+    } catch (_) {
+      if (mounted) GardenSnackBar.error(context, 'No se pudo bloquear al usuario.');
+    }
+  }
+
+  Future<void> _showReportSheet() async {
+    if (_otherPersonId == null) return;
+    const reasons = <String, String>{
+      'HARASSMENT': 'Acoso',
+      'INAPPROPRIATE_CONTENT': 'Contenido inapropiado',
+      'SPAM': 'Spam',
+      'SCAM_OR_FRAUD': 'Estafa o fraude',
+      'THREATS': 'Amenazas',
+      'OTHER': 'Otro',
+    };
+    String? selectedReason;
+    final detailsCtrl = TextEditingController();
+    bool submitting = false;
+
+    final submitted = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = themeNotifier.isDark;
+        return StatefulBuilder(builder: (ctx, setSheet) {
+          final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+          final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+          final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+          final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(
+                    color: borderColor, borderRadius: BorderRadius.circular(2)))),
+                  const SizedBox(height: 16),
+                  Text('Reportar a ${widget.otherPersonName}', style: TextStyle(color: textColor, fontSize: 17, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text('Nuestro equipo revisará esta conversación.', style: TextStyle(color: subtextColor, fontSize: 13)),
+                  const SizedBox(height: 16),
+                  ...reasons.entries.map((e) => RadioListTile<String>(
+                        value: e.key,
+                        groupValue: selectedReason,
+                        onChanged: (v) => setSheet(() => selectedReason = v),
+                        activeColor: GardenColors.primary,
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        title: Text(e.value, style: TextStyle(color: textColor, fontSize: 14)),
+                      )),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: detailsCtrl,
+                    style: TextStyle(color: textColor, fontSize: 14),
+                    maxLines: 3,
+                    maxLength: 2000,
+                    decoration: InputDecoration(
+                      hintText: 'Detalles adicionales (opcional)',
+                      hintStyle: TextStyle(color: subtextColor, fontSize: 13),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: GardenColors.error,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onPressed: (selectedReason == null || submitting) ? null : () async {
+                        setSheet(() => submitting = true);
+                        try {
+                          final response = await http.post(
+                            Uri.parse('$_baseUrl/chat/report'),
+                            headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+                            body: jsonEncode({
+                              'bookingId': widget.bookingId,
+                              'reason': selectedReason,
+                              if (detailsCtrl.text.trim().isNotEmpty) 'details': detailsCtrl.text.trim(),
+                            }),
+                          );
+                          final data = jsonDecode(response.body);
+                          if (data['success'] == true) {
+                            Navigator.pop(ctx, true);
+                          } else {
+                            setSheet(() => submitting = false);
+                            if (ctx.mounted) {
+                              GardenSnackBar.error(ctx, data['error']?['message'] ?? 'No se pudo enviar el reporte.');
+                            }
+                          }
+                        } catch (_) {
+                          setSheet(() => submitting = false);
+                          if (ctx.mounted) GardenSnackBar.error(ctx, 'No se pudo enviar el reporte.');
+                        }
+                      },
+                      child: submitting
+                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Text('Enviar reporte', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        });
+      },
+    );
+
+    detailsCtrl.dispose();
+
+    if (submitted == true && mounted) {
+      GardenSnackBar.success(context, 'Reporte enviado — nuestro equipo lo revisará.');
+      // Ofrecer bloquear también, como acción relacionada pero separada.
+      final wantsBlock = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => GardenGlassDialog(
+          title: const Text('¿También quieres bloquear a esta persona?'),
+          content: Text('${widget.otherPersonName} ya no podrá enviarte mensajes si la bloqueas.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No, gracias')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Bloquear', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+      if (wantsBlock == true) {
+        await _confirmBlockUser();
+      }
     }
   }
 
@@ -520,6 +730,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 ),
               ],
             ),
+            actions: [
+              if (_otherPersonId != null)
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_vert, color: textColor),
+                  onSelected: (value) {
+                    if (value == 'report') _showReportSheet();
+                    if (value == 'block') _confirmBlockUser();
+                  },
+                  itemBuilder: (ctx) => [
+                    const PopupMenuItem(value: 'report', child: Text('Reportar')),
+                    if (!_iBlockedThem)
+                      PopupMenuItem(value: 'block', child: Text('Bloquear a ${widget.otherPersonName}')),
+                  ],
+                ),
+            ],
           ),
           body: !_initialized
             ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
@@ -550,6 +775,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                 ]),
                               ],
                             )),
+                            if (_otherPersonId != null)
+                              PopupMenuButton<String>(
+                                icon: Icon(Icons.more_vert, color: textColor, size: 18),
+                                onSelected: (value) {
+                                  if (value == 'report') _showReportSheet();
+                                  if (value == 'block') _confirmBlockUser();
+                                },
+                                itemBuilder: (ctx) => [
+                                  const PopupMenuItem(value: 'report', child: Text('Reportar')),
+                                  if (!_iBlockedThem)
+                                    PopupMenuItem(value: 'block', child: Text('Bloquear a ${widget.otherPersonName}')),
+                                ],
+                              ),
                           ],
                         ),
                       ),
@@ -618,7 +856,31 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         ),
                       ),
                     ),
-                  // Input de mensaje
+                  // Input de mensaje — o aviso de conversación bloqueada
+                  if (_conversationBlocked)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+                      decoration: BoxDecoration(
+                        color: surface,
+                        border: Border(top: BorderSide(color: borderColor)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.block_rounded, color: subtextColor, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _iBlockedThem
+                                  ? 'Has bloqueado a esta persona.'
+                                  : 'No puedes enviar mensajes en esta conversación.',
+                              style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
                   Container(
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
                     decoration: BoxDecoration(

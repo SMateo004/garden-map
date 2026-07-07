@@ -317,8 +317,54 @@ class _WebShellScreenState extends State<WebShellScreen> {
             ),
           ),
           body: _buildBody(),
+          bottomNavigationBar: _HelpFooterBar(isDark: isDark),
         );
       },
+    );
+  }
+}
+
+/// Pie de página fijo con acceso al Centro de Ayuda — visible en todas las
+/// pestañas de la web app (Marketplace, Reservas, Mascotas), tanto para
+/// visitantes públicos como para usuarios logueados.
+class _HelpFooterBar extends StatelessWidget {
+  final bool isDark;
+  const _HelpFooterBar({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final textColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        border: Border(top: BorderSide(color: borderColor, width: 1)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+          child: Row(
+            children: [
+              Text(
+                '© ${DateTime.now().year} Garden Bolivia',
+                style: TextStyle(color: textColor, fontSize: 12),
+              ),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: () => context.push('/help-center'),
+                icon: const Icon(Icons.help_outline_rounded, size: 18, color: GardenColors.primary),
+                label: const Text(
+                  'Centro de Ayuda',
+                  style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

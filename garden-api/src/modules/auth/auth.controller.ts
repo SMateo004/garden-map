@@ -309,8 +309,31 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 export const sendVerificationEmail = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const emailService = await import('./email.service.js');
-  const result = await emailService.generateAndSendVerificationCode(userId);
-  res.json({ success: true, data: result });
+  try {
+    const result = await emailService.generateAndSendVerificationCode(userId);
+    res.json({ success: true, data: result });
+  } catch (err) {
+    // Resend realmente falló (EMAIL_SEND_FAILED) — a diferencia del teléfono,
+    // aquí SOLO notificamos al admin cuando el envío automático de verdad
+    // falla, no en cada solicitud (Resend es confiable la gran mayoría de
+    // las veces). Ver admin.service.ts listPendingEmailOtpRequests().
+    if ((err as any)?.code === 'EMAIL_SEND_FAILED') {
+      try {
+        await prisma.adminNotification.create({
+          data: { type: 'EMAIL_OTP_MANUAL_HELP', caregiverId: userId },
+        });
+        const { sendPushToAdmins } = await import('../../services/firebase.service.js');
+        sendPushToAdmins(
+          '📧 Falló el envío de código por correo',
+          'Resend no pudo entregar un código de verificación de email. Revisa el panel para enviarlo manualmente.',
+          { type: 'EMAIL_OTP_MANUAL_HELP', userId }
+        ).catch(() => {});
+      } catch (_) {
+        // No bloquea la respuesta de error al usuario si falla la notificación al admin
+      }
+    }
+    throw err;
+  }
 });
 
 /** POST /api/auth/verify-email — body: { code }. Validate code, mark user + caregiver email verified. */
@@ -882,26 +905,38 @@ export const sendCaregiverPhoneOtp = asyncHandler(async (req: Request, res: Resp
 
   const toPhone = user.phone.startsWith('+') ? user.phone : `+591${user.phone}`;
 
-  // Enviar por Twilio Verify usando nuestro propio código (customCode).
-  // Si Twilio falla, el código sigue guardado en BD — soporte puede darlo manualmente.
-  const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_VERIFY_SERVICE_SID } = await import('../../config/env.js').then(m => m.env);
-  if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_VERIFY_SERVICE_SID) {
-    try {
-      const { default: twilio } = await import('twilio');
-      const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-      await (client.verify.v2.services(TWILIO_VERIFY_SERVICE_SID).verifications.create as Function)({
-        to: toPhone,
-        channel: 'sms',
-        customCode: otp,
-      });
-    } catch (err) {
-      logger.error(String(err), 'Twilio Verify send error — code saved in DB for manual support');
-    }
-  } else {
-    logger.warn('Twilio not configured — OTP code saved in DB only');
+  // WhatsApp primero, SMS (AWS SNS) como respaldo automático. Si ambos
+  // fallan, el código sigue guardado en BD — soporte puede darlo manualmente.
+  const { sendOtp } = await import('../../services/otp-delivery.service.js');
+  const channel = await sendOtp(toPhone, otp);
+
+  // Mientras ningún canal automático sea 100% confiable (WhatsApp pendiente
+  // de aprobación de Meta, SMS con entrega no garantizada a Bolivia),
+  // notificamos siempre al admin para que pueda enviar el código
+  // manualmente por WhatsApp desde el panel si hace falta. Este aviso deja
+  // de ser relevante solo cuando el usuario verifica su teléfono — ver
+  // admin.service.ts listPendingPhoneOtpRequests().
+  try {
+    await prisma.adminNotification.create({
+      data: { type: 'PHONE_OTP_MANUAL_HELP', caregiverId: userId },
+    });
+    const { sendPushToAdmins } = await import('../../services/firebase.service.js');
+    sendPushToAdmins(
+      '📱 Código de teléfono solicitado',
+      `Un cuidador pidió un código de verificación (canal automático: ${channel}). Revisa el panel si no le llega.`,
+      { type: 'PHONE_OTP_MANUAL_HELP', userId }
+    ).catch(() => {});
+  } catch (_) {
+    // No bloquea la respuesta al usuario si falla la notificación al admin
   }
 
-  return res.json({ success: true, message: `Código enviado a ${toPhone}.` });
+  return res.json({
+    success: true,
+    message: channel === 'none'
+      ? `Código generado para ${toPhone}. Contacta a soporte si no lo recibes.`
+      : `Código enviado a ${toPhone} por ${channel === 'whatsapp' ? 'WhatsApp' : 'SMS'}.`,
+    data: { channel },
+  });
 });
 
 /** POST /api/auth/caregiver/verify-phone — body: { code }

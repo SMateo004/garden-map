@@ -23,9 +23,17 @@ class DisputeScreen extends StatefulWidget {
 
 class _DisputeScreenState extends State<DisputeScreen> {
   String _token = '';
-  int _step = 0; // 0: encuesta, 1: procesando IA, 2: resultado
+  int _step = 0; // 0: encuesta, 1: procesando IA, 2: resultado, 3: formulario de apelación
   final List<String> _selectedReasons = [];
   Map<String, dynamic>? _resolution;
+
+  // Estado persistido de la disputa (incluye campos de apelación) — se carga
+  // al entrar a la pantalla para saber si ya hay un veredicto, si se puede
+  // apelar, o si ya está en apelación / resuelta por un admin humano.
+  Map<String, dynamic>? _fullDispute;
+  final TextEditingController _appealReasonCtrl = TextEditingController();
+  final TextEditingController _appealEvidenceCtrl = TextEditingController();
+  bool _submittingAppeal = false;
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
@@ -52,11 +60,118 @@ class _DisputeScreenState extends State<DisputeScreen> {
   @override
   void initState() {
     super.initState();
-    _loadToken();
+    _init();
+  }
+
+  @override
+  void dispose() {
+    _appealReasonCtrl.dispose();
+    _appealEvidenceCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _init() async {
+    await _loadToken();
+    await _checkDisputeStatus();
   }
 
   Future<void> _loadToken() async {
     setState(() => _token = AuthState.token);
+  }
+
+  /// Carga el estado persistido de la disputa. Si ya tiene un veredicto de la
+  /// IA (RESOLVED) o está en apelación (APPEALED), salta directo a la
+  /// pantalla de resultado en vez de mostrar la encuesta de nuevo.
+  Future<void> _checkDisputeStatus() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/disputes/${widget.bookingId}'),
+        headers: {'Authorization': 'Bearer $_token'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true && data['data'] != null) {
+        final dispute = data['data'] as Map<String, dynamic>;
+        final status = dispute['status'] as String?;
+        if (!mounted) return;
+        setState(() {
+          _fullDispute = dispute;
+          if (status == 'RESOLVED' || status == 'APPEALED') {
+            List<String> recs = [];
+            try {
+              recs = (jsonDecode(dispute['aiRecommendations'] as String? ?? '[]') as List).cast<String>();
+            } catch (_) {}
+            _resolution = {
+              'verdict': dispute['aiVerdict'],
+              'analysis': dispute['aiAnalysis'],
+              'recommendations': recs,
+            };
+            _step = 2;
+          } else if (status == 'PENDING_AI') {
+            _step = 1;
+          }
+          // PENDING_CLIENT / PENDING_CAREGIVER: se mantiene la encuesta (step 0)
+        });
+      }
+    } catch (_) {
+      // Sin disputa previa (404) u otro error de red: se mantiene la encuesta inicial.
+    }
+  }
+
+  /// Fecha límite para apelar: 5 días hábiles después de `updatedAt` (el
+  /// momento en que se resolvió la disputa), saltando sábados y domingos.
+  bool _isWithinAppealWindow() {
+    final updatedAtStr = _fullDispute?['updatedAt'] as String?;
+    if (updatedAtStr == null) return false;
+    DateTime deadline;
+    try {
+      deadline = DateTime.parse(updatedAtStr);
+    } catch (_) {
+      return false;
+    }
+    int added = 0;
+    while (added < 5) {
+      deadline = deadline.add(const Duration(days: 1));
+      if (deadline.weekday != DateTime.saturday && deadline.weekday != DateTime.sunday) {
+        added++;
+      }
+    }
+    return !DateTime.now().isAfter(deadline);
+  }
+
+  Future<void> _submitAppeal() async {
+    final reason = _appealReasonCtrl.text.trim();
+    if (reason.length < 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Explica tu apelación con al menos algunas frases.'), backgroundColor: GardenColors.error),
+      );
+      return;
+    }
+    setState(() => _submittingAppeal = true);
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/disputes/${widget.bookingId}/appeal'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'reason': reason,
+          if (_appealEvidenceCtrl.text.trim().isNotEmpty) 'newEvidence': _appealEvidenceCtrl.text.trim(),
+        }),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _checkDisputeStatus();
+        if (!mounted) return;
+        setState(() { _step = 2; });
+      } else {
+        throw Exception(data['error']?['message'] ?? 'No se pudo enviar la apelación');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error),
+      );
+    } finally {
+      if (mounted) setState(() => _submittingAppeal = false);
+    }
   }
 
   Future<void> _submitClientReport() async {
@@ -98,6 +213,9 @@ class _DisputeScreenState extends State<DisputeScreen> {
           _resolution = data['data'];
           _step = 2;
         });
+        // Refresca el registro persistido (updatedAt, id, etc.) para que la
+        // ventana de apelación se calcule sobre la fecha real de resolución.
+        await _checkDisputeStatus();
       } else {
         throw Exception(data['error']?['message'] ?? 'Error');
       }
@@ -138,8 +256,13 @@ class _DisputeScreenState extends State<DisputeScreen> {
 
   Widget _buildBody() {
     if (_step == 1) return _buildProcessing();
+    if (_step == 3) return _buildAppealForm();
     if (_step == 2) {
-      if (widget.role == 'CLIENT') return _buildClientConfirmation();
+      // El cliente solo ve la confirmación genérica justo después de reportar
+      // (paso síncrono, sin veredicto todavía). Una vez que la disputa ya
+      // tiene un veredicto (RESOLVED/APPEALED, cargado por _checkDisputeStatus),
+      // ambas partes ven la misma pantalla de resolución + apelación.
+      if (widget.role == 'CLIENT' && _resolution == null) return _buildClientConfirmation();
       return _buildResolution();
     }
     if (widget.role == 'CLIENT') return _buildClientSurvey();
@@ -593,6 +716,8 @@ class _DisputeScreenState extends State<DisputeScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+          _buildAppealSection(textColor, subtextColor, surface, borderColor),
           const SizedBox(height: 24),
 
           GardenButton(
@@ -605,6 +730,182 @@ class _DisputeScreenState extends State<DisputeScreen> {
             label: 'Ir al inicio',
             outline: true,
             onPressed: () => context.go('/marketplace'),
+          ),
+          const SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
+
+  /// Sección de apelación en la pantalla de resultado — depende del estado
+  /// persistido de la disputa (`_fullDispute`), no solo del veredicto en
+  /// memoria, porque necesita `status`, `appealedAt`, `appealResolution`, etc.
+  Widget _buildAppealSection(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    final d = _fullDispute;
+    if (d == null) return const SizedBox.shrink();
+
+    final status = d['status'] as String?;
+    final appealResolution = d['appealResolution'] as String?;
+    final appealVerdict = d['appealVerdict'] as String?;
+    final appealedAt = d['appealedAt'] as String?;
+
+    // 1) Ya hay una decisión final de un admin humano sobre la apelación.
+    if (appealResolution != null) {
+      final isWin = appealVerdict == 'CAREGIVER_WINS';
+      final isLoss = appealVerdict == 'CLIENT_WINS';
+      final color = isWin ? GardenColors.success : isLoss ? GardenColors.error : GardenColors.warning;
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color, width: 1.5),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(Icons.verified_user_rounded, color: color, size: 18),
+              const SizedBox(width: 8),
+              Text('Resultado de la apelación', style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 14)),
+            ]),
+            const SizedBox(height: 4),
+            Text('Revisado por una persona del equipo de Garden — decisión definitiva.',
+              style: TextStyle(color: subtextColor, fontSize: 12)),
+            const SizedBox(height: 12),
+            Text(appealResolution, style: TextStyle(color: textColor, fontSize: 13, height: 1.5)),
+          ],
+        ),
+      );
+    }
+
+    // 2) La disputa está en apelación, esperando revisión humana.
+    if (status == 'APPEALED') {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: GardenColors.primary.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+        ),
+        child: Row(children: [
+          const Icon(Icons.gavel_rounded, color: GardenColors.primary, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'En apelación — un miembro de nuestro equipo está revisando tu caso.',
+              style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600, height: 1.4),
+            ),
+          ),
+        ]),
+      );
+    }
+
+    // 3) Aún se puede apelar (no apelada, dentro del plazo de 5 días hábiles).
+    if (status == 'RESOLVED' && appealedAt == null && _isWithinAppealWindow()) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '¿No estás de acuerdo con esta decisión? Puedes apelarla dentro de los 5 días hábiles siguientes.',
+            style: TextStyle(color: subtextColor, fontSize: 12),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 10),
+          GardenButton(
+            label: 'Apelar esta decisión',
+            icon: Icons.gavel_rounded,
+            outline: true,
+            color: GardenColors.warning,
+            onPressed: () => setState(() { _step = 3; }),
+          ),
+        ],
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildAppealForm() {
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.gavel_rounded, color: GardenColors.warning, size: 24),
+            const SizedBox(width: 10),
+            Expanded(child: Text('Apelar la decisión', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800))),
+          ]),
+          const SizedBox(height: 8),
+          Text(
+            'Una persona del equipo de Garden (no el sistema automatizado) revisará tu caso con la nueva información que envíes. Esta decisión será definitiva.',
+            style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
+          ),
+          const SizedBox(height: 20),
+
+          Text('¿Por qué apelas?', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: borderColor),
+            ),
+            child: TextField(
+              controller: _appealReasonCtrl,
+              maxLines: 5,
+              style: TextStyle(color: textColor, fontSize: 14),
+              decoration: const InputDecoration(
+                hintText: 'Explica por qué crees que el veredicto no fue justo...',
+                contentPadding: EdgeInsets.all(14),
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          Text('Nueva evidencia (opcional)', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: borderColor),
+            ),
+            child: TextField(
+              controller: _appealEvidenceCtrl,
+              maxLines: 4,
+              style: TextStyle(color: textColor, fontSize: 14),
+              decoration: const InputDecoration(
+                hintText: 'Describe fotos, mensajes u otra evidencia nueva que quieras que se considere...',
+                contentPadding: EdgeInsets.all(14),
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 28),
+
+          GardenButton(
+            label: 'Enviar apelación',
+            icon: Icons.send_rounded,
+            color: GardenColors.warning,
+            loading: _submittingAppeal,
+            onPressed: _submittingAppeal ? null : _submitAppeal,
+          ),
+          const SizedBox(height: 12),
+          GardenButton(
+            label: 'Cancelar',
+            outline: true,
+            onPressed: _submittingAppeal ? null : () => setState(() { _step = 2; }),
           ),
           const SizedBox(height: 32),
         ],

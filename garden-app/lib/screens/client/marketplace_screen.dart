@@ -498,60 +498,69 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       actionIcon = Icons.hourglass_top_rounded;
     }
 
+    // Rediseño más compacto y amigable: fondo suave (no bloque sólido), una
+    // sola línea de texto principal con la etiqueta de estado como chip
+    // integrado, e ícono más pequeño — antes ocupaba ~100px de alto, ahora
+    // baja a ~56px sin perder la información.
     return GestureDetector(
       onTap: () => context.push('/my-bookings'),
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: GardenColors.primary,
-          borderRadius: BorderRadius.circular(20),
+          color: GardenColors.primary.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: GardenColors.primary.withValues(alpha: 0.25)),
         ),
         child: Row(
           children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: GardenColors.primary.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(actionIcon, color: GardenColors.primary, size: 18),
+            ),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    isInProgress ? 'EN CURSO' : 'PRÓXIMA SESIÓN',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.2,
+                  Row(children: [
+                    Text(
+                      isInProgress ? 'EN CURSO' : 'PRÓXIMA SESIÓN',
+                      style: const TextStyle(
+                        color: GardenColors.primary,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        subText,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: GardenColors.primary.withValues(alpha: 0.65), fontSize: 11),
+                      ),
+                    ),
+                  ]),
                   Text(
                     mainText,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subText,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 13,
+                      color: GardenColors.primary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 12),
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(actionIcon, color: Colors.white, size: 24),
-            ),
+            Icon(Icons.chevron_right_rounded, color: GardenColors.primary.withValues(alpha: 0.5), size: 20),
           ],
         ),
       ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'firebase_options.dart';
@@ -43,6 +44,10 @@ import 'screens/onboarding/maintenance_screen.dart';
 import 'screens/onboarding/update_required_screen.dart';
 import 'screens/caregiver/mobile_verify_screen.dart';
 import 'screens/legal/legal_screen.dart';
+import 'screens/support/help_center_screen.dart';
+import 'screens/support/help_category_screen.dart';
+import 'screens/support/help_article_screen.dart';
+import 'data/help_center_content.dart';
 import 'screens/caregiver/professional_register_screen.dart';
 import 'screens/caregiver/company_register_screen.dart';
 import 'screens/auth/forgot_password_screen.dart';
@@ -115,6 +120,7 @@ const _publicPaths = {
   '/update-required',
   '/privacy',
   '/terms',
+  '/help-center',
   '/sign-in/profesional',
   '/caregiver/onboarding',
   '/caregiver/onboarding-profesional',
@@ -527,6 +533,27 @@ final GoRouter _router = GoRouter(
       },
     ),
     GoRoute(
+      path: '/help-center',
+      name: 'helpCenter',
+      builder: (context, state) => const HelpCenterScreen(),
+    ),
+    GoRoute(
+      path: '/help-center/category',
+      name: 'helpCenterCategory',
+      builder: (context, state) => HelpCategoryScreen(category: state.extra as HelpCategory),
+    ),
+    GoRoute(
+      path: '/help-center/article',
+      name: 'helpCenterArticle',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>;
+        return HelpArticleScreen(
+          article: extra['article'] as HelpArticle,
+          categoryTitle: extra['categoryTitle'] as String,
+        );
+      },
+    ),
+    GoRoute(
       path: '/privacy',
       name: 'privacy',
       builder: (context, state) => const PrivacyPolicyScreen(),
@@ -582,11 +609,20 @@ Future<void> _bootstrap() async {
       FcmService.reportErrorToAdmin('Platform error: $error', stack.toString());
       return true;
     };
-
-    await FcmService.init();
   }
 
+  // Notificaciones (FCM + locales): NO se esperan aquí. El diálogo de permiso
+  // del sistema y los reintentos de red de FCM (hasta 12s) bloqueaban el
+  // primer frame — la app se quedaba en la pantalla verde nativa hasta que
+  // el usuario respondía el diálogo. Corren en segundo plano sin bloquear.
+  if (!kIsWeb) {
+    unawaited(_initNotificationsInBackground());
+  }
+}
+
+Future<void> _initNotificationsInBackground() async {
   await LocalNotificationService.init();
+  await FcmService.init();
   await LocalNotificationService.requestPermission();
 }
 

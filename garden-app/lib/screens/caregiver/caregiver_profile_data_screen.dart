@@ -592,6 +592,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       // whyCaregiver y whatDiffers — siempre se guardan
       body['whyCaregiver'] = _whyCaregiverController.text.trim();
       body['whatDiffers'] = _whatDiffersController.text.trim();
+      // Se guarda explícitamente — antes nunca se enviaba, dejando el campo
+      // en `false` en la BD para todo cuidador amateur y atascándolo en este
+      // paso al reanudar el registro (el chequeo de reanudación asumía
+      // isAmateur=false y exigía experienceDescription/whyCaregiver, que un
+      // amateur nunca llena porque el formulario se los oculta).
+      body['isAmateur'] = _isAmateur;
       // experienceDescription, handleAnxious, emergencyResponse — solo para no-amateurs
       if (!_isAmateur) {
         body['experienceDescription'] = _experienceDescController.text.trim();

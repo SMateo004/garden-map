@@ -20,5 +20,6 @@ router.get('/favorites', clientProfileController.getFavorites);
 router.post('/favorites/:caregiverId', clientProfileController.toggleFavorite);
 
 router.get('/my-reviews', clientProfileController.getMyReviews);
+router.get('/my-donations', clientProfileController.getMyDonationsSummary);
 
 export default router;

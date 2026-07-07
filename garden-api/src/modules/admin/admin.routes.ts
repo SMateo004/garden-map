@@ -131,6 +131,30 @@ router.get('/disputes', adminController.getDisputes);
 /** POST /api/admin/disputes/:bookingId/resolve-manual — resolución forzada, con contraseña. */
 router.post('/disputes/:bookingId/resolve-manual', adminController.resolveDisputeManual);
 
+/** GET /api/admin/disputes/appeals — disputas apeladas, pendientes de revisión humana. */
+router.get('/disputes/appeals', adminController.getDisputeAppeals);
+
+/** POST /api/admin/disputes/:bookingId/resolve-appeal — decisión final de un admin humano sobre una apelación. */
+router.post('/disputes/:bookingId/resolve-appeal', adminController.resolveDisputeAppeal);
+
+/** GET /api/admin/chat-reports — listar reportes de chat, ?status= opcional. */
+router.get('/chat-reports', adminController.getChatReports);
+
+/** POST /api/admin/chat-reports/:id/resolve — resolver reporte de chat (ACTION_TAKEN | DISMISSED). */
+router.post('/chat-reports/:id/resolve', adminController.resolveChatReport);
+
+/** GET /api/admin/phone-otp-requests — cuidadores que pidieron código de teléfono y aún no verifican. */
+router.get('/phone-otp-requests', adminController.getPendingPhoneOtpRequests);
+
+/** POST /api/admin/phone-otp-requests/:userId/message — (re)genera el código y el mensaje listo para copiar/enviar. */
+router.post('/phone-otp-requests/:userId/message', adminController.generatePhoneOtpMessage);
+
+/** GET /api/admin/email-otp-requests — usuarios a los que Resend no pudo enviarles el código de email. */
+router.get('/email-otp-requests', adminController.getPendingEmailOtpRequests);
+
+/** POST /api/admin/email-otp-requests/:userId/message — genera el código y el mensaje listo para copiar/enviar. */
+router.post('/email-otp-requests/:userId/message', adminController.generateEmailOtpMessage);
+
 /** POST /api/admin/bookings/:id/resolve-incident — reanuda el reloj tras una emergencia. */
 router.post('/bookings/:id/resolve-incident', adminController.resolveIncidentAdmin);
 

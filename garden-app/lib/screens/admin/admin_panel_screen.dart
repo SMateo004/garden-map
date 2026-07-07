@@ -11,6 +11,9 @@ import 'admin_owners_screen.dart';
 import 'admin_general_screen.dart';
 import 'admin_technical_screen.dart';
 import 'admin_notifications_screen.dart';
+import 'admin_chat_reports_screen.dart';
+import 'admin_phone_otp_screen.dart';
+import 'admin_email_otp_screen.dart';
 import 'admin_vets_screen.dart';
 import 'payment_qr_admin_screen.dart';
 import 'audit_screen.dart';
@@ -1023,6 +1026,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ('Feature Flags', Icons.flag_rounded),
     ('QR de Pago', Icons.qr_code_2_rounded),
     ('Auditoría', Icons.fact_check_outlined),
+    ('Reportes de chat', Icons.shield_outlined),
+    ('Verif. telefónica', Icons.phone_forwarded_outlined),
+    ('Verif. de correo', Icons.mark_email_unread_outlined),
   ];
 
   // Agrupación del sidebar web — cada grupo es (título, ícono, índices de _tabs).
@@ -1030,7 +1036,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5]),
     ('Finanzas', Icons.attach_money_rounded, [3, 6, 7, 15]),
     ('Personas', Icons.groups_outlined, [8, 9]),
-    ('Comunicación', Icons.forum_outlined, [12, 13]),
+    ('Comunicación', Icons.forum_outlined, [12, 13, 17, 18, 19]),
     ('Sistema', Icons.settings_outlined, [10, 11, 14, 16]),
   ];
 
@@ -1055,6 +1061,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         _buildFeatureFlagsTab(surface, textColor, subtextColor, borderColor),
         PaymentQrAdminScreen(adminToken: _adminToken),
         AuditScreen(adminToken: _adminToken),
+        AdminChatReportsScreen(adminToken: _adminToken),
+        AdminPhoneOtpScreen(adminToken: _adminToken),
+        AdminEmailOtpScreen(adminToken: _adminToken),
       ],
     );
   }
@@ -1737,6 +1746,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       ('Todas', ''),
       ('Pendientes', 'PENDING_CAREGIVER'),
       ('Análisis IA', 'PENDING_AI'),
+      ('Apelaciones', 'APPEALED'),
       ('Resueltas', 'RESOLVED'),
     ];
 
@@ -1844,6 +1854,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         statusLabel = 'Analizando IA…';
         statusIcon = Icons.psychology_rounded;
         break;
+      case 'APPEALED':
+        statusColor = GardenColors.warning;
+        statusLabel = 'En apelación';
+        statusIcon = Icons.gavel_rounded;
+        break;
       case 'RESOLVED':
         statusColor = GardenColors.success;
         statusLabel = 'Resuelta';
@@ -1888,7 +1903,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         decoration: BoxDecoration(
           color: surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: status == 'RESOLVED' ? statusColor.withValues(alpha: 0.25) : borderColor),
+          border: Border.all(
+            color: status == 'APPEALED'
+                ? GardenColors.warning
+                : status == 'RESOLVED' ? statusColor.withValues(alpha: 0.25) : borderColor,
+            width: status == 'APPEALED' ? 1.5 : 1,
+          ),
         ),
         child: Row(children: [
           // Status icon circle
@@ -1983,6 +2003,94 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     }
   }
 
+  /// Diálogo para que un admin humano dé el veredicto final de una apelación
+  /// (POST /api/admin/disputes/:bookingId/resolve-appeal). Requiere elegir un
+  /// veredicto (puede confirmar o revertir el de la IA) y escribir la
+  /// justificación — esta decisión es definitiva y ya no se puede apelar.
+  Future<void> _showResolveAppealDialog(Map<String, dynamic> d) async {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final resolutionController = TextEditingController();
+    String? selectedVerdict;
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          backgroundColor: surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('Veredicto final de apelación', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 17)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Esta decisión es definitiva. Si cambia el veredicto original, el dinero se ajusta de inmediato.',
+                  style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4)),
+                const SizedBox(height: 14),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  ('CAREGIVER_WINS', 'Cuidador', GardenColors.success),
+                  ('CLIENT_WINS', 'Dueño', GardenColors.error),
+                  ('PARTIAL', '80/20', GardenColors.warning),
+                ].map((opt) {
+                  final selected = selectedVerdict == opt.$1;
+                  return ChoiceChip(
+                    label: Text(opt.$2, style: TextStyle(color: selected ? Colors.white : opt.$3, fontSize: 12, fontWeight: FontWeight.w600)),
+                    selected: selected,
+                    selectedColor: opt.$3,
+                    backgroundColor: opt.$3.withValues(alpha: 0.1),
+                    onSelected: (_) => setS(() => selectedVerdict = opt.$1),
+                  );
+                }).toList()),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: resolutionController,
+                  maxLines: 4,
+                  style: TextStyle(color: textColor, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: 'Resolución escrita (visible para ambas partes)',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: GardenColors.primary, foregroundColor: Colors.white),
+              onPressed: () {
+                if (selectedVerdict == null || resolutionController.text.trim().length < 5) return;
+                Navigator.pop(ctx, {'verdict': selectedVerdict!, 'resolution': resolutionController.text.trim()});
+              },
+              child: const Text('Confirmar veredicto'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result == null) return;
+
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/admin/disputes/${d['bookingId']}/resolve-appeal'),
+        headers: {'Authorization': 'Bearer $_adminToken', 'Content-Type': 'application/json'},
+        body: jsonEncode(result),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadDisputes();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Apelación resuelta'), backgroundColor: GardenColors.success));
+      } else {
+        throw Exception(data['error']?['message'] ?? 'Error al resolver la apelación');
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error));
+    }
+  }
+
   Future<void> _showDisputeDetailSheet(Map<String, dynamic> d) async {
     final isDark = themeNotifier.isDark;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
@@ -1999,6 +2107,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     final caregiverResponse = (d['caregiverResponse'] as List? ?? []).cast<String>();
     final amount = d['amount'];
     final hasDiscountCode = d['discountCodeId'] != null;
+    final appealedBy = d['appealedBy'] as String?;
+    final appealReason = d['appealReason'] as String?;
+    final appealResolution = d['appealResolution'] as String?;
 
     Color verdictColor;
     String verdictLabel;
@@ -2234,7 +2345,89 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 )),
               ],
 
-              if (status != 'RESOLVED') ...[
+              // Apelación: razón de quien apeló + decisión final ya tomada (si existe)
+              if (appealedBy != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: GardenColors.warning.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: GardenColors.warning.withValues(alpha: 0.35)),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      const Icon(Icons.gavel_rounded, size: 13, color: GardenColors.warning),
+                      const SizedBox(width: 6),
+                      Text('APELACIÓN DE ${appealedBy == 'CLIENT' ? 'DUEÑO' : 'CUIDADOR'}',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: GardenColors.warning, letterSpacing: 0.5)),
+                    ]),
+                    if (appealReason != null) ...[
+                      const SizedBox(height: 6),
+                      Text(appealReason, style: TextStyle(color: textColor, fontSize: 12, height: 1.4)),
+                    ],
+                  ]),
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (appealResolution != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: GardenColors.primary.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      const Icon(Icons.verified_user_rounded, size: 13, color: GardenColors.primary),
+                      const SizedBox(width: 6),
+                      Text('DECISIÓN FINAL DE APELACIÓN', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: GardenColors.primary, letterSpacing: 0.5)),
+                    ]),
+                    const SizedBox(height: 6),
+                    Text(appealResolution, style: TextStyle(color: textColor, fontSize: 12, height: 1.4)),
+                  ]),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              // Formulario de resolución final para apelaciones pendientes
+              if (status == 'APPEALED') ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: GardenColors.primary.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      const Icon(Icons.how_to_reg_rounded, size: 14, color: GardenColors.primary),
+                      const SizedBox(width: 6),
+                      Text('RESOLVER APELACIÓN', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: GardenColors.primary, letterSpacing: 1)),
+                    ]),
+                    const SizedBox(height: 4),
+                    Text('Esta decisión es definitiva y mueve el dinero de inmediato si el veredicto cambia.', style: TextStyle(fontSize: 11, color: subtextColor)),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: GardenColors.primary),
+                        minimumSize: const Size(double.infinity, 42),
+                      ),
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await _showResolveAppealDialog(d);
+                      },
+                      icon: const Icon(Icons.gavel_rounded, size: 14, color: GardenColors.primary),
+                      label: const Text('Dar veredicto final', style: TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w700)),
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              if (status != 'RESOLVED' && status != 'APPEALED') ...[
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.all(12),

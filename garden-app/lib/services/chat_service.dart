@@ -61,6 +61,8 @@ class ChatService extends ChangeNotifier {
   List<ChatMessage> get messages => _messages;
   bool get connected => _connected;
   int get unreadCount => _unreadCount;
+  // true si el último intento de envío falló porque alguna de las partes bloqueó a la otra.
+  bool blockedError = false;
 
   ChatService({
     required String baseUrl,
@@ -162,6 +164,7 @@ class ChatService extends ChangeNotifier {
   // en vez de que el mensaje simplemente desaparezca si falla (sin conexión, timeout, etc).
   Future<bool> sendMessage(String bookingId, String message) async {
     if (message.trim().isEmpty) return false;
+    blockedError = false;
     try {
       final response = await http
           .post(
@@ -182,6 +185,9 @@ class ChatService extends ChangeNotifier {
           if (!_isDisposed) notifyListeners();
         }
         return true;
+      }
+      if (response.statusCode == 403 && data['error']?['code'] == 'USER_BLOCKED') {
+        blockedError = true;
       }
       return false;
     } catch (e) {

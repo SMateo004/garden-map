@@ -7,7 +7,7 @@ import '../../theme/garden_theme.dart';
 class CaregiverGuideScreen extends StatelessWidget {
   const CaregiverGuideScreen({super.key});
 
-  static const _whatsApp = 'https://wa.me/59178081291?text=Hola%2C%20soy%20cuidador%20nuevo%20en%20GARDEN%20y%20necesito%20ayuda%20%F0%9F%8C%BF';
+  static const _whatsApp = 'https://wa.me/59175933133?text=Hola%2C%20soy%20cuidador%20nuevo%20en%20GARDEN%20y%20necesito%20ayuda%20%F0%9F%8C%BF';
   static const _email = 'mailto:contactogardenbo@gmail.com?subject=Consulta%20cuidador%20GARDEN';
 
   Future<void> _launch(String url) async {
@@ -318,7 +318,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                                 _contactButton(
                                   icon: Icons.chat_rounded,
                                   label: 'WhatsApp Soporte',
-                                  subtitle: '+591 78081291 · Lunes a Sábado 9:00–20:00',
+                                  subtitle: '+591 75933133 · Lunes a Sábado 9:00–20:00',
                                   color: const Color(0xFF25D366),
                                   onTap: () => _launch(_whatsApp),
                                 ),

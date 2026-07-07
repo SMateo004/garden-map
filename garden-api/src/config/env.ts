@@ -48,10 +48,16 @@ const envSchema = z.object({
   BLOCKCHAIN_ENABLED: z.string().transform(v => v === 'true').default('false'),
   // AI Agent (Anthropic — required when BLOCKCHAIN_ENABLED or dispute resolution is active)
   ANTHROPIC_API_KEY: z.string().optional(),
-  // Twilio Verify (SMS OTP para verificación de teléfono)
-  TWILIO_ACCOUNT_SID: z.string().optional(),
-  TWILIO_AUTH_TOKEN: z.string().optional(),
-  TWILIO_VERIFY_SERVICE_SID: z.string().optional(),
+  // OTP de teléfono — WhatsApp Business Cloud API (canal principal) con
+  // AWS SNS como SMS de respaldo (reutiliza AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY
+  // ya configurados arriba para Rekognition). Ver src/services/otp-delivery.service.ts.
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  WHATSAPP_AUTH_TEMPLATE_NAME: z.string().default('otp_verification'),
+  // Número de origen (Toll-Free) de AWS End User Messaging SMS, en formato
+  // E.164 (ej. +18773183672). Sin esto, el SMS de respaldo no tiene desde
+  // dónde enviar y se omite.
+  AWS_SMS_ORIGINATION_NUMBER: z.string().optional(),
   // SIP — Integración QR bancario Bolivia (MC4 / Banco)
   // Poner SIP_ENABLED=true y completar las demás vars cuando lleguen las credenciales del banco.
   SIP_ENABLED: z.string().transform(v => v === 'true').default('false'),

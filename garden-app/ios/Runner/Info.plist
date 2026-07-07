@@ -91,10 +91,10 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>GARDEN necesita acceso a tu cámara para tomar fotos de tus mascotas.</string>
-	<key>NSFallDetectionUsageDescription</key>
-	<string></string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Se usa para detectar dispositivos en la red local durante el desarrollo.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>GARDEN necesita tu ubicación para mostrarte cuidadores cercanos y compartir en vivo la ruta del paseo con el dueño de la mascota.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>GARDEN necesita permiso para guardar fotos en tu galería.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

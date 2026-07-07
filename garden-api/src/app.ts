@@ -30,6 +30,7 @@ import meetAndGreetRoutes from './modules/meet-and-greet/meet-and-greet.routes.j
 import placesRoutes from './modules/places/places.routes.js';
 import vetsRoutes from './modules/vets/vets.routes.js';
 import appHealthRoutes from './modules/app-health/app-health.routes.js';
+import legalRoutes from './modules/legal/legal.routes.js';
 
 const app = express();
 
@@ -248,6 +249,10 @@ app.get('/health', async (_req, res) => {
     },
   });
 });
+
+// Página pública de Política de Privacidad (https://api.gardenbo.com/legal/privacy) —
+// requerida como URL pública por App Store Connect y Google Play Console.
+app.use('/legal', legalRoutes);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/caregiver', caregiverProfileRoutes);

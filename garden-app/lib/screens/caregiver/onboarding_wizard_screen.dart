@@ -13,8 +13,7 @@ import '../../services/auth_service.dart';
 
 import 'caregiver_profile_data_screen.dart';
 import 'verification_screen.dart';
-import 'phone_verification_screen.dart';
-import 'email_verification_screen.dart';
+import 'combined_verification_step.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/address_map_picker.dart';
 import '../../widgets/address_section.dart';
@@ -66,6 +65,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   double? _addressLat;
   double? _addressLng;
   bool _isApartment = false;
+
+  // Paso 9 (nuevo, final): Contactos de emergencia (3 obligatorios: nombre + teléfono)
+  final List<TextEditingController> _emergencyNameControllers =
+      List.generate(3, (_) => TextEditingController());
+  final List<TextEditingController> _emergencyPhoneControllers =
+      List.generate(3, (_) => TextEditingController());
+
+  bool _isValidBoPhone(String phone) => RegExp(r'^[67][0-9]{7}$').hasMatch(phone.trim());
 
   // Paso 6: Perfil Profesional
   final List<String> _sizesAccepted = [];
@@ -303,6 +310,16 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
       // Step 5: Profile photo
       _profilePhotoUrl = profile['profilePhoto'] as String?;
+
+      // Step 9: Contactos de emergencia — rellenar si ya existen (parcial o completo)
+      final emergencyContacts = (profile['emergencyContacts'] as List?) ?? [];
+      for (int i = 0; i < 3; i++) {
+        if (i < emergencyContacts.length) {
+          final c = emergencyContacts[i] as Map<String, dynamic>? ?? {};
+          _emergencyNameControllers[i].text = c['name'] as String? ?? '';
+          _emergencyPhoneControllers[i].text = c['phone'] as String? ?? '';
+        }
+      }
     });
   }
 
@@ -377,7 +394,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       final bioOk = bio.length >= 10 || bioDetail.length >= 10;
       final sizesAccepted = (profile['sizesAccepted'] as List?) ?? [];
       final animalTypes = (profile['animalTypes'] as List?) ?? [];
-      final isAmateur = profile['isAmateur'] == true;
+      // BUG (reportado): el paso 6 nunca envía `isAmateur` al backend — solo
+      // envía `experienceYears`. Chequear solo `profile['isAmateur']` deja a
+      // TODO cuidador amateur (0 años) atascado en el paso 6 para siempre,
+      // porque nunca llenó experienceDescription/whyCaregiver (el formulario
+      // se los oculta). Mismo fallback que ya usa el backend en
+      // caregiver-profile.validation.ts (getMissingFieldsForApproval).
+      final isAmateur = profile['isAmateur'] == true || profile['experienceYears'] == 0;
 
       // Para no-amateurs se exigen campos de experiencia mínimos.
       final experienceOk = isAmateur || (
@@ -403,17 +426,21 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         return;
       }
 
-      // Step 8: Verificación de teléfono — requiere phoneVerified true
+      // Step 8: Verificación combinada de teléfono + email — requiere ambos true.
+      // Un usuario que regresa puede ya tener UNO de los dos verificado; el paso
+      // combinado se encarga de mostrar ese lado como "Verificado" de inmediato
+      // (consulta el perfil de nuevo al montarse) y solo pide el que falte.
       final phoneVerified = profile['phoneVerified'] == true;
-      if (!phoneVerified) {
+      final emailVerified = profile['emailVerified'] == true ||
+          (profile['user'] as Map<String, dynamic>?)?['emailVerified'] == true;
+      if (!phoneVerified || !emailVerified) {
         setState(() => _currentStep = 8);
         return;
       }
 
-      // Step 9: Verificación de email
-      final emailVerified = profile['emailVerified'] == true ||
-          (profile['user'] as Map<String, dynamic>?)?['emailVerified'] == true;
-      if (!emailVerified) {
+      // Step 9: Contactos de emergencia (mínimo 1, hasta 3)
+      final emergencyContacts = (profile['emergencyContacts'] as List?) ?? [];
+      if (emergencyContacts.isEmpty) {
         setState(() => _currentStep = 9);
         return;
       }
@@ -512,6 +539,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     _breedsWhyController.dispose();
     _typicalDayController.dispose();
     _bioDetailController.dispose();
+    for (final c in _emergencyNameControllers) { c.dispose(); }
+    for (final c in _emergencyPhoneControllers) { c.dispose(); }
     super.dispose();
   }
 
@@ -669,6 +698,20 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           }
         }
         return true;
+      case 9: // Contactos de emergencia (3 obligatorios: nombre + teléfono)
+        for (int i = 0; i < 3; i++) {
+          final name = _emergencyNameControllers[i].text.trim();
+          final phone = _emergencyPhoneControllers[i].text.trim();
+          if (name.isEmpty) {
+            _showStepError('Falta el nombre del contacto de emergencia #${i + 1}');
+            return false;
+          }
+          if (!_isValidBoPhone(phone)) {
+            _showStepError('Teléfono inválido para el contacto de emergencia #${i + 1} (8 dígitos, empieza con 6 o 7)');
+            return false;
+          }
+        }
+        return true;
       default:
         return true; // Steps 6-8 handled by embedded screens
     }
@@ -814,6 +857,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       return;
     }
 
+    // Step 9: Contactos de emergencia → guardar y finalizar registro
+    if (_currentStep == 9) {
+      await _onEmergencyContactsNext();
+      return;
+    }
+
     // Steps 6-8 handled by embedded screens
   }
 
@@ -953,12 +1002,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       final phoneVerified = profile['phoneVerified'] == true;
       final emailVerified = profile['emailVerified'] == true ||
           (profile['user'] as Map<String, dynamic>?)?['emailVerified'] == true;
+      final emergencyContacts = (profile['emergencyContacts'] as List?) ?? [];
 
       if (!identityDone) {
         setState(() => _currentStep = 7);
-      } else if (!phoneVerified) {
+      } else if (!phoneVerified || !emailVerified) {
         setState(() => _currentStep = 8);
-      } else if (!emailVerified) {
+      } else if (emergencyContacts.isEmpty) {
         setState(() => _currentStep = 9);
       } else {
         await _completeWizard();
@@ -971,7 +1021,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   }
 
   /// Step 7 → next: only advance if identityVerificationStatus == VERIFIED,
-  /// and auto-skip step 8 if email is already verified.
+  /// and auto-skip step 8 (combined verification) if both phone + email are
+  /// already verified, and step 9 (emergency contacts) if already saved.
   Future<void> _onIdentityVerificationComplete() async {
     setState(() => _isLoading = true);
     try {
@@ -987,9 +1038,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         final phoneVerified = profile['phoneVerified'] == true;
         final emailVerified = profile['emailVerified'] == true ||
             (profile['user'] as Map<String, dynamic>?)?['emailVerified'] == true;
-        if (!phoneVerified) {
+        final emergencyContacts = (profile['emergencyContacts'] as List?) ?? [];
+        if (!phoneVerified || !emailVerified) {
           setState(() => _currentStep = 8);
-        } else if (!emailVerified) {
+        } else if (emergencyContacts.isEmpty) {
           setState(() => _currentStep = 9);
         } else {
           await _completeWizard();
@@ -1010,13 +1062,22 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     }
   }
 
-  /// Step 8 complete: phone verified — advance to email verification (step 9).
-  Future<void> _onPhoneVerificationComplete() async {
+  /// Step 8 complete: BOTH phone and email verified (combined verification
+  /// step) — advance to the final step, contactos de emergencia (step 9).
+  Future<void> _onCombinedVerificationComplete() async {
     setState(() => _currentStep = 9);
   }
 
-  /// Step 9 complete: email verified — finish wizard.
-  Future<void> _onEmailVerificationComplete() async {
+  /// Step 9 (final): validates 3 emergency contacts, saves them, then submits.
+  Future<void> _onEmergencyContactsNext() async {
+    if (!_validateCurrentStep()) return;
+    setState(() => _isLoading = true);
+    final contacts = List.generate(3, (i) => {
+      'name': _emergencyNameControllers[i].text.trim(),
+      'phone': _emergencyPhoneControllers[i].text.trim(),
+    });
+    await _patchProfile({'emergencyContacts': contacts});
+    setState(() => _isLoading = false);
     await _completeWizard();
   }
 
@@ -1261,6 +1322,109 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             ),
           ),
           const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  // ── PASO 9 (index 9, final): Contactos de emergencia ─────────────
+  // Requerido por Términos y Condiciones Sección 17 antes de ofrecer
+  // Hospedaje/Guardería. Se piden 3 contactos (nombre + teléfono), todos
+  // obligatorios, con la misma validación de teléfono boliviano del Paso 0.
+  Widget _buildStep9() {
+    final isDark = themeNotifier.isDark;
+    final textColor    = isDark ? GardenColors.darkTextPrimary    : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary  : GardenColors.lightTextSecondary;
+    final borderColor  = isDark ? GardenColors.darkBorder         : GardenColors.lightBorder;
+    final surface      = isDark ? GardenColors.darkSurface        : GardenColors.lightSurface;
+
+    InputDecoration field(String hint, IconData icon) => InputDecoration(
+      hintText: hint,
+      prefixIcon: Icon(icon, color: subtextColor, size: 20),
+    );
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Contactos de emergencia',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
+          const SizedBox(height: 6),
+          Text(
+            'Por seguridad, GARDEN requiere 3 contactos de emergencia antes de activar tu perfil. '
+            'Solo se usarán si ocurre una emergencia durante un servicio.',
+            style: TextStyle(fontSize: 14, color: subtextColor, height: 1.5),
+          ),
+          const SizedBox(height: 24),
+
+          for (int i = 0; i < 3; i++) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: borderColor),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Container(
+                      width: 26,
+                      height: 26,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: GardenColors.primary.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text('${i + 1}', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700, fontSize: 13)),
+                    ),
+                    const SizedBox(width: 10),
+                    Text('Contacto ${i + 1}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: textColor)),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+                      child: const Text('Obligatorio', style: TextStyle(fontSize: 10, color: GardenColors.primary, fontWeight: FontWeight.w600)),
+                    ),
+                  ]),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _emergencyNameControllers[i],
+                    style: TextStyle(color: textColor),
+                    inputFormatters: [noDigitsFormatter],
+                    decoration: field('Nombre completo', Icons.person_outlined),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _emergencyPhoneControllers[i],
+                    keyboardType: TextInputType.number,
+                    style: TextStyle(color: textColor),
+                    decoration: field('Teléfono (ej: 76543210)', Icons.phone_outlined),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: GardenColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: GardenColors.primary.withValues(alpha: 0.2)),
+            ),
+            child: Row(children: [
+              const Icon(Icons.info_outline, color: GardenColors.primary, size: 15),
+              const SizedBox(width: 8),
+              Expanded(child: Text(
+                '8 dígitos, empieza con 6 o 7',
+                style: TextStyle(fontSize: 12, color: subtextColor, height: 1.4),
+              )),
+            ]),
+          ),
         ],
       ),
     );
@@ -2290,9 +2454,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ─── Steps 6-9 are post-registration embedded screens ───────────────────
+    // ─── Steps 6-8 are post-registration embedded screens ───────────────────
     // They manage their own navigation via callbacks; wizard provides only
-    // the progress header above them.
+    // the progress header above them. Step 9 (contactos de emergencia) is a
+    // regular form step like 0-5 and uses the standard bottom nav button.
     final Widget postRegStep;
     if (_currentStep == 6) {
       postRegStep = CaregiverProfileDataScreen(
@@ -2307,21 +2472,19 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         onComplete: _onIdentityVerificationComplete,
       );
     } else if (_currentStep == 8) {
-      postRegStep = PhoneVerificationScreen(
+      // Paso combinado: verifica teléfono Y correo en una sola pantalla.
+      // Ambos códigos se envían en paralelo al montar el widget; cada lado
+      // se verifica de forma independiente (ver CombinedVerificationStep).
+      postRegStep = CombinedVerificationStep(
         showAppBar: false,
         phoneNumber: _phoneController.text.trim(),
-        onComplete: _onPhoneVerificationComplete,
+        onComplete: _onCombinedVerificationComplete,
         onChangePhone: (newPhone) async {
           // Actualiza el teléfono en el perfil y recarga el paso para enviar nuevo OTP
           _phoneController.text = newPhone;
           await _patchProfile({'phone': newPhone});
-          if (mounted) setState(() {}); // rebuild para que PhoneVerificationScreen reciba nuevo número
+          if (mounted) setState(() {}); // rebuild para que reciba el nuevo número
         },
-      );
-    } else if (_currentStep == 9) {
-      postRegStep = EmailVerificationScreen(
-        showAppBar: false,
-        onComplete: _onEmailVerificationComplete,
       );
     } else {
       postRegStep = const SizedBox.shrink();
@@ -2336,8 +2499,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       _buildStep2(),   // 5: Fotos del lugar/acción
       postRegStep,     // 6: Perfil profesional
       postRegStep,     // 7: Verificación de identidad
-      postRegStep,     // 8: Verificación de teléfono
-      postRegStep,     // 9: Verificación de email
+      postRegStep,     // 8: Verificación combinada (teléfono + email)
+      _buildStep9(),   // 9: Contactos de emergencia (final)
     ];
 
     final stepTitles = [
@@ -2349,14 +2512,15 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       'Fotos',
       'Perfil profesional',
       'Verificación ID',
-      'Verificar Teléfono',
-      'Verificar Email',
+      'Verificar cuenta',
+      'Contactos de emergencia',
     ];
 
-    // Steps 6-9 are embedded screens that manage their own "Continue" buttons.
-    // The wizard hides the bottom nav bar for those steps.
-    final bool showNavButtons = _currentStep <= 5;
+    // Steps 6-8 are embedded screens that manage their own "Continue" buttons.
+    // Step 9 (contactos de emergencia) uses the standard bottom nav, like 0-5.
+    final bool showNavButtons = _currentStep <= 5 || _currentStep == 9;
     final bool isRegistrationStep = _currentStep == 0;
+    final bool isFinalStep = _currentStep == 9;
 
     return AnimatedBuilder(
       animation: themeNotifier,
@@ -2629,7 +2793,9 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                             ],
                             Expanded(
                               child: GardenButton(
-                                label: isRegistrationStep ? 'Crear mi cuenta' : 'Siguiente →',
+                                label: isRegistrationStep
+                                    ? 'Crear mi cuenta'
+                                    : (isFinalStep ? 'Finalizar registro' : 'Siguiente →'),
                                 loading: _isLoading,
                                 height: 48,
                                 onPressed: _isLoading ? () {} : _nextStep,

@@ -226,6 +226,112 @@ router.get('/:bookingId', authMiddleware,
   })
 );
 
+// POST /api/disputes/:bookingId/appeal — cualquiera de las partes apela el
+// veredicto de la IA dentro de los 5 días hábiles siguientes a la resolución
+// (Sección 13 de los Términos y Condiciones). Un admin humano revisa después
+// vía POST /api/admin/disputes/:bookingId/resolve-appeal.
+router.post('/:bookingId/appeal', authMiddleware,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { bookingId } = req.params;
+    const userId = (req as any).user.userId;
+    const { reason, newEvidence } = req.body as { reason?: string; newEvidence?: string };
+
+    if (!reason || typeof reason !== 'string' || reason.trim().length < 10) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Explica tu apelación con al menos 10 caracteres.' },
+      });
+    }
+
+    const booking = await prisma.booking.findFirst({
+      where: { id: bookingId },
+      include: { caregiver: { select: { userId: true } } },
+    });
+    if (!booking) return res.status(404).json({ success: false, error: { message: 'Reserva no encontrada' } });
+
+    const isClient = booking.clientId === userId;
+    const isCaregiver = (booking as any).caregiver?.userId === userId;
+    if (!isClient && !isCaregiver) {
+      return res.status(403).json({ success: false, error: { message: 'Sin acceso a esta disputa' } });
+    }
+
+    const dispute = await (prisma as any).dispute.findUnique({ where: { bookingId } });
+    if (!dispute || !dispute.aiVerdict || dispute.status !== 'RESOLVED') {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Esta disputa todavía no tiene un veredicto que se pueda apelar.' },
+      });
+    }
+    if (dispute.appealedAt) {
+      return res.status(409).json({
+        success: false,
+        error: { message: 'Esta disputa ya fue apelada.' },
+      });
+    }
+    if (!isWithinBusinessDays(dispute.updatedAt, 5)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'El plazo de 5 días hábiles para apelar esta decisión ya venció.' },
+      });
+    }
+
+    const appealedBy = isClient ? 'CLIENT' : 'CAREGIVER';
+    const combinedReason = newEvidence?.trim()
+      ? `${reason.trim()}\n\nNueva evidencia: ${newEvidence.trim()}`
+      : reason.trim();
+
+    const claimed = await (prisma as any).dispute.updateMany({
+      where: { bookingId, status: 'RESOLVED', appealedAt: null },
+      data: {
+        status: 'APPEALED',
+        appealedBy,
+        appealReason: combinedReason,
+        appealedAt: new Date(),
+      },
+    });
+    if (claimed.count === 0) {
+      return res.status(409).json({
+        success: false,
+        error: { message: 'Esta disputa ya fue apelada o ya no admite apelación.' },
+      });
+    }
+
+    // Notificar de urgencia al equipo de Garden — un humano debe revisar.
+    const { sendPushToAdmins } = await import('../../services/firebase.service.js');
+    await prisma.adminNotification.create({
+      data: { type: 'DISPUTE_APPEALED', caregiverId: (booking as any).caregiver?.userId ?? '', bookingId },
+    }).catch(() => {});
+    sendPushToAdmins(
+      '⚖️ Apelación de disputa',
+      `Reserva ${bookingId!.slice(0, 8).toUpperCase()} — ${appealedBy === 'CLIENT' ? 'el dueño' : 'el cuidador'} apeló el veredicto de la IA. Revisión humana requerida.`,
+      { type: 'DISPUTE_APPEALED', bookingId: bookingId! }
+    ).catch(() => {});
+
+    track(userId, 'dispute_appealed', { bookingId, appealedBy });
+    res.json({ success: true, data: { bookingId, status: 'APPEALED', appealedBy } });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// Días hábiles — utilidad para el plazo de apelación (5 días hábiles, solo
+// se excluyen sábados y domingos; no maneja feriados bolivianos).
+// ---------------------------------------------------------------------------
+export function isWithinBusinessDays(from: Date, businessDays: number): boolean {
+  const deadline = addBusinessDays(new Date(from), businessDays);
+  return new Date() <= deadline;
+}
+
+export function addBusinessDays(start: Date, days: number): Date {
+  const result = new Date(start);
+  let added = 0;
+  while (added < days) {
+    result.setDate(result.getDate() + 1);
+    const day = result.getDay(); // 0 = domingo, 6 = sábado
+    if (day !== 0 && day !== 6) added++;
+  }
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Agente de IA investigador — analiza TODA la evidencia y siempre decide un ganador
 // ---------------------------------------------------------------------------

@@ -14,6 +14,7 @@ import { ensureAbsoluteUrl, ensureAbsoluteUrls } from '../../shared/upload-utils
 import type { PatchCaregiverProfileBody, PatchAvailabilityBody } from './caregiver-profile.validation.js';
 import {
   getMissingRequiredFieldsForSubmit,
+  validateEmergencyContacts,
   type RequiredSubmitField,
 } from './caregiver-profile.validation.js';
 import logger from '../../shared/logger.js';
@@ -264,6 +265,7 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if ((body as any).placePhotos !== undefined) (updateData as any).placePhotos = (body as any).placePhotos;
   if (body.profilePhoto !== undefined) updateData.profilePhoto = ensureAbsoluteUrl(body.profilePhoto) ?? null;
   if (body.experienceYears !== undefined) updateData.experienceYears = body.experienceYears;
+  if ((body as any).isAmateur !== undefined) (updateData as any).isAmateur = (body as any).isAmateur;
   if (body.ownPets !== undefined) updateData.ownPets = body.ownPets;
   if (body.currentPetsDetails !== undefined) updateData.currentPetsDetails = body.currentPetsDetails;
   if (body.caredOthers !== undefined) updateData.caredOthers = body.caredOthers;
@@ -303,6 +305,13 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.ciAnversoUrl !== undefined) updateData.ciAnversoUrl = ensureAbsoluteUrl(body.ciAnversoUrl) ?? null;
   if (body.ciReversoUrl !== undefined) updateData.ciReversoUrl = ensureAbsoluteUrl(body.ciReversoUrl) ?? null;
   if (body.ciNumber !== undefined) updateData.ciNumber = body.ciNumber;
+  if (body.emergencyContacts !== undefined) {
+    try {
+      updateData.emergencyContacts = validateEmergencyContacts(body.emergencyContacts);
+    } catch (err: any) {
+      throw new BadRequestError(err.message, 'INVALID_EMERGENCY_CONTACTS');
+    }
+  }
   // onboardingStatus is intentionally NOT settable by the client.
   // It is computed server-side by checkAndAutoSubmitProfile based on actual field values.
   // Allowing clients to set it would let them fake completion progress.

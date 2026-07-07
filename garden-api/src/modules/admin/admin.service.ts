@@ -1021,6 +1021,225 @@ export async function resolveDisputeManually(
 }
 
 // ---------------------------------------------------------------------------
+// Apelaciones de disputas — Sección 13 de los Términos y Condiciones.
+// Una persona del equipo de Garden (nunca el sistema automatizado) revisa la
+// apelación y su decisión es definitiva.
+// ---------------------------------------------------------------------------
+
+/** GET /api/admin/disputes/appeals — todas las disputas con status='APPEALED'. */
+export async function listDisputeAppeals(): Promise<any[]> {
+  const disputes = await prisma.dispute.findMany({
+    where: { status: 'APPEALED' } as any,
+    include: {
+      booking: {
+        include: {
+          client: { select: { firstName: true, lastName: true, email: true } },
+          caregiver: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
+        },
+      },
+    },
+    orderBy: { appealedAt: 'desc' } as any,
+  });
+
+  return disputes.map((d: any) => {
+    let aiRecommendations: string[] = [];
+    try { aiRecommendations = JSON.parse(d.aiRecommendations ?? '[]'); } catch { /* no-op */ }
+    return {
+      id: d.id,
+      bookingId: d.bookingId,
+      status: d.status,
+      clientReasons: d.clientReasons,
+      caregiverResponse: d.caregiverResponse,
+      aiVerdict: d.aiVerdict,
+      aiAnalysis: d.aiAnalysis,
+      aiRecommendations,
+      resolution: d.resolution,
+      appealedBy: d.appealedBy,
+      appealReason: d.appealReason,
+      appealedAt: d.appealedAt,
+      createdAt: d.createdAt,
+      updatedAt: d.updatedAt,
+      clientName: `${d.booking.client.firstName} ${d.booking.client.lastName}`,
+      clientEmail: d.booking.client.email,
+      caregiverName: `${d.booking.caregiver.user.firstName} ${d.booking.caregiver.user.lastName}`,
+      serviceType: d.booking.serviceType,
+      petName: d.booking.petName,
+      amount: d.booking.totalAmount,
+    };
+  });
+}
+
+/** Monto que cada parte recibió/recibe bajo un veredicto dado, en función del
+ *  monto total y neto de la reserva. Se usa tanto para aplicar el veredicto
+ *  original de la IA como para calcular la diferencia (delta) al resolver una
+ *  apelación con un veredicto distinto. */
+function amountsForVerdict(verdict: string, totalAmount: number, netAmount: number): {
+  caregiverAmount: number; clientCashAmount: number; clientDiscountAmount: number;
+} {
+  if (verdict === 'CAREGIVER_WINS') {
+    return { caregiverAmount: netAmount, clientCashAmount: 0, clientDiscountAmount: 0 };
+  }
+  if (verdict === 'CLIENT_WINS') {
+    return { caregiverAmount: 0, clientCashAmount: totalAmount, clientDiscountAmount: 0 };
+  }
+  // PARTIAL
+  const caregiverPayout = parseFloat((netAmount * 0.80).toFixed(2));
+  const clientDiscountAmount = parseFloat((netAmount * 0.20).toFixed(2));
+  return { caregiverAmount: caregiverPayout, clientCashAmount: 0, clientDiscountAmount };
+}
+
+/**
+ * POST /api/admin/disputes/:bookingId/resolve-appeal — decisión final de un
+ * admin humano sobre una disputa apelada. Puede confirmar el veredicto de la
+ * IA o revertirlo. Cuando el veredicto cambia, esta función revierte el pago
+ * original y aplica el nuevo, dejando WalletTransaction como rastro completo
+ * de ambos movimientos (nunca se borra el historial, solo se ajusta).
+ */
+export async function resolveDisputeAppeal(
+  bookingId: string,
+  adminId: string,
+  verdict: 'CLIENT_WINS' | 'CAREGIVER_WINS' | 'PARTIAL',
+  resolutionText: string
+): Promise<{ id: string; verdict: string }> {
+  if (!resolutionText || resolutionText.trim().length < 5) {
+    throw new BadRequestError('Escribe la resolución de la apelación.');
+  }
+
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId },
+    include: { caregiver: { include: { user: true } }, dispute: true } as any,
+  });
+  if (!booking) throw new NotFoundError('Reserva no encontrada');
+  const dispute = (booking as any).dispute;
+  if (!dispute) throw new BadRequestError('Esta reserva no tiene una disputa');
+  if (dispute.status !== 'APPEALED') throw new BadRequestError('Esta disputa no está en apelación');
+
+  const totalAmount = Number(booking.totalAmount);
+  const commission = Number((booking as any).commissionAmount ?? totalAmount * 0.10);
+  const netAmount = totalAmount - commission;
+  const caregiverUserId = (booking as any).caregiver.userId;
+  const clientId = booking.clientId;
+
+  const oldVerdict = dispute.aiVerdict as string;
+  const oldAmounts = amountsForVerdict(oldVerdict, totalAmount, netAmount);
+  const newAmounts = amountsForVerdict(verdict, totalAmount, netAmount);
+
+  const caregiverDelta = parseFloat((newAmounts.caregiverAmount - oldAmounts.caregiverAmount).toFixed(2));
+  const clientCashDelta = parseFloat((newAmounts.clientCashAmount - oldAmounts.clientCashAmount).toFixed(2));
+
+  await prisma.$transaction(async (tx) => {
+    // Atomic claim — la apelación solo puede resolverse UNA vez.
+    const claimed = await (tx as any).dispute.updateMany({
+      where: { bookingId, status: 'APPEALED' },
+      data: { status: 'RESOLVED' },
+    });
+    if (claimed.count === 0) {
+      throw new BadRequestError('Esta apelación ya fue resuelta');
+    }
+
+    // ── Ajuste al cuidador (si cambia lo que le corresponde) ────────────────
+    if (caregiverDelta !== 0) {
+      const before = await tx.caregiverProfile.findUnique({ where: { userId: caregiverUserId }, select: { balance: true } });
+      const balanceBefore = Number(before?.balance ?? 0);
+      await tx.caregiverProfile.update({ where: { userId: caregiverUserId }, data: { balance: { increment: caregiverDelta } } });
+      await tx.walletTransaction.create({
+        data: {
+          userId: caregiverUserId,
+          type: caregiverDelta > 0 ? 'EARNING' : 'ADJUSTMENT',
+          amount: caregiverDelta,
+          balance: balanceBefore + caregiverDelta,
+          description: `Ajuste por apelación de disputa — Reserva #${bookingId.slice(0, 8).toUpperCase()}`,
+          status: 'COMPLETED',
+        },
+      });
+    }
+
+    // ── Ajuste al dueño (si cambia el reembolso en efectivo) ────────────────
+    if (clientCashDelta !== 0) {
+      const before = await tx.clientProfile.findUnique({ where: { userId: clientId }, select: { balance: true } });
+      const balanceBefore = Number(before?.balance ?? 0);
+      await tx.clientProfile.update({ where: { userId: clientId }, data: { balance: { increment: clientCashDelta } } });
+      await tx.walletTransaction.create({
+        data: {
+          userId: clientId,
+          type: clientCashDelta > 0 ? 'REFUND' : 'ADJUSTMENT',
+          amount: clientCashDelta,
+          balance: balanceBefore + clientCashDelta,
+          description: `Ajuste por apelación de disputa — Reserva #${bookingId.slice(0, 8).toUpperCase()}`,
+          status: 'COMPLETED',
+        },
+      });
+    }
+
+    // ── Código de descuento (PARTIAL) ────────────────────────────────────────
+    let discountCodeId = dispute.discountCodeId as string | null;
+    if (verdict === 'PARTIAL' && oldVerdict !== 'PARTIAL') {
+      // Nuevo veredicto parcial: emitir código nuevo
+      const discountCode = `GDN-APL-${bookingId.slice(0, 6).toUpperCase()}-${Date.now().toString(36).toUpperCase().slice(-4)}`;
+      const giftCode = await tx.giftCode.create({
+        data: { code: discountCode, amount: newAmounts.clientDiscountAmount, maxUses: 1, active: true },
+      });
+      discountCodeId = giftCode.id;
+    } else if (verdict !== 'PARTIAL' && oldVerdict === 'PARTIAL' && discountCodeId) {
+      // Ya no aplica el split: desactivar el código anterior (best-effort — si
+      // ya fue usado por el dueño, ese uso no se puede revertir).
+      await tx.giftCode.update({ where: { id: discountCodeId }, data: { active: false } }).catch(() => {});
+    }
+
+    // ── Estado final de la reserva según el veredicto de la apelación ───────
+    const bookingData = verdict === 'CLIENT_WINS'
+      ? { status: BookingStatus.CANCELLED, payoutStatus: 'REFUNDED' }
+      : { status: BookingStatus.COMPLETED, payoutStatus: 'PAID' };
+    await tx.booking.update({ where: { id: bookingId }, data: bookingData as any });
+
+    const resolutionSummary = verdict === 'CAREGIVER_WINS'
+      ? `Apelación resuelta: pago completo al cuidador (Bs ${netAmount.toFixed(2)})`
+      : verdict === 'CLIENT_WINS'
+        ? `Apelación resuelta: reembolso completo al cliente (Bs ${totalAmount.toFixed(2)})`
+        : `Apelación resuelta: parcial — cuidador Bs ${newAmounts.caregiverAmount.toFixed(2)} (80%) | descuento dueño Bs ${newAmounts.clientDiscountAmount.toFixed(2)} (20%)`;
+
+    await (tx as any).dispute.update({
+      where: { bookingId },
+      data: {
+        appealVerdict: verdict,
+        appealResolution: resolutionText.trim(),
+        appealResolvedByAdminId: adminId,
+        appealResolvedAt: new Date(),
+        resolution: resolutionSummary,
+        discountCodeId,
+      },
+    });
+  });
+
+  const verdictChanged = verdict !== oldVerdict;
+  const clientMsg = verdictChanged
+    ? `Un miembro de nuestro equipo revisó tu apelación y cambió el resultado. ${resolutionText.trim()}`
+    : `Un miembro de nuestro equipo revisó tu apelación y confirmó la decisión anterior. ${resolutionText.trim()}`;
+  const caregiverMsg = clientMsg;
+
+  await prisma.notification.create({
+    data: { userId: clientId, title: '⚖️ Resultado de tu apelación', message: clientMsg, type: 'SYSTEM' },
+  }).catch(() => {});
+  await prisma.notification.create({
+    data: { userId: caregiverUserId, title: '⚖️ Resultado de la apelación', message: caregiverMsg, type: 'SYSTEM' },
+  }).catch(() => {});
+  sendPushToUser(clientId, '⚖️ Resultado de tu apelación', 'Un miembro de nuestro equipo revisó tu caso. Toca para ver el resultado.').catch(() => {});
+  sendPushToUser(caregiverUserId, '⚖️ Resultado de la apelación', 'Un miembro de nuestro equipo revisó tu caso. Toca para ver el resultado.').catch(() => {});
+
+  await prisma.adminAction.create({
+    data: {
+      adminId,
+      actionType: 'DISPUTE_APPEAL_RESOLVED',
+      targetId: bookingId,
+      notes: `Apelación resuelta: ${verdict}${verdictChanged ? ` (cambió de ${oldVerdict})` : ' (confirmó veredicto de IA)'}`,
+    },
+  });
+
+  logger.info('Admin: apelación de disputa resuelta', { bookingId, adminId, verdict, oldVerdict, caregiverDelta, clientCashDelta });
+  return { id: bookingId, verdict };
+}
+
+// ---------------------------------------------------------------------------
 // Incidentes/emergencias en servicio activo
 // ---------------------------------------------------------------------------
 
@@ -2502,4 +2721,257 @@ export async function isZoneBlocked(zone: string): Promise<boolean> {
 export async function getBlockedZonesList(): Promise<string[]> {
   const blocked = await _getBlockedZones();
   return [...blocked];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REPORTES DE CHAT (App Store 1.2 UGC / Google Play — moderación)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** GET /api/admin/chat-reports — listado de reportes de chat, filtro opcional por status. */
+export async function listChatReports(status?: string) {
+  const reports = await prisma.chatReport.findMany({
+    where: status ? { status } : {},
+    include: {
+      booking: { select: { id: true, serviceType: true, petName: true } },
+      reporter: { select: { id: true, firstName: true, lastName: true, email: true } },
+      reportedUser: { select: { id: true, firstName: true, lastName: true, email: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 300,
+  });
+
+  return reports.map((r) => {
+    let messages: any[] = [];
+    try { messages = JSON.parse(r.messagesSnapshot); } catch { /* no-op */ }
+    return {
+      id: r.id,
+      bookingId: r.bookingId,
+      reason: r.reason,
+      details: r.details,
+      status: r.status,
+      adminNotes: r.adminNotes,
+      reviewedByAdminId: r.reviewedByAdminId,
+      reviewedAt: toIso(r.reviewedAt),
+      createdAt: r.createdAt.toISOString(),
+      messagesSnapshot: messages,
+      reporter: {
+        id: r.reporter.id,
+        name: `${r.reporter.firstName} ${r.reporter.lastName}`.trim(),
+        email: r.reporter.email,
+      },
+      reportedUser: {
+        id: r.reportedUser.id,
+        name: `${r.reportedUser.firstName} ${r.reportedUser.lastName}`.trim(),
+        email: r.reportedUser.email,
+      },
+      booking: {
+        id: r.booking.id,
+        serviceType: r.booking.serviceType,
+        petName: r.booking.petName,
+      },
+    };
+  });
+}
+
+/**
+ * POST /api/admin/chat-reports/:id/resolve — decisión del admin sobre un reporte de chat.
+ * Si suspendUser=true y el usuario reportado tiene perfil de cuidador, se suspende ese perfil
+ * (reutiliza la misma lógica que suspendCaregiver). Para clientes no hay mecanismo de
+ * suspensión de cuenta hoy — se registra en adminNotes.
+ */
+export async function resolveChatReport(
+  reportId: string,
+  adminId: string,
+  status: 'ACTION_TAKEN' | 'DISMISSED',
+  adminNotes: string,
+  suspendUser: boolean
+) {
+  const report = await prisma.chatReport.findUnique({
+    where: { id: reportId },
+    include: { reportedUser: { include: { caregiverProfile: true } } },
+  });
+  if (!report) throw new NotFoundError('Reporte de chat no encontrado');
+  if (report.status !== 'PENDING' && report.status !== 'REVIEWED') {
+    throw new BadRequestError('Este reporte ya fue resuelto');
+  }
+
+  let suspended = false;
+  let suspendNote = '';
+
+  if (suspendUser && status === 'ACTION_TAKEN') {
+    if (report.reportedUser.caregiverProfile) {
+      await suspendCaregiver(
+        report.reportedUser.caregiverProfile.id,
+        adminId,
+        `Reportado en chat (motivo: ${report.reason}) — reporte ${reportId.slice(0, 8).toUpperCase()}`
+      );
+      suspended = true;
+    } else {
+      suspendNote = ' [No se pudo suspender: el usuario reportado no tiene perfil de cuidador — no existe mecanismo de suspensión para cuentas de cliente todavía.]';
+    }
+  }
+
+  const updated = await prisma.chatReport.update({
+    where: { id: reportId },
+    data: {
+      status,
+      adminNotes: `${adminNotes}${suspendNote}`,
+      reviewedByAdminId: adminId,
+      reviewedAt: new Date(),
+    },
+  });
+
+  await prisma.adminAction.create({
+    data: {
+      adminId,
+      actionType: 'CHAT_REPORT_RESOLVED',
+      targetId: reportId,
+      notes: `${status} — ${adminNotes}${suspendNote}`,
+    },
+  });
+
+  return { success: true, status: updated.status, suspended };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VERIFICACIÓN TELEFÓNICA MANUAL (fallback mientras WhatsApp/SMS no son
+// 100% confiables — ver otp-delivery.service.ts). El admin ve el mensaje
+// listo para copiar/enviar por su propio WhatsApp. Cada entrada permanece
+// en la lista hasta que el usuario verifica su teléfono exitosamente.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** GET /api/admin/phone-otp-requests — cuidadores que pidieron un código y
+ * todavía NO verificaron su teléfono. Desaparece de la lista solo cuando
+ * phoneVerified pasa a true. */
+export async function listPendingPhoneOtpRequests() {
+  const notifications = await prisma.adminNotification.findMany({
+    where: { type: 'PHONE_OTP_MANUAL_HELP' },
+    orderBy: { createdAt: 'desc' },
+    take: 500,
+  });
+
+  // Última solicitud por usuario (puede haber pedido el código varias veces)
+  const latestByUser = new Map<string, Date>();
+  for (const n of notifications) {
+    if (!latestByUser.has(n.caregiverId)) latestByUser.set(n.caregiverId, n.createdAt);
+  }
+
+  const userIds = [...latestByUser.keys()];
+  if (userIds.length === 0) return [];
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: {
+      id: true, firstName: true, lastName: true, phone: true,
+      caregiverProfile: { select: { phoneVerified: true } },
+    },
+  });
+
+  return users
+    .filter((u) => (u as any).caregiverProfile?.phoneVerified !== true)
+    .map((u) => ({
+      userId: u.id,
+      name: `${u.firstName} ${u.lastName}`.trim(),
+      phone: u.phone,
+      requestedAt: latestByUser.get(u.id)?.toISOString(),
+    }))
+    .sort((a, b) => (b.requestedAt ?? '').localeCompare(a.requestedAt ?? ''));
+}
+
+/**
+ * POST /api/admin/phone-otp-requests/:userId/message — (re)genera un código
+ * de 6 dígitos fresco (10 min de vigencia desde AHORA) y devuelve el mensaje
+ * exacto listo para copiar/pegar, para que el admin lo envíe manualmente por
+ * su propio WhatsApp sin depender de que el envío automático haya llegado.
+ */
+export async function generatePhoneOtpMessage(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { phone: true } });
+  if (!user || !user.phone) {
+    throw new BadRequestError('Este usuario no tiene teléfono registrado');
+  }
+
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { phoneOtp: otp, phoneOtpExpiresAt: expiresAt },
+  });
+
+  const toPhone = user.phone.startsWith('+') ? user.phone : `+591${user.phone}`;
+  const message = `GARDEN: tu código de verificación es ${otp}. Vence en 10 minutos. No lo compartas con nadie.`;
+
+  return { phone: toPhone, message, expiresAt: expiresAt.toISOString() };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VERIFICACIÓN DE CORREO MANUAL (fallback — SOLO aparece cuando Resend
+// realmente falla al enviar, a diferencia del teléfono que se notifica
+// siempre. Ver auth.controller.ts sendVerificationEmail — el catch de
+// EMAIL_SEND_FAILED es lo único que crea estas notificaciones).
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** GET /api/admin/email-otp-requests — usuarios a los que Resend NO pudo
+ * enviarles el código y que todavía no verifican su correo. Desaparece de
+ * la lista solo cuando emailVerified pasa a true. */
+export async function listPendingEmailOtpRequests() {
+  const notifications = await prisma.adminNotification.findMany({
+    where: { type: 'EMAIL_OTP_MANUAL_HELP' },
+    orderBy: { createdAt: 'desc' },
+    take: 500,
+  });
+
+  const latestByUser = new Map<string, Date>();
+  for (const n of notifications) {
+    if (!latestByUser.has(n.caregiverId)) latestByUser.set(n.caregiverId, n.createdAt);
+  }
+
+  const userIds = [...latestByUser.keys()];
+  if (userIds.length === 0) return [];
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, firstName: true, lastName: true, email: true, emailVerified: true },
+  });
+
+  return users
+    .filter((u) => u.emailVerified !== true)
+    .map((u) => ({
+      userId: u.id,
+      name: `${u.firstName} ${u.lastName}`.trim(),
+      email: u.email,
+      requestedAt: latestByUser.get(u.id)?.toISOString(),
+    }))
+    .sort((a, b) => (b.requestedAt ?? '').localeCompare(a.requestedAt ?? ''));
+}
+
+/**
+ * POST /api/admin/email-otp-requests/:userId/message — genera un código
+ * fresco (10 min de vigencia desde AHORA), lo guarda hasheado como una
+ * EmailVerification normal (así el flujo de verificación del usuario sigue
+ * funcionando igual), y devuelve el código EN TEXTO PLANO + el mensaje listo
+ * para que el admin lo copie o lo mande por correo/WhatsApp manualmente.
+ * NO reintenta enviar por Resend — si el admin está aquí es porque Resend
+ * ya falló una vez para este usuario.
+ */
+export async function generateEmailOtpMessage(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  if (!user || !user.email) {
+    throw new BadRequestError('Este usuario no tiene correo registrado');
+  }
+
+  const { createHash, randomInt } = await import('crypto');
+  const code = randomInt(100000, 999999).toString();
+  const codeHash = createHash('sha256').update(code).digest('hex');
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+  // Invalida códigos previos sin verificar antes de crear el nuevo — mismo
+  // criterio que generateAndSendVerificationCode en email.service.ts.
+  await prisma.emailVerification.deleteMany({ where: { userId, verified: false } });
+  await prisma.emailVerification.create({
+    data: { userId, codeHash, expiresAt, attempts: 0 },
+  });
+
+  const message = `GARDEN: tu código de verificación es ${code}. Vence en 10 minutos. No lo compartas con nadie.`;
+
+  return { email: user.email, message, code, expiresAt: expiresAt.toISOString() };
 }

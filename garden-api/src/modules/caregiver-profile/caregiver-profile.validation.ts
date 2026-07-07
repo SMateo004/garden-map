@@ -48,6 +48,7 @@ export interface PatchCaregiverProfileBody {
   photos?: string[];
   profilePhoto?: string | null;
   experienceYears?: any;
+  isAmateur?: boolean;
   ownPets?: boolean;
   currentPetsDetails?: any;
   caredOthers?: boolean;
@@ -83,6 +84,32 @@ export interface PatchCaregiverProfileBody {
   ciNumber?: string;
   onboardingStatus?: any;
   serviceDetails?: any;
+  emergencyContacts?: Array<{ name?: string; phone?: string }>;
+}
+
+// --- Contactos de emergencia: 1-3, cada uno con nombre y teléfono boliviano válido ---
+
+const EMERGENCY_PHONE_REGEX = /^[67][0-9]{7}$/;
+
+/** Valida el arreglo de contactos de emergencia. Lanza con el primer error encontrado. */
+export function validateEmergencyContacts(contacts: unknown): { name: string; phone: string }[] {
+  if (!Array.isArray(contacts)) {
+    throw new Error('emergencyContacts debe ser un arreglo');
+  }
+  if (contacts.length < 1 || contacts.length > 3) {
+    throw new Error('Debes registrar entre 1 y 3 contactos de emergencia');
+  }
+  return contacts.map((c, i) => {
+    const name = typeof c?.name === 'string' ? c.name.trim() : '';
+    const phone = typeof c?.phone === 'string' ? c.phone.trim() : '';
+    if (!name) {
+      throw new Error(`Falta el nombre del contacto de emergencia #${i + 1}`);
+    }
+    if (!EMERGENCY_PHONE_REGEX.test(phone)) {
+      throw new Error(`Teléfono inválido para el contacto de emergencia #${i + 1} (8 dígitos, debe empezar con 6 o 7)`);
+    }
+    return { name, phone };
+  });
 }
 
 // --- Submit: lista de campos obligatorios para enviar solicitud (MVP wizard) ---
