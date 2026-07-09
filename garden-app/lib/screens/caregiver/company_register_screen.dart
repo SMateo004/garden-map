@@ -34,7 +34,13 @@ import 'phone_verification_screen.dart';
 import 'email_verification_screen.dart';
 
 class CompanyRegisterScreen extends StatefulWidget {
-  const CompanyRegisterScreen({super.key});
+  /// When true, the screen queries the backend on load to jump straight to
+  /// the first incomplete post-registration step (4-10) instead of starting
+  /// at paso 0. Set to true when navigating from the home screen's
+  /// "Continuar registro" button for a caregiver with isCompany=true.
+  final bool resumeMode;
+
+  const CompanyRegisterScreen({super.key, this.resumeMode = false});
 
   @override
   State<CompanyRegisterScreen> createState() => _CompanyRegisterScreenState();
@@ -129,6 +135,169 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
   void initState() {
     super.initState();
     _loadPriceLimits();
+    // resumeMode: la empresa ya tiene sesión activa (viene de
+    // caregiver_home_screen.dart, no del flujo de registro anónimo) —
+    // reutilizamos el token ya guardado en AuthState.
+    if (widget.resumeMode) {
+      final token = AuthState.token;
+      if (token.isNotEmpty) {
+        _authToken = token;
+        _computeAndSetResumeStep();
+      }
+    }
+  }
+
+  /// Rellena los controladores/state vars de los pasos 1-7 con los datos
+  /// ya guardados en el backend, para poder retomar el registro donde se
+  /// quedó (mismo patrón que _populateStateFromProfile en
+  /// onboarding_wizard_screen.dart).
+  void _populateStateFromProfile(Map<String, dynamic> profile) {
+    final user = profile['user'] as Map<String, dynamic>?;
+
+    setState(() {
+      // Paso 1: Datos de la empresa
+      _companyNameCtrl.text = profile['companyName'] as String? ?? _companyNameCtrl.text;
+      _businessType = profile['businessType'] as String? ?? _businessType;
+      _emailCtrl.text = user?['email'] as String? ?? _emailCtrl.text;
+      _phoneCtrl.text = user?['phone'] as String? ?? _phoneCtrl.text;
+      _bioCtrl.text = profile['bio'] as String? ?? _bioCtrl.text;
+
+      // Paso 2: Ubicación
+      _zone = profile['zone'] as String? ?? _zone;
+      _streetCtrl.text = profile['addressStreet'] as String? ?? _streetCtrl.text;
+      _numberCtrl.text = profile['addressNumber'] as String? ?? _numberCtrl.text;
+      _apartmentCtrl.text = profile['addressApartment'] as String? ?? _apartmentCtrl.text;
+      _condominioCtrl.text = profile['addressCondominio'] as String? ?? _condominioCtrl.text;
+      _referenceCtrl.text = profile['addressReference'] as String? ?? _referenceCtrl.text;
+      _isApartment = (profile['addressApartment'] as String? ?? '').isNotEmpty;
+      _lat = (profile['addressLat'] as num?)?.toDouble() ?? _lat;
+      _lng = (profile['addressLng'] as num?)?.toDouble() ?? _lng;
+
+      // Paso 3: Servicios
+      final services = (profile['servicesOffered'] as List? ?? []).cast<String>();
+      _services
+        ..clear()
+        ..addAll(services);
+
+      // Paso 4: Disponibilidad — la empresa la guarda en serviceDetails.availability
+      // (no en serviceAvailability, que es el campo que usa el wizard individual)
+      final serviceDetails = profile['serviceDetails'] as Map<String, dynamic>?;
+      final availability = serviceDetails?['availability'] as Map<String, dynamic>?;
+      if (availability != null) {
+        _weekdays = availability['weekdays'] as bool? ?? _weekdays;
+        _weekends = availability['weekends'] as bool? ?? _weekends;
+        _holidays = availability['holidays'] as bool? ?? _holidays;
+        final slots = availability['slots'] as Map<String, dynamic>?;
+        if (slots != null) {
+          _morning = slots['morning'] as bool? ?? _morning;
+          _afternoon = slots['afternoon'] as bool? ?? _afternoon;
+          _night = slots['night'] as bool? ?? _night;
+        }
+      }
+
+      // Paso 5: Fotos
+      _caregiverPhotoUrls = List<String>.from(profile['caregiverPhotos'] ?? []);
+      final rawPlace = profile['placePhotos'] as Map<String, dynamic>?;
+      if (rawPlace != null) {
+        _placePhotoUrls = rawPlace.map((k, v) => MapEntry(k, List<String>.from(v as List? ?? [])));
+      }
+
+      // Paso 6: Precios
+      final pDay = (profile['pricePerDay'] as num?)?.toDouble();
+      final pWalk = (profile['pricePerWalk60'] as num?)?.toDouble();
+      final pGuar = (profile['pricePerGuarderia'] as num?)?.toDouble();
+      if (pDay != null && pDay > 0) _precioHospedaje = pDay;
+      if (pWalk != null && pWalk > 0) _precioPaseo = pWalk;
+      if (pGuar != null && pGuar > 0) _precioGuarderia = pGuar;
+
+      // Paso 7: Logo — el POST /caregiver/profile/photo guarda la URL en el
+      // campo `profilePhoto` (mismo campo reutilizado del cuidador individual)
+      _logoUrl = profile['profilePhoto'] as String? ?? _logoUrl;
+    });
+  }
+
+  /// Para empresas que retoman el registro: consulta el perfil y salta al
+  /// primer paso incompleto. El resume NUNCA aterriza antes del paso 4,
+  /// porque los pasos 0-3 son PRE-creación de cuenta y en resume la cuenta
+  /// ya existe (mismo patrón que _computeAndSetResumeStep en
+  /// onboarding_wizard_screen.dart).
+  Future<void> _computeAndSetResumeStep() async {
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/caregiver/my-profile'),
+        headers: {'Authorization': 'Bearer $_authToken'},
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] != true) return;
+      final profile = data['data'] as Map<String, dynamic>;
+
+      _populateStateFromProfile(profile);
+
+      // Paso 4: Disponibilidad
+      final serviceDetails = profile['serviceDetails'] as Map<String, dynamic>?;
+      final availability = serviceDetails?['availability'] as Map<String, dynamic>?;
+      final hasAvailability = availability != null && availability.isNotEmpty;
+      if (!hasAvailability) {
+        setState(() => _currentStep = 4);
+        return;
+      }
+
+      // Paso 5: Fotos — mismo criterio que _validateStep case 5
+      final services = (profile['servicesOffered'] as List? ?? []).cast<String>();
+      final onlyPaseo = services.length == 1 && services.contains('PASEO');
+      final minCaregiverPhotos = onlyPaseo ? 2 : 4;
+      final caregiverPhotos = (profile['caregiverPhotos'] as List? ?? []);
+      final needsPlacePhotosResume = services.contains('HOSPEDAJE') || services.contains('GUARDERIA');
+      bool photosOk = caregiverPhotos.length >= minCaregiverPhotos;
+      if (photosOk && needsPlacePhotosResume) {
+        final placePhotos = profile['placePhotos'] as Map<String, dynamic>? ?? {};
+        for (final (key, _, required) in _placeSections) {
+          if (!required) continue;
+          final count = (placePhotos[key] as List? ?? []).length;
+          if (count < 1) { photosOk = false; break; }
+        }
+      }
+      if (!photosOk) {
+        setState(() => _currentStep = 5);
+        return;
+      }
+
+      // Paso 6: Precios
+      bool pricesOk = true;
+      if (services.contains('HOSPEDAJE') && ((profile['pricePerDay'] ?? 0) as num) <= 0) pricesOk = false;
+      if (services.contains('PASEO') && ((profile['pricePerWalk60'] ?? 0) as num) <= 0) pricesOk = false;
+      if (services.contains('GUARDERIA') && ((profile['pricePerGuarderia'] ?? 0) as num) <= 0) pricesOk = false;
+      if (!pricesOk) {
+        setState(() => _currentStep = 6);
+        return;
+      }
+
+      // Paso 7: Logo (campo profilePhoto)
+      if (profile['profilePhoto'] == null) {
+        setState(() => _currentStep = 7);
+        return;
+      }
+
+      // Paso 8: Verificación de teléfono — si ya está verificado, sáltalo
+      final phoneVerified = profile['phoneVerified'] == true;
+      if (!phoneVerified) {
+        setState(() => _currentStep = 8);
+        return;
+      }
+
+      // Paso 9: Verificación de correo — si ya está verificado, sáltalo
+      final emailVerified = profile['emailVerified'] == true ||
+          (profile['user'] as Map<String, dynamic>?)?['emailVerified'] == true;
+      if (!emailVerified) {
+        setState(() => _currentStep = 9);
+        return;
+      }
+
+      // Todo lo anterior completo — perfil detallado de la empresa
+      setState(() => _currentStep = 10);
+    } catch (_) {
+      // Falla silenciosa — se queda en el paso 0 (comportamiento actual)
+    }
   }
 
   Future<void> _loadPriceLimits() async {

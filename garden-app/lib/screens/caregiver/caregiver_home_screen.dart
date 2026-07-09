@@ -3620,8 +3620,11 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                       final prefs = await SharedPreferences.getInstance();
                       await prefs.setBool('caregiver_setup_complete', false);
                       if (!context.mounted) return;
+                      final isCompany = _caregiver?['isCompany'] == true;
                       if (_conversionInProgress) {
                         router.go('/caregiver/onboarding', extra: {'clientConversionMode': true});
+                      } else if (isCompany) {
+                        router.go('/caregiver/onboarding-profesional', extra: {'resumeMode': true});
                       } else {
                         router.go('/caregiver/onboarding', extra: {'resumeMode': true});
                       }

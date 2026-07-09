@@ -270,6 +270,8 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       acceptSeniors: c.acceptSeniors,
       sizesAccepted: c.sizesAccepted,
       isProfessional: (c as any).isProfessional ?? false,
+      isCompany: (c as any).isCompany ?? false,
+      companyName: (c as any).companyName ?? null,
       maxPets: c.maxPets ?? 1,
       // Store raw coords in cache; jitter is applied AFTER retrieval so each response
       // gets fresh noise and cached data doesn't leak a static jittered position.
@@ -518,6 +520,8 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     oftenOut: profile.oftenOut,
     spaceDescription: profile.spaceDescription,
     isProfessional: (profile as any).isProfessional ?? false,
+    isCompany: (profile as any).isCompany ?? false,
+    companyName: (profile as any).companyName ?? null,
     extraServices: ((profile as any).extraServices ?? []).map((e: any) => ({
       id: e.id,
       name: e.name,

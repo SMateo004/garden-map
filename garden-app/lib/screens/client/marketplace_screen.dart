@@ -1951,6 +1951,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final reviewCount = caregiver['reviewCount'] as int? ?? 0;
     final firstName = caregiver['firstName'] as String? ?? '';
     final lastName = caregiver['lastName'] as String? ?? '';
+    final isCompany = caregiver['isCompany'] == true;
+    final companyName = caregiver['companyName'] as String?;
+    final displayName = (isCompany && (companyName?.isNotEmpty ?? false))
+        ? companyName!
+        : '$firstName $lastName';
     final zone = _kZoneLabels[caregiver['zone']] ?? caregiver['zone'] ?? '';
     final expYears = caregiver['experienceYears'] as int?;
     final allServices = (caregiver['services'] as List? ?? []);
@@ -2029,7 +2034,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       child: GardenAvatar(
                         imageUrl: caregiver['profilePicture'] as String?,
                         size: 58,
-                        initials: '${firstName.isNotEmpty ? firstName[0] : "C"}${lastName.isNotEmpty ? lastName[0] : ""}',
+                        initials: (isCompany && (companyName?.isNotEmpty ?? false))
+                            ? companyName![0]
+                            : '${firstName.isNotEmpty ? firstName[0] : "C"}${lastName.isNotEmpty ? lastName[0] : ""}',
                       ),
                     ),
                     if (isVerified)
@@ -2049,7 +2056,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       children: [
                         Row(children: [
                           Expanded(
-                            child: Text('$firstName $lastName',
+                            child: Text(displayName,
                                 style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700),
                                 overflow: TextOverflow.ellipsis),
                           ),

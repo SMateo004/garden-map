@@ -721,14 +721,19 @@ class _BookingScreenState extends State<BookingScreen> {
           GardenAvatar(
             imageUrl: _caregiver!['profilePicture'] as String?,
             size: 56,
-            initials: '${(_caregiver!['firstName'] as String? ?? 'C')[0]}${(_caregiver!['lastName'] as String? ?? '')[0]}',
+            initials: (_caregiver!['isCompany'] == true && ((_caregiver!['companyName'] as String?)?.isNotEmpty ?? false))
+                ? (_caregiver!['companyName'] as String)[0]
+                : '${(_caregiver!['firstName'] as String? ?? 'C')[0]}${(_caregiver!['lastName'] as String? ?? '')[0]}',
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${_caregiver!['firstName']} ${_caregiver!['lastName']}',
+                Text(
+                  (_caregiver!['isCompany'] == true && ((_caregiver!['companyName'] as String?)?.isNotEmpty ?? false))
+                      ? _caregiver!['companyName'] as String
+                      : '${_caregiver!['firstName']} ${_caregiver!['lastName']}',
                   style: GardenText.h4.copyWith(color: textColor)),
                 const SizedBox(height: 4),
                 Row(children: [

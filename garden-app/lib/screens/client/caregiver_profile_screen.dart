@@ -311,7 +311,11 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
         .where((e) => (placePhotos[e.key]?.isNotEmpty ?? false))
         .map((e) => (e.key, e.value, placePhotos[e.key]!))
         .toList();
-    final name = '${_caregiver!['firstName']} ${_caregiver!['lastName']}';
+    final isCompany = _caregiver!['isCompany'] == true;
+    final companyName = _caregiver!['companyName'] as String?;
+    final name = (isCompany && (companyName?.isNotEmpty ?? false))
+        ? companyName!
+        : '${_caregiver!['firstName']} ${_caregiver!['lastName']}';
     final rating = (_caregiver!['rating'] as num? ?? 0).toStringAsFixed(1);
     final reviewCount = _caregiver!['reviewCount'] as int? ?? 0;
     final zone = _caregiver!['zone'] as String? ?? '';
@@ -431,7 +435,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                             GardenAvatar(
                               imageUrl: _caregiver!['profilePicture'] as String?,
                               size: 72,
-                              initials: '${_caregiver!['firstName']?[0] ?? ''}${_caregiver!['lastName']?[0] ?? ''}',
+                              initials: (_caregiver!['isCompany'] == true && ((_caregiver!['companyName'] as String?)?.isNotEmpty ?? false)) ? (_caregiver!['companyName'] as String)[0] : '${_caregiver!['firstName']?[0] ?? ''}${_caregiver!['lastName']?[0] ?? ''}',
                             ),
                             const SizedBox(width: 20),
                             Expanded(
@@ -886,7 +890,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                     children: [
                       // Nombre + rating
                       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        GardenAvatar(imageUrl: _caregiver!['profilePicture'] as String?, size: 64, initials: '${_caregiver!['firstName']?[0] ?? ''}${_caregiver!['lastName']?[0] ?? ''}'),
+                        GardenAvatar(imageUrl: _caregiver!['profilePicture'] as String?, size: 64, initials: (_caregiver!['isCompany'] == true && ((_caregiver!['companyName'] as String?)?.isNotEmpty ?? false)) ? (_caregiver!['companyName'] as String)[0] : '${_caregiver!['firstName']?[0] ?? ''}${_caregiver!['lastName']?[0] ?? ''}'),
                         const SizedBox(width: 16),
                         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -502,7 +502,12 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/caregiver/onboarding-profesional',
       name: 'companyRegister',
-      builder: (context, state) => const CompanyRegisterScreen(),
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        return CompanyRegisterScreen(
+          resumeMode: extra['resumeMode'] as bool? ?? false,
+        );
+      },
     ),
     GoRoute(
       path: '/caregiver/:id',
