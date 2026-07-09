@@ -86,6 +86,15 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// Determina si el usuario debe pasar por la subida obligatoria de foto de
+  /// perfil antes de continuar. Solo aplica a CLIENT sin foto guardada.
+  /// Compartido entre login social (_handleSocialResult) y login por
+  /// email/contraseña (_handleLogin) para que ambos flujos apliquen el mismo
+  /// criterio y ninguno pueda saltarse el requisito.
+  bool _needsProfilePhoto(String role, String? profilePicture) {
+    return role == 'CLIENT' && (profilePicture == null || profilePicture.isEmpty);
+  }
+
   void _handleSocialResult(SocialLoginResult result) {
     if (!result.success) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -104,8 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
         duration: Duration(seconds: 5),
       ));
     }
-    final needsPhoto = (result.role ?? 'CLIENT') == 'CLIENT' &&
-        (result.profilePicture == null || result.profilePicture!.isEmpty);
+    final needsPhoto = _needsProfilePhoto(result.role ?? 'CLIENT', result.profilePicture);
     _navigateAfterLogin(result.role ?? 'CLIENT', activeRole: result.activeRole, needsProfilePhoto: needsPhoto);
   }
 
@@ -125,8 +133,10 @@ class _LoginScreenState extends State<LoginScreen> {
       final prefs = await SharedPreferences.getInstance();
       final role = prefs.getString('user_role') ?? '';
       final activeRole = prefs.getString('active_role');
+      final profilePicture = prefs.getString('user_photo');
       if (!mounted) return;
-      _navigateAfterLogin(role, activeRole: activeRole);
+      final needsPhoto = _needsProfilePhoto(role, profilePicture);
+      _navigateAfterLogin(role, activeRole: activeRole, needsProfilePhoto: needsPhoto);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -131,12 +131,60 @@ const _publicPaths = {
   '/verify',           // alias legacy de /mobile-verify
 };
 
+// ── Guardia de rol ───────────────────────────────────────────
+// Mapeo conservador de prefijos de ruta → rol requerido, SOLO para pantallas
+// "home" exclusivas de cada rol. Deja fuera a propósito rutas compartidas o
+// de flujos de transición (ej. /caregiver/onboarding, /caregiver/setup,
+// /caregiver/verification), que un CLIENT convirtiéndose en CAREGIVER (o un
+// CAREGIVER aún no aprobado) necesita poder visitar sin importar su rol
+// efectivo actual.
+const _roleRestrictedPrefixes = <String, String>{
+  '/admin': 'ADMIN',
+  '/caregiver/home': 'CAREGIVER',
+  '/marketplace': 'CLIENT',
+  '/my-bookings-tab': 'CLIENT',
+  '/my-pets-tab': 'CLIENT',
+  '/my-pets': 'CLIENT',
+  '/service-selector': 'CLIENT',
+};
+
+// Home correcta para cada rol efectivo — mismo destino que usa el cambio de
+// rol explícito en profile_screen.dart (_doSwitchRole).
+String _homeForRole(String effectiveRole) {
+  switch (effectiveRole) {
+    case 'ADMIN':
+      return '/admin';
+    case 'CAREGIVER':
+      return '/caregiver/home';
+    default:
+      return '/service-selector';
+  }
+}
+
 // ── Router ─────────────────────────────────────────────────
 final GoRouter _router = GoRouter(
   initialLocation: '/',
   // Redirige al login si se intenta acceder a una ruta protegida sin sesión.
   redirect: (context, state) {
     final path = state.matchedLocation;
+
+    // Guardia de rol: se evalúa ANTES del chequeo de rutas públicas porque
+    // /marketplace y /service-selector son públicas para invitados pero
+    // igual deben respetar el rol efectivo de una sesión ya autenticada
+    // (ej. tras un cambio de rol seguido de "atrás" en el navegador).
+    if (AuthState.hasSession) {
+      String? requiredRole;
+      for (final entry in _roleRestrictedPrefixes.entries) {
+        if (path == entry.key || path.startsWith('${entry.key}/')) {
+          requiredRole = entry.value;
+          break;
+        }
+      }
+      if (requiredRole != null && AuthState.effectiveRole != requiredRole) {
+        return _homeForRole(AuthState.effectiveRole);
+      }
+    }
+
     if (_publicPaths.any((p) => path == p || path.startsWith('$p/'))) {
       return null; // ruta pública — sin restricción
     }
@@ -540,16 +588,32 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/help-center/category',
       name: 'helpCenterCategory',
-      builder: (context, state) => HelpCategoryScreen(category: state.extra as HelpCategory),
+      builder: (context, state) {
+        // `extra` no sobrevive a un refresh de página en Flutter Web (no va
+        // codificado en la URL). Si llega null o de un tipo inesperado,
+        // volvemos al índice del Centro de Ayuda en vez de crashear.
+        final category = state.extra as HelpCategory?;
+        if (category == null) {
+          return const HelpCenterScreen();
+        }
+        return HelpCategoryScreen(category: category);
+      },
     ),
     GoRoute(
       path: '/help-center/article',
       name: 'helpCenterArticle',
       builder: (context, state) {
-        final extra = state.extra as Map<String, dynamic>;
+        // Mismo caso: sin `extra` (p. ej. tras un refresh en web) no hay forma
+        // de reconstruir el artículo, así que caemos de vuelta al índice.
+        final extra = state.extra as Map<String, dynamic>?;
+        final article = extra?['article'] as HelpArticle?;
+        final categoryTitle = extra?['categoryTitle'] as String?;
+        if (article == null || categoryTitle == null) {
+          return const HelpCenterScreen();
+        }
         return HelpArticleScreen(
-          article: extra['article'] as HelpArticle,
-          categoryTitle: extra['categoryTitle'] as String,
+          article: article,
+          categoryTitle: categoryTitle,
         );
       },
     ),

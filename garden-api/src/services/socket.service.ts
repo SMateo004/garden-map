@@ -105,10 +105,31 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
                             { caregiver: { userId: socket.data.userId } },
                         ],
                     },
+                    include: {
+                        caregiver: { select: { userId: true } },
+                    },
                 });
 
                 if (!booking) {
                     socket.emit('error', { message: 'No tienes acceso a este chat' });
+                    return;
+                }
+
+                // Bloqueo: si cualquiera de las dos partes bloqueó a la otra, no se
+                // puede enviar mensajes. El endpoint REST (POST /chat/:bookingId/messages)
+                // ya validaba esto, pero el socket permitía evadirlo enviando por WS.
+                const isClient = booking.clientId === socket.data.userId;
+                const recipientId = isClient ? booking.caregiver.userId : booking.clientId;
+                const blockExists = await prisma.userBlock.findFirst({
+                    where: {
+                        OR: [
+                            { blockerId: socket.data.userId, blockedId: recipientId },
+                            { blockerId: recipientId, blockedId: socket.data.userId },
+                        ],
+                    },
+                });
+                if (blockExists) {
+                    socket.emit('error', { message: 'No puedes enviar mensajes a este usuario.' });
                     return;
                 }
 

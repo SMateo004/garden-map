@@ -186,6 +186,12 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
       return;
     }
 
+    // Servicios que el cuidador tiene REALMENTE habilitados (servicesOffered).
+    // No basta con que el precio sea > 0: un precio puede quedar guardado en
+    // la BD (ej. pre-relleno de Guardería con el precio de Paseo) para un
+    // servicio que el cuidador nunca activó. Por eso siempre se exige que el
+    // servicio esté en esta lista además de tener precio configurado.
+    final services = (_caregiver!['services'] as List?)?.cast<String>() ?? [];
     final pricePerWalk60Raw = _caregiver!['pricePerWalk60'];
     final pricePerWalk30Raw = _caregiver!['pricePerWalk30'];
     final pricePerDayRaw = _caregiver!['pricePerDay'];
@@ -194,9 +200,9 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     final pricePerWalk60 = (pricePerWalk60Raw != null && (pricePerWalk60Raw as num) > 0) ? pricePerWalk60Raw : null;
     final pricePerWalk30 = (pricePerWalk30Raw != null && (pricePerWalk30Raw as num) > 0) ? pricePerWalk30Raw : null;
     final pricePerGuarderia = (pricePerGuarderiaRaw != null && (pricePerGuarderiaRaw as num) > 0) ? pricePerGuarderiaRaw : null;
-    final offersHospedaje = pricePerDay != null;
-    final offersPaseo = pricePerWalk30 != null || pricePerWalk60 != null;
-    final offersGuarderia = pricePerGuarderia != null;
+    final offersHospedaje = services.contains('HOSPEDAJE') && pricePerDay != null;
+    final offersPaseo = services.contains('PASEO') && (pricePerWalk30 != null || pricePerWalk60 != null);
+    final offersGuarderia = services.contains('GUARDERIA') && pricePerGuarderia != null;
     final walkDisplayPrice = pricePerWalk30 ?? pricePerWalk60;
     final walkDisplayUnit = pricePerWalk30 != null ? '30 min' : 'hora';
     final isDark = themeNotifier.isDark;

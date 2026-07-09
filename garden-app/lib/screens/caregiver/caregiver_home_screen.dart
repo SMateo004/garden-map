@@ -15,6 +15,7 @@ import '../chat/chat_screen.dart';
 import '../service/service_execution_screen.dart';
 import '../../widgets/pet_profile_sheet.dart';
 import '../../widgets/price_suggestion_banner.dart';
+import '../../services/auth_service.dart';
 import '../../services/auth_state.dart';
 import '../../services/secure_storage_service.dart';
 
@@ -394,8 +395,11 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   }
 
   Future<void> _logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    // Solo limpia el token y las claves de sesión (user_role, active_role,
+    // user_id, user_name, user_photo). NO usar prefs.clear() aquí: borraría
+    // también las banderas de tutorial (tutorial_*) y cualquier otra
+    // preferencia de dispositivo que no sea de sesión.
+    await AuthService().clearToken();
     if (mounted) context.go('/login');
   }
 
@@ -3471,6 +3475,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         await SecureStorageService.saveRefreshToken(result['refreshToken'] as String);
         await prefs.setString('user_role', 'CLIENT');
         await prefs.remove('active_role');
+        AuthState.updateRole(role: 'CLIENT', activeRole: '');
         await prefs.remove('client_conversion_in_progress');
         if (!mounted) return;
         context.go('/service-selector');

@@ -217,6 +217,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
         await authService.saveRefreshToken(result['refreshToken'] as String);
         await prefs.setString('user_role', 'CAREGIVER');
         await prefs.remove('active_role');
+        AuthState.updateRole(role: 'CAREGIVER', activeRole: '');
         await prefs.setBool('client_conversion_in_progress', true);
 
         if (!mounted) return;

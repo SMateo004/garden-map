@@ -225,6 +225,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         await prefs.setString('auth_token', _authToken);
         await prefs.setString('user_role', 'CAREGIVER');
         await prefs.setString('active_role', 'CAREGIVER');
+        AuthState.updateRole(role: 'CAREGIVER', activeRole: 'CAREGIVER');
         await prefs.setString('user_name', _companyNameCtrl.text.trim());
         final refreshToken = d['refreshToken'] as String?;
         if (refreshToken != null) await prefs.setString('refresh_token', refreshToken);

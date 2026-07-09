@@ -19,6 +19,7 @@
 library;
 
 import 'package:flutter/foundation.dart' show ValueNotifier, kDebugMode, debugPrint;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'secure_storage_service.dart';
 
 /// Se emite cuando el servidor devuelve 401 y el refresh token también es inválido.
@@ -30,6 +31,8 @@ class AuthState {
   AuthState._(); // non-instantiable
 
   static String _token = '';
+  static String _role = '';
+  static String _activeRole = '';
 
   // ── Synchronous read ───────────────────────────────────────────────────────
 
@@ -39,15 +42,31 @@ class AuthState {
   /// True when there is an active session token in memory.
   static bool get hasSession => _token.isNotEmpty;
 
+  /// El rol permanente del usuario ('CLIENT', 'CAREGIVER', 'ADMIN').
+  static String get role => _role;
+
+  /// El rol activo temporal (sobre-escribe [role] mientras no esté vacío).
+  static String get activeRole => _activeRole;
+
+  /// El rol "efectivo" actual: [activeRole] si no está vacío, si no [role].
+  /// Mismo patrón usado en login_screen.dart, profile_screen.dart y
+  /// mobile_splash_screen.dart.
+  static String get effectiveRole => _activeRole.isNotEmpty ? _activeRole : _role;
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   /// Call once at app start (after WidgetsFlutterBinding.ensureInitialized).
-  /// Loads the token from SecureStorageService into the in-memory cache so
-  /// all subsequent reads via [token] are synchronous.
+  /// Loads the token from SecureStorageService and the role/activeRole from
+  /// SharedPreferences into the in-memory cache so all subsequent reads via
+  /// [token]/[role]/[activeRole]/[effectiveRole] are synchronous.
   static Future<void> initialize() async {
     _token = await SecureStorageService.getAccessToken() ?? '';
+    final prefs = await SharedPreferences.getInstance();
+    _role = prefs.getString('user_role') ?? '';
+    _activeRole = prefs.getString('active_role') ?? '';
     if (kDebugMode) {
-      debugPrint('[AuthState] initialized — session: ${_token.isNotEmpty ? "present" : "none"}');
+      debugPrint('[AuthState] initialized — session: ${_token.isNotEmpty ? "present" : "none"}, '
+          'role: $_role, activeRole: $_activeRole');
     }
   }
 
@@ -58,10 +77,21 @@ class AuthState {
     await SecureStorageService.saveAccessToken(newToken);
   }
 
+  /// Update the in-memory role cache. Call alongside every write to
+  /// `user_role`/`active_role` in SharedPreferences so this cache stays in
+  /// sync with persisted storage. Pass only the field(s) that changed;
+  /// omitted fields are left untouched. Pass an empty string to clear a role.
+  static void updateRole({String? role, String? activeRole}) {
+    if (role != null) _role = role;
+    if (activeRole != null) _activeRole = activeRole;
+  }
+
   /// Clear the in-memory token AND all persisted session data.
   /// Call on explicit logout.
   static Future<void> clear() async {
     _token = '';
+    _role = '';
+    _activeRole = '';
     await SecureStorageService.clearAll();
   }
 

@@ -561,10 +561,15 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         'requireMeetAndGreet': _requireMeetAndGreet,
         'sizesAccepted': _acceptedSizes,
         'animalTypes': _acceptedPetTypes,
-        if (pricePerDay != null && pricePerDay > 0) 'pricePerDay': pricePerDay,
-        if (pricePerWalk30 != null && pricePerWalk30 > 0) 'pricePerWalk30': pricePerWalk30,
-        if (pricePerWalk60 != null && pricePerWalk60 > 0) 'pricePerWalk60': pricePerWalk60,
-        if (pricePerGuarderia != null && pricePerGuarderia > 0) 'pricePerGuarderia': pricePerGuarderia,
+        // Cada precio solo se envía si su servicio está realmente activo —
+        // de lo contrario un precio pre-rellenado (ej. Guardería copiando el
+        // precio de Paseo como sugerencia) podía guardarse en la BD aunque el
+        // cuidador nunca hubiera habilitado ese servicio, y luego aparecer
+        // ofrecido en el marketplace.
+        if (offersHospedaje && pricePerDay != null && pricePerDay > 0) 'pricePerDay': pricePerDay,
+        if (offersPaseo && pricePerWalk30 != null && pricePerWalk30 > 0) 'pricePerWalk30': pricePerWalk30,
+        if (offersPaseo && pricePerWalk60 != null && pricePerWalk60 > 0) 'pricePerWalk60': pricePerWalk60,
+        if (offersGuarderia && pricePerGuarderia != null && pricePerGuarderia > 0) 'pricePerGuarderia': pricePerGuarderia,
         'serviceDetails': {
           'allowsLargePets': _allowsLargePets,
           'allowsMultiplePets': _allowsMultiplePets,

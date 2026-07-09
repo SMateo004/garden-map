@@ -285,36 +285,96 @@ router.delete('/vets/:id', asyncHandler(async (req, res) => {
   res.json({ success: true });
 }));
 
-// ── Donaciones ────────────────────────────────────────────────────────────────
+// ── Donaciones (trazabilidad completa — separada del área financiera) ──────
+// El monto (`amount`) de cada donación es INTOCABLE desde este módulo: no
+// existe ningún endpoint que lo modifique. Lo único que el admin puede
+// registrar es que ya se hizo la transferencia real y hacia qué beneficiario
+// (hogar de mascotas / refugio) — nunca cambiar cuánto se donó.
 
-/** GET /api/admin/donations — resumen + historial de donaciones para hogares de perros. */
-router.get('/donations', asyncHandler(async (_req, res) => {
-  const [donations, summary] = await Promise.all([
+/** GET /api/admin/donations — historial completo de donaciones, ?status=pending|disbursed opcional. */
+router.get('/donations', asyncHandler(async (req, res) => {
+  const status = req.query.status as string | undefined;
+  const where = status === 'pending' ? { disbursedAt: null }
+    : status === 'disbursed' ? { disbursedAt: { not: null } }
+    : {};
+
+  const [donations, pendingSummary, totalSummary] = await Promise.all([
     prisma.donation.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
-      take: 200,
+      take: 500,
       include: {
         client: { select: { firstName: true, lastName: true, email: true } },
         booking: { select: { serviceType: true, petName: true } },
+        beneficiary: { select: { id: true, name: true } },
       },
     }),
-    prisma.donation.aggregate({
-      _sum: { amount: true },
-      where: { disbursedAt: null },
-    }),
+    prisma.donation.aggregate({ _sum: { amount: true }, _count: { _all: true }, where: { disbursedAt: null } }),
+    prisma.donation.aggregate({ _sum: { amount: true }, _count: { _all: true } }),
   ]);
-  const pendingTotal = Number(summary._sum.amount ?? 0);
-  res.json({ success: true, data: { pendingTotal, donations } });
+
+  res.json({
+    success: true,
+    data: {
+      pendingTotal: Number(pendingSummary._sum.amount ?? 0),
+      pendingCount: pendingSummary._count._all,
+      grandTotal: Number(totalSummary._sum.amount ?? 0),
+      totalCount: totalSummary._count._all,
+      donations,
+    },
+  });
 }));
 
-/** POST /api/admin/donations/:id/disburse — marcar donación como enviada al hogar. */
-router.post('/donations/:id/disburse', asyncHandler(async (req, res) => {
-  const { note } = req.body as { note?: string };
-  const donation = await prisma.donation.update({
-    where: { id: req.params.id },
-    data: { disbursedAt: new Date(), disbursementNote: note ?? null },
+/** GET /api/admin/donation-beneficiaries — hogares/refugios registrados (activos primero). */
+router.get('/donation-beneficiaries', asyncHandler(async (_req, res) => {
+  const beneficiaries = await prisma.donationBeneficiary.findMany({
+    orderBy: [{ active: 'desc' }, { name: 'asc' }],
   });
-  res.json({ success: true, data: donation });
+  res.json({ success: true, data: beneficiaries });
+}));
+
+/** POST /api/admin/donation-beneficiaries — registra un nuevo hogar/refugio. */
+router.post('/donation-beneficiaries', asyncHandler(async (req, res) => {
+  const { name, contactInfo } = req.body as { name?: string; contactInfo?: string };
+  if (!name || typeof name !== 'string' || name.trim().length < 2) {
+    return res.status(400).json({ success: false, error: { message: 'Escribe el nombre del beneficiario.' } });
+  }
+  const beneficiary = await prisma.donationBeneficiary.create({
+    data: { name: name.trim(), contactInfo: contactInfo?.trim() || null },
+  });
+  res.json({ success: true, data: beneficiary });
+}));
+
+/**
+ * POST /api/admin/donations/disburse — marca una o varias donaciones como
+ * transferidas a un beneficiario. Body: { donationIds: string[], beneficiaryId: string, note?: string }.
+ * Solo toca disbursedAt/disbursementNote/beneficiaryId/disbursedByAdminId —
+ * el campo `amount` nunca se incluye en el update, es imposible editarlo desde aquí.
+ */
+router.post('/donations/disburse', asyncHandler(async (req, res) => {
+  const { donationIds, beneficiaryId, note } = req.body as { donationIds?: string[]; beneficiaryId?: string; note?: string };
+  if (!Array.isArray(donationIds) || donationIds.length === 0) {
+    return res.status(400).json({ success: false, error: { message: 'Selecciona al menos una donación.' } });
+  }
+  if (!beneficiaryId || typeof beneficiaryId !== 'string') {
+    return res.status(400).json({ success: false, error: { message: 'Selecciona un beneficiario.' } });
+  }
+  const beneficiary = await prisma.donationBeneficiary.findUnique({ where: { id: beneficiaryId } });
+  if (!beneficiary) {
+    return res.status(404).json({ success: false, error: { message: 'Beneficiario no encontrado.' } });
+  }
+
+  const result = await prisma.donation.updateMany({
+    where: { id: { in: donationIds }, disbursedAt: null },
+    data: {
+      disbursedAt: new Date(),
+      disbursementNote: note?.trim() || null,
+      beneficiaryId,
+      disbursedByAdminId: req.user!.userId,
+    },
+  });
+
+  res.json({ success: true, data: { updated: result.count, beneficiary: beneficiary.name } });
 }));
 
 // ═══════════════════════════════════════════════════════════════════════════

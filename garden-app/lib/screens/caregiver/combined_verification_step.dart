@@ -183,6 +183,16 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
   }
 
   void _onPhoneDigitChanged(int index, String value) {
+    if (value.length > 1) {
+      final digits = value.replaceAll(RegExp(r'\D'), '');
+      for (int i = 0; i < 6; i++) {
+        _phoneCtrls[i].text = i < digits.length ? digits[i] : '';
+      }
+      final focusIndex = digits.length.clamp(0, 5);
+      _phoneFocus[focusIndex].requestFocus();
+      if (digits.length >= 6) _verifyPhoneCode();
+      return;
+    }
     if (value.isNotEmpty && index < 5) _phoneFocus[index + 1].requestFocus();
     if (value.isEmpty && index > 0) _phoneFocus[index - 1].requestFocus();
     if (_phoneCtrls.every((c) => c.text.isNotEmpty)) _verifyPhoneCode();

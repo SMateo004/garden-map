@@ -567,16 +567,36 @@ model Donation {
   clientId         String
   amount           Decimal   @db.Decimal(10, 2)
   createdAt        DateTime  @default(now())
-  /// Fecha en que el admin transfirió los fondos al hogar.
-  disbursedAt      DateTime?
-  disbursementNote String?   @db.VarChar(500)
+  /// Fecha en que el admin transfirió los fondos al beneficiario. El monto
+  /// (`amount`) NUNCA se edita desde el panel de admin — solo se registra
+  /// que ya se hizo la transferencia real y hacia quién.
+  disbursedAt        DateTime?
+  disbursementNote   String?   @db.VarChar(500)
+  beneficiaryId      String?
+  disbursedByAdminId String?
 
-  booking Booking @relation(fields: [bookingId], references: [id])
-  client  User    @relation(fields: [clientId], references: [id])
+  booking     Booking              @relation(fields: [bookingId], references: [id])
+  client      User                 @relation(fields: [clientId], references: [id])
+  beneficiary DonationBeneficiary? @relation(fields: [beneficiaryId], references: [id])
 
   @@index([disbursedAt])
   @@index([clientId])
+  @@index([beneficiaryId])
   @@map("donations")
+}
+
+/// Hogar de mascotas / refugio registrado como destinatario de donaciones.
+/// Puramente informativo — no tiene login ni acceso a la plataforma.
+model DonationBeneficiary {
+  id          String   @id @default(uuid())
+  name        String
+  contactInfo String?  @db.VarChar(300)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  donations Donation[]
+
+  @@map("donation_beneficiaries")
 }
 
 model IdentityVerificationSession {

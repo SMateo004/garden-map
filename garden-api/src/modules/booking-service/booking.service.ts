@@ -3063,6 +3063,7 @@ export async function addServiceEvent(
   // Datos de pausa a persistir junto al evento — única excepción donde el
   // tiempo del servicio se congela (ver calcOvertimeMinutes).
   const pauseData: { pausedAt?: Date | null; totalPausedMinutes?: number } = {};
+  const pausedAtSnapshot = booking.pausedAt;
   if ((type === 'INCIDENT' || type === 'ACCIDENT') && !booking.pausedAt) {
     pauseData.pausedAt = new Date();
   } else if (type === 'INCIDENT_RESOLVED' && booking.pausedAt) {
@@ -3071,10 +3072,25 @@ export async function addServiceEvent(
     pauseData.totalPausedMinutes = booking.totalPausedMinutes + pausedMinutes;
   }
 
-  const updated = await prisma.booking.update({
-    where: { id: bookingId },
-    data: { serviceEvents: events, ...pauseData },
-  });
+  let updated: typeof booking;
+  if (type === 'INCIDENT_RESOLVED') {
+    // Claim atómico — evita resolver dos veces la misma emergencia si el admin
+    // la resuelve (resolveIncidentAdmin) casi al mismo tiempo que el cuidador:
+    // solo se aplica si pausedAt sigue siendo el mismo que acabamos de leer.
+    const claimed = await prisma.booking.updateMany({
+      where: { id: bookingId, pausedAt: pausedAtSnapshot },
+      data: { serviceEvents: events, ...pauseData },
+    });
+    if (claimed.count === 0) {
+      throw new BadRequestError('Esta emergencia ya fue resuelta (probablemente por un administrador) justo antes de esta acción.');
+    }
+    updated = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
+  } else {
+    updated = await prisma.booking.update({
+      where: { id: bookingId },
+      data: { serviceEvents: events, ...pauseData },
+    });
+  }
 
   // Si es un incidente o accidente: notificar de URGENCIA al admin (quien
   // debe actuar), y al dueño con lenguaje tranquilo — no queremos generar
@@ -3307,6 +3323,9 @@ export async function concludeService(
     if (!booking) throw new BookingNotFoundError(bookingId);
     if (booking.status !== BookingStatus.IN_PROGRESS) {
       throw new BadRequestError('El servicio debe estar en curso para concluirlo');
+    }
+    if (booking.pausedAt) {
+      throw new BadRequestError('No puedes finalizar el servicio mientras haya una emergencia activa sin resolver.');
     }
 
     // Validar fotos mínimas server-side (PASEO=2, otros=3)

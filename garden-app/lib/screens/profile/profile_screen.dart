@@ -159,6 +159,8 @@ class _ProfileScreenState extends State<ProfileScreen>
           } else {
             await prefs.remove('active_role');
           }
+          final apiRole = data['data']?['role'] as String? ?? _role;
+          AuthState.updateRole(role: apiRole, activeRole: apiActiveRole);
           setState(() {
             _userData = data['data'];
             _role = _userData?['role'] ?? _role;
@@ -1852,6 +1854,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user_role', 'CLIENT');
         await prefs.remove('active_role');
+        AuthState.updateRole(role: 'CLIENT', activeRole: '');
         await prefs.remove('client_conversion_in_progress');
         if (!mounted) return;
         context.go('/service-selector');

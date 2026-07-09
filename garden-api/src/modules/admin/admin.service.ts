@@ -896,6 +896,12 @@ export async function refundBooking(
   if (booking.refundStatus === 'PROCESSED') {
     throw new BadRequestError('Esta reserva ya fue reembolsada.');
   }
+  // El pago debe haber pasado por aprobación (paidAt seteado por approvePayment/
+  // approvePaymentSecure o por confirmación automática de Stripe/QR) antes de poder
+  // reembolsarse — evita acreditar dinero que Garden nunca llegó a cobrar.
+  if (!booking.paidAt) {
+    throw new BadRequestError('Debes aprobar el pago antes de poder reembolsarlo.');
+  }
   // Refund = precio del servicio (totalAmount) — la donación voluntaria no se revierte.
   const refundAmount = Number(booking.totalAmount);
   if (refundAmount <= 0) {
@@ -1139,9 +1145,10 @@ export async function resolveDisputeAppeal(
 
     // ── Ajuste al cuidador (si cambia lo que le corresponde) ────────────────
     if (caregiverDelta !== 0) {
-      const before = await tx.caregiverProfile.findUnique({ where: { userId: caregiverUserId }, select: { balance: true } });
+      // Balance unificado vive en User (CaregiverProfile.balance está @deprecated)
+      const before = await tx.user.findUnique({ where: { id: caregiverUserId }, select: { balance: true } });
       const balanceBefore = Number(before?.balance ?? 0);
-      await tx.caregiverProfile.update({ where: { userId: caregiverUserId }, data: { balance: { increment: caregiverDelta } } });
+      await tx.user.update({ where: { id: caregiverUserId }, data: { balance: { increment: caregiverDelta } } });
       await tx.walletTransaction.create({
         data: {
           userId: caregiverUserId,
@@ -1156,9 +1163,10 @@ export async function resolveDisputeAppeal(
 
     // ── Ajuste al dueño (si cambia el reembolso en efectivo) ────────────────
     if (clientCashDelta !== 0) {
-      const before = await tx.clientProfile.findUnique({ where: { userId: clientId }, select: { balance: true } });
+      // Balance unificado vive en User (ClientProfile.balance está @deprecated)
+      const before = await tx.user.findUnique({ where: { id: clientId }, select: { balance: true } });
       const balanceBefore = Number(before?.balance ?? 0);
-      await tx.clientProfile.update({ where: { userId: clientId }, data: { balance: { increment: clientCashDelta } } });
+      await tx.user.update({ where: { id: clientId }, data: { balance: { increment: clientCashDelta } } });
       await tx.walletTransaction.create({
         data: {
           userId: clientId,
@@ -1257,7 +1265,8 @@ export async function resolveIncidentAdmin(
   if (!booking) throw new NotFoundError('Reserva no encontrada');
   if (!booking.pausedAt) throw new BadRequestError('Esta reserva no tiene ninguna emergencia activa');
 
-  const pausedMinutes = Math.round((Date.now() - booking.pausedAt.getTime()) / 60000);
+  const pausedAtSnapshot = booking.pausedAt;
+  const pausedMinutes = Math.round((Date.now() - pausedAtSnapshot.getTime()) / 60000);
   const totalPausedMinutes = booking.totalPausedMinutes + pausedMinutes;
 
   const events = (booking.serviceEvents as any[]) || [];
@@ -1270,10 +1279,16 @@ export async function resolveIncidentAdmin(
     timestamp: new Date().toISOString(),
   });
 
-  await prisma.booking.update({
-    where: { id: bookingId },
+  // Claim atómico — evita que esto se aplique dos veces si el cuidador resuelve
+  // la misma emergencia (addServiceEvent INCIDENT_RESOLVED) casi al mismo tiempo:
+  // solo gana quien encuentre pausedAt todavía igual al que acabamos de leer.
+  const claimed = await prisma.booking.updateMany({
+    where: { id: bookingId, pausedAt: pausedAtSnapshot },
     data: { pausedAt: null, totalPausedMinutes, serviceEvents: events },
   });
+  if (claimed.count === 0) {
+    throw new BadRequestError('Esta emergencia ya fue resuelta (probablemente por el cuidador) justo antes de esta acción.');
+  }
 
   await prisma.adminAction.create({
     data: { adminId, actionType: 'INCIDENT_RESOLVED_ADMIN', targetId: bookingId, notes: `${pausedMinutes} min pausados` },

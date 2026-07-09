@@ -109,34 +109,31 @@ class _PaymentScreenState extends State<PaymentScreen> {
     // booking automatically (see below) so it doesn't block the caregiver's
     // calendar slot indefinitely.
     if (widget.bookingParams != null && widget.bookingId == null) {
+      // La creación de la reserva y la carga de billetera se manejan por
+      // separado (en vez de Future.wait) para que un fallo de red al pedir
+      // el saldo de billetera (ej. corte de red justo después del POST)
+      // nunca deje _bookingId sin asignar: la reserva ya fue creada en el
+      // servidor y _handleBack/_cancelBooking necesitan ese id para poder
+      // limpiarla si el usuario sale sin pagar. Antes, al compartir destino
+      // de fallo dentro de un solo try, una excepción en el GET /wallet
+      // interrumpía el código antes de llegar a `_bookingId = ...`, dejando
+      // la reserva huérfana en PENDING_PAYMENT sin ningún mecanismo de
+      // limpieza (el cron de expiración de QR sólo cubre reservas con
+      // qrId asignado).
       try {
-        final results = await Future.wait([
-          http.post(
-            Uri.parse('$_baseUrl/bookings'),
-            headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
-            body: jsonEncode(widget.bookingParams),
-          ),
-          http.get(Uri.parse('$_baseUrl/wallet'), headers: {'Authorization': 'Bearer $_clientToken'}),
-        ]);
-
-        final createData = jsonDecode(results[0].body);
-        if (results[0].statusCode != 201 || createData['success'] != true) {
+        final createRes = await http.post(
+          Uri.parse('$_baseUrl/bookings'),
+          headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
+          body: jsonEncode(widget.bookingParams),
+        );
+        final createData = jsonDecode(createRes.body);
+        if (createRes.statusCode != 201 || createData['success'] != true) {
           final errors = (createData['errors'] as List?)?.map((e) => e['message'] as String).join(', ');
           throw Exception(errors ?? createData['error']?['message'] ?? 'Error al crear la reserva');
         }
         final bk = createData['data'] as Map<String, dynamic>;
         _bookingId = bk['id'] as String;
-
-        final walletData = jsonDecode(results[1].body);
-        if (mounted) {
-          setState(() {
-            _booking = bk;
-            if (walletData['success'] == true) {
-              _walletBalance = double.tryParse(walletData['data']?['balance']?.toString() ?? '0') ?? 0.0;
-            }
-            _walletLoaded = true;
-          });
-        }
+        if (mounted) setState(() => _booking = bk);
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -145,7 +142,35 @@ class _PaymentScreenState extends State<PaymentScreen> {
             duration: const Duration(seconds: 6),
           ));
         }
+        if (mounted) setState(() => _isLoading = false);
+        return;
       }
+
+      // La reserva ya está creada y _bookingId asignado — si el saldo de
+      // billetera falla, se muestra 0/no disponible pero sin perder la
+      // referencia a la reserva (el usuario puede salir y cancelarla bien).
+      try {
+        final walletRes = await http.get(Uri.parse('$_baseUrl/wallet'),
+            headers: {'Authorization': 'Bearer $_clientToken'});
+        final walletData = jsonDecode(walletRes.body);
+        if (mounted && walletData['success'] == true) {
+          setState(() {
+            _walletBalance = double.tryParse(walletData['data']?['balance']?.toString() ?? '0') ?? 0.0;
+            _walletLoaded = true;
+          });
+        }
+      } catch (_) {
+        // Saldo no disponible por fallo de red — se deja en 0 y el usuario
+        // puede reintentar (_loadData) sin afectar la reserva ya creada.
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('No se pudo cargar el saldo de tu billetera. Puedes continuar sin ella.'),
+            backgroundColor: GardenColors.warning,
+            duration: Duration(seconds: 5),
+          ));
+        }
+      }
+
       if (mounted) setState(() => _isLoading = false);
       return;
     }

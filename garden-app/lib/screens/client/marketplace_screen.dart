@@ -1953,20 +1953,25 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final lastName = caregiver['lastName'] as String? ?? '';
     final zone = _kZoneLabels[caregiver['zone']] ?? caregiver['zone'] ?? '';
     final expYears = caregiver['experienceYears'] as int?;
-    final services = (caregiver['services'] as List? ?? []).take(2).toList();
+    final allServices = (caregiver['services'] as List? ?? []);
+    final services = allServices.take(2).toList();
+    // Set de servicios realmente habilitados (servicesOffered) — un precio
+    // guardado en la BD (ej. Guardería pre-rellenada con el precio de Paseo)
+    // no implica que el cuidador ofrezca ese servicio hoy.
+    final servicesSet = allServices.map((s) => s.toString()).toSet();
 
     // Prices to display — list of (label, unit) pairs
-    // Only show prices > 0 (0 means the caregiver doesn't offer that service)
+    // Solo se muestra el precio si el servicio está habilitado Y el precio > 0
     final List<(String, String)> prices = [];
     final priceDay = caregiver['pricePerDay'];
     final priceWalk60 = caregiver['pricePerWalk60'];
     final priceWalk30 = caregiver['pricePerWalk30'];
-    final bool hasDayPrice = priceDay != null && (priceDay as num) > 0;
-    final bool hasWalk60Price = priceWalk60 != null && (priceWalk60 as num) > 0;
-    final bool hasWalk30Price = priceWalk30 != null && (priceWalk30 as num) > 0;
+    final bool hasDayPrice = servicesSet.contains('HOSPEDAJE') && priceDay != null && (priceDay as num) > 0;
+    final bool hasWalk60Price = servicesSet.contains('PASEO') && priceWalk60 != null && (priceWalk60 as num) > 0;
+    final bool hasWalk30Price = servicesSet.contains('PASEO') && priceWalk30 != null && (priceWalk30 as num) > 0;
 
     final priceGuarderia = caregiver['pricePerGuarderia'];
-    final bool hasGuarderiaPrice = priceGuarderia != null && (priceGuarderia as num) > 0;
+    final bool hasGuarderiaPrice = servicesSet.contains('GUARDERIA') && priceGuarderia != null && (priceGuarderia as num) > 0;
 
     if (_selectedService == 'hospedaje') {
       if (hasDayPrice) prices.add(('Bs $priceDay', '/noche'));

@@ -54,6 +54,7 @@ class AuthService {
   Future<void> saveActiveRole(String activeRole) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('active_role', activeRole);
+    AuthState.updateRole(activeRole: activeRole);
   }
 
   Future<String> getActiveRole() async {
@@ -89,11 +90,14 @@ class AuthService {
     );
     await prefs.setString('user_photo', user['profilePicture'] as String? ?? '');
     // Persist active_role from the server; clear if null or same as permanent role
+    String effectiveActiveRole = '';
     if (activeRole != null && activeRole.isNotEmpty && activeRole != permanentRole) {
       await prefs.setString('active_role', activeRole);
+      effectiveActiveRole = activeRole;
     } else {
       await prefs.remove('active_role');
     }
+    AuthState.updateRole(role: permanentRole, activeRole: effectiveActiveRole);
   }
 
   // ── Session refresh ─────────────────────────────────────────────────────────
@@ -278,6 +282,7 @@ class AuthService {
       final permanentRole = prefs.getString('user_role') ?? '';
       if (effectiveRole == permanentRole) {
         await prefs.remove('active_role');
+        AuthState.updateRole(activeRole: '');
       } else {
         await saveActiveRole(effectiveRole);
       }

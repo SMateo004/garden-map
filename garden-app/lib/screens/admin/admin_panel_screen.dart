@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../theme/garden_theme.dart';
 import 'admin_owners_screen.dart';
@@ -14,9 +13,11 @@ import 'admin_notifications_screen.dart';
 import 'admin_chat_reports_screen.dart';
 import 'admin_phone_otp_screen.dart';
 import 'admin_email_otp_screen.dart';
+import 'admin_donations_screen.dart';
 import 'admin_vets_screen.dart';
 import 'payment_qr_admin_screen.dart';
 import 'audit_screen.dart';
+import '../../services/auth_service.dart';
 import '../../services/auth_state.dart';
 
 class AdminPanelScreen extends StatefulWidget {
@@ -974,8 +975,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 tooltip: 'Cerrar sesión',
                 onPressed: () async {
                   final router = GoRouter.of(context);
-                  final prefs = await SharedPreferences.getInstance();
-                  await prefs.clear();
+                  // Solo limpia el token y las claves de sesión (user_role,
+                  // active_role, user_id, user_name, user_photo). NO usar
+                  // prefs.clear(): borraría también las banderas de tutorial
+                  // (tutorial_*) y otras preferencias de dispositivo.
+                  await AuthService().clearToken();
                   router.go('/login');
                 },
               ),
@@ -1029,13 +1033,17 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ('Reportes de chat', Icons.shield_outlined),
     ('Verif. telefónica', Icons.phone_forwarded_outlined),
     ('Verif. de correo', Icons.mark_email_unread_outlined),
+    ('Donaciones', Icons.volunteer_activism_outlined),
   ];
 
   // Agrupación del sidebar web — cada grupo es (título, ícono, índices de _tabs).
+  // NOTA: "Donaciones" (20) va deliberadamente en "Personas", NUNCA en
+  // "Finanzas" — no es ingreso de Garden, es dinero de terceros en tránsito
+  // hacia refugios, y el admin no puede editar montos ahí.
   static const List<(String, IconData, List<int>)> _webNavGroups = [
     ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5]),
     ('Finanzas', Icons.attach_money_rounded, [3, 6, 7, 15]),
-    ('Personas', Icons.groups_outlined, [8, 9]),
+    ('Personas', Icons.groups_outlined, [8, 9, 20]),
     ('Comunicación', Icons.forum_outlined, [12, 13, 17, 18, 19]),
     ('Sistema', Icons.settings_outlined, [10, 11, 14, 16]),
   ];
@@ -1064,6 +1072,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         AdminChatReportsScreen(adminToken: _adminToken),
         AdminPhoneOtpScreen(adminToken: _adminToken),
         AdminEmailOtpScreen(adminToken: _adminToken),
+        AdminDonationsScreen(adminToken: _adminToken),
       ],
     );
   }

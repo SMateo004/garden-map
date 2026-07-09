@@ -435,6 +435,7 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
       profilePhoto: 'foto de perfil (paso 2)',
       identityVerified: 'verificación de identidad (paso 8)',
       emailVerified: 'verificación de email (paso 10)',
+      emergencyContacts: 'debes registrar exactamente 3 contactos de emergencia (paso 9)',
       experienceYears: 'años de experiencia (paso 7)',
       experienceDescription: 'descripción de experiencia (paso 7)',
       whyCaregiver: 'motivación como cuidador (paso 7)',

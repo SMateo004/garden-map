@@ -2833,14 +2833,20 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   const SizedBox(height: 16),
 
                   // ── Botón deslizante: Finalizar servicio ─────────────────
+                  // No se puede finalizar mientras haya una emergencia activa sin
+                  // resolver (_isServicePaused) — hay que resolverla primero.
                   SlideToConfirmButton(
-                    label: isPhotoMet
-                        ? 'Desliza para finalizar servicio'
-                        : 'Necesitas ${minPhotos - photoCount} foto${minPhotos - photoCount == 1 ? '' : 's'} más',
-                    color: isPhotoMet ? GardenColors.success : GardenColors.warning,
+                    label: _isServicePaused
+                        ? 'Resuelve la emergencia activa primero'
+                        : isPhotoMet
+                            ? 'Desliza para finalizar servicio'
+                            : 'Necesitas ${minPhotos - photoCount} foto${minPhotos - photoCount == 1 ? '' : 's'} más',
+                    color: _isServicePaused
+                        ? GardenColors.error
+                        : (isPhotoMet ? GardenColors.success : GardenColors.warning),
                     icon: Icons.check_circle_rounded,
                     height: 58,
-                    onConfirmed: isPhotoMet ? _showFinishConfirmation : null,
+                    onConfirmed: (isPhotoMet && !_isServicePaused) ? _showFinishConfirmation : null,
                   ),
                   const SizedBox(height: 20),
 

@@ -910,24 +910,28 @@ export const sendCaregiverPhoneOtp = asyncHandler(async (req: Request, res: Resp
   const { sendOtp } = await import('../../services/otp-delivery.service.js');
   const channel = await sendOtp(toPhone, otp);
 
-  // Mientras ningún canal automático sea 100% confiable (WhatsApp pendiente
-  // de aprobación de Meta, SMS con entrega no garantizada a Bolivia),
-  // notificamos siempre al admin para que pueda enviar el código
-  // manualmente por WhatsApp desde el panel si hace falta. Este aviso deja
-  // de ser relevante solo cuando el usuario verifica su teléfono — ver
-  // admin.service.ts listPendingPhoneOtpRequests().
-  try {
-    await prisma.adminNotification.create({
-      data: { type: 'PHONE_OTP_MANUAL_HELP', caregiverId: userId },
-    });
-    const { sendPushToAdmins } = await import('../../services/firebase.service.js');
-    sendPushToAdmins(
-      '📱 Código de teléfono solicitado',
-      `Un cuidador pidió un código de verificación (canal automático: ${channel}). Revisa el panel si no le llega.`,
-      { type: 'PHONE_OTP_MANUAL_HELP', userId }
-    ).catch(() => {});
-  } catch (_) {
-    // No bloquea la respuesta al usuario si falla la notificación al admin
+  // Igual que con el email: SOLO notificamos al admin cuando el envío
+  // automático realmente falló (ni WhatsApp ni SMS lograron entregarse),
+  // no en cada solicitud. Este aviso deja de ser relevante solo cuando el
+  // usuario verifica su teléfono — ver admin.service.ts
+  // listPendingPhoneOtpRequests(). Nota: mientras WhatsApp esté sin
+  // configurar y la cuenta de AWS siga en sandbox, `channel` será 'none'
+  // para casi todos los usuarios reales — en cuanto cualquiera de los dos
+  // quede activo, estas notificaciones bajan solas, sin tocar código.
+  if (channel === 'none') {
+    try {
+      await prisma.adminNotification.create({
+        data: { type: 'PHONE_OTP_MANUAL_HELP', caregiverId: userId },
+      });
+      const { sendPushToAdmins } = await import('../../services/firebase.service.js');
+      sendPushToAdmins(
+        '📱 Falló el envío de código por teléfono',
+        'Ni WhatsApp ni SMS pudieron entregar un código de verificación. Revisa el panel para enviarlo manualmente.',
+        { type: 'PHONE_OTP_MANUAL_HELP', userId }
+      ).catch(() => {});
+    } catch (_) {
+      // No bloquea la respuesta al usuario si falla la notificación al admin
+    }
   }
 
   return res.json({

@@ -297,6 +297,22 @@ router.post('/block', authMiddleware, asyncHandler(async (req: Request, res: Res
         return res.status(400).json({ success: false, error: { message: 'No puedes bloquearte a ti mismo' } });
     }
 
+    // Solo se puede bloquear a alguien con quien se comparte al menos una reserva
+    // (como cliente o cuidador, en cualquier combinación) — evita que cualquier
+    // usuario autenticado bloquee un UUID arbitrario sin relación alguna.
+    const sharedBooking = await prisma.booking.findFirst({
+        where: {
+            OR: [
+                { clientId: userId, caregiver: { userId: targetUserId } },
+                { clientId: targetUserId, caregiver: { userId } },
+            ],
+        },
+        select: { id: true },
+    });
+    if (!sharedBooking) {
+        return res.status(403).json({ success: false, error: { message: 'Solo puedes bloquear usuarios con los que tengas una reserva en común' } });
+    }
+
     await prisma.userBlock.upsert({
         where: { blockerId_blockedId: { blockerId: userId, blockedId: targetUserId } },
         create: { blockerId: userId, blockedId: targetUserId },

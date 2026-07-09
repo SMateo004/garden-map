@@ -363,11 +363,14 @@ class SocialAuthService {
     await prefs.setString('user_id',    user['id'] as String? ?? '');
     await prefs.setString('user_name',  name);
     await prefs.setString('user_photo', user['profilePicture'] as String? ?? '');
+    String effectiveActiveRole = '';
     if (activeRole != null && activeRole.isNotEmpty && activeRole != role) {
       await prefs.setString('active_role', activeRole);
+      effectiveActiveRole = activeRole;
     } else {
       await prefs.remove('active_role');
     }
+    AuthState.updateRole(role: role, activeRole: effectiveActiveRole);
 
     return SocialLoginResult(
       success: true,

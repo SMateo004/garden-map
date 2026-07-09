@@ -87,7 +87,7 @@ export interface PatchCaregiverProfileBody {
   emergencyContacts?: Array<{ name?: string; phone?: string }>;
 }
 
-// --- Contactos de emergencia: 1-3, cada uno con nombre y teléfono boliviano válido ---
+// --- Contactos de emergencia: exactamente 3, cada uno con nombre y teléfono boliviano válido ---
 
 const EMERGENCY_PHONE_REGEX = /^[67][0-9]{7}$/;
 
@@ -96,8 +96,8 @@ export function validateEmergencyContacts(contacts: unknown): { name: string; ph
   if (!Array.isArray(contacts)) {
     throw new Error('emergencyContacts debe ser un arreglo');
   }
-  if (contacts.length < 1 || contacts.length > 3) {
-    throw new Error('Debes registrar entre 1 y 3 contactos de emergencia');
+  if (contacts.length !== 3) {
+    throw new Error('Debes registrar exactamente 3 contactos de emergencia');
   }
   return contacts.map((c, i) => {
     const name = typeof c?.name === 'string' ? c.name.trim() : '';
@@ -128,6 +128,7 @@ const REQUIRED_FIELDS_FOR_SUBMIT = [
   'verificationAccepted',
   'identityVerified',
   'emailVerified',
+  'emergencyContacts',
   'experienceYears',
   'experienceDescription',
   'whyCaregiver',
@@ -168,6 +169,14 @@ export function getMissingRequiredFieldsForSubmit(profile: any): RequiredSubmitF
   // Verificación de identidad (IA) y email son obligatorios para aprobar
   if (profile.identityVerificationStatus !== 'VERIFIED') missing.push('identityVerified');
   if (profile.emailVerified !== true && profile.user?.emailVerified !== true) missing.push('emailVerified');
+
+  // Paso 9: exactamente 3 contactos de emergencia válidos (nombre + teléfono boliviano)
+  const emergencyContacts = Array.isArray(profile.emergencyContacts) ? profile.emergencyContacts : [];
+  const validEmergencyContacts = emergencyContacts.filter((c: any) =>
+    typeof c?.name === 'string' && c.name.trim().length > 0 &&
+    typeof c?.phone === 'string' && EMERGENCY_PHONE_REGEX.test(c.phone.trim())
+  );
+  if (validEmergencyContacts.length !== 3) missing.push('emergencyContacts');
 
   // Paso 6 (Perfil profesional)
   if (profile.experienceYears === null || profile.experienceYears === undefined) missing.push('experienceYears');
