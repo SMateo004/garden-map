@@ -4,19 +4,26 @@ import 'package:http/http.dart' as http;
 import '../theme/garden_theme.dart';
 
 /// Muestra el perfil completo de una mascota en un bottom sheet.
-/// Se obtiene del endpoint GET /api/caregiver/bookings/:bookingId/pet.
+/// Si se pasa [bookingId], se obtiene de GET /api/caregiver/bookings/:bookingId/pet.
+/// Si se pasa [petId] (sin bookingId), se obtiene de GET /api/caregiver/pets/:petId
+/// (sin restricción de estado de reserva — usado para el historial de mascotas
+/// del cuidador).
 Future<void> showPetProfileSheet({
   required BuildContext context,
-  required String bookingId,
+  String? bookingId,
+  String? petId,
   required String token,
   required String petName,
 }) async {
+  assert(bookingId != null || petId != null,
+      'showPetProfileSheet requiere bookingId o petId');
   await showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (_) => _PetProfileSheet(
       bookingId: bookingId,
+      petId: petId,
       token: token,
       petName: petName,
     ),
@@ -24,12 +31,14 @@ Future<void> showPetProfileSheet({
 }
 
 class _PetProfileSheet extends StatefulWidget {
-  final String bookingId;
+  final String? bookingId;
+  final String? petId;
   final String token;
   final String petName;
 
   const _PetProfileSheet({
-    required this.bookingId,
+    this.bookingId,
+    this.petId,
     required this.token,
     required this.petName,
   });
@@ -54,8 +63,11 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
 
   Future<void> _loadPet() async {
     try {
+      final uri = widget.bookingId != null
+          ? Uri.parse('$_baseUrl/caregiver/bookings/${widget.bookingId}/pet')
+          : Uri.parse('$_baseUrl/caregiver/pets/${widget.petId}');
       final res = await http.get(
-        Uri.parse('$_baseUrl/caregiver/bookings/${widget.bookingId}/pet'),
+        uri,
         headers: {'Authorization': 'Bearer ${widget.token}'},
       );
       final body = jsonDecode(res.body) as Map<String, dynamic>;

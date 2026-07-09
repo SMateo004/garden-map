@@ -78,6 +78,50 @@ class _BookingScreenState extends State<BookingScreen> {
   String? _selectedStartTime; // hora específica dentro del slot, ej: "09:00"
   int _caregiverMaxPets = 1; // máximo de mascotas simultáneas del cuidador
 
+  // Servicios extra opcionales (ej. "Comida incluida")
+  Set<String> _selectedExtraIds = {};
+
+  /// Servicios extra que ofrece el cuidador y aplican al servicio seleccionado.
+  List<Map<String, dynamic>> get _availableExtras {
+    if (_selectedService == null || _caregiver == null) return [];
+    final extras = (_caregiver!['extraServices'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    return extras.where((e) {
+      final appliesTo = (e['appliesTo'] as List?) ?? [];
+      return appliesTo.contains(_selectedService);
+    }).toList();
+  }
+
+  /// Número de "días" que cobra el servicio principal — misma regla que usa
+  /// _calculatePrice() para el servicio base, reutilizada para los extras
+  /// porque el backend cobra extras con la misma unidad (pricePerDay × días).
+  int get _extraServiceDays {
+    if (_selectedService == 'HOSPEDAJE') {
+      if (_selectedDate != null && _endDate != null) {
+        final days = _endDate!.difference(_selectedDate!).inDays;
+        return days > 0 ? days : 1;
+      }
+      return 1;
+    } else if (_selectedService == 'PASEO' && _isMultiDay) {
+      return _selectedDates.isNotEmpty ? _selectedDates.length : 1;
+    }
+    // PASEO de un solo día y GUARDERIA: 1
+    return 1;
+  }
+
+  /// Total acumulado de los extras seleccionados (pricePerDay × días).
+  double get _extraServicesTotal {
+    if (_selectedExtraIds.isEmpty) return 0;
+    final days = _extraServiceDays;
+    double total = 0;
+    for (final extra in _availableExtras) {
+      if (_selectedExtraIds.contains(extra['id'])) {
+        final pricePerDay = (extra['pricePerDay'] as num?)?.toDouble() ?? 0;
+        total += pricePerDay * days;
+      }
+    }
+    return total;
+  }
+
   /// Start date of the booking (first selected date or single-day date)
   DateTime? get _bookingStartDate {
     if (_selectedService == 'PASEO' && _isMultiDay && _selectedDates.isNotEmpty) {
@@ -435,6 +479,12 @@ class _BookingScreenState extends State<BookingScreen> {
         };
       }
 
+    // Servicios extra opcionales (aplica a las 3 ramas anteriores por igual,
+    // ya que todas asignan a la misma variable `body`).
+    if (_selectedExtraIds.isNotEmpty) {
+      body['extraServiceIds'] = _selectedExtraIds.toList();
+    }
+
     // If M&G enabled, include mgData so backend creates PENDING_MG (still goes via API immediately)
     if (_includeMG && _mgDate != null) {
       final timeStr = _mgTime != null
@@ -532,30 +582,33 @@ class _BookingScreenState extends State<BookingScreen> {
   double? _calculatePrice() {
     if (_caregiver == null || _selectedService == null) return null;
     final petMult = _petPriceMultiplier;
+    double? basePrice;
     if (_selectedService == 'GUARDERIA') {
       if (_selectedDate == null || _selectedTimeSlot == null) return null;
       final pricePerGuarderia = (_caregiver!['pricePerGuarderia'] as num?)?.toDouble()
           ?? (_caregiver!['pricePerWalk60'] as num?)?.toDouble();
       if (pricePerGuarderia == null || pricePerGuarderia <= 0) return null;
-      return pricePerGuarderia * (_guarderiaSelectedDuration / 60) * petMult;
+      basePrice = pricePerGuarderia * (_guarderiaSelectedDuration / 60) * petMult;
     } else if (_selectedService == 'PASEO') {
       final price60 = (_caregiver!['pricePerWalk60'] as num?)?.toDouble();
       if (price60 == null) return null;
       final unitPrice = _selectedDuration == 30 ? (price60 / 2).roundToDouble() : price60;
       if (_isMultiDay) {
         final numDays = _selectedDates.length;
-        return numDays > 0 ? unitPrice * numDays * petMult : null;
+        basePrice = numDays > 0 ? unitPrice * numDays * petMult : null;
+      } else {
+        basePrice = unitPrice * petMult;
       }
-      return unitPrice * petMult;
     } else if (_selectedService == 'HOSPEDAJE') {
       if (_selectedDate != null && _endDate != null) {
         int days = _endDate!.difference(_selectedDate!).inDays;
         if (days <= 0) days = 1;
         final pricePerDay = (_caregiver!['pricePerDay'] as num?)?.toDouble() ?? 0.0;
-        return pricePerDay * days * petMult;
+        basePrice = pricePerDay * days * petMult;
       }
     }
-    return null;
+    if (basePrice == null) return null;
+    return basePrice + _extraServicesTotal;
   }
 
   /// Verifica si una fecha está en la lista multi-day
@@ -1681,6 +1734,14 @@ class _BookingScreenState extends State<BookingScreen> {
                 const SizedBox(height: 24),
                 Divider(color: borderColor),
                 const SizedBox(height: 20),
+
+                // ── Servicios extra opcionales ──────────────────────────
+                if (_hasServiceDateSelected && _availableExtras.isNotEmpty) ...[
+                  _buildExtraServicesSection(textColor, subtextColor, borderColor, surface),
+                  const SizedBox(height: 24),
+                  Divider(color: borderColor),
+                  const SizedBox(height: 20),
+                ],
 
                 // ── Meet & Greet opcional ───────────────────────────────
                 _buildMeetAndGreetSection(surface, textColor, subtextColor, borderColor),
@@ -3020,6 +3081,56 @@ class _BookingScreenState extends State<BookingScreen> {
     ); // Opacity
   }
 
+  /// Sección de servicios extra opcionales (ej. "Comida incluida"), filtrados
+  /// por _availableExtras según el servicio seleccionado. El precio de cada
+  /// uno se muestra ya multiplicado por los días que aplica (_extraServiceDays).
+  Widget _buildExtraServicesSection(Color textColor, Color subtextColor, Color borderColor, Color surface) {
+    final days = _extraServiceDays;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Servicios extra', style: GardenText.h4.copyWith(color: textColor)),
+        const SizedBox(height: 4),
+        Text('Opcional · se suma al total de la reserva', style: TextStyle(color: subtextColor, fontSize: 12)),
+        const SizedBox(height: 12),
+        ..._availableExtras.map((extra) {
+          final id = extra['id'] as String;
+          final name = extra['name'] as String? ?? 'Extra';
+          final pricePerDay = (extra['pricePerDay'] as num?)?.toDouble() ?? 0;
+          final isSelected = _selectedExtraIds.contains(id);
+          final totalForExtra = pricePerDay * days;
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: isSelected ? GardenColors.primary.withValues(alpha: 0.08) : surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: isSelected ? GardenColors.primary : borderColor),
+            ),
+            child: CheckboxListTile(
+              value: isSelected,
+              onChanged: (checked) => setState(() {
+                if (checked == true) {
+                  _selectedExtraIds.add(id);
+                } else {
+                  _selectedExtraIds.remove(id);
+                }
+              }),
+              controlAffinity: ListTileControlAffinity.leading,
+              activeColor: GardenColors.primary,
+              title: Text(name, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
+              subtitle: Text(
+                days > 1
+                    ? 'Bs ${pricePerDay.round()}/día × $days = Bs ${totalForExtra.round()}'
+                    : 'Bs ${pricePerDay.round()}',
+                style: TextStyle(color: subtextColor, fontSize: 12),
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
   Widget _buildSummary(double price) {
     if (_selectedPetIds.isEmpty || _selectedService == null) return const SizedBox();
     // En modo multi-day, no es necesario _selectedDate
@@ -3094,6 +3205,13 @@ class _BookingScreenState extends State<BookingScreen> {
                 }).join(' · ')),
           if (_selectedService == 'PASEO' && !_isMultiDay && _selectedStartTime != null)
             _summaryRow(Icons.access_time, 'Hora', _selectedStartTime!),
+          // Desglose de servicios extra seleccionados
+          if (_selectedExtraIds.isNotEmpty)
+            ..._availableExtras.where((e) => _selectedExtraIds.contains(e['id'])).map((extra) {
+              final pricePerDay = (extra['pricePerDay'] as num?)?.toDouble() ?? 0;
+              final total = pricePerDay * _extraServiceDays;
+              return _summaryRow(Icons.add_circle_outline, extra['name'] as String? ?? 'Extra', 'Bs ${total.round()}');
+            }),
           const Divider(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

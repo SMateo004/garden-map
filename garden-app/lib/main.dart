@@ -20,6 +20,7 @@ import 'screens/client/payment_screen.dart';
 import 'screens/client/slot_conflict_screen.dart';
 import 'screens/client/booking_confirmed_screen.dart';
 import 'screens/caregiver/caregiver_home_screen.dart';
+import 'screens/caregiver/caregiver_pets_screen.dart';
 import 'screens/caregiver/verification_screen.dart';
 import 'screens/caregiver/caregiver_edit_profile_screen.dart';
 import 'screens/client/my_bookings_screen.dart';
@@ -141,6 +142,7 @@ const _publicPaths = {
 const _roleRestrictedPrefixes = <String, String>{
   '/admin': 'ADMIN',
   '/caregiver/home': 'CAREGIVER',
+  '/caregiver/pets': 'CAREGIVER',
   '/marketplace': 'CLIENT',
   '/my-bookings-tab': 'CLIENT',
   '/my-pets-tab': 'CLIENT',
@@ -381,6 +383,11 @@ final GoRouter _router = GoRouter(
       path: '/caregiver/home',
       name: 'caregiverHome',
       builder: (context, state) => const CaregiverHomeScreen(),
+    ),
+    GoRoute(
+      path: '/caregiver/pets',
+      name: 'caregiverPets',
+      builder: (context, state) => const CaregiverPetsScreen(),
     ),
     GoRoute(
       path: '/caregiver/setup',

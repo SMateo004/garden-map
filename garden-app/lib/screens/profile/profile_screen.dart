@@ -1072,6 +1072,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                           onTap: () => context.push('/caregiver/edit-profile')),
                       _profileTile(icon: Icons.home_outlined, title: 'Mi panel',
                           onTap: () => context.push('/caregiver/home')),
+                      _profileTile(icon: Icons.pets_outlined, title: 'Mascotas',
+                          onTap: () => context.push('/caregiver/pets')),
                       if (_caregiverProfile?['verified'] != true &&
                           _caregiverProfile?['verificationStatus'] != 'VERIFIED' &&
                           _caregiverProfile?['identityVerificationStatus'] != 'VERIFIED')
@@ -1325,6 +1327,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
           _profileTile(icon: Icons.edit_outlined, title: 'Editar perfil', onTap: () => context.push('/caregiver/edit-profile')),
           _profileTile(icon: Icons.home_outlined, title: 'Mi panel', onTap: () => context.push('/caregiver/home')),
+          _profileTile(icon: Icons.pets_outlined, title: 'Mascotas', onTap: () => context.push('/caregiver/pets')),
           if (_caregiverProfile?['verified'] != true &&
               _caregiverProfile?['verificationStatus'] != 'VERIFIED' &&
               _caregiverProfile?['identityVerificationStatus'] != 'VERIFIED')

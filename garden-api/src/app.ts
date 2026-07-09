@@ -17,6 +17,7 @@ import bookingRoutes from './modules/booking-service/booking.routes.js';
 import paymentRoutes, { webhookRouter as stripeWebhookRouter } from './modules/payment-service/payment.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import caregiverProfileRoutes from './modules/caregiver-profile/caregiver-profile.routes.js';
+import extraServiceRoutes from './modules/extra-service/extra-service.routes.js';
 import verificationRoutes from './modules/verification/verification.routes.js';
 import clientProfileRoutes from './modules/client-profile/client-profile.routes.js';
 import uploadRoutes from './modules/upload/upload.routes.js';
@@ -256,6 +257,7 @@ app.use('/legal', legalRoutes);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/caregiver', caregiverProfileRoutes);
+app.use('/api/caregiver/extra-services', extraServiceRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/client', clientProfileRoutes);
 app.use('/api/upload', uploadRoutes);

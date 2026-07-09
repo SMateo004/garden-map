@@ -356,6 +356,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
             timeBlocks: true,
           },
         },
+        extraServices: { where: { active: true }, orderBy: { createdAt: 'asc' } },
       },
     });
   } catch (includeError: any) {
@@ -391,6 +392,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
               // timeBlocks omitido porque no existe en la DB
             },
           },
+          extraServices: { where: { active: true }, orderBy: { createdAt: 'asc' } },
         },
       });
       // Agregar timeBlocks como null a todas las filas de availability
@@ -516,6 +518,12 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     oftenOut: profile.oftenOut,
     spaceDescription: profile.spaceDescription,
     isProfessional: (profile as any).isProfessional ?? false,
+    extraServices: ((profile as any).extraServices ?? []).map((e: any) => ({
+      id: e.id,
+      name: e.name,
+      pricePerDay: applyMarkup(e.pricePerDay, markupRate),
+      appliesTo: e.appliesTo,
+    })),
   };
 
   // Enriquecer con reputación de blockchain

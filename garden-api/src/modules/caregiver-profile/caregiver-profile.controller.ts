@@ -127,6 +127,21 @@ export const getMyBookingsAsCaregiver = asyncHandler(async (req: Request, res: R
   res.json({ success: true, data: result.bookings, pagination: result.pagination });
 });
 
+/** GET /api/caregiver/pets - Mascotas únicas con las que el cuidador ha tenido reservas. */
+export const getMyCaregiverPets = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const pets = await bookingService.getCaregiverPets(userId);
+  res.json({ success: true, data: pets });
+});
+
+/** GET /api/caregiver/pets/:petId - Perfil completo de una mascota con historial de reservas (cualquier estado). */
+export const getMyCaregiverPetById = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const petId = req.params.petId!;
+  const pet = await bookingService.getCaregiverPetById(userId, petId);
+  res.json({ success: true, data: pet });
+});
+
 /** GET /api/caregiver/notifications - Bandeja de notificaciones (APPROVED, REJECTED, REVIEW). */
 export const getNotifications = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId;

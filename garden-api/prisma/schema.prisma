@@ -215,6 +215,7 @@ model CaregiverProfile {
   sugerencias                     SugerenciaPrecio[]
   infractions                     CaregiverInfraction[]
   trainingProgress                TrainingVideoProgress[]
+  extraServices                   ExtraService[]
 
   @@index([status])
   @@index([userId])
@@ -355,6 +356,7 @@ model Booking {
   bookingPets                BookingPet[]
   donation                   Donation?
   chatReports                ChatReport[]
+  bookingExtras              BookingExtra[]
 
   @@index([clientId, status])
   @@index([caregiverId, status])
@@ -383,6 +385,43 @@ model BookingPet {
   @@index([bookingId])
   @@index([petId])
   @@map("booking_pets")
+}
+
+/// Servicio extra configurable por un cuidador (hoy exclusivo de empresas —
+/// isCompany=true — validado en el service, no aquí, para poder abrirlo a
+/// cuidadores individuales a futuro sin migración). Se cobra siempre por día.
+model ExtraService {
+  id            String         @id @default(uuid())
+  caregiverId   String
+  name          String         @db.VarChar(100)
+  pricePerDay   Decimal        @db.Decimal(10, 2)
+  /// A qué servicio(s) principal(es) aplica este extra.
+  appliesTo     ServiceType[]
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  caregiver     CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+  bookingExtras BookingExtra[]
+
+  @@index([caregiverId])
+  @@map("extra_services")
+}
+
+/// Snapshot de un servicio extra seleccionado en una reserva — conserva
+/// nombre/precio del momento de la reserva aunque el ExtraService original
+/// cambie o se desactive después.
+model BookingExtra {
+  id             String        @id @default(uuid())
+  bookingId      String
+  extraServiceId String?
+  name           String        @db.VarChar(100)
+  pricePerDay    Decimal       @db.Decimal(10, 2)
+  totalPrice     Decimal       @db.Decimal(10, 2)
+  booking        Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  extraService   ExtraService? @relation(fields: [extraServiceId], references: [id], onDelete: SetNull)
+
+  @@index([bookingId])
+  @@map("booking_extras")
 }
 
 /// Reporte de incumplimiento del cuidador (servicio no iniciado). Emitido por el cliente.
@@ -669,6 +708,10 @@ model EmailVerification {
   id        String   @id @default(uuid())
   userId    String
   codeHash  String   @db.VarChar(64)
+  /// Código en texto plano — SOLO se guarda cuando el setting global
+  /// `otpVisibleToAdminEnabled` está activo (para que el admin pueda verlo
+  /// en pruebas). Con el setting apagado queda null, igual que antes.
+  plainCode String?  @db.VarChar(6)
   expiresAt DateTime
   attempts  Int      @default(0)
   verified  Boolean  @default(false)

@@ -3347,57 +3347,69 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           const SizedBox(height: 8),
 
           // ── NAV ITEMS ────────────────────────────────────────────────────
-          ..._navItems.asMap().entries.map((entry) {
-            final i = entry.key;
-            final tab = entry.value;
-            final isActive = _selectedTab == i;
-            return SizedBox(
-              key: _webNavKeys[i],
-              child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-              child: InkWell(
-                onTap: () => _onTabTap(i),
-                borderRadius: BorderRadius.circular(10),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                  decoration: BoxDecoration(
-                    color: isActive ? GardenColors.primary.withValues(alpha: 0.10) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
-                    border: isActive ? Border.all(color: GardenColors.primary.withValues(alpha: 0.2)) : null,
-                  ),
-                  child: Row(children: [
-                    Icon(
-                      isActive ? tab.activeIcon : tab.icon,
-                      size: 18,
-                      color: isActive ? GardenColors.primary : subtextColor,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      tab.label,
-                      style: TextStyle(
-                        color: isActive ? GardenColors.primary : subtextColor,
-                        fontSize: 13,
-                        fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+          // Envueltos en Expanded+scroll (en vez de una lista fija seguida de
+          // Spacer) para que el sidebar nunca desborde en ventanas bajas,
+          // sin importar cuántos ítems tenga (nav items + acciones inferiores).
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ..._navItems.asMap().entries.map((entry) {
+                    final i = entry.key;
+                    final tab = entry.value;
+                    final isActive = _selectedTab == i;
+                    return SizedBox(
+                      key: _webNavKeys[i],
+                      child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                      child: InkWell(
+                        onTap: () => _onTabTap(i),
+                        borderRadius: BorderRadius.circular(10),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                          decoration: BoxDecoration(
+                            color: isActive ? GardenColors.primary.withValues(alpha: 0.10) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
+                            border: isActive ? Border.all(color: GardenColors.primary.withValues(alpha: 0.2)) : null,
+                          ),
+                          child: Row(children: [
+                            Icon(
+                              isActive ? tab.activeIcon : tab.icon,
+                              size: 18,
+                              color: isActive ? GardenColors.primary : subtextColor,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              tab.label,
+                              style: TextStyle(
+                                color: isActive ? GardenColors.primary : subtextColor,
+                                fontSize: 13,
+                                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                              ),
+                            ),
+                          ]),
+                        ),
                       ),
+                    ));
+                  }),
+
+                  Divider(color: borderColor, height: 1),
+
+                  // ── ACCIONES INFERIORES ──────────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Column(
+                      children: [
+                        _sidebarAction(Icons.account_balance_wallet_outlined, 'Mi billetera', subtextColor, () => context.push('/wallet')),
+                        _sidebarAction(Icons.pets_outlined, 'Mascotas', subtextColor, () => context.push('/caregiver/pets')),
+                        _sidebarAction(Icons.person_outline_rounded, 'Mi perfil', subtextColor, () => context.push('/profile')),
+                      ],
                     ),
-                  ]),
-                ),
+                  ),
+                ],
               ),
-            ));
-          }),
-
-          const Spacer(),
-          Divider(color: borderColor, height: 1),
-
-          // ── ACCIONES INFERIORES ──────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: Column(
-              children: [
-                _sidebarAction(Icons.account_balance_wallet_outlined, 'Mi billetera', subtextColor, () => context.push('/wallet')),
-                _sidebarAction(Icons.person_outline_rounded, 'Mi perfil', subtextColor, () => context.push('/profile')),
-              ],
             ),
           ),
           const SizedBox(height: 8),

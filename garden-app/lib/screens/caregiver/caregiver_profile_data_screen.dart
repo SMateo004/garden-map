@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/extra_services_editor.dart';
 
 class CaregiverProfileDataScreen extends StatefulWidget {
   /// When true, the screen hides its own AppBar/Scaffold and calls
@@ -181,7 +182,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   bool get _needsPlacePhotos => _needsSpaceSection;
 
   // ── Company-aware label helpers ──────────────────────────────────────────
-  bool get _ic => widget.isCompany;
+  // widget.isCompany solo llega en true desde el wizard de registro de
+  // empresa; en cualquier otra navegación (ej. Mi Perfil → Datos del
+  // cuidador) hay que confiar en el valor real ya cargado desde el backend.
+  bool _apiIsCompany = false;
+  bool get _ic => widget.isCompany || _apiIsCompany;
   String get _lAboutTitle     => _ic ? 'Sobre la empresa'               : 'Sobre ti como cuidador';
   String get _lExpTitle       => _ic ? 'Historia de la empresa'         : 'Tu experiencia profesional';
   String get _lYearsLabel     => _ic ? 'Años de operación'              : 'Años cuidando mascotas';
@@ -229,6 +234,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   /// Does NOT call setState — callers are responsible for wrapping in
   /// setState when appropriate (or calling directly in initState).
   void _applyProfile(Map<String, dynamic> profile) {
+    _apiIsCompany = profile['isCompany'] as bool? ?? false;
+
     // Usar el porcentaje ya calculado por el backend (más preciso que el local)
     final onboardingPct = (profile['onboardingStatus'] as Map<String, dynamic>?)?['percentage'] as int?;
     if (onboardingPct != null) _completionPercentage = onboardingPct;
@@ -977,6 +984,16 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                               child: _buildServicesPricesSection(surface, borderColor, textColor, subtextColor),
                             ),
                             const SizedBox(height: 14),
+
+                            // Servicios extra — solo para cuentas EMPRESA
+                            if (_ic) ...[
+                              _webSection(surface, borderColor, textColor,
+                                title: 'Servicios extra',
+                                icon: Icons.add_business_outlined,
+                                child: ExtraServicesEditor(token: _caregiverToken, baseUrl: _baseUrl),
+                              ),
+                              const SizedBox(height: 14),
+                            ],
 
                             _webSection(surface, borderColor, textColor,
                               title: 'Sobre ti como cuidador',

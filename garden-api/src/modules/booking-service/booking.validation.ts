@@ -21,6 +21,9 @@ export const hospedajeSchema = z
     // totalDays is accepted from the client for UX purposes but ALWAYS recomputed
     // server-side in booking.service.ts — never trusted for pricing.
     totalDays: z.coerce.number().int().min(1).max(90).optional(),
+    // IDs de ExtraService seleccionados — nombre/precio SIEMPRE se recalculan
+    // server-side en booking.service.ts, nunca se confía en lo que envíe el cliente.
+    extraServiceIds: z.array(z.string()).optional(),
   })
   .refine(
     (data) => {
@@ -76,6 +79,9 @@ export const paseoSchema = z
       .min(1, 'walkDays debe tener al menos 1 día')
       .max(30, 'Máximo 30 días por reserva')
       .optional(),
+    // IDs de ExtraService seleccionados — nombre/precio SIEMPRE se recalculan
+    // server-side en booking.service.ts, nunca se confía en lo que envíe el cliente.
+    extraServiceIds: z.array(z.string()).optional(),
   })
   .refine(
     (data) => {
@@ -107,6 +113,9 @@ export const guarderiaSchema = z.object({
     .refine((n) => [180, 240, 360, 480, 600].includes(n), {
       message: 'Duración debe ser 180, 240, 360, 480 o 600 minutos',
     }),
+  // IDs de ExtraService seleccionados — nombre/precio SIEMPRE se recalculan
+  // server-side en booking.service.ts, nunca se confía en lo que envíe el cliente.
+  extraServiceIds: z.array(z.string()).optional(),
 });
 
 /** Schema for optional M&G data attached at booking creation. */

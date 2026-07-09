@@ -15,6 +15,7 @@ import {
   BookingNotFoundError,
   BookingValidationError,
   ForbiddenError,
+  NotFoundError,
 } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
 import { track } from '../../shared/analytics.js';
@@ -406,6 +407,9 @@ export async function createBooking(
     let pricePerUnit: number;
     let totalDays: number | null = null;
     let totalAmount: number;
+    // Multiplicador de días/repeticiones para servicios extra — se fija en la
+    // misma rama que ya calcula los días de cada tipo de servicio, más abajo.
+    let extraDaysMultiplier = 1;
 
     // Multi-pet discount multipliers (applied to base price per additional pet of the SAME owner):
     // Pet 1: 100%, Pet 2: 75%, Pet 3: 50%
@@ -434,6 +438,7 @@ export async function createBooking(
       }
       totalDays = computedDays;
       totalAmount = Math.round(totalDays * pricePerUnit * petMultiplier);
+      extraDaysMultiplier = totalDays;
     } else if (body.serviceType === ServiceType.GUARDERIA) {
       const duration = (body as any).duration as number;
       const p60 = caregiver.pricePerWalk60 ?? 0;
@@ -458,6 +463,7 @@ export async function createBooking(
       // Multi-day: multiply by number of days; Multi-pet: apply discount multiplier
       const numDays = walkDays && walkDays.length > 0 ? walkDays.length : 1;
       totalAmount = Math.round(pricePerUnit * numDays * petMultiplier);
+      extraDaysMultiplier = numDays;
     }
 
     // ── Validar límites de precio configurados por admin ──────────────────────
@@ -480,6 +486,32 @@ export async function createBooking(
         `El precio del cuidador (Bs ${pricePerUnit}) supera el máximo permitido (Bs ${priceMax}).`,
         'BOOKING_VALIDATION', 'pricePerUnit'
       );
+    }
+
+    // ── Servicios extra (opcional) ─────────────────────────────────────────────
+    // Se suman ANTES de aplicar la comisión de plataforma, para que la comisión
+    // también aplique sobre el monto de los extras (igual que sobre el resto).
+    // Nunca se confía en nombre/precio enviado por el cliente — siempre se usa
+    // el precio real vigente de ExtraService. IDs que no matcheen (no pertenecen
+    // al cuidador, no aplican a este serviceType, o están inactivos) se ignoran
+    // silenciosamente en vez de fallar la reserva.
+    const extraServiceIds = (body as any).extraServiceIds as string[] | undefined;
+    const matchedExtras = extraServiceIds && extraServiceIds.length > 0
+      ? await tx.extraService.findMany({
+          where: {
+            id: { in: extraServiceIds },
+            caregiverId: caregiver.id,
+            active: true,
+            appliesTo: { has: body.serviceType as ServiceType },
+          },
+        })
+      : [];
+    if (matchedExtras.length > 0) {
+      const extrasTotal = matchedExtras.reduce(
+        (sum, e) => sum + Math.round(Number(e.pricePerDay) * extraDaysMultiplier),
+        0
+      );
+      totalAmount += extrasTotal;
     }
 
     const subtotal = totalAmount;
@@ -553,6 +585,19 @@ export async function createBooking(
       })),
     });
 
+    // Snapshot de los servicios extra contratados (nombre/precio al momento de la reserva)
+    if (matchedExtras.length > 0) {
+      await tx.bookingExtra.createMany({
+        data: matchedExtras.map((e) => ({
+          bookingId: booking.id,
+          extraServiceId: e.id,
+          name: e.name,
+          pricePerDay: e.pricePerDay,
+          totalPrice: new Prisma.Decimal(Math.round(Number(e.pricePerDay) * extraDaysMultiplier)),
+        })),
+      });
+    }
+
     // If M&G data provided: create MeetAndGreet record and notify caregiver immediately
     if (mgData) {
       await tx.meetAndGreet.create({
@@ -611,7 +656,7 @@ export async function createBooking(
     });
 
     return bookingToResponse(booking);
-  });
+  }, { timeout: 15000 });
 }
 
 /**
@@ -2823,6 +2868,174 @@ export async function getBookingsByCaregiverUserId(
     bookings: bookings.map(bookingToResponse),
     pagination: { page, limit, total, pages: Math.ceil(total / limit) || 1 },
   };
+}
+
+/** Mascota única devuelta por getCaregiverPets — para GET /api/caregiver/pets. */
+export type CaregiverPetSummary = {
+  id: string;
+  name: string;
+  breed: string | null;
+  photoUrl: string | null;
+  size: string | null;
+  animalType: string | null;
+  isAggressive: boolean;
+  specialNeeds: string | null;
+  upcoming: boolean;
+};
+
+/** Estados de reserva que cuentan como "próxima/en curso" para el flag `upcoming`. */
+const UPCOMING_BOOKING_STATUSES: BookingStatus[] = [
+  BookingStatus.CONFIRMED,
+  BookingStatus.WAITING_CAREGIVER_APPROVAL,
+  BookingStatus.IN_PROGRESS,
+];
+
+/**
+ * Lista las mascotas únicas con las que el cuidador ha tenido (o tiene) reservas.
+ * Aplana cada booking en 1+N "avistamientos" (mascota principal + bookingPets),
+ * deduplicando por Pet.id. Bookings cuya mascota fue borrada (pet: null) se omiten
+ * del resultado ya que no hay datos útiles que mostrar.
+ */
+export async function getCaregiverPets(userId: string): Promise<CaregiverPetSummary[]> {
+  const profile = await prisma.caregiverProfile.findFirst({
+    where: { userId },
+    select: { id: true },
+  });
+  if (!profile) return [];
+
+  const bookings = await prisma.booking.findMany({
+    where: {
+      caregiverId: profile.id,
+      status: {
+        notIn: [BookingStatus.PENDING_PAYMENT, BookingStatus.PAYMENT_PENDING_APPROVAL] as BookingStatus[],
+      },
+    },
+    select: {
+      status: true,
+      startDate: true,
+      walkDate: true,
+      petId: true,
+      petName: true,
+      petBreed: true,
+      petAge: true,
+      petSize: true,
+      pet: {
+        select: {
+          id: true,
+          name: true,
+          breed: true,
+          photoUrl: true,
+          size: true,
+          animalType: true,
+          isAggressive: true,
+          specialNeeds: true,
+        },
+      },
+      bookingPets: {
+        select: {
+          petId: true,
+          pet: {
+            select: {
+              id: true,
+              name: true,
+              breed: true,
+              photoUrl: true,
+              size: true,
+              animalType: true,
+              isAggressive: true,
+              specialNeeds: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const petsById = new Map<string, CaregiverPetSummary>();
+
+  for (const booking of bookings) {
+    const isUpcoming = UPCOMING_BOOKING_STATUSES.includes(booking.status);
+    const sightedPets = [booking.pet, ...booking.bookingPets.map((bp) => bp.pet)];
+
+    for (const p of sightedPets) {
+      if (!p) continue; // mascota borrada — sin Pet real no hay nada útil que mostrar
+      const existing = petsById.get(p.id);
+      if (existing) {
+        existing.upcoming = existing.upcoming || isUpcoming;
+      } else {
+        petsById.set(p.id, {
+          id: p.id,
+          name: p.name,
+          breed: p.breed ?? null,
+          photoUrl: p.photoUrl ?? null,
+          size: p.size ?? null,
+          animalType: p.animalType ?? null,
+          isAggressive: p.isAggressive,
+          specialNeeds: p.specialNeeds ?? null,
+          upcoming: isUpcoming,
+        });
+      }
+    }
+  }
+
+  return [...petsById.values()].sort((a, b) => Number(b.upcoming) - Number(a.upcoming));
+}
+
+/** Select completo del perfil de mascota, compartido con GET /bookings/:bookingId/pet. */
+const FULL_PET_SELECT = {
+  id: true,
+  name: true,
+  breed: true,
+  age: true,
+  size: true,
+  photoUrl: true,
+  specialNeeds: true,
+  notes: true,
+  gender: true,
+  weight: true,
+  color: true,
+  sterilized: true,
+  microchipNumber: true,
+  extraPhotos: true,
+  vaccinePhotos: true,
+  documents: true,
+} as const;
+
+/**
+ * Detalle solo-lectura de una mascota, para GET /api/caregiver/pets/:petId.
+ * A diferencia de /bookings/:bookingId/pet, NO restringe por estado de booking —
+ * basta con que exista al menos un booking histórico (cualquier estado) entre
+ * el cuidador y esa mascota (como mascota principal o como bookingPet).
+ */
+export async function getCaregiverPetById(userId: string, petId: string) {
+  const profile = await prisma.caregiverProfile.findFirst({
+    where: { userId },
+    select: { id: true },
+  });
+  if (!profile) {
+    throw new ForbiddenError('Perfil de cuidador no encontrado');
+  }
+
+  const hasHistory = await prisma.booking.findFirst({
+    where: {
+      caregiverId: profile.id,
+      OR: [{ petId }, { bookingPets: { some: { petId } } }],
+    },
+    select: { id: true },
+  });
+  if (!hasHistory) {
+    throw new NotFoundError('No tienes historial con esta mascota', 'PET_NO_HISTORY');
+  }
+
+  const pet = await prisma.pet.findUnique({
+    where: { id: petId },
+    select: FULL_PET_SELECT,
+  });
+  if (!pet) {
+    throw new NotFoundError('Mascota no encontrada', 'PET_NOT_FOUND');
+  }
+
+  return pet;
 }
 
 /**

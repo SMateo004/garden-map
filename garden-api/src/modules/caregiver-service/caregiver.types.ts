@@ -70,6 +70,8 @@ export interface CaregiverDetail extends CaregiverListItem {
     count: number;
     verified: boolean;
   } | null;
+  /** Servicios extra activos ofrecidos por el cuidador (solo empresas por ahora). Precio ya incluye el markup de plataforma. */
+  extraServices: Array<{ id: string; name: string; pricePerDay: number | null; appliesTo: string[] }>;
 }
 
 export interface ReviewPublic {

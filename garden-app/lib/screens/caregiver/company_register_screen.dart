@@ -28,6 +28,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart' show GardenColors, GardenButton, GardenInput, themeNotifier;
 import '../../services/auth_state.dart';
 import '../../widgets/address_section.dart';
+import '../../widgets/extra_services_editor.dart';
 import 'caregiver_profile_data_screen.dart';
 import 'phone_verification_screen.dart';
 import 'email_verification_screen.dart';
@@ -960,6 +961,15 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         if (_services.contains('GUARDERIA'))
           _buildPriceCard('Guardería', '/ día', '🏡', _precioGuarderia, (v) => setState(() => _precioGuarderia = v), textColor, subtextColor, surface, borderColor,
               min: _guarMin, max: _guarMax),
+        if (_authToken.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text('Servicios extra (opcional)', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          Text('Agrega servicios adicionales que se cobran por día, como "Comida incluida" o "Peluquería".',
+              style: TextStyle(color: subtextColor, fontSize: 13)),
+          const SizedBox(height: 12),
+          ExtraServicesEditor(token: _authToken, baseUrl: _baseUrl),
+        ],
       ],
     );
   }

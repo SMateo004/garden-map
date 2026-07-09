@@ -35,6 +35,8 @@ router.post('/verify-email', caregiverProfileController.verifyEmail);
 router.get('/availability', caregiverProfileController.getMyAvailability);
 router.patch('/availability', caregiverProfileController.patchAvailability);
 router.get('/bookings', caregiverProfileController.getMyBookingsAsCaregiver);
+router.get('/pets', caregiverProfileController.getMyCaregiverPets);
+router.get('/pets/:petId', caregiverProfileController.getMyCaregiverPetById);
 router.get('/notifications', caregiverProfileController.getNotifications);
 router.patch('/notifications/:id/read', caregiverProfileController.markNotificationRead);
 
