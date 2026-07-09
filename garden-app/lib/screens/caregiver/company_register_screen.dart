@@ -63,16 +63,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
   final _passwordCtrl      = TextEditingController();
   final _phoneCtrl         = TextEditingController();
   final _bioCtrl           = TextEditingController();
-  String _businessType     = 'HOTEL';
   bool _obscurePassword    = true;
-
-  static const _businessTypes = [
-    ('HOTEL',       '🏨 Hotel'),
-    ('HOSTAL',      '🛏️ Hostal'),
-    ('GUARDERIA',   '🏡 Guardería'),
-    ('PET_HOTEL',   '🐾 Hotel para mascotas'),
-    ('OTHER',       '🏢 Otro'),
-  ];
 
   // ── Paso 2: Ubicación ──────────────────────────────────────────────────────
   final _addressCtrl      = TextEditingController(); // kept for composed address string
@@ -93,6 +84,15 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
     ('HOSPEDAJE',  '🏠', 'Hospedaje'),
     ('GUARDERIA',  '🏡', 'Guardería'),
   ];
+
+  /// businessType ya no se pregunta aparte — se infiere de los servicios
+  /// elegidos acá para no duplicar la pregunta con selección única + múltiple.
+  String get _inferredBusinessType {
+    final onlyGuarderia = _services.length == 1 && _services.contains('GUARDERIA');
+    if (onlyGuarderia) return 'GUARDERIA';
+    if (_services.contains('HOSPEDAJE')) return 'HOTEL';
+    return 'OTHER';
+  }
 
   // ── Paso 4: Disponibilidad ─────────────────────────────────────────────────
   bool _weekdays  = true;
@@ -157,7 +157,6 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
     setState(() {
       // Paso 1: Datos de la empresa
       _companyNameCtrl.text = profile['companyName'] as String? ?? _companyNameCtrl.text;
-      _businessType = profile['businessType'] as String? ?? _businessType;
       _emailCtrl.text = user?['email'] as String? ?? _emailCtrl.text;
       _phoneCtrl.text = user?['phone'] as String? ?? _phoneCtrl.text;
       _bioCtrl.text = profile['bio'] as String? ?? _bioCtrl.text;
@@ -373,7 +372,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         body: jsonEncode({
           'code': _codeCtrl.text.trim(),
           'companyName': _companyNameCtrl.text.trim(),
-          'businessType': _businessType,
+          'businessType': _inferredBusinessType,
           'email': _emailCtrl.text.trim(),
           'password': _passwordCtrl.text,
           'phone': _phoneCtrl.text.trim(),
@@ -813,31 +812,10 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         Text('Información de la empresa', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
         const SizedBox(height: 24),
         GardenInput(hint: 'Nombre de la empresa *', controller: _companyNameCtrl),
-        const SizedBox(height: 12),
-        Text('Tipo de negocio', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _businessTypes.map((e) {
-            final type = e.$1;
-            final label = e.$2;
-            final sel = _businessType == type;
-            return GestureDetector(
-              onTap: () => setState(() => _businessType = type),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: sel ? GardenColors.primary : surface,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: sel ? GardenColors.primary : borderColor),
-                ),
-                child: Text(label, style: TextStyle(color: sel ? Colors.white : subtextColor, fontWeight: FontWeight.w600, fontSize: 13)),
-              ),
-            );
-          }).toList(),
-        ),
+        // "Tipo de negocio" se eliminó de acá — se preguntaba dos veces lo
+        // mismo que el paso 3 ("Servicios que ofrece"), solo que acá era de
+        // selección única. Ahora se infiere automáticamente de los servicios
+        // elegidos en el paso 3 (ver _inferredBusinessType).
         const SizedBox(height: 12),
         GardenInput(hint: 'Correo electrónico *', controller: _emailCtrl, keyboardType: TextInputType.emailAddress),
         const SizedBox(height: 12),
