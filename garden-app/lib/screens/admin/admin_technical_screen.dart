@@ -31,6 +31,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
     'disputasEnabled':         true,
     'preciosDinamicosEnabled': true,
     'meetGreetEnabled':        true,
+    'otpVisibleToAdminEnabled': true,
   };
 
   static const Map<String, num> _numericDefaults = {
@@ -400,6 +401,11 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                   _buildBoolTile(icon: Icons.construction_rounded, iconColor: Colors.red,
                     title: 'Modo mantenimiento', subtitle: 'Muestra aviso a todos los usuarios',
                     settingKey: 'maintenanceMode', surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
+                  _buildBoolTile(icon: Icons.pin_outlined, iconColor: Colors.deepPurple,
+                    title: 'Mostrar códigos OTP al admin',
+                    subtitle: 'Muestra el código de verificación de email y teléfono en el detalle de cada cuidador — solo para pruebas, no dejar activo en producción real.',
+                    settingKey: 'otpVisibleToAdminEnabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
                   _buildStringTile(icon: Icons.workspace_premium_rounded, iconColor: Colors.indigo,
                     title: 'Código cuidador profesional', subtitle: 'Código para registro de cuidadores profesionales',

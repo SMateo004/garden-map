@@ -117,6 +117,8 @@ export interface AdminCaregiverDetailDto {
     phoneOtp: string | null;
     phoneOtpExpiresAt: string | null;
   };
+  emailOtpCode: string | null;
+  emailOtpExpiresAt: string | null;
 
   // --- Perfil público / wizard ---
   bio: string | null;

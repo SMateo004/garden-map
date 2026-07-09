@@ -6,6 +6,7 @@ import { BadRequestError, CaregiverNotFoundError, NotFoundError, UnauthorizedErr
 import * as caregiverProfileService from '../caregiver-profile/caregiver-profile.service.js';
 import { checkAndAutoSubmitProfile } from '../caregiver-profile/caregiver-profile-completion.helper.js';
 import { getCache, delByPrefix } from '../../shared/cache.js';
+import { getBoolSetting } from '../../utils/settings-cache.js';
 import logger from '../../shared/logger.js';
 import { track } from '../../shared/analytics.js';
 import type {
@@ -42,6 +43,17 @@ export async function getCaregiverDetailForAdmin(profileId: string): Promise<Adm
     select: { id: true, selfieUrl: true }
   });
 
+  // Visibilidad permanente del OTP vigente (email + teléfono) para el admin,
+  // gateada por switch — distinta del fallback PHONE_OTP_MANUAL_HELP /
+  // EMAIL_OTP_MANUAL_HELP que solo aparece cuando el envío automático falla.
+  const otpVisibleToAdmin = await getBoolSetting('otpVisibleToAdminEnabled', true);
+  const latestEmailVerification = otpVisibleToAdmin
+    ? await prisma.emailVerification.findFirst({
+        where: { userId: profile.userId, verified: false },
+        orderBy: { createdAt: 'desc' },
+      })
+    : null;
+
   const u = profile.user;
   const dto: AdminCaregiverDetailDto = {
     id: profile.id,
@@ -77,9 +89,11 @@ export async function getCaregiverDetailForAdmin(profileId: string): Promise<Adm
       isOver18: u.isOver18,
       createdAt: u.createdAt.toISOString(),
       updatedAt: u.updatedAt.toISOString(),
-      phoneOtp: u.phoneOtp ?? null,
-      phoneOtpExpiresAt: u.phoneOtpExpiresAt ? u.phoneOtpExpiresAt.toISOString() : null,
+      phoneOtp: otpVisibleToAdmin ? (u.phoneOtp ?? null) : null,
+      phoneOtpExpiresAt: otpVisibleToAdmin && u.phoneOtpExpiresAt ? u.phoneOtpExpiresAt.toISOString() : null,
     },
+    emailOtpCode: latestEmailVerification?.plainCode ?? null,
+    emailOtpExpiresAt: latestEmailVerification?.expiresAt.toISOString() ?? null,
     bio: profile.bio,
     bioDetail: profile.bioDetail,
     zone: profile.zone,
@@ -2853,6 +2867,10 @@ export async function resolveChatReport(
 // 100% confiables — ver otp-delivery.service.ts). El admin ve el mensaje
 // listo para copiar/enviar por su propio WhatsApp. Cada entrada permanece
 // en la lista hasta que el usuario verifica su teléfono exitosamente.
+// Esto es DISTINTO de la visibilidad permanente del código vigente que se
+// expone en getCaregiverDetailForAdmin (campo phoneOtp), gateada por el
+// switch otpVisibleToAdminEnabled — ese mecanismo no depende de que el envío
+// automático haya fallado, siempre muestra el último código solicitado.
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** GET /api/admin/phone-otp-requests — cuidadores que pidieron un código y
@@ -2920,9 +2938,12 @@ export async function generatePhoneOtpMessage(userId: string) {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VERIFICACIÓN DE CORREO MANUAL (fallback — SOLO aparece cuando Resend
-// realmente falla al enviar, a diferencia del teléfono que se notifica
-// siempre. Ver auth.controller.ts sendVerificationEmail — el catch de
-// EMAIL_SEND_FAILED es lo único que crea estas notificaciones).
+// realmente falla al enviar. Ver email.service.ts sendVerificationEmail — el
+// catch de EMAIL_SEND_FAILED es lo único que crea estas notificaciones).
+// Esto es DISTINTO de la visibilidad permanente del código vigente que se
+// expone en getCaregiverDetailForAdmin (campos emailOtpCode/
+// emailOtpExpiresAt, leídos de EmailVerification.plainCode), gateada por el
+// switch otpVisibleToAdminEnabled — no depende de que el envío haya fallado.
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** GET /api/admin/email-otp-requests — usuarios a los que Resend NO pudo

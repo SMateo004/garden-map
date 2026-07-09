@@ -8,6 +8,7 @@ import prisma from '../../config/database.js';
 import { env } from '../../config/env.js';
 import { BadRequestError } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
+import { getBoolSetting } from '../../utils/settings-cache.js';
 
 const CODE_EXPIRY_MINUTES = 10;
 const MAX_VERIFY_ATTEMPTS = 5;
@@ -135,6 +136,7 @@ export async function generateAndSendVerificationCode(userId: string): Promise<{
   const code = generateCode();
   const codeHash = hashCode(code);
   const expiresAt = new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000);
+  const otpVisibleToAdmin = await getBoolSetting('otpVisibleToAdminEnabled', true);
 
   await prisma.emailVerification.create({
     data: {
@@ -142,6 +144,7 @@ export async function generateAndSendVerificationCode(userId: string): Promise<{
       codeHash,
       expiresAt,
       attempts: 0,
+      ...(otpVisibleToAdmin ? { plainCode: code } : {}),
     },
   });
 

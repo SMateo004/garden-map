@@ -4360,6 +4360,66 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                         ),
                       ]);
                     }),
+                    // Último código de EMAIL — visible solo para soporte
+                    Builder(builder: (_) {
+                      final emailOtp = detail?['user']?['emailOtpCode'] as String?;
+                      final expiresStr = detail?['user']?['emailOtpExpiresAt'] as String?;
+                      if (emailOtp == null || emailOtp.isEmpty) return const SizedBox.shrink();
+                      final expires = expiresStr != null ? DateTime.tryParse(expiresStr) : null;
+                      final expired = expires != null && expires.isBefore(DateTime.now());
+                      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: expired
+                                ? Colors.grey.withValues(alpha: 0.08)
+                                : GardenColors.warning.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: expired
+                                  ? Colors.grey.withValues(alpha: 0.25)
+                                  : GardenColors.warning.withValues(alpha: 0.40),
+                            ),
+                          ),
+                          child: Row(children: [
+                            Icon(
+                              Icons.mark_email_read_outlined,
+                              size: 14,
+                              color: expired ? Colors.grey : GardenColors.warning,
+                            ),
+                            const SizedBox(width: 6),
+                            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(
+                                'ÚLTIMO CÓDIGO DE EMAIL${expired ? ' (EXPIRADO)' : ''}',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.8,
+                                  color: expired ? Colors.grey : GardenColors.warning,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              SelectableText(
+                                emailOtp,
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 6,
+                                  color: expired ? Colors.grey : textColor,
+                                ),
+                              ),
+                            ]),
+                            const Spacer(),
+                            if (!expired && expires != null)
+                              Text(
+                                'exp. ${expires.hour.toString().padLeft(2,'0')}:${expires.minute.toString().padLeft(2,'0')}',
+                                style: const TextStyle(fontSize: 10, color: Colors.grey),
+                              ),
+                          ]),
+                        ),
+                      ]);
+                    }),
                   ])),
 
                   // COMPLETITUD

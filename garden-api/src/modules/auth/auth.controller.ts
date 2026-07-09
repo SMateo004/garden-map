@@ -882,8 +882,11 @@ export const registerCompany = asyncHandler(async (req: Request, res: Response) 
 
 // ── Phone Verification ───────────────────────────────────────────────────────
 // El backend genera el código, lo persiste en users.phoneOtp, y lo envía por
-// Twilio SMS. El soporte admin puede consultar el último código emitido en el
-// panel de administración (campo phoneOtp del perfil del cuidador).
+// Twilio SMS. Ese mismo campo se expone siempre en el detalle de cuidador del
+// panel de administración (gateado por el switch otpVisibleToAdminEnabled —
+// ver admin.service.ts getCaregiverDetailForAdmin), para que el admin pueda
+// hacer pruebas. Aparte, existe el fallback PHONE_OTP_MANUAL_HELP (ver
+// admin.service.ts) que solo entra en juego para el flujo de reenvío manual.
 
 /** POST /api/auth/caregiver/send-phone-otp
  *  Genera un código de 6 dígitos, lo guarda en BD y lo envía por SMS. */
