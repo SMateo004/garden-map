@@ -6,10 +6,12 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 
-/// Panel admin: verificación de correo manual — a diferencia de la
-/// verificación telefónica, esta pantalla SOLO recibe entradas cuando
-/// Resend realmente falla al enviar el correo (no en cada solicitud, ya
-/// que Resend es confiable la gran mayoría de las veces).
+/// Panel admin: verificación de correo manual — normalmente SOLO recibe
+/// entradas cuando Resend realmente falla al enviar el correo. Con el
+/// switch "Mostrar códigos OTP al admin" (Configuración técnica) activo,
+/// ADEMÁS lista todos los códigos pendientes vigentes aunque el envío no
+/// haya fallado, mostrando el código REAL que ya se le mandó al usuario
+/// (no uno regenerado) — pensado solo para pruebas.
 class AdminEmailOtpScreen extends StatefulWidget {
   final String adminToken;
   const AdminEmailOtpScreen({super.key, required this.adminToken});
@@ -77,7 +79,7 @@ class _AdminEmailOtpScreenState extends State<AdminEmailOtpScreen> {
             padding: const EdgeInsets.all(16),
             color: GardenColors.error.withValues(alpha: 0.08),
             child: Text(
-              'Esta lista solo muestra casos donde Resend falló realmente al enviar el correo. Desaparece cuando el usuario verifica.',
+              'En rojo: Resend falló realmente al enviar el correo. En azul: código pendiente visible solo por el switch de pruebas (el envío por Resend funcionó normal). Cada entrada desaparece cuando el usuario verifica.',
               style: TextStyle(color: textColor, fontSize: 12.5),
             ),
           ),
@@ -100,6 +102,8 @@ class _AdminEmailOtpScreenState extends State<AdminEmailOtpScreen> {
                           separatorBuilder: (_, __) => const SizedBox(height: 10),
                           itemBuilder: (_, i) {
                             final r = _requests[i];
+                            final isRealFailure = r['isRealFailure'] as bool? ?? true;
+                            final accentColor = isRealFailure ? GardenColors.error : GardenColors.primary;
                             return Material(
                               color: surface,
                               borderRadius: BorderRadius.circular(GardenRadius.lg),
@@ -110,11 +114,14 @@ class _AdminEmailOtpScreenState extends State<AdminEmailOtpScreen> {
                                   padding: const EdgeInsets.all(14),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(GardenRadius.lg),
-                                    border: Border.all(color: GardenColors.error.withValues(alpha: 0.4)),
+                                    border: Border.all(color: accentColor.withValues(alpha: 0.4)),
                                   ),
                                   child: Row(
                                     children: [
-                                      const Icon(Icons.mark_email_unread_outlined, color: GardenColors.error, size: 22),
+                                      Icon(
+                                        isRealFailure ? Icons.mark_email_unread_outlined : Icons.visibility_outlined,
+                                        color: accentColor, size: 22,
+                                      ),
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Column(
@@ -165,6 +172,7 @@ class _EmailOtpDetailSheetState extends State<_EmailOtpDetailSheet> {
   bool _generating = false;
   String? _message;
   String? _email;
+  bool _reused = false;
 
   @override
   void initState() {
@@ -187,6 +195,7 @@ class _EmailOtpDetailSheetState extends State<_EmailOtpDetailSheet> {
         setState(() {
           _message = data['data']['message'] as String;
           _email = data['data']['email'] as String;
+          _reused = data['data']['reused'] as bool? ?? false;
         });
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -271,7 +280,17 @@ class _EmailOtpDetailSheetState extends State<_EmailOtpDetailSheet> {
           if (_generating)
             const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator(color: GardenColors.primary)))
           else if (_message != null) ...[
-            Text('MENSAJE LISTO PARA ENVIAR', style: TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+            Text(
+              _reused ? 'CÓDIGO REAL YA ENVIADO POR RESEND' : 'MENSAJE LISTO PARA ENVIAR',
+              style: TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+            ),
+            if (_reused) ...[
+              const SizedBox(height: 2),
+              Text(
+                'Este es el mismo código que el usuario ya recibió en su correo — no se generó uno nuevo.',
+                style: TextStyle(color: subtextColor, fontSize: 11.5),
+              ),
+            ],
             const SizedBox(height: 8),
             Container(
               width: double.infinity,
@@ -334,7 +353,7 @@ class _EmailOtpDetailSheetState extends State<_EmailOtpDetailSheet> {
             TextButton.icon(
               onPressed: _generate,
               icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('Generar código nuevo'),
+              label: Text(_reused ? 'Actualizar (sigue siendo el mismo código mientras sea válido)' : 'Generar código nuevo'),
             ),
           ],
         ],

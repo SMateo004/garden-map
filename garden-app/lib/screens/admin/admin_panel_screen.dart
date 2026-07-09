@@ -4362,8 +4362,11 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                     }),
                     // Último código de EMAIL — visible solo para soporte
                     Builder(builder: (_) {
-                      final emailOtp = detail?['user']?['emailOtpCode'] as String?;
-                      final expiresStr = detail?['user']?['emailOtpExpiresAt'] as String?;
+                      // emailOtpCode/emailOtpExpiresAt viven en la raíz del detalle
+                      // (siblings de 'user'), a diferencia de phoneOtp que sí está
+                      // anidado dentro de 'user' — no son la misma estructura.
+                      final emailOtp = detail?['emailOtpCode'] as String?;
+                      final expiresStr = detail?['emailOtpExpiresAt'] as String?;
                       if (emailOtp == null || emailOtp.isEmpty) return const SizedBox.shrink();
                       final expires = expiresStr != null ? DateTime.tryParse(expiresStr) : null;
                       final expired = expires != null && expires.isBefore(DateTime.now());

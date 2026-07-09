@@ -2897,7 +2897,11 @@ export async function resolveChatReport(
 
 /** GET /api/admin/phone-otp-requests — cuidadores que pidieron un código y
  * todavía NO verificaron su teléfono. Desaparece de la lista solo cuando
- * phoneVerified pasa a true. */
+ * phoneVerified pasa a true.
+ *
+ * Con el switch otpVisibleToAdminEnabled activo, ADEMÁS se listan todos los
+ * cuidadores con un phoneOtp pendiente vigente (sin importar si el envío
+ * automático falló) — marcados con isRealFailure:false. */
 export async function listPendingPhoneOtpRequests() {
   const notifications = await prisma.adminNotification.findMany({
     where: { type: 'PHONE_OTP_MANUAL_HELP' },
@@ -2911,9 +2915,21 @@ export async function listPendingPhoneOtpRequests() {
     if (!latestByUser.has(n.caregiverId)) latestByUser.set(n.caregiverId, n.createdAt);
   }
 
+  const otpVisibleToAdmin = await getBoolSetting('otpVisibleToAdminEnabled', true);
+  if (otpVisibleToAdmin) {
+    const pending = await prisma.user.findMany({
+      where: { phoneOtp: { not: null }, phoneOtpExpiresAt: { gt: new Date() } },
+      select: { id: true, phoneOtpExpiresAt: true },
+    });
+    for (const p of pending) {
+      if (!latestByUser.has(p.id)) latestByUser.set(p.id, p.phoneOtpExpiresAt!);
+    }
+  }
+
   const userIds = [...latestByUser.keys()];
   if (userIds.length === 0) return [];
 
+  const realFailureIds = new Set(notifications.map((n) => n.caregiverId));
   const users = await prisma.user.findMany({
     where: { id: { in: userIds } },
     select: {
@@ -2929,20 +2945,32 @@ export async function listPendingPhoneOtpRequests() {
       name: `${u.firstName} ${u.lastName}`.trim(),
       phone: u.phone,
       requestedAt: latestByUser.get(u.id)?.toISOString(),
+      isRealFailure: realFailureIds.has(u.id),
     }))
     .sort((a, b) => (b.requestedAt ?? '').localeCompare(a.requestedAt ?? ''));
 }
 
 /**
- * POST /api/admin/phone-otp-requests/:userId/message — (re)genera un código
- * de 6 dígitos fresco (10 min de vigencia desde AHORA) y devuelve el mensaje
- * exacto listo para copiar/pegar, para que el admin lo envíe manualmente por
- * su propio WhatsApp sin depender de que el envío automático haya llegado.
+ * POST /api/admin/phone-otp-requests/:userId/message — si ya existe un
+ * phoneOtp vigente (el mismo que se mandó por WhatsApp/SMS), lo devuelve TAL
+ * CUAL en vez de regenerar — regenerar invalidaría el código real que el
+ * usuario ya recibió, causando un mismatch. Solo genera uno fresco si no hay
+ * ninguno vigente (expiró, o nunca se pidió), y lo guarda igual que siempre.
  */
 export async function generatePhoneOtpMessage(userId: string) {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { phone: true } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { phone: true, phoneOtp: true, phoneOtpExpiresAt: true },
+  });
   if (!user || !user.phone) {
     throw new BadRequestError('Este usuario no tiene teléfono registrado');
+  }
+
+  const toPhone = user.phone.startsWith('+') ? user.phone : `+591${user.phone}`;
+
+  if (user.phoneOtp && user.phoneOtpExpiresAt && user.phoneOtpExpiresAt > new Date()) {
+    const message = `GARDEN: tu código de verificación es ${user.phoneOtp}. Vence en 10 minutos. No lo compartas con nadie.`;
+    return { phone: toPhone, message, expiresAt: user.phoneOtpExpiresAt.toISOString(), reused: true };
   }
 
   const otp = String(Math.floor(100000 + Math.random() * 900000));
@@ -2952,10 +2980,9 @@ export async function generatePhoneOtpMessage(userId: string) {
     data: { phoneOtp: otp, phoneOtpExpiresAt: expiresAt },
   });
 
-  const toPhone = user.phone.startsWith('+') ? user.phone : `+591${user.phone}`;
   const message = `GARDEN: tu código de verificación es ${otp}. Vence en 10 minutos. No lo compartas con nadie.`;
 
-  return { phone: toPhone, message, expiresAt: expiresAt.toISOString() };
+  return { phone: toPhone, message, expiresAt: expiresAt.toISOString(), reused: false };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2970,7 +2997,12 @@ export async function generatePhoneOtpMessage(userId: string) {
 
 /** GET /api/admin/email-otp-requests — usuarios a los que Resend NO pudo
  * enviarles el código y que todavía no verifican su correo. Desaparece de
- * la lista solo cuando emailVerified pasa a true. */
+ * la lista solo cuando emailVerified pasa a true.
+ *
+ * Con el switch otpVisibleToAdminEnabled activo, ADEMÁS se listan todos los
+ * usuarios con un EmailVerification pendiente vigente (sin importar si
+ * Resend falló) — marcados con isRealFailure:false, para que el admin
+ * pueda verlos aquí durante pruebas sin esperar un fallo real de envío. */
 export async function listPendingEmailOtpRequests() {
   const notifications = await prisma.adminNotification.findMany({
     where: { type: 'EMAIL_OTP_MANUAL_HELP' },
@@ -2983,9 +3015,22 @@ export async function listPendingEmailOtpRequests() {
     if (!latestByUser.has(n.caregiverId)) latestByUser.set(n.caregiverId, n.createdAt);
   }
 
+  const otpVisibleToAdmin = await getBoolSetting('otpVisibleToAdminEnabled', true);
+  if (otpVisibleToAdmin) {
+    const pending = await prisma.emailVerification.findMany({
+      where: { verified: false, expiresAt: { gt: new Date() }, plainCode: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      select: { userId: true, createdAt: true },
+    });
+    for (const p of pending) {
+      if (!latestByUser.has(p.userId)) latestByUser.set(p.userId, p.createdAt);
+    }
+  }
+
   const userIds = [...latestByUser.keys()];
   if (userIds.length === 0) return [];
 
+  const realFailureIds = new Set(notifications.map((n) => n.caregiverId));
   const users = await prisma.user.findMany({
     where: { id: { in: userIds } },
     select: { id: true, firstName: true, lastName: true, email: true, emailVerified: true },
@@ -2998,23 +3043,38 @@ export async function listPendingEmailOtpRequests() {
       name: `${u.firstName} ${u.lastName}`.trim(),
       email: u.email,
       requestedAt: latestByUser.get(u.id)?.toISOString(),
+      isRealFailure: realFailureIds.has(u.id),
     }))
     .sort((a, b) => (b.requestedAt ?? '').localeCompare(a.requestedAt ?? ''));
 }
 
 /**
- * POST /api/admin/email-otp-requests/:userId/message — genera un código
- * fresco (10 min de vigencia desde AHORA), lo guarda hasheado como una
- * EmailVerification normal (así el flujo de verificación del usuario sigue
- * funcionando igual), y devuelve el código EN TEXTO PLANO + el mensaje listo
- * para que el admin lo copie o lo mande por correo/WhatsApp manualmente.
- * NO reintenta enviar por Resend — si el admin está aquí es porque Resend
- * ya falló una vez para este usuario.
+ * POST /api/admin/email-otp-requests/:userId/message — si con el switch
+ * otpVisibleToAdminEnabled activo ya existe un código vigente (el mismo que
+ * Resend le mandó al usuario, guardado en claro en EmailVerification.plainCode),
+ * lo devuelve TAL CUAL en vez de generar uno nuevo — regenerar invalidaría el
+ * código real que el usuario ya tiene en su bandeja, causando un mismatch.
+ * Solo si no hay un código vigente reutilizable (switch apagado, o el único
+ * caso real: Resend falló y por lo tanto nunca hubo envío real que preservar)
+ * genera uno fresco, lo guarda hasheado, y lo devuelve en texto plano para
+ * que el admin lo mande manualmente por correo/WhatsApp.
  */
 export async function generateEmailOtpMessage(userId: string) {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
   if (!user || !user.email) {
     throw new BadRequestError('Este usuario no tiene correo registrado');
+  }
+
+  const otpVisibleToAdmin = await getBoolSetting('otpVisibleToAdminEnabled', true);
+  if (otpVisibleToAdmin) {
+    const existing = await prisma.emailVerification.findFirst({
+      where: { userId, verified: false, expiresAt: { gt: new Date() }, plainCode: { not: null } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (existing?.plainCode) {
+      const message = `GARDEN: tu código de verificación es ${existing.plainCode}. Vence en 10 minutos. No lo compartas con nadie.`;
+      return { email: user.email, message, code: existing.plainCode, expiresAt: existing.expiresAt.toISOString(), reused: true };
+    }
   }
 
   const { createHash, randomInt } = await import('crypto');
@@ -3026,10 +3086,10 @@ export async function generateEmailOtpMessage(userId: string) {
   // criterio que generateAndSendVerificationCode en email.service.ts.
   await prisma.emailVerification.deleteMany({ where: { userId, verified: false } });
   await prisma.emailVerification.create({
-    data: { userId, codeHash, expiresAt, attempts: 0 },
+    data: { userId, codeHash, expiresAt, attempts: 0, ...(otpVisibleToAdmin ? { plainCode: code } : {}) },
   });
 
   const message = `GARDEN: tu código de verificación es ${code}. Vence en 10 minutos. No lo compartas con nadie.`;
 
-  return { email: user.email, message, code, expiresAt: expiresAt.toISOString() };
+  return { email: user.email, message, code, expiresAt: expiresAt.toISOString(), reused: false };
 }

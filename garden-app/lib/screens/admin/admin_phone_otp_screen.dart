@@ -10,6 +10,11 @@ import '../../widgets/garden_empty_state.dart';
 /// (pendiente de aprobación de Meta) y SMS (entrega no garantizada a
 /// Bolivia) no son 100% confiables. Cada fila permanece en la lista hasta
 /// que el usuario verifica su teléfono exitosamente.
+///
+/// Con el switch "Mostrar códigos OTP al admin" (Configuración técnica)
+/// activo, ADEMÁS lista todos los códigos pendientes vigentes aunque el
+/// envío no haya fallado, mostrando el código REAL ya enviado (no uno
+/// regenerado) — pensado solo para pruebas.
 class AdminPhoneOtpScreen extends StatefulWidget {
   final String adminToken;
   const AdminPhoneOtpScreen({super.key, required this.adminToken});
@@ -100,6 +105,8 @@ class _AdminPhoneOtpScreenState extends State<AdminPhoneOtpScreen> {
                           separatorBuilder: (_, __) => const SizedBox(height: 10),
                           itemBuilder: (_, i) {
                             final r = _requests[i];
+                            final isRealFailure = r['isRealFailure'] as bool? ?? true;
+                            final accentColor = isRealFailure ? GardenColors.warning : GardenColors.primary;
                             return Material(
                               color: surface,
                               borderRadius: BorderRadius.circular(GardenRadius.lg),
@@ -110,11 +117,14 @@ class _AdminPhoneOtpScreenState extends State<AdminPhoneOtpScreen> {
                                   padding: const EdgeInsets.all(14),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(GardenRadius.lg),
-                                    border: Border.all(color: GardenColors.warning.withValues(alpha: 0.4)),
+                                    border: Border.all(color: accentColor.withValues(alpha: 0.4)),
                                   ),
                                   child: Row(
                                     children: [
-                                      const Icon(Icons.phone_forwarded_outlined, color: GardenColors.warning, size: 22),
+                                      Icon(
+                                        isRealFailure ? Icons.phone_forwarded_outlined : Icons.visibility_outlined,
+                                        color: accentColor, size: 22,
+                                      ),
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Column(
@@ -165,6 +175,7 @@ class _PhoneOtpDetailSheetState extends State<_PhoneOtpDetailSheet> {
   bool _generating = false;
   String? _message;
   String? _phone;
+  bool _reused = false;
 
   @override
   void initState() {
@@ -188,6 +199,7 @@ class _PhoneOtpDetailSheetState extends State<_PhoneOtpDetailSheet> {
         setState(() {
           _message = data['data']['message'] as String;
           _phone = data['data']['phone'] as String;
+          _reused = data['data']['reused'] as bool? ?? false;
         });
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -254,7 +266,17 @@ class _PhoneOtpDetailSheetState extends State<_PhoneOtpDetailSheet> {
           if (_generating)
             const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator(color: GardenColors.primary)))
           else if (_message != null) ...[
-            Text('MENSAJE LISTO PARA ENVIAR', style: TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+            Text(
+              _reused ? 'CÓDIGO REAL YA ENVIADO' : 'MENSAJE LISTO PARA ENVIAR',
+              style: TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+            ),
+            if (_reused) ...[
+              const SizedBox(height: 2),
+              Text(
+                'Este es el mismo código que el usuario ya recibió por WhatsApp/SMS — no se generó uno nuevo.',
+                style: TextStyle(color: subtextColor, fontSize: 11.5),
+              ),
+            ],
             const SizedBox(height: 8),
             Container(
               width: double.infinity,
@@ -304,7 +326,7 @@ class _PhoneOtpDetailSheetState extends State<_PhoneOtpDetailSheet> {
             TextButton.icon(
               onPressed: _generate,
               icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('Generar código nuevo'),
+              label: Text(_reused ? 'Actualizar (sigue siendo el mismo código mientras sea válido)' : 'Generar código nuevo'),
             ),
           ],
         ],
