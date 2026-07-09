@@ -88,7 +88,17 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       if (_caregiver != null) {
         final status = (_caregiver!['status'] as String? ?? '').toUpperCase();
         _caregiverStatus = status;
-        if (status != 'APPROVED') {
+        // Las empresas nacen con status:APPROVED desde el registro (a
+        // diferencia del individual, que arranca en DRAFT), así que `status`
+        // por sí solo no detecta un wizard de empresa sin terminar — hay que
+        // mirar también los flags de completitud que ya calcula el backend
+        // en cada PATCH /caregiver/profile.
+        final isCompany = _caregiver!['isCompany'] == true;
+        final wizardIncomplete = isCompany &&
+            (_caregiver!['caregiverProfileComplete'] != true ||
+                _caregiver!['personalInfoComplete'] != true ||
+                _caregiver!['availabilityComplete'] != true);
+        if (status != 'APPROVED' || wizardIncomplete) {
           if (mounted) setState(() => _setupPending = true);
         }
       }

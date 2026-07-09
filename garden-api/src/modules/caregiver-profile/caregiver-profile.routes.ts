@@ -4,6 +4,7 @@ import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js
 import * as caregiverProfileController from './caregiver-profile.controller.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import { checkAndAutoSubmitProfile } from './caregiver-profile-completion.helper.js';
+import { addPlacePhotoAtomic, removePlacePhotoAtomic } from './caregiver-profile.service.js';
 import { prisma } from '../../config/database.js';
 import multer from 'multer';
 import { uploadImage } from '../../services/storage.service.js';
@@ -145,10 +146,15 @@ router.post('/profile/place-photo', upload.single('placePhoto'),
     }
 
     const photoUrl = await uploadImage(file.buffer, { folder: 'caregivers/place', name: `place_${section}_${userId}_${Date.now()}` });
-    const updated = { ...current, [section]: [...sectionPhotos, photoUrl] };
-    await prisma.caregiverProfile.update({ where: { userId }, data: { placePhotos: updated } });
 
-    res.json({ success: true, data: { photoUrl, section, total: (updated[section] ?? []).length } });
+    // Escritura atómica: jsonb_set solo toca la clave de esta sección, sin pisar
+    // lo que otra request concurrente (subiendo a otra sección) acaba de escribir.
+    await addPlacePhotoAtomic(userId, section, photoUrl);
+
+    const updatedProfile = await prisma.caregiverProfile.findFirst({ where: { userId }, select: { placePhotos: true } });
+    const updatedSectionPhotos = ((updatedProfile?.placePhotos ?? {}) as Record<string, string[]>)[section] ?? [];
+
+    res.json({ success: true, data: { photoUrl, section, total: updatedSectionPhotos.length } });
   })
 );
 
@@ -162,9 +168,9 @@ router.delete('/profile/place-photo',
     const profile = await prisma.caregiverProfile.findFirst({ where: { userId }, select: { placePhotos: true } });
     if (!profile) return res.status(404).json({ success: false, error: { message: 'Perfil no encontrado' } });
 
-    const current = (profile.placePhotos ?? {}) as Record<string, string[]>;
-    const updated = { ...current, [section]: (current[section] ?? []).filter((p: string) => p !== photoUrl) };
-    await prisma.caregiverProfile.update({ where: { userId }, data: { placePhotos: updated } });
+    // Escritura atómica: filtra la URL dentro del mismo UPDATE (jsonb_agg sobre
+    // jsonb_array_elements_text), sin leer-modificar-escribir el objeto completo en JS.
+    await removePlacePhotoAtomic(userId, section, photoUrl);
 
     res.json({ success: true });
   })

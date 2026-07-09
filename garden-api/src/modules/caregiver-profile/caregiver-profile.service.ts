@@ -697,6 +697,49 @@ export async function patchAvailability(userId: string, body: PatchAvailabilityB
   return { success: true };
 }
 
+/**
+ * Agrega una foto a una sección de placePhotos con un UPDATE atómico (jsonb_set).
+ * Evita el read-modify-write que pisaba secciones subidas concurrentemente
+ * (ej. "sala" y "descanso" casi al mismo tiempo pisaban la escritura de la otra).
+ */
+export async function addPlacePhotoAtomic(userId: string, section: string, photoUrl: string): Promise<void> {
+  await prisma.$executeRaw`
+    UPDATE "caregiver_profiles"
+    SET "placePhotos" = jsonb_set(
+      COALESCE("placePhotos", '{}'::jsonb),
+      ARRAY[${section}]::text[],
+      COALESCE("placePhotos"->${section}, '[]'::jsonb) || to_jsonb(${photoUrl}::text),
+      true
+    )
+    WHERE "userId" = ${userId}
+  `;
+}
+
+/**
+ * Elimina una foto de una sección de placePhotos con un UPDATE atómico:
+ * filtra el array de la sección (jsonb_agg sobre jsonb_array_elements_text)
+ * dentro del mismo statement, sin leer-modificar-escribir el objeto completo en JS.
+ */
+export async function removePlacePhotoAtomic(userId: string, section: string, photoUrl: string): Promise<void> {
+  await prisma.$executeRaw`
+    UPDATE "caregiver_profiles"
+    SET "placePhotos" = jsonb_set(
+      COALESCE("placePhotos", '{}'::jsonb),
+      ARRAY[${section}]::text[],
+      COALESCE(
+        (
+          SELECT jsonb_agg(elem)
+          FROM jsonb_array_elements_text(COALESCE("placePhotos"->${section}, '[]'::jsonb)) AS elem
+          WHERE elem <> ${photoUrl}
+        ),
+        '[]'::jsonb
+      ),
+      true
+    )
+    WHERE "userId" = ${userId}
+  `;
+}
+
 /** GET notifications for the logged-in caregiver (inbox). */
 export async function getNotifications(userId: string) {
   const list = await prisma.notification.findMany({

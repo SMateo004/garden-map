@@ -89,6 +89,11 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
     suspended: false,
     status: CaregiverStatus.APPROVED,
     verified: true,
+    // Las empresas quedan verified:true apenas confirman teléfono+email
+    // (antes de terminar el paso final del wizard, perfil detallado) — a
+    // diferencia del individual, donde verified:true ya implica registro
+    // 100% completo. No mostrar una empresa a medias en el marketplace.
+    OR: [{ isCompany: false }, { isCompany: true, caregiverProfileComplete: true }],
   } as Prisma.CaregiverProfileWhereInput;
 
   if (zonesFilter?.length) {
@@ -322,13 +327,18 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
 
   const markupRate = await getMarkupRate();
 
-  // Solo visibles para clientes: APPROVED + verified, no suspendido
+  // Solo visibles para clientes: APPROVED + verified, no suspendido.
+  // Empresas quedan verified:true antes de terminar el wizard (ver
+  // comentario equivalente en el `where` del listado, más arriba en este
+  // archivo) — exigirles además caregiverProfileComplete evita mostrar un
+  // perfil de empresa a medias si un cliente entra directo por su URL.
   const publicWhere = {
     id,
     suspended: false,
     status: CaregiverStatus.APPROVED,
     verified: true,
-  };
+    OR: [{ isCompany: false }, { isCompany: true, caregiverProfileComplete: true }],
+  } as Prisma.CaregiverProfileWhereUniqueInput;
 
   // Manejar el caso donde timeBlocks no existe en la DB
   let profile;

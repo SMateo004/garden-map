@@ -772,6 +772,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   }
 
   Future<void> _addPlacePhoto(String section) async {
+    // Evita disparar subidas concurrentes (doble-tap o tocar otra sección
+    // mientras una subida sigue en vuelo). El backend ya es atómico, pero
+    // esto además evita gastar cuota/ancho de banda con subidas duplicadas.
+    if (_uploadingPlacePhoto) return;
     final current = _placePhotoUrls[section] ?? [];
     if (current.length >= 3) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Máximo 3 fotos por sección')));
@@ -2067,17 +2071,22 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                 ),
               if (canAdd)
                 GestureDetector(
-                  onTap: () => _addPlacePhoto(key),
-                  child: Container(
-                    width: 80, height: 80,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: required && photos.isEmpty ? GardenColors.error.withValues(alpha: 0.5) : borderColor),
-                    ),
-                    child: Icon(
-                      Icons.add_photo_alternate_outlined,
-                      color: required && photos.isEmpty ? GardenColors.error : GardenColors.primary,
-                      size: 28,
+                  // Deshabilitado mientras hay una subida en curso (cualquier sección) —
+                  // evita disparar subidas concurrentes por doble-tap o tocar otra sección.
+                  onTap: _uploadingPlacePhoto ? null : () => _addPlacePhoto(key),
+                  child: Opacity(
+                    opacity: _uploadingPlacePhoto ? 0.4 : 1.0,
+                    child: Container(
+                      width: 80, height: 80,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: required && photos.isEmpty ? GardenColors.error.withValues(alpha: 0.5) : borderColor),
+                      ),
+                      child: Icon(
+                        Icons.add_photo_alternate_outlined,
+                        color: required && photos.isEmpty ? GardenColors.error : GardenColors.primary,
+                        size: 28,
+                      ),
                     ),
                   ),
                 ),

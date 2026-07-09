@@ -127,7 +127,9 @@ export interface AdminCaregiverDetailDto {
   spaceType: string[]; // Array de tipos de espacio
   spaceDescription: string | null;
   address: string | null;
-  photos: string[];
+  photos: string[]; // legacy — reemplazado por caregiverPhotos
+  caregiverPhotos: string[];
+  placePhotos: Record<string, string[]> | null;
 
   // --- Servicios y disponibilidad ---
   servicesOffered: string[];
@@ -135,7 +137,10 @@ export interface AdminCaregiverDetailDto {
   pricePerDay: number | null;
   pricePerWalk30: number | null;
   pricePerWalk60: number | null;
+  pricePerGuarderia: number | null;
+  guarderiaIncludeWalk: boolean;
   rates: Record<string, unknown> | null;
+  extraServices: Array<{ id: string; name: string; pricePerDay: number | null; appliesTo: string[]; active: boolean }>;
 
   // --- Términos ---
   termsAccepted: boolean | null;
@@ -190,6 +195,10 @@ export interface AdminCaregiverDetailDto {
   lastIdentityVerificationSessionId?: string;
   emailVerified: boolean;
   isProfessional: boolean;
+  isCompany: boolean;
+  companyName: string | null;
+  businessType: string | null;
+  emergencyContacts: Array<{ name: string; phone: string }> | null;
   reviewChecklist: string[] | null;
 
   // --- Flags de completitud ---

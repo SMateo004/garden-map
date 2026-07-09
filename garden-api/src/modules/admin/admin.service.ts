@@ -33,6 +33,10 @@ export async function getCaregiverDetailForAdmin(profileId: string): Promise<Adm
     include: {
       user: true,
       availability: { orderBy: { date: 'asc' }, take: 100 },
+      // Admin ve TODOS los extras (activos e inactivos), a diferencia del
+      // endpoint público que solo muestra los activos — se distinguen con
+      // el campo `active` en el mapeo del DTO.
+      extraServices: { orderBy: { createdAt: 'asc' } },
     },
   });
   if (!profile) throw new CaregiverNotFoundError(profileId);
@@ -101,11 +105,15 @@ export async function getCaregiverDetailForAdmin(profileId: string): Promise<Adm
     spaceDescription: profile.spaceDescription,
     address: profile.address,
     photos: profile.photos ?? [],
+    caregiverPhotos: (profile as any).caregiverPhotos ?? [],
+    placePhotos: (profile as any).placePhotos as Record<string, string[]> | null,
     servicesOffered: profile.servicesOffered ?? [],
     serviceAvailability: profile.serviceAvailability as Record<string, unknown> | null,
     pricePerDay: profile.pricePerDay,
     pricePerWalk30: profile.pricePerWalk30,
     pricePerWalk60: profile.pricePerWalk60,
+    pricePerGuarderia: profile.pricePerGuarderia,
+    guarderiaIncludeWalk: (profile as any).guarderiaIncludeWalk ?? false,
     rates: profile.rates as Record<string, unknown> | null,
     termsAccepted: profile.termsAccepted,
     privacyAccepted: profile.privacyAccepted,
@@ -160,6 +168,17 @@ export async function getCaregiverDetailForAdmin(profileId: string): Promise<Adm
     emailVerified: u.emailVerified,
     reviewChecklist: Array.isArray((profile as any).reviewChecklist) ? (profile as any).reviewChecklist : null,
     isProfessional: (profile as any).isProfessional ?? false,
+    isCompany: (profile as any).isCompany ?? false,
+    companyName: (profile as any).companyName ?? null,
+    businessType: (profile as any).businessType ?? null,
+    emergencyContacts: ((profile as any).emergencyContacts as Array<{ name: string; phone: string }> | null) ?? null,
+    extraServices: ((profile as any).extraServices ?? []).map((e: any) => ({
+      id: e.id,
+      name: e.name,
+      pricePerDay: e.pricePerDay != null ? Number(e.pricePerDay) : null,
+      appliesTo: e.appliesTo,
+      active: e.active,
+    })),
     // Compute completeness from actual profile data (not stale stored flags)
     personalInfoComplete: Boolean(u.firstName?.trim() && u.lastName?.trim() && u.phone?.trim()),
     caregiverProfileComplete: Boolean(

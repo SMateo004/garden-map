@@ -4217,9 +4217,8 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                       ]),
                     ],
                     const SizedBox(height: 6),
-                    Row(children: [
+                    Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
                       widget.statusBadge(status),
-                      const SizedBox(width: 8),
                       if (detail?['verified'] == true)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -4232,6 +4231,23 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                             Icon(Icons.verified_rounded, size: 11, color: GardenColors.success),
                             SizedBox(width: 3),
                             Text('Verificado', style: TextStyle(color: GardenColors.success, fontSize: 10, fontWeight: FontWeight.bold)),
+                          ]),
+                        ),
+                      if (detail?['isCompany'] == true)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.indigo.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.indigo.withValues(alpha: 0.4)),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            const Icon(Icons.business_rounded, size: 11, color: Colors.indigo),
+                            const SizedBox(width: 3),
+                            Text(
+                              'Empresa${(detail?['companyName'] as String?)?.isNotEmpty == true ? ' · ${detail!['companyName']}' : ''}${_businessTypeLabel(detail?['businessType'] as String?) != null ? ' (${_businessTypeLabel(detail?['businessType'] as String?)})' : ''}',
+                              style: const TextStyle(color: Colors.indigo, fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
                           ]),
                         ),
                     ]),
@@ -4425,6 +4441,32 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                     }),
                   ])),
 
+                  // CONTACTOS DE EMERGENCIA
+                  if ((detail?['emergencyContacts'] as List?)?.isNotEmpty == true)
+                    infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        const Icon(Icons.emergency_outlined, size: 14, color: GardenColors.error),
+                        const SizedBox(width: 6),
+                        Text('CONTACTOS DE EMERGENCIA', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: GardenColors.error, letterSpacing: 1)),
+                      ]),
+                      const SizedBox(height: 10),
+                      ...(detail!['emergencyContacts'] as List).map((c) {
+                        final contact = c as Map<String, dynamic>;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(children: [
+                            const Icon(Icons.person_outline_rounded, size: 14, color: Colors.grey),
+                            const SizedBox(width: 6),
+                            Expanded(child: Text(contact['name']?.toString() ?? '—', style: TextStyle(fontSize: 13, color: textColor))),
+                            const SizedBox(width: 6),
+                            const Icon(Icons.phone_outlined, size: 14, color: Colors.grey),
+                            const SizedBox(width: 4),
+                            Text(contact['phone']?.toString() ?? '—', style: TextStyle(fontSize: 13, color: textColor, fontWeight: FontWeight.w600)),
+                          ]),
+                        );
+                      }),
+                    ])),
+
                   // COMPLETITUD
                   infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
@@ -4504,11 +4546,66 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                       Wrap(children: (detail!['servicesOffered'] as List).map((s) => chip(s.toString(), color: GardenColors.primary)).toList()),
                       const SizedBox(height: 10),
                     ],
-                    Row(children: [
-                      if (detail?['pricePerDay'] != null) _priceCard('Hospedaje / día', 'Bs ${detail!['pricePerDay']}', Icons.home_rounded, textColor, subtextColor, borderColor),
-                      if (detail?['pricePerDay'] != null && detail?['pricePerWalk60'] != null) const SizedBox(width: 8),
-                      if (detail?['pricePerWalk60'] != null) _priceCard('Paseo 60 min', 'Bs ${detail!['pricePerWalk60']}', Icons.directions_walk_rounded, textColor, subtextColor, borderColor),
-                    ]),
+                    Builder(builder: (_) {
+                      final priceEntries = <(String, String, IconData)>[
+                        if (detail?['pricePerDay'] != null)
+                          ('Hospedaje / día', 'Bs ${detail!['pricePerDay']}', Icons.home_rounded),
+                        if (detail?['pricePerWalk30'] != null)
+                          ('Paseo 30 min', 'Bs ${detail!['pricePerWalk30']}', Icons.directions_walk_rounded),
+                        if (detail?['pricePerWalk60'] != null)
+                          ('Paseo 60 min', 'Bs ${detail!['pricePerWalk60']}', Icons.directions_walk_rounded),
+                        if (detail?['pricePerGuarderia'] != null)
+                          ('Guardería / día', 'Bs ${detail!['pricePerGuarderia']}', Icons.pets_rounded),
+                      ];
+                      if (priceEntries.isEmpty) return const SizedBox.shrink();
+                      final rows = <Widget>[];
+                      for (var i = 0; i < priceEntries.length; i += 2) {
+                        final pair = priceEntries.skip(i).take(2).toList();
+                        rows.add(Padding(
+                          padding: EdgeInsets.only(bottom: i + 2 < priceEntries.length ? 8 : 0),
+                          child: Row(children: [
+                            _priceCard(pair[0].$1, pair[0].$2, pair[0].$3, textColor, subtextColor, borderColor),
+                            if (pair.length > 1) ...[
+                              const SizedBox(width: 8),
+                              _priceCard(pair[1].$1, pair[1].$2, pair[1].$3, textColor, subtextColor, borderColor),
+                            ],
+                          ]),
+                        ));
+                      }
+                      return Column(children: rows);
+                    }),
+                    if ((detail?['extraServices'] as List?)?.isNotEmpty == true) ...[
+                      const SizedBox(height: 14),
+                      const Text('SERVICIOS EXTRA', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
+                      const SizedBox(height: 8),
+                      ...(detail!['extraServices'] as List).map((e) {
+                        final ex = e as Map<String, dynamic>;
+                        final isActive = ex['active'] != false;
+                        final appliesTo = (ex['appliesTo'] as List? ?? []);
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Icon(Icons.add_circle_outline_rounded, size: 14, color: isActive ? GardenColors.primary : Colors.grey),
+                            const SizedBox(width: 6),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, children: [
+                                Text(ex['name']?.toString() ?? '—',
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isActive ? textColor : subtextColor)),
+                                Text('Bs ${ex['pricePerDay']}/día',
+                                  style: const TextStyle(fontSize: 12, color: GardenColors.primary, fontWeight: FontWeight.w600)),
+                                if (!isActive) chip('Inactivo', color: Colors.grey),
+                              ]),
+                              if (appliesTo.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Wrap(spacing: 4, runSpacing: 4,
+                                    children: appliesTo.map((s) => chip(s.toString(), color: Colors.teal)).toList()),
+                                ),
+                            ])),
+                          ]),
+                        );
+                      }),
+                    ],
                   ])),
 
                   // EXPERIENCIA
@@ -4641,31 +4738,42 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                     ])),
                   ],
 
-                  // FOTOS DEL PERFIL
-                  if ((detail?['photos'] as List?)?.isNotEmpty == true) ...[
-                    sectionHeader('FOTOS DEL ESPACIO', Icons.photo_library_outlined),
-                    SizedBox(
-                      height: 90,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: (detail!['photos'] as List).length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
-                        itemBuilder: (_, i) {
-                          final url = (detail['photos'] as List)[i] as String;
-                          return ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.network(url, width: 90, height: 90, fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                width: 90, height: 90,
-                                decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(10)),
-                                child: Icon(Icons.broken_image_outlined, color: subtextColor),
-                              )),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
+                  // FOTOS — reales (caregiverPhotos/placePhotos) + legacy (photos)
+                  Builder(builder: (_) {
+                    final legacyPhotos = (detail?['photos'] as List?)?.whereType<String>().toList() ?? [];
+                    final caregiverPhotosList = (detail?['caregiverPhotos'] as List?)?.whereType<String>().toList() ?? [];
+                    final placePhotosMap = detail?['placePhotos'] as Map<String, dynamic>?;
+                    final placeSections = placePhotosMap == null
+                        ? <(String, String, List<String>)>[]
+                        : _placeSectionLabels
+                            .map((sec) => (sec.$1, sec.$2, ((placePhotosMap[sec.$1] as List?) ?? []).whereType<String>().toList()))
+                            .where((sec) => sec.$3.isNotEmpty)
+                            .toList();
+                    if (legacyPhotos.isEmpty && caregiverPhotosList.isEmpty && placeSections.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      sectionHeader('FOTOS', Icons.photo_library_outlined),
+                      if (caregiverPhotosList.isNotEmpty) ...[
+                        const Text('FOTOS DEL CUIDADOR', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
+                        const SizedBox(height: 6),
+                        _photoStrip(caregiverPhotosList, borderColor, subtextColor),
+                        const SizedBox(height: 12),
+                      ],
+                      for (final sec in placeSections) ...[
+                        Text(sec.$2, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
+                        const SizedBox(height: 6),
+                        _photoStrip(sec.$3, borderColor, subtextColor),
+                        const SizedBox(height: 12),
+                      ],
+                      if (legacyPhotos.isNotEmpty) ...[
+                        const Text('FOTOS (LEGACY)', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
+                        const SizedBox(height: 6),
+                        _photoStrip(legacyPhotos, borderColor, subtextColor),
+                        const SizedBox(height: 12),
+                      ],
+                    ]);
+                  }),
 
                   // REQUISITOS LEGALES
                   sectionHeader('REQUISITOS LEGALES', Icons.gavel_rounded),
@@ -4802,6 +4910,29 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
     );
   }
 
+  // Mismo mapeo de businessType usado en company_register_screen.dart
+  static const Map<String, String> _businessTypeLabels = {
+    'HOTEL': '🏨 Hotel',
+    'HOSTAL': '🛏️ Hostal',
+    'GUARDERIA': '🏡 Guardería',
+    'PET_HOTEL': '🐾 Hotel para mascotas',
+    'OTHER': '🏢 Otro',
+  };
+
+  String? _businessTypeLabel(String? type) {
+    if (type == null || type.isEmpty) return null;
+    return _businessTypeLabels[type] ?? type;
+  }
+
+  // Mismas secciones/labels de placePhotos usadas en caregiver_profile_data_screen.dart
+  static const List<(String, String)> _placeSectionLabels = [
+    ('sala', '🛋️ Sala / Área principal'),
+    ('descanso', '🛏️ Zona de descanso'),
+    ('alimentacion', '🍽️ Área de alimentación'),
+    ('jardin', '🌿 Jardín / Patio'),
+    ('juego', '🎾 Área de juego'),
+  ];
+
   bool _hasDocuments(Map<String, dynamic>? detail) {
     if (detail == null) return false;
     return detail['ciAnversoUrl'] != null || detail['ciReversoUrl'] != null ||
@@ -4890,6 +5021,24 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
       const SizedBox(width: 5),
       Text(label, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
     ]),
+  );
+
+  Widget _photoStrip(List<String> urls, Color borderColor, Color subtextColor) => SizedBox(
+    height: 90,
+    child: ListView.separated(
+      scrollDirection: Axis.horizontal,
+      itemCount: urls.length,
+      separatorBuilder: (_, __) => const SizedBox(width: 8),
+      itemBuilder: (_, i) => ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.network(urls[i], width: 90, height: 90, fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            width: 90, height: 90,
+            decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(10)),
+            child: Icon(Icons.broken_image_outlined, color: subtextColor),
+          )),
+      ),
+    ),
   );
 
   Widget _miniIdBadge(String label, String value, Color subtextColor, Color borderColor) => Container(
