@@ -2173,21 +2173,43 @@ export async function deleteCaregiver(
   });
   const bookingIds = bookings.map((b) => b.id);
 
-  // Delete child records of Booking without cascade
-  if (bookingIds.length > 0) {
-    await prisma.dispute.deleteMany({ where: { bookingId: { in: bookingIds } } });
-    await prisma.meetAndGreet.deleteMany({ where: { bookingId: { in: bookingIds } } });
-    await prisma.chatMessage.deleteMany({ where: { bookingId: { in: bookingIds } } });
-  }
-  // ChatMessages sent by the caregiver user (senderId FK — no cascade)
-  await prisma.chatMessage.deleteMany({ where: { senderId: userId } });
-  // SugerenciaPrecio references CaregiverProfile without cascade
-  await prisma.sugerenciaPrecio.deleteMany({ where: { caregiverId: profileId } });
-  // WalletTransaction references User without cascade
-  await prisma.walletTransaction.deleteMany({ where: { userId } });
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Delete child records of Booking without cascade
+      if (bookingIds.length > 0) {
+        await tx.dispute.deleteMany({ where: { bookingId: { in: bookingIds } } });
+        await tx.meetAndGreet.deleteMany({ where: { bookingId: { in: bookingIds } } });
+        await tx.chatMessage.deleteMany({ where: { bookingId: { in: bookingIds } } });
+        // Donation.booking no tiene onDelete:Cascade (se conserva por defecto para
+        // reportes financieros) — hay que borrarla a mano antes de poder borrar
+        // las reservas del cuidador, si no el delete final falla por FK constraint.
+        await tx.donation.deleteMany({ where: { bookingId: { in: bookingIds } } });
+      }
+      // ChatMessages sent by the caregiver user (senderId FK — no cascade)
+      await tx.chatMessage.deleteMany({ where: { senderId: userId } });
+      // SugerenciaPrecio references CaregiverProfile without cascade
+      await tx.sugerenciaPrecio.deleteMany({ where: { caregiverId: profileId } });
+      // WalletTransaction references User without cascade
+      await tx.walletTransaction.deleteMany({ where: { userId } });
+      // Donation.client tampoco tiene cascade — cubre el caso (poco común pero
+      // posible) de que este cuidador haya donado alguna vez como cliente.
+      await tx.donation.deleteMany({ where: { clientId: userId } });
 
-  // Delete user — Prisma cascades: User → CaregiverProfile → Availability, Booking, Review
-  await prisma.user.delete({ where: { id: userId } });
+      // Delete user — Prisma cascades: User → CaregiverProfile → Availability, Booking, Review
+      await tx.user.delete({ where: { id: userId } });
+    });
+  } catch (err: any) {
+    // Constraint de FK no contemplada (ej. una relación nueva sin cascade) —
+    // dar un mensaje claro en vez del genérico "Error interno del servidor".
+    if (err?.code === 'P2003' || err?.code === 'P2014') {
+      throw new BadRequestError(
+        'No se pudo eliminar: el cuidador todavía tiene datos relacionados que no se pudieron limpiar automáticamente (código ' +
+          err.code + '). Revisa logs para identificar la tabla — probablemente falta un caso en deleteCaregiver.',
+        'CAREGIVER_DELETE_FK_CONSTRAINT'
+      );
+    }
+    throw err;
+  }
 
   await getCache().del(`caregivers:detail:${profileId}`);
   await delByPrefix('caregivers:list:');
