@@ -347,6 +347,19 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
                       'Confirma tu teléfono y tu correo para proteger tu cuenta y activar tu perfil de cuidador.',
                       style: TextStyle(fontSize: 14, color: subtextColor, height: 1.5),
                     ),
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: surfaceEl,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Text(
+                        'Te enviaremos un código de verificación por SMS. Pueden aplicarse tarifas de mensajes y datos; la frecuencia varía. Responde AYUDA para ayuda o ALTO para cancelar.',
+                        style: TextStyle(fontSize: 12, color: subtextColor, height: 1.4),
+                      ),
+                    ),
                     const SizedBox(height: 24),
 
                     _buildVerificationCard(

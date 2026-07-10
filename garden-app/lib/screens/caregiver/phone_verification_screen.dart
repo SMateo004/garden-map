@@ -237,7 +237,21 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
                       style: TextStyle(color: GardenColors.primary, fontSize: 13)),
                 ),
               ],
-              const SizedBox(height: 26),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: surfaceEl,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Text(
+                  'Pueden aplicarse tarifas de mensajes y datos; la frecuencia varía. Responde AYUDA para ayuda o ALTO para cancelar.',
+                  style: TextStyle(fontSize: 12, color: subtextColor, height: 1.4),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 20),
 
               if (_isSending && !_codeSent) ...[
                 const CircularProgressIndicator(color: GardenColors.primary),
