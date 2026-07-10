@@ -1708,6 +1708,15 @@ export async function requestCancellationByCaregiver(
   notificationService
     .onCaregiverCancelled(bookingId, reason)
     .catch((err) => logger.error('Notification onCaregiverCancelled failed', { bookingId, err }));
+
+  track(caregiverUserId, 'booking_cancelled', {
+    bookingId,
+    cancelledBy: 'CAREGIVER',
+    serviceType: result.serviceType,
+    totalAmount: Number(result.totalAmount),
+    reason,
+  });
+
   return result;
 }
 
@@ -1948,6 +1957,17 @@ export async function cancelBooking(
     entity: 'Booking',
     entityId: bookingId,
     details: { reason: cancellationReason ?? null, refundAmount: result.refundAmount, refundStatus: result.refundStatus },
+  });
+
+  track(clientId, 'booking_cancelled', {
+    bookingId,
+    cancelledBy: 'CLIENT',
+    serviceType: result.booking.serviceType,
+    source: cancellationSource ?? 'CLIENT_REQUEST',
+    totalAmount: Number(result.booking.totalAmount),
+    refundAmount: result.refundAmount,
+    refundStatus: result.refundStatus,
+    reason: cancellationReason ?? null,
   });
 
   // Registro en Blockchain (asíncrono) — guarda txHash si la tx tiene éxito

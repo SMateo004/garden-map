@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import prisma from '../../config/database.js';
+import { track } from '../../shared/analytics.js';
 
 const router = Router();
 
@@ -268,6 +269,12 @@ router.post(
           `Cuando el depósito sea confirmado, te lo notificaremos aquí. ¡Gracias por confiar en Garden!`,
         type: 'SYSTEM',
       },
+    });
+
+    track(userId, 'withdrawal_requested', {
+      transactionId: transactionId!,
+      amount: parsedAmount,
+      bankName: bankSnapshot!.bankName,
     });
 
     res.json({
