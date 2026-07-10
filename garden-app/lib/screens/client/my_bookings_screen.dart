@@ -1730,7 +1730,7 @@ class _RatingSheetState extends State<_RatingSheet> {
       if (data['success'] == true) {
         if (!mounted) return;
         widget.onSubmitted(); // Esto cierra el ModalBottom y recarga _loadBookings() en la pantalla principal
-        
+
         if (_rating < 3) {
           context.push(
             '/dispute/${widget.bookingId}',
@@ -1739,9 +1739,19 @@ class _RatingSheetState extends State<_RatingSheet> {
         } else {
           GardenSnackBar.success(context, '¡Gracias por tu calificación!');
         }
+      } else if (mounted) {
+        // BUG (auditoría): antes, si el servidor rechazaba la calificación
+        // (ej. ya calificada, reserva no completada), no pasaba absolutamente
+        // nada — el botón dejaba de girar sin ningún aviso, y el usuario no
+        // tenía forma de saber si funcionó o no.
+        GardenSnackBar.error(context, data['error']?['message'] ?? 'No se pudo enviar tu calificación. Intenta de nuevo.');
       }
     } catch (e) {
-      // ignore
+      // BUG (auditoría): antes se ignoraba en silencio cualquier fallo de
+      // red — el usuario no se enteraba de que su calificación no se envió.
+      if (mounted) {
+        GardenSnackBar.error(context, 'Error de conexión. Intenta de nuevo.');
+      }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }

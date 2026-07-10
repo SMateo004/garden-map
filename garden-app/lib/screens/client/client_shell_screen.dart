@@ -40,8 +40,11 @@ class _ClientShellScreenState extends State<ClientShellScreen> {
 
   Future<void> _maybeShowTutorial() async {
     final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getString('user_id') ?? 'anonymous';
-    if (!mounted) return;
+    final userId = prefs.getString('user_id') ?? '';
+    // Ver nota en web_shell_screen.dart: nunca mostrar con userId vacío/'anonymous'
+    // — evita que el tutorial se marque "visto" bajo una clave que no es la
+    // cuenta real y vuelva a aparecer luego con el userId correcto.
+    if (userId.isEmpty || !mounted) return;
     GardenTutorial.maybeShow(
       context,
       prefKey: 'tutorial_client_v1_$userId',

@@ -145,6 +145,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       debugPrint('SERVICE: Response ${response.statusCode}: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}');
       
       final data = jsonDecode(response.body);
+      // Este refresco corre cada 10s vía Timer.periodic mientras el servicio
+      // está activo (ver más abajo) — si el usuario sale de la pantalla justo
+      // cuando esta respuesta llega, el widget ya está disposed y setState()
+      // crashearía. dispose() cancela el timer pero no un request en vuelo.
+      if (!mounted) return;
       if (data['success'] == true) {
         setState(() {
           _booking = data['data'];

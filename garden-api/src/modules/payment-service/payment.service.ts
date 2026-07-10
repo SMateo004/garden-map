@@ -301,33 +301,52 @@ export async function verifyPaymentByQr(qrId: string, clientId: string): Promise
   }
 
   // Si el dueño eligió donar, registrar la donación
+  // BUG (auditoría): antes esto era fire-and-forget (sin await) — si el
+  // proceso se caía justo después de responder al cliente, el pago quedaba
+  // confirmado pero la donación nunca se registraba, sin forma de saberlo
+  // salvo por un log. Ahora se espera antes de continuar; si falla, solo se
+  // registra el error (el pago en sí ya está confirmado y no debe fallar
+  // la respuesta al cliente por esto).
   if (booking.donationAmount && Number(booking.donationAmount) > 0) {
-    prisma.donation.upsert({
-      where: { bookingId: booking.id },
-      create: { bookingId: booking.id, clientId: booking.clientId, amount: booking.donationAmount },
-      update: {},
-    }).catch((err) => logger.error('Donation record creation failed (QR)', { bookingId: booking.id, err }));
+    try {
+      await prisma.donation.upsert({
+        where: { bookingId: booking.id },
+        create: { bookingId: booking.id, clientId: booking.clientId, amount: booking.donationAmount },
+        update: {},
+      });
+    } catch (err) {
+      logger.error('Donation record creation failed (QR)', { bookingId: booking.id, err });
+    }
   }
 
   // Si había deuda previa incluida en el QR, recuperarla (zerificar balance negativo)
   const debtRecovery = Number(booking.debtRecoveryAmount ?? 0);
   if (debtRecovery > 0) {
-    prisma.user.update({
-      where: { id: booking.clientId },
-      data: { balance: { increment: debtRecovery } },
-    }).then(() => {
-      return prisma.walletTransaction.create({
-        data: {
-          userId: booking.clientId,
-          type: 'DEBT_RECOVERY',
-          amount: debtRecovery,
-          balance: 0, // balance se zerificó
-          description: `Deuda por tiempo extra recuperada vía QR — reserva ${booking.id.slice(0, 8)}`,
-          bookingId: booking.id,
-          status: 'COMPLETED',
-        },
+    try {
+      // Ambos escritos en una sola transacción — antes eran dos awaits
+      // encadenados fuera de una transacción: si el proceso caía entre el
+      // incremento de balance y la creación del registro de wallet, el saldo
+      // quedaba recuperado sin ningún WalletTransaction que lo explique.
+      await prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: booking.clientId },
+          data: { balance: { increment: debtRecovery } },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            userId: booking.clientId,
+            type: 'DEBT_RECOVERY',
+            amount: debtRecovery,
+            balance: 0, // balance se zerificó
+            description: `Deuda por tiempo extra recuperada vía QR — reserva ${booking.id.slice(0, 8)}`,
+            bookingId: booking.id,
+            status: 'COMPLETED',
+          },
+        });
       });
-    }).catch((err) => logger.error('Debt recovery failed (QR)', { bookingId: booking.id, err }));
+    } catch (err) {
+      logger.error('Debt recovery failed (QR)', { bookingId: booking.id, err });
+    }
   }
 
   // Registro en Blockchain — guardar txHash
@@ -501,33 +520,46 @@ export async function verifyPaymentBySipCallback(
     logger.error('[SIP callback] Notification failed', { bookingId: booking.id, err });
   });
 
+  // Ver comentario equivalente en verifyPaymentByQr — antes fire-and-forget,
+  // ahora awaited (best-effort, no rompe la confirmación de pago si falla).
   if (booking.donationAmount && Number(booking.donationAmount) > 0) {
-    prisma.donation.upsert({
-      where: { bookingId: booking.id },
-      create: { bookingId: booking.id, clientId: booking.clientId, amount: booking.donationAmount },
-      update: {},
-    }).catch((err) => logger.error('[SIP callback] Donation record failed', { bookingId: booking.id, err }));
+    try {
+      await prisma.donation.upsert({
+        where: { bookingId: booking.id },
+        create: { bookingId: booking.id, clientId: booking.clientId, amount: booking.donationAmount },
+        update: {},
+      });
+    } catch (err) {
+      logger.error('[SIP callback] Donation record failed', { bookingId: booking.id, err });
+    }
   }
 
-  // Recuperar deuda previa incluida en el QR (igual que en verifyPaymentByQr)
+  // Recuperar deuda previa incluida en el QR (igual que en verifyPaymentByQr) —
+  // ambos escritos en una sola transacción para no dejar un incremento de
+  // balance sin su WalletTransaction correspondiente si el proceso falla a mitad.
   const sipDebtRecovery = Number(booking.debtRecoveryAmount ?? 0);
   if (sipDebtRecovery > 0) {
-    prisma.user.update({
-      where: { id: booking.clientId },
-      data: { balance: { increment: sipDebtRecovery } },
-    }).then(() =>
-      prisma.walletTransaction.create({
-        data: {
-          userId: booking.clientId,
-          type: 'DEBT_RECOVERY',
-          amount: sipDebtRecovery,
-          balance: 0,
-          description: `Deuda por tiempo extra recuperada vía SIP — reserva ${booking.id.slice(0, 8)}`,
-          bookingId: booking.id,
-          status: 'COMPLETED',
-        },
-      })
-    ).catch((err) => logger.error('[SIP callback] Debt recovery failed', { bookingId: booking.id, err }));
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: booking.clientId },
+          data: { balance: { increment: sipDebtRecovery } },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            userId: booking.clientId,
+            type: 'DEBT_RECOVERY',
+            amount: sipDebtRecovery,
+            balance: 0,
+            description: `Deuda por tiempo extra recuperada vía SIP — reserva ${booking.id.slice(0, 8)}`,
+            bookingId: booking.id,
+            status: 'COMPLETED',
+          },
+        });
+      });
+    } catch (err) {
+      logger.error('[SIP callback] Debt recovery failed', { bookingId: booking.id, err });
+    }
   }
 
   blockchainService.createBookingOnChain(

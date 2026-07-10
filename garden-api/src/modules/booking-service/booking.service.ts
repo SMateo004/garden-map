@@ -1282,6 +1282,13 @@ export async function initPayment(
     // "5000" en vez de "50" que vacían la wallet del cliente por accidente.
     const effectiveDonation = Math.min(Math.max(0, donationAmount), 500);
 
+    // Bloquea la fila del cliente para el resto de la transacción — sin esto,
+    // dos pagos con billetera casi simultáneos (dos reservas, doble-tap,
+    // reintento) pueden leer el mismo saldo bajo Read Committed y ambos
+    // descontar, dejando el saldo negativo sin que ninguno se haya rechazado.
+    // Mismo patrón que wallet.routes.ts (retiros) — ver comentario ahí.
+    await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${clientId} FOR UPDATE`;
+
     // ── Deuda previa del cliente (saldo negativo) ─────────────────────────────
     // Si el cliente tiene saldo negativo (por cargo de overtime de un servicio anterior),
     // la deuda se incorpora al pago actual y se recupera cuando el pago se confirme.
@@ -4400,87 +4407,106 @@ export async function autoPayoutExpiredReviews() {
 export async function confirmExtensionQrBySip(bookingId: string, qrId: string): Promise<void> {
   const cfg = await getBookingSettings();
 
-  const booking = await prisma.booking.findFirst({
-    where: { id: bookingId },
-    select: {
-      id: true, clientId: true, caregiverId: true, serviceType: true, status: true,
-      duration: true, endDate: true, totalDays: true,
-      totalAmount: true, commissionAmount: true, pricePerUnit: true,
-      petName: true, serviceEvents: true,
-    },
-  });
-
-  if (!booking) throw new BookingNotFoundError(bookingId);
-  if (booking.status !== BookingStatus.IN_PROGRESS) {
-    throw new BookingValidationError(`Reserva no está en curso para confirmar extensión (estado: ${booking.status})`);
-  }
-
-  const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
-  const pendingIdx = events.findIndex(
-    (e: any) => e.type === 'EXTENSION_PENDING_PAYMENT' && e.method === 'qr' && e.qrId === qrId
-  );
-
-  if (pendingIdx === -1) {
-    logger.info('[SIP callback] Extensión ya procesada o qrId no encontrado — idempotente', { bookingId, qrId });
-    return;
-  }
-
-  const pending = events[pendingIdx];
-  if (new Date(pending.qrExpiresAt) < new Date()) {
-    throw new BookingValidationError('QR de extensión expirado');
-  }
-
-  const { extraAmount, extensionId } = pending;
-  const pricePerUnitClient = Number(booking.pricePerUnit);
-  const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
-
-  events[pendingIdx] = {
-    type: 'EXTENSION_CONFIRMED',
-    extensionId,
-    ...(pending.additionalMinutes !== undefined ? { additionalMinutes: pending.additionalMinutes } : {}),
-    ...(pending.additionalDays !== undefined ? { additionalDays: pending.additionalDays } : {}),
-    extraAmount,
-    method: 'qr',
-    paidAt: new Date().toISOString(),
-    timestamp: new Date().toISOString(),
-  };
-
-  let updateData: Parameters<typeof prisma.booking.update>[0]['data'];
-  let pushTitle: string;
-  let pushBody: string;
-  let notifMessage: string;
-
-  if (booking.serviceType === ServiceType.PASEO) {
-    const additionalMinutes: number = pending.additionalMinutes;
-    const extraCommission = extraAmount - Math.round((pricePerUnitCaregiver / 60) * additionalMinutes);
-    updateData = {
-      duration: (booking.duration ?? 60) + additionalMinutes,
-      totalAmount: new Prisma.Decimal(Number(booking.totalAmount) + extraAmount),
-      commissionAmount: new Prisma.Decimal(Number(booking.commissionAmount) + extraCommission),
-      serviceEvents: events,
-    };
-    pushTitle = '⏱️ Extensión confirmada';
-    pushBody = `+${additionalMinutes} min · Bs ${extraAmount} adicionales`;
-    notifMessage = `El pago de +${additionalMinutes} min fue confirmado por el banco. Bs ${extraAmount} adicionales — ${booking.petName ?? 'mascota'}.`;
-  } else {
-    const additionalDays: number = pending.additionalDays;
-    const extraCommission = extraAmount - pricePerUnitCaregiver * additionalDays;
-    const newEndDate = new Date(booking.endDate!);
-    newEndDate.setDate(newEndDate.getDate() + additionalDays);
-    updateData = {
-      endDate: newEndDate,
-      totalDays: (booking.totalDays ?? 1) + additionalDays,
-      totalAmount: new Prisma.Decimal(Number(booking.totalAmount) + extraAmount),
-      commissionAmount: new Prisma.Decimal(Number(booking.commissionAmount) + extraCommission),
-      serviceEvents: events,
-    };
-    pushTitle = '🏠 Hospedaje extendido';
-    pushBody = `+${additionalDays} noche${additionalDays > 1 ? 's' : ''} · Bs ${extraAmount} adicionales`;
-    notifMessage = `El pago de +${additionalDays} noche${additionalDays > 1 ? 's' : ''} fue confirmado por el banco. Bs ${extraAmount} adicionales — ${booking.petName ?? 'mascota'}.`;
-  }
-
+  // BUG (encontrado en auditoría): antes se leía `booking` fuera de la
+  // transacción y se calculaban totalAmount/commissionAmount de forma
+  // aditiva (oldValue + extraAmount) en JS, para luego sobreescribir con un
+  // `update` sin condición. Si dos extensiones del mismo booking se pagan
+  // casi al mismo tiempo (o SIP reenvía el mismo callback — ya documentado
+  // en otros puntos de este archivo como algo que realmente pasa), ambas
+  // transacciones parten del mismo snapshot y la que confirma al final pisa
+  // silenciosamente el aumento de la otra: el cuidador cobra de menos por
+  // un pago que el cliente sí hizo. Ahora todo el ciclo lectura-cálculo-
+  // escritura vive DENTRO de una sola transacción con el booking bloqueado
+  // (`FOR UPDATE`) desde el inicio, igual que el patrón ya usado para
+  // retiros de billetera y pagos con wallet en initPayment.
   let caregiverUserId: string | null = null;
+  let pushTitle = '';
+  let pushBody = '';
+  let loggedServiceType: ServiceType | null = null;
+  let loggedExtensionId: string | null = null;
+
   await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "bookings" WHERE id = ${bookingId} FOR UPDATE`;
+
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId },
+      select: {
+        id: true, clientId: true, caregiverId: true, serviceType: true, status: true,
+        duration: true, endDate: true, totalDays: true,
+        totalAmount: true, commissionAmount: true, pricePerUnit: true,
+        petName: true, serviceEvents: true,
+      },
+    });
+
+    if (!booking) throw new BookingNotFoundError(bookingId);
+    if (booking.status !== BookingStatus.IN_PROGRESS) {
+      throw new BookingValidationError(`Reserva no está en curso para confirmar extensión (estado: ${booking.status})`);
+    }
+
+    const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
+    const pendingIdx = events.findIndex(
+      (e: any) => e.type === 'EXTENSION_PENDING_PAYMENT' && e.method === 'qr' && e.qrId === qrId
+    );
+
+    if (pendingIdx === -1) {
+      logger.info('[SIP callback] Extensión ya procesada o qrId no encontrado — idempotente', { bookingId, qrId });
+      return;
+    }
+
+    const pending = events[pendingIdx];
+    if (new Date(pending.qrExpiresAt) < new Date()) {
+      throw new BookingValidationError('QR de extensión expirado');
+    }
+
+    const { extraAmount, extensionId } = pending;
+    loggedExtensionId = extensionId;
+    loggedServiceType = booking.serviceType;
+    const pricePerUnitClient = Number(booking.pricePerUnit);
+    const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
+
+    events[pendingIdx] = {
+      type: 'EXTENSION_CONFIRMED',
+      extensionId,
+      ...(pending.additionalMinutes !== undefined ? { additionalMinutes: pending.additionalMinutes } : {}),
+      ...(pending.additionalDays !== undefined ? { additionalDays: pending.additionalDays } : {}),
+      extraAmount,
+      method: 'qr',
+      paidAt: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
+    };
+
+    let updateData: Parameters<typeof prisma.booking.update>[0]['data'];
+    let notifMessage: string;
+
+    if (booking.serviceType === ServiceType.PASEO) {
+      const additionalMinutes: number = pending.additionalMinutes;
+      const extraCommission = extraAmount - Math.round((pricePerUnitCaregiver / 60) * additionalMinutes);
+      updateData = {
+        duration: (booking.duration ?? 60) + additionalMinutes,
+        totalAmount: new Prisma.Decimal(Number(booking.totalAmount) + extraAmount),
+        commissionAmount: new Prisma.Decimal(Number(booking.commissionAmount) + extraCommission),
+        serviceEvents: events,
+      };
+      pushTitle = '⏱️ Extensión confirmada';
+      pushBody = `+${additionalMinutes} min · Bs ${extraAmount} adicionales`;
+      notifMessage = `El pago de +${additionalMinutes} min fue confirmado por el banco. Bs ${extraAmount} adicionales — ${booking.petName ?? 'mascota'}.`;
+    } else {
+      const additionalDays: number = pending.additionalDays;
+      const extraCommission = extraAmount - pricePerUnitCaregiver * additionalDays;
+      const newEndDate = new Date(booking.endDate!);
+      newEndDate.setDate(newEndDate.getDate() + additionalDays);
+      updateData = {
+        endDate: newEndDate,
+        totalDays: (booking.totalDays ?? 1) + additionalDays,
+        totalAmount: new Prisma.Decimal(Number(booking.totalAmount) + extraAmount),
+        commissionAmount: new Prisma.Decimal(Number(booking.commissionAmount) + extraCommission),
+        serviceEvents: events,
+      };
+      pushTitle = '🏠 Hospedaje extendido';
+      pushBody = `+${additionalDays} noche${additionalDays > 1 ? 's' : ''} · Bs ${extraAmount} adicionales`;
+      notifMessage = `El pago de +${additionalDays} noche${additionalDays > 1 ? 's' : ''} fue confirmado por el banco. Bs ${extraAmount} adicionales — ${booking.petName ?? 'mascota'}.`;
+    }
+
     await tx.booking.update({ where: { id: bookingId }, data: updateData });
     const caregiver = await tx.caregiverProfile.findFirst({
       where: { id: booking.caregiverId },
@@ -4503,5 +4529,7 @@ export async function confirmExtensionQrBySip(bookingId: string, qrId: string): 
     sendPushToUser(caregiverUserId, pushTitle, pushBody).catch(() => {});
   }
 
-  logger.info('[SIP callback] Extension confirmed via banco', { bookingId, extensionId, serviceType: booking.serviceType });
+  if (loggedExtensionId) {
+    logger.info('[SIP callback] Extension confirmed via banco', { bookingId, extensionId: loggedExtensionId, serviceType: loggedServiceType });
+  }
 }

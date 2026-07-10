@@ -20,6 +20,10 @@ const envSchema = z.object({
   // Vercel deployment domains — comma-separated, supports exact or *.vercel.app suffix
   VERCEL_DOMAINS: z.string().default(''),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
+  // Google Places (autocompletado de direcciones) — antes tenía un valor por
+  // defecto hardcodeado en el código fuente (places.routes.ts), expuesto en
+  // el historial de git. Ahora es obligatorio por env — sin fallback.
+  GOOGLE_MAPS_KEY: z.string().min(1, 'GOOGLE_MAPS_KEY is required for address autocomplete'),
   // AWS Rekognition (identity verification)
   AWS_ACCESS_KEY_ID: z.string().optional(),
   AWS_SECRET_ACCESS_KEY: z.string().optional(),

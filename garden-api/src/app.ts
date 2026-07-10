@@ -188,8 +188,19 @@ app.use(express.json({ limit: '2mb' }));
 
 const uploadsDir = path.join(process.cwd(), 'uploads');
 
-// Verification uploads (selfies, cédulas, liveness) — auth required
-app.use('/uploads/verification', authMiddleware, (_req, res, next) => {
+// Verification uploads (selfies, cédulas, liveness) — antes solo pedía estar
+// logueado, sin verificar que el archivo pedido fuera tuyo o que fueras
+// admin. La URL incluye el userId en texto plano
+// (/uploads/verification/<userId>/<archivo>), y ese userId se obtiene
+// fácilmente en otras partes de la app (reservas, chats, listados) — así que
+// cualquier usuario autenticado podía ver el CI/selfie de cualquier otro.
+app.use('/uploads/verification', authMiddleware, (req, res, next) => {
+  const ownerId = req.path.split('/').filter(Boolean)[0];
+  const isSelf = ownerId === req.user!.userId;
+  const isAdmin = (req.user!.activeRole ?? req.user!.role) === 'ADMIN';
+  if (!isSelf && !isAdmin) {
+    return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'No tienes acceso a este archivo.' } });
+  }
   res.set('Cross-Origin-Resource-Policy', 'same-site');
   next();
 }, express.static(path.join(uploadsDir, 'verification')));

@@ -47,6 +47,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _paymentConfirmed = false;
   bool _paymentRejected = false;
   bool _qrExpired = false;
+  // Semáforo síncrono contra la carrera del sondeo automático (cada 5s) y el
+  // botón "Ya realicé el pago" llamando a _checkPaymentStatus() casi al mismo
+  // tiempo — sin esto, ambos podían leer un estado confirmado antes de que
+  // cualquiera marcara _paymentConfirmed=true, proponiendo el Meet & Greet
+  // dos veces y apilando dos diálogos de "pago exitoso".
+  bool _handlingConfirmation = false;
 
   // Fallback manual — solo aparece si SIP (banco) no puede generar el QR.
   // El cliente puede pedir que un admin verifique y apruebe el pago a mano
@@ -331,10 +337,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
             _paymentConfirmed = true;
           });
           _showPaymentSuccessOverlay();
+        } else if (responseData == null || responseData['qrId'] == null) {
+          // BUG (auditoría): success=true pero data nula/incompleta dejaba
+          // _qrResponse en null y arrancaba el polling igual — la pantalla
+          // de QR generado hace `_qrResponse!['qrId']` más abajo y crashea.
+          // Con un contrato de backend violado así, es más seguro tratarlo
+          // como error que mostrar una pantalla de QR rota.
+          throw Exception('El servidor no devolvió los datos del QR. Intenta de nuevo.');
         } else {
-          if (responseData?['walletDeducted'] != null) {
+          if (responseData['walletDeducted'] != null) {
             _walletContributionUsed =
-                double.tryParse(responseData!['walletDeducted'].toString()) ?? 0.0;
+                double.tryParse(responseData['walletDeducted'].toString()) ?? 0.0;
           }
           setState(() => _qrResponse = responseData);
           // Auto-start polling as soon as QR is shown
@@ -453,7 +466,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Future<void> _checkPaymentStatus() async {
-    if (_bookingId == null) return;
+    if (_bookingId == null || _paymentConfirmed) return;
     try {
       final response = await http.get(
         Uri.parse('$_baseUrl/bookings/$_bookingId'),
@@ -469,6 +482,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
         final qrId = bookingData['qrId'];
 
         if (status == 'WAITING_CAREGIVER_APPROVAL' || status == 'CONFIRMED') {
+          // Chequeo+set sincrónico, sin ningún await antes — el sondeo automático
+          // y el botón manual pueden llamar a esta función casi al mismo tiempo,
+          // y ambos podrían llegar hasta aquí antes de que _paymentConfirmed se
+          // marque en el setState de abajo (que ocurre después de un await).
+          if (_handlingConfirmation) return;
+          _handlingConfirmation = true;
           _stopPolling();
           if (widget.mgData != null) await _proposeMeetAndGreet();
           setState(() {

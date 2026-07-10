@@ -87,8 +87,13 @@ class _WebShellScreenState extends State<WebShellScreen> {
 
   Future<void> _maybeShowTutorial() async {
     final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getString('user_id') ?? 'anonymous';
-    if (!mounted) return;
+    final userId = prefs.getString('user_id') ?? '';
+    // Si 'user_id' todavía no se persistió (carrera con el login), NO
+    // mostrar con una clave 'anonymous' — eso marcaría como "visto" un
+    // tutorial que en realidad nunca se ligó a la cuenta real, y la
+    // próxima vez (con el userId real ya disponible) volvería a mostrarse
+    // como si fuera la primera vez. Mejor omitir esta vez que mostrarlo mal.
+    if (userId.isEmpty || !mounted) return;
     GardenTutorial.maybeShow(
       context,
       prefKey: 'tutorial_client_web_v1_$userId',

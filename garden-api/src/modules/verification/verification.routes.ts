@@ -1,9 +1,20 @@
 import { Router } from 'express';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
 import * as controller from './verification.controller.js';
 
 const router = Router();
+
+// Cada sesión de FaceLiveness es una llamada real y facturada a AWS Rekognition
+// — límite propio además del global, incluso para requests ya autenticados.
+const livenessSessionLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados intentos. Espera un momento.' } },
+});
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -18,7 +29,7 @@ router.post('/generate-link', authMiddleware, requireRole('CAREGIVER'), controll
  *  Returns { sessionId } for use with the Amplify FaceLiveness Flutter SDK.
  *  Requires AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY env vars.
  *  Accepts x-verification-token header (QR mobile flow) or Bearer auth (native app flow). */
-router.post('/create-liveness-session', controller.createLivenessSession);
+router.post('/create-liveness-session', livenessSessionLimiter, controller.createLivenessSession);
 
 /** GET /api/verification/validate?token= — public, returns { valid, userId?, message? } */
 router.get('/validate', controller.validate);

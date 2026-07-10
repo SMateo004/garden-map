@@ -1,8 +1,10 @@
 import { Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import { asyncHandler } from '../../shared/async-handler.js';
 import * as verificationService from './verification.service.js';
 import { createLivenessSession as awsCreateLivenessSession, checkBlinkLiveness } from './liveness.service.js';
 import logger from '../../shared/logger.js';
+import { env } from '../../config/env.js';
 
 /** POST /api/verification/generate-link — authenticated CAREGIVER. Returns URL with JWT (15min). */
 export const generateLink = asyncHandler(async (req: Request, res: Response) => {
@@ -101,7 +103,43 @@ export const submit = asyncHandler(async (req: Request, res: Response) => {
 /** POST /api/verification/create-liveness-session — authenticated CAREGIVER.
  *  Creates an AWS Rekognition FaceLiveness session. The mobile app passes the returned
  *  sessionId to the Amplify FaceLiveness Flutter widget, then sends it back on /submit. */
-export const createLivenessSession = asyncHandler(async (_req: Request, res: Response) => {
+/** POST /api/verification/create-liveness-session — antes NO validaba absolutamente
+ * nada (parámetro `_req` ni siquiera se leía): cualquiera, sin credenciales, podía
+ * llamarlo en bucle y cada llamada crea una sesión real y facturada de AWS
+ * Rekognition FaceLiveness. Ahora exige UNA de dos cosas:
+ *   1. Un Bearer JWT de sesión normal válido (flujo real de la app nativa —
+ *      verification_screen_stub.dart manda el token de sesión normal aquí,
+ *      NO el token especial de /generate-link, así que se valida como tal).
+ *   2. El token especial de verificación (JWT de /generate-link o el token
+ *      estático del perfil) vía query/header/body — flujo QR web. */
+export const createLivenessSession = asyncHandler(async (req: Request, res: Response) => {
+  let authorized = false;
+
+  if (req.headers.authorization?.startsWith('Bearer ')) {
+    try {
+      jwt.verify(req.headers.authorization.slice(7), env.JWT_SECRET);
+      authorized = true;
+    } catch {
+      // Token de sesión inválido/expirado — probar el flujo de token de verificación abajo
+    }
+  }
+
+  if (!authorized) {
+    const vToken =
+      (req.query.token as string) ??
+      (req.headers['x-verification-token'] as string) ??
+      (req.body?.token as string);
+    const check = vToken ? await verificationService.validateToken(vToken) : { valid: false };
+    authorized = check.valid;
+  }
+
+  if (!authorized) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Sesión o token de verificación inválido.' },
+    });
+  }
+
   const session = await awsCreateLivenessSession();
   if (!session) {
     return res.status(503).json({
