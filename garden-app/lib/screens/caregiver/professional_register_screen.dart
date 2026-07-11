@@ -93,6 +93,22 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
   final _keyStep3Days = GlobalKey();
   final _keyStep3Times = GlobalKey();
 
+  /// Fuerza un rebuild para que el botón "Siguiente" reaccione en vivo a lo
+  /// que se escribe (los TextFormField no disparaban setState por sí solos,
+  /// así que _canProceed nunca se reevaluaba mientras el usuario tipeaba).
+  void _onFormFieldChanged() { if (mounted) setState(() {}); }
+
+  @override
+  void initState() {
+    super.initState();
+    for (final c in [
+      _firstNameController, _lastNameController, _emailController,
+      _passwordController, _phoneController, _bioController,
+    ]) {
+      c.addListener(_onFormFieldChanged);
+    }
+  }
+
   @override
   void dispose() {
     _codeController.dispose();
@@ -209,6 +225,42 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
         return true;
       default:
         return true;
+    }
+  }
+
+  /// Espejo silencioso de `_validateCurrentStep()` (sin SnackBars ni scroll)
+  /// para habilitar/deshabilitar el botón de forma reactiva, en vez de
+  /// dejarlo siempre tocable y mostrar el error recién después del tap.
+  bool get _canProceed {
+    switch (_currentStep) {
+      case 0:
+        return _codeController.text.trim().isNotEmpty;
+      case 1:
+        return _firstNameController.text.trim().isNotEmpty &&
+            _lastNameController.text.trim().isNotEmpty &&
+            _emailController.text.trim().isNotEmpty &&
+            _passwordController.text.isNotEmpty &&
+            _phoneController.text.trim().isNotEmpty &&
+            _bioController.text.trim().length >= 50;
+      case 2:
+        return _servicesOffered.isNotEmpty && _selectedZone != null;
+      case 3:
+        return (_weekdays || _weekends || _holidays) && _times.isNotEmpty;
+      case 4:
+        // _nextStep permite avanzar con fotos aún locales (las sube recién al
+        // tocar el botón) — usar solo _photoUrls (ya subidas) desactivaría el
+        // botón incorrectamente aunque el usuario ya haya elegido suficientes.
+        final minFotos = _servicesOffered.contains('HOSPEDAJE') ? 4 : 2;
+        return (_photoUrls.length + _localPhotos.length) >= minFotos;
+      case 5:
+        if (_servicesOffered.contains('HOSPEDAJE') && _precioHospedaje <= 0) return false;
+        if (_servicesOffered.contains('PASEO') && _precioPaseo <= 0) return false;
+        if (_servicesOffered.contains('GUARDERIA') && _precioGuarderia <= 0) return false;
+        return true;
+      case 6:
+        return _profilePhotoUrl != null || _localProfilePhoto != null;
+      default:
+        return true; // Paso 7: embedded screen maneja su propio botón
     }
   }
 
@@ -1336,7 +1388,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
                               label: buttonLabel,
                               loading: _isLoading,
                               height: kIsWeb ? 44 : 48,
-                              onPressed: _isLoading ? () {} : _nextStep,
+                              onPressed: (_isLoading || !_canProceed) ? null : _nextStep,
                             ),
                           ),
                         ],

@@ -505,17 +505,57 @@ export async function applyResolution(bookingId: string, resolution: any, bookin
       throw Object.assign(new Error('La disputa ya fue resuelta o el pago ya no está retenido'), { code: 'DISPUTE_ALREADY_RESOLVED' });
     }
 
+    // Toda disputa que llega acá viene de una calificación <3 estrellas (ver
+    // comentario en dispute.routes.ts: "Only allow disputes on COMPLETED
+    // bookings whose payment is ON_HOLD (i.e. client rated <3)"). Esa
+    // calificación quedaba guardada solo en booking.ownerRating/ownerComment
+    // y nunca se creaba el Review ni se recalculaba el promedio del cuidador
+    // — a diferencia de confirmReceiptByClient (rating >= 3), que sí hace
+    // ambas cosas. El resultado: ningún cuidador con una calificación baja
+    // disputada veía esa reseña reflejada en su rating/reviewCount público,
+    // sin importar quién ganara la disputa.
+    if (typeof booking.ownerRating === 'number') {
+      await tx.review.create({
+        data: {
+          bookingId: booking.id,
+          clientId,
+          caregiverId: booking.caregiverId,
+          rating: booking.ownerRating,
+          comment: booking.ownerComment ?? undefined,
+          serviceType: booking.serviceType,
+        },
+      });
+      const reviewAgg = await tx.review.aggregate({
+        where: { caregiverId: booking.caregiverId, isSystemGenerated: false },
+        _avg: { rating: true },
+        _count: { id: true },
+      });
+      await tx.caregiverProfile.update({
+        where: { id: booking.caregiverId },
+        data: {
+          rating: reviewAgg._avg.rating || booking.ownerRating,
+          reviewCount: reviewAgg._count.id || 1,
+        },
+      });
+    }
+
     if (resolution.verdict === 'CAREGIVER_WINS') {
       // ── Pago completo al cuidador (90% del total) ──────────────────────────
-      // Snapshot balance BEFORE increment so WalletTransaction.balance is correct
-      const caregiverBefore = await tx.caregiverProfile.findUnique({
-        where: { userId: caregiverUserId },
+      // Snapshot balance BEFORE increment so WalletTransaction.balance is correct.
+      // OJO: el balance real que lee GET /api/wallet y los retiros vive en
+      // User.balance (ver wallet.routes.ts, "Unified balance lives on User"),
+      // no en CaregiverProfile.balance — antes esto acreditaba un campo que
+      // el sistema de billetera nunca lee, así que el ganador de la disputa
+      // nunca podía retirar ni ver el dinero, aunque el WalletTransaction
+      // creado abajo aparentaba que sí se había pagado.
+      const caregiverBefore = await tx.user.findUnique({
+        where: { id: caregiverUserId },
         select: { balance: true },
       });
       const caregiverBalanceBefore = Number(caregiverBefore?.balance ?? 0);
 
-      await tx.caregiverProfile.update({
-        where: { userId: caregiverUserId },
+      await tx.user.update({
+        where: { id: caregiverUserId },
         data: { balance: { increment: netAmount } },
       });
       await tx.walletTransaction.create({
@@ -561,14 +601,15 @@ export async function applyResolution(bookingId: string, resolution: any, bookin
 
     } else if (resolution.verdict === 'CLIENT_WINS') {
       // ── Reembolso completo al cliente (incluyendo comisión) ────────────────
-      const clientBefore = await tx.clientProfile.findUnique({
-        where: { userId: clientId },
+      // Mismo fix: acreditar User.balance, no ClientProfile.balance.
+      const clientBefore = await tx.user.findUnique({
+        where: { id: clientId },
         select: { balance: true },
       });
       const clientBalanceBefore = Number(clientBefore?.balance ?? 0);
 
-      await tx.clientProfile.update({
-        where: { userId: clientId },
+      await tx.user.update({
+        where: { id: clientId },
         data: { balance: { increment: totalAmount } },
       });
       await tx.walletTransaction.create({
@@ -631,14 +672,15 @@ export async function applyResolution(bookingId: string, resolution: any, bookin
         },
       });
 
-      const caregiverBeforePartial = await tx.caregiverProfile.findUnique({
-        where: { userId: caregiverUserId },
+      // Mismo fix: acreditar User.balance, no CaregiverProfile.balance.
+      const caregiverBeforePartial = await tx.user.findUnique({
+        where: { id: caregiverUserId },
         select: { balance: true },
       });
       const caregiverBalanceBeforePartial = Number(caregiverBeforePartial?.balance ?? 0);
 
-      await tx.caregiverProfile.update({
-        where: { userId: caregiverUserId },
+      await tx.user.update({
+        where: { id: caregiverUserId },
         data: { balance: { increment: caregiverPayout } },
       });
       await tx.walletTransaction.create({

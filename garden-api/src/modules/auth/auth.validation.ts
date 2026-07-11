@@ -275,6 +275,39 @@ export const registerClientSchema = z.object({
   inviteCode: z.string().max(64).optional(),
 });
 
+// --- Register professional / register company (con código de admin) ---
+// Antes estos dos endpoints solo chequeaban que los campos fueran strings no
+// vacíos (sin formato de email/teléfono), y la unicidad de teléfono se
+// comparaba tal cual llegaba del body — dos formatos distintos del mismo
+// número real (ej. "70012345" y "+591-7001-2345") pasaban como cuentas
+// distintas. Reutiliza phoneCaregiverSchema (normaliza a 8 dígitos antes de
+// guardar/comparar) igual que registerCaregiverSchema/registerClientSchema.
+export const registerProfessionalMinimalSchema = z.object({
+  code: z.string().min(1, 'Código de registro requerido'),
+  email: z.string().email('Email inválido'),
+  password: z.string().min(8, 'Mínimo 8 caracteres').max(128, 'Máximo 128 caracteres'),
+  firstName: z.string().min(1, 'Nombre requerido').max(100),
+  lastName: z.string().min(1, 'Apellido requerido').max(100),
+  phone: phoneCaregiverSchema,
+  bio: z.string().max(500).optional(),
+  address: z.string().max(500).optional(),
+}).passthrough();
+
+export const registerCompanyMinimalSchema = z.object({
+  code: z.string().min(1, 'Código de registro requerido'),
+  companyName: z.string().min(1, 'Nombre de empresa requerido').max(150),
+  businessType: z.string().default('OTHER'),
+  email: z.string().email('Email inválido'),
+  password: z.string().min(6, 'Mínimo 6 caracteres').max(128, 'Máximo 128 caracteres'),
+  phone: phoneCaregiverSchema,
+  bio: z.string().max(500).optional(),
+  zone: z.string().optional(),
+  address: z.string().max(500).optional(),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
+  services: z.array(z.string()).optional(),
+});
+
 export type LoginBody = z.infer<typeof loginSchema>;
 export type RegisterCaregiverBody = z.infer<typeof registerCaregiverSchema>;
 export type RegisterClientBody = z.infer<typeof registerClientSchema>;

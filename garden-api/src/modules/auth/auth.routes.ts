@@ -24,6 +24,19 @@ const registerLimiter = rateLimit({
   message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados intentos de registro. Espera 1 hora.' } },
 });
 
+// Los códigos de registro de empresa/profesional son strings cortos elegidos por un
+// admin (no un token largo) y, si aciertan, register-professional/register-company
+// crean una cuenta APPROVED/verified sin revisión manual — sin límite, este endpoint
+// era el único punto del módulo de auth donde se podía adivinar un secreto de negocio
+// sin restricción alguna.
+const validateCodeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Demasiados intentos. Espera 1 hora.' } },
+});
+
 // 3 envíos de código por hora — previene spam de email
 const emailCodeLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -162,13 +175,13 @@ router.post('/social/register-client', registerLimiter, socialRegisterClient);
 // ── Password Reset ────────────────────────────────────────────────────────────
 /** POST /api/auth/forgot-password — body: { email }. Sends reset link. Always 200. */
 /** POST /api/auth/validate-professional-code — verifica código sin crear cuenta. Body: { code }. */
-router.post('/validate-professional-code', authController.validateProfessionalCode);
+router.post('/validate-professional-code', validateCodeLimiter, authController.validateProfessionalCode);
 
 /** POST /api/auth/register-professional — registro profesional con código de admin. */
 router.post('/register-professional', registerLimiter, authController.registerProfessional);
 
 /** POST /api/auth/validate-company-code — verifica código de empresa sin crear cuenta. */
-router.post('/validate-company-code', authController.validateCompanyCode);
+router.post('/validate-company-code', validateCodeLimiter, authController.validateCompanyCode);
 
 /** POST /api/auth/register-company — registro de empresa (hotel/hostal/guardería) con código de admin. */
 router.post('/register-company', registerLimiter, authController.registerCompany);

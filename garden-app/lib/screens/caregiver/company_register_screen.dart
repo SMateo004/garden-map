@@ -49,6 +49,12 @@ class CompanyRegisterScreen extends StatefulWidget {
 class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
   int _currentStep = 0;
   bool _isLoading = false;
+  // Cubre TODO _next() (registro, patch, subida de fotos/logo) para que el
+  // botón se deshabilite/muestre loading durante cualquier paso, no solo los
+  // que ya tenían su propio flag (_isLoading solo cubría _registerCompany y
+  // _uploadLogo, dejando el botón tocable —y aparentemente sin reacción—
+  // mientras se subían fotos o se guardaba disponibilidad/precios).
+  bool _isAdvancing = false;
   String _authToken = '';
 
   static const _baseUrl = String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
@@ -131,9 +137,19 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
   double _hospMin  = 10.0;   double _hospMax  = 400.0;
   double _guarMin  = 10.0;   double _guarMax  = 400.0;
 
+  /// Fuerza un rebuild para que el botón "Continuar" reaccione en vivo a lo
+  /// que se escribe (sin esto los campos de texto no disparaban setState,
+  /// así que _canProceed nunca se reevaluaba mientras el usuario tipeaba).
+  void _onFormFieldChanged() { if (mounted) setState(() {}); }
+
   @override
   void initState() {
     super.initState();
+    _companyNameCtrl.addListener(_onFormFieldChanged);
+    _emailCtrl.addListener(_onFormFieldChanged);
+    _passwordCtrl.addListener(_onFormFieldChanged);
+    _phoneCtrl.addListener(_onFormFieldChanged);
+    _bioCtrl.addListener(_onFormFieldChanged);
     _loadPriceLimits();
     // resumeMode: la empresa ya tiene sesión activa (viene de
     // caregiver_home_screen.dart, no del flujo de registro anónimo) —
@@ -425,60 +441,121 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
   // ── Next step logic ────────────────────────────────────────────────────────
   Future<void> _next() async {
     if (!_validateStep()) return;
+    if (_isAdvancing) return; // evita doble-tap mientras ya hay una acción en curso
+    setState(() => _isAdvancing = true);
+    try {
+      // Step 3→4: create account
+      if (_currentStep == 3) {
+        final ok = await _registerCompany();
+        if (!ok) return;
+        // PATCH availability after creation
+        setState(() => _currentStep = 4);
+        return;
+      }
 
-    // Step 3→4: create account
-    if (_currentStep == 3) {
-      final ok = await _registerCompany();
-      if (!ok) return;
-      // PATCH availability after creation
-      setState(() => _currentStep = 4);
-      return;
-    }
-
-    // Step 4: patch availability
-    if (_currentStep == 4) {
-      await _patchProfile({
-        'serviceDetails': {
-          'availability': {
-            'weekdays': _weekdays, 'weekends': _weekends, 'holidays': _holidays,
-            'slots': {'morning': _morning, 'afternoon': _afternoon, 'night': _night},
+      // Step 4: patch availability
+      if (_currentStep == 4) {
+        await _patchProfile({
+          'serviceDetails': {
+            'availability': {
+              'weekdays': _weekdays, 'weekends': _weekends, 'holidays': _holidays,
+              'slots': {'morning': _morning, 'afternoon': _afternoon, 'night': _night},
+            },
           },
-        },
-        'defaultAvailabilitySchedule': {
-          'weekdays': _weekdays, 'weekends': _weekends, 'holidays': _holidays,
-        },
-      });
-    }
-
-    // Step 5: upload pending photos
-    if (_currentStep == 5) {
-      await _uploadPendingCaregiverPhotos();
-      await _uploadPendingPlacePhotos();
-    }
-
-    // Step 6: patch prices
-    if (_currentStep == 6) {
-      final body = <String, dynamic>{};
-      if (_services.contains('HOSPEDAJE')) {
-        body['pricePerDay'] = _precioHospedaje.toInt();
+          'defaultAvailabilitySchedule': {
+            'weekdays': _weekdays, 'weekends': _weekends, 'holidays': _holidays,
+          },
+        });
       }
-      if (_services.contains('PASEO')) {
-        body['pricePerWalk60'] = _precioPaseo.toInt();
-        body['pricePerWalk30'] = (_precioPaseo / 2).round();
-      }
-      if (_services.contains('GUARDERIA')) {
-        body['pricePerGuarderia'] = _precioGuarderia.toInt();
-      }
-      await _patchProfile(body);
-    }
 
-    // Step 7: upload logo
-    if (_currentStep == 7) {
-      await _uploadLogo();
-    }
+      // Step 5: upload pending photos
+      if (_currentStep == 5) {
+        await _uploadPendingCaregiverPhotos();
+        await _uploadPendingPlacePhotos();
+      }
 
-    setState(() => _currentStep++);
+      // Step 6: patch prices
+      if (_currentStep == 6) {
+        final body = <String, dynamic>{};
+        if (_services.contains('HOSPEDAJE')) {
+          body['pricePerDay'] = _precioHospedaje.toInt();
+        }
+        if (_services.contains('PASEO')) {
+          body['pricePerWalk60'] = _precioPaseo.toInt();
+          body['pricePerWalk30'] = (_precioPaseo / 2).round();
+        }
+        if (_services.contains('GUARDERIA')) {
+          body['pricePerGuarderia'] = _precioGuarderia.toInt();
+        }
+        await _patchProfile(body);
+      }
+
+      // Step 7: upload logo
+      if (_currentStep == 7) {
+        await _uploadLogo();
+      }
+
+      setState(() => _currentStep++);
+    } finally {
+      if (mounted) setState(() => _isAdvancing = false);
+    }
   }
+
+  /// Espejo silencioso de `_validateStep()` (sin SnackBars ni efectos
+  /// secundarios) para habilitar/deshabilitar el botón de forma reactiva,
+  /// en vez de dejarlo siempre tocable y mostrar el error recién después
+  /// del tap.
+  bool get _canProceed {
+    switch (_currentStep) {
+      case 0:
+        return _codeCtrl.text.trim().isNotEmpty;
+      case 1:
+        return _companyNameCtrl.text.trim().isNotEmpty &&
+            _emailCtrl.text.trim().isNotEmpty &&
+            _passwordCtrl.text.length >= 6 &&
+            _phoneCtrl.text.trim().isNotEmpty &&
+            _bioCtrl.text.trim().length >= 20;
+      case 2:
+        return _zone != null;
+      case 3:
+        return _services.isNotEmpty;
+      case 4:
+        return (_weekdays || _weekends || _holidays) && (_morning || _afternoon || _night);
+      case 5:
+        final onlyPaseo = _services.length == 1 && _services.contains('PASEO');
+        final minCaregiverPhotos = onlyPaseo ? 2 : 4;
+        final totalCaregiver = _caregiverPhotoUrls.length + _localCaregiverPhotos.length;
+        if (totalCaregiver < minCaregiverPhotos) return false;
+        if (_needsPlacePhotos) {
+          for (final (key, _, req) in _placeSections) {
+            if (!req) continue;
+            final count = (_placePhotoUrls[key]?.length ?? 0) + (_localPlacePhotos[key]?.length ?? 0);
+            if (count < 1) return false;
+          }
+        }
+        return true;
+      case 6:
+        if (_services.contains('HOSPEDAJE') && _precioHospedaje <= 0) return false;
+        if (_services.contains('PASEO') && _precioPaseo <= 0) return false;
+        if (_services.contains('GUARDERIA') && _precioGuarderia <= 0) return false;
+        return true;
+      case 7:
+        return _logoUrl != null || _localLogo != null;
+      default:
+        return true;
+    }
+  }
+
+  String get _buttonLabel {
+    switch (_currentStep) {
+      case 0: return 'Verificar código';
+      case 3: return 'Crear cuenta';
+      case 7: return 'Finalizar';
+      default: return 'Continuar';
+    }
+  }
+
+  VoidCallback get _buttonAction => _currentStep == 0 ? _validateCode : _next;
 
   bool _validateStep() {
     switch (_currentStep) {
@@ -556,10 +633,18 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         final resp = await req.send();
         final data = jsonDecode(await resp.stream.bytesToString());
         if (data['success'] == true) {
+          if (!mounted) return;
           setState(() { _caregiverPhotoUrls.add(data['data']['photoUrl'] as String); _localCaregiverPhotos.removeAt(0); });
+        } else {
+          throw Exception(data['error']?['message'] ?? 'Error al subir foto');
         }
       }
-    } catch (_) {} finally {
+    } catch (e) {
+      // Antes este catch quedaba vacío: si la subida fallaba, el usuario no
+      // se enteraba y quedaba atascado tocando "Continuar" sin saber por qué
+      // seguía faltando la foto que "ya había subido".
+      if (mounted) _showError('Error subiendo foto: ${e.toString().replaceFirst('Exception: ', '')}');
+    } finally {
       if (mounted) setState(() => _uploadingCaregiverPhoto = false);
     }
   }
@@ -593,14 +678,19 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
           final resp = await req.send();
           final data = jsonDecode(await resp.stream.bytesToString());
           if (data['success'] == true) {
+            if (!mounted) return;
             setState(() {
               _placePhotoUrls[section] = [...(_placePhotoUrls[section] ?? []), data['data']['photoUrl'] as String];
               _localPlacePhotos[section] = (_localPlacePhotos[section] ?? []).skip(1).toList();
             });
+          } else {
+            throw Exception(data['error']?['message'] ?? 'Error al subir foto de sección');
           }
         }
       }
-    } catch (_) {} finally {
+    } catch (e) {
+      if (mounted) _showError('Error subiendo foto: ${e.toString().replaceFirst('Exception: ', '')}');
+    } finally {
       if (mounted) setState(() => _uploadingPlacePhoto = false);
     }
   }
@@ -736,15 +826,16 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
   }
 
   Widget _buildBottomBar(Color textColor, Color borderColor) {
+    final busy = _isLoading || _isAdvancing;
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: borderColor)),
       ),
       child: GardenButton(
-        label: _currentStep < 7 ? 'Continuar' : 'Siguiente',
-        loading: _isLoading,
-        onPressed: _isLoading ? null : _next,
+        label: _buttonLabel,
+        loading: busy,
+        onPressed: (busy || !_canProceed) ? null : _buttonAction,
       ),
     );
   }
@@ -767,21 +858,10 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
           keyboardType: TextInputType.text,
           onChanged: (_) => setState(() => _codeValid = false),
         ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton(
-            onPressed: _isLoading ? null : _validateCode,
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: GardenColors.primary),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
-            child: _isLoading
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))
-                : Text('Verificar código', style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600)),
-          ),
-        ),
+        // El botón "Verificar código" vive en la barra inferior compartida
+        // (_buildBottomBar) — antes había uno duplicado acá arriba que hacía
+        // exactamente lo mismo, dejando dos botones para la misma acción en
+        // esta pantalla.
         if (_codeValid) ...[
           const SizedBox(height: 12),
           Container(

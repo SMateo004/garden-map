@@ -135,11 +135,23 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   String _authToken = '';
   Map<String, dynamic>? _priceStats;
 
+  /// Fuerza un rebuild para que el botón "Siguiente" reaccione en vivo a lo
+  /// que se escribe — sin esto los TextFormField no disparaban setState, así
+  /// que _canProceed nunca se reevaluaba mientras el usuario tipeaba.
+  void _onFormFieldChanged() { if (mounted) setState(() {}); }
+
   @override
   void initState() {
     super.initState();
     _emailController.text = widget.initialEmail;
     _passwordController.text = widget.initialPassword;
+    for (final c in [
+      _firstNameController, _lastNameController, _emailController,
+      _passwordController, _phoneController, _addressStreetController,
+      ..._emergencyNameControllers, ..._emergencyPhoneControllers,
+    ]) {
+      c.addListener(_onFormFieldChanged);
+    }
     _loadToken();
     _loadPriceStats();
     _loadPriceLimits();
@@ -376,10 +388,17 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         return;
       }
 
-      // Step 5: Fotos (skipped for PASEO-only caregivers)
+      // Step 5: Fotos — mismo criterio que _validateCurrentStep/_canProceed
+      // case 5 (onlyPaseo ? 2 : 4). Antes este cálculo usaba reglas propias
+      // (HOSPEDAJE→4, Paseo-only→0, resto→2) que no coincidían con la
+      // validación real del paso: a un cuidador Paseo-only lo daba por
+      // completo con 0 fotos (necesita 2), y a uno de solo Guardería con 2
+      // (necesita 4) — en ambos casos el resume saltaba el paso 5 dejando al
+      // cuidador atascado más adelante cuando /caregiver/submit rechazaba el
+      // registro por falta de fotos, sin que la wizard mostrara por qué.
       final photos = (profile['caregiverPhotos'] as List?) ?? (profile['photos'] as List?) ?? [];
       final isPaseoOnly = servicesOffered.length == 1 && servicesOffered.contains('PASEO');
-      final minPhotos = servicesOffered.contains('HOSPEDAJE') ? 4 : isPaseoOnly ? 0 : 2;
+      final minPhotos = isPaseoOnly ? 2 : 4;
       if (photos.length < minPhotos) {
         setState(() => _currentStep = 5);
         return;
@@ -717,6 +736,61 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     }
   }
 
+  /// Espejo silencioso de `_validateCurrentStep()` (sin SnackBars ni scroll)
+  /// para habilitar/deshabilitar el botón de forma reactiva, en vez de
+  /// dejarlo siempre tocable y mostrar el error recién después del tap.
+  bool get _canProceed {
+    if (_currentStep == 0 && widget.clientConversionMode) return true;
+    switch (_currentStep) {
+      case 0:
+        return _firstNameController.text.trim().isNotEmpty &&
+            _lastNameController.text.trim().isNotEmpty &&
+            _emailController.text.trim().isNotEmpty &&
+            _passwordController.text.isNotEmpty &&
+            _phoneController.text.trim().isNotEmpty &&
+            _addressStreetController.text.trim().isNotEmpty &&
+            _addressZone != null &&
+            _dateOfBirth != null;
+      case 1:
+        return _profilePhotoUrl != null || _localProfilePhoto != null;
+      case 2:
+        if (_servicesOffered.isEmpty) return false;
+        if (_servicesOffered.contains('HOSPEDAJE') && _homeType == null) return false;
+        return true;
+      case 3:
+        if (_servicesOffered.contains('HOSPEDAJE') &&
+            (_precioHospedaje < _hospMin || _precioHospedaje > _hospMax)) return false;
+        if (_servicesOffered.contains('PASEO') &&
+            (_precioPaseo < _paseoMin || _precioPaseo > _paseoMax)) return false;
+        if (_servicesOffered.contains('GUARDERIA') &&
+            (_precioGuarderia < _guarMin || _precioGuarderia > _guarMax)) return false;
+        return true;
+      case 4:
+        return (_weekdays || _weekends || _holidays) && _times.isNotEmpty;
+      case 5:
+        final onlyPaseo = _servicesOffered.length == 1 && _servicesOffered.contains('PASEO');
+        final minCaregiverPhotos = onlyPaseo ? 2 : 4;
+        if (_caregiverPhotoUrls.length + _localCaregiverPhotos.length < minCaregiverPhotos) return false;
+        final needsPlace = _servicesOffered.contains('HOSPEDAJE') || _servicesOffered.contains('GUARDERIA');
+        if (needsPlace) {
+          for (final sec in ['sala', 'descanso', 'alimentacion']) {
+            final total = (_placePhotoUrls[sec]?.length ?? 0) + (_localPlacePhotos[sec]?.length ?? 0);
+            if (total < 1) return false;
+          }
+        }
+        return true;
+      case 9:
+        for (int i = 0; i < 3; i++) {
+          final name = _emergencyNameControllers[i].text.trim();
+          final phone = _emergencyPhoneControllers[i].text.trim();
+          if (name.isEmpty || !_isValidBoPhone(phone)) return false;
+        }
+        return true;
+      default:
+        return true; // Steps 6-8: embedded screens manage their own button
+    }
+  }
+
   Future<void> _nextStep() async {
     // Step 0: en clientConversionMode el usuario ya está registrado, solo avanzar
     if (_currentStep == 0 && widget.clientConversionMode) {
@@ -1014,7 +1088,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         await _completeWizard();
       }
     } catch (_) {
-      setState(() => _currentStep = 7);
+      if (mounted) setState(() => _currentStep = 7);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -1077,6 +1151,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       'phone': _emergencyPhoneControllers[i].text.trim(),
     });
     await _patchProfile({'emergencyContacts': contacts});
+    if (!mounted) return;
     setState(() => _isLoading = false);
     await _completeWizard();
   }
@@ -1124,7 +1199,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           throw Exception(data['error']?['message'] ?? 'Error al subir foto');
         }
       }
-      setState(() { _caregiverPhotoUrls.addAll(newUrls); _localCaregiverPhotos.clear(); });
+      if (mounted) setState(() { _caregiverPhotoUrls.addAll(newUrls); _localCaregiverPhotos.clear(); });
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error subiendo foto: $e'), backgroundColor: GardenColors.error));
       rethrow;
@@ -1174,6 +1249,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             throw Exception(data['error']?['message'] ?? 'Error al subir foto de sección');
           }
         }
+        if (!mounted) return;
         setState(() {
           _placePhotoUrls[section] = [...(_placePhotoUrls[section] ?? []), ...newUrls];
           _localPlacePhotos[section] = [];
@@ -2798,7 +2874,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                                     : (isFinalStep ? 'Finalizar registro' : 'Siguiente →'),
                                 loading: _isLoading,
                                 height: 48,
-                                onPressed: _isLoading ? () {} : _nextStep,
+                                onPressed: (_isLoading || !_canProceed) ? null : _nextStep,
                               ),
                             ),
                           ],

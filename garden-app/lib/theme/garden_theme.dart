@@ -870,6 +870,15 @@ class GardenButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final result = _buildContent(context);
+    final isDisabled = onPressed == null && !loading;
+    // Sin esto el botón se veía idéntico (mismo degradado vibrante) estando
+    // deshabilitado — la única señal era que dejaba de responder al toque,
+    // invisible para el usuario hasta que probaba tocarlo.
+    return isDisabled ? Opacity(opacity: 0.45, child: result) : result;
+  }
+
+  Widget _buildContent(BuildContext context) {
     final btnColor = color ?? GardenColors.primary;
 
     final radius = BorderRadius.circular(GardenRadius.lg);

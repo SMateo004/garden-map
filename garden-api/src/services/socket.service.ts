@@ -9,6 +9,26 @@ import logger from '../shared/logger.js';
 
 let io: SocketServer | null = null;
 
+// send_message por WebSocket no pasaba por chatMessageLimiter ni por el
+// límite de 2000 caracteres que sí aplica el endpoint REST equivalente
+// (POST /chat/:bookingId/messages) — cualquiera podía evadir ambos controles
+// enviando por el socket en vez del REST. Ventana simple en memoria por
+// usuario (mismo límite: 60 mensajes/minuto).
+const CHAT_MSG_WINDOW_MS = 60 * 1000;
+const CHAT_MSG_MAX = 60;
+const chatMessageWindows = new Map<string, { count: number; windowStart: number }>();
+
+function isChatMessageRateLimited(userId: string): boolean {
+    const now = Date.now();
+    const entry = chatMessageWindows.get(userId);
+    if (!entry || now - entry.windowStart > CHAT_MSG_WINDOW_MS) {
+        chatMessageWindows.set(userId, { count: 1, windowStart: now });
+        return false;
+    }
+    entry.count += 1;
+    return entry.count > CHAT_MSG_MAX;
+}
+
 export function initSocketServer(httpServer: HttpServer): SocketServer {
     const explicitOrigins = env.ALLOWED_ORIGINS
         .split(',')
@@ -96,6 +116,14 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
             try {
                 const { bookingId, message } = data;
                 if (!message?.trim()) return;
+                if (message.length > 2000) {
+                    socket.emit('error', { message: 'El mensaje no puede superar 2000 caracteres.' });
+                    return;
+                }
+                if (isChatMessageRateLimited(socket.data.userId as string)) {
+                    socket.emit('error', { message: 'Demasiados mensajes. Espera un momento.' });
+                    return;
+                }
 
                 const booking = await prisma.booking.findFirst({
                     where: {

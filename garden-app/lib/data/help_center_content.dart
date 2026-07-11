@@ -63,8 +63,8 @@ const List<HelpCategory> helpCenterCategories = [
           ),
           HelpSection(
             heading: '1. Elige el tipo de servicio',
-            body: 'Desde el marketplace, elige entre Paseo, Hospedaje, Guardería '
-                'o Baño y estética. Cada servicio tiene una duración y una '
+            body: 'Desde el marketplace, elige entre Paseo, Hospedaje o '
+                'Guardería. Cada servicio tiene una duración y una '
                 'dinámica distinta — por ejemplo, el paseo estándar dura 30 '
                 'minutos y el extendido 60 minutos; el hospedaje es de noche '
                 'completa en casa del cuidador.',
@@ -99,7 +99,7 @@ const List<HelpCategory> helpCenterCategories = [
             body: 'Puedes pagar con tu Billetera Garden (si tienes saldo), con '
                 'QR bancario, o combinando ambos. El precio final incluye el '
                 'monto que fija el cuidador más la comisión de plataforma del '
-                '20%. Por ejemplo: si el cuidador cobra Bs 100, tú pagas Bs 120 '
+                '10%. Por ejemplo: si el cuidador cobra Bs 100, tú pagas Bs 110 '
                 '— el cuidador recibe sus Bs 100 completos.',
           ),
           HelpSection(
@@ -124,20 +124,16 @@ const List<HelpCategory> helpCenterCategories = [
           ),
           HelpSection(
             heading: 'Hospedaje y Guardería',
-            body: '• Más de 72 horas antes del servicio: reembolso del 100%.\n'
-                '• Entre 24 y 72 horas antes: reembolso del 50%.\n'
+            body: '• Más de 48 horas antes del servicio: reembolso del 100% '
+                '(se descuenta un cargo administrativo fijo de Bs 10).\n'
+                '• Entre 24 y 48 horas antes: reembolso del 50%.\n'
                 '• Menos de 24 horas o no te presentas: sin reembolso.',
           ),
           HelpSection(
-            heading: 'Paseo y Visita domiciliaria',
+            heading: 'Paseo',
             body: '• Más de 12 horas antes: reembolso del 100%.\n'
-                '• Entre 2 y 12 horas antes: reembolso del 50%.\n'
-                '• Menos de 2 horas o no te presentas: sin reembolso.',
-          ),
-          HelpSection(
-            heading: 'Baño y estética',
-            body: '• Más de 24 horas antes: reembolso del 100%.\n'
-                '• Menos de 24 horas: reembolso del 50%.',
+                '• Entre 6 y 12 horas antes: reembolso del 50%.\n'
+                '• Menos de 6 horas o no te presentas: sin reembolso.',
           ),
           HelpSection(
             heading: '¿Cómo y cuándo recibo mi reembolso?',
@@ -203,11 +199,11 @@ const List<HelpCategory> helpCenterCategories = [
         id: 'como-funciona-pago',
         title: 'Cómo funciona el pago y la comisión de Garden',
         excerpt: 'Por qué pagas un poco más del precio del cuidador.',
-        keywords: ['comision', 'precio', 'cuanto cuesta', '20%'],
+        keywords: ['comision', 'precio', 'cuanto cuesta', '10%'],
         sections: [
           HelpSection(
             body: 'Cada cuidador fija libremente el precio de su servicio. '
-                'Garden añade una comisión de plataforma del 20% sobre ese '
+                'Garden añade una comisión de plataforma del 10% sobre ese '
                 'precio, que paga el cliente. Esta comisión cubre el '
                 'procesamiento seguro del pago, el fondo de garantía, el '
                 'soporte, la verificación de identidad de los cuidadores y el '
@@ -216,9 +212,9 @@ const List<HelpCategory> helpCenterCategories = [
           HelpSection(
             heading: 'Ejemplo',
             body: 'Si el cuidador cobra Bs 100 por su servicio, tú pagas Bs '
-                '120 en total (Bs 100 + 20% de comisión). El cuidador recibe '
+                '110 en total (Bs 100 + 10% de comisión). El cuidador recibe '
                 'sus Bs 100 completos — Garden se queda únicamente con los Bs '
-                '20 de comisión.',
+                '10 de comisión.',
           ),
           HelpSection(
             heading: '¿Cuándo recibe el cuidador su pago?',
@@ -421,8 +417,8 @@ const List<HelpCategory> helpCenterCategories = [
             heading: '4. Precios',
             body: 'Fijas tu propio precio para cada servicio que ofreces, '
                 'dentro de un rango mínimo y máximo que define Garden por '
-                'zona (normalmente entre Bs 10 y Bs 400). Este es el monto que '
-                'recibes íntegro — la comisión del 20% la paga el cliente '
+                'zona (normalmente entre Bs 15 y Bs 400). Este es el monto que '
+                'recibes íntegro — la comisión del 10% la paga el cliente '
                 'aparte.',
           ),
           HelpSection(
@@ -504,13 +500,13 @@ const List<HelpCategory> helpCenterCategories = [
             body: 'Puedes editar tus precios y disponibilidad en cualquier '
                 'momento desde tu perfil → "Editar perfil". Los precios deben '
                 'mantenerse dentro del rango mínimo y máximo que Garden '
-                'define para tu zona y servicio (por defecto entre Bs 10 y Bs '
+                'define para tu zona y servicio (por defecto entre Bs 15 y Bs '
                 '400).',
           ),
           HelpSection(
             heading: 'Recuerda',
             body: 'El precio que fijas es el monto íntegro que recibes — el '
-                'cliente paga ese precio más el 20% de comisión de Garden. Si '
+                'cliente paga ese precio más el 10% de comisión de Garden. Si '
                 'subes o bajas tu precio, se aplica a las reservas nuevas '
                 'desde ese momento, no afecta reservas ya confirmadas.',
           ),

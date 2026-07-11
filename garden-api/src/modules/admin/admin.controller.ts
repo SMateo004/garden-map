@@ -353,28 +353,44 @@ export const rejectIdentityVerification = asyncHandler(async (req: Request, res:
 
 export const getWithdrawals = asyncHandler(async (req: Request, res: Response) => {
   const status = req.query.status as string | undefined;
-  
-  const withdrawals = await prisma.walletTransaction.findMany({
-    where: { 
-      type: 'WITHDRAWAL',
-      ...(status ? { status } : { status: { in: ['PENDING', 'PROCESSING'] } }),
-    },
-    include: {
-      user: {
-        select: {
-          id: true, firstName: true, lastName: true, email: true, role: true,
-          balance: true,
-          bankName: true, bankAccount: true, bankHolder: true, bankType: true,
-          caregiverProfile: {
-            select: { bankName: true, bankAccount: true, bankHolder: true, bankType: true }
+  // Sin paginación, esto traía TODOS los retiros de una sola vez — con
+  // volumen real de producción esto crece sin límite. Mismo patrón page/limit
+  // que getReservations/listCaregivers.
+  const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? '50'), 10) || 50));
+  const skip = (page - 1) * limit;
+
+  const where = {
+    type: 'WITHDRAWAL' as const,
+    ...(status ? { status } : { status: { in: ['PENDING', 'PROCESSING'] } }),
+  };
+
+  const [withdrawals, total] = await Promise.all([
+    prisma.walletTransaction.findMany({
+      where,
+      include: {
+        user: {
+          select: {
+            id: true, firstName: true, lastName: true, email: true, role: true,
+            balance: true,
+            bankName: true, bankAccount: true, bankHolder: true, bankType: true,
+            caregiverProfile: {
+              select: { bankName: true, bankAccount: true, bankHolder: true, bankType: true }
+            }
           }
         }
-      }
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+      },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.walletTransaction.count({ where }),
+  ]);
 
-  res.json({ success: true, data: { withdrawals, total: withdrawals.length } });
+  res.json({
+    success: true,
+    data: { withdrawals, total, pagination: { page, limit, total, pages: Math.ceil(total / limit) } },
+  });
 });
 
 export const processWithdrawal = asyncHandler(async (req: Request, res: Response) => {
@@ -611,9 +627,17 @@ export const toggleGiftCode = asyncHandler(async (req: Request, res: Response) =
   res.json({ success: true, data: { active: updated.active } });
 });
 
-/** GET /api/admin/disputes — listar todas las disputas */
+/** GET /api/admin/disputes?page=&limit= — listar disputas (más recientes primero). */
 export const getDisputes = asyncHandler(async (req: Request, res: Response) => {
   const status = req.query.status as string | undefined;
+  // Sin límite, esto traía TODAS las disputas de la historia en una sola
+  // consulta — el frontend actual espera un array plano en "data" (sin
+  // envoltorio de paginación), así que se mantiene esa forma para no romper
+  // la pantalla de admin existente, pero se acota con page/limit (default:
+  // las 200 más recientes) para que la consulta no crezca sin límite.
+  const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
+  const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit ?? '200'), 10) || 200));
+  const skip = (page - 1) * limit;
 
   const disputes = await prisma.dispute.findMany({
     where: status ? { status } : {},
@@ -626,6 +650,8 @@ export const getDisputes = asyncHandler(async (req: Request, res: Response) => {
       },
     },
     orderBy: { createdAt: 'desc' },
+    skip,
+    take: limit,
   });
 
   res.json({

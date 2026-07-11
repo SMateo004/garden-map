@@ -2287,54 +2287,68 @@ export async function confirmWalkExtensionQr(
 ): Promise<BookingCreateResult> {
   const cfg = await getBookingSettings();
 
-  const booking = await prisma.booking.findFirst({
-    where: { id: bookingId, clientId }, // ← ownership check: only the booking's client can confirm
-    select: {
-      id: true, clientId: true, caregiverId: true, serviceType: true, status: true,
-      duration: true, totalAmount: true, commissionAmount: true, pricePerUnit: true,
-      petName: true, serviceEvents: true,
-    },
-  });
-
-  if (!booking) throw new BookingNotFoundError(bookingId); // covers both not-found AND unauthorized
-  if (booking.status !== BookingStatus.IN_PROGRESS) throw new BookingValidationError('El paseo ya no está en curso');
-
-  const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
-  const pendingIdx = events.findIndex(
-    e => e.type === 'EXTENSION_PENDING_PAYMENT' && e.method === 'qr' && e.qrId === qrId
-  );
-
-  if (pendingIdx === -1) throw new BookingValidationError('QR de extensión no válido o ya procesado');
-
-  const pending = events[pendingIdx];
-  const qrExpiry = new Date(pending.qrExpiresAt);
-  if (qrExpiry < new Date()) throw new BookingValidationError('El QR de extensión ha expirado. Genera uno nuevo.');
-
-  const { additionalMinutes, extraAmount, extensionId } = pending;
-
-  // Aplicar extensión
-  const pricePerUnitClient = Number(booking.pricePerUnit);
-  const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
-  const extraCommission = extraAmount - Math.round((pricePerUnitCaregiver / 60) * additionalMinutes);
-
-  const newDuration = (booking.duration ?? 60) + additionalMinutes;
-  const newTotal = Number(booking.totalAmount) + extraAmount;
-  const newCommission = Number(booking.commissionAmount) + extraCommission;
-
-  // Reemplazar PENDING → EXTENSION_CONFIRMED
-  events[pendingIdx] = {
-    type: 'EXTENSION_CONFIRMED',
-    extensionId,
-    additionalMinutes,
-    extraAmount,
-    method: 'qr',
-    paidAt: new Date().toISOString(),
-    timestamp: new Date().toISOString(),
-  };
-
   let caregiverUserId: string | null = null;
+  let additionalMinutes = 0;
+  let extraAmount = 0;
+  let newTotal = 0;
 
+  // Todo el read-compute-write debe pasar por el mismo lock de fila: antes
+  // `booking`/`events` se leían ANTES de la transacción, así que dos
+  // confirmaciones de extensión concurrentes (dos callbacks del mismo QR, o
+  // dos extensiones distintas casi simultáneas) partían de la misma foto
+  // (duration/totalAmount/serviceEvents) y la segunda escritura pisaba por
+  // completo el resultado de la primera — el cliente pagaba y confirmaba,
+  // pero la duración/monto de la reserva nunca reflejaban esa extensión.
   const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "bookings" WHERE id = ${bookingId} FOR UPDATE`;
+
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, clientId }, // ← ownership check: only the booking's client can confirm
+      select: {
+        id: true, clientId: true, caregiverId: true, serviceType: true, status: true,
+        duration: true, totalAmount: true, commissionAmount: true, pricePerUnit: true,
+        petName: true, serviceEvents: true,
+      },
+    });
+
+    if (!booking) throw new BookingNotFoundError(bookingId); // covers both not-found AND unauthorized
+    if (booking.status !== BookingStatus.IN_PROGRESS) throw new BookingValidationError('El paseo ya no está en curso');
+
+    const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
+    const pendingIdx = events.findIndex(
+      e => e.type === 'EXTENSION_PENDING_PAYMENT' && e.method === 'qr' && e.qrId === qrId
+    );
+
+    if (pendingIdx === -1) throw new BookingValidationError('QR de extensión no válido o ya procesado');
+
+    const pending = events[pendingIdx];
+    const qrExpiry = new Date(pending.qrExpiresAt);
+    if (qrExpiry < new Date()) throw new BookingValidationError('El QR de extensión ha expirado. Genera uno nuevo.');
+
+    const extensionId = pending.extensionId;
+    additionalMinutes = pending.additionalMinutes;
+    extraAmount = pending.extraAmount;
+
+    // Aplicar extensión
+    const pricePerUnitClient = Number(booking.pricePerUnit);
+    const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
+    const extraCommission = extraAmount - Math.round((pricePerUnitCaregiver / 60) * additionalMinutes);
+
+    const newDuration = (booking.duration ?? 60) + additionalMinutes;
+    newTotal = Number(booking.totalAmount) + extraAmount;
+    const newCommission = Number(booking.commissionAmount) + extraCommission;
+
+    // Reemplazar PENDING → EXTENSION_CONFIRMED
+    events[pendingIdx] = {
+      type: 'EXTENSION_CONFIRMED',
+      extensionId,
+      additionalMinutes,
+      extraAmount,
+      method: 'qr',
+      paidAt: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
+    };
+
     const updated = await tx.booking.update({
       where: { id: bookingId },
       data: {
@@ -2487,76 +2501,87 @@ export async function confirmHospedajeExtensionQr(
 ): Promise<BookingCreateResult> {
   const cfg = await getBookingSettings();
 
-  const booking = await prisma.booking.findFirst({
-    where: { id: bookingId, clientId }, // ← ownership check
-    select: {
-      id: true, clientId: true, caregiverId: true, serviceType: true, status: true,
-      endDate: true, totalDays: true, totalAmount: true, commissionAmount: true,
-      pricePerUnit: true, petName: true, serviceEvents: true,
-    },
-  });
-
-  if (!booking) throw new BookingNotFoundError(bookingId); // covers not-found AND unauthorized
-  if (booking.status !== BookingStatus.IN_PROGRESS) throw new BookingValidationError('El hospedaje ya no está en curso');
-
-  const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
-  const pendingIdx = events.findIndex(
-    e => e.type === 'EXTENSION_PENDING_PAYMENT' && e.method === 'qr' && e.qrId === qrId
-  );
-
-  if (pendingIdx === -1) throw new BookingValidationError('QR de extensión no válido o ya procesado');
-
-  const pending = events[pendingIdx];
-  const qrExpiry = new Date(pending.qrExpiresAt);
-  if (qrExpiry < new Date()) throw new BookingValidationError('El QR de extensión ha expirado. Genera uno nuevo.');
-
-  const { additionalDays, extraAmount, extensionId } = pending;
-
-  const pricePerUnitClient = Number(booking.pricePerUnit);
-  const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
-  const extraCommission = extraAmount - pricePerUnitCaregiver * additionalDays;
-
-  const newEndDate = new Date(booking.endDate!);
-  newEndDate.setDate(newEndDate.getDate() + additionalDays);
-  const newTotalDays = (booking.totalDays ?? 1) + additionalDays;
-
-  // Verificar que la nueva endDate no entra en conflicto con otra reserva del mismo cuidador.
-  // Se hace ANTES de modificar la DB para que, si hay conflicto, el error llegue al cliente
-  // y el pago (ya confirmado por el banco) sea reembolsado manualmente por el admin.
-  await prisma.$transaction(async (checkTx) => {
-    await assertHospedajeAvailability(
-      checkTx,
-      booking.caregiverId,
-      booking.endDate!.toISOString(),   // desde la endDate actual (nuevo rango)
-      newEndDate.toISOString(),
-      1  // petCount=1 mínimo; la mascota ya está alojada, solo verificamos fechas adicionales
-    );
-  }).catch((err) => {
-    // Si hay conflicto de disponibilidad, lanzar con mensaje claro
-    if (err instanceof BookingValidationError || (err as any).code === 'AVAILABILITY_CONFLICT') {
-      throw new BookingValidationError(
-        `Las fechas de extensión (${additionalDays} días más) entran en conflicto con otra reserva del cuidador. ` +
-        `El pago fue recibido — contacta al soporte para el reembolso.`
-      );
-    }
-    throw err;
-  });
-  const newTotal = Number(booking.totalAmount) + extraAmount;
-  const newCommission = Number(booking.commissionAmount) + extraCommission;
-
-  events[pendingIdx] = {
-    type: 'EXTENSION_CONFIRMED',
-    extensionId,
-    additionalDays,
-    extraAmount,
-    method: 'qr',
-    paidAt: new Date().toISOString(),
-    timestamp: new Date().toISOString(),
-  };
-
   let caregiverUserId: string | null = null;
+  let additionalDays = 0;
+  let extraAmount = 0;
+  let newTotal = 0;
 
+  // Mismo fix que confirmWalkExtensionQr: todo el read-compute-write (incluida
+  // la verificación de disponibilidad, que antes corría en una transacción
+  // aparte ANTES de esta) pasa por un único lock de fila, para que dos
+  // confirmaciones concurrentes de extensión no partan de la misma foto
+  // stale de endDate/totalAmount y se pisen entre sí.
   const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "bookings" WHERE id = ${bookingId} FOR UPDATE`;
+
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, clientId }, // ← ownership check
+      select: {
+        id: true, clientId: true, caregiverId: true, serviceType: true, status: true,
+        endDate: true, totalDays: true, totalAmount: true, commissionAmount: true,
+        pricePerUnit: true, petName: true, serviceEvents: true,
+      },
+    });
+
+    if (!booking) throw new BookingNotFoundError(bookingId); // covers not-found AND unauthorized
+    if (booking.status !== BookingStatus.IN_PROGRESS) throw new BookingValidationError('El hospedaje ya no está en curso');
+
+    const events: any[] = Array.isArray(booking.serviceEvents) ? [...(booking.serviceEvents as any[])] : [];
+    const pendingIdx = events.findIndex(
+      e => e.type === 'EXTENSION_PENDING_PAYMENT' && e.method === 'qr' && e.qrId === qrId
+    );
+
+    if (pendingIdx === -1) throw new BookingValidationError('QR de extensión no válido o ya procesado');
+
+    const pending = events[pendingIdx];
+    const qrExpiry = new Date(pending.qrExpiresAt);
+    if (qrExpiry < new Date()) throw new BookingValidationError('El QR de extensión ha expirado. Genera uno nuevo.');
+
+    const extensionId = pending.extensionId;
+    additionalDays = pending.additionalDays;
+    extraAmount = pending.extraAmount;
+
+    const pricePerUnitClient = Number(booking.pricePerUnit);
+    const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
+    const extraCommission = extraAmount - pricePerUnitCaregiver * additionalDays;
+
+    const newEndDate = new Date(booking.endDate!);
+    newEndDate.setDate(newEndDate.getDate() + additionalDays);
+    const newTotalDays = (booking.totalDays ?? 1) + additionalDays;
+
+    // Verificar que la nueva endDate no entra en conflicto con otra reserva del mismo cuidador,
+    // con el lock de fila ya tomado y datos frescos.
+    try {
+      await assertHospedajeAvailability(
+        tx,
+        booking.caregiverId,
+        booking.endDate!.toISOString(),   // desde la endDate actual (nuevo rango)
+        newEndDate.toISOString(),
+        1  // petCount=1 mínimo; la mascota ya está alojada, solo verificamos fechas adicionales
+      );
+    } catch (err: any) {
+      if (err instanceof BookingValidationError || err?.code === 'AVAILABILITY_CONFLICT') {
+        throw new BookingValidationError(
+          `Las fechas de extensión (${additionalDays} días más) entran en conflicto con otra reserva del cuidador. ` +
+          `El pago fue recibido — contacta al soporte para el reembolso.`
+        );
+      }
+      throw err;
+    }
+
+    newTotal = Number(booking.totalAmount) + extraAmount;
+    const newCommission = Number(booking.commissionAmount) + extraCommission;
+
+    events[pendingIdx] = {
+      type: 'EXTENSION_CONFIRMED',
+      extensionId,
+      additionalDays,
+      extraAmount,
+      method: 'qr',
+      paidAt: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
+    };
+
     const updated = await tx.booking.update({
       where: { id: bookingId },
       data: {

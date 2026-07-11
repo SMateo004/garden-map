@@ -8,6 +8,8 @@ import {
   loginSchema,
   registerCaregiverSchema,
   registerClientSchema,
+  registerProfessionalMinimalSchema,
+  registerCompanyMinimalSchema,
   patchCaregiverProfileSchema,
   type RegisterCaregiverBody,
   type RegisterClientBody,
@@ -843,12 +845,15 @@ export const validateProfessionalCode = asyncHandler(async (req: Request, res: R
 
 /** POST /api/auth/register-professional — registro de cuidador profesional con código. */
 export const registerProfessional = asyncHandler(async (req: Request, res: Response) => {
-  const body = req.body ?? {};
-  if (!body.code || typeof body.code !== 'string') {
-    return res.status(400).json({ success: false, error: { code: 'MISSING_CODE', message: 'Código de registro requerido.' } });
-  }
-  if (!body.email || !body.password || !body.firstName || !body.lastName || !body.phone) {
-    return res.status(400).json({ success: false, error: { code: 'MISSING_FIELDS', message: 'Faltan campos obligatorios.' } });
+  let body;
+  try {
+    body = registerProfessionalMinimalSchema.parse(req.body ?? {});
+  } catch (err) {
+    if (err instanceof ZodError) {
+      const issues = err.issues.map((issue) => ({ field: issue.path.join('.'), message: issue.message }));
+      return res.status(400).json({ success: false, message: 'Datos inválidos', error: { code: 'VALIDATION_ERROR', message: 'Datos inválidos' }, errors: issues });
+    }
+    throw err;
   }
   const result = await authService.registerProfessional(body);
   return res.status(201).json({ success: true, data: result });
@@ -869,12 +874,15 @@ export const validateCompanyCode = asyncHandler(async (req: Request, res: Respon
 
 /** POST /api/auth/register-company — registro de empresa con código de admin. */
 export const registerCompany = asyncHandler(async (req: Request, res: Response) => {
-  const body = req.body ?? {};
-  if (!body.code || typeof body.code !== 'string') {
-    return res.status(400).json({ success: false, error: { code: 'MISSING_CODE', message: 'Código de registro requerido.' } });
-  }
-  if (!body.companyName || !body.email || !body.password || !body.phone) {
-    return res.status(400).json({ success: false, error: { code: 'MISSING_FIELDS', message: 'Faltan campos obligatorios (nombre empresa, email, contraseña, teléfono).' } });
+  let body;
+  try {
+    body = registerCompanyMinimalSchema.parse(req.body ?? {});
+  } catch (err) {
+    if (err instanceof ZodError) {
+      const issues = err.issues.map((issue) => ({ field: issue.path.join('.'), message: issue.message }));
+      return res.status(400).json({ success: false, message: 'Datos inválidos', error: { code: 'VALIDATION_ERROR', message: 'Datos inválidos' }, errors: issues });
+    }
+    throw err;
   }
   const result = await authService.registerCompany(body);
   return res.status(201).json({ success: true, data: result });

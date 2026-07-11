@@ -1,4 +1,5 @@
 import prisma from '../../config/database.js';
+import { NotFoundError } from '../../shared/errors.js';
 
 export async function getMyNotifications(userId: string) {
     return prisma.notification.findMany({
@@ -9,8 +10,16 @@ export async function getMyNotifications(userId: string) {
 }
 
 export async function markAsRead(notificationId: string, userId: string) {
-    return prisma.notification.update({
+    // prisma.update lanza P2025 (Record not found) si el id no existe o no es
+    // de este usuario, y sin este chequeo eso llegaba al cliente como 500 sin
+    // manejar en vez de un 404 claro.
+    const existing = await prisma.notification.findFirst({
         where: { id: notificationId, userId },
+        select: { id: true },
+    });
+    if (!existing) throw new NotFoundError('Notificación no encontrada');
+    return prisma.notification.update({
+        where: { id: notificationId },
         data: { read: true, readAt: new Date() },
     });
 }

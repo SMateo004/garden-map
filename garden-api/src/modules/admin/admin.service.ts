@@ -751,20 +751,28 @@ export async function getPaymentsPending(
 /** POST /api/admin/bookings/:id/reject-payment — rechazar pago; vuelve a PENDING_PAYMENT y limpia QR.
  *  Si el cliente había usado billetera para cubrir parte del pago, se le reembolsa automáticamente. */
 export async function rejectPayment(bookingId: string, adminId: string): Promise<{ id: string; status: string }> {
-  const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
-    select: { id: true, clientId: true, status: true, walletPaymentAmount: true },
-  });
-  if (!booking) throw new NotFoundError('Reserva no encontrada');
-  if (booking.status !== BookingStatus.PAYMENT_PENDING_APPROVAL && booking.status !== BookingStatus.PENDING_PAYMENT) {
-    throw new BadRequestError(
-      'Solo se puede rechazar una reserva en espera de aprobación de pago.'
-    );
-  }
+  let booking!: { id: string; clientId: string; status: string; walletPaymentAmount: any };
+  let walletContrib = 0;
 
-  const walletContrib = Number(booking.walletPaymentAmount ?? 0);
-
+  // Mismo problema que refundBooking: leer fuera del lock permitía que dos
+  // rechazos concurrentes del mismo pago vieran ambos walletPaymentAmount > 0
+  // y walletPaymentAmount ya reseteado a 0 solo por uno de ellos al final —
+  // cada uno reembolsaba el monto completo, triplicando lo acreditado.
   const updated = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "bookings" WHERE id = ${bookingId} FOR UPDATE`;
+    booking = await tx.booking.findUnique({
+      where: { id: bookingId },
+      select: { id: true, clientId: true, status: true, walletPaymentAmount: true },
+    }) as any;
+    if (!booking) throw new NotFoundError('Reserva no encontrada');
+    if (booking.status !== BookingStatus.PAYMENT_PENDING_APPROVAL && booking.status !== BookingStatus.PENDING_PAYMENT) {
+      throw new BadRequestError(
+        'Solo se puede rechazar una reserva en espera de aprobación de pago.'
+      );
+    }
+
+    walletContrib = Number(booking.walletPaymentAmount ?? 0);
+
     // 1. Limpiar QR y resetear contribución de billetera
     const result = await tx.booking.update({
       where: { id: bookingId },
@@ -921,29 +929,39 @@ export async function refundBooking(
 ): Promise<{ id: string; status: string; refundAmount: number; destination: RefundDestination; couponCode?: string }> {
   await assertAdminPassword(adminId, adminPassword);
 
-  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
-  if (!booking) throw new NotFoundError('Reserva no encontrada');
-  if (booking.status === BookingStatus.COMPLETED) {
-    throw new BadRequestError('No se puede reembolsar una reserva cuyo servicio ya se completó.');
-  }
-  if (booking.refundStatus === 'PROCESSED') {
-    throw new BadRequestError('Esta reserva ya fue reembolsada.');
-  }
-  // El pago debe haber pasado por aprobación (paidAt seteado por approvePayment/
-  // approvePaymentSecure o por confirmación automática de Stripe/QR) antes de poder
-  // reembolsarse — evita acreditar dinero que Garden nunca llegó a cobrar.
-  if (!booking.paidAt) {
-    throw new BadRequestError('Debes aprobar el pago antes de poder reembolsarlo.');
-  }
-  // Refund = precio del servicio (totalAmount) — la donación voluntaria no se revierte.
-  const refundAmount = Number(booking.totalAmount);
-  if (refundAmount <= 0) {
-    throw new BadRequestError('Esta reserva no tiene un monto de servicio pagado para reembolsar.');
-  }
-
+  let refundAmount = 0;
   let couponCode: string | undefined;
+  let clientId = '';
 
+  // Todo el chequeo de estado + el crédito de dinero debe pasar por el mismo
+  // lock de fila (FOR UPDATE) — antes se leía el booking fuera de la
+  // transacción, así que dos solicitudes de reembolso concurrentes para la
+  // misma reserva pasaban ambas el chequeo `refundStatus === 'PROCESSED'`
+  // (ninguna lo veía todavía) y cada una acreditaba el monto completo,
+  // multiplicando el reembolso real entregado al cliente.
   await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "bookings" WHERE id = ${bookingId} FOR UPDATE`;
+    const booking = await tx.booking.findUnique({ where: { id: bookingId } });
+    if (!booking) throw new NotFoundError('Reserva no encontrada');
+    if (booking.status === BookingStatus.COMPLETED) {
+      throw new BadRequestError('No se puede reembolsar una reserva cuyo servicio ya se completó.');
+    }
+    if (booking.refundStatus === 'PROCESSED') {
+      throw new BadRequestError('Esta reserva ya fue reembolsada.');
+    }
+    // El pago debe haber pasado por aprobación (paidAt seteado por approvePayment/
+    // approvePaymentSecure o por confirmación automática de Stripe/QR) antes de poder
+    // reembolsarse — evita acreditar dinero que Garden nunca llegó a cobrar.
+    if (!booking.paidAt) {
+      throw new BadRequestError('Debes aprobar el pago antes de poder reembolsarlo.');
+    }
+    // Refund = precio del servicio (totalAmount) — la donación voluntaria no se revierte.
+    refundAmount = Number(booking.totalAmount);
+    if (refundAmount <= 0) {
+      throw new BadRequestError('Esta reserva no tiene un monto de servicio pagado para reembolsar.');
+    }
+    clientId = booking.clientId;
+
     if (destination === 'WALLET') {
       const updatedUser = await tx.user.update({
         where: { id: booking.clientId },
@@ -1002,7 +1020,7 @@ export async function refundBooking(
       ? `Tu reembolso de Bs ${refundAmount.toFixed(2)} está disponible como cupón: ${couponCode}.`
       : `Tu reembolso de Bs ${refundAmount.toFixed(2)} fue procesado por transferencia.`;
   prisma.notification.create({
-    data: { userId: booking.clientId, title: 'Reembolso procesado', message: notifMessage, type: 'PAYMENT' },
+    data: { userId: clientId, title: 'Reembolso procesado', message: notifMessage, type: 'PAYMENT' },
   }).catch((err) => logger.warn('Failed to notify client of refund', { bookingId, err }));
 
   logger.info('Admin: reembolso procesado', { bookingId, adminId, refundAmount, destination, couponCode });
@@ -2174,6 +2192,8 @@ export async function deleteCaregiver(
   });
   if (!profile) throw new CaregiverNotFoundError(profileId);
 
+  const userId = profile.userId;
+
   await prisma.adminAction.create({
     data: {
       adminId,
@@ -2183,52 +2203,32 @@ export async function deleteCaregiver(
     },
   });
 
-  const userId = profile.userId;
-
-  // Collect booking IDs to clean up child records that lack onDelete:Cascade
-  const bookings = await prisma.booking.findMany({
-    where: { caregiverId: profileId },
-    select: { id: true },
-  });
-  const bookingIds = bookings.map((b) => b.id);
-
-  try {
-    await prisma.$transaction(async (tx) => {
-      // Delete child records of Booking without cascade
-      if (bookingIds.length > 0) {
-        await tx.dispute.deleteMany({ where: { bookingId: { in: bookingIds } } });
-        await tx.meetAndGreet.deleteMany({ where: { bookingId: { in: bookingIds } } });
-        await tx.chatMessage.deleteMany({ where: { bookingId: { in: bookingIds } } });
-        // Donation.booking no tiene onDelete:Cascade (se conserva por defecto para
-        // reportes financieros) — hay que borrarla a mano antes de poder borrar
-        // las reservas del cuidador, si no el delete final falla por FK constraint.
-        await tx.donation.deleteMany({ where: { bookingId: { in: bookingIds } } });
-      }
-      // ChatMessages sent by the caregiver user (senderId FK — no cascade)
-      await tx.chatMessage.deleteMany({ where: { senderId: userId } });
-      // SugerenciaPrecio references CaregiverProfile without cascade
-      await tx.sugerenciaPrecio.deleteMany({ where: { caregiverId: profileId } });
-      // WalletTransaction references User without cascade
-      await tx.walletTransaction.deleteMany({ where: { userId } });
-      // Donation.client tampoco tiene cascade — cubre el caso (poco común pero
-      // posible) de que este cuidador haya donado alguna vez como cliente.
-      await tx.donation.deleteMany({ where: { clientId: userId } });
-
-      // Delete user — Prisma cascades: User → CaregiverProfile → Availability, Booking, Review
-      await tx.user.delete({ where: { id: userId } });
+  // Mismo patrón que el borrado de cuenta propia (self-delete en
+  // auth.controller.ts): soft-delete + anonimizar + suspender del
+  // marketplace, en vez de borrar en duro. Antes esto borraba en cascada
+  // Booking, Review, Dispute, ChatMessage, Donation y WalletTransaction —
+  // destruyendo por completo el historial financiero y de servicio del
+  // cuidador (retiros, ganancias, reseñas de clientes) sin posibilidad de
+  // auditoría posterior. Ahora se conserva todo; solo se saca al cuidador
+  // del mercado y se anonimiza su PII para que no pueda volver a loguearse
+  // ni ser contactado.
+  const deletedTag = `deleted_admin_${Date.now()}`;
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        email: `${deletedTag}@garden.deleted`,
+        passwordHash: '',
+        phone: deletedTag,
+        isDeleted: true,
+        deletedAt: new Date(),
+      },
     });
-  } catch (err: any) {
-    // Constraint de FK no contemplada (ej. una relación nueva sin cascade) —
-    // dar un mensaje claro en vez del genérico "Error interno del servidor".
-    if (err?.code === 'P2003' || err?.code === 'P2014') {
-      throw new BadRequestError(
-        'No se pudo eliminar: el cuidador todavía tiene datos relacionados que no se pudieron limpiar automáticamente (código ' +
-          err.code + '). Revisa logs para identificar la tabla — probablemente falta un caso en deleteCaregiver.',
-        'CAREGIVER_DELETE_FK_CONSTRAINT'
-      );
-    }
-    throw err;
-  }
+    await tx.caregiverProfile.update({
+      where: { id: profileId },
+      data: { status: 'DRAFT', suspended: true },
+    });
+  });
 
   await getCache().del(`caregivers:detail:${profileId}`);
   await delByPrefix('caregivers:list:');
@@ -2988,7 +2988,11 @@ export async function generatePhoneOtpMessage(userId: string) {
   const toPhone = user.phone.startsWith('+') ? user.phone : `+591${user.phone}`;
 
   if (user.phoneOtp && user.phoneOtpExpiresAt && user.phoneOtpExpiresAt > new Date()) {
-    const message = `GARDEN: tu código de verificación es ${user.phoneOtp}. Vence en 10 minutos. No lo compartas con nadie.`;
+    // Código reutilizado: puede llevar minutos activo ya, "vence en 10
+    // minutos" era falso salvo justo al momento de generarse — se calcula el
+    // tiempo real restante en vez de repetir el texto fijo de un código nuevo.
+    const minutesLeft = Math.max(1, Math.ceil((user.phoneOtpExpiresAt.getTime() - Date.now()) / 60000));
+    const message = `GARDEN: tu código de verificación es ${user.phoneOtp}. Vence en ${minutesLeft} minuto${minutesLeft === 1 ? '' : 's'}. No lo compartas con nadie.`;
     return { phone: toPhone, message, expiresAt: user.phoneOtpExpiresAt.toISOString(), reused: true };
   }
 
