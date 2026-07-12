@@ -108,6 +108,20 @@ const envSchema = z.object({
       path: ['SIP_CALLBACK_PASS'],
     });
   }
+  // booking.service.ts arma la URL de callback que se le manda al banco como
+  // `${API_PUBLIC_URL}/api/payments/confirmarPago`. API_PUBLIC_URL tiene un
+  // default de localhost y NO es una var "propia" de SIP, así que sin este
+  // chequeo el server arrancaba bien con SIP activo pero mandaba al banco una
+  // URL de callback inalcanzable — los pagos se generarían pero nunca se
+  // confirmarían, en silencio, sin ningún error visible hasta que un cliente
+  // pagara de verdad y el QR nunca se marcara como pagado.
+  if (data.API_PUBLIC_URL.includes('localhost') || data.API_PUBLIC_URL.includes('127.0.0.1')) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'API_PUBLIC_URL debe ser la URL pública real (ej. https://api.gardenbo.com) cuando SIP_ENABLED=true — el banco necesita poder llamar de vuelta a este callback.',
+      path: ['API_PUBLIC_URL'],
+    });
+  }
 });
 
 const parsed = envSchema.safeParse(process.env);
