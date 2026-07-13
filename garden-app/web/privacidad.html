@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Política de Privacidad · Garden</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --primary:#778C43; --primary-dark:#5C6E32;
+  --bg:#F5F2EC; --surface:#FFFFFF;
+  --text:#1E2D0F; --text-sec:#5C7238; --border:#DBD0C4;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased;}
+a{color:var(--primary-dark);}
+.wrap{max-width:760px;margin:0 auto;padding:64px 24px 100px;}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:40px;}
+.brand span{font-weight:900;font-size:24px;letter-spacing:-0.03em;}
+h1{font-weight:900;font-size:clamp(28px,5vw,40px);letter-spacing:-0.03em;margin-bottom:8px;}
+.updated{font-size:14px;color:var(--text-sec);margin-bottom:40px;}
+h2{font-weight:800;font-size:22px;margin-top:40px;margin-bottom:12px;letter-spacing:-0.02em;}
+p, li{font-size:16px;color:var(--text);margin-bottom:12px;}
+ul{padding-left:22px;margin-bottom:16px;}
+table{width:100%;border-collapse:collapse;margin:16px 0 24px;font-size:14px;}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
+th{background:var(--surface);font-weight:800;color:var(--text-sec);text-transform:uppercase;font-size:11px;letter-spacing:0.06em;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px 24px;margin-bottom:24px;}
+footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);font-size:13px;color:var(--text-sec);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="brand">
+    <svg viewBox="0 0 120 120" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="30" cy="48" rx="10" ry="14" fill="#778C43" transform="rotate(-25 30 48)"/>
+      <ellipse cx="50" cy="30" rx="9" ry="13" fill="#778C43" transform="rotate(-8 50 30)"/>
+      <ellipse cx="72" cy="30" rx="9" ry="13" fill="#778C43" transform="rotate(8 72 30)"/>
+      <ellipse cx="92" cy="48" rx="10" ry="14" fill="#778C43" transform="rotate(25 92 48)"/>
+      <path d="M60 60c-18 0-30 12-30 26 0 10 8 18 18 18 6 0 10-3 12-7 2 4 6 7 12 7 10 0 18-8 18-18 0-14-12-26-30-26z" fill="#778C43"/>
+    </svg>
+    <span>garden</span>
+  </a>
+
+  <h1>Política de Privacidad</h1>
+  <p class="updated">Última actualización: 12 de julio de 2026</p>
+
+  <p>Esta política describe qué datos recolecta Garden (marketplace de servicios de cuidado de
+  mascotas en Santa Cruz de la Sierra, Bolivia — operado bajo el dominio <strong>gardenbo.com</strong>),
+  por qué los recolecta, y qué derechos tenés sobre ellos.</p>
+
+  <h2>1. Qué datos recolectamos</h2>
+  <p>Garden es un marketplace de servicios reales (paseo, guardería y hospedaje de mascotas), no
+  una app anónima — necesitamos ciertos datos personales para conectar dueños con cuidadores de
+  forma segura y para procesar pagos.</p>
+
+  <table>
+    <tr><th>Categoría</th><th>Dato</th><th>Para qué lo usamos</th></tr>
+    <tr><td>Ubicación</td><td>Ubicación aproximada</td><td>Mostrar cuidadores cercanos a tu zona</td></tr>
+    <tr><td>Ubicación</td><td>Ubicación precisa (GPS)</td><td>Seguimiento en vivo durante un paseo activo</td></tr>
+    <tr><td>Información personal</td><td>Nombre, correo, teléfono</td><td>Cuenta de usuario, verificación por OTP</td></tr>
+    <tr><td>Información personal</td><td>Dirección física</td><td>Dirección de servicio (recojo/entrega de mascota)</td></tr>
+    <tr><td>Información personal</td><td>Documento de identidad (CI)</td><td>Verificación de identidad de cuidadores</td></tr>
+    <tr><td>Fotos y video</td><td>Fotos de perfil, mascota, evidencia de servicio</td><td>Funcionalidad de la app</td></tr>
+    <tr><td>Información financiera</td><td>Datos de pago (QR bancario)</td><td>Procesar el pago de reservas</td></tr>
+    <tr><td>Mensajes</td><td>Chat entre cliente y cuidador</td><td>Comunicación dentro de una reserva</td></tr>
+    <tr><td>Identificadores</td><td>Token de dispositivo (push)</td><td>Notificaciones de la app</td></tr>
+    <tr><td>Diagnóstico</td><td>Registros de errores (Sentry)</td><td>Detectar y corregir fallos técnicos</td></tr>
+  </table>
+
+  <h2>2. Con quién compartimos datos</h2>
+  <p>No vendemos tus datos. Usamos los siguientes proveedores para operar la app, cada uno solo
+  accede a lo necesario para su función:</p>
+  <ul>
+    <li><strong>Cloudinary</strong> — almacenamiento de imágenes</li>
+    <li><strong>Firebase</strong> — notificaciones push y autenticación</li>
+    <li><strong>Resend</strong> — envío de correos transaccionales</li>
+    <li><strong>AWS Rekognition</strong> — verificación de identidad (liveness check)</li>
+    <li><strong>Anthropic (Claude)</strong> — análisis automatizado de evidencia en disputas</li>
+    <li><strong>Sentry</strong> — monitoreo de errores técnicos</li>
+    <li><strong>Google, Facebook, Apple</strong> — si elegís iniciar sesión con esas cuentas</li>
+  </ul>
+
+  <h2>3. Seguridad</h2>
+  <p>Toda la comunicación entre la app y nuestros servidores viaja cifrada (HTTPS/TLS). Los pagos
+  se procesan mediante QR bancario boliviano; Garden no almacena números de tarjeta.</p>
+
+  <h2>4. Tus derechos</h2>
+  <p>Podés solicitar la eliminación de tu cuenta y datos personales en cualquier momento desde la
+  app (Perfil → Eliminar cuenta) o escribiéndonos a
+  <a href="mailto:contactogardenbo@gmail.com">contactogardenbo@gmail.com</a>.</p>
+
+  <h2>5. Menores de edad</h2>
+  <p>Garden no está dirigido a menores de 18 años. No recolectamos intencionalmente datos de
+  menores.</p>
+
+  <h2>6. Cambios a esta política</h2>
+  <p>Si actualizamos esta política de forma relevante, lo vamos a notificar dentro de la app.</p>
+
+  <div class="card">
+    <strong>¿Preguntas sobre tu privacidad?</strong><br/>
+    Escribinos a <a href="mailto:contactogardenbo@gmail.com">contactogardenbo@gmail.com</a>
+  </div>
+
+  <footer>GARDEN · Santa Cruz de la Sierra, Bolivia · gardenbo.com</footer>
+</div>
+</body>
+</html>
