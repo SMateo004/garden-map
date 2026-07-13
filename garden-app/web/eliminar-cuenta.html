@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Eliminar cuenta y datos · Garden</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --primary:#778C43; --primary-dark:#5C6E32;
+  --bg:#F5F2EC; --surface:#FFFFFF;
+  --text:#1E2D0F; --text-sec:#5C7238; --border:#DBD0C4;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased;}
+a{color:var(--primary-dark);}
+.wrap{max-width:760px;margin:0 auto;padding:64px 24px 100px;}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:40px;}
+.brand span{font-weight:900;font-size:24px;letter-spacing:-0.03em;}
+h1{font-weight:900;font-size:clamp(28px,5vw,40px);letter-spacing:-0.03em;margin-bottom:8px;}
+.updated{font-size:14px;color:var(--text-sec);margin-bottom:40px;}
+h2{font-weight:800;font-size:22px;margin-top:40px;margin-bottom:12px;letter-spacing:-0.02em;}
+p, li{font-size:16px;color:var(--text);margin-bottom:12px;}
+ol,ul{padding-left:22px;margin-bottom:16px;}
+table{width:100%;border-collapse:collapse;margin:16px 0 24px;font-size:14px;}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
+th{background:var(--surface);font-weight:800;color:var(--text-sec);text-transform:uppercase;font-size:11px;letter-spacing:0.06em;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px 24px;margin-bottom:24px;}
+footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);font-size:13px;color:var(--text-sec);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="brand">
+    <svg viewBox="0 0 120 120" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="30" cy="48" rx="10" ry="14" fill="#778C43" transform="rotate(-25 30 48)"/>
+      <ellipse cx="50" cy="30" rx="9" ry="13" fill="#778C43" transform="rotate(-8 50 30)"/>
+      <ellipse cx="72" cy="30" rx="9" ry="13" fill="#778C43" transform="rotate(8 72 30)"/>
+      <ellipse cx="92" cy="48" rx="10" ry="14" fill="#778C43" transform="rotate(25 92 48)"/>
+      <path d="M60 60c-18 0-30 12-30 26 0 10 8 18 18 18 6 0 10-3 12-7 2 4 6 7 12 7 10 0 18-8 18-18 0-14-12-26-30-26z" fill="#778C43"/>
+    </svg>
+    <span>garden</span>
+  </a>
+
+  <h1>Eliminar tu cuenta y tus datos de Garden</h1>
+  <p class="updated">Última actualización: 12 de julio de 2026</p>
+
+  <p>Garden (aplicación desarrollada por Garden Bolivia, disponible en gardenbo.com y en Google
+  Play / App Store) te permite eliminar tu cuenta y solicitar la eliminación de tus datos en
+  cualquier momento, tanto desde dentro de la app como escribiéndonos directamente.</p>
+
+  <h2>Opción 1 — Eliminar tu cuenta desde la app</h2>
+  <ol>
+    <li>Abrí la app Garden e iniciá sesión.</li>
+    <li>Andá a <strong>Perfil</strong> (ícono inferior o menú lateral).</li>
+    <li>Desplazate hasta el final de la pantalla y tocá el enlace <strong>Eliminar cuenta</strong>, debajo del botón "Cerrar sesión".</li>
+    <li>Confirmá la acción cuando la app te lo pida.</li>
+  </ol>
+  <p>Tu cuenta se elimina de inmediato y deja de estar disponible para iniciar sesión.</p>
+
+  <h2>Opción 2 — Solicitarlo por correo (sin usar la app)</h2>
+  <p>Escribinos a <a href="mailto:contactogardenbo@gmail.com">contactogardenbo@gmail.com</a> desde
+  el correo asociado a tu cuenta de Garden, indicando "Eliminar mi cuenta" en el asunto. Procesamos
+  la solicitud dentro de los 30 días siguientes y te confirmamos por correo cuando esté hecho.</p>
+
+  <h2>Qué datos se eliminan</h2>
+  <table>
+    <tr><th>Dato</th><th>¿Se elimina?</th></tr>
+    <tr><td>Nombre, correo, teléfono</td><td>Sí, de forma permanente</td></tr>
+    <tr><td>Fotos de perfil, mascota</td><td>Sí, de forma permanente</td></tr>
+    <tr><td>Dirección física</td><td>Sí, de forma permanente</td></tr>
+    <tr><td>Historial de chat</td><td>Sí, de forma permanente</td></tr>
+    <tr><td>Ubicación / historial de GPS</td><td>Sí, de forma permanente</td></tr>
+    <tr><td>Documento de identidad (CI, solo cuidadores)</td><td>Sí, de forma permanente</td></tr>
+  </table>
+
+  <h2>Qué datos se conservan (y por qué)</h2>
+  <p>Por obligaciones legales y contables (regulación boliviana sobre transacciones financieras y
+  resolución de disputas), conservamos lo siguiente durante <strong>5 años</strong> después de la
+  eliminación de la cuenta, de forma desvinculada de tu identidad siempre que sea posible:</p>
+  <ul>
+    <li>Registros de transacciones de pago (montos, fechas — sin datos de tarjeta/QR)</li>
+    <li>Historial de reservas completadas, a efectos de auditoría</li>
+    <li>Registros de disputas ya resueltas</li>
+  </ul>
+  <p>Estos registros no son accesibles públicamente ni se usan para ningún fin distinto al
+  cumplimiento legal y contable.</p>
+
+  <div class="card">
+    <strong>¿Dudas sobre tu solicitud?</strong><br/>
+    Escribinos a <a href="mailto:contactogardenbo@gmail.com">contactogardenbo@gmail.com</a>
+  </div>
+
+  <footer>GARDEN · Santa Cruz de la Sierra, Bolivia · gardenbo.com</footer>
+</div>
+</body>
+</html>
