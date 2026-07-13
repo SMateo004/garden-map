@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "1067635397531-dhhnmnl4u61vp2mdesma7hkn7ijpm9nm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.garden.bolivia",
+            "certificate_hash": "1991a794f87b7983740ca96c4bb8b1bafe91cba3"
+          }
+        },
+        {
+          "client_id": "1067635397531-hq2t2dvnbonsc4gapr69hq57srgaksgc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.garden.bolivia",
+            "certificate_hash": "39be4839e13ea392db7337086f89105bf6c07c84"
+          }
+        },
+        {
           "client_id": "1067635397531-d9v8mtsm3to56m71krq6h5g01p1081vh.apps.googleusercontent.com",
           "client_type": 3
         }
