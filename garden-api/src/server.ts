@@ -54,6 +54,7 @@ import { iniciarJobQrExpiry } from './jobs/qr-expiry.job.js';
 import { iniciarJobMgExpiry } from './jobs/mg-expiry.job.js';
 import { iniciarJobSlotConflictExpiry } from './jobs/slot-conflict-expiry.job.js';
 import { iniciarJobChatRetention } from './jobs/chat-retention.job.js';
+import { iniciarJobCaregiverAcceptExpiry } from './jobs/caregiver-accept-expiry.job.js';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
@@ -187,6 +188,10 @@ async function start() {
         { key: 'qrValidityMinutes',        value: '15'    },
         { key: 'autoReleasePaymentHoras',  value: '24'    },
         { key: 'onHoldSlaHoras',           value: '72'    }, // ← faltaba seed
+        // Horas para que el cuidador acepte una reserva antes de cancelarse
+        // automáticamente con reembolso completo a billetera. También se usa
+        // como anticipación mínima requerida para poder reservar un servicio.
+        { key: 'caregiverAcceptWindowHoras', value: '3'   },
         // ── Política cancelación HOSPEDAJE (numeric) ─────────────────────────
         { key: 'hospedajeRefundAdminFeeBS',    value: '10' },
         { key: 'hospedajeRefund100Horas',      value: '48' },
@@ -231,6 +236,7 @@ async function start() {
     iniciarJobMgExpiry();
     iniciarJobSlotConflictExpiry();
     iniciarJobChatRetention();
+    iniciarJobCaregiverAcceptExpiry();
   }, 10000);
 
   // Auto-release payment after service ends if owner hasn't reviewed

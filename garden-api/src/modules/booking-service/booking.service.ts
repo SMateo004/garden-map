@@ -67,6 +67,7 @@ async function getBookingSettings() {
         paseo50h,
         qrValidityMinutes,
         hospedajeMaxExtensionDays,
+        caregiverAcceptWindowHoras,
     ] = await Promise.all([
         getNumericSetting('platformCommissionPct',         10),
         getNumericSetting('hospedajeRefundAdminFeeBS',     10),
@@ -76,6 +77,7 @@ async function getBookingSettings() {
         getNumericSetting('paseoRefund50Horas',             6),
         getNumericSetting('qrValidityMinutes',             15),
         getNumericSetting('hospedajeMaxExtensionDays',     30),
+        getNumericSetting('caregiverAcceptWindowHoras',     3),
     ]);
     return {
         COMMISSION_RATE:                commissionPct / 100,
@@ -86,6 +88,7 @@ async function getBookingSettings() {
         PASEO_REFUND_50_HOURS:          paseo50h,
         QR_VALIDITY_MINUTES_PAYMENT:    qrValidityMinutes,
         HOSPEDAJE_MAX_EXTENSION_DAYS:   hospedajeMaxExtensionDays,
+        MIN_BOOKING_ADVANCE_HOURS:      caregiverAcceptWindowHoras,
     };
 }
 
@@ -350,6 +353,38 @@ export async function createBooking(
             'Las reservas deben realizarse con al menos un día de anticipación. Por favor, selecciona fechas a partir de mañana.',
             'BOOKING_VALIDATION',
             'walkDate'
+          );
+        }
+      }
+    }
+
+    // VALIDACIÓN: anticipación mínima en horas (configurable, default 3h) —
+    // el cuidador necesita tiempo real para aceptar la reserva antes de que
+    // empiece el servicio. Solo aplica cuando hay una hora de inicio
+    // específica (startTime); reservas de bloque genérico sin hora exacta
+    // ya quedan cubiertas por la validación de "1 día de anticipación" arriba.
+    if (body.serviceType !== ServiceType.HOSPEDAJE) {
+      const walkDaysForAdvance = (body as any).walkDays as Array<{ date: string; startTime?: string }> | undefined;
+      const singleDateForAdvance = (body as any).walkDate as string | undefined;
+      const singleStartTime = (body as any).startTime as string | undefined;
+      const slotsToCheck = walkDaysForAdvance
+        ? walkDaysForAdvance.map((d) => ({ date: d.date, startTime: d.startTime }))
+        : singleDateForAdvance
+        ? [{ date: singleDateForAdvance, startTime: singleStartTime }]
+        : [];
+
+      for (const slot of slotsToCheck) {
+        if (!slot.startTime) continue; // sin hora específica, no se puede evaluar con precisión
+        const [year, month, day] = slot.date.split('-').map(Number);
+        const [hour, minute] = slot.startTime.split(':').map(Number);
+        // Bolivia es UTC-4 todo el año (sin horario de verano)
+        const startUtcMs = Date.UTC(year as number, (month as number) - 1, day as number, (hour as number) + 4, (minute as number) || 0);
+        const hoursUntilStart = (startUtcMs - Date.now()) / (60 * 60 * 1000);
+        if (hoursUntilStart < cfg.MIN_BOOKING_ADVANCE_HOURS) {
+          throw new BookingValidationError(
+            `Este horario empieza en menos de ${cfg.MIN_BOOKING_ADVANCE_HOURS} horas — el cuidador no tendría tiempo suficiente para aceptar la reserva. Elige un horario más adelante.`,
+            'BOOKING_VALIDATION',
+            'startTime'
           );
         }
       }
