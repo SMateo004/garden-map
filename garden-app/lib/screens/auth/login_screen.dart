@@ -665,7 +665,6 @@ class _FacebookLogoFallback extends StatelessWidget {
           fontSize: 18,
           fontWeight: FontWeight.w900,
           height: 1,
-          fontFamily: 'Arial',
         ),
       ),
     );

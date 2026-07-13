@@ -1284,56 +1284,68 @@ class _PaymentScreenState extends State<PaymentScreen> {
           const SizedBox(height: 12),
 
           // ── Wallet option ────────────────────────────────────────────────
-          if (_walletLoaded && _walletBalance > 0) ...[
-            GestureDetector(
-              onTap: () => setState(() => _useWallet = !_useWallet),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: _useWallet ? GardenColors.primary.withValues(alpha: 0.08) : surface,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: _useWallet ? GardenColors.primary : borderColor,
-                    width: _useWallet ? 2 : 1,
+          // Siempre visible cuando ya cargó el saldo — con saldo 0 se muestra
+          // opaca/deshabilitada (AbsorbPointer) en vez de ocultarse, para que
+          // el usuario sepa que la opción existe.
+          if (_walletLoaded) ...[
+            Opacity(
+              opacity: _walletBalance > 0 ? 1.0 : 0.45,
+              child: AbsorbPointer(
+                absorbing: _walletBalance <= 0,
+                child: GestureDetector(
+                  onTap: () => setState(() => _useWallet = !_useWallet),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _useWallet ? GardenColors.primary.withValues(alpha: 0.08) : surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: _useWallet ? GardenColors.primary : borderColor,
+                        width: _useWallet ? 2 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: _useWallet
+                                ? GardenColors.primary.withValues(alpha: 0.15)
+                                : borderColor.withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.account_balance_wallet_rounded,
+                              color: _useWallet ? GardenColors.primary : subtextColor, size: 24),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Billetera Garden',
+                                  style: TextStyle(
+                                      color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                              Text(
+                                  _walletBalance > 0
+                                      ? 'Saldo disponible: Bs ${_walletBalance.toStringAsFixed(2)}'
+                                      : 'Sin saldo disponible',
+                                  style: TextStyle(
+                                      color: _useWallet ? GardenColors.primary : subtextColor,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _useWallet,
+                          onChanged: _walletBalance > 0 ? (v) => setState(() => _useWallet = v) : null,
+                          activeColor: GardenColors.primary,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: _useWallet
-                            ? GardenColors.primary.withValues(alpha: 0.15)
-                            : borderColor.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(Icons.account_balance_wallet_rounded,
-                          color: _useWallet ? GardenColors.primary : subtextColor, size: 24),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Billetera Garden',
-                              style: TextStyle(
-                                  color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
-                          Text('Saldo disponible: Bs ${_walletBalance.toStringAsFixed(2)}',
-                              style: TextStyle(
-                                  color: _useWallet ? GardenColors.primary : subtextColor,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: _useWallet,
-                      onChanged: (v) => setState(() => _useWallet = v),
-                      activeColor: GardenColors.primary,
-                    ),
-                  ],
                 ),
               ),
             ),

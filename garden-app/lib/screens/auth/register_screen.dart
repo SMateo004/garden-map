@@ -1023,7 +1023,7 @@ class _FbLogo extends StatelessWidget {
           child: Text('f',
             style: TextStyle(
               color: Colors.white, fontSize: 18,
-              fontWeight: FontWeight.w800, height: 1, fontFamily: 'Georgia',
+              fontWeight: FontWeight.w800, height: 1,
             ),
           ),
         ),

@@ -46,6 +46,12 @@ class _BookingScreenState extends State<BookingScreen> {
   int _guarderiaSelectedDuration = 180; // solo guardería: 180 min por defecto
   bool _isSubmitting = false;
 
+  // Anticipación mínima requerida para reservar un horario específico —
+  // configurable por admin (Panel técnico → "Ventana de aceptación del
+  // cuidador"), mismo valor que usa el backend para cancelar automáticamente
+  // si el cuidador no acepta a tiempo.
+  double _minBookingAdvanceHoras = 3;
+
   // Multi-day paseo
   bool _isMultiDay = false;
   final List<DateTime> _selectedDates = []; // fechas seleccionadas en modo multi-día
@@ -142,6 +148,23 @@ class _BookingScreenState extends State<BookingScreen> {
   void initState() {
     super.initState();
     _initData();
+    _loadMinBookingAdvance();
+  }
+
+  Future<void> _loadMinBookingAdvance() async {
+    try {
+      final response = await http.get(Uri.parse('$_baseUrl/settings'));
+      final data = jsonDecode(response.body);
+      if (data['success'] == true && mounted) {
+        final raw = data['data']?['caregiverAcceptWindowHoras'];
+        final parsed = raw is num ? raw.toDouble() : double.tryParse(raw?.toString() ?? '');
+        if (parsed != null && parsed > 0) {
+          setState(() => _minBookingAdvanceHoras = parsed);
+        }
+      }
+    } catch (e) {
+      // silencioso — se mantiene el default de 3h
+    }
   }
 
   @override
@@ -360,6 +383,62 @@ class _BookingScreenState extends State<BookingScreen> {
     } catch (_) {}
   }
 
+  /// True si [date] + [timeStr] ("HH:mm") están a más de [_minBookingAdvanceHoras]
+  /// horas de distancia. Sin hora específica no se puede evaluar con precisión
+  /// (queda cubierto por la validación de "1 día de anticipación" del backend).
+  bool _isStartTimeFarEnough(DateTime? date, String? timeStr) {
+    if (date == null || timeStr == null) return true;
+    final parts = timeStr.split(':');
+    final hour = int.tryParse(parts.isNotEmpty ? parts[0] : '') ?? 0;
+    final minute = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+    final startDateTime = DateTime(date.year, date.month, date.day, hour, minute);
+    return startDateTime.difference(DateTime.now()).inMinutes >= _minBookingAdvanceHoras * 60;
+  }
+
+  /// Válido para habilitar "Continuar al pago" — replica las validaciones de
+  /// _createBooking() sin efectos secundarios (sin toasts), para uso en
+  /// onPressed condicional del botón.
+  bool get _isFormValid {
+    if (_selectedPetIds.isEmpty) return false;
+    if (_selectedService == null) return false;
+    final isMultiDayPaseo = _selectedService == 'PASEO' && _isMultiDay;
+    if (!isMultiDayPaseo && _selectedDate == null) return false;
+
+    if (_selectedService == 'GUARDERIA') {
+      if (_selectedTimeSlot == null) return false;
+      if (_selectedStartTime == null) return false;
+      if (!_isStartTimeFarEnough(_selectedDate, _selectedStartTime)) return false;
+    }
+
+    if (_selectedService == 'PASEO') {
+      if (_isMultiDay) {
+        if (_selectedDates.isEmpty) return false;
+        if (_multiDayTimeSlot == null) return false;
+        if (_multiDaySameTime) {
+          if (_multiDaySharedTime == null) return false;
+          for (final d in _selectedDates) {
+            if (!_isStartTimeFarEnough(d, _multiDaySharedTime)) return false;
+          }
+        } else {
+          for (final d in _selectedDates) {
+            final ds = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+            final t = _perDayTimes[ds];
+            if (t == null) return false;
+            if (!_isStartTimeFarEnough(d, t)) return false;
+          }
+        }
+      } else {
+        if (_selectedTimeSlot == null) return false;
+        if (_selectedStartTime == null) return false;
+        if (!_isStartTimeFarEnough(_selectedDate, _selectedStartTime)) return false;
+      }
+    }
+
+    if (_selectedService == 'HOSPEDAJE' && _endDate == null) return false;
+
+    return true;
+  }
+
   Future<void> _createBooking() async {
     if (_selectedPetIds.isEmpty) {
       _showError('Selecciona al menos una mascota');
@@ -384,6 +463,10 @@ class _BookingScreenState extends State<BookingScreen> {
         _showError('Selecciona una hora de inicio');
         return;
       }
+      if (!_isStartTimeFarEnough(_selectedDate, _selectedStartTime)) {
+        _showError('Este horario empieza en menos de ${_minBookingAdvanceHoras.toStringAsFixed(0)} horas. Elige un horario más adelante.');
+        return;
+      }
     }
     if (_selectedService == 'PASEO') {
       if (_isMultiDay) {
@@ -400,6 +483,12 @@ class _BookingScreenState extends State<BookingScreen> {
             _showError('Selecciona una hora para los paseos');
             return;
           }
+          for (final d in _selectedDates) {
+            if (!_isStartTimeFarEnough(d, _multiDaySharedTime)) {
+              _showError('Uno de los días elegidos empieza en menos de ${_minBookingAdvanceHoras.toStringAsFixed(0)} horas. Elige horarios más adelante.');
+              return;
+            }
+          }
         } else {
           final missing = _selectedDates.any((d) {
             final ds = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -409,6 +498,13 @@ class _BookingScreenState extends State<BookingScreen> {
             _showError('Selecciona la hora para cada día');
             return;
           }
+          for (final d in _selectedDates) {
+            final ds = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+            if (!_isStartTimeFarEnough(d, _perDayTimes[ds])) {
+              _showError('Uno de los días elegidos empieza en menos de ${_minBookingAdvanceHoras.toStringAsFixed(0)} horas. Elige horarios más adelante.');
+              return;
+            }
+          }
         }
       } else {
         if (_selectedTimeSlot == null) {
@@ -417,6 +513,10 @@ class _BookingScreenState extends State<BookingScreen> {
         }
         if (_selectedStartTime == null) {
           _showError('Selecciona una hora de inicio');
+          return;
+        }
+        if (!_isStartTimeFarEnough(_selectedDate, _selectedStartTime)) {
+          _showError('Este horario empieza en menos de ${_minBookingAdvanceHoras.toStringAsFixed(0)} horas. Elige un horario más adelante.');
           return;
         }
       }
@@ -1780,7 +1880,7 @@ class _BookingScreenState extends State<BookingScreen> {
                     child: GardenButton(
                       label: _isSubmitting ? 'Procesando...' : 'Continuar al pago',
                       loading: _isSubmitting,
-                      onPressed: _createBooking,
+                      onPressed: (_isSubmitting || !_isFormValid) ? null : _createBooking,
                     ),
                   ),
                 ),

@@ -137,9 +137,15 @@ class _WalletScreenState extends State<WalletScreen> {
                               ],
                             ),
                             const SizedBox(height: 12),
-                            Text(
-                              'Bs ${(_walletData?['balance'] ?? 0).toStringAsFixed(2)}',
-                              style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.w900, letterSpacing: -1),
+                            TweenAnimationBuilder<double>(
+                              key: ValueKey((_walletData?['balance'] ?? 0).toString()),
+                              tween: Tween(begin: 0, end: (_walletData?['balance'] as num? ?? 0).toDouble()),
+                              duration: const Duration(milliseconds: 700),
+                              curve: Curves.easeOutCubic,
+                              builder: (context, value, _) => Text(
+                                'Bs ${value.toStringAsFixed(2)}',
+                                style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.w900, letterSpacing: -1),
+                              ),
                             ),
                             const SizedBox(height: 20),
                             // Stats en fila

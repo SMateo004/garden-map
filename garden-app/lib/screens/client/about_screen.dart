@@ -189,7 +189,7 @@ class _HeroSection extends StatelessWidget {
           Text(
             'Nacimos para darle\na tu mascota lo mejor.',
             textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.nunito(
               fontSize: mobile ? 34 : 62,
               fontWeight: FontWeight.w900,
               color: pal.textPri,
@@ -204,7 +204,7 @@ class _HeroSection extends StatelessWidget {
               'GARDEN es una plataforma boliviana que conecta dueños de mascotas con cuidadores verificados. '
               'Creemos que cada mascota merece atención de calidad — con transparencia, tecnología y corazón.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.nunito(
                 fontSize: mobile ? 15 : 18,
                 color: pal.textSec,
                 height: 1.7,
@@ -250,7 +250,7 @@ class _StatsRow extends StatelessWidget {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Text(s.$1, style: const TextStyle(fontSize: 26)),
           const SizedBox(height: 6),
-          Text(s.$2, style: GoogleFonts.inter(color: pal.textPri, fontWeight: FontWeight.w800, fontSize: 15)),
+          Text(s.$2, style: GoogleFonts.nunito(color: pal.textPri, fontWeight: FontWeight.w800, fontSize: 15)),
           Text(s.$3, style: TextStyle(color: pal.textSec, fontSize: 12)),
         ]),
       )).toList(),
@@ -290,7 +290,7 @@ class _AboutSection extends StatelessWidget {
       _Tag('¿Qué es GARDEN?'),
       const SizedBox(height: 20),
       Text('Una plataforma con propósito',
-        style: GoogleFonts.inter(
+        style: GoogleFonts.nunito(
           fontSize: mobile ? 26 : 40,
           fontWeight: FontWeight.w900,
           color: pal.textPri,
@@ -303,13 +303,13 @@ class _AboutSection extends StatelessWidget {
         'Conectamos a dueños con cuidadores certificados y verificados por inteligencia artificial, '
         'garantizando que cada servicio — desde un paseo hasta hospedaje completo — se realice con el '
         'más alto estándar de confianza y calidad.',
-        style: GoogleFonts.inter(color: pal.textSec, fontSize: mobile ? 14 : 16, height: 1.75),
+        style: GoogleFonts.nunito(color: pal.textSec, fontSize: mobile ? 14 : 16, height: 1.75),
       ),
       const SizedBox(height: 20),
       Text(
         'Nuestro sistema de escrow blockchain protege cada pago: el cuidador solo recibe el dinero cuando '
         'vos confirmás que el servicio fue completado correctamente. Sin riesgos, sin sorpresas.',
-        style: GoogleFonts.inter(color: pal.textSec, fontSize: mobile ? 14 : 16, height: 1.75),
+        style: GoogleFonts.nunito(color: pal.textSec, fontSize: mobile ? 14 : 16, height: 1.75),
       ),
     ]),
   );
@@ -362,7 +362,7 @@ class _FeatureRow extends StatelessWidget {
       ),
       const SizedBox(width: 14),
       Expanded(child: Text(label,
-        style: GoogleFonts.inter(color: pal.textPri, fontWeight: FontWeight.w600, fontSize: 14))),
+        style: GoogleFonts.nunito(color: pal.textPri, fontWeight: FontWeight.w600, fontSize: 14))),
     ]),
   );
 }
@@ -387,7 +387,7 @@ class _MissionVisionSection extends StatelessWidget {
           delay: 100.ms,
           child: Text('Misión & Visión',
             textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.nunito(
               fontSize: mobile ? 28 : 44,
               fontWeight: FontWeight.w900,
               color: pal.textPri,
@@ -496,7 +496,7 @@ class _MVCard extends StatelessWidget {
         ]),
         const SizedBox(height: 24),
         Text(title,
-          style: GoogleFonts.inter(
+          style: GoogleFonts.nunito(
             color: pal.textPri,
             fontWeight: FontWeight.w800,
             fontSize: 22,
@@ -504,7 +504,7 @@ class _MVCard extends StatelessWidget {
           )),
         const SizedBox(height: 14),
         Text(body,
-          style: GoogleFonts.inter(color: pal.textSec, fontSize: 15, height: 1.75)),
+          style: GoogleFonts.nunito(color: pal.textSec, fontSize: 15, height: 1.75)),
       ]),
     );
   }
@@ -536,7 +536,7 @@ class _ValuesSection extends StatelessWidget {
         _Reveal(scroll: scroll, delay: 100.ms,
           child: Text('Nuestros valores',
             textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.nunito(
               fontSize: mobile ? 28 : 44,
               fontWeight: FontWeight.w900,
               color: pal.textPri,
@@ -595,7 +595,7 @@ class _ValueCardState extends State<_ValueCard> {
             child: Icon(icon, color: pal.accent, size: 22),
           ),
           const SizedBox(height: 18),
-          Text(title, style: GoogleFonts.inter(color: pal.textPri, fontWeight: FontWeight.w800, fontSize: 17)),
+          Text(title, style: GoogleFonts.nunito(color: pal.textPri, fontWeight: FontWeight.w800, fontSize: 17)),
           const SizedBox(height: 10),
           Text(desc, style: TextStyle(color: pal.textSec, fontSize: 13, height: 1.7)),
         ]),
@@ -622,7 +622,7 @@ class _TeamSection extends StatelessWidget {
         _Reveal(scroll: scroll, delay: 100.ms,
           child: Text('Equipo fundador',
             textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.nunito(
               fontSize: mobile ? 28 : 44,
               fontWeight: FontWeight.w900,
               color: pal.textPri,
@@ -635,7 +635,7 @@ class _TeamSection extends StatelessWidget {
             child: Text(
               'Dos personas con una misión compartida: transformar cómo Bolivia cuida a sus mascotas.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(color: pal.textSec, fontSize: mobile ? 14 : 16, height: 1.6),
+              style: GoogleFonts.nunito(color: pal.textSec, fontSize: mobile ? 14 : 16, height: 1.6),
             ),
           )),
         const SizedBox(height: 64),
@@ -776,7 +776,7 @@ class _FounderCardState extends State<_FounderCard> {
               child: Column(children: [
                 Text(widget.name,
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(color: pal.textPri, fontWeight: FontWeight.w900, fontSize: 19)),
+                  style: GoogleFonts.nunito(color: pal.textPri, fontWeight: FontWeight.w900, fontSize: 19)),
                 const SizedBox(height: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
@@ -791,7 +791,7 @@ class _FounderCardState extends State<_FounderCard> {
                 const SizedBox(height: 18),
                 Text(widget.bio,
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(color: pal.textSec, fontSize: 13, height: 1.7)),
+                  style: GoogleFonts.nunito(color: pal.textSec, fontSize: 13, height: 1.7)),
               ]),
             ),
           ),
@@ -830,13 +830,13 @@ class _LegalSection extends StatelessWidget {
             const SizedBox(height: 20),
             Text('Transparencia legal',
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(color: pal.textPri, fontWeight: FontWeight.w900, fontSize: mobile ? 22 : 28, letterSpacing: -0.8)),
+              style: GoogleFonts.nunito(color: pal.textPri, fontWeight: FontWeight.w900, fontSize: mobile ? 22 : 28, letterSpacing: -0.8)),
             const SizedBox(height: 14),
             Text(
               'Creemos en la transparencia total. Podés leer en detalle nuestros términos de uso, '
               'política de privacidad y cómo gestionamos tus datos y pagos.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(color: pal.textSec, fontSize: 14, height: 1.7),
+              style: GoogleFonts.nunito(color: pal.textSec, fontSize: 14, height: 1.7),
             ),
             const SizedBox(height: 32),
             Builder(builder: (ctx) => Wrap(
@@ -984,7 +984,7 @@ class _NavBtnState extends State<_NavBtn> {
           borderRadius: BorderRadius.circular(10),
         ),
         child: Text(widget.label,
-          style: GoogleFonts.inter(
+          style: GoogleFonts.nunito(
             fontSize: 14,
             fontWeight: FontWeight.w500,
             color: _h ? widget.pal.textPri : widget.pal.textSec,

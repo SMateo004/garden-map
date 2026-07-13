@@ -572,32 +572,44 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
             markers: [
               Marker(
                 point: _currentPos!,
-                width: 52, height: 64,
+                width: 84, height: 96,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 44, height: 44,
-                      decoration: BoxDecoration(
-                        color: GardenColors.primary,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 3),
-                        boxShadow: [
-                          BoxShadow(
-                            color: GardenColors.primary.withValues(alpha: 0.45),
-                            blurRadius: 8, spreadRadius: 2,
+                    SizedBox(
+                      width: 84, height: 84,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Pulso tipo radar detrás del avatar — sutil, solo
+                          // acá (posición en vivo durante el paseo), no en
+                          // ningún otro ícono del mapa.
+                          const _MapPulseRing(color: GardenColors.primary),
+                          Container(
+                            width: 44, height: 44,
+                            decoration: BoxDecoration(
+                              color: GardenColors.primary,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: GardenColors.primary.withValues(alpha: 0.45),
+                                  blurRadius: 8, spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: widget.petPhoto != null && widget.petPhoto!.isNotEmpty
+                                ? ClipOval(
+                                    child: Image.network(
+                                      widget.petPhoto!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => _petInitial(),
+                                    ),
+                                  )
+                                : _petInitial(),
                           ),
                         ],
                       ),
-                      child: widget.petPhoto != null && widget.petPhoto!.isNotEmpty
-                          ? ClipOval(
-                              child: Image.network(
-                                widget.petPhoto!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => _petInitial(),
-                              ),
-                            )
-                          : _petInitial(),
                     ),
                     // Triángulo apuntando hacia abajo
                     const CustomPaint(
@@ -679,6 +691,46 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Anillo tipo radar que crece y se desvanece detrás del avatar de la
+/// mascota en el mapa — señala "esto es una posición en vivo", como el punto
+/// azul de Google Maps.
+class _MapPulseRing extends StatefulWidget {
+  final Color color;
+  const _MapPulseRing({required this.color});
+  @override
+  State<_MapPulseRing> createState() => _MapPulseRingState();
+}
+
+class _MapPulseRingState extends State<_MapPulseRing>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))
+      ..repeat();
+  }
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, _) {
+        final t = _ctrl.value;
+        return Container(
+          width: 44 + (40 * t),
+          height: 44 + (40 * t),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: widget.color.withValues(alpha: (1 - t) * 0.35),
+          ),
+        );
+      },
+    );
+  }
+}
 
 class _PulsingDotSmall extends StatefulWidget {
   final bool active;
