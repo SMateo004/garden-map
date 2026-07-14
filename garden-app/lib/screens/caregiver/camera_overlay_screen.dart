@@ -1,8 +1,86 @@
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image/image.dart' as img;
 import '../../theme/garden_theme.dart';
 
 enum CameraFrameShape { oval, rectangle }
+
+/// Recorte visible del marco guía, como fracción del tamaño de pantalla.
+/// Única fuente de verdad compartida por los painters del overlay y por el
+/// recorte real de la foto capturada — así lo que el usuario ve encuadrado
+/// es exactamente lo que se guarda y se envía a verificación.
+Rect frameCutoutRect(Size size, CameraFrameShape shape) {
+  if (shape == CameraFrameShape.oval) {
+    final w = size.width * 0.78;
+    final h = w * 1.15;
+    final cx = size.width / 2;
+    final cy = size.height * 0.44;
+    return Rect.fromCenter(center: Offset(cx, cy), width: w, height: h);
+  } else {
+    final w = size.width * 0.82;
+    final h = w * 0.63;
+    final cx = size.width / 2;
+    final cy = size.height * 0.42;
+    return Rect.fromCenter(center: Offset(cx, cy), width: w, height: h);
+  }
+}
+
+class _CropParams {
+  final Uint8List bytes;
+  final double screenW;
+  final double screenH;
+  final CameraFrameShape shape;
+  const _CropParams(this.bytes, this.screenW, this.screenH, this.shape);
+}
+
+/// Recorta la foto cruda de la cámara a la región exacta que mostraba el
+/// marco guía en pantalla (óvalo del rostro o rectángulo del CI), para que
+/// la imagen final no incluya fondo de sobra ni quede distorsionada al
+/// mostrarla en miniaturas con otra proporción.
+Uint8List _cropToFrame(_CropParams p) {
+  var image = img.decodeImage(p.bytes);
+  if (image == null) return p.bytes;
+  image = img.bakeOrientation(image);
+
+  final cutout = frameCutoutRect(Size(p.screenW, p.screenH), p.shape);
+
+  final rawW = image.width.toDouble();
+  final rawH = image.height.toDouble();
+  final scale = (p.screenW / rawW > p.screenH / rawH)
+      ? p.screenW / rawW
+      : p.screenH / rawH;
+  final visibleW = p.screenW / scale;
+  final visibleH = p.screenH / scale;
+  final offsetX = (rawW - visibleW) / 2;
+  final offsetY = (rawH - visibleH) / 2;
+
+  final fx = cutout.left / p.screenW;
+  final fy = cutout.top / p.screenH;
+  final fw = cutout.width / p.screenW;
+  final fh = cutout.height / p.screenH;
+
+  var cropLeft = offsetX + fx * visibleW;
+  var cropTop = offsetY + fy * visibleH;
+  var cropWidth = fw * visibleW;
+  var cropHeight = fh * visibleH;
+
+  cropLeft = cropLeft.clamp(0, rawW - 1);
+  cropTop = cropTop.clamp(0, rawH - 1);
+  cropWidth = cropWidth.clamp(1, rawW - cropLeft);
+  cropHeight = cropHeight.clamp(1, rawH - cropTop);
+
+  final cropped = img.copyCrop(
+    image,
+    x: cropLeft.round(),
+    y: cropTop.round(),
+    width: cropWidth.round(),
+    height: cropHeight.round(),
+  );
+
+  return Uint8List.fromList(img.encodeJpg(cropped, quality: 92));
+}
 
 /// Pantalla de cámara con overlay guía + linterna.
 /// Devuelve [File] con la foto capturada, o null si el usuario cancela.
@@ -37,12 +115,14 @@ class _CameraOverlayScreenState extends State<CameraOverlayScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     _initCamera();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     _controller?.dispose();
     super.dispose();
   }
@@ -110,8 +190,18 @@ class _CameraOverlayScreenState extends State<CameraOverlayScreen>
 
     setState(() => _isCapturing = true);
     try {
+      final screenSize = MediaQuery.of(context).size;
       final xfile = await controller.takePicture();
-      final bytes = await xfile.readAsBytes();
+      final rawBytes = await xfile.readAsBytes();
+      final bytes = await compute(
+        _cropToFrame,
+        _CropParams(
+          rawBytes,
+          screenSize.width,
+          screenSize.height,
+          widget.frameShape,
+        ),
+      );
       if (!mounted) return;
       Navigator.of(context).pop(bytes);
     } catch (e) {
@@ -164,8 +254,22 @@ class _CameraOverlayScreenState extends State<CameraOverlayScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // ── Preview de cámara ──────────────────────────────────────────
-          CameraPreview(_controller!),
+          // ── Preview de cámara (cover, sin estirar la imagen) ─────────────
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final previewAspectRatio = 1 / _controller!.value.aspectRatio;
+              return ClipRect(
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  child: SizedBox(
+                    width: constraints.maxWidth,
+                    height: constraints.maxWidth / previewAspectRatio,
+                    child: CameraPreview(_controller!),
+                  ),
+                ),
+              );
+            },
+          ),
 
           // ── Overlay oscuro con recorte ─────────────────────────────────
           CustomPaint(
@@ -309,7 +413,7 @@ class _OverlayPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = Colors.black.withValues(alpha: 0.55);
 
-    final cutout = _cutoutRect(size);
+    final cutout = frameCutoutRect(size, shape);
 
     final full = Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
     final hole = shape == CameraFrameShape.oval
@@ -321,22 +425,6 @@ class _OverlayPainter extends CustomPainter {
     final overlayPath =
         Path.combine(PathOperation.difference, full, hole);
     canvas.drawPath(overlayPath, paint);
-  }
-
-  Rect _cutoutRect(Size size) {
-    if (shape == CameraFrameShape.oval) {
-      final w = size.width * 0.72;
-      final h = w * 1.28;
-      final cx = size.width / 2;
-      final cy = size.height * 0.44;
-      return Rect.fromCenter(center: Offset(cx, cy), width: w, height: h);
-    } else {
-      final w = size.width * 0.82;
-      final h = w * 0.63;
-      final cx = size.width / 2;
-      final cy = size.height * 0.42;
-      return Rect.fromCenter(center: Offset(cx, cy), width: w, height: h);
-    }
   }
 
   @override
@@ -361,7 +449,7 @@ class _FrameBorderPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5;
 
-    final cutout = _cutoutRect(size);
+    final cutout = frameCutoutRect(size, shape);
 
     if (shape == CameraFrameShape.oval) {
       // Borde sólido blanco
@@ -373,22 +461,6 @@ class _FrameBorderPainter extends CustomPainter {
           RRect.fromRectAndRadius(cutout, const Radius.circular(16));
       canvas.drawRRect(rrect, paint);
       _drawCornerLines(canvas, cutout, dashedPaint);
-    }
-  }
-
-  Rect _cutoutRect(Size size) {
-    if (shape == CameraFrameShape.oval) {
-      final w = size.width * 0.72;
-      final h = w * 1.28;
-      final cx = size.width / 2;
-      final cy = size.height * 0.44;
-      return Rect.fromCenter(center: Offset(cx, cy), width: w, height: h);
-    } else {
-      final w = size.width * 0.82;
-      final h = w * 0.63;
-      final cx = size.width / 2;
-      final cy = size.height * 0.42;
-      return Rect.fromCenter(center: Offset(cx, cy), width: w, height: h);
     }
   }
 

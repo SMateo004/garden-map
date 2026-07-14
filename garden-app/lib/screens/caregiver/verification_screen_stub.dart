@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
@@ -130,7 +131,22 @@ class _VerificationScreenState extends State<VerificationScreen> {
         _generatingToken = false;
       });
 
-      // 3. Show liveness check full-screen
+      // 3. AWS Amplify's FaceLiveness native component only checks
+      // (checkSelfPermission) for CAMERA access — it does not request it.
+      // Without asking first, it throws cameraPermissionDenied instead of
+      // showing the OS permission dialog.
+      final cameraStatus = await Permission.camera.request();
+      if (!mounted) return;
+      if (!cameraStatus.isGranted) {
+        _showSnack(
+          'Necesitamos acceso a tu cámara para verificar tu identidad. '
+          'Habilítalo en Ajustes.',
+          isError: true,
+        );
+        return;
+      }
+
+      // 4. Show liveness check full-screen
       final passed = await Navigator.push<bool>(
         context,
         MaterialPageRoute(
@@ -382,6 +398,12 @@ class _VerificationScreenState extends State<VerificationScreen> {
     VoidCallback onNext,
   ) {
     final displayStep = _currentStep; // 1, 2, or 3
+    // La miniatura respeta la proporción real de la foto ya recortada por
+    // CameraOverlayScreen: casi cuadrada para el rostro, apaisada tipo
+    // carnet para el CI — así no se ve deformada al mostrarla.
+    final isSelfie = type == 'selfie';
+    const cardWidth = 280.0;
+    final cardHeight = isSelfie ? cardWidth * 1.15 : cardWidth * 0.63;
 
     return Column(
       children: [
@@ -433,8 +455,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 GestureDetector(
                   onTap: () => _capturePhoto(type),
                   child: Container(
-                    width: 280,
-                    height: 280,
+                    width: cardWidth,
+                    height: cardHeight,
                     decoration: BoxDecoration(
                       color: _surfaceColor,
                       borderRadius: BorderRadius.circular(GardenRadius.lg),
