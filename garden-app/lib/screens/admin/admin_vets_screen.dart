@@ -106,6 +106,15 @@ class _AdminVetsScreenState extends State<AdminVetsScreen> {
     );
   }
 
+  void _showRedemptionForm() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _RedemptionFormSheet(adminToken: widget.adminToken, baseUrl: _baseUrl),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = themeNotifier.isDark;
@@ -117,12 +126,27 @@ class _AdminVetsScreenState extends State<AdminVetsScreen> {
 
     return Scaffold(
       backgroundColor: bg,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showForm(),
-        backgroundColor: GardenColors.primary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Agregar', style: TextStyle(fontWeight: FontWeight.w700)),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton.extended(
+            heroTag: 'donor-redemption-fab',
+            onPressed: _showRedemptionForm,
+            backgroundColor: const Color(0xFF232323),
+            foregroundColor: const Color(0xFFD4AF37),
+            icon: const Icon(Icons.card_giftcard_rounded),
+            label: const Text('Registrar canje', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton.extended(
+            heroTag: 'add-vet-fab',
+            onPressed: () => _showForm(),
+            backgroundColor: GardenColors.primary,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Agregar', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
@@ -726,6 +750,181 @@ class _VetFormSheetState extends State<_VetFormSheet> {
                           style: const TextStyle(
                               fontWeight: FontWeight.w800, fontSize: 15),
                         ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REDEMPTION FORM SHEET — registrar canje de tarjeta de donador
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _RedemptionFormSheet extends StatefulWidget {
+  final String adminToken;
+  final String baseUrl;
+
+  const _RedemptionFormSheet({required this.adminToken, required this.baseUrl});
+
+  @override
+  State<_RedemptionFormSheet> createState() => _RedemptionFormSheetState();
+}
+
+class _RedemptionFormSheetState extends State<_RedemptionFormSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _codeCtrl = TextEditingController();
+  final _businessCtrl = TextEditingController();
+  DateTime _redeemedAt = DateTime.now();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _codeCtrl.dispose();
+    _businessCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _redeemedAt,
+      firstDate: DateTime(2024),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) setState(() => _redeemedAt = picked);
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    try {
+      final res = await http.post(
+        Uri.parse('${widget.baseUrl}/admin/donor-redemptions'),
+        headers: {
+          'Authorization': 'Bearer ${widget.adminToken}',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'donorCode': _codeCtrl.text.trim().toUpperCase(),
+          'businessName': _businessCtrl.text.trim(),
+          'redeemedAt': _redeemedAt.toIso8601String(),
+        }),
+      );
+      final data = jsonDecode(res.body);
+      if (mounted) {
+        if (data['success'] == true) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Canje registrado para ${data['data']?['userName'] ?? 'el cliente'}'),
+            backgroundColor: GardenColors.success,
+          ));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(data['error']?['message'] as String? ?? 'Error al registrar'),
+            backgroundColor: GardenColors.error,
+          ));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Error de conexión'),
+          backgroundColor: GardenColors.error,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final inputFill = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
+
+    final inputDecoration = InputDecoration(
+      filled: true,
+      fillColor: inputFill,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(GardenRadius.md), borderSide: BorderSide(color: borderColor)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(GardenRadius.md), borderSide: BorderSide(color: borderColor)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(GardenRadius.md), borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    );
+
+    return Container(
+      decoration: BoxDecoration(color: bg, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+      padding: EdgeInsets.only(
+        left: 20, right: 20, top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 20),
+              Row(children: [
+                const Icon(Icons.card_giftcard_rounded, color: Color(0xFFD4AF37)),
+                const SizedBox(width: 10),
+                Text('Registrar canje de donador', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
+              ]),
+              const SizedBox(height: 4),
+              Text(
+                'Cargá el código que el negocio te informó — el uso queda asociado al cliente dueño de ese código.',
+                style: TextStyle(color: subtextColor, fontSize: 12.5),
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _codeCtrl,
+                textCapitalization: TextCapitalization.characters,
+                style: TextStyle(color: textColor, fontWeight: FontWeight.w700, letterSpacing: 1.5),
+                decoration: inputDecoration.copyWith(labelText: 'Código de donador (ej. GRD-XXXXXXXX)'),
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _businessCtrl,
+                style: TextStyle(color: textColor),
+                decoration: inputDecoration.copyWith(labelText: 'Nombre del negocio/veterinaria'),
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+              ),
+              const SizedBox(height: 14),
+              InkWell(
+                onTap: _pickDate,
+                borderRadius: BorderRadius.circular(GardenRadius.md),
+                child: InputDecorator(
+                  decoration: inputDecoration.copyWith(labelText: 'Fecha del canje'),
+                  child: Text(
+                    '${_redeemedAt.day.toString().padLeft(2, '0')}/${_redeemedAt.month.toString().padLeft(2, '0')}/${_redeemedAt.year}',
+                    style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _saving ? null : _save,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF232323),
+                    foregroundColor: const Color(0xFFD4AF37),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.md)),
+                  ),
+                  child: _saving
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFD4AF37)))
+                      : const Text('Registrar canje', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                 ),
               ),
             ],
