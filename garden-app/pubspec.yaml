@@ -36,6 +36,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   image_picker: ^1.2.1
   camera: ^0.11.0
+  permission_handler: ^11.3.1
+  image: ^4.2.0
   http_parser: ^4.1.2
   socket_io_client: ^2.0.3+1
   intl: ^0.20.2

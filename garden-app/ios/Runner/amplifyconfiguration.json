@@ -1,0 +1,21 @@
+{
+  "UserAgent": "aws-amplify-cli/2.0",
+  "Version": "1.0",
+  "auth": {
+    "plugins": {
+      "awsCognitoAuthPlugin": {
+        "IdentityManager": {
+          "Default": {}
+        },
+        "CredentialsProvider": {
+          "CognitoIdentity": {
+            "Default": {
+              "PoolId": "us-east-1:f496f823-849b-46a1-86db-db6e71896c08",
+              "Region": "us-east-1"
+            }
+          }
+        }
+      }
+    }
+  }
+}

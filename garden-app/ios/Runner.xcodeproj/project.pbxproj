@@ -27,6 +27,7 @@
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
+		D5211041050F5C56034C133A /* amplifyconfiguration.json in Resources */ = {isa = PBXBuildFile; fileRef = 9DBAF29B4B4779ACCB8EFC6C /* amplifyconfiguration.json */; };
 		F4C883797B33AA8AB676CCF1 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9B4754896437024313E14543 /* Pods_RunnerTests.framework */; };
 		F4E97F5E9D7E5DC16ABB95FE /* Pods_GardenActivityWidgetExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 989D5821582C3E6721A008DD /* Pods_GardenActivityWidgetExtension.framework */; };
 /* End PBXBuildFile section */
@@ -102,6 +103,7 @@
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		989D5821582C3E6721A008DD /* Pods_GardenActivityWidgetExtension.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_GardenActivityWidgetExtension.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		9B4754896437024313E14543 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		9DBAF29B4B4779ACCB8EFC6C /* amplifyconfiguration.json */ = {isa = PBXFileReference; includeInIndex = 1; path = amplifyconfiguration.json; sourceTree = "<group>"; };
 		B415BB6781F3CC0D1F44A094 /* Pods-GardenActivityWidgetExtension.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GardenActivityWidgetExtension.debug.xcconfig"; path = "Target Support Files/Pods-GardenActivityWidgetExtension/Pods-GardenActivityWidgetExtension.debug.xcconfig"; sourceTree = "<group>"; };
 		B8349F1462AFF557370C05DC /* Pods-GardenActivityWidgetExtension.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GardenActivityWidgetExtension.release.xcconfig"; path = "Target Support Files/Pods-GardenActivityWidgetExtension/Pods-GardenActivityWidgetExtension.release.xcconfig"; sourceTree = "<group>"; };
 		D22D8A3F29E4EA267889D45F /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
@@ -237,6 +239,7 @@
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 				1584A9542FB147F200ED9403 /* GoogleService-Info.plist */,
+				9DBAF29B4B4779ACCB8EFC6C /* amplifyconfiguration.json */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -398,6 +401,7 @@
 				3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */,
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
+				D5211041050F5C56034C133A /* amplifyconfiguration.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
