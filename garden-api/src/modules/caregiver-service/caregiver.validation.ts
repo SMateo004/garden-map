@@ -31,7 +31,13 @@ export const listCaregiversQuerySchema = z.object({
     if (upper === 'GATO' || upper === 'CATS') return 'CATS';
     return undefined;
   }),
-  zone: z.enum(['equipetrol', 'urbari', 'norte', 'las_palmas', 'centro', 'remanzo', 'sur', 'urubo_norte', 'urubo_sur', 'otros']).optional(),
+  /** Key de zona (ej. "equipetrol", "fidel_anzoategui") — cualquier ciudad, ya no
+   * limitado a la lista fija de Santa Cruz. Se resuelve contra CityZone real en el
+   * controller, no acá — así una zona de otra ciudad no rompe la validación con 400. */
+  zone: z.string().optional().transform((v) => v?.toLowerCase()),
+  /** Ciudad del usuario (uuid de City) — el marketplace siempre filtra por ciudad,
+   * nunca muestra cuidadores de todas las ciudades mezclados. */
+  cityId: z.string().optional(),
   priceRange: z.enum(['economico', 'estandar', 'premium']).optional(),
   // spaceTypes: comma-separated string que se convierte a array (ej: "casa_con_patio,departamento_pequeno")
   spaceTypes: z.string().optional().transform((val) => {

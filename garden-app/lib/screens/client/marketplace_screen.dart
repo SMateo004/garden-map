@@ -78,6 +78,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   // ── Ciudad del usuario logueado (multi-ciudad) — el mapa/filtros del
   // marketplace se centran y llenan según SU perfil, nunca hardcodeado a
   // Santa Cruz. Guests o cuentas sin ciudad elegida caen a Santa Cruz. ──
+  String? _cityId;
   String _cityName = 'Santa Cruz';
   LatLng _cityCenter = _kSantaCruzCenter;
   double _cityZoom = _kDefaultZoom;
@@ -227,7 +228,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
     _loadInitialData();
     _loadBanners();
-    _loadZones();
     ZonesService.getBlockedZones().then((blocked) {
       if (!mounted) return;
       setState(() {
@@ -310,6 +310,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       final zones = await CitiesService.getZones(resolvedCity.id);
       if (!mounted) return;
       setState(() {
+        _cityId = resolvedCity.id;
         _cityName = resolvedCity.name;
         _cityCenter = LatLng(resolvedCity.centerLat, resolvedCity.centerLng);
         _cityZoom = resolvedCity.defaultZoom;
@@ -333,6 +334,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   Future<void> _loadInitialData() async {
     await _loadToken();
+    // Resolver la ciudad ANTES de pedir cuidadores — si no, la primera carga
+    // se hace sin cityId y el backend cae al default (Santa Cruz), mostrando
+    // por un instante (o directamente, si el usuario no scrollea) cuidadores
+    // de la ciudad equivocada para alguien en Cochabamba.
+    await _loadZones();
     await Future.wait([_loadCaregivers(reset: true), _loadActiveBooking()]);
     _activeBookingTimer?.cancel();
     _activeBookingTimer = Timer.periodic(const Duration(seconds: 60), (_) {
@@ -395,6 +401,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       'limit': '20',
       'page': _currentPage.toString(),
       if (_selectedService != 'todos') 'service': _selectedService,
+      // El marketplace siempre filtra por ciudad (nunca mezcla cuidadores de
+      // ciudades distintas) — "Todas las zonas" solo deja el filtro de zona
+      // vacío, cityId sigue mandándose siempre.
+      if (_cityId != null) 'cityId': _cityId!,
       if (_selectedZone != null) 'zone': _selectedZone!.toLowerCase(),
       if (_selectedPetType != null) 'petType': _selectedPetType!,
       if (_minExperienceYears != null && _minExperienceYears! > 0) 'experienceYears': _minExperienceYears.toString(),

@@ -35,11 +35,35 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
       normalizedService === 'hospedaje' ? 'HOSPEDAJE' :
       normalizedService === 'guarderia' ? 'GUARDERIA' :
       undefined;
-    const zoneFilter = query.zone ? [ZONE_QUERY_TO_ENUM[query.zone]].filter(Boolean) : undefined;
+
+    // Resolver la ciudad real (uuid) — si no vino cityId explícito, cae a
+    // Santa Cruz (guest sin perfil, o cuenta vieja sin ciudad elegida).
+    let cityId = query.cityId;
+    if (!cityId) {
+      const santaCruz = await prisma.city.findUnique({ where: { slug: 'santa-cruz' }, select: { id: true } });
+      cityId = santaCruz?.id;
+    }
+
+    // Resolver la zona real (uuid) dentro de esa ciudad — reemplaza el mapeo
+    // fijo ZONE_QUERY_TO_ENUM (solo Santa Cruz) para que cualquier zona de
+    // cualquier ciudad funcione sin 400.
+    let zoneId: string | undefined;
+    if (query.zone && cityId) {
+      const cityZone = await prisma.cityZone.findFirst({
+        where: { cityId, key: { equals: query.zone, mode: 'insensitive' } },
+        select: { id: true },
+      });
+      zoneId = cityZone?.id;
+      // Zona legada de Santa Cruz sigue mandándose también, para no perder
+      // el filtro de "zonas bloqueadas por admin" (basado en el enum viejo).
+    }
+    const legacyZoneEnum = query.zone ? ZONE_QUERY_TO_ENUM[query.zone] : undefined;
 
     const result = await caregiverService.listCaregivers({
       service: serviceFilter ?? (query.service as 'ambos' | undefined),
-      zone: zoneFilter?.length ? (zoneFilter as string[]) : undefined,
+      zone: legacyZoneEnum ? [legacyZoneEnum] : undefined,
+      cityId,
+      zoneId,
       priceRange: query.priceRange,
       spaceTypes: query.spaceTypes,
       experienceYears: query.experienceYears,

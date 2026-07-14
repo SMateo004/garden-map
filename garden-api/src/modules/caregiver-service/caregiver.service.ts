@@ -44,7 +44,7 @@ function applyMarkup(price: number | null | undefined, rate: number): number | n
  */
 export async function listCaregivers(filters: CaregiverFilters): Promise<PaginatedCaregivers> {
   const {
-    service, zone, priceRange, spaceTypes,
+    service, zone, cityId, zoneId, priceRange, spaceTypes,
     experienceYears, acceptAggressive, acceptPuppies, acceptSeniors, sizesAccepted,
     search, petType,
     page = 1, limit = 10, cursor,
@@ -53,6 +53,8 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
   const cacheKey = `caregivers:list:${JSON.stringify({
     service: service ?? '',
     zone: Array.isArray(zone) ? zone.join(',') : zone ?? '',
+    cityId: cityId ?? '',
+    zoneId: zoneId ?? '',
     priceRange: priceRange ?? '',
     spaceTypes: Array.isArray(spaceTypes) ? spaceTypes.join(',') : spaceTypes ?? '',
     experienceYears: experienceYears ?? '',
@@ -96,12 +98,23 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
     OR: [{ isCompany: false }, { isCompany: true, caregiverProfileComplete: true }],
   } as Prisma.CaregiverProfileWhereInput;
 
-  if (zonesFilter?.length) {
-    // Si el usuario filtra por zona, intersectar con zonas no bloqueadas
+  // El marketplace siempre filtra por ciudad — nunca mezcla cuidadores de
+  // ciudades distintas, aunque el usuario no haya elegido zona todavía.
+  if (cityId) {
+    where.cityId = cityId;
+  }
+
+  if (zoneId) {
+    // Zona real (uuid) — funciona para cualquier ciudad. Reemplaza el filtro
+    // por enum legado como fuente principal de verdad.
+    where.zoneId = zoneId;
+  } else if (zonesFilter?.length) {
+    // Fallback legado (perfiles viejos sin zoneId todavía backfillado).
     const allowedFromFilter = zonesFilter.filter((z) => !blockedZones.includes(z));
     where.zone = { in: allowedFromFilter.length ? allowedFromFilter : zonesFilter };
   } else if (blockedZones.length > 0) {
-    // Sin filtro del usuario: excluir zonas bloqueadas
+    // Sin filtro del usuario: excluir zonas bloqueadas (solo aplica al enum
+    // legado de Santa Cruz; otras ciudades no tienen este feature todavía)
     where.zone = { notIn: blockedZones as Zone[] };
   }
 

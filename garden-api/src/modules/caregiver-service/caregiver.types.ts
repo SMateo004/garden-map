@@ -89,6 +89,12 @@ export interface ReviewPublic {
 export interface CaregiverFilters {
   service?: ServiceType | 'ambos';
   zone?: string | string[];
+  /** Ciudad del usuario (uuid de City) — el marketplace siempre filtra por
+   * ciudad, nunca mezcla cuidadores de ciudades distintas. */
+  cityId?: string;
+  /** Zona real resuelta (uuid de CityZone) — reemplaza el enum legado `zone`
+   * para poder filtrar por zonas de cualquier ciudad, no solo Santa Cruz. */
+  zoneId?: string;
   priceRange?: 'economico' | 'estandar' | 'premium';
   spaceTypes?: string[]; // Array de tipos de espacio para filtrado multi-select
   page?: number;
