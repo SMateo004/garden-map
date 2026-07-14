@@ -9,7 +9,6 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/address_section.dart';
 import '../../services/cities_service.dart';
-import '../../constants/geo_data.dart';
 import '../../utils/input_formatters.dart';
 
 class MyDataScreen extends StatefulWidget {
@@ -30,8 +29,6 @@ class _MyDataScreenState extends State<MyDataScreen> {
   late TextEditingController _lastCtrl;
   late TextEditingController _emailCtrl;
   late TextEditingController _phoneCtrl;
-  String _selectedCity = kBoliviaDepartments.first; // 'Santa Cruz' por defecto
-  String _selectedCountry = kLatamCountries.first; // 'Bolivia' por defecto
   late TextEditingController _addressCtrl;
   late TextEditingController _bioCtrl;
   DateTime? _dateOfBirth;
@@ -85,18 +82,6 @@ class _MyDataScreenState extends State<MyDataScreen> {
     super.dispose();
   }
 
-  /// Coincidencia insensible a mayúsculas/acentos con la lista de opciones del
-  /// dropdown; si el valor guardado no coincide con ninguna (dato legado, typo),
-  /// cae al primer elemento en vez de dejar el selector en un estado inválido.
-  String _matchOption(String? value, List<String> options) {
-    if (value == null || value.trim().isEmpty) return options.first;
-    final normalized = value.trim().toLowerCase();
-    for (final o in options) {
-      if (o.toLowerCase() == normalized) return o;
-    }
-    return options.first;
-  }
-
   Future<void> _loadData() async {
     _token = AuthState.token;
     try {
@@ -118,8 +103,6 @@ class _MyDataScreenState extends State<MyDataScreen> {
           // debe quedar vacío para que el usuario cargue su número real.
           final rawPhone = user['phone'] as String? ?? '';
           _phoneCtrl.text = rawPhone.startsWith('social_pending_') ? '' : rawPhone;
-          _selectedCity = _matchOption(user['city'] as String?, kBoliviaDepartments);
-          _selectedCountry = _matchOption(user['country'] as String?, kLatamCountries);
           _addressCtrl.text = user['address'] as String? ?? '';
           _bioCtrl.text = user['bio'] as String? ?? '';
           _streetCtrl.text = user['addressStreet'] as String? ?? '';
@@ -229,12 +212,21 @@ class _MyDataScreenState extends State<MyDataScreen> {
     setState(() => _saving = true);
     try {
       final emailVerified = _userData?['emailVerified'] == true;
+      // 'city'/'country' ya no se piden en un dropdown propio — se derivan
+      // de la ciudad Garden elegida en AddressSection (con 'Bolivia' fijo,
+      // único país donde opera la app hoy).
+      String cityName = 'Santa Cruz';
+      if (_gardenCityId != null) {
+        final cities = await CitiesService.getCities();
+        final match = cities.where((c) => c.id == _gardenCityId).firstOrNull;
+        if (match != null) cityName = match.name;
+      }
       final body = <String, dynamic>{
         'firstName': fn,
         'lastName': ln,
         'phone': _phoneCtrl.text.trim(),
-        'city': _selectedCity,
-        'country': _selectedCountry,
+        'city': cityName,
+        'country': 'Bolivia',
         'address': _buildFullAddress(),
         'bio': _bioCtrl.text.trim(),
         if (_dateOfBirth != null) 'dateOfBirth': _dateOfBirth!.toIso8601String(),
@@ -413,46 +405,9 @@ class _MyDataScreenState extends State<MyDataScreen> {
                 decoration: fieldDeco('Número de teléfono', Icons.phone_outlined)),
             const SizedBox(height: 16),
 
-            // City + Country side by side on web
-            if (kIsWeb) ...[
-              Text('Ubicación', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 6),
-              Row(children: [
-                Expanded(child: DropdownButtonFormField<String>(
-                    value: _selectedCity,
-                    style: TextStyle(color: textColor),
-                    decoration: fieldDeco('Ciudad', Icons.location_city_outlined),
-                    items: kBoliviaDepartments.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-                    onChanged: (v) { if (v != null) setState(() => _selectedCity = v); })),
-                const SizedBox(width: 12),
-                Expanded(child: DropdownButtonFormField<String>(
-                    value: _selectedCountry,
-                    style: TextStyle(color: textColor),
-                    decoration: fieldDeco('País', Icons.public_outlined),
-                    items: kLatamCountries.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                    onChanged: (v) { if (v != null) setState(() => _selectedCountry = v); })),
-              ]),
-              const SizedBox(height: 16),
-            ] else ...[
-              Text('Ciudad', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
-                  value: _selectedCity,
-                  style: TextStyle(color: textColor),
-                  decoration: fieldDeco('Tu ciudad', Icons.location_city_outlined),
-                  items: kBoliviaDepartments.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-                  onChanged: (v) { if (v != null) setState(() => _selectedCity = v); }),
-              const SizedBox(height: 16),
-              Text('País', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
-                  value: _selectedCountry,
-                  style: TextStyle(color: textColor),
-                  decoration: fieldDeco('Tu país', Icons.public_outlined),
-                  items: kLatamCountries.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                  onChanged: (v) { if (v != null) setState(() => _selectedCountry = v); }),
-              const SizedBox(height: 16),
-            ],
+            // Ciudad y país ya no se piden acá — la ciudad la define el
+            // selector de AddressSection (más abajo), que reemplaza este dato
+            // legado. Pedirlo dos veces confundía al usuario.
 
             // Address
             Text('Dirección', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),

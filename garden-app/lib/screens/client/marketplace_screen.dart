@@ -22,17 +22,12 @@ import '../../utils/web_redirect.dart';
 const _kAppStoreUrl  = 'https://apps.apple.com/app/garden-cuidadores/id000000000';
 const _kPlayStoreUrl = 'https://play.google.com/store/apps/details?id=com.garden.app';
 
-// ── Alias locales para las constantes de zonas compartidas ───────────────────
-// Nota: los polígonos de zona (dibujo de bordes en el mapa) siguen viniendo
-// del archivo hardcodeado — el nuevo sistema de zonas por ciudad (admin)
-// solo define un punto central por zona, no un polígono. Labels/colores/
-// centros SÍ vienen dinámicos de la API (_zoneLabels/_zoneColors/etc. más
-// abajo), así que un color o nombre editado desde el panel admin se refleja
-// acá sin necesitar un release — los polígonos de Santa Cruz quedan como
-// referencia visual fija.
+// ── Defaults antes de resolver la ciudad real del usuario (_loadZones) ──────
+// Santa Cruz es el fallback para guests/perfiles sin ciudad elegida — el
+// centro/zoom/polígonos reales de la ciudad del usuario se cargan async y
+// reemplazan estos valores vía _cityCenter/_cityZoom/_zonePolygons (state).
 const _kSantaCruzCenter = kSantaCruzCenter;
-const _kDefaultZoom     = kZoneMapDefaultZoom;
-const _kZonePolygons    = kZonePolygons;
+const _kDefaultZoom = kZoneMapDefaultZoom;
 
 // ── Widget principal ──────────────────────────────────────────────────────
 
@@ -69,13 +64,23 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   // como opción en el filtro ni dibujarse en el mapa.
   Set<String> _blockedZones = {};
 
-  // Zonas de Santa Cruz — dinámicas desde la API (multi-ciudad), en vez de
-  // los mapas hardcodeados de constants/zones.dart. Un color/nombre editado
-  // desde el panel admin se refleja acá sin necesitar un release.
+  // Zonas de la ciudad del usuario — dinámicas desde la API (multi-ciudad),
+  // en vez de los mapas hardcodeados de constants/zones.dart. Un color/nombre
+  // editado desde el panel admin se refleja acá sin necesitar un release.
   Map<String, String> _zoneLabels = {};
   Map<String, Color> _zoneColors = {};
   Map<String, LatLng> _zoneCenters = {};
   final Map<String, double> _zoneZooms = {}; // zoom fijo por zona (14.0 default)
+  // Polígonos por zona (mínimo 4 puntos) — vienen de la API; zonas viejas sin
+  // polígono simplemente no dibujan borde, solo el marcador de _zoneCenters.
+  Map<String, List<LatLng>> _zonePolygons = {};
+
+  // ── Ciudad del usuario logueado (multi-ciudad) — el mapa/filtros del
+  // marketplace se centran y llenan según SU perfil, nunca hardcodeado a
+  // Santa Cruz. Guests o cuentas sin ciudad elegida caen a Santa Cruz. ──
+  String _cityName = 'Santa Cruz';
+  LatLng _cityCenter = _kSantaCruzCenter;
+  double _cityZoom = _kDefaultZoom;
 
   // ── Filters (API) ──
   String _selectedService = 'todos';
@@ -275,20 +280,49 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     } catch (_) {}
   }
 
+  /// Resuelve la ciudad del usuario logueado (via /auth/me) y carga sus
+  /// zonas — el marketplace nunca asume Santa Cruz salvo que el usuario no
+  /// tenga ciudad elegida en su perfil (o sea un guest sin sesión).
   Future<void> _loadZones() async {
     try {
+      String? profileCityId;
+      final token = AuthState.token;
+      if (token.isNotEmpty) {
+        try {
+          final res = await http.get(
+            Uri.parse('$_baseUrl/auth/me'),
+            headers: {'Authorization': 'Bearer $token'},
+          );
+          final data = jsonDecode(res.body);
+          if (data['success'] == true) {
+            profileCityId = (data['data'] as Map<String, dynamic>)['cityId'] as String?;
+          }
+        } catch (_) {}
+      }
+
       final cities = await CitiesService.getCities();
-      final scz = cities.where((c) => c.slug == 'santa-cruz').firstOrNull;
-      if (scz == null) return;
-      final zones = await CitiesService.getZones(scz.id);
+      final resolvedCity = (profileCityId != null
+              ? cities.where((c) => c.id == profileCityId).firstOrNull
+              : null) ??
+          cities.where((c) => c.slug == 'santa-cruz').firstOrNull;
+      if (resolvedCity == null) return;
+
+      final zones = await CitiesService.getZones(resolvedCity.id);
       if (!mounted) return;
       setState(() {
+        _cityName = resolvedCity.name;
+        _cityCenter = LatLng(resolvedCity.centerLat, resolvedCity.centerLng);
+        _cityZoom = resolvedCity.defaultZoom;
         _zoneLabels = {for (final z in zones) z.key: z.label};
         _zoneColors = {for (final z in zones) z.key: z.color};
         _zoneCenters = {for (final z in zones) z.key: LatLng(z.lat, z.lng)};
         _zoneZooms
           ..clear()
           ..addEntries(zones.map((z) => MapEntry(z.key, 14.0)));
+        _zonePolygons = {
+          for (final z in zones)
+            if (z.points != null && z.points!.length >= 4) z.key: z.points!,
+        };
       });
     } catch (_) {
       // Sin conexión — se mantienen los mapas vacíos hasta el próximo intento;
@@ -1074,7 +1108,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => SizedBox(
+      builder: (sheetContext) => SizedBox(
         height: MediaQuery.of(context).size.height * 0.8,
         child: GlassBox(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -1095,6 +1129,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 child: _buildMapPanel(
                   theme, isDark, surface,
                   isDark ? GardenColors.darkBorder : GardenColors.lightBorder,
+                  // El botón "X" del panel debe cerrar ESTE modal — un
+                  // setState() en la pantalla de fondo no lo hace, ya que el
+                  // bottom sheet es una ruta aparte manejada por Navigator.
+                  onClose: () => Navigator.pop(sheetContext),
                 ),
               ),
             ),
@@ -1129,7 +1167,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   const SizedBox(width: 8),
                   Text('·', style: TextStyle(color: subtextColor, fontSize: 16)),
                   const SizedBox(width: 8),
-                  Text('Cuidadores en Santa Cruz', style: TextStyle(color: subtextColor, fontSize: 13)),
+                  Text('Cuidadores en $_cityName', style: TextStyle(color: subtextColor, fontSize: 13)),
                   const Spacer(),
                   if (_authToken.isNotEmpty) ...[
                     NotificationBell(token: _authToken, baseUrl: _baseUrl),
@@ -1272,7 +1310,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 if (_selectedZone != null && _zoneCenters[_selectedZone] != null) {
                   _mapController.move(_zoneCenters[_selectedZone]!, _zoneZooms[_selectedZone] ?? 14.0);
                 } else {
-                  _mapController.move(_kSantaCruzCenter, _kDefaultZoom);
+                  _mapController.move(_cityCenter, _cityZoom);
                 }
               });
             },
@@ -2189,13 +2227,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   // ── Map Panel ─────────────────────────────────────────────────────────────
 
-  Widget _buildMapPanel(ThemeData theme, bool isDark, Color surface, Color border) {
+  Widget _buildMapPanel(ThemeData theme, bool isDark, Color surface, Color border, {VoidCallback? onClose}) {
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
 
     // Las zonas deshabilitadas por un admin desaparecen del mapa — ni su
     // polígono ni su marcador se dibujan mientras estén bloqueadas.
-    final polygons = _kZonePolygons.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
+    final polygons = _zonePolygons.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
       final color = _zoneColors[e.key] ?? GardenColors.primary;
       final isSelected = _selectedZone == e.key;
       return Polygon(
@@ -2257,14 +2295,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               children: [
                 const Icon(Icons.map_rounded, size: 16, color: GardenColors.primary),
                 const SizedBox(width: 8),
-                Text('Mapa · Santa Cruz', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+                Text('Mapa · $_cityName', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
                 const Spacer(),
                 // Zoom out button
                 if (_selectedZone != null)
                   GestureDetector(
                     onTap: () {
                       _selectZone(null);
-                      _mapController.move(_kSantaCruzCenter, _kDefaultZoom);
+                      _mapController.move(_cityCenter, _cityZoom);
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -2283,7 +2321,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 const SizedBox(width: 4),
                 IconButton(
                   icon: Icon(Icons.close_rounded, size: 18, color: subtextColor),
-                  onPressed: () => setState(() => _showMap = false),
+                  onPressed: onClose ?? () => setState(() => _showMap = false),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                   tooltip: 'Cerrar mapa',
@@ -2309,7 +2347,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       final z = _zoneZooms[e.key] ?? 14.0;
                       if (c != null) _mapController.move(c, z);
                     } else {
-                      _mapController.move(_kSantaCruzCenter, _kDefaultZoom);
+                      _mapController.move(_cityCenter, _cityZoom);
                     }
                   },
                   child: AnimatedContainer(
@@ -2343,8 +2381,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             child: FlutterMap(
               mapController: _mapController,
               options: MapOptions(
-                initialCenter: _kSantaCruzCenter,
-                initialZoom: _kDefaultZoom,
+                initialCenter: _cityCenter,
+                initialZoom: _cityZoom,
                 minZoom: 10,
                 maxZoom: 17,
                 onTap: (_, __) {
