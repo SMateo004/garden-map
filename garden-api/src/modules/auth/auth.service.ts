@@ -1,7 +1,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { createHash } from 'crypto';
-import { UserRole, VerificationStatus, CaregiverStatus } from '@prisma/client';
+import { UserRole, VerificationStatus, CaregiverStatus, Zone } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import prisma from '../../config/database.js';
 import { env } from '../../config/env.js';
@@ -15,6 +15,16 @@ import { blockchainService } from '../../services/blockchain.service.js';
 import { getBoolSetting, getStringSetting } from '../../utils/settings-cache.js';
 
 const SALT_ROUNDS = 12;
+
+/** El enum `zone` de Prisma solo cubre las zonas de Santa Cruz — otras
+ * ciudades (Cochabamba, etc.) usan keys propios que romperían la escritura
+ * a esta columna. Descarta silenciosamente cualquier valor que no sea un
+ * miembro real del enum, en vez de dejar que Prisma tire un 500. */
+function safeZoneEnum(value: unknown): Zone | undefined {
+  return typeof value === 'string' && (Object.values(Zone) as string[]).includes(value)
+    ? (value as Zone)
+    : undefined;
+}
 
 /** Edad en años cumplidos a partir de una fecha de nacimiento. */
 export function calculateAge(dateOfBirth: Date): number {
@@ -219,6 +229,7 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
     addressLat?: number; addressLng?: number;
     addressStreet?: string; addressNumber?: string; addressApartment?: string;
     addressCondominio?: string; addressReference?: string; addressZone?: string;
+    cityId?: string; zoneId?: string;
   };
 
   let result: { user: Awaited<ReturnType<typeof prisma.user.create>>; profile: Awaited<ReturnType<typeof prisma.caregiverProfile.create>> };
@@ -254,6 +265,8 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
           ...(profileAddr.addressCondominio ? { addressCondominio: profileAddr.addressCondominio } : {}),
           ...(profileAddr.addressReference ? { addressReference: profileAddr.addressReference } : {}),
           ...(profileAddr.addressZone ? { addressZone: profileAddr.addressZone } : {}),
+          ...(profileAddr.cityId ? { cityId: profileAddr.cityId } : {}),
+          ...(profileAddr.zoneId ? { zoneId: profileAddr.zoneId } : {}),
           photos: ensureAbsoluteUrls(profileInput.photos ?? []),
           walkerPhotos: [],
           servicesOffered: profileInput.servicesOffered ?? [],
@@ -484,6 +497,7 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
         addressLat?: number; addressLng?: number;
         addressStreet?: string; addressNumber?: string; addressApartment?: string;
         addressCondominio?: string; addressReference?: string; addressZone?: string;
+        cityId?: string; zoneId?: string;
       };
       const prof = await tx.clientProfile.create({
         data: {
@@ -502,6 +516,8 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
           ...(bodyAddr.addressCondominio ? { addressCondominio: bodyAddr.addressCondominio } : {}),
           ...(bodyAddr.addressReference ? { addressReference: bodyAddr.addressReference } : {}),
           ...(bodyAddr.addressZone ? { addressZone: bodyAddr.addressZone } : {}),
+          ...(bodyAddr.cityId ? { cityId: bodyAddr.cityId } : {}),
+          ...(bodyAddr.zoneId ? { zoneId: bodyAddr.zoneId } : {}),
         },
       });
       logger.info('ClientProfile creado (tx)', { id: prof.id });
@@ -753,6 +769,9 @@ export async function registerProfessional(body: RegisterProfessionalBody): Prom
   const email = body.email.toLowerCase().trim();
 
   const now = new Date();
+  const cityId = (body as any).cityId as string | undefined;
+  const zoneId = (body as any).zoneId as string | undefined;
+  const cityRecord = cityId ? await prisma.city.findUnique({ where: { id: cityId } }) : null;
 
   const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
@@ -764,7 +783,7 @@ export async function registerProfessional(body: RegisterProfessionalBody): Prom
         lastName: body.lastName.trim(),
         phone: body.phone.trim(),
         country: 'Bolivia',
-        city: 'Santa Cruz de la Sierra',
+        city: cityRecord?.name ?? 'Santa Cruz de la Sierra',
         isOver18: true,
       },
     });
@@ -773,7 +792,9 @@ export async function registerProfessional(body: RegisterProfessionalBody): Prom
       data: {
         userId: user.id,
         bio: typeof body.bio === 'string' ? body.bio : null,
-        zone: body.zone as any ?? null,
+        zone: safeZoneEnum(body.zone) ?? null,
+        ...(cityId ? { cityId } : {}),
+        ...(zoneId ? { zoneId } : {}),
         photos: ensureAbsoluteUrls((body.photos ?? []) as string[]),
         profilePhoto: ensureAbsoluteUrl(body.profilePhoto as string | undefined) ?? null,
         servicesOffered: (body.services ?? []) as any[],
@@ -880,6 +901,9 @@ export async function registerCompany(body: RegisterCompanyBody): Promise<Regist
   const passwordHash = await hashPassword(body.password);
   const email = body.email.toLowerCase().trim();
   const now = new Date();
+  const cityId = (body as any).cityId as string | undefined;
+  const zoneId = (body as any).zoneId as string | undefined;
+  const cityRecord = cityId ? await prisma.city.findUnique({ where: { id: cityId } }) : null;
 
   const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
@@ -891,7 +915,7 @@ export async function registerCompany(body: RegisterCompanyBody): Promise<Regist
         lastName: '-',
         phone: body.phone.trim(),
         country: 'Bolivia',
-        city: 'Santa Cruz de la Sierra',
+        city: cityRecord?.name ?? 'Santa Cruz de la Sierra',
         isOver18: true,
         emailVerified: false,
       },
@@ -901,7 +925,9 @@ export async function registerCompany(body: RegisterCompanyBody): Promise<Regist
       data: {
         userId: user.id,
         bio: body.bio ?? null,
-        zone: body.zone as any ?? null,
+        zone: safeZoneEnum(body.zone) ?? null,
+        ...(cityId ? { cityId } : {}),
+        ...(zoneId ? { zoneId } : {}),
         address: body.address ?? null,
         servicesOffered: (body.services ?? []) as any[],
         status: CaregiverStatus.APPROVED,

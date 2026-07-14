@@ -99,22 +99,41 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
   /// así que _canProceed nunca se reevaluaba mientras el usuario tipeaba).
   void _onFormFieldChanged() { if (mounted) setState(() {}); }
 
-  // Zonas de Santa Cruz (dinámicas — reemplaza el mapa hardcodeado que tenía
-  // una key rota 'CENTRO_SAN_MARTIN' sin match con ninguna zona real).
+  // Ciudades/zonas dinámicas (multi-ciudad) — reemplaza el mapa hardcodeado
+  // que tenía una key rota 'CENTRO_SAN_MARTIN' sin match con ninguna zona real.
+  List<GardenCity> _cities = [];
   List<GardenZone> _zones = [];
+  String? _selectedCityId;
 
-  Future<void> _loadZones() async {
+  Future<void> _loadCities() async {
     final cities = await CitiesService.getCities();
+    if (!mounted) return;
     final scz = cities.where((c) => c.slug == 'santa-cruz').firstOrNull;
-    if (scz == null || !mounted) return;
-    final zones = await CitiesService.getZones(scz.id);
-    if (mounted) setState(() => _zones = zones);
+    setState(() {
+      _cities = cities;
+      _selectedCityId = scz?.id ?? (cities.isNotEmpty ? cities.first.id : null);
+    });
+    if (_selectedCityId != null) await _loadZonesForCity(_selectedCityId!);
+  }
+
+  Future<void> _loadZonesForCity(String cityId) async {
+    final zones = await CitiesService.getZones(cityId);
+    if (mounted) {
+      setState(() {
+        _zones = zones;
+        // La zona elegida puede no existir en la ciudad nueva — se limpia
+        // para no dejar un filtro "fantasma" apuntando a otra ciudad.
+        if (_selectedZone != null && !zones.any((z) => z.key == _selectedZone)) {
+          _selectedZone = null;
+        }
+      });
+    }
   }
 
   @override
   void initState() {
     super.initState();
-    _loadZones();
+    _loadCities();
     for (final c in [
       _firstNameController, _lastNameController, _emailController,
       _passwordController, _phoneController, _bioController,
@@ -372,6 +391,14 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
   Future<void> _registerProfessional() async {
     setState(() => _isLoading = true);
     try {
+      // El enum legado `zone` solo cubre las zonas de Santa Cruz — para
+      // cualquier otra ciudad, un key como 'FIDEL_ANZOATEGUI' rompería la
+      // escritura en la columna Prisma (enum estricto). Solo se manda ahí
+      // cuando la ciudad elegida es Santa Cruz; el resto de ciudades dependen
+      // únicamente de zoneId (uuid, siempre válido).
+      final selectedCity = _cities.where((c) => c.id == _selectedCityId).firstOrNull;
+      final isSantaCruz = selectedCity?.slug == 'santa-cruz';
+      final zoneId = _zones.where((z) => z.key == _selectedZone).firstOrNull?.id;
       final response = await http.post(
         Uri.parse('$_baseUrl/auth/register-professional'),
         headers: {'Content-Type': 'application/json'},
@@ -384,7 +411,9 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           'phone': _phoneController.text.trim(),
           'bio': _bioController.text.trim(),
           if (_addressController.text.trim().isNotEmpty) 'address': _addressController.text.trim(),
-          if (_selectedZone != null) 'zone': _selectedZone,
+          if (_selectedZone != null && isSantaCruz) 'zone': _selectedZone,
+          if (_selectedCityId != null) 'cityId': _selectedCityId,
+          if (zoneId != null) 'zoneId': zoneId,
           'services': _servicesOffered,
           if (_servicesOffered.contains('HOSPEDAJE')) 'pricePerDay': _precioHospedaje.toInt(),
           if (_servicesOffered.contains('PASEO')) 'pricePerWalk60': _precioPaseo.toInt(),
@@ -778,8 +807,29 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
         ]),
         const SizedBox(height: 28),
 
+        Text('Ciudad', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          value: _selectedCityId,
+          dropdownColor: surfaceEl,
+          style: TextStyle(color: textColor, fontSize: 14),
+          decoration: InputDecoration(
+            prefixIcon: Icon(Icons.location_city_outlined, color: subtextColor, size: 20),
+          ),
+          items: _cities.map((c) => DropdownMenuItem(
+            value: c.id,
+            child: Text(c.name, style: TextStyle(color: textColor)),
+          )).toList(),
+          onChanged: (v) {
+            if (v == null) return;
+            setState(() => _selectedCityId = v);
+            _loadZonesForCity(v);
+          },
+        ),
+        const SizedBox(height: 20),
+
         SizedBox(key: _keyStep2Zone, height: 0),
-        Text('Zona en Santa Cruz', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w700)),
+        Text('Zona', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w700)),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
           value: _selectedZone,

@@ -229,6 +229,8 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.bio !== undefined) updateData.bio = body.bio;
   if (body.bioDetail !== undefined) updateData.bioDetail = body.bioDetail;
   if (body.zone !== undefined) updateData.zone = body.zone;
+  if ((body as any).cityId !== undefined) updateData.cityId = (body as any).cityId;
+  if ((body as any).zoneId !== undefined) updateData.zoneId = (body as any).zoneId;
   if (body.spaceType !== undefined) {
     updateData.spaceType = Array.isArray(body.spaceType) ? body.spaceType : (body.spaceType ? [body.spaceType] : []);
   }

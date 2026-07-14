@@ -207,6 +207,8 @@ class AuthService {
     String? addressCondominio,
     String? addressReference,
     String? addressZone,
+    String? cityId,
+    String? zoneId,
   }) async {
     final body = {
       'firstName': firstName,
@@ -225,6 +227,8 @@ class AuthService {
       if (addressCondominio != null && addressCondominio.isNotEmpty) 'addressCondominio': addressCondominio,
       if (addressReference != null && addressReference.isNotEmpty) 'addressReference': addressReference,
       if (addressZone != null && addressZone.isNotEmpty) 'addressZone': addressZone,
+      if (cityId != null) 'cityId': cityId,
+      if (zoneId != null) 'zoneId': zoneId,
     };
     final http.Response response;
     try {

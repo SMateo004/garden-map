@@ -7,6 +7,7 @@ import '../../services/auth_service.dart';
 import '../../services/social_auth_service.dart';
 import '../legal/legal_screen.dart';
 import '../../widgets/address_section.dart';
+import '../../services/cities_service.dart';
 import '../../utils/input_formatters.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -47,6 +48,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _addressCondominioController= TextEditingController();
   final _addressReferenceController = TextEditingController();
   String? _addressZone;
+  String? _gardenCityId;
   double? _addressLat;
   double? _addressLng;
   bool _isApartment               = false;
@@ -331,6 +333,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
           if (_addressZone != null) _addressZone!,
         ];
         final addressString = addressParts.join(', ');
+        // Resolver el zoneId real (uuid) a partir del key elegido — mismo
+        // patrón que my_data_screen.dart, para que quede coherente desde el
+        // registro y no solo al editar el perfil después.
+        String? zoneId;
+        if (_gardenCityId != null && _addressZone != null) {
+          final zones = await CitiesService.getZones(_gardenCityId!);
+          zoneId = zones.where((z) => z.key == _addressZone).firstOrNull?.id;
+        }
         await _authService.registerClient(
           firstName: firstName, lastName: lastName, email: email, password: password, phone: phone,
           address: addressString.isNotEmpty ? addressString : null,
@@ -343,6 +353,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           addressCondominio: _addressCondominioController.text.trim(),
           addressReference: _addressReferenceController.text.trim(),
           addressZone: _addressZone,
+          cityId: _gardenCityId,
+          zoneId: zoneId,
         );
         if (!mounted) return;
         // El registro normal nunca pide foto — siempre falta en este punto,
@@ -638,6 +650,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
               referenceController: _addressReferenceController,
               selectedZone: _addressZone,
               onZoneChanged: (val) => setState(() => _addressZone = val),
+              initialCityId: _gardenCityId,
+              onCityChanged: (cityId, _) => setState(() => _gardenCityId = cityId),
               addressLat: _addressLat,
               addressLng: _addressLng,
               isApartment: _isApartment,

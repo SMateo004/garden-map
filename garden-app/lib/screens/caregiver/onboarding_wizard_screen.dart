@@ -17,6 +17,7 @@ import 'combined_verification_step.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/address_map_picker.dart';
 import '../../widgets/address_section.dart';
+import '../../services/cities_service.dart';
 import '../../utils/input_formatters.dart';
 
 class OnboardingWizardScreen extends StatefulWidget {
@@ -62,6 +63,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   final _addressCondominioController = TextEditingController();
   final _addressReferenceController = TextEditingController();
   String? _addressZone;      // zona seleccionada del dropdown
+  String? _gardenCityId;
   double? _addressLat;
   double? _addressLng;
   bool _isApartment = false;
@@ -853,8 +855,17 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     if (_currentStep == 2) {
       if (!_validateCurrentStep()) return;
       setState(() => _isLoading = true);
+      // El enum legado `zone` solo cubre zonas de Santa Cruz — para otras
+      // ciudades un key como 'FIDEL_ANZOATEGUI' haría fallar la validación
+      // (nativeEnum estricto). Solo se manda cuando la ciudad es Santa Cruz
+      // (o no se eligió ciudad, que cae al default de Santa Cruz).
+      var isSantaCruz = true;
+      if (_gardenCityId != null) {
+        final cities = await CitiesService.getCities();
+        isSantaCruz = cities.where((c) => c.id == _gardenCityId).firstOrNull?.slug == 'santa-cruz';
+      }
       await _patchProfile({
-        'zone': _addressZone ?? _selectedZone,
+        if (isSantaCruz) 'zone': _addressZone ?? _selectedZone,
         'servicesOffered': _servicesOffered,
         if (_homeType != null) 'homeType': _homeType,
         'hasYard': _hasYard,
@@ -944,6 +955,19 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   Future<void> _registerMinimalAndAdvance() async {
     setState(() => _isLoading = true);
     try {
+      // Resolver ciudad/zoneId reales (multi-ciudad) a partir del key elegido
+      // en AddressSection — mismo patrón que my_data_screen.dart.
+      String cityName = 'Santa Cruz de la Sierra';
+      String? zoneId;
+      if (_gardenCityId != null) {
+        final cities = await CitiesService.getCities();
+        final match = cities.where((c) => c.id == _gardenCityId).firstOrNull;
+        if (match != null) cityName = match.name;
+        if (_addressZone != null) {
+          final zones = await CitiesService.getZones(_gardenCityId!);
+          zoneId = zones.where((z) => z.key == _addressZone).firstOrNull?.id;
+        }
+      }
       final response = await http.post(
         Uri.parse('$_baseUrl/auth/caregiver/register'),
         headers: {'Content-Type': 'application/json'},
@@ -956,7 +980,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             'phone': _phoneController.text.trim(),
             'dateOfBirth': _dateOfBirth!.toIso8601String(),
             'country': 'Bolivia',
-            'city': 'Santa Cruz de la Sierra',
+            'city': cityName,
             'isOver18': true,
           },
           'profile': {
@@ -974,6 +998,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             if (_addressReferenceController.text.trim().isNotEmpty)
               'addressReference': _addressReferenceController.text.trim(),
             if (_addressZone != null) 'addressZone': _addressZone,
+            if (_gardenCityId != null) 'cityId': _gardenCityId,
+            if (zoneId != null) 'zoneId': zoneId,
           },
         }),
       );
@@ -1337,6 +1363,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             referenceController: _addressReferenceController,
             selectedZone: _addressZone,
             onZoneChanged: (val) => setState(() => _addressZone = val),
+            initialCityId: _gardenCityId,
+            onCityChanged: (cityId, _) => setState(() => _gardenCityId = cityId),
             addressLat: _addressLat,
             addressLng: _addressLng,
             isApartment: _isApartment,

@@ -28,6 +28,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart' show GardenColors, GardenButton, GardenInput, themeNotifier;
 import '../../services/auth_state.dart';
 import '../../widgets/address_section.dart';
+import '../../services/cities_service.dart';
 import '../../widgets/extra_services_editor.dart';
 import 'caregiver_profile_data_screen.dart';
 import 'phone_verification_screen.dart';
@@ -82,6 +83,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
   double? _lat;
   double? _lng;
   String? _zone;
+  String? _gardenCityId;
 
   // ── Paso 3: Servicios ──────────────────────────────────────────────────────
   final List<String> _services = [];
@@ -382,6 +384,14 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
   Future<bool> _registerCompany() async {
     setState(() => _isLoading = true);
     try {
+      // Resolver zoneId real (uuid) — el enum legado `zone` solo cubre Santa
+      // Cruz, el backend ya lo descarta solo si no matchea, pero mandamos
+      // zoneId siempre que haya ciudad/zona elegidas para quedar coherente.
+      String? zoneId;
+      if (_gardenCityId != null && _zone != null) {
+        final zones = await CitiesService.getZones(_gardenCityId!);
+        zoneId = zones.where((z) => z.key == _zone).firstOrNull?.id;
+      }
       final res = await http.post(
         Uri.parse('$_baseUrl/auth/register-company'),
         headers: {'Content-Type': 'application/json'},
@@ -394,6 +404,8 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
           'phone': _phoneCtrl.text.trim(),
           'bio': _bioCtrl.text.trim(),
           'zone': _zone,
+          if (_gardenCityId != null) 'cityId': _gardenCityId,
+          if (zoneId != null) 'zoneId': zoneId,
           'address': [_streetCtrl.text.trim(), _numberCtrl.text.trim(), _referenceCtrl.text.trim()]
               .where((s) => s.isNotEmpty).join(', '),
           if (_lat != null) 'lat': _lat,
@@ -946,6 +958,8 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
           referenceController: _referenceCtrl,
           selectedZone: _zone,
           onZoneChanged: (val) => setState(() => _zone = val),
+          initialCityId: _gardenCityId,
+          onCityChanged: (cityId, _) => setState(() => _gardenCityId = cityId),
           addressLat: _lat,
           addressLng: _lng,
           isApartment: _isApartment,

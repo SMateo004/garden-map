@@ -111,6 +111,11 @@ export const registerCaregiverProfileSchema = z.object({
   zone: z.nativeEnum(Zone, {
     invalid_type_error: 'Zona no válida; elige una de la lista',
   }).optional(),
+  /** Ciudad/zona reales (multi-ciudad) — ids de City/CityZone. El enum `zone`
+   * de arriba solo cubre zonas de Santa Cruz; para otras ciudades estos son
+   * la única fuente real. */
+  cityId: z.string().optional(),
+  zoneId: z.string().optional(),
   spaceType: z
     .array(z.enum(['Casa con patio', 'Casa sin patio', 'Departamento pequeño', 'Departamento amplio']))
     .min(1, 'Selecciona al menos un tipo de espacio')
@@ -204,6 +209,10 @@ const spaceTypeEnum = z.string(); // Liberalized
 export const patchCaregiverProfileSchema = z.object({
   bio: z.string().min(1).max(500).optional(),
   zone: z.nativeEnum(Zone).optional(),
+  /** Ciudad/zona reales (multi-ciudad) — el enum `zone` de arriba solo cubre
+   * Santa Cruz; otras ciudades dependen únicamente de estos ids. */
+  cityId: z.string().optional(),
+  zoneId: z.string().optional(),
   spaceType: z.array(spaceTypeEnum).optional(),
   address: z.string().max(500).optional(),
 
@@ -271,6 +280,9 @@ export const registerClientSchema = z.object({
   addressCondominio: z.string().max(100).optional().transform((v) => v?.trim() || undefined),
   addressReference: z.string().max(200).optional().transform((v) => v?.trim() || undefined),
   addressZone: z.string().max(100).optional().transform((v) => v?.trim() || undefined),
+  /** Ciudad/zona reales (multi-ciudad) — ids de City/CityZone, no el enum legado. */
+  cityId: z.string().optional(),
+  zoneId: z.string().optional(),
   /** Código de invitación beta. Solo requerido cuando betaInviteRequired=true en AppSettings. */
   inviteCode: z.string().max(64).optional(),
 });
@@ -291,6 +303,8 @@ export const registerProfessionalMinimalSchema = z.object({
   phone: phoneCaregiverSchema,
   bio: z.string().max(500).optional(),
   address: z.string().max(500).optional(),
+  cityId: z.string().optional(),
+  zoneId: z.string().optional(),
 }).passthrough();
 
 export const registerCompanyMinimalSchema = z.object({
@@ -306,6 +320,8 @@ export const registerCompanyMinimalSchema = z.object({
   lat: z.number().optional(),
   lng: z.number().optional(),
   services: z.array(z.string()).optional(),
+  cityId: z.string().optional(),
+  zoneId: z.string().optional(),
 });
 
 export type LoginBody = z.infer<typeof loginSchema>;
