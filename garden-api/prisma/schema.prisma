@@ -1247,6 +1247,10 @@ model CityZone {
   color     String   @db.VarChar(9)
   lat       Float
   lng       Float
+  /// Vértices del polígono a pintar en el mapa del marketplace, en orden
+  /// (mínimo 4): [{lat, lng}, ...]. Nullable — zonas viejas sin polígono
+  /// siguen mostrándose como marcador simple en lat/lng hasta que se editen.
+  points    Json?
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

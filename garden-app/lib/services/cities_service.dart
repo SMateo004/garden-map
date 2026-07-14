@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:latlong2/latlong.dart';
 
 /// Ciudad donde Garden opera (multi-ciudad — reemplaza el supuesto implícito
 /// de "todo es Santa Cruz"). Datos reales desde el backend, editables por
@@ -43,6 +44,9 @@ class GardenZone {
   final Color color;
   final double lat;
   final double lng;
+  /// Vértices del polígono a pintar en el mapa, en orden (null = zona vieja
+  /// sin polígono todavía — se muestra solo como marcador en lat/lng).
+  final List<LatLng>? points;
 
   const GardenZone({
     required this.id,
@@ -51,6 +55,7 @@ class GardenZone {
     required this.color,
     required this.lat,
     required this.lng,
+    this.points,
   });
 
   factory GardenZone.fromJson(Map<String, dynamic> json) => GardenZone(
@@ -60,6 +65,9 @@ class GardenZone {
         color: _parseHexColor(json['color'] as String),
         lat: (json['lat'] as num).toDouble(),
         lng: (json['lng'] as num).toDouble(),
+        points: (json['points'] as List?)
+            ?.map((p) => LatLng((p['lat'] as num).toDouble(), (p['lng'] as num).toDouble()))
+            .toList(),
       );
 
   static Color _parseHexColor(String hex) {

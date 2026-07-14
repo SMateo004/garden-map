@@ -402,7 +402,7 @@ app.get('/api/cities/:cityId/zones', async (req, res) => {
     const zones = await prisma.cityZone.findMany({
       where: { cityId: req.params.cityId as string, active: true },
       orderBy: { label: 'asc' },
-      select: { id: true, key: true, label: true, color: true, lat: true, lng: true },
+      select: { id: true, key: true, label: true, color: true, lat: true, lng: true, points: true },
     });
     res.json({ success: true, data: zones });
   } catch {

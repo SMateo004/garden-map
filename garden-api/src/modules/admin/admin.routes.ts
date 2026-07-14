@@ -292,11 +292,32 @@ router.get('/city-zones', asyncHandler(async (req, res) => {
   res.json({ success: true, data: zones });
 }));
 
+/** Valida que `points` (si viene) sea un array de 4+ {lat,lng} numéricos. */
+function validatePoints(points: unknown): { lat: number; lng: number }[] | undefined {
+  if (points == null) return undefined;
+  if (!Array.isArray(points) || points.length < 4) {
+    throw new Error('points debe ser un array de al menos 4 puntos [{lat, lng}, ...]');
+  }
+  return points.map((p) => {
+    const lat = parseFloat(p?.lat);
+    const lng = parseFloat(p?.lng);
+    if (isNaN(lat) || isNaN(lng)) throw new Error('Cada punto necesita lat y lng numéricos');
+    return { lat, lng };
+  });
+}
+
 /** POST /api/admin/city-zones — crear zona nueva dentro de una ciudad */
 router.post('/city-zones', asyncHandler(async (req, res) => {
-  const { cityId, key, label, color, lat, lng } = req.body;
+  const { cityId, key, label, color, lat, lng, points } = req.body;
   if (!cityId || !key || !label || !color || lat == null || lng == null) {
     res.status(400).json({ success: false, error: { message: 'cityId, key, label, color, lat, lng son requeridos' } });
+    return;
+  }
+  let validatedPoints: { lat: number; lng: number }[] | undefined;
+  try {
+    validatedPoints = validatePoints(points);
+  } catch (e) {
+    res.status(400).json({ success: false, error: { message: (e as Error).message } });
     return;
   }
   const zone = await prisma.cityZone.create({
@@ -305,14 +326,22 @@ router.post('/city-zones', asyncHandler(async (req, res) => {
       key: String(key).trim().toUpperCase().replace(/\s+/g, '_'),
       label, color,
       lat: parseFloat(lat), lng: parseFloat(lng),
+      points: validatedPoints ?? undefined,
     },
   });
   res.json({ success: true, data: zone });
 }));
 
-/** PATCH /api/admin/city-zones/:id — editar zona (label, color, coords, activar/desactivar) */
+/** PATCH /api/admin/city-zones/:id — editar zona (label, color, coords, polígono, activar/desactivar) */
 router.patch('/city-zones/:id', asyncHandler(async (req, res) => {
-  const { label, color, lat, lng, active } = req.body;
+  const { label, color, lat, lng, points, active } = req.body;
+  let validatedPoints: { lat: number; lng: number }[] | undefined;
+  try {
+    validatedPoints = validatePoints(points);
+  } catch (e) {
+    res.status(400).json({ success: false, error: { message: (e as Error).message } });
+    return;
+  }
   const zone = await prisma.cityZone.update({
     where: { id: req.params.id },
     data: {
@@ -320,6 +349,7 @@ router.patch('/city-zones/:id', asyncHandler(async (req, res) => {
       ...(color !== undefined && { color }),
       ...(lat !== undefined && { lat: parseFloat(lat) }),
       ...(lng !== undefined && { lng: parseFloat(lng) }),
+      ...(validatedPoints !== undefined && { points: validatedPoints }),
       ...(active !== undefined && { active }),
     },
   });

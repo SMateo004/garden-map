@@ -363,6 +363,11 @@ class _ZoneFormSheetState extends State<_ZoneFormSheet> {
   late final TextEditingController _lng;
   late Color _color;
   bool _saving = false;
+  // Vértices del polígono — mínimo 4 filas siempre visibles. Si se dejan
+  // todas vacías, la zona se guarda sin polígono (solo marcador en lat/lng),
+  // igual que las zonas viejas sembradas antes de este feature.
+  late List<TextEditingController> _pointLat;
+  late List<TextEditingController> _pointLng;
 
   bool get _isEditing => widget.zone != null;
 
@@ -383,6 +388,13 @@ class _ZoneFormSheetState extends State<_ZoneFormSheet> {
     _color = z != null
         ? Color(0xFF000000 | (int.tryParse((z['color'] as String).replaceFirst('#', ''), radix: 16) ?? 0x4CAF50))
         : _palette.first;
+
+    final existingPoints = (z?['points'] as List?)?.cast<Map<String, dynamic>>();
+    final rowCount = existingPoints != null && existingPoints.length >= 4 ? existingPoints.length : 4;
+    _pointLat = List.generate(rowCount, (i) =>
+        TextEditingController(text: existingPoints != null && i < existingPoints.length ? (existingPoints[i]['lat'] as num).toString() : ''));
+    _pointLng = List.generate(rowCount, (i) =>
+        TextEditingController(text: existingPoints != null && i < existingPoints.length ? (existingPoints[i]['lng'] as num).toString() : ''));
   }
 
   @override
@@ -391,13 +403,57 @@ class _ZoneFormSheetState extends State<_ZoneFormSheet> {
     _label.dispose();
     _lat.dispose();
     _lng.dispose();
+    for (final c in _pointLat) c.dispose();
+    for (final c in _pointLng) c.dispose();
     super.dispose();
+  }
+
+  void _addPointRow() => setState(() {
+        _pointLat.add(TextEditingController());
+        _pointLng.add(TextEditingController());
+      });
+
+  void _removePointRow(int i) => setState(() {
+        _pointLat.removeAt(i).dispose();
+        _pointLng.removeAt(i).dispose();
+      });
+
+  /// Devuelve null si todas las filas están vacías (sin polígono), la lista
+  /// de puntos si todas están completas, o lanza si está a medio llenar.
+  List<Map<String, double>>? _collectPoints() {
+    final filled = <Map<String, double>>[];
+    var anyFilled = false;
+    for (var i = 0; i < _pointLat.length; i++) {
+      final latText = _pointLat[i].text.trim();
+      final lngText = _pointLng[i].text.trim();
+      if (latText.isEmpty && lngText.isEmpty) continue;
+      anyFilled = true;
+      final lat = double.tryParse(latText);
+      final lng = double.tryParse(lngText);
+      if (lat == null || lng == null) {
+        throw const FormatException('Cada punto necesita latitud y longitud válidas');
+      }
+      filled.add({'lat': lat, 'lng': lng});
+    }
+    if (!anyFilled) return null;
+    if (filled.length < 4) {
+      throw const FormatException('Completa al menos 4 puntos para formar el polígono, o dejalos todos vacíos');
+    }
+    return filled;
   }
 
   String _colorHex(Color c) => '#${c.toARGB32().toRadixString(16).substring(2).toUpperCase()}';
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    List<Map<String, double>>? points;
+    try {
+      points = _collectPoints();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text((e as FormatException).message), backgroundColor: GardenColors.error));
+      return;
+    }
     setState(() => _saving = true);
     try {
       final body = {
@@ -407,6 +463,7 @@ class _ZoneFormSheetState extends State<_ZoneFormSheet> {
         'color': _colorHex(_color),
         'lat': double.parse(_lat.text.trim()),
         'lng': double.parse(_lng.text.trim()),
+        if (points != null) 'points': points,
       };
       final uri = _isEditing
           ? Uri.parse('${widget.baseUrl}/admin/city-zones/${widget.zone!['id']}')
@@ -475,7 +532,29 @@ class _ZoneFormSheetState extends State<_ZoneFormSheet> {
                 Expanded(child: TextFormField(controller: _lng, keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true), style: TextStyle(color: textColor), decoration: deco.copyWith(labelText: 'Longitud'),
                     validator: (v) => double.tryParse(v ?? '') == null ? 'Inválido' : null)),
               ]),
-              const SizedBox(height: 14),
+              const SizedBox(height: 20),
+              Row(children: [
+                Expanded(child: Text('Polígono de la zona (mínimo 4 puntos)', style: TextStyle(color: textColor, fontSize: 13.5, fontWeight: FontWeight.w700))),
+                TextButton.icon(onPressed: _addPointRow, icon: const Icon(Icons.add, size: 18), label: const Text('Punto')),
+              ]),
+              Text('Se pintan en el mapa del marketplace en el orden en que los cargues. Dejá todas las filas vacías si preferís que la zona se muestre solo como un marcador (punto), sin polígono.',
+                  style: TextStyle(color: subtextColor, fontSize: 12)),
+              const SizedBox(height: 10),
+              ...List.generate(_pointLat.length, (i) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(children: [
+                      SizedBox(width: 22, child: Text('${i + 1}', style: TextStyle(color: subtextColor, fontSize: 12))),
+                      const SizedBox(width: 6),
+                      Expanded(child: TextFormField(controller: _pointLat[i], keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true), style: TextStyle(color: textColor), decoration: deco.copyWith(labelText: 'Lat ${i + 1}'))),
+                      const SizedBox(width: 8),
+                      Expanded(child: TextFormField(controller: _pointLng[i], keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true), style: TextStyle(color: textColor), decoration: deco.copyWith(labelText: 'Lng ${i + 1}'))),
+                      if (_pointLat.length > 4) ...[
+                        const SizedBox(width: 4),
+                        IconButton(onPressed: () => _removePointRow(i), icon: const Icon(Icons.close, size: 18), color: subtextColor),
+                      ],
+                    ]),
+                  )),
+              const SizedBox(height: 10),
               Text('Color en el mapa', style: TextStyle(color: subtextColor, fontSize: 12.5, fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               Wrap(spacing: 10, runSpacing: 10, children: _palette.map((c) {
