@@ -16,6 +16,7 @@ import 'admin_email_otp_screen.dart';
 import 'admin_donations_screen.dart';
 import 'admin_vets_screen.dart';
 import 'admin_cities_screen.dart';
+import 'admin_test_booking_screen.dart';
 import 'payment_qr_admin_screen.dart';
 import 'audit_screen.dart';
 import '../../services/auth_service.dart';
@@ -1036,6 +1037,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ('Verif. de correo', Icons.mark_email_unread_outlined),
     ('Donaciones', Icons.volunteer_activism_outlined),
     ('Ciudades', Icons.map_rounded),
+    // Solo para pruebas — visible en el sidebar de web (_webNavGroups) pero
+    // excluido a propósito del tab bar de mobile (ver _buildTabBar).
+    ('Reserva de prueba', Icons.science_outlined),
   ];
 
   // Agrupación del sidebar web — cada grupo es (título, ícono, índices de _tabs).
@@ -1043,7 +1047,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   // "Finanzas" — no es ingreso de Garden, es dinero de terceros en tránsito
   // hacia refugios, y el admin no puede editar montos ahí.
   static const List<(String, IconData, List<int>)> _webNavGroups = [
-    ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5, 21]),
+    ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5, 21, 22]),
     ('Finanzas', Icons.attach_money_rounded, [3, 6, 7, 15]),
     ('Personas', Icons.groups_outlined, [8, 9, 20]),
     ('Comunicación', Icons.forum_outlined, [12, 13, 17, 18, 19]),
@@ -1076,6 +1080,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         AdminEmailOtpScreen(adminToken: _adminToken),
         AdminDonationsScreen(adminToken: _adminToken),
         AdminCitiesScreen(adminToken: _adminToken),
+        AdminTestBookingScreen(adminToken: _adminToken),
       ],
     );
   }
@@ -1159,7 +1164,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
-          children: tabs.asMap().entries.map((entry) {
+          // "Reserva de prueba" (el último tab de _tabs) es exclusivo de web
+          // — se oculta acá para que nunca aparezca en el nav de mobile.
+          children: tabs.asMap().entries.where((e) => e.key != tabs.length - 1).map((entry) {
             final i = entry.key;
             final tab = entry.value;
             final selected = _selectedTab == i;

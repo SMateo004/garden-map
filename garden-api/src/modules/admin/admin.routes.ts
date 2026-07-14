@@ -67,6 +67,13 @@ router.post('/bookings/:id/approve-payment-secure', adminController.approvePayme
 /** POST /api/admin/bookings/:id/refund — reembolsa el servicio y cancela la reserva. */
 router.post('/bookings/:id/refund', adminController.refundBooking);
 
+/** POST /api/admin/bookings/test — crea una reserva de prueba a mano, directo a
+ *  WAITING_CAREGIVER_APPROVAL, sin restricciones normales del flujo real. */
+router.post('/bookings/test', adminController.createTestBooking);
+
+/** DELETE /api/admin/bookings/:id/test — borra una reserva de prueba (createdByAdmin=true). */
+router.delete('/bookings/:id/test', adminController.deleteTestBooking);
+
 /** GET /api/admin/extension-payments-pending — extensiones de paseo pendientes de aprobación. */
 router.get('/extension-payments-pending', adminController.getExtensionPaymentsPending);
 

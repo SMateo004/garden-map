@@ -32,6 +32,7 @@ export const listCaregiversQuerySchema = z.object({
     .transform((v) => (v === '' ? undefined : v)),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().max(80).optional(),
 });
 
 export type ListCaregiversQuery = z.infer<typeof listCaregiversQuerySchema>;

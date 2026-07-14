@@ -38,7 +38,7 @@ import {
 /** GET /api/admin/caregivers — listado de todos los cuidadores (paginado, filtro status opcional). */
 export const getCaregiversList = asyncHandler(async (req: Request, res: Response) => {
   const query = listCaregiversQuerySchema.parse(req.query);
-  const result = await adminService.listCaregivers(query.page, query.limit, query.status);
+  const result = await adminService.listCaregivers(query.page, query.limit, query.status, query.search);
   res.json({ success: true, data: result });
 });
 
@@ -280,6 +280,33 @@ export const refundBooking = asyncHandler(async (req: Request, res: Response) =>
   const result = await adminService.refundBooking(id, adminId, adminPassword, destination as 'WALLET' | 'COUPON' | 'MANUAL_TRANSACTION');
   auditLog({ userId: adminId, action: 'BOOKING_REFUNDED', entity: 'Booking', entityId: id, ip: req.ip });
   res.json({ success: true, data: result });
+});
+
+/** POST /api/admin/bookings/test — crea una reserva de prueba a mano (sin Meet&Greet,
+ *  sin disponibilidad, sin pago real), directo a WAITING_CAREGIVER_APPROVAL. Exclusivo
+ *  para testing — exige contraseña de admin, y solo esta reserva puede borrarse después. */
+export const createTestBooking = asyncHandler(async (req: Request, res: Response) => {
+  const adminId = req.user!.userId;
+  const { adminPassword, ...input } = req.body as { adminPassword?: string } & Record<string, unknown>;
+  if (!adminPassword) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_PASSWORD', message: 'Se requiere la contraseña de admin' } });
+  }
+  const result = await adminService.createTestBooking(adminId, adminPassword, input as never);
+  auditLog({ userId: adminId, action: 'TEST_BOOKING_CREATED', entity: 'Booking', entityId: result.id, ip: req.ip });
+  res.json({ success: true, data: result });
+});
+
+/** DELETE /api/admin/bookings/:id/test — borra una reserva de prueba (createdByAdmin=true). */
+export const deleteTestBooking = asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params.id!;
+  const adminId = req.user!.userId;
+  const { adminPassword } = req.body as { adminPassword?: string };
+  if (!adminPassword) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_PASSWORD', message: 'Se requiere la contraseña de admin' } });
+  }
+  await adminService.deleteTestBooking(id, adminId, adminPassword);
+  auditLog({ userId: adminId, action: 'TEST_BOOKING_DELETED', entity: 'Booking', entityId: id, ip: req.ip });
+  res.json({ success: true, data: { id } });
 });
 
 /** GET /api/admin/extension-payments-pending — extensiones de paseo pendientes de aprobación */

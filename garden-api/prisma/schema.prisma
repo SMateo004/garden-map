@@ -312,6 +312,10 @@ model Booking {
   refundAmount               Decimal?         @db.Decimal(10, 2)
   refundStatus               RefundStatus?
   createdAt                  DateTime         @default(now())
+  /// true solo si esta reserva la creó un admin a mano (herramienta de
+  /// pruebas, sin pasar por el flujo real de pago/Meet&Greet). Habilita el
+  /// botón de borrado directo — nunca se puede borrar una reserva real.
+  createdByAdmin              Boolean          @default(false)
   serviceStartedAt           DateTime?
   serviceEndedAt             DateTime?
   serviceStartPhoto          String?

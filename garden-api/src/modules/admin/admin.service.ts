@@ -1,8 +1,8 @@
-import { BookingStatus, CaregiverStatus, Prisma, VerificationStatus } from '@prisma/client';
+import { BookingStatus, CaregiverStatus, Prisma, ServiceType, VerificationStatus } from '@prisma/client';
 import prisma from '../../config/database.js';
 import * as bookingService from '../booking-service/booking.service.js';
 import { applyResolution as applyDisputeResolution } from '../dispute/dispute.routes.js';
-import { BadRequestError, CaregiverNotFoundError, NotFoundError, UnauthorizedError } from '../../shared/errors.js';
+import { BadRequestError, CaregiverNotFoundError, ForbiddenError, NotFoundError, UnauthorizedError } from '../../shared/errors.js';
 import * as caregiverProfileService from '../caregiver-profile/caregiver-profile.service.js';
 import { checkAndAutoSubmitProfile } from '../caregiver-profile/caregiver-profile-completion.helper.js';
 import { getCache, delByPrefix } from '../../shared/cache.js';
@@ -325,14 +325,28 @@ export async function toggleProfessional(
 export async function listCaregivers(
   page: number,
   limit: number,
-  status?: string
+  status?: string,
+  search?: string
 ): Promise<PendingCaregiversResult> {
   const skip = (page - 1) * limit;
-  const where: { status?: { in?: CaregiverStatus[]; equals?: CaregiverStatus } } = {};
+  const where: {
+    status?: { in?: CaregiverStatus[]; equals?: CaregiverStatus };
+    user?: { OR: Array<{ firstName?: object; lastName?: object; email?: object }> };
+  } = {};
   if (status === 'pendientes') {
     where.status = { in: [CaregiverStatus.PENDING_REVIEW, CaregiverStatus.NEEDS_REVISION] };
   } else if (status && Object.values(CaregiverStatus).includes(status as CaregiverStatus)) {
     where.status = { equals: status as CaregiverStatus };
+  }
+  if (search?.trim()) {
+    const q = search.trim();
+    where.user = {
+      OR: [
+        { firstName: { contains: q, mode: 'insensitive' } },
+        { lastName: { contains: q, mode: 'insensitive' } },
+        { email: { contains: q, mode: 'insensitive' } },
+      ],
+    };
   }
   const [caregivers, total] = await Promise.all([
     prisma.caregiverProfile.findMany({
@@ -913,6 +927,163 @@ export async function approvePaymentSecure(
 
   logger.info('Admin: pago aprobado (secure, con contraseña)', { bookingId, adminId });
   return { id: bookingId, status: BookingStatus.WAITING_CAREGIVER_APPROVAL };
+}
+
+// ---------------------------------------------------------------------------
+// Reservas de prueba creadas a mano por el admin — atajo exclusivo para
+// testing (sin Meet&Greet, sin disponibilidad, sin pago real). Van directo a
+// WAITING_CAREGIVER_APPROVAL para poder probar el flujo de aceptación del
+// cuidador en adelante. Se marcan con createdByAdmin=true, que es lo único
+// que habilita borrarlas — nunca se puede borrar una reserva real por acá.
+// ---------------------------------------------------------------------------
+
+export interface CreateTestBookingInput {
+  caregiverProfileId: string;
+  clientUserId: string;
+  petId?: string;
+  petName?: string;
+  serviceType: 'PASEO' | 'HOSPEDAJE' | 'GUARDERIA';
+  walkDate?: string; // ISO date, PASEO/GUARDERIA
+  startTime?: string; // HH:mm
+  startDate?: string; // ISO date, HOSPEDAJE
+  endDate?: string; // ISO date, HOSPEDAJE
+  totalAmount: number;
+  paid: boolean;
+}
+
+export async function createTestBooking(
+  adminId: string,
+  adminPassword: string,
+  input: CreateTestBookingInput
+): Promise<{ id: string; status: string }> {
+  await assertAdminPassword(adminId, adminPassword);
+
+  const caregiverProfile = await prisma.caregiverProfile.findUnique({
+    where: { id: input.caregiverProfileId },
+    select: { id: true, userId: true },
+  });
+  if (!caregiverProfile) throw new NotFoundError('Cuidador no encontrado');
+
+  const clientProfile = await prisma.clientProfile.findUnique({
+    where: { userId: input.clientUserId },
+    select: { id: true },
+  });
+  if (!clientProfile) throw new NotFoundError('Dueño no encontrado (sin perfil de cliente)');
+
+  let petName = input.petName?.trim();
+  let petBreed: string | undefined;
+  let petAge: number | undefined;
+  let petSize: string | undefined;
+  if (input.petId) {
+    const pet = await prisma.pet.findUnique({ where: { id: input.petId } });
+    if (!pet || pet.clientProfileId !== clientProfile.id) {
+      throw new BadRequestError('La mascota elegida no pertenece a este dueño');
+    }
+    petName = pet.name;
+    petBreed = pet.breed ?? undefined;
+    petAge = pet.age ?? undefined;
+    petSize = pet.size ?? undefined;
+  }
+  if (!petName) throw new BadRequestError('Falta el nombre de la mascota');
+
+  const commissionPct = await (await import('../../utils/settings-cache.js')).getNumericSetting('platformCommissionPct', 10);
+  const totalAmount = Math.round(input.totalAmount * 100) / 100;
+  const commissionAmount = Math.round(totalAmount * (commissionPct / 100) * 100) / 100;
+
+  const booking = await prisma.$transaction(async (tx) => {
+    const created = await tx.booking.create({
+      data: {
+        clientId: input.clientUserId,
+        caregiverId: caregiverProfile.id,
+        serviceType: input.serviceType as ServiceType,
+        status: BookingStatus.WAITING_CAREGIVER_APPROVAL,
+        petId: input.petId ?? null,
+        petName,
+        petBreed,
+        petAge,
+        petSize: petSize as never,
+        totalAmount,
+        pricePerUnit: totalAmount,
+        commissionAmount,
+        paidAt: input.paid ? new Date() : null,
+        createdByAdmin: true,
+        ...(input.serviceType === 'HOSPEDAJE'
+          ? {
+              startDate: input.startDate ? new Date(input.startDate) : undefined,
+              endDate: input.endDate ? new Date(input.endDate) : undefined,
+            }
+          : {
+              walkDate: input.walkDate ? new Date(input.walkDate) : undefined,
+              startTime: input.startTime,
+            }),
+      },
+    });
+    await tx.bookingPet.create({
+      data: {
+        bookingId: created.id,
+        petId: input.petId ?? null,
+        petIndex: 1,
+        petName: petName!,
+        petBreed,
+        petAge,
+        petSize: petSize as never,
+      },
+    });
+    await tx.adminAction.create({
+      data: {
+        adminId,
+        actionType: 'CREATE_TEST_BOOKING',
+        targetId: created.id,
+        notes: `Reserva de prueba creada a mano (paid=${input.paid}). Booking ${created.id} → WAITING_CAREGIVER_APPROVAL`,
+      },
+    });
+    await tx.notification.create({
+      data: {
+        userId: caregiverProfile.userId,
+        title: 'Nueva reserva confirmada',
+        message: 'Tienes una nueva reserva esperando tu aceptación.',
+        type: 'NEW_BOOKING',
+      },
+    });
+    return created;
+  });
+
+  sendPushToUser(
+    caregiverProfile.userId,
+    'Nueva reserva confirmada',
+    'Tienes una nueva reserva esperando tu aceptación.'
+  ).catch(() => {});
+
+  logger.info('Admin: reserva de prueba creada', { bookingId: booking.id, adminId, paid: input.paid });
+  return { id: booking.id, status: booking.status };
+}
+
+/** DELETE /api/admin/bookings/:id/test — borra una reserva SOLO si fue creada
+ *  por este mismo atajo de admin (createdByAdmin=true). Cualquier reserva
+ *  real (createdByAdmin=false) queda intocable acá — para eso ya existe
+ *  cancelación/reembolso, que preservan el historial. */
+export async function deleteTestBooking(bookingId: string, adminId: string, adminPassword: string): Promise<void> {
+  await assertAdminPassword(adminId, adminPassword);
+
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId }, select: { id: true, createdByAdmin: true } });
+  if (!booking) throw new NotFoundError('Reserva no encontrada');
+  if (!booking.createdByAdmin) {
+    throw new ForbiddenError('Solo se pueden borrar reservas de prueba creadas por este atajo de admin', 'NOT_TEST_BOOKING');
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.booking.delete({ where: { id: bookingId } });
+    await tx.adminAction.create({
+      data: {
+        adminId,
+        actionType: 'DELETE_TEST_BOOKING',
+        targetId: bookingId,
+        notes: `Reserva de prueba ${bookingId} borrada.`,
+      },
+    });
+  });
+
+  logger.info('Admin: reserva de prueba borrada', { bookingId, adminId });
 }
 
 export type RefundDestination = 'WALLET' | 'COUPON' | 'MANUAL_TRANSACTION';
