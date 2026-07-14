@@ -209,6 +209,16 @@ class _MyDataScreenState extends State<MyDataScreen> {
         const SnackBar(content: Text('Selecciona tu fecha de nacimiento')));
       return;
     }
+    // Foto obligatoria para dueños de mascota — si el usuario ya tiene una
+    // (subida acá o heredada de su perfil de cuidador, si tiene doble rol),
+    // esto no bloquea nada; solo exige que exista alguna.
+    final hasPhoto = _pendingPhotoBytes != null ||
+        (_userData?['profilePicture'] as String? ?? '').trim().isNotEmpty;
+    if (!hasPhoto) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La foto de perfil es obligatoria')));
+      return;
+    }
     setState(() => _saving = true);
     try {
       final emailVerified = _userData?['emailVerified'] == true;
@@ -427,6 +437,15 @@ class _MyDataScreenState extends State<MyDataScreen> {
               onZoneChanged: (val) => setState(() => _addressZone = val),
               initialCityId: _gardenCityId,
               onCityChanged: (cityId, _) => setState(() => _gardenCityId = cityId),
+              onCityChangeReset: () => setState(() {
+                _addressLat = null;
+                _addressLng = null;
+                _streetCtrl.clear();
+                _numberCtrl.clear();
+                _apartmentCtrl.clear();
+                _condominioCtrl.clear();
+                _referenceCtrl.clear();
+              }),
               addressLat: _addressLat,
               addressLng: _addressLng,
               isApartment: _isApartment,

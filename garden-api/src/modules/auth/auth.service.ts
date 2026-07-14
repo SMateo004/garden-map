@@ -247,6 +247,10 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
           country: userInput.country.trim(),
           city: userInput.city.trim(),
           isOver18: userInput.isOver18 === true,
+          // Comparte la foto con User.profilePicture desde el registro — si
+          // este mismo usuario después usa su perfil de dueño de mascota
+          // (doble rol), "Mis Datos" ya la ve, no le pide una nueva.
+          ...(profileInput.profilePhoto ? { profilePicture: ensureAbsoluteUrl(profileInput.profilePhoto) } : {}),
         },
       });
 
@@ -785,6 +789,7 @@ export async function registerProfessional(body: RegisterProfessionalBody): Prom
         country: 'Bolivia',
         city: cityRecord?.name ?? 'Santa Cruz de la Sierra',
         isOver18: true,
+        ...(body.profilePhoto ? { profilePicture: ensureAbsoluteUrl(body.profilePhoto as string) } : {}),
       },
     });
 

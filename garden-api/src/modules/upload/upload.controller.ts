@@ -163,6 +163,9 @@ export const uploadUserPhotoHandler = [
     const url = await uploadImage(file.buffer, { folder: 'users', name: `user-${userId}-${Date.now()}` });
 
     await prisma.user.update({ where: { id: userId }, data: { profilePicture: url } });
+    // Si este usuario también tiene perfil de cuidador (doble rol), se
+    // sincroniza para que no queden dos fotos distintas del mismo usuario.
+    await prisma.caregiverProfile.updateMany({ where: { userId }, data: { profilePhoto: url } });
     logger.info('Foto usuario actualizada', { url, userId });
     res.json({ success: true, data: { url } });
   }),
