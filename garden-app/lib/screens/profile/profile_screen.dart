@@ -8,6 +8,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
 import '../client/my_data_screen.dart';
 import '../client/my_ratings_screen.dart';
+import '../client/nearby_vets_screen.dart';
 import 'blocked_users_screen.dart';
 import '../../services/auth_state.dart';
 import '../../services/secure_storage_service.dart';
@@ -31,7 +32,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   String _role = '';
   String _activeRole = '';
   Map<String, dynamic>? _caregiverProfile;
-  Map<String, dynamic>? _donationsSummary;
 
   // Pulsing animation for incomplete profile tiles
   late final AnimationController _pulseCtrl;
@@ -99,26 +99,9 @@ class _ProfileScreenState extends State<ProfileScreen>
     });
     if (_token.isNotEmpty) {
       await _loadProfile();
-      if (_effectiveRole == 'CLIENT') _loadDonationsSummary();
     } else {
       setState(() => _isLoading = false);
     }
-  }
-
-  /// Tarjeta de "Donador" — 100% simbólica/visual, pero con el monto real
-  /// acumulado (tabla Donation en el backend). No bloquea el spinner de la
-  /// página, es un dato secundario.
-  Future<void> _loadDonationsSummary() async {
-    try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/client/my-donations'),
-        headers: {'Authorization': 'Bearer $_token'},
-      );
-      final data = jsonDecode(response.body);
-      if (data['success'] == true && mounted) {
-        setState(() => _donationsSummary = data['data']);
-      }
-    } catch (_) {}
   }
 
   /// Refresca solo _caregiverProfile (sin spinner de página completa) — usado
@@ -465,61 +448,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  /// Tarjeta de "Donador" — solo aparece si el cliente ya donó al menos una
-  /// vez. Puramente decorativa/simbólica (el nivel no da ningún beneficio
-  /// real), pero el monto mostrado es el acumulado real de sus donaciones.
-  Widget _buildDonorCard(bool isDark) {
-    final total = (_donationsSummary?['totalAmount'] as num?)?.toDouble() ?? 0;
-    final count = (_donationsSummary?['count'] as num?)?.toInt() ?? 0;
-    if (count <= 0 || total <= 0) return const SizedBox.shrink();
-
-    final String tierEmoji;
-    final String tierLabel;
-    if (total >= 200) {
-      tierEmoji = '🦸';
-      tierLabel = 'Héroe Peludo';
-    } else if (total >= 50) {
-      tierEmoji = '🛡️';
-      tierLabel = 'Protector';
-    } else {
-      tierEmoji = '🐾';
-      tierLabel = 'Amigo de los Perritos';
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isDark
-              ? [const Color(0xFF3D2E0A), const Color(0xFF241A05)]
-              : [const Color(0xFFFFF8E1), const Color(0xFFFFF3D0)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFFFCC02).withValues(alpha: 0.4)),
-      ),
-      child: Row(children: [
-        Container(
-          width: 48, height: 48,
-          decoration: BoxDecoration(color: const Color(0xFFFFCC02).withValues(alpha: 0.2), shape: BoxShape.circle),
-          child: Center(child: Text(tierEmoji, style: const TextStyle(fontSize: 22))),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(tierLabel, style: const TextStyle(color: Color(0xFF8D6E00), fontSize: 14, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 2),
-            Text(
-              'Bs ${total.toStringAsFixed(0)} donados · $count reserva${count == 1 ? '' : 's'}',
-              style: const TextStyle(color: Color(0xFF8D6E63), fontSize: 12),
-            ),
-          ]),
-        ),
-      ]),
-    );
-  }
 
   Widget _profileTile({
     required IconData icon,
@@ -1046,7 +974,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                     Text('Mi cuenta', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
                     const SizedBox(height: 8),
                     if (_effectiveRole == 'CLIENT') ...[
-                      _buildDonorCard(isDark),
                       _profileTile(icon: Icons.person_outlined, title: 'Mis Datos', highlight: _isClientDataIncomplete, onTap: () async {
                         final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const MyDataScreen()));
                         if (result == true && mounted) _loadProfile();
@@ -1057,6 +984,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                       _profileTile(icon: Icons.star_outline, title: 'Mis calificaciones',
                           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyRatingsScreen()))),
                       _profileTile(icon: Icons.account_balance_wallet_outlined, title: 'Mi billetera', onTap: () => context.push('/wallet')),
+                      _profileTile(icon: Icons.local_hospital_outlined, title: 'Veterinarias cercanas',
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NearbyVetsScreen()))),
                       if (_role == 'CLIENT')
                         _profileTile(icon: Icons.volunteer_activism_outlined, title: 'Conviérteme en cuidador',
                             onTap: () => context.push('/become-caregiver')),
@@ -1295,7 +1224,6 @@ class _ProfileScreenState extends State<ProfileScreen>
         const SizedBox(height: 10),
         
         if (_effectiveRole == 'CLIENT') ...[
-          _buildDonorCard(isDark),
           _profileTile(icon: Icons.person_outlined, title: 'Mis Datos', highlight: _isClientDataIncomplete, onTap: () async {
             final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const MyDataScreen()));
             if (result == true && mounted) _loadProfile();
@@ -1306,6 +1234,8 @@ class _ProfileScreenState extends State<ProfileScreen>
           _profileTile(icon: Icons.star_outline, title: 'Mis calificaciones',
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyRatingsScreen()))),
           _profileTile(icon: Icons.account_balance_wallet_outlined, title: 'Mi billetera', onTap: () => context.push('/wallet')),
+          _profileTile(icon: Icons.local_hospital_outlined, title: 'Veterinarias cercanas',
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NearbyVetsScreen()))),
           // Solo para CLIENT permanente (no para CAREGIVER actuando como CLIENT)
           if (_role == 'CLIENT')
             _profileTile(

@@ -95,3 +95,67 @@ export const getMyDonationsSummary = asyncHandler(async (req: Request, res: Resp
     },
   });
 });
+
+/** Sin caracteres ambiguos (0/O, 1/I/L) para que se pueda dictar/anotar a mano sin errores. */
+const DONOR_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function generateDonorCode(): string {
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += DONOR_CODE_CHARS[Math.floor(Math.random() * DONOR_CODE_CHARS.length)];
+  }
+  return `GRD-${code}`;
+}
+
+/** GET /api/client/donor-card — tarjeta de donador completa (reverso de la
+ *  billetera): código único (se genera solo, fijo de por vida), total
+ *  donado + detalle, y uso del código en negocios asociados. */
+export const getDonorCard = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+
+  const existing = await prisma.user.findUnique({ where: { id: userId }, select: { donorCode: true } });
+  let donorCode = existing?.donorCode ?? null;
+
+  if (!donorCode) {
+    for (let attempt = 0; attempt < 5 && !donorCode; attempt++) {
+      try {
+        const updated = await prisma.user.update({
+          where: { id: userId },
+          data: { donorCode: generateDonorCode() },
+          select: { donorCode: true },
+        });
+        donorCode = updated.donorCode;
+      } catch (err: any) {
+        if (err?.code !== 'P2002') throw err; // colisión de código único → reintentar
+      }
+    }
+  }
+
+  const [agg, donations, redemptions, redemptionCount] = await Promise.all([
+    prisma.donation.aggregate({ where: { clientId: userId }, _sum: { amount: true }, _count: { _all: true } }),
+    prisma.donation.findMany({
+      where: { clientId: userId },
+      orderBy: { createdAt: 'desc' },
+      select: { amount: true, createdAt: true },
+      take: 50,
+    }),
+    prisma.donorCodeRedemption.findMany({
+      where: { userId },
+      orderBy: { redeemedAt: 'desc' },
+      select: { businessName: true, redeemedAt: true },
+      take: 50,
+    }),
+    prisma.donorCodeRedemption.count({ where: { userId } }),
+  ]);
+
+  res.json({
+    success: true,
+    data: {
+      code: donorCode,
+      totalDonated: Number(agg._sum.amount ?? 0),
+      donationCount: agg._count._all,
+      donations: donations.map((d) => ({ amount: Number(d.amount), date: d.createdAt })),
+      redemptionCount,
+      redemptions: redemptions.map((r) => ({ businessName: r.businessName, date: r.redeemedAt })),
+    },
+  });
+});

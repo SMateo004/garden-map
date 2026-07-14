@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -15,17 +16,61 @@ class WalletScreen extends StatefulWidget {
   State<WalletScreen> createState() => _WalletScreenState();
 }
 
-class _WalletScreenState extends State<WalletScreen> {
+class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderStateMixin {
   Map<String, dynamic>? _walletData;
   bool _isLoading = true;
   String _token = '';
   String _role = '';
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
+  // Tarjeta de donador — carrusel dentro de la billetera, solo para CLIENT.
+  final PageController _cardPageController = PageController();
+  int _cardPage = 0;
+  bool _donorCardFlipped = false;
+  Map<String, dynamic>? _donorCardData;
+  bool _loadingDonorCard = false;
+  late final AnimationController _flipController =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
+
+  void _toggleDonorFlip() {
+    if (_donorCardFlipped) {
+      _flipController.reverse();
+    } else {
+      _flipController.forward();
+    }
+    setState(() => _donorCardFlipped = !_donorCardFlipped);
+  }
+
   @override
   void initState() {
     super.initState();
     _initWallet();
+  }
+
+  Future<void> _loadDonorCard() async {
+    if (_donorCardData != null || _loadingDonorCard) return;
+    setState(() => _loadingDonorCard = true);
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/client/donor-card'),
+        headers: {'Authorization': 'Bearer $_token'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true && mounted) {
+        setState(() => _donorCardData = data['data']);
+      }
+    } catch (e) {
+      debugPrint('Error loading donor card: $e');
+    } finally {
+      if (mounted) setState(() => _loadingDonorCard = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _cardPageController.dispose();
+    _flipController.dispose();
+    super.dispose();
   }
 
   Future<void> _initWallet() async {
@@ -34,6 +79,7 @@ class _WalletScreenState extends State<WalletScreen> {
     _role = prefs.getString('user_role') ?? '';
     if (_token.isNotEmpty) {
       await _loadWallet();
+      if (_role == 'CLIENT') _loadDonorCard();
     } else {
       setState(() => _isLoading = false);
     }
@@ -113,64 +159,28 @@ class _WalletScreenState extends State<WalletScreen> {
                     child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // SECCIÓN 1 — Tarjeta de saldo principal
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(28),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [GardenColors.navy, GardenColors.primary.withValues(alpha: 0.8)],
+                      // SECCIÓN 1 — Tarjeta de saldo (+ tarjeta de donador, solo CLIENT)
+                      if (_role == 'CLIENT') ...[
+                        SizedBox(
+                          height: 220,
+                          child: PageView(
+                            controller: _cardPageController,
+                            onPageChanged: (i) => setState(() => _cardPage = i),
+                            children: [
+                              _buildBalanceCard(),
+                              _buildDonorCardFlip(),
+                            ],
                           ),
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: GardenShadows.elevated,
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Row(
-                              children: [
-                                Icon(Icons.account_balance_wallet_outlined, color: Colors.white70, size: 18),
-                                SizedBox(width: 8),
-                                Text('Saldo disponible', style: TextStyle(color: Colors.white70, fontSize: 13)),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            TweenAnimationBuilder<double>(
-                              key: ValueKey((_walletData?['balance'] ?? 0).toString()),
-                              tween: Tween(begin: 0, end: (_walletData?['balance'] as num? ?? 0).toDouble()),
-                              duration: const Duration(milliseconds: 700),
-                              curve: Curves.easeOutCubic,
-                              builder: (context, value, _) => Text(
-                                'Bs ${value.toStringAsFixed(2)}',
-                                style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.w900, letterSpacing: -1),
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            // Stats en fila
-                            Row(
-                              children: [
-                                if (_role == 'CAREGIVER') ...[
-                                  _walletStat('Ganado', 'Bs ${(_walletData?['totalEarned'] ?? 0).toStringAsFixed(0)}', GardenColors.success),
-                                  const SizedBox(width: 20),
-                                  _walletStat('Retirado', 'Bs ${(_walletData?['totalWithdrawn'] ?? 0).toStringAsFixed(0)}', Colors.white70),
-                                  if ((_walletData?['pendingWithdrawals'] ?? 0) > 0) ...[
-                                    const SizedBox(width: 20),
-                                    _walletStat('Pendiente', 'Bs ${(_walletData?['pendingWithdrawals'] ?? 0).toStringAsFixed(0)}', GardenColors.warning),
-                                  ],
-                                ] else ...[
-                                  _walletStat('Pagado', 'Bs ${(_walletData?['totalPaid'] ?? 0).toStringAsFixed(0)}', Colors.white70),
-                                  const SizedBox(width: 20),
-                                  _walletStat('Reembolsos', 'Bs ${(_walletData?['totalRefunded'] ?? 0).toStringAsFixed(0)}', GardenColors.info),
-                                ],
-                              ],
-                            ),
-                          ],
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [_pageDot(0), const SizedBox(width: 6), _pageDot(1)],
                         ),
-                      ),
+                      ] else
+                        _buildBalanceCard(),
                       const SizedBox(height: 16),
-                      
+
                       // Botón código de regalo
                       GestureDetector(
                         onTap: () => _showRedeemDialog(),
@@ -193,8 +203,11 @@ class _WalletScreenState extends State<WalletScreen> {
                           ),
                         ),
                       ),
-                      
+
                       const SizedBox(height: 24),
+                      if (_cardPage == 1 && _role == 'CLIENT')
+                        _buildDonorHistorySection(textColor, subtextColor, surface, borderColor)
+                      else ...[
                       // SECCIÓN 2 — Datos bancarios y botón de retiro (todos los roles)
                       Text('Datos de cobro', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 12),
@@ -227,7 +240,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                               style: TextStyle(color: subtextColor, fontSize: 13)),
                                         ],
                                       )
-                                    : Text('Configura tus datos para cobrar', 
+                                    : Text('Configura tus datos para cobrar',
                                         style: TextStyle(color: subtextColor, fontSize: 13, fontStyle: FontStyle.italic)),
                               ),
                               const SizedBox(width: 8),
@@ -273,6 +286,7 @@ class _WalletScreenState extends State<WalletScreen> {
                             return true;
                           })
                           .map((t) => _buildTransactionTile(t as Map<String, dynamic>, surface, textColor, subtextColor, borderColor)),
+                      ],
                     ],
                   ),
                 )),
@@ -282,6 +296,284 @@ class _WalletScreenState extends State<WalletScreen> {
           ),
         );
       },
+    );
+  }
+
+  // ── Tarjeta de saldo (extraída para poder vivir dentro de un PageView) ──────
+  Widget _buildBalanceCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [GardenColors.navy, GardenColors.primary.withValues(alpha: 0.8)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: GardenShadows.elevated,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.account_balance_wallet_outlined, color: Colors.white70, size: 18),
+              SizedBox(width: 8),
+              Text('Saldo disponible', style: TextStyle(color: Colors.white70, fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TweenAnimationBuilder<double>(
+            key: ValueKey((_walletData?['balance'] ?? 0).toString()),
+            tween: Tween(begin: 0, end: (_walletData?['balance'] as num? ?? 0).toDouble()),
+            duration: const Duration(milliseconds: 700),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, _) => Text(
+              'Bs ${value.toStringAsFixed(2)}',
+              style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.w900, letterSpacing: -1),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              if (_role == 'CAREGIVER') ...[
+                _walletStat('Ganado', 'Bs ${(_walletData?['totalEarned'] ?? 0).toStringAsFixed(0)}', GardenColors.success),
+                const SizedBox(width: 20),
+                _walletStat('Retirado', 'Bs ${(_walletData?['totalWithdrawn'] ?? 0).toStringAsFixed(0)}', Colors.white70),
+                if ((_walletData?['pendingWithdrawals'] ?? 0) > 0) ...[
+                  const SizedBox(width: 20),
+                  _walletStat('Pendiente', 'Bs ${(_walletData?['pendingWithdrawals'] ?? 0).toStringAsFixed(0)}', GardenColors.warning),
+                ],
+              ] else ...[
+                _walletStat('Pagado', 'Bs ${(_walletData?['totalPaid'] ?? 0).toStringAsFixed(0)}', Colors.white70),
+                const SizedBox(width: 20),
+                _walletStat('Reembolsos', 'Bs ${(_walletData?['totalRefunded'] ?? 0).toStringAsFixed(0)}', GardenColors.info),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pageDot(int index) {
+    final active = _cardPage == index;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      width: active ? 18 : 6,
+      height: 6,
+      decoration: BoxDecoration(
+        color: active ? GardenColors.primary : GardenColors.primary.withValues(alpha: 0.25),
+        borderRadius: BorderRadius.circular(3),
+      ),
+    );
+  }
+
+  // ── Tarjeta de donador — flip 3D al tocar (frente: monto donado, reverso:
+  // código de socio para descuentos en negocios asociados). Diseño exclusivo
+  // tipo tarjeta premium — negro + dorado, deliberadamente distinto de la
+  // tarjeta de saldo para que se lea como "otra clase de tarjeta".
+  Widget _buildDonorCardFlip() {
+    return GestureDetector(
+      onTap: _toggleDonorFlip,
+      child: AnimatedBuilder(
+        animation: _flipController,
+        builder: (context, child) {
+          final angle = _flipController.value * math.pi;
+          final showFront = angle <= math.pi / 2;
+          return Transform(
+            alignment: Alignment.center,
+            transform: Matrix4.identity()
+              ..setEntry(3, 2, 0.0018)
+              ..rotateY(angle),
+            child: showFront
+                ? _donorCardFront()
+                : Transform(
+                    alignment: Alignment.center,
+                    transform: Matrix4.identity()..rotateY(math.pi),
+                    child: _donorCardBack(),
+                  ),
+          );
+        },
+      ),
+    );
+  }
+
+  static const _donorGold = Color(0xFFD4AF37);
+
+  Widget _donorCardFront() {
+    final total = (_donorCardData?['totalDonated'] as num?)?.toDouble() ?? 0;
+    final count = (_donorCardData?['donationCount'] as num?)?.toInt() ?? 0;
+    return Container(
+      width: double.infinity,
+      height: 200,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF232323), Color(0xFF000000)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _donorGold.withValues(alpha: 0.4)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 20, offset: const Offset(0, 10))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.pets_rounded, color: _donorGold, size: 20),
+              const SizedBox(width: 8),
+              const Text('GARDEN DONADOR', style: TextStyle(color: _donorGold, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 2)),
+              const Spacer(),
+              Icon(Icons.touch_app_outlined, color: Colors.white.withValues(alpha: 0.4), size: 16),
+            ],
+          ),
+          const Spacer(),
+          if (_loadingDonorCard)
+            const SizedBox(
+              width: 22, height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2, color: _donorGold),
+            )
+          else ...[
+            Text('Bs ${total.toStringAsFixed(0)} donados',
+                style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+            const SizedBox(height: 4),
+            Text('$count donación${count == 1 ? '' : 'es'} realizada${count == 1 ? '' : 's'}',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 13)),
+          ],
+          const SizedBox(height: 14),
+          Text('Toca para ver tu código de socio',
+              style: TextStyle(color: _donorGold.withValues(alpha: 0.85), fontSize: 11, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _donorCardBack() {
+    final code = _donorCardData?['code'] as String? ?? '············';
+    final redemptionCount = (_donorCardData?['redemptionCount'] as num?)?.toInt() ?? 0;
+    return Container(
+      width: double.infinity,
+      height: 200,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF232323), Color(0xFF000000)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _donorGold.withValues(alpha: 0.4)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 20, offset: const Offset(0, 10))],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(width: double.infinity, height: 34, color: const Color(0xFF0A0A0A)),
+          const SizedBox(height: 22),
+          Text(
+            code,
+            style: const TextStyle(color: _donorGold, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 2.5, fontFamily: 'monospace'),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Código de socio · válido en negocios asociados',
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 14),
+          Text('Usado $redemptionCount ${redemptionCount == 1 ? 'vez' : 'veces'}',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  // ── Debajo de la tarjeta de donador: historial de donaciones + uso del
+  // código en negocios, en vez de "Datos de cobro"/transacciones normales.
+  Widget _buildDonorHistorySection(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    final donations = (_donorCardData?['donations'] as List?) ?? [];
+    final redemptions = (_donorCardData?['redemptions'] as List?) ?? [];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Historial de donaciones', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 16),
+        if (donations.isEmpty)
+          Center(
+            child: Column(children: [
+              const SizedBox(height: 40),
+              Icon(Icons.favorite_border_rounded, size: 48, color: subtextColor.withValues(alpha: 0.5)),
+              const SizedBox(height: 12),
+              Text('Aún no hiciste ninguna donación', style: TextStyle(color: subtextColor, fontSize: 14)),
+            ]),
+          )
+        else
+          ...donations.map((d) {
+            final amount = (d['amount'] as num).toDouble();
+            final date = DateTime.tryParse(d['date'] as String? ?? '');
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderColor)),
+              child: Row(children: [
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(color: _donorGold.withValues(alpha: 0.12), shape: BoxShape.circle),
+                  child: const Icon(Icons.favorite_rounded, color: _donorGold, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    date != null ? '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}' : '—',
+                    style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Text('Bs ${amount.toStringAsFixed(2)}', style: const TextStyle(color: _donorGold, fontWeight: FontWeight.w800, fontSize: 14)),
+              ]),
+            );
+          }),
+        const SizedBox(height: 32),
+        Text('Uso de tu tarjeta', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 16),
+        if (redemptions.isEmpty)
+          Center(
+            child: Column(children: [
+              const SizedBox(height: 40),
+              Icon(Icons.storefront_outlined, size: 48, color: subtextColor.withValues(alpha: 0.5)),
+              const SizedBox(height: 12),
+              Text('Todavía no usaste tu código en ningún negocio', style: TextStyle(color: subtextColor, fontSize: 14), textAlign: TextAlign.center),
+            ]),
+          )
+        else
+          ...redemptions.map((r) {
+            final date = DateTime.tryParse(r['date'] as String? ?? '');
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderColor)),
+              child: Row(children: [
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(color: GardenColors.secondary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.storefront_rounded, color: GardenColors.secondary, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(r['businessName'] as String? ?? '—', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                ),
+                Text(
+                  date != null ? '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}' : '—',
+                  style: TextStyle(color: subtextColor, fontSize: 12),
+                ),
+              ]),
+            );
+          }),
+      ],
     );
   }
 
