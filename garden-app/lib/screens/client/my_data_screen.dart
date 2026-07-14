@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/address_section.dart';
+import '../../services/cities_service.dart';
 import '../../constants/geo_data.dart';
 import '../../utils/input_formatters.dart';
 
@@ -45,6 +46,9 @@ class _MyDataScreenState extends State<MyDataScreen> {
   double? _addressLat;
   double? _addressLng;
   bool _isApartment = false;
+  // Ciudad/zona de Garden (multi-ciudad) — distinto de _selectedCity, que es
+  // el departamento de Bolivia (dato general del perfil, ya existente).
+  String? _gardenCityId;
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
@@ -108,7 +112,12 @@ class _MyDataScreenState extends State<MyDataScreen> {
           _firstCtrl.text = user['firstName'] as String? ?? '';
           _lastCtrl.text = user['lastName'] as String? ?? '';
           _emailCtrl.text = user['email'] as String? ?? '';
-          _phoneCtrl.text = user['phone'] as String? ?? '';
+          // Cuentas creadas vía login social sin teléfono real reciben un
+          // placeholder interno ('social_pending_xxxxx') para satisfacer la
+          // columna NOT NULL/UNIQUE — nunca debe mostrarse tal cual, el campo
+          // debe quedar vacío para que el usuario cargue su número real.
+          final rawPhone = user['phone'] as String? ?? '';
+          _phoneCtrl.text = rawPhone.startsWith('social_pending_') ? '' : rawPhone;
           _selectedCity = _matchOption(user['city'] as String?, kBoliviaDepartments);
           _selectedCountry = _matchOption(user['country'] as String?, kLatamCountries);
           _addressCtrl.text = user['address'] as String? ?? '';
@@ -119,6 +128,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
           _condominioCtrl.text = user['addressCondominio'] as String? ?? '';
           _referenceCtrl.text = user['addressReference'] as String? ?? '';
           _addressZone = user['addressZone'] as String?;
+          _gardenCityId = user['cityId'] as String?;
           _addressLat = (user['addressLat'] as num?)?.toDouble();
           _addressLng = (user['addressLng'] as num?)?.toDouble();
           _isApartment = (user['addressApartment'] as String? ?? '').isNotEmpty;
@@ -237,7 +247,15 @@ class _MyDataScreenState extends State<MyDataScreen> {
         if (_isApartment && _condominioCtrl.text.trim().isNotEmpty) 'addressCondominio': _condominioCtrl.text.trim(),
         if (_referenceCtrl.text.trim().isNotEmpty) 'addressReference': _referenceCtrl.text.trim(),
         if (_addressZone != null) 'addressZone': _addressZone,
+        if (_gardenCityId != null) 'cityId': _gardenCityId,
       };
+      // Resolver el zoneId real (uuid) a partir del key elegido — el
+      // dropdown de AddressSection trabaja con el key legible, no el id.
+      if (_gardenCityId != null && _addressZone != null) {
+        final zones = await CitiesService.getZones(_gardenCityId!);
+        final match = zones.where((z) => z.key == _addressZone).firstOrNull;
+        if (match != null) body['zoneId'] = match.id;
+      }
       final res = await http.patch(
         Uri.parse('$_baseUrl/auth/me'),
         headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
@@ -452,6 +470,8 @@ class _MyDataScreenState extends State<MyDataScreen> {
               referenceController: _referenceCtrl,
               selectedZone: _addressZone,
               onZoneChanged: (val) => setState(() => _addressZone = val),
+              initialCityId: _gardenCityId,
+              onCityChanged: (cityId, _) => setState(() => _gardenCityId = cityId),
               addressLat: _addressLat,
               addressLng: _addressLng,
               isApartment: _isApartment,

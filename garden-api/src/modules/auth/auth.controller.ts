@@ -59,6 +59,8 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
           addressCondominio: true,
           addressReference: true,
           addressZone: true,
+          cityId: true,
+          zoneId: true,
         },
       });
       return res.json({
@@ -75,6 +77,8 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
           addressCondominio: clientProfile?.addressCondominio ?? null,
           addressReference: clientProfile?.addressReference ?? null,
           addressZone: clientProfile?.addressZone ?? null,
+          cityId: clientProfile?.cityId ?? null,
+          zoneId: clientProfile?.zoneId ?? null,
           clientProfile: clientProfile ? { isComplete: clientProfile.isComplete } : null,
         },
       });
@@ -96,6 +100,8 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
           addressCondominio: true,
           addressReference: true,
           addressZone: true,
+          cityId: true,
+          zoneId: true,
         },
       });
       const effectivePhoto = user.profilePicture || caregiverProfile?.profilePhoto;
@@ -115,6 +121,8 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
           addressCondominio: caregiverProfile?.addressCondominio ?? null,
           addressReference: caregiverProfile?.addressReference ?? null,
           addressZone: caregiverProfile?.addressZone ?? null,
+          cityId: caregiverProfile?.cityId ?? null,
+          zoneId: caregiverProfile?.zoneId ?? null,
           caregiverProfile: caregiverProfile ? { profilePhoto: caregiverProfile.profilePhoto } : null,
         },
       });
@@ -359,13 +367,15 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
   const {
     firstName, lastName, phone, city, country, dateOfBirth, address, bio, email,
     addressLat, addressLng, addressStreet, addressNumber, addressApartment,
-    addressCondominio, addressReference, addressZone,
+    addressCondominio, addressReference, addressZone, cityId, zoneId,
   } = req.body as {
     firstName?: string; lastName?: string; phone?: string; city?: string; country?: string;
     dateOfBirth?: string; address?: string; bio?: string; email?: string;
     addressLat?: number; addressLng?: number;
     addressStreet?: string; addressNumber?: string; addressApartment?: string;
     addressCondominio?: string; addressReference?: string; addressZone?: string;
+    /** Ciudad/zona reales (multi-ciudad) — ids de City/CityZone, no el enum legado. */
+    cityId?: string; zoneId?: string;
   };
   const userData: Record<string, unknown> = {};
   if (firstName && firstName.trim()) userData.firstName = firstName.trim();
@@ -414,6 +424,8 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
   if (addressCondominio !== undefined) profileData.addressCondominio = addressCondominio?.trim() || null;
   if (addressReference !== undefined) profileData.addressReference = addressReference?.trim() || null;
   if (addressZone !== undefined) profileData.addressZone = addressZone?.trim() || null;
+  if (cityId !== undefined) profileData.cityId = cityId || null;
+  if (zoneId !== undefined) profileData.zoneId = zoneId || null;
 
   if (Object.keys(userData).length === 0 && Object.keys(profileData).length === 0) {
     return res.status(400).json({ success: false, error: { code: 'EMPTY_BODY', message: 'Nada que actualizar' } });

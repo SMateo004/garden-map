@@ -15,6 +15,7 @@ import 'admin_phone_otp_screen.dart';
 import 'admin_email_otp_screen.dart';
 import 'admin_donations_screen.dart';
 import 'admin_vets_screen.dart';
+import 'admin_cities_screen.dart';
 import 'payment_qr_admin_screen.dart';
 import 'audit_screen.dart';
 import '../../services/auth_service.dart';
@@ -1034,6 +1035,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ('Verif. telefónica', Icons.phone_forwarded_outlined),
     ('Verif. de correo', Icons.mark_email_unread_outlined),
     ('Donaciones', Icons.volunteer_activism_outlined),
+    ('Ciudades', Icons.map_rounded),
   ];
 
   // Agrupación del sidebar web — cada grupo es (título, ícono, índices de _tabs).
@@ -1041,7 +1043,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   // "Finanzas" — no es ingreso de Garden, es dinero de terceros en tránsito
   // hacia refugios, y el admin no puede editar montos ahí.
   static const List<(String, IconData, List<int>)> _webNavGroups = [
-    ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5]),
+    ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5, 21]),
     ('Finanzas', Icons.attach_money_rounded, [3, 6, 7, 15]),
     ('Personas', Icons.groups_outlined, [8, 9, 20]),
     ('Comunicación', Icons.forum_outlined, [12, 13, 17, 18, 19]),
@@ -1073,6 +1075,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         AdminPhoneOtpScreen(adminToken: _adminToken),
         AdminEmailOtpScreen(adminToken: _adminToken),
         AdminDonationsScreen(adminToken: _adminToken),
+        AdminCitiesScreen(adminToken: _adminToken),
       ],
     );
   }

@@ -240,6 +240,92 @@ router.get('/debug/animal-types', asyncHandler(async (_req, res) => {
   });
 }));
 
+// ── Ciudades y zonas (multi-ciudad) ─────────────────────────────────────────
+
+/** GET /api/admin/cities — listar todas las ciudades (incl. inactivas) */
+router.get('/cities', asyncHandler(async (_req, res) => {
+  const cities = await prisma.city.findMany({ orderBy: { name: 'asc' }, include: { _count: { select: { zones: true } } } });
+  res.json({ success: true, data: cities });
+}));
+
+/** POST /api/admin/cities — crear ciudad nueva */
+router.post('/cities', asyncHandler(async (req, res) => {
+  const { name, slug, centerLat, centerLng, defaultZoom } = req.body;
+  if (!name || !slug || centerLat == null || centerLng == null) {
+    res.status(400).json({ success: false, error: { message: 'name, slug, centerLat, centerLng son requeridos' } });
+    return;
+  }
+  const city = await prisma.city.create({
+    data: {
+      name, slug,
+      centerLat: parseFloat(centerLat), centerLng: parseFloat(centerLng),
+      defaultZoom: defaultZoom != null ? parseFloat(defaultZoom) : 13,
+    },
+  });
+  res.json({ success: true, data: city });
+}));
+
+/** PATCH /api/admin/cities/:id — editar ciudad (nombre, centro del mapa, activar/desactivar) */
+router.patch('/cities/:id', asyncHandler(async (req, res) => {
+  const { name, centerLat, centerLng, defaultZoom, active } = req.body;
+  const city = await prisma.city.update({
+    where: { id: req.params.id },
+    data: {
+      ...(name !== undefined && { name }),
+      ...(centerLat !== undefined && { centerLat: parseFloat(centerLat) }),
+      ...(centerLng !== undefined && { centerLng: parseFloat(centerLng) }),
+      ...(defaultZoom !== undefined && { defaultZoom: parseFloat(defaultZoom) }),
+      ...(active !== undefined && { active }),
+    },
+  });
+  res.json({ success: true, data: city });
+}));
+
+/** GET /api/admin/city-zones?cityId= — listar zonas de una ciudad (incl. inactivas) */
+router.get('/city-zones', asyncHandler(async (req, res) => {
+  const cityId = req.query.cityId as string | undefined;
+  const zones = await prisma.cityZone.findMany({
+    where: cityId ? { cityId } : undefined,
+    orderBy: [{ cityId: 'asc' }, { label: 'asc' }],
+    include: { city: { select: { name: true, slug: true } } },
+  });
+  res.json({ success: true, data: zones });
+}));
+
+/** POST /api/admin/city-zones — crear zona nueva dentro de una ciudad */
+router.post('/city-zones', asyncHandler(async (req, res) => {
+  const { cityId, key, label, color, lat, lng } = req.body;
+  if (!cityId || !key || !label || !color || lat == null || lng == null) {
+    res.status(400).json({ success: false, error: { message: 'cityId, key, label, color, lat, lng son requeridos' } });
+    return;
+  }
+  const zone = await prisma.cityZone.create({
+    data: {
+      cityId,
+      key: String(key).trim().toUpperCase().replace(/\s+/g, '_'),
+      label, color,
+      lat: parseFloat(lat), lng: parseFloat(lng),
+    },
+  });
+  res.json({ success: true, data: zone });
+}));
+
+/** PATCH /api/admin/city-zones/:id — editar zona (label, color, coords, activar/desactivar) */
+router.patch('/city-zones/:id', asyncHandler(async (req, res) => {
+  const { label, color, lat, lng, active } = req.body;
+  const zone = await prisma.cityZone.update({
+    where: { id: req.params.id },
+    data: {
+      ...(label !== undefined && { label }),
+      ...(color !== undefined && { color }),
+      ...(lat !== undefined && { lat: parseFloat(lat) }),
+      ...(lng !== undefined && { lng: parseFloat(lng) }),
+      ...(active !== undefined && { active }),
+    },
+  });
+  res.json({ success: true, data: zone });
+}));
+
 /** GET /api/admin/vets — listar veterinarias */
 router.get('/vets', asyncHandler(async (_req, res) => {
   const vets = await (prisma as any).vetClinic.findMany({ orderBy: { createdAt: 'desc' } });
@@ -283,6 +369,48 @@ router.delete('/vets/:id', asyncHandler(async (req, res) => {
     data: { isActive: false },
   });
   res.json({ success: true });
+}));
+
+// ── Tarjeta de donador — canjes en negocios asociados ───────────────────────
+// El negocio no tiene cuenta ni valida nada por su cuenta: anota el uso a
+// mano y se lo comunica a Garden; el admin lo carga acá con el código del
+// cliente. Puramente informativo, sin ningún efecto monetario.
+
+/** GET /api/admin/donor-redemptions — historial completo de canjes. */
+router.get('/donor-redemptions', asyncHandler(async (_req, res) => {
+  const redemptions = await prisma.donorCodeRedemption.findMany({
+    orderBy: { redeemedAt: 'desc' },
+    take: 200,
+    include: { user: { select: { firstName: true, lastName: true, email: true, donorCode: true } } },
+  });
+  res.json({ success: true, data: redemptions });
+}));
+
+/** POST /api/admin/donor-redemptions — registrar un canje por código de donador. */
+router.post('/donor-redemptions', asyncHandler(async (req, res) => {
+  const { donorCode, businessName, redeemedAt } = req.body;
+  if (!donorCode || !businessName || !redeemedAt) {
+    res.status(400).json({ success: false, error: { message: 'donorCode, businessName y redeemedAt son requeridos' } });
+    return;
+  }
+  const user = await prisma.user.findUnique({
+    where: { donorCode: String(donorCode).trim().toUpperCase() },
+    select: { id: true, firstName: true, lastName: true },
+  });
+  if (!user) {
+    res.status(404).json({ success: false, error: { message: 'Código de donador no encontrado' } });
+    return;
+  }
+  const adminId = (req.user as { userId?: string })?.userId;
+  const redemption = await prisma.donorCodeRedemption.create({
+    data: {
+      userId: user.id,
+      businessName: String(businessName).trim(),
+      redeemedAt: new Date(redeemedAt),
+      loggedByAdminId: adminId ?? null,
+    },
+  });
+  res.json({ success: true, data: { ...redemption, userName: `${user.firstName} ${user.lastName}` } });
 }));
 
 // ── Donaciones (trazabilidad completa — separada del área financiera) ──────

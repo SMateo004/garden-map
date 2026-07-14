@@ -24,6 +24,7 @@ import 'package:image_picker/image_picker.dart' as image_picker_pkg;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart' show fixImageUrl, GardenColors, GardenButton, themeNotifier;
 import '../../services/auth_service.dart';
+import '../../services/cities_service.dart';
 import '../../utils/input_formatters.dart';
 import 'caregiver_profile_data_screen.dart';
 
@@ -98,9 +99,22 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
   /// así que _canProceed nunca se reevaluaba mientras el usuario tipeaba).
   void _onFormFieldChanged() { if (mounted) setState(() {}); }
 
+  // Zonas de Santa Cruz (dinámicas — reemplaza el mapa hardcodeado que tenía
+  // una key rota 'CENTRO_SAN_MARTIN' sin match con ninguna zona real).
+  List<GardenZone> _zones = [];
+
+  Future<void> _loadZones() async {
+    final cities = await CitiesService.getCities();
+    final scz = cities.where((c) => c.slug == 'santa-cruz').firstOrNull;
+    if (scz == null || !mounted) return;
+    final zones = await CitiesService.getZones(scz.id);
+    if (mounted) setState(() => _zones = zones);
+  }
+
   @override
   void initState() {
     super.initState();
+    _loadZones();
     for (final c in [
       _firstNameController, _lastNameController, _emailController,
       _passwordController, _phoneController, _bioController,
@@ -719,15 +733,6 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
   }
 
   Widget _buildStep2(Color textColor, Color subtextColor, Color borderColor, Color surfaceEl) {
-    const zoneLabels = {
-      'EQUIPETROL': 'Equipetrol',
-      'URBARI': 'Urbari',
-      'NORTE': 'Norte',
-      'LAS_PALMAS': 'Las Palmas',
-      'CENTRO_SAN_MARTIN': 'Centro/San Martín',
-      'OTROS': 'Otros',
-    };
-
     Widget serviceCard(String service, String emoji, String label) {
       final selected = _servicesOffered.contains(service);
       return GestureDetector(
@@ -784,9 +789,9 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
             prefixIcon: Icon(Icons.location_on_outlined, color: subtextColor, size: 20),
           ),
           hint: Text('Selecciona tu zona', style: TextStyle(color: subtextColor)),
-          items: zoneLabels.entries.map((e) => DropdownMenuItem(
-            value: e.key,
-            child: Text(e.value, style: TextStyle(color: textColor)),
+          items: _zones.map((z) => DropdownMenuItem(
+            value: z.key,
+            child: Text(z.label, style: TextStyle(color: textColor)),
           )).toList(),
           onChanged: (v) => setState(() => _selectedZone = v),
         ),

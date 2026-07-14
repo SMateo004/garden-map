@@ -35,4 +35,34 @@ router.get(
   })
 );
 
+/** GET /api/vets/nearest-for-me — las 5 veterinarias activas más cercanas a
+ * la dirección guardada del cliente logueado (Mi Perfil). No requiere pasar
+ * lat/lng — usa la ubicación real de su perfil (ciudad/zona actual). */
+router.get(
+  '/nearest-for-me',
+  authMiddleware,
+  asyncHandler(async (req, res) => {
+    const userId = req.user!.userId;
+    const effectiveRole = (req.user as { activeRole?: string })?.activeRole ?? req.user?.role;
+    const profile = effectiveRole === 'CAREGIVER'
+      ? await prisma.caregiverProfile.findUnique({ where: { userId }, select: { addressLat: true, addressLng: true } })
+      : await prisma.clientProfile.findUnique({ where: { userId }, select: { addressLat: true, addressLng: true } });
+
+    if (!profile?.addressLat || !profile?.addressLng) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'NO_ADDRESS', message: 'Completa tu dirección en Mi Perfil para ver veterinarias cercanas.' },
+      });
+      return;
+    }
+
+    const vets = await (prisma as any).vetClinic.findMany({ where: { isActive: true } });
+    const sorted = vets
+      .map((v: any) => ({ ...v, distanceKm: haversineKm(profile.addressLat!, profile.addressLng!, v.lat, v.lng) }))
+      .sort((a: any, b: any) => a.distanceKm - b.distanceKm)
+      .slice(0, 5);
+    res.json({ success: true, data: sorted });
+  })
+);
+
 export default router;

@@ -380,6 +380,36 @@ app.get('/api/settings/blocked-zones', async (_req, res) => {
   }
 });
 
+/** GET /api/cities — ciudades activas donde Garden opera (público, sin auth).
+ * Usado para el selector de ciudad en registro/perfil, antes de elegir zona. */
+app.get('/api/cities', async (_req, res) => {
+  try {
+    const cities = await prisma.city.findMany({
+      where: { active: true },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, slug: true, centerLat: true, centerLng: true, defaultZoom: true },
+    });
+    res.json({ success: true, data: cities });
+  } catch {
+    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Error loading cities' } });
+  }
+});
+
+/** GET /api/cities/:cityId/zones — zonas activas de una ciudad (público, sin auth).
+ * Reemplaza el enum fijo Zone — cada ciudad tiene sus propias zonas con color/coords. */
+app.get('/api/cities/:cityId/zones', async (req, res) => {
+  try {
+    const zones = await prisma.cityZone.findMany({
+      where: { cityId: req.params.cityId as string, active: true },
+      orderBy: { label: 'asc' },
+      select: { id: true, key: true, label: true, color: true, lat: true, lng: true },
+    });
+    res.json({ success: true, data: zones });
+  } catch {
+    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Error loading zones' } });
+  }
+});
+
 /** GET /api/banners — banners activos ordenados por posición (público, sin auth) */
 app.get('/api/banners', async (_req, res) => {
   try {

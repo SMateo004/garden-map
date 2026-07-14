@@ -22,6 +22,11 @@ model User {
   profilePicture               String?
   country                      String?
   city                         String?
+  /// Código único de la tarjeta de donador — se genera solo la primera vez
+  /// que el cliente abre esa tarjeta en la billetera (lazy), fijo de por
+  /// vida. Se muestra en el reverso de la tarjeta para canjear descuentos
+  /// en veterinarias/negocios asociados.
+  donorCode                    String?                       @unique
   isOver18                     Boolean                       @default(true)
   createdAt                    DateTime                      @default(now())
   updatedAt                    DateTime                      @updatedAt
@@ -39,6 +44,7 @@ model User {
   sentMessages                 ChatMessage[]
   walletTransactions           WalletTransaction[]
   donations                    Donation[]
+  donorCodeRedemptions         DonorCodeRedemption[]
   featureFlags                 UserFeatureFlag[]             @relation("UserFeatureFlags")
   refreshTokens                RefreshToken[]
   passwordResets               PasswordReset[]
@@ -108,6 +114,13 @@ model CaregiverProfile {
   addressCondominio               String?                 @db.VarChar(100)
   addressReference                String?                 @db.VarChar(200)
   addressZone                     String?                 @db.VarChar(100)
+  /// Ciudad/zona reales (multi-ciudad) — reemplazan gradualmente el enum
+  /// `zone` fijo a Santa Cruz. Nullable por ahora para no romper perfiles
+  /// existentes; se migran con un script aparte.
+  cityId                          String?
+  city                            City?                   @relation(fields: [cityId], references: [id])
+  zoneId                          String?
+  cityZone                        CityZone?               @relation(fields: [zoneId], references: [id])
   servicesOffered                 ServiceType[]
   serviceAvailability             Json?
   pricePerDay                     Int?
@@ -207,7 +220,7 @@ model CaregiverProfile {
   infractionCount                 Int                     @default(0)
   /// Contactos de emergencia obligatorios (1-3): [{ name: string, phone: string }].
   /// Requerido por Términos y Condiciones Sección 17 antes de ofrecer Hospedaje/Guardería.
-  emergencyContacts                Json?
+  emergencyContacts               Json?
   availability                    Availability[]
   bookings                        Booking[]               @relation("CaregiverBookings")
   user                            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -391,15 +404,15 @@ model BookingPet {
 /// isCompany=true — validado en el service, no aquí, para poder abrirlo a
 /// cuidadores individuales a futuro sin migración). Se cobra siempre por día.
 model ExtraService {
-  id            String         @id @default(uuid())
+  id            String           @id @default(uuid())
   caregiverId   String
-  name          String         @db.VarChar(100)
-  pricePerDay   Decimal        @db.Decimal(10, 2)
+  name          String           @db.VarChar(100)
+  pricePerDay   Decimal          @db.Decimal(10, 2)
   /// A qué servicio(s) principal(es) aplica este extra.
   appliesTo     ServiceType[]
-  active        Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  active        Boolean          @default(true)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
   caregiver     CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
   bookingExtras BookingExtra[]
 
@@ -504,30 +517,35 @@ model Review {
 /// isComplete = true cuando tiene al menos un Pet con name, size y photoUrl (permite crear reservas).
 /// Fotos: petPhoto = URL absoluta Cloudinary (sincronizada con primera mascota); cada Pet.photoUrl también.
 model ClientProfile {
-  id                   String   @id @default(uuid())
-  userId               String   @unique
-  address              String?  @db.VarChar(500)
+  id                   String    @id @default(uuid())
+  userId               String    @unique
+  address              String?   @db.VarChar(500)
   addressLat           Float?
   addressLng           Float?
-  addressStreet        String?  @db.VarChar(200)
-  addressNumber        String?  @db.VarChar(20)
-  addressApartment     String?  @db.VarChar(50)
-  addressCondominio    String?  @db.VarChar(100)
-  addressReference     String?  @db.VarChar(200)
-  addressZone          String?  @db.VarChar(100)
-  phone                String?  @db.VarChar(20)
+  addressStreet        String?   @db.VarChar(200)
+  addressNumber        String?   @db.VarChar(20)
+  addressApartment     String?   @db.VarChar(50)
+  addressCondominio    String?   @db.VarChar(100)
+  addressReference     String?   @db.VarChar(200)
+  addressZone          String?   @db.VarChar(100)
+  /// Ciudad/zona reales (multi-ciudad) — mismo patrón que CaregiverProfile.
+  cityId               String?
+  city                 City?     @relation(fields: [cityId], references: [id])
+  zoneId               String?
+  cityZone             CityZone? @relation(fields: [zoneId], references: [id])
+  phone                String?   @db.VarChar(20)
   bio                  String?
   /// URL absoluta Cloudinary de la foto principal de mascota (p. ej. primera mascota).
   petPhoto             String?
   /// true = tiene al menos una mascota completa (name, size, photoUrl); permite reservas.
-  isComplete           Boolean  @default(false)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isComplete           Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   pets                 Pet[]
   /// @deprecated — balance moved to User.balance for unified wallet. Kept for zero-downtime migration.
-  balance              Decimal  @default(0) @db.Decimal(10, 2)
-  favoriteCaregiverIds String[] @default([])
+  balance              Decimal   @default(0) @db.Decimal(10, 2)
+  favoriteCaregiverIds String[]  @default([])
 
   @@index([userId])
   @@index([isComplete])
@@ -601,11 +619,11 @@ model AdminNotification {
 
 /// Donación voluntaria del dueño al momento del pago, destinada al 100% a hogares de perros.
 model Donation {
-  id               String    @id @default(uuid())
-  bookingId        String    @unique
-  clientId         String
-  amount           Decimal   @db.Decimal(10, 2)
-  createdAt        DateTime  @default(now())
+  id                 String    @id @default(uuid())
+  bookingId          String    @unique
+  clientId           String
+  amount             Decimal   @db.Decimal(10, 2)
+  createdAt          DateTime  @default(now())
   /// Fecha en que el admin transfirió los fondos al beneficiario. El monto
   /// (`amount`) NUNCA se edita desde el panel de admin — solo se registra
   /// que ya se hizo la transferencia real y hacia quién.
@@ -622,6 +640,24 @@ model Donation {
   @@index([clientId])
   @@index([beneficiaryId])
   @@map("donations")
+}
+
+/// Registro de un canje de la tarjeta de donador en una veterinaria/negocio
+/// asociado. El negocio no tiene cuenta ni valida nada por su cuenta — anota
+/// el uso a mano y se lo comunica a Garden; el admin lo carga acá desde el
+/// panel. Puramente informativo, no dispara ningún efecto monetario.
+model DonorCodeRedemption {
+  id              String   @id @default(uuid())
+  userId          String
+  businessName    String   @db.VarChar(200)
+  redeemedAt      DateTime // fecha real en que se usó el descuento (la informa el negocio)
+  createdAt       DateTime @default(now())
+  loggedByAdminId String?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("donor_code_redemptions")
 }
 
 /// Hogar de mascotas / refugio registrado como destinatario de donaciones.
@@ -1166,8 +1202,62 @@ model VetClinic {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  /// Ciudad a la que pertenece — solo para organizar el panel admin; el cálculo
+  /// de "más cercana" sigue siendo por distancia real (lat/lng), no por ciudad.
+  cityId    String?
+  city      City?    @relation(fields: [cityId], references: [id])
 
+  @@index([cityId])
   @@map("vet_clinics")
+}
+
+/// Ciudad donde Garden opera. Reemplaza el supuesto implícito de "todo es
+/// Santa Cruz" — permite expandir a Cochabamba y otras ciudades sin tocar
+/// código, solo agregando datos desde el panel admin.
+model City {
+  id          String   @id @default(uuid())
+  name        String   @db.VarChar(100)
+  /// slug usado internamente (ej. "santa-cruz", "cochabamba") — estable, no editable desde la UI.
+  slug        String   @unique @db.VarChar(50)
+  active      Boolean  @default(true)
+  centerLat   Float
+  centerLng   Float
+  defaultZoom Float    @default(13)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  zones             CityZone[]
+  caregiverProfiles CaregiverProfile[]
+  clientProfiles    ClientProfile[]
+  vetClinics        VetClinic[]
+
+  @@map("cities")
+}
+
+/// Zona dentro de una ciudad (ej. Equipetrol en Santa Cruz, Parque Fidel
+/// Anzoátegui en Cochabamba). Reemplaza el enum fijo `Zone` — el admin puede
+/// agregar/editar/activar-desactivar zonas de cualquier ciudad sin migración.
+model CityZone {
+  id        String   @id @default(uuid())
+  cityId    String
+  /// Slug único dentro de la ciudad (ej. "EQUIPETROL") — usado internamente, no editable.
+  key       String   @db.VarChar(60)
+  label     String   @db.VarChar(100)
+  /// Color hex para mostrar en el mapa (ej. "#4CAF50").
+  color     String   @db.VarChar(9)
+  lat       Float
+  lng       Float
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  city              City               @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  caregiverProfiles CaregiverProfile[]
+  clientProfiles    ClientProfile[]
+
+  @@unique([cityId, key])
+  @@index([cityId])
+  @@map("city_zones")
 }
 
 /// Registro de auditoría de todas las acciones importantes del sistema.

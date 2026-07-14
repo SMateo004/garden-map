@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../constants/zones.dart';
 import '../../services/zones_service.dart';
+import '../../services/cities_service.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/garden_logo_loader.dart';
@@ -22,12 +23,15 @@ const _kAppStoreUrl  = 'https://apps.apple.com/app/garden-cuidadores/id000000000
 const _kPlayStoreUrl = 'https://play.google.com/store/apps/details?id=com.garden.app';
 
 // ── Alias locales para las constantes de zonas compartidas ───────────────────
+// Nota: los polígonos de zona (dibujo de bordes en el mapa) siguen viniendo
+// del archivo hardcodeado — el nuevo sistema de zonas por ciudad (admin)
+// solo define un punto central por zona, no un polígono. Labels/colores/
+// centros SÍ vienen dinámicos de la API (_zoneLabels/_zoneColors/etc. más
+// abajo), así que un color o nombre editado desde el panel admin se refleja
+// acá sin necesitar un release — los polígonos de Santa Cruz quedan como
+// referencia visual fija.
 const _kSantaCruzCenter = kSantaCruzCenter;
 const _kDefaultZoom     = kZoneMapDefaultZoom;
-const _kZoneLabels      = kZoneLabels;
-const _kZoneColors      = kZoneColors;
-const _kZoneCenters     = kZoneCenters;
-const _kZoneZooms       = kZoneZooms;
 const _kZonePolygons    = kZonePolygons;
 
 // ── Widget principal ──────────────────────────────────────────────────────
@@ -64,6 +68,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   // Zonas deshabilitadas temporalmente por un admin — no deben aparecer
   // como opción en el filtro ni dibujarse en el mapa.
   Set<String> _blockedZones = {};
+
+  // Zonas de Santa Cruz — dinámicas desde la API (multi-ciudad), en vez de
+  // los mapas hardcodeados de constants/zones.dart. Un color/nombre editado
+  // desde el panel admin se refleja acá sin necesitar un release.
+  Map<String, String> _zoneLabels = {};
+  Map<String, Color> _zoneColors = {};
+  Map<String, LatLng> _zoneCenters = {};
+  final Map<String, double> _zoneZooms = {}; // zoom fijo por zona (14.0 default)
 
   // ── Filters (API) ──
   String _selectedService = 'todos';
@@ -210,6 +222,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
     _loadInitialData();
     _loadBanners();
+    _loadZones();
     ZonesService.getBlockedZones().then((blocked) {
       if (!mounted) return;
       setState(() {
@@ -260,6 +273,28 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         }
       }
     } catch (_) {}
+  }
+
+  Future<void> _loadZones() async {
+    try {
+      final cities = await CitiesService.getCities();
+      final scz = cities.where((c) => c.slug == 'santa-cruz').firstOrNull;
+      if (scz == null) return;
+      final zones = await CitiesService.getZones(scz.id);
+      if (!mounted) return;
+      setState(() {
+        _zoneLabels = {for (final z in zones) z.key: z.label};
+        _zoneColors = {for (final z in zones) z.key: z.color};
+        _zoneCenters = {for (final z in zones) z.key: LatLng(z.lat, z.lng)};
+        _zoneZooms
+          ..clear()
+          ..addEntries(zones.map((z) => MapEntry(z.key, 14.0)));
+      });
+    } catch (_) {
+      // Sin conexión — se mantienen los mapas vacíos hasta el próximo intento;
+      // el resto de la UI ya tolera _zoneLabels/_zoneColors vacíos (fallback
+      // a GardenColors.primary y a la key cruda como label).
+    }
   }
 
   Future<void> _loadInitialData() async {
@@ -401,8 +436,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     _refreshSheet?.call();
     _loadCaregivers(reset: true);
     if (zone != null && _showMap) {
-      final center = _kZoneCenters[zone];
-      final zoom = _kZoneZooms[zone] ?? 14.0;
+      final center = _zoneCenters[zone];
+      final zoom = _zoneZooms[zone] ?? 14.0;
       if (center != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _mapController.move(center, zoom));
       }
@@ -1234,8 +1269,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               if (!_showMap) return;
               // Animate to selected zone if any
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (_selectedZone != null && _kZoneCenters[_selectedZone] != null) {
-                  _mapController.move(_kZoneCenters[_selectedZone]!, _kZoneZooms[_selectedZone] ?? 14.0);
+                if (_selectedZone != null && _zoneCenters[_selectedZone] != null) {
+                  _mapController.move(_zoneCenters[_selectedZone]!, _zoneZooms[_selectedZone] ?? 14.0);
                 } else {
                   _mapController.move(_kSantaCruzCenter, _kDefaultZoom);
                 }
@@ -1470,9 +1505,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   // muestran como opción de filtro.
                   Wrap(
                     spacing: 6, runSpacing: 6,
-                    children: _kZoneLabels.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
+                    children: _zoneLabels.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
                       final isSelected = _selectedZone == e.key;
-                      final color = _kZoneColors[e.key] ?? GardenColors.primary;
+                      final color = _zoneColors[e.key] ?? GardenColors.primary;
                       return GestureDetector(
                         onTap: () => _selectZone(isSelected ? null : e.key),
                         child: AnimatedContainer(
@@ -1945,7 +1980,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final cardBg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-    final zoneColor = _kZoneColors[caregiver['zone']] ?? GardenColors.primary;
+    final zoneColor = _zoneColors[caregiver['zone']] ?? GardenColors.primary;
 
     final rating = (caregiver['rating'] as num? ?? 0).toStringAsFixed(1);
     final reviewCount = caregiver['reviewCount'] as int? ?? 0;
@@ -1956,7 +1991,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final displayName = (isCompany && (companyName?.isNotEmpty ?? false))
         ? companyName!
         : '$firstName $lastName';
-    final zone = _kZoneLabels[caregiver['zone']] ?? caregiver['zone'] ?? '';
+    final zone = _zoneLabels[caregiver['zone']] ?? caregiver['zone'] ?? '';
     final expYears = caregiver['experienceYears'] as int?;
     final allServices = (caregiver['services'] as List? ?? []);
     final services = allServices.take(2).toList();
@@ -2161,7 +2196,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     // Las zonas deshabilitadas por un admin desaparecen del mapa — ni su
     // polígono ni su marcador se dibujan mientras estén bloqueadas.
     final polygons = _kZonePolygons.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
-      final color = _kZoneColors[e.key] ?? GardenColors.primary;
+      final color = _zoneColors[e.key] ?? GardenColors.primary;
       final isSelected = _selectedZone == e.key;
       return Polygon(
         points: e.value,
@@ -2171,9 +2206,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       );
     }).toList();
 
-    final markers = _kZoneCenters.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
-      final color = _kZoneColors[e.key] ?? GardenColors.primary;
-      final label = _kZoneLabels[e.key] ?? e.key;
+    final markers = _zoneCenters.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
+      final color = _zoneColors[e.key] ?? GardenColors.primary;
+      final label = _zoneLabels[e.key] ?? e.key;
       final isSelected = _selectedZone == e.key;
       // Count caregivers in this zone
       final count = _caregivers.where((c) => c['zone'] == e.key).length;
@@ -2263,15 +2298,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
-              children: _kZoneLabels.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
-                final color = _kZoneColors[e.key] ?? GardenColors.primary;
+              children: _zoneLabels.entries.where((e) => !_blockedZones.contains(e.key)).map((e) {
+                final color = _zoneColors[e.key] ?? GardenColors.primary;
                 final isSelected = _selectedZone == e.key;
                 return GestureDetector(
                   onTap: () {
                     _selectZone(isSelected ? null : e.key);
                     if (!isSelected) {
-                      final c = _kZoneCenters[e.key];
-                      final z = _kZoneZooms[e.key] ?? 14.0;
+                      final c = _zoneCenters[e.key];
+                      final z = _zoneZooms[e.key] ?? 14.0;
                       if (c != null) _mapController.move(c, z);
                     } else {
                       _mapController.move(_kSantaCruzCenter, _kDefaultZoom);

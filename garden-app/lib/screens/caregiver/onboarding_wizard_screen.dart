@@ -1839,15 +1839,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     final borderColor  = isDark ? GardenColors.darkBorder         : GardenColors.lightBorder;
     final surfaceEl    = isDark ? GardenColors.darkSurfaceElevated: GardenColors.lightSurfaceElevated;
 
-    const zoneLabels = {
-      'EQUIPETROL': 'Equipetrol',
-      'URBARI': 'Urbari',
-      'NORTE': 'Norte',
-      'LAS_PALMAS': 'Las Palmas',
-      'CENTRO_SAN_MARTIN': 'Centro/San Martín',
-      'OTROS': 'Otros',
-    };
-
     Widget serviceCard(String service, String emoji, String label) {
       final selected = _servicesOffered.contains(service);
       return GestureDetector(
