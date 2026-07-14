@@ -84,7 +84,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<bool> _showTermsDialog() async {
-    final isDark = themeNotifier.isDark;
+    // Registro siempre en modo claro — se ve mejor la marca, independiente
+    // del tema del dispositivo/app.
+    final isDark = false;
     final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
@@ -366,7 +368,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return AnimatedBuilder(
       animation: themeNotifier,
       builder: (context, _) {
-        final isDark = themeNotifier.isDark;
+        // Registro siempre en modo claro — se ve mejor la marca, independiente
+    // del tema del dispositivo/app.
+    final isDark = false;
         final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
         final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
         final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
@@ -942,7 +946,9 @@ class _RegisterSocialBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = themeNotifier.isDark;
+    // Registro siempre en modo claro — se ve mejor la marca, independiente
+    // del tema del dispositivo/app.
+    final isDark = false;
     final label = _isFacebook ? 'Continuar con Facebook' : 'Continuar con Google';
 
     final bgColor = _isFacebook

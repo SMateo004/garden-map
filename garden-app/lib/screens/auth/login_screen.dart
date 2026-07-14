@@ -152,7 +152,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = themeNotifier.isDark;
+    // Login siempre en modo claro — se ve mejor la marca, independiente del
+    // tema del dispositivo/app.
+    final isDark = false;
     final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
@@ -519,7 +521,9 @@ class _SocialBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = themeNotifier.isDark;
+    // Login siempre en modo claro — se ve mejor la marca, independiente del
+    // tema del dispositivo/app.
+    final isDark = false;
     final label = _isFacebook ? 'Continuar con Facebook' : 'Continuar con Google';
 
     final bgColor = _isFacebook
