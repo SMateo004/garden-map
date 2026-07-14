@@ -17,13 +17,19 @@ class AddressMapResult {
 }
 
 /// Modal fullscreen con mapa de OpenStreetMap y pin arrastrable.
-/// Centrado en Santa Cruz de la Sierra por defecto.
+/// Centrado en la ciudad del usuario (Santa Cruz si no se especifica), y
+/// restringido a un radio alrededor de esa ciudad — evita que alguien marque
+/// una ubicación "exacta" fuera de su ciudad real (fraude de zona/dirección).
 /// Devuelve [AddressMapResult] con lat/lng confirmados, o null si cancela.
 Future<AddressMapResult?> showAddressMapPicker(
   BuildContext context, {
   double? initialLat,
   double? initialLng,
   String purpose = 'Tu dirección se usa para coordinar el servicio con el cuidador.',
+  double cityLat = -17.7863,
+  double cityLng = -63.1812,
+  String cityName = 'Santa Cruz',
+  double radiusKm = 35,
 }) {
   return showModalBottomSheet<AddressMapResult>(
     context: context,
@@ -34,6 +40,10 @@ Future<AddressMapResult?> showAddressMapPicker(
       initialLat: initialLat,
       initialLng: initialLng,
       purpose: purpose,
+      cityLat: cityLat,
+      cityLng: cityLng,
+      cityName: cityName,
+      radiusKm: radiusKm,
     ),
   );
 }
@@ -42,11 +52,19 @@ class _AddressMapPicker extends StatefulWidget {
   final double? initialLat;
   final double? initialLng;
   final String purpose;
+  final double cityLat;
+  final double cityLng;
+  final String cityName;
+  final double radiusKm;
 
   const _AddressMapPicker({
     this.initialLat,
     this.initialLng,
     required this.purpose,
+    required this.cityLat,
+    required this.cityLng,
+    required this.cityName,
+    required this.radiusKm,
   });
 
   @override
@@ -54,10 +72,9 @@ class _AddressMapPicker extends StatefulWidget {
 }
 
 class _AddressMapPickerState extends State<_AddressMapPicker> {
-  // Santa Cruz de la Sierra, Bolivia
-  static const _defaultLat = -17.7863;
-  static const _defaultLng = -63.1812;
+  static const _distance = Distance();
 
+  late final LatLng _cityCenter;
   late LatLng _pinPosition;
   late MapController _mapController;
   bool _locating = false;
@@ -67,16 +84,44 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
   /// [_reverseAddress] que es la dirección completa mostrada como preview.
   String? _reverseStreet;
   bool _reversing = false;
+  DateTime? _lastOutOfBoundsWarning;
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
+    _cityCenter = LatLng(widget.cityLat, widget.cityLng);
     _pinPosition = LatLng(
-      widget.initialLat ?? _defaultLat,
-      widget.initialLng ?? _defaultLng,
+      widget.initialLat ?? widget.cityLat,
+      widget.initialLng ?? widget.cityLng,
     );
     if (widget.initialLat != null) _reverseGeocode(_pinPosition);
+  }
+
+  bool _isWithinCity(LatLng point) =>
+      _distance.as(LengthUnit.Kilometer, _cityCenter, point) <= widget.radiusKm;
+
+  /// Si el usuario paneó el mapa fuera del radio permitido, revierte el pin
+  /// a la última posición válida y avisa (con throttle para no spamear el
+  /// SnackBar en cada pixel de un drag largo).
+  void _handlePositionChanged(LatLng newCenter, double currentZoom) {
+    if (_isWithinCity(newCenter)) {
+      setState(() => _pinPosition = newCenter);
+      return;
+    }
+    final now = DateTime.now();
+    if (_lastOutOfBoundsWarning == null ||
+        now.difference(_lastOutOfBoundsWarning!) > const Duration(seconds: 2)) {
+      _lastOutOfBoundsWarning = now;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('No podés marcar una ubicación fuera de ${widget.cityName}'),
+        duration: const Duration(seconds: 2),
+      ));
+    }
+    // Revertir el mapa a la última posición válida.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _mapController.move(_pinPosition, currentZoom);
+    });
   }
 
   @override
@@ -104,6 +149,12 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
       );
       final ll = LatLng(pos.latitude, pos.longitude);
       if (!mounted) return;
+      if (!_isWithinCity(ll)) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Tu ubicación actual está fuera de ${widget.cityName} — marcá manualmente dentro de la ciudad'),
+        ));
+        return;
+      }
       setState(() => _pinPosition = ll);
       _mapController.move(ll, 17);
       _reverseGeocode(ll);
@@ -231,7 +282,7 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
                         initialZoom: 16,
                         onPositionChanged: (pos, hasGesture) {
                           if (hasGesture) {
-                            setState(() => _pinPosition = pos.center);
+                            _handlePositionChanged(pos.center, pos.zoom);
                           }
                         },
                         onMapEvent: (event) {

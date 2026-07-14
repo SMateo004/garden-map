@@ -960,6 +960,15 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
           onZoneChanged: (val) => setState(() => _zone = val),
           initialCityId: _gardenCityId,
           onCityChanged: (cityId, _) => setState(() => _gardenCityId = cityId),
+          onCityChangeReset: () => setState(() {
+            _lat = null;
+            _lng = null;
+            _streetCtrl.clear();
+            _numberCtrl.clear();
+            _apartmentCtrl.clear();
+            _condominioCtrl.clear();
+            _referenceCtrl.clear();
+          }),
           addressLat: _lat,
           addressLng: _lng,
           isApartment: _isApartment,

@@ -1365,6 +1365,15 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             onZoneChanged: (val) => setState(() => _addressZone = val),
             initialCityId: _gardenCityId,
             onCityChanged: (cityId, _) => setState(() => _gardenCityId = cityId),
+            onCityChangeReset: () => setState(() {
+              _addressLat = null;
+              _addressLng = null;
+              _addressStreetController.clear();
+              _addressNumberController.clear();
+              _addressApartmentController.clear();
+              _addressCondominioController.clear();
+              _addressReferenceController.clear();
+            }),
             addressLat: _addressLat,
             addressLng: _addressLng,
             isApartment: _isApartment,

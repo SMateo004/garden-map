@@ -9,6 +9,7 @@ import '../../theme/garden_theme.dart';
 import '../../utils/garden_banks.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/address_section.dart';
+import '../../services/cities_service.dart';
 
 class CaregiverEditProfileScreen extends StatefulWidget {
   const CaregiverEditProfileScreen({super.key});
@@ -39,6 +40,7 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
   final _condominioCtrl = TextEditingController();
   final _referenceCtrl = TextEditingController();
   String? _addressZone;
+  String? _gardenCityId;
   double? _addressLat;
   double? _addressLng;
   bool _isApartment = false;
@@ -97,6 +99,7 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
           _condominioCtrl.text = profile['addressCondominio'] as String? ?? '';
           _referenceCtrl.text = profile['addressReference'] as String? ?? '';
           _addressZone = profile['addressZone'] as String?;
+          _gardenCityId = profile['cityId'] as String?;
           _addressLat = (profile['addressLat'] as num?)?.toDouble();
           _addressLng = (profile['addressLng'] as num?)?.toDouble();
           _isApartment = (_apartmentCtrl.text).isNotEmpty;
@@ -188,7 +191,13 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
         if (_isApartment && _condominioCtrl.text.trim().isNotEmpty) 'addressCondominio': _condominioCtrl.text.trim(),
         if (_referenceCtrl.text.trim().isNotEmpty) 'addressReference': _referenceCtrl.text.trim(),
         if (_addressZone != null) 'addressZone': _addressZone,
+        if (_gardenCityId != null) 'cityId': _gardenCityId,
       };
+      if (_gardenCityId != null && _addressZone != null) {
+        final zones = await CitiesService.getZones(_gardenCityId!);
+        final match = zones.where((z) => z.key == _addressZone).firstOrNull;
+        if (match != null) addressBody['zoneId'] = match.id;
+      }
 
       final response = await http.patch(
         Uri.parse('$_baseUrl/caregiver/profile'),
@@ -387,6 +396,17 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                           referenceController: _referenceCtrl,
                           selectedZone: _addressZone,
                           onZoneChanged: (val) => setState(() => _addressZone = val),
+                          initialCityId: _gardenCityId,
+                          onCityChanged: (cityId, _) => setState(() => _gardenCityId = cityId),
+                          onCityChangeReset: () => setState(() {
+                            _addressLat = null;
+                            _addressLng = null;
+                            _streetCtrl.clear();
+                            _numberCtrl.clear();
+                            _apartmentCtrl.clear();
+                            _condominioCtrl.clear();
+                            _referenceCtrl.clear();
+                          }),
                           addressLat: _addressLat,
                           addressLng: _addressLng,
                           isApartment: _isApartment,
@@ -587,6 +607,17 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                                                 referenceController: _referenceCtrl,
                                                 selectedZone: _addressZone,
                                                 onZoneChanged: (val) => setState(() => _addressZone = val),
+                                                initialCityId: _gardenCityId,
+                                                onCityChanged: (cityId, _) => setState(() => _gardenCityId = cityId),
+                                                onCityChangeReset: () => setState(() {
+                                                  _addressLat = null;
+                                                  _addressLng = null;
+                                                  _streetCtrl.clear();
+                                                  _numberCtrl.clear();
+                                                  _apartmentCtrl.clear();
+                                                  _condominioCtrl.clear();
+                                                  _referenceCtrl.clear();
+                                                }),
                                                 addressLat: _addressLat,
                                                 addressLng: _addressLng,
                                                 isApartment: _isApartment,

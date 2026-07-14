@@ -29,6 +29,10 @@ class AddressSection extends StatefulWidget {
   // que todavía no la usan.
   final String? initialCityId;
   final void Function(String cityId, String cityName)? onCityChanged;
+  /// Se llama cuando el usuario cambia de ciudad — el padre debe limpiar
+  /// addressLat/Lng/street/número/dpto/condominio/referencia (la ubicación
+  /// exacta ya no es válida para la ciudad nueva, hay que volver a marcarla).
+  final VoidCallback? onCityChangeReset;
   final double? addressLat;
   final double? addressLng;
   final bool isApartment;
@@ -52,6 +56,7 @@ class AddressSection extends StatefulWidget {
     required this.onZoneChanged,
     this.initialCityId,
     this.onCityChanged,
+    this.onCityChangeReset,
     this.addressLat,
     this.addressLng,
     required this.isApartment,
@@ -69,6 +74,15 @@ class _AddressSectionState extends State<AddressSection> {
   String? _selectedCityId;
   bool _loadingCities = true;
 
+  // ── Auto-completado + bloqueo de zona por polígono ──────────────────────
+  // Si la ubicación exacta que el usuario marcó en el mapa cae dentro del
+  // polígono de una zona (cargado por el admin), la zona se llena sola y se
+  // bloquea — evita que alguien elija a mano una zona distinta de donde
+  // realmente está su pin (fraude de zona). Zonas sin polígono todavía
+  // cargado no bloquean nada — el usuario sigue eligiendo a mano.
+  List<GardenZone> _zonesForMatch = [];
+  bool _zoneLocked = false;
+
   InputDecoration _field(String hint, IconData icon) => InputDecoration(
         hintText: hint,
         prefixIcon: Icon(icon, size: 20),
@@ -78,6 +92,15 @@ class _AddressSectionState extends State<AddressSection> {
   void initState() {
     super.initState();
     _loadCities();
+  }
+
+  @override
+  void didUpdateWidget(AddressSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final pinChanged = widget.addressLat != oldWidget.addressLat || widget.addressLng != oldWidget.addressLng;
+    if (pinChanged && widget.addressLat != null && widget.addressLng != null) {
+      _matchZoneByPoint(LatLng(widget.addressLat!, widget.addressLng!));
+    }
   }
 
   Future<void> _loadCities() async {
@@ -91,10 +114,49 @@ class _AddressSectionState extends State<AddressSection> {
               ? cities.firstWhere((c) => c.slug == 'santa-cruz', orElse: () => cities.first).id
               : null);
     });
+    if (_selectedCityId != null) await _loadZonesForMatch(_selectedCityId!);
+    // Si ya había un pin cargado (ej. editando un perfil existente), corre
+    // el match apenas se conocen las zonas de la ciudad.
+    if (widget.addressLat != null && widget.addressLng != null) {
+      _matchZoneByPoint(LatLng(widget.addressLat!, widget.addressLng!));
+    }
+  }
+
+  Future<void> _loadZonesForMatch(String cityId) async {
+    final zones = await CitiesService.getZones(cityId);
+    if (mounted) setState(() => _zonesForMatch = zones);
+  }
+
+  /// Ray casting estándar — true si [point] cae dentro de [polygon].
+  bool _pointInPolygon(LatLng point, List<LatLng> polygon) {
+    var inside = false;
+    for (var i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      final xi = polygon[i].longitude, yi = polygon[i].latitude;
+      final xj = polygon[j].longitude, yj = polygon[j].latitude;
+      final intersect = ((yi > point.latitude) != (yj > point.latitude)) &&
+          (point.longitude < (xj - xi) * (point.latitude - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  void _matchZoneByPoint(LatLng point) {
+    for (final zone in _zonesForMatch) {
+      final points = zone.points;
+      if (points == null || points.length < 4) continue;
+      if (_pointInPolygon(point, points)) {
+        setState(() => _zoneLocked = true);
+        if (widget.selectedZone != zone.key) widget.onZoneChanged(zone.key);
+        return;
+      }
+    }
+    // El pin no cae en ningún polígono conocido — queda en selección manual.
+    if (_zoneLocked) setState(() => _zoneLocked = false);
   }
 
   @override
   Widget build(BuildContext context) {
+    final selectedCity = _cities.where((c) => c.id == _selectedCityId).firstOrNull;
     final bool hasPin = widget.addressLat != null && widget.addressLng != null;
 
     return Column(
@@ -154,11 +216,21 @@ class _AddressSectionState extends State<AddressSection> {
                       ))
                   .toList(),
               onChanged: (cityId) {
-                if (cityId == null) return;
-                setState(() => _selectedCityId = cityId);
+                if (cityId == null || cityId == _selectedCityId) return;
+                setState(() {
+                  _selectedCityId = cityId;
+                  _zoneLocked = false;
+                  _zonesForMatch = [];
+                });
                 widget.onZoneChanged(null); // cambiar de ciudad resetea la zona elegida
+                _loadZonesForMatch(cityId);
                 final city = _cities.firstWhere((c) => c.id == cityId);
                 widget.onCityChanged?.call(cityId, city.name);
+                // La ubicación exacta marcada en el mapa pertenecía a la
+                // ciudad anterior — hay que volver a marcarla para la nueva
+                // ciudad (evita, ej., decir que vivís en Cochabamba con un
+                // pin que en realidad quedó puesto en Santa Cruz).
+                widget.onCityChangeReset?.call();
               },
             ),
           ),
@@ -195,6 +267,9 @@ class _AddressSectionState extends State<AddressSection> {
                 initialLat: widget.addressLat,
                 initialLng: widget.addressLng,
                 purpose: widget.purposeText,
+                cityLat: selectedCity?.centerLat ?? -17.775,
+                cityLng: selectedCity?.centerLng ?? -63.175,
+                cityName: selectedCity?.name ?? 'tu ciudad',
               );
               if (result != null) widget.onMapResult(result);
             },
@@ -237,6 +312,21 @@ class _AddressSectionState extends State<AddressSection> {
             cityId: _selectedCityId!,
             selectedZone: widget.selectedZone,
             onZoneChanged: widget.onZoneChanged,
+            locked: _zoneLocked,
+          ),
+        if (_zoneLocked)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(children: [
+              Icon(Icons.lock_outline_rounded, size: 14, color: widget.subtextColor),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Zona detectada automáticamente según tu ubicación exacta — no se puede cambiar a mano.',
+                  style: TextStyle(color: widget.subtextColor, fontSize: 11.5),
+                ),
+              ),
+            ]),
           ),
 
         const SizedBox(height: 12),
@@ -318,6 +408,7 @@ class _ZoneDropdownWithMap extends StatefulWidget {
   final String cityId;
   final String? selectedZone;
   final void Function(String?) onZoneChanged;
+  final bool locked;
 
   const _ZoneDropdownWithMap({
     super.key,
@@ -329,6 +420,7 @@ class _ZoneDropdownWithMap extends StatefulWidget {
     required this.cityId,
     required this.selectedZone,
     required this.onZoneChanged,
+    this.locked = false,
   });
 
   @override
@@ -463,7 +555,7 @@ class _ZoneDropdownWithMapState extends State<_ZoneDropdownWithMap> {
                       style: TextStyle(color: widget.textColor, fontSize: 14, fontWeight: FontWeight.w600)),
                 ]);
               }).toList(),
-              onChanged: widget.onZoneChanged,
+              onChanged: widget.locked ? null : widget.onZoneChanged,
             ),
           ),
         ),
