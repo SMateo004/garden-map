@@ -302,6 +302,35 @@ class _MobileServiceSelectorScreenState
                     ),
                   ),
                 ),
+
+                const SizedBox(height: 16),
+
+                // ── CTA cuidador — no hay un botón dedicado en el flujo de
+                // login/registro, así que este texto es la única entrada al
+                // registro de cuidador desde la primera pantalla de la app. ──
+                FadeTransition(
+                  opacity: _card2Fade,
+                  child: Center(
+                    child: GestureDetector(
+                      onTap: () => context.push('/become-caregiver'),
+                      child: RichText(
+                        text: TextSpan(
+                          style: TextStyle(color: subtextColor, fontSize: 13),
+                          children: [
+                            const TextSpan(text: '¿Querés cuidar mascotas? '),
+                            TextSpan(
+                              text: 'Conviértete en cuidador',
+                              style: TextStyle(
+                                color: GardenColors.primary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
