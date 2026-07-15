@@ -6,6 +6,14 @@ import { env } from '../../config/env.js';
 
 export type LivenessProvider = 'FACETEC' | 'ONFIDO' | 'AWS_REKOGNITION';
 
+/**
+ * AWS recomienda 90 como punto de partida, pero con cámara de celular e
+ * iluminación variable es común no llegar justo a ese número aunque la
+ * persona sea real. 85 sigue bloqueando spoofing evidente (fotos, videos,
+ * máscaras) con bastantes menos falsos rechazos legítimos.
+ */
+export const LIVENESS_CONFIDENCE_THRESHOLD = 85;
+
 export interface LivenessResult {
   passed: boolean;
   score: number;
@@ -95,7 +103,7 @@ async function verifyAwsLiveness(sessionId: string): Promise<LivenessResult> {
     const confidence = response.Confidence ?? 0;
     const status = response.Status; // EXPIRED | CREATED | IN_PROGRESS | SUCCEEDED | FAILED
 
-    const passed = status === 'SUCCEEDED' && confidence >= 90;
+    const passed = status === 'SUCCEEDED' && confidence >= LIVENESS_CONFIDENCE_THRESHOLD;
 
     logger.info('AWS Liveness Result', { sessionId, confidence, status, passed });
 

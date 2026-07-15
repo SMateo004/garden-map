@@ -21,7 +21,7 @@ import {
   compareFaces,
   validateDocumentLabels,
 } from './rekognition.service.js';
-import { performLivenessCheck } from './liveness.service.js';
+import { performLivenessCheck, LIVENESS_CONFIDENCE_THRESHOLD } from './liveness.service.js';
 import { crossValidate, calculateDetailedTrustScore } from './identity-validation.service.js';
 import { uploadVerificationImage } from './verification-upload.js';
 import { generateFingerprint, getGeolocation, logVerificationAudit, calculateBehavioralRisk, DeviceInfo } from './fraud.service.js';
@@ -241,7 +241,7 @@ export async function submitVerification(
         livenessScore = livenessResult.score;
         livenessStatus = livenessResult.status;
 
-        if (livenessStatus !== 'PASSED' || livenessScore < 90) {
+        if (livenessStatus !== 'PASSED' || livenessScore < LIVENESS_CONFIDENCE_THRESHOLD) {
           await prisma.caregiverProfile.update({
             where: { userId: user.id },
             // @ts-ignore
