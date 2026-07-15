@@ -3594,11 +3594,80 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         return;
       }
     }
+    // El backend exige una foto de inicio (serviceStartPhoto) — pedirla y
+    // subirla ANTES de llamar a /start, si no el servicio nunca puede
+    // iniciarse (no hay otra forma de conseguir esa foto una vez arrancado).
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 8, 20, 4),
+                child: Text('Foto de inicio del servicio',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+              ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Text('Es obligatoria — deja constancia del estado inicial de la mascota/espacio.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt_rounded),
+                title: const Text('Cámara', style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_rounded),
+                title: const Text('Galería'),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (source == null) return;
+    if (!mounted) return;
+
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: source, imageQuality: 85);
+    if (picked == null) return;
+    if (!mounted) return;
+
     setState(() => _isProcessing = true);
     try {
+      final bytes = await picked.readAsBytes();
+      final fileName = picked.name.isEmpty ? 'start_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
+
+      final uploadRequest = http.MultipartRequest(
+        'POST',
+        Uri.parse('$_baseUrl/upload/service-photo'),
+      );
+      uploadRequest.headers['Authorization'] = 'Bearer $_token';
+      uploadRequest.files.add(http.MultipartFile.fromBytes(
+        'photo', bytes,
+        filename: fileName,
+        contentType: MediaType('image', 'jpeg'),
+      ));
+      final uploadStreamed = await uploadRequest.send();
+      final uploadResponse = await http.Response.fromStream(uploadStreamed);
+      final uploadData = jsonDecode(uploadResponse.body);
+      if (uploadData['success'] != true) {
+        throw Exception(uploadData['error']?['message'] ?? 'No se pudo subir la foto de inicio');
+      }
+      final photoUrl = uploadData['data']['url'] as String;
+
       final response = await http.post(
         Uri.parse('$_baseUrl/bookings/${widget.bookingId}/start'),
         headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({'photo': photoUrl}),
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
