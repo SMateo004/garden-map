@@ -1495,13 +1495,17 @@ class _AdminLiveTrackMapState extends State<_AdminLiveTrackMap> {
       );
     }
     final current = _track.last;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(initialCenter: current, initialZoom: 16),
       children: [
         TileLayer(
-          urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.garden.app',
+          urlTemplate: isDark
+              ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+              : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+          subdomains: const ['a', 'b', 'c', 'd'],
+          userAgentPackageName: 'com.garden.bolivia',
         ),
         if (_track.length > 1)
           PolylineLayer(polylines: [

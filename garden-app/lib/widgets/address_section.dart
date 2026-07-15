@@ -660,6 +660,7 @@ class _ZoneReferenceMap extends StatelessWidget {
     }).toList();
 
     final center = zones.isNotEmpty ? LatLng(zones.first.lat, zones.first.lng) : const LatLng(-17.775, -63.175);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return FlutterMap(
       mapController: mapController,
@@ -672,8 +673,11 @@ class _ZoneReferenceMap extends StatelessWidget {
       ),
       children: [
         TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.garden.app',
+          urlTemplate: isDark
+              ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+              : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+          subdomains: const ['a', 'b', 'c', 'd'],
+          userAgentPackageName: 'com.garden.bolivia',
         ),
         MarkerLayer(markers: markers),
       ],

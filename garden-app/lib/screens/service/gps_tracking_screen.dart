@@ -534,7 +534,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
               ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
               : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
           subdomains: const ['a', 'b', 'c', 'd'],
-          userAgentPackageName: 'com.garden.app',
+          userAgentPackageName: 'com.garden.bolivia',
         ),
 
         // Polilínea del trayecto

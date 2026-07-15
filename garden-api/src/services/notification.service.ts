@@ -569,7 +569,7 @@ export async function onCaregiverWelcome(userId: string): Promise<void> {
   }
 
   const caregiverName = name(user.firstName, user.lastName, 'Cuidador');
-  const guideUrl = 'https://gardenbo.com/guia-cuidador';
+  const guideUrl = 'https://gardenbo.com/app.html#/guia-cuidador';
 
   const html = gardenEmail(
     `¡Bienvenido a GARDEN, ${caregiverName}! 🌿`,
