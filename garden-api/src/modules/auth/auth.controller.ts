@@ -578,11 +578,14 @@ export const deleteAccount = asyncHandler(async (req: Request, res: Response) =>
     },
   });
 
-  // 6. Remove from marketplace if caregiver
+  // 6. Remove from marketplace if caregiver. ciNumber se libera (null) porque
+  // es único en la base — si no, el mismo documento real queda bloqueado para
+  // siempre y esta misma persona no podría volver a registrarse, aunque todo
+  // el punto de este soft-delete es justamente permitir eso.
   if (caregiverProfile) {
     await prisma.caregiverProfile.update({
       where: { userId },
-      data: { status: 'DRAFT', suspended: true },
+      data: { status: 'DRAFT', suspended: true, ciNumber: null } as any,
     });
   }
 

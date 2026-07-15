@@ -2395,9 +2395,13 @@ export async function deleteCaregiver(
         deletedAt: new Date(),
       },
     });
+    // ciNumber se libera (null) porque es único en la base — si no, el mismo
+    // documento real queda bloqueado para siempre y esa persona no podría
+    // volver a registrarse nunca más, aunque su cuenta anonimizada quede
+    // conservada solo para auditoría/historial financiero.
     await tx.caregiverProfile.update({
       where: { id: profileId },
-      data: { status: 'DRAFT', suspended: true },
+      data: { status: 'DRAFT', suspended: true, ciNumber: null } as any,
     });
   });
 
