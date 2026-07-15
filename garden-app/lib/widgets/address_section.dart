@@ -114,6 +114,15 @@ class _AddressSectionState extends State<AddressSection> {
               ? cities.firstWhere((c) => c.slug == 'santa-cruz', orElse: () => cities.first).id
               : null);
     });
+    // Si el default (o initialCityId) ya resuelve una ciudad válida, avisarle
+    // al padre aunque el usuario nunca haya tocado el dropdown — si no, el
+    // padre nunca se entera de la ciudad y el perfil se guarda con
+    // cityId null, invisible en el marketplace aunque la UI muestre la
+    // ciudad correcta seleccionada.
+    if (_selectedCityId != null) {
+      final selected = cities.where((c) => c.id == _selectedCityId).firstOrNull;
+      if (selected != null) widget.onCityChanged?.call(selected.id, selected.name);
+    }
     if (_selectedCityId != null) await _loadZonesForMatch(_selectedCityId!);
     // Si ya había un pin cargado (ej. editando un perfil existente), corre
     // el match apenas se conocen las zonas de la ciudad.
