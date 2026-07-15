@@ -31,6 +31,11 @@ router.post('/generate-link', authMiddleware, requireRole('CAREGIVER'), controll
  *  Accepts x-verification-token header (QR mobile flow) or Bearer auth (native app flow). */
 router.post('/create-liveness-session', livenessSessionLimiter, controller.createLivenessSession);
 
+/** POST /api/verification/check-liveness — auth CAREGIVER o token de verificación.
+ *  Consulta el resultado real de AWS Face Liveness apenas termina la captura nativa.
+ *  Body: { sessionId }. Devuelve { passed, score, status, reason?, token? }. */
+router.post('/check-liveness', livenessSessionLimiter, controller.checkLiveness);
+
 /** GET /api/verification/validate?token= — public, returns { valid, userId?, message? } */
 router.get('/validate', controller.validate);
 

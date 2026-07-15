@@ -102,7 +102,8 @@ export async function submitVerification(
   ciBackBuffer: Buffer,
   deviceInfo?: DeviceInfo,
   livenessSessionId?: string,
-  blinkLivenessToken?: string
+  blinkLivenessToken?: string,
+  awsLivenessToken?: string
 ): Promise<{
   similarity: number;
   livenessScore: number;
@@ -187,13 +188,34 @@ export async function submitVerification(
     try {
 
       // 1. Advanced Liveness Check
-      logger.info('Step 1: Validating liveness', { sessionId, livenessSessionId, hasBlinkToken: !!blinkLivenessToken });
+      logger.info('Step 1: Validating liveness', { sessionId, livenessSessionId, hasBlinkToken: !!blinkLivenessToken, hasAwsLivenessToken: !!awsLivenessToken });
 
-      if (env.NODE_ENV === 'development' && !livenessSessionId && !blinkLivenessToken) {
+      if (env.NODE_ENV === 'development' && !livenessSessionId && !blinkLivenessToken && !awsLivenessToken) {
         // Solo en desarrollo y sin liveness: bypass con score simulado
         logger.warn('Liveness check bypassed (development mode)', { sessionId });
         livenessScore = 95;
         livenessStatus = 'PASSED';
+      } else if (awsLivenessToken) {
+        // Native app flow (preferido): la app ya verificó el resultado con AWS apenas
+        // terminó de capturar (vía /check-liveness) y recibió este JWT firmado — evita
+        // volver a consultar a AWS acá, minutos después, cuando el resultado de la
+        // sesión ya podría no estar disponible/actualizado.
+        logger.info('AWS liveness token provided — verifying', { sessionId });
+        try {
+          const payload = (await import('jsonwebtoken')).default.verify(
+            awsLivenessToken,
+            env.JWT_SECRET as string,
+          ) as { userId: string; type: string; score: number };
+
+          if (payload.type !== 'aws_liveness' || payload.userId !== user.id) {
+            throw new BadRequestError('Token de prueba de vida inválido');
+          }
+          livenessScore = payload.score;
+          livenessStatus = 'PASSED';
+          logger.info('AWS liveness token verified', { sessionId, score: livenessScore });
+        } catch (jwtErr: any) {
+          throw new BadRequestError('La prueba de vida ha expirado o no es válida. Por favor, inténtalo de nuevo.');
+        }
       } else if (blinkLivenessToken) {
         // Web QR flow: blink liveness — verify the signed JWT issued by /check-blink
         logger.info('Blink liveness token provided — verifying', { sessionId });

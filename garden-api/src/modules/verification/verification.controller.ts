@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { asyncHandler } from '../../shared/async-handler.js';
 import * as verificationService from './verification.service.js';
-import { createLivenessSession as awsCreateLivenessSession, checkBlinkLiveness } from './liveness.service.js';
+import { createLivenessSession as awsCreateLivenessSession, checkBlinkLiveness, checkAwsLivenessNow } from './liveness.service.js';
 import logger from '../../shared/logger.js';
 import { env } from '../../config/env.js';
 
@@ -72,6 +72,7 @@ export const submit = asyncHandler(async (req: Request, res: Response) => {
 
   const livenessSessionId = req.body?.livenessSessionId as string | undefined;
   const blinkLivenessToken = req.body?.blinkLivenessToken as string | undefined;
+  const awsLivenessToken = req.body?.awsLivenessToken as string | undefined;
 
   logger.info('➡️ Incoming verification request', {
     token: effectiveToken.substring(0, 10) + '...',
@@ -80,6 +81,7 @@ export const submit = asyncHandler(async (req: Request, res: Response) => {
     hasCiBack: !!ciBack,
     livenessSessionId,
     hasBlinkToken: !!blinkLivenessToken,
+    hasAwsLivenessToken: !!awsLivenessToken,
   });
 
   const result = await verificationService.submitVerification(
@@ -90,6 +92,7 @@ export const submit = asyncHandler(async (req: Request, res: Response) => {
     deviceInfo,
     livenessSessionId,
     blinkLivenessToken,
+    awsLivenessToken,
   );
 
   logger.info('✅ Verification request processed', {
@@ -148,6 +151,48 @@ export const createLivenessSession = asyncHandler(async (req: Request, res: Resp
     });
   }
   res.json({ success: true, data: session });
+});
+
+/** POST /api/verification/check-liveness — auth CAREGIVER *o* token de verificación
+ *  (mismo esquema dual que create-liveness-session). Consulta el resultado real de
+ *  AWS Face Liveness apenas el widget nativo termina de capturar — no hay que esperar
+ *  a /submit, minutos después, cuando el usuario ya terminó de tomar las fotos del CI.
+ *  Si pasa, devuelve un JWT de 15min que /submit acepta como awsLivenessToken. */
+export const checkLiveness = asyncHandler(async (req: Request, res: Response) => {
+  let userId: string | undefined;
+
+  if (req.headers.authorization?.startsWith('Bearer ')) {
+    try {
+      const payload = jwt.verify(req.headers.authorization.slice(7), env.JWT_SECRET) as { userId: string };
+      userId = payload.userId;
+    } catch {
+      // Token de sesión inválido/expirado — probar el flujo de token de verificación abajo
+    }
+  }
+
+  if (!userId) {
+    const vToken =
+      (req.query.token as string) ??
+      (req.headers['x-verification-token'] as string) ??
+      (req.body?.token as string);
+    const check = vToken ? await verificationService.validateToken(vToken) : { valid: false };
+    if (check.valid) userId = (check as any).userId;
+  }
+
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Sesión o token de verificación inválido.' },
+    });
+  }
+
+  const sessionId = req.body?.sessionId as string | undefined;
+  if (!sessionId) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_SESSION_ID' } });
+  }
+
+  const result = await checkAwsLivenessNow(sessionId, userId);
+  res.json({ success: true, data: result });
 });
 
 /** POST /api/verification/check-blink — public (verification token required).

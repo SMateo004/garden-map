@@ -35,6 +35,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
   // Liveness (AWS Rekognition Face Liveness)
   String? _livenessSessionId;
+  String? _awsLivenessToken;
 
   // Fotos capturadas
   Uint8List? _selfiePreview;
@@ -157,14 +158,43 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
       if (!mounted) return;
 
-      if (passed == true) {
-        setState(() => _currentStep = 1); // → selfie
-      } else {
+      if (passed != true) {
         _showSnack(
           'La verificación de vida falló o fue cancelada. Inténtalo de nuevo.',
           isError: true,
         );
+        return;
       }
+
+      // 5. Verificar el resultado real con AWS apenas termina la captura —
+      // no esperar a /submit, minutos después de tomar las 3 fotos del CI,
+      // cuando el resultado de la sesión ya podría no estar disponible.
+      setState(() => _generatingToken = true);
+      final checkRes = await http.post(
+        Uri.parse('$_baseUrl/verification/check-liveness'),
+        headers: {
+          'Authorization': 'Bearer $_caregiverToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'sessionId': sessionId}),
+      ).timeout(const Duration(seconds: 15));
+      final checkData = jsonDecode(checkRes.body);
+
+      if (!mounted) return;
+
+      final checkOk = checkData['success'] == true && checkData['data']?['passed'] == true;
+      if (!checkOk) {
+        final reason = checkData['data']?['reason'] ??
+            checkData['error']?['message'] ??
+            'La prueba de vida no pudo confirmarse. Inténtalo de nuevo.';
+        _showSnack(reason, isError: true);
+        return;
+      }
+
+      setState(() {
+        _awsLivenessToken = checkData['data']['token'] as String?;
+        _currentStep = 1; // → selfie
+      });
     } catch (e) {
       if (mounted) _showSnack(e.toString(), isError: true);
     } finally {
@@ -251,7 +281,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
       final request = http.MultipartRequest('POST', uri);
 
       request.fields['token'] = _verificationToken;
-      if (_livenessSessionId != null) {
+      if (_awsLivenessToken != null) {
+        request.fields['awsLivenessToken'] = _awsLivenessToken!;
+      } else if (_livenessSessionId != null) {
+        // Respaldo por si el check inmediato no llegó a completarse.
         request.fields['livenessSessionId'] = _livenessSessionId!;
       }
 
@@ -701,6 +734,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                       _currentStep = 0;
                       _verificationToken = '';
                       _livenessSessionId = null;
+                      _awsLivenessToken = null;
                       _selfiePreview = null;
                       _ciFrontPreview = null;
                       _ciBackPreview = null;

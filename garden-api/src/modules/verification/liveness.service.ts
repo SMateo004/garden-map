@@ -120,6 +120,33 @@ async function verifyAwsLiveness(sessionId: string): Promise<LivenessResult> {
 }
 
 /**
+ * Verifica el resultado de una sesión de AWS Face Liveness apenas el widget nativo
+ * termina de capturar (en vez de esperar a /submit, varios minutos después de
+ * tomar las 3 fotos siguientes). Si pasa, emite un JWT de corta duración que
+ * /submit acepta sin volver a consultar a AWS — evita cualquier problema de
+ * resultados que ya no estén disponibles/actualizados para cuando el usuario
+ * termina de subir las fotos del CI.
+ */
+export async function checkAwsLivenessNow(
+  sessionId: string,
+  userId: string,
+): Promise<{ passed: boolean; score: number; status: string; reason?: string; token?: string }> {
+  const result = await verifyAwsLiveness(sessionId);
+
+  if (!result.passed) {
+    return { passed: false, score: result.score, status: result.status, reason: result.reason };
+  }
+
+  const token = jwt.sign(
+    { userId, sessionId, type: 'aws_liveness', score: result.score },
+    env.JWT_SECRET as string,
+    { expiresIn: '15m' },
+  );
+
+  return { passed: true, score: result.score, status: result.status, token };
+}
+
+/**
  * Creates an AWS Rekognition FaceLiveness session.
  * Returns the sessionId that the mobile client passes to the Amplify Liveness SDK.
  * Requires AWS credentials with rekognition:CreateFaceLivenessSession permission.
