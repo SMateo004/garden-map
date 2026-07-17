@@ -73,6 +73,8 @@ export interface BookingCreateResult {
   ownerComment?: string | null;
   caregiverRating?: number | null;
   caregiverComment?: string | null;
+  /** Chips de cualidades del cuidador (Amable, Puntual, etc.) seleccionados por el dueño al calificar. */
+  caregiverSkillTags?: string[];
   hasDisputePending?: boolean;
   disputeReasons?: string[];
   meetAndGreet?: any;
@@ -147,6 +149,7 @@ export function bookingToResponse(b: any): BookingCreateResult {
     ownerComment: b.ownerComment,
     caregiverRating: b.caregiverRating,
     caregiverComment: b.caregiverComment,
+    caregiverSkillTags: b.caregiverSkillTags ?? [],
     hasDisputePending: !!(b.dispute && b.dispute.status !== 'RESOLVED'),
     disputeReasons: b.dispute?.clientReasons ?? [],
     meetAndGreet: b.meetAndGreet ?? null,

@@ -380,9 +380,18 @@ model Booking {
   ownerRated                 Boolean          @default(false)
   ownerRating                Int?
   ownerComment               String?          @db.Text
+  /// Chips de cualidades del cuidador (Amable, Puntual, Responsable, Respetuoso,
+  /// Buena comunicación) que el dueño puede marcar al calificar — alimenta la
+  /// reputación del cuidador. Selección múltiple, ninguna obligatoria.
+  caregiverSkillTags         String[]         @default([])
   caregiverRated             Boolean          @default(false)
   caregiverRating            Int?
   caregiverComment           String?          @db.Text
+  /// Última vez que se envió el recordatorio in-app+push de "calificación
+  /// pendiente" al dueño (ver procesarRecordatoriosCalificacion en
+  /// service-reminders.job.ts) — evita reenviarlo varias veces dentro de la
+  /// misma ventana horaria de detección.
+  ratingReminderSentAt       DateTime?
   blockchainTxHash           String?
   blockchainFinalizedTxHash  String?
   blockchainCancelledTxHash  String?

@@ -3788,7 +3788,8 @@ export async function confirmReceiptByClient(
   bookingId: string,
   clientId: string,
   rating: number,
-  comment?: string
+  comment?: string,
+  skillTags?: string[]
 ): Promise<BookingCreateResult> {
   // Validate rating before any DB operation
   const ratingNum = Number(rating);
@@ -3828,6 +3829,7 @@ export async function confirmReceiptByClient(
           ownerRated: true,
           ownerRating: rating,
           ownerComment: comment,
+          caregiverSkillTags: skillTags ?? [],
         },
       });
       if (claimed.count === 0) {
@@ -3885,6 +3887,7 @@ export async function confirmReceiptByClient(
         ownerRated: true,
         ownerRating: rating,
         ownerComment: comment,
+        caregiverSkillTags: skillTags ?? [],
       },
     });
     if (claimed.count === 0) {

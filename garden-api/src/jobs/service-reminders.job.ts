@@ -170,6 +170,9 @@ async function procesarRecordatoriosCalificacion() {
       ownerRated: false,
       payoutStatus: 'PENDING',
       serviceEndedAt: { gte: windowStart, lte: windowEnd },
+      // Sin esto, cada corrida horaria dentro de la ventana de 4h reenviaba el
+      // mismo recordatorio (hasta 4 veces) al mismo dueño para el mismo booking.
+      ratingReminderSentAt: null,
     },
     select: {
       id: true,
@@ -198,6 +201,8 @@ async function procesarRecordatoriosCalificacion() {
         '⭐ ¡Califica el servicio!',
         `Recuerda calificar el ${svcLabel} de ${b.petName ?? 'tu mascota'}. El cuidador espera su pago.`
       ).catch(() => {});
+
+      await prisma.booking.update({ where: { id: b.id }, data: { ratingReminderSentAt: new Date() } });
 
       logger.info('[RATING-REMINDER] Recordatorio 24h enviado', { bookingId: b.id });
     } catch (err: any) {

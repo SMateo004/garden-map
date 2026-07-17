@@ -310,6 +310,8 @@ export const confirmReceiptBodySchema = z.object({
     .min(1, 'rating mínimo es 1')
     .max(5, 'rating máximo es 5'),
   comment: z.string().max(1000, 'El comentario no puede superar 1000 caracteres').optional(),
+  /** Chips de cualidades del cuidador seleccionados por el dueño (Amable, Puntual, etc.) — opcional, ninguno es obligatorio. */
+  skillTags: z.array(z.string().max(50)).max(20).optional(),
 });
 export type ConfirmReceiptBody = z.infer<typeof confirmReceiptBodySchema>;
 

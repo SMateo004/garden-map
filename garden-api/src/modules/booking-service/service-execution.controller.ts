@@ -153,7 +153,8 @@ export const confirmReceipt = asyncHandler(async (req: Request, res: Response) =
         bookingId,
         clientId,
         parsed.data.rating,
-        parsed.data.comment
+        parsed.data.comment,
+        parsed.data.skillTags
     );
     res.json({ success: true, data: booking });
 });

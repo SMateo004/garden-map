@@ -4,7 +4,13 @@ import * as bookingController from './booking.controller.js';
 import * as serviceExecutionController from './service-execution.controller.js';
 import multer from 'multer';
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+// Este middleware se usa en /:id/event y /:id/conclude, que reciben tanto fotos
+// como videos cortos (el picker en la app permite hasta 2 min de video). Un
+// límite de 5MB alcanzaba para fotos pero cualquier video real de 2 minutos lo
+// supera fácilmente — multer cortaba el stream a mitad de subida y el cliente
+// veía "SocketException: Software caused connection abort (errno 103)". Subimos
+// el límite a 80MB para cubrir video comprimido de 2 min con margen.
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 80 * 1024 * 1024 } });
 const router = Router();
 
 /** GET /api/bookings/my — obtener todas las reservas del cliente autenticado. */

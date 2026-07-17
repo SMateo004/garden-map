@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -14,6 +13,7 @@ import '../../widgets/slide_to_confirm_button.dart';
 import '../chat/chat_screen.dart';
 import 'gps_tracking_screen.dart';
 import 'meet_and_greet_screen.dart';
+import '../../services/gps_tracking_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_state.dart';
 import '../../services/garden_live_activity.dart';
@@ -42,6 +42,17 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   // Survey state — must be class-level to survive parent rebuilds (e.g. themeNotifier)
   int _surveyRating = 0;
   final TextEditingController _surveyCommentController = TextEditingController();
+  // Cualidades del cuidador que el dueño puede marcar al calificar — selección
+  // múltiple, ninguna obligatoria. Se envían junto con rating/comment.
+  final List<String> _surveySkillTags = [];
+  static const List<String> _caregiverSkillOptions = [
+    'Amable', 'Puntual', 'Responsable', 'Respetuoso', 'Buena comunicación',
+  ];
+  // Mensajes de validación mostrados cuando el usuario intenta enviar sin
+  // completar los campos obligatorios (antes fallaba en silencio con el botón
+  // simplemente deshabilitado, sin explicar por qué).
+  bool _surveyShowValidationError = false;
+  bool _caregiverSurveyShowValidationError = false;
 
   // Caregiver rates owner — post-service
   int _caregiverSurveyRating = 0;
@@ -74,8 +85,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   bool _gpsDialogShown = false;
 
   // GPS live info — client side (PASEO, IN_PROGRESS)
-  int _gpsPointCount = 0;
-  double _gpsDistanceM = 0;
+  // Nota: solo indicamos si hay señal GPS reciente y cuándo fue la última
+  // actualización — no se expone la cantidad de puntos ni la distancia
+  // recorrida en esta pantalla (eso queda en la pantalla de mapa dedicada).
+  bool _gpsHasSignal = false;
   DateTime? _gpsLastPoint;
   Timer? _gpsInfoTimer;
 
@@ -264,23 +277,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       if (data['success'] == true) {
         final pts = (data['data'] as List? ?? []);
         if (pts.isEmpty) return;
-        // Haversine distance from track points
-        double distM = 0;
-        for (int i = 1; i < pts.length; i++) {
-          final prev = pts[i - 1];
-          final curr = pts[i];
-          final lat1 = (prev['lat'] as num).toDouble() * math.pi / 180;
-          final lat2 = (curr['lat'] as num).toDouble() * math.pi / 180;
-          final dLat = lat2 - lat1;
-          final dLng = ((curr['lng'] as num).toDouble() - (prev['lng'] as num).toDouble()) * math.pi / 180;
-          final a = math.pow(math.sin(dLat / 2), 2) +
-              math.cos(lat1) * math.cos(lat2) * math.pow(math.sin(dLng / 2), 2);
-          distM += 6371000.0 * 2 * math.atan2(math.sqrt(a.toDouble()), math.sqrt(1 - a.toDouble()));
-        }
         final lastTs = pts.last['timestamp'] as String?;
         setState(() {
-          _gpsPointCount = pts.length;
-          _gpsDistanceM = distM;
+          _gpsHasSignal = true;
           _gpsLastPoint = lastTs != null ? DateTime.tryParse(lastTs) : null;
         });
       }
@@ -288,18 +287,15 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   }
 
   String _buildGpsStatusText() {
-    if (_gpsPointCount == 0) return 'El cuidador aún no ha compartido su ubicación';
-    final dist = _gpsDistanceM < 1000
-        ? '${_gpsDistanceM.toStringAsFixed(0)} m recorridos'
-        : '${(_gpsDistanceM / 1000).toStringAsFixed(2)} km recorridos';
-    if (_gpsLastPoint == null) return '$_gpsPointCount puntos · $dist';
+    if (!_gpsHasSignal) return 'El cuidador aún no ha compartido su ubicación';
+    if (_gpsLastPoint == null) return 'Ubicación en vivo disponible';
     final diff = DateTime.now().difference(_gpsLastPoint!);
     final ago = diff.inSeconds < 60
         ? 'hace ${diff.inSeconds}s'
         : diff.inMinutes < 60
             ? 'hace ${diff.inMinutes} min'
             : 'hace ${diff.inHours}h';
-    return '$dist · actualizado $ago';
+    return 'Ubicación actualizada $ago';
   }
 
   void _showGpsDisabledDialog() {
@@ -2276,10 +2272,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                 children: [
                                   Row(
                                     children: [
-                                      _GpsPulsingDot(active: _gpsPointCount > 0),
+                                      _GpsPulsingDot(active: _gpsHasSignal),
                                       const SizedBox(width: 6),
                                       Text(
-                                        _gpsPointCount > 0 ? 'GPS en vivo' : 'Esperando GPS...',
+                                        _gpsHasSignal ? 'GPS en vivo' : 'Esperando GPS...',
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontWeight: FontWeight.w800,
@@ -2837,24 +2833,6 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   ),
                   const SizedBox(height: 16),
 
-                  // ── Botón deslizante: Finalizar servicio ─────────────────
-                  // No se puede finalizar mientras haya una emergencia activa sin
-                  // resolver (_isServicePaused) — hay que resolverla primero.
-                  SlideToConfirmButton(
-                    label: _isServicePaused
-                        ? 'Resuelve la emergencia activa primero'
-                        : isPhotoMet
-                            ? 'Desliza para finalizar servicio'
-                            : 'Necesitas ${minPhotos - photoCount} foto${minPhotos - photoCount == 1 ? '' : 's'} más',
-                    color: _isServicePaused
-                        ? GardenColors.error
-                        : (isPhotoMet ? GardenColors.success : GardenColors.warning),
-                    icon: Icons.check_circle_rounded,
-                    height: 58,
-                    onConfirmed: (isPhotoMet && !_isServicePaused) ? _showFinishConfirmation : null,
-                  ),
-                  const SizedBox(height: 20),
-
                   // ── Grid de acciones ─────────────────────────────────────
                   Text('Acciones', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
                   const SizedBox(height: 12),
@@ -2947,6 +2925,26 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   ],
                   const SizedBox(height: 12),
                   const SizedBox(height: 6),
+
+                  // ── Botón deslizante: Finalizar servicio ─────────────────
+                  // No se puede finalizar mientras haya una emergencia activa sin
+                  // resolver (_isServicePaused) — hay que resolverla primero.
+                  // Movido a después del bloque de Acciones (pedido explícito) para
+                  // que el cuidador no lo toque por error antes de revisar las acciones.
+                  SlideToConfirmButton(
+                    label: _isServicePaused
+                        ? 'Resuelve la emergencia activa primero'
+                        : isPhotoMet
+                            ? 'Desliza para finalizar servicio'
+                            : 'Necesitas ${minPhotos - photoCount} foto${minPhotos - photoCount == 1 ? '' : 's'} más',
+                    color: _isServicePaused
+                        ? GardenColors.error
+                        : (isPhotoMet ? GardenColors.success : GardenColors.warning),
+                    icon: Icons.check_circle_rounded,
+                    height: 58,
+                    onConfirmed: (isPhotoMet && !_isServicePaused) ? _showFinishConfirmation : null,
+                  ),
+                  const SizedBox(height: 20),
 
                   // ── Fotos enviadas ───────────────────────────────────────
                   if (_serviceEvents.isNotEmpty) ...[
@@ -3673,6 +3671,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       if (data['success'] == true) {
         await _loadBooking();
         if (!mounted) return;
+        // Arranca el tracking GPS en background (independiente de la pantalla)
+        // apenas el servicio pasa a IN_PROGRESS. Solo aplica a PASEO — el
+        // backend (trackServiceLocation) rechaza el resto de todos modos.
+        if (_booking?['serviceType'] == 'PASEO') {
+          GpsTrackingSession.instance.start(bookingId: widget.bookingId, token: _token);
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('¡Servicio iniciado! El escrow blockchain está activo.'), backgroundColor: GardenColors.success),
         );
@@ -3817,6 +3821,31 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       ),
     );
     if (confirmed != true) return;
+
+    // Segunda confirmación — el dueño no tiene la barra de "deslizar para
+    // confirmar" que sí tiene el cuidador, así que agregamos un segundo paso
+    // explícito acá para evitar toques accidentales (pedido explícito: el
+    // cuidador NO necesita esta fricción extra, solo el dueño).
+    final doubleConfirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.xl)),
+        title: Text('¿Estás completamente seguro?', style: TextStyle(color: textColor, fontWeight: FontWeight.w800)),
+        content: Text(
+          'Esta acción no se puede deshacer. Confirmá solo si el servicio realmente ya terminó.',
+          style: TextStyle(color: subtextColor, fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sí, confirmar', style: TextStyle(color: GardenColors.success, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (doubleConfirmed != true) return;
     await _markServiceEnded();
   }
 
@@ -4003,6 +4032,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
+        // El servicio pasó a COMPLETED — cortar el tracking GPS en background
+        // acá, no en _markServiceEnded (esa acción del dueño solo congela el
+        // reloj de overtime, no termina el booking realmente).
+        if (_booking?['serviceType'] == 'PASEO') {
+          GpsTrackingSession.instance.stop();
+        }
         await _loadBooking();
       } else {
         throw Exception(data['error']?['message'] ?? 'Error');
@@ -4039,7 +4074,14 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         filename: fileName,
         contentType: MediaType('video', 'mp4'),
       ));
-      final streamed = await request.send();
+      // Un video de hasta 2 min puede pesar varias decenas de MB — sin timeout
+      // explícito, una red lenta puede colgar el request indefinidamente hasta
+      // que el OS lo corte solo (apareciendo como "connection abort" en vez de
+      // un timeout claro). Le damos 3 minutos de margen para la subida.
+      final streamed = await request.send().timeout(
+        const Duration(minutes: 3),
+        onTimeout: () => throw Exception('La subida tardó demasiado. Verifica tu conexión e intenta de nuevo.'),
+      );
       final response = await http.Response.fromStream(streamed);
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
@@ -4054,8 +4096,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       }
     } catch (e) {
       if (mounted) {
+        final msg = e.toString().contains('errno 103') || e.toString().toLowerCase().contains('connection abort')
+            ? 'Se cortó la conexión al enviar el video. Revisa tu conexión a internet e intenta de nuevo con un video más corto.'
+            : 'No se pudo enviar el video: $e';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo enviar el video: $e'), backgroundColor: GardenColors.error),
+          SnackBar(content: Text(msg), backgroundColor: GardenColors.error),
         );
       }
     } finally {
@@ -4697,6 +4742,92 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 ),
               ),
             ),
+            if (_surveyShowValidationError && _surveyCommentController.text.trim().isEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: GardenColors.error, size: 16),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'El comentario es obligatorio para calificar al cuidador',
+                      style: const TextStyle(color: GardenColors.error, fontSize: 12.5, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (_surveyShowValidationError && _surveyRating == 0) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: GardenColors.error, size: 16),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Selecciona una calificación de estrellas',
+                      style: const TextStyle(color: GardenColors.error, fontSize: 12.5, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 18),
+
+            // ── Cualidades del cuidador (opcional, selección múltiple) ──
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '¿Qué destacarías del cuidador? (opcional)',
+                style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _caregiverSkillOptions.map((opt) {
+                final isSel = _surveySkillTags.contains(opt);
+                return GestureDetector(
+                  onTap: () => setState(() {
+                    if (isSel) {
+                      _surveySkillTags.remove(opt);
+                    } else {
+                      _surveySkillTags.add(opt);
+                    }
+                  }),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSel ? GardenColors.primary.withValues(alpha: 0.12) : surface,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isSel ? GardenColors.primary : borderColor,
+                        width: isSel ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isSel) ...[
+                          const Icon(Icons.check_rounded, color: GardenColors.primary, size: 14),
+                          const SizedBox(width: 4),
+                        ],
+                        Text(
+                          opt,
+                          style: TextStyle(
+                            color: isSel ? GardenColors.primary : subtextColor,
+                            fontSize: 13,
+                            fontWeight: isSel ? FontWeight.w600 : FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
             const SizedBox(height: 18),
 
             // ── Feedback Smart Contract ────────────────────────────────
@@ -4739,10 +4870,31 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             ),
 
             const SizedBox(height: 32),
-            GardenButton(
-              label: _isProcessing ? 'Procesando en Blockchain...' : 'Confirmar calificación',
-              loading: _isProcessing,
-              onPressed: canSubmit ? () => _submitRating(_surveyRating, _surveyCommentController.text) : null,
+            GestureDetector(
+              // Cuando el botón está deshabilitado, GardenButton ignora el tap
+              // internamente — este detector envuelve para poder mostrar el
+              // motivo en vez de fallar en silencio.
+              onTap: canSubmit
+                  ? null
+                  : () {
+                      setState(() => _surveyShowValidationError = true);
+                      final reason = _surveyRating == 0
+                          ? 'Selecciona una calificación de estrellas'
+                          : 'El comentario es obligatorio para calificar al cuidador';
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(reason), backgroundColor: GardenColors.error),
+                      );
+                    },
+              child: AbsorbPointer(
+                absorbing: !canSubmit,
+                child: GardenButton(
+                  label: _isProcessing ? 'Procesando en Blockchain...' : 'Confirmar calificación',
+                  loading: _isProcessing,
+                  onPressed: canSubmit
+                      ? () => _submitRating(_surveyRating, _surveyCommentController.text, _surveySkillTags)
+                      : null,
+                ),
+              ),
             ),
             const SizedBox(height: 16),
             Row(
@@ -4759,7 +4911,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     );
   }
 
-  Future<void> _submitRating(int rating, String comment) async {
+  Future<void> _submitRating(int rating, String comment, [List<String>? skillTags]) async {
     debugPrint('SERVICE: _submitRating starting for ${widget.bookingId} with rating $rating. Comment: $comment');
     setState(() => _isProcessing = true);
     try {
@@ -4767,7 +4919,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       final response = await http.post(
         Uri.parse('$_baseUrl/bookings/${widget.bookingId}/confirm-receipt'),
         headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
-        body: jsonEncode({'rating': rating, 'comment': comment}),
+        body: jsonEncode({'rating': rating, 'comment': comment, 'skillTags': skillTags ?? []}),
       );
       debugPrint('SERVICE: Confirmation response ${response.statusCode}: ${response.body}');
       final data = jsonDecode(response.body);
@@ -4977,15 +5129,44 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               ),
             ),
 
+            if (_caregiverSurveyShowValidationError && _caregiverSurveyRating == 0) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: GardenColors.error, size: 16),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Selecciona una calificación de estrellas para enviar',
+                      style: const TextStyle(color: GardenColors.error, fontSize: 12.5, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 32),
 
-            GardenButton(
-              label: _isSubmittingCaregiverRating ? 'Enviando...' : 'Enviar calificación',
-              icon: Icons.star_rounded,
-              loading: _isSubmittingCaregiverRating,
-              onPressed: _caregiverSurveyRating > 0 && !_isSubmittingCaregiverRating
-                  ? _submitCaregiverRating
-                  : null,
+            GestureDetector(
+              onTap: (_caregiverSurveyRating > 0 && !_isSubmittingCaregiverRating)
+                  ? null
+                  : () {
+                      if (_isSubmittingCaregiverRating) return;
+                      setState(() => _caregiverSurveyShowValidationError = true);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Selecciona una calificación de estrellas para enviar'), backgroundColor: GardenColors.error),
+                      );
+                    },
+              child: AbsorbPointer(
+                absorbing: !(_caregiverSurveyRating > 0 && !_isSubmittingCaregiverRating),
+                child: GardenButton(
+                  label: _isSubmittingCaregiverRating ? 'Enviando...' : 'Enviar calificación',
+                  icon: Icons.star_rounded,
+                  loading: _isSubmittingCaregiverRating,
+                  onPressed: _caregiverSurveyRating > 0 && !_isSubmittingCaregiverRating
+                      ? _submitCaregiverRating
+                      : null,
+                ),
+              ),
             ),
 
             const SizedBox(height: 12),
