@@ -358,6 +358,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                       TextField(
                         controller: _bioController,
                         maxLines: 4,
+                        readOnly: !_isEditing,
                         style: TextStyle(color: textColor),
                         decoration: _inputDecoration('Cuéntanos sobre tu experiencia cuidando mascotas...', isDark),
                       ),
@@ -371,60 +372,69 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                         style: TextStyle(color: subtextColor, fontSize: 12),
                       ),
                       const SizedBox(height: 14),
-                      Theme(
-                        data: Theme.of(context).copyWith(
-                          inputDecorationTheme: InputDecorationTheme(
-                            filled: true,
-                            fillColor: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 2)),
-                            hintStyle: TextStyle(color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      IgnorePointer(
+                        ignoring: !_isEditing,
+                        child: Theme(
+                          data: Theme.of(context).copyWith(
+                            inputDecorationTheme: InputDecorationTheme(
+                              filled: true,
+                              fillColor: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
+                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder)),
+                              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 2)),
+                              hintStyle: TextStyle(color: isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
                           ),
-                        ),
-                        child: AddressSection(
-                          isDark: isDark,
-                          textColor: textColor,
-                          subtextColor: subtextColor,
-                          borderColor: borderColor,
-                          surfaceEl: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
-                          streetController: _streetCtrl,
-                          numberController: _numberCtrl,
-                          apartmentController: _apartmentCtrl,
-                          condominioController: _condominioCtrl,
-                          referenceController: _referenceCtrl,
-                          selectedZone: _addressZone,
-                          onZoneChanged: (val) => setState(() => _addressZone = val),
-                          initialCityId: _gardenCityId,
-                          onCityChanged: (cityId, _) => setState(() => _gardenCityId = cityId),
-                          onCityChangeReset: () => setState(() {
-                            _addressLat = null;
-                            _addressLng = null;
-                            _streetCtrl.clear();
-                            _numberCtrl.clear();
-                            _apartmentCtrl.clear();
-                            _condominioCtrl.clear();
-                            _referenceCtrl.clear();
-                          }),
-                          addressLat: _addressLat,
-                          addressLng: _addressLng,
-                          isApartment: _isApartment,
-                          purposeText: 'Tu dirección define en qué zona ofreces servicios. Solo se muestra la zona (no la calle exacta) a los dueños.',
-                          onMapResult: (result) => setState(() {
-                            _addressLat = result.lat;
-                            _addressLng = result.lng;
-                          }),
-                          onApartmentToggle: (val) => setState(() => _isApartment = val),
+                          child: AddressSection(
+                            isDark: isDark,
+                            textColor: textColor,
+                            subtextColor: subtextColor,
+                            borderColor: borderColor,
+                            surfaceEl: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
+                            streetController: _streetCtrl,
+                            numberController: _numberCtrl,
+                            apartmentController: _apartmentCtrl,
+                            condominioController: _condominioCtrl,
+                            referenceController: _referenceCtrl,
+                            selectedZone: _addressZone,
+                            onZoneChanged: (val) => setState(() => _addressZone = val),
+                            initialCityId: _gardenCityId,
+                            onCityChanged: (cityId, _) => setState(() => _gardenCityId = cityId),
+                            onCityChangeReset: () => setState(() {
+                              _addressLat = null;
+                              _addressLng = null;
+                              _streetCtrl.clear();
+                              _numberCtrl.clear();
+                              _apartmentCtrl.clear();
+                              _condominioCtrl.clear();
+                              _referenceCtrl.clear();
+                            }),
+                            addressLat: _addressLat,
+                            addressLng: _addressLng,
+                            isApartment: _isApartment,
+                            purposeText: 'Tu dirección define en qué zona ofreces servicios. Solo se muestra la zona (no la calle exacta) a los dueños.',
+                            onMapResult: (result) => setState(() {
+                              _addressLat = result.lat;
+                              _addressLng = result.lng;
+                            }),
+                            onApartmentToggle: (val) => setState(() => _isApartment = val),
+                          ),
                         ),
                       ),
                       const Divider(height: 32),
 
-                      _buildPersonalInfoSection(textColor, subtextColor, isDark),
+                      IgnorePointer(
+                        ignoring: !_isEditing,
+                        child: _buildPersonalInfoSection(textColor, subtextColor, isDark),
+                      ),
                       const Divider(height: 32),
 
                       // Sección — Datos de cobro
-                      _buildBankSection(textColor, subtextColor, surface, borderColor, isDark),
+                      IgnorePointer(
+                        ignoring: !_isEditing,
+                        child: _buildBankSection(textColor, subtextColor, surface, borderColor, isDark),
+                      ),
                       const Divider(height: 32),
 
                       // Sección — Estado

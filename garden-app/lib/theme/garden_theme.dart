@@ -595,14 +595,18 @@ class GardenGlassDialog extends StatelessWidget {
               ),
             if (actions != null && actions!.isNotEmpty) ...[
               const SizedBox(height: 24),
+              // Cada acción se envuelve en Expanded para que se reparta el
+              // ancho disponible del diálogo — con Row + Padding simple los
+              // botones podían desbordar el ancho en pantallas angostas
+              // (ej. "Confirmar" quedaba invisible/no tocable en celulares
+              // reales de 360-375dp de ancho).
               Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: actions!
-                    .map((a) => Padding(
-                          padding: const EdgeInsets.only(left: 8),
-                          child: a,
-                        ))
-                    .toList(),
+                children: [
+                  for (var i = 0; i < actions!.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 8),
+                    Expanded(child: actions![i]),
+                  ],
+                ],
               ),
             ],
           ],
@@ -1029,6 +1033,11 @@ class GardenInput extends StatelessWidget {
   final void Function(String)? onChanged;
   final Widget? suffixIcon;
 
+  /// Cuando es `false`, el campo se muestra deshabilitado (no acepta input,
+  /// no recibe foco). Default `true` — retrocompatible con todos los usos
+  /// existentes de GardenInput que no pasan este parámetro.
+  final bool enabled;
+
   const GardenInput({
     super.key,
     required this.hint,
@@ -1041,6 +1050,7 @@ class GardenInput extends StatelessWidget {
     this.validator,
     this.onChanged,
     this.suffixIcon,
+    this.enabled = true,
   });
 
   @override
@@ -1053,6 +1063,7 @@ class GardenInput extends StatelessWidget {
 
     return TextFormField(
       controller: controller,
+      enabled: enabled,
       obscureText: obscureText,
       keyboardType: keyboardType,
       maxLines: maxLines,

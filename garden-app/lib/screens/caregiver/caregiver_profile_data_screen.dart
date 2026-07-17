@@ -1503,12 +1503,19 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             SizedBox(key: _keyBio, height: 0),
             _sectionTitle(_lAboutTitle, textColor),
             SizedBox(key: _keyBioDetail, height: 0),
-            GardenInput(
-              hint: _lBioHint,
-              controller: _bioDetailController,
-              maxLines: 6,
-              maxLength: 300,
-              onChanged: (_) => setState(() {}),
+            // Solo se bloquea en modo standalone (fuera del wizard de
+            // onboarding, donde _isEditing nunca se activa) — en
+            // embeddedMode el campo debe seguir siempre editable.
+            IgnorePointer(
+              ignoring: !widget.embeddedMode && !_isEditing,
+              child: GardenInput(
+                hint: _lBioHint,
+                controller: _bioDetailController,
+                enabled: widget.embeddedMode || _isEditing,
+                maxLines: 6,
+                maxLength: 300,
+                onChanged: (_) => setState(() {}),
+              ),
             ),
             const Divider(height: 48),
 
@@ -1628,10 +1635,26 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             // Sección 8 — FAQ
             SizedBox(key: _keyFaq, height: 0),
             _sectionTitle('Preguntas frecuentes', textColor),
-            GardenInput(hint: '¿Qué incluye tu servicio?', controller: _includesController, maxLines: 2),
+            IgnorePointer(
+              ignoring: !widget.embeddedMode && !_isEditing,
+              child: GardenInput(
+                hint: '¿Qué incluye tu servicio?',
+                controller: _includesController,
+                enabled: widget.embeddedMode || _isEditing,
+                maxLines: 2,
+              ),
+            ),
             const SizedBox(height: 12),
             const SizedBox(height: 12),
-            GardenInput(hint: '¿Qué necesitas del dueño antes del servicio?', controller: _requirementsController, maxLines: 2),
+            IgnorePointer(
+              ignoring: !widget.embeddedMode && !_isEditing,
+              child: GardenInput(
+                hint: '¿Qué necesitas del dueño antes del servicio?',
+                controller: _requirementsController,
+                enabled: widget.embeddedMode || _isEditing,
+                maxLines: 2,
+              ),
+            ),
 
             const Divider(height: 48),
 
