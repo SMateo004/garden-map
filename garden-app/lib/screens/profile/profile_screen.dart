@@ -479,62 +479,58 @@ class _ProfileScreenState extends State<ProfileScreen>
           final glowAlpha = 0.18 + 0.22 * t;
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Material(
-              color: surface,
-              borderRadius: BorderRadius.circular(GardenRadius.md),
-              child: InkWell(
-                onTap: onTap,
-                borderRadius: BorderRadius.circular(GardenRadius.md),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(GardenRadius.md),
-                    border: Border.all(color: pulseBorder, width: 1.5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: pulseBorder.withValues(alpha: glowAlpha),
-                        blurRadius: 10 + 8 * t,
-                        spreadRadius: 1,
+            child: GardenPressable(
+              onTap: onTap,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                decoration: BoxDecoration(
+                  color: surface,
+                  borderRadius: BorderRadius.circular(GardenRadius.md),
+                  border: Border.all(color: pulseBorder, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: pulseBorder.withValues(alpha: glowAlpha),
+                      blurRadius: 10 + 8 * t,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: GardenColors.warning.withValues(alpha: 0.12 + 0.06 * t),
+                        borderRadius: BorderRadius.circular(GardenRadius.sm),
                       ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: GardenColors.warning.withValues(alpha: 0.12 + 0.06 * t),
-                          borderRadius: BorderRadius.circular(GardenRadius.sm),
-                        ),
-                        child: Icon(icon, color: GardenColors.warning, size: 17),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(title,
-                                style: TextStyle(
-                                    color: textColor,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14)),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Completa tu perfil',
+                      child: Icon(icon, color: GardenColors.warning, size: 17),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(title,
                               style: TextStyle(
-                                color: GardenColors.warning.withValues(alpha: 0.85 + 0.15 * t),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 11,
-                              ),
+                                  color: textColor,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14)),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Completa tu perfil',
+                            style: TextStyle(
+                              color: GardenColors.warning.withValues(alpha: 0.85 + 0.15 * t),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 11,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      Icon(Icons.chevron_right_rounded,
-                          color: GardenColors.warning, size: 18),
-                    ],
-                  ),
+                    ),
+                    Icon(Icons.chevron_right_rounded,
+                        color: GardenColors.warning, size: 18),
+                  ],
                 ),
               ),
             ),
@@ -543,24 +539,17 @@ class _ProfileScreenState extends State<ProfileScreen>
       );
     }
 
-    // Normal tile
-    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    // Normal tile — GlassBox + squish táctil, consistente con el nav bar.
     return Opacity(
       opacity: onTap == null ? 0.55 : 1.0,
       child: Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: surface,
-        borderRadius: BorderRadius.circular(GardenRadius.md),
-        child: InkWell(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: GardenPressable(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(GardenRadius.md),
-          child: Container(
+          child: GlassBox(
+            borderRadius: BorderRadius.circular(GardenRadius.md),
+            blurSigma: 16,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(GardenRadius.md),
-              border: Border.all(color: borderColor),
-            ),
             child: Row(
               children: [
                 Container(
@@ -584,7 +573,6 @@ class _ProfileScreenState extends State<ProfileScreen>
             ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -695,7 +683,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Row(
                     children: [
-                      IconButton(icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 18), onPressed: () => Navigator.pop(context)),
+                      GardenBackButton(size: 32, iconColor: textColor, onTap: () => Navigator.pop(context)),
                       const SizedBox(width: 6),
                       Text('Mi Perfil', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
                       const Spacer(),

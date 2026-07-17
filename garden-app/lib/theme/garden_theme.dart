@@ -345,6 +345,10 @@ class GlassBox extends StatelessWidget {
   final BorderRadius? borderRadius;
   final EdgeInsetsGeometry? padding;
   final double blurSigma;
+  /// Agrega un sutil brillo/highlight blanco en la parte superior — acentúa
+  /// la sensación de "vidrio" en superficies grandes (ej. nav bar). Sutil
+  /// a propósito, no cambia el comportamiento existente si se deja en false.
+  final bool showTopHighlight;
 
   const GlassBox({
     super.key,
@@ -352,6 +356,7 @@ class GlassBox extends StatelessWidget {
     this.borderRadius,
     this.padding,
     this.blurSigma = 22,
+    this.showTopHighlight = false,
   });
 
   @override
@@ -397,15 +402,139 @@ class GlassBox extends StatelessWidget {
 
     final inner = Container(padding: padding, decoration: decoration, child: child);
 
+    // Sheen sutil arriba — simula el reflejo de luz sobre una superficie de
+    // vidrio curva. Solo se dibuja si se pide explícitamente (showTopHighlight)
+    // para no alterar la apariencia de los usos existentes de GlassBox.
+    final content = !showTopHighlight
+        ? inner
+        : Stack(
+            children: [
+              inner,
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                height: 30,
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.only(
+                        topLeft: radius.topLeft,
+                        topRight: radius.topRight,
+                      ),
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.white.withValues(alpha: isDark ? 0.10 : 0.38),
+                          Colors.white.withValues(alpha: 0.0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+
     if (!useBlur) {
-      return ClipRRect(borderRadius: radius, child: inner);
+      return ClipRRect(borderRadius: radius, child: content);
     }
 
     return ClipRRect(
       borderRadius: radius,
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
-        child: inner,
+        child: content,
+      ),
+    );
+  }
+}
+
+/// Envoltorio genérico que aplica un efecto "squish" táctil (escala hacia
+/// abajo al tocar y rebote elástico al soltar) — da sensación de vidrio
+/// líquido comprimiéndose bajo el dedo. Reutilizable en cualquier botón/tile.
+class GardenPressable extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  final double pressedScale;
+  final BorderRadius? borderRadius;
+
+  const GardenPressable({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.pressedScale = 0.90,
+    this.borderRadius,
+  });
+
+  @override
+  State<GardenPressable> createState() => _GardenPressableState();
+}
+
+class _GardenPressableState extends State<GardenPressable> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (mounted && _pressed != value) setState(() => _pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      onTapDown: (_) => _setPressed(true),
+      onTapUp: (_) => _setPressed(false),
+      onTapCancel: () => _setPressed(false),
+      child: AnimatedScale(
+        scale: _pressed ? widget.pressedScale : 1.0,
+        duration: Duration(milliseconds: _pressed ? 110 : 200),
+        curve: _pressed ? Curves.easeOut : Curves.easeOutBack,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// Botón de "volver" circular con tratamiento Liquid Glass — reemplaza los
+/// `IconButton(Icons.arrow_back...)` sueltos en pantallas core, con el mismo
+/// squish táctil que el nav bar. En Android hereda automáticamente el
+/// fallback opaco de [GlassBox] (sin BackdropFilter) por el crash conocido.
+class GardenBackButton extends StatelessWidget {
+  final VoidCallback? onTap;
+  final Color? iconColor;
+  final double size;
+  final IconData icon;
+
+  const GardenBackButton({
+    super.key,
+    this.onTap,
+    this.iconColor,
+    this.size = 36,
+    this.icon = Icons.arrow_back_rounded,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final color = iconColor ??
+        (isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary);
+
+    return GardenPressable(
+      pressedScale: 0.85,
+      onTap: onTap ?? () => Navigator.maybePop(context),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: GlassBox(
+          borderRadius: BorderRadius.circular(size / 2),
+          padding: EdgeInsets.zero,
+          blurSigma: 18,
+          child: Center(
+            child: Icon(icon, color: color, size: size * 0.5),
+          ),
+        ),
       ),
     );
   }
@@ -413,7 +542,7 @@ class GlassBox extends StatelessWidget {
 
 /// Barra de navegación inferior flotante con efecto Liquid Glass.
 /// Reemplaza el BottomNavigationBar estándar. Usa con extendBody: true en Scaffold.
-class LiquidGlassNavBar extends StatelessWidget {
+class LiquidGlassNavBar extends StatefulWidget {
   final int selectedIndex;
   final ValueChanged<int> onTap;
   final List<GardenNavItem> items;
@@ -426,6 +555,17 @@ class LiquidGlassNavBar extends StatelessWidget {
   });
 
   @override
+  State<LiquidGlassNavBar> createState() => _LiquidGlassNavBarState();
+}
+
+class _LiquidGlassNavBarState extends State<LiquidGlassNavBar> {
+  int? _pressedIndex;
+
+  void _setPressed(int? index) {
+    if (mounted && _pressedIndex != index) setState(() => _pressedIndex = index);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bottomPad = MediaQuery.of(context).padding.bottom;
@@ -435,85 +575,117 @@ class LiquidGlassNavBar extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(20, 6, 20, bottomPad + 14),
       child: GlassBox(
         borderRadius: BorderRadius.circular(30),
+        // Sigma levemente mayor + sheen superior — acentúa el efecto "vidrio"
+        // en esta superficie grande y siempre visible.
+        blurSigma: 26,
+        showTopHighlight: true,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-          child: Row(
-            children: List.generate(items.length, (i) {
-              final item = items[i];
-              final selected = i == selectedIndex;
-              final iconColor = selected
-                  ? GardenColors.primary
-                  : (isDark ? GardenColors.darkTextSecondary : const Color(0xFF8A9A7A));
-              final labelColor = selected
-                  ? GardenColors.primary
-                  : (isDark ? GardenColors.darkTextSecondary : const Color(0xFF8A9A7A));
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final itemWidth = constraints.maxWidth / widget.items.length;
+              const blobHeight = 36.0;
+              const blobMargin = 6.0;
 
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => onTap(i),
-                  behavior: HitTestBehavior.opaque,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 240),
-                            curve: Curves.easeInOut,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                            decoration: BoxDecoration(
-                              color: selected
-                                  ? GardenColors.primary.withValues(alpha: 0.13)
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(16),
-                              border: selected
-                                  ? Border.all(
-                                      color: GardenColors.primary.withValues(alpha: 0.22),
-                                      width: 1.0,
-                                    )
-                                  : null,
-                            ),
-                            child: Icon(
-                              selected ? item.activeIcon : item.icon,
-                              color: iconColor,
-                              size: 22,
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // Blob líquido — se desliza detrás del ítem activo con
+                  // rebote elástico, en vez de saltar de color instantáneo.
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 480),
+                    curve: Curves.elasticOut,
+                    left: itemWidth * widget.selectedIndex + blobMargin,
+                    top: 0,
+                    width: (itemWidth - blobMargin * 2).clamp(0.0, itemWidth),
+                    height: blobHeight,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: GardenColors.primary.withValues(alpha: 0.13),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: GardenColors.primary.withValues(alpha: 0.22),
+                          width: 1.0,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: List.generate(widget.items.length, (i) {
+                      final item = widget.items[i];
+                      final selected = i == widget.selectedIndex;
+                      final squished = _pressedIndex == i;
+                      final iconColor = selected
+                          ? GardenColors.primary
+                          : (isDark ? GardenColors.darkTextSecondary : const Color(0xFF8A9A7A));
+                      final labelColor = iconColor;
+
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => widget.onTap(i),
+                          onTapDown: (_) => _setPressed(i),
+                          onTapUp: (_) => _setPressed(null),
+                          onTapCancel: () => _setPressed(null),
+                          behavior: HitTestBehavior.opaque,
+                          child: AnimatedScale(
+                            // Squish táctil: downscale breve al tocar, rebote
+                            // elástico al volver — sensación de gota de líquido.
+                            scale: squished ? 0.90 : 1.0,
+                            duration: Duration(milliseconds: squished ? 100 : 200),
+                            curve: squished ? Curves.easeOut : Curves.easeOutBack,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                                      child: Icon(
+                                        selected ? item.activeIcon : item.icon,
+                                        color: iconColor,
+                                        size: 22,
+                                      ),
+                                    ),
+                                    if (item.showDot)
+                                      Positioned(
+                                        top: 4,
+                                        right: 10,
+                                        child: Container(
+                                          width: 9,
+                                          height: 9,
+                                          decoration: BoxDecoration(
+                                            color: GardenColors.error,
+                                            shape: BoxShape.circle,
+                                            border: Border.all(color: isDark ? GardenColors.darkSurface : Colors.white, width: 1.5),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 3),
+                                AnimatedDefaultTextStyle(
+                                  duration: const Duration(milliseconds: 240),
+                                  // Nav labels — SemiBold 600 inactive / Bold 700 active (nav labels spec)
+                                  style: GoogleFonts.nunito(
+                                    color: labelColor,
+                                    fontSize: 10,
+                                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                                    letterSpacing: selected ? 0.10 : 0.06,
+                                    height: 1.20,
+                                  ),
+                                  child: Text(item.label),
+                                ),
+                              ],
                             ),
                           ),
-                          if (item.showDot)
-                            Positioned(
-                              top: 4,
-                              right: 10,
-                              child: Container(
-                                width: 9,
-                                height: 9,
-                                decoration: BoxDecoration(
-                                  color: GardenColors.error,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: isDark ? GardenColors.darkSurface : Colors.white, width: 1.5),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 3),
-                      AnimatedDefaultTextStyle(
-                        duration: const Duration(milliseconds: 240),
-                        // Nav labels — SemiBold 600 inactive / Bold 700 active (nav labels spec)
-                        style: GoogleFonts.nunito(
-                          color: labelColor,
-                          fontSize: 10,
-                          fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                          letterSpacing: selected ? 0.10 : 0.06,
-                          height: 1.20,
                         ),
-                        child: Text(item.label),
-                      ),
-                    ],
+                      );
+                    }),
                   ),
-                ),
+                ],
               );
-            }),
+            },
           ),
         ),
       ),
