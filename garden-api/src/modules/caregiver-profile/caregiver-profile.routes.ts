@@ -11,12 +11,13 @@ import { uploadImage } from '../../services/storage.service.js';
 import { assertImageBuffer } from '../../shared/mime-validation.js';
 import { validarFoto } from '../../agents/foto-validacion.agent.js';
 import logger from '../../shared/logger.js';
+import { validateBankInfo, persistBankInfo, BANK_ACCOUNT_TYPES } from '../wallet/bank-info.util.js';
 
 const bankInfoSchema = z.object({
   bankName: z.string().min(2, 'Nombre del banco requerido').max(100),
-  bankAccount: z.string().min(4, 'Número de cuenta requerido').max(50).regex(/^[a-zA-Z0-9\-]+$/, 'Cuenta inválida'),
+  bankAccount: z.string().min(4, 'Número de cuenta o teléfono requerido').max(50).regex(/^[a-zA-Z0-9\-]+$/, 'Cuenta inválida'),
   bankHolder: z.string().min(2, 'Nombre del titular requerido').max(100),
-  bankType: z.string().min(1, 'Tipo de cuenta requerido').max(50),
+  bankType: z.enum(BANK_ACCOUNT_TYPES as [string, ...string[]], { errorMap: () => ({ message: 'Tipo de cuenta inválido' }) }),
 });
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -53,10 +54,17 @@ router.patch('/bank-info', authMiddleware, requireRole('CAREGIVER'),
     const userId = (req as any).user.userId;
     const { bankName, bankAccount, bankHolder, bankType } = parsed.data;
 
-    await prisma.caregiverProfile.update({
-      where: { userId },
-      data: { bankName, bankAccount, bankHolder, bankType },
-    });
+    const validationError = validateBankInfo({ bankName, bankAccount, bankHolder, bankType });
+    if (validationError) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', ...validationError } });
+    }
+
+    // Escribe en User (única fuente de verdad para retiros — ver wallet.routes.ts)
+    // además de CaregiverProfile (legacy, solo para compatibilidad con vistas de
+    // admin existentes). Antes este endpoint solo escribía en CaregiverProfile,
+    // lo cual dejaba desactualizados los datos que realmente se usan para
+    // procesar un retiro (User.bank*) si el cuidador editaba desde esta pantalla.
+    await persistBankInfo(userId, 'CAREGIVER', { bankName, bankAccount, bankHolder, bankType });
 
     res.json({ success: true, data: { message: 'Datos bancarios actualizados' } });
   })

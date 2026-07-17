@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
@@ -21,7 +23,13 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   bool _isLoading = true;
   String _token = '';
   String _role = '';
+  bool _uploadingQr = false;
+  bool _switchingMethod = false;
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
+
+  /// Modalidad de retiro elegida: BANK_TRANSFER (default) o QR_TRANSFER.
+  String get _withdrawalMethod => _walletData?['withdrawalMethod'] as String? ?? 'BANK_TRANSFER';
+  Map<String, dynamic>? get _qrInfo => _walletData?['qrInfo'] as Map<String, dynamic>?;
 
   // Tarjeta de donador — carrusel dentro de la billetera, solo para CLIENT.
   final PageController _cardPageController = PageController();
@@ -101,6 +109,87 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
     } catch (e) {
       debugPrint('Error loading wallet: $e');
       setState(() => _isLoading = false);
+    }
+  }
+
+  /// Cambia la modalidad de retiro preferida (transferencia bancaria vs QR de
+  /// transferencia). El backend valida cuál usar al procesar `/wallet/withdraw`.
+  Future<void> _setWithdrawalMethod(String method) async {
+    if (_switchingMethod || _withdrawalMethod == method) return;
+    setState(() => _switchingMethod = true);
+    try {
+      final response = await http.put(
+        Uri.parse('$_baseUrl/wallet/withdrawal-method'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({'withdrawalMethod': method}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true && mounted) {
+        setState(() {
+          _walletData = {...?_walletData, 'withdrawalMethod': method};
+        });
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['error']?['message'] ?? 'No se pudo cambiar la modalidad de retiro'), backgroundColor: GardenColors.error),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error de conexión. Intenta de nuevo.'), backgroundColor: GardenColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _switchingMethod = false);
+    }
+  }
+
+  /// Sube (o reemplaza) el QR de cobro propio del cliente/cuidador para la
+  /// modalidad de retiro "QR de transferencia". El backend guarda historial
+  /// (isCurrent) — ver comentario en el modelo WithdrawalQr del schema.
+  Future<void> _pickAndUploadQr() async {
+    if (_uploadingQr) return;
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+    if (picked == null) return;
+
+    setState(() => _uploadingQr = true);
+    try {
+      final bytes = await picked.readAsBytes();
+      final fileName = picked.name.isEmpty ? 'qr.jpg' : picked.name;
+      final uri = Uri.parse('$_baseUrl/wallet/withdrawal-qr');
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Authorization'] = 'Bearer $_token';
+      request.files.add(http.MultipartFile.fromBytes(
+        'qrImage', bytes, filename: fileName,
+        contentType: MediaType('image', 'jpeg'),
+      ));
+      final response = await http.Response.fromStream(await request.send());
+      final data = jsonDecode(response.body);
+      if (!mounted) return;
+      if (response.statusCode == 200 && data['success'] == true) {
+        setState(() {
+          _walletData = {
+            ...?_walletData,
+            'qrInfo': {'imageUrl': data['data']['imageUrl'], 'updatedAt': data['data']['updatedAt']},
+          };
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('QR de cobro actualizado'), backgroundColor: GardenColors.success),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['error']?['message'] ?? 'Error al subir el QR'), backgroundColor: GardenColors.error),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error de conexión. Intenta de nuevo.'), backgroundColor: GardenColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingQr = false);
     }
   }
 
@@ -208,9 +297,31 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                       if (_cardPage == 1 && _role == 'CLIENT')
                         _buildDonorHistorySection(textColor, subtextColor, surface, borderColor)
                       else ...[
-                      // SECCIÓN 2 — Datos bancarios y botón de retiro (todos los roles)
+                      // SECCIÓN 2 — Modalidad de retiro, datos de cobro y botón de retiro (todos los roles)
                       Text('Datos de cobro', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 12),
+                        // ── Selector de modalidad: transferencia bancaria vs QR de transferencia ──
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _withdrawalMethodChip(
+                                'Transferencia bancaria', Icons.account_balance_rounded, 'BANK_TRANSFER',
+                                textColor, subtextColor, surface, borderColor,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _withdrawalMethodChip(
+                                'QR de transferencia', Icons.qr_code_2_rounded, 'QR_TRANSFER',
+                                textColor, subtextColor, surface, borderColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        if (_withdrawalMethod == 'QR_TRANSFER')
+                          _buildQrSection(textColor, subtextColor, surface, borderColor)
+                        else
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
@@ -351,6 +462,105 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                 _walletStat('Reembolsos', 'Bs ${(_walletData?['totalRefunded'] ?? 0).toStringAsFixed(0)}', GardenColors.info),
               ],
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Chip seleccionable para elegir la modalidad de retiro (transferencia
+  /// bancaria vs QR de transferencia). Persiste la elección en el backend.
+  Widget _withdrawalMethodChip(
+    String label, IconData icon, String method,
+    Color textColor, Color subtextColor, Color surface, Color borderColor,
+  ) {
+    final isSelected = _withdrawalMethod == method;
+    return GestureDetector(
+      onTap: _switchingMethod ? null : () => _setWithdrawalMethod(method),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? GardenColors.primary.withValues(alpha: 0.1) : surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: isSelected ? GardenColors.primary : borderColor),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: isSelected ? GardenColors.primary : subtextColor, size: 20),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isSelected ? GardenColors.primary : textColor,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Sección "QR de transferencia": muestra el QR de cobro vigente (si hay
+  /// uno) y permite subir/reemplazar uno nuevo. El cliente sube su propio QR
+  /// de cobro (el que genera su banco/billetera personal para recibir pagos).
+  Widget _buildQrSection(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    final qrInfo = _qrInfo;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 64, height: 64,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor),
+            ),
+            child: qrInfo != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(11),
+                    child: Image.network(qrInfo['imageUrl'] as String, fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: GardenColors.error)),
+                  )
+                : Icon(Icons.qr_code_2_rounded, color: subtextColor.withValues(alpha: 0.4), size: 28),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  qrInfo != null ? 'QR de cobro cargado' : 'Sube tu QR de cobro',
+                  style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  qrInfo != null
+                      ? 'Es el que genera tu banco o billetera para recibir pagos. Puedes reemplazarlo cuando quieras.'
+                      : 'Sube el QR de cobro que genera tu banco o billetera para recibir pagos.',
+                  style: TextStyle(color: subtextColor, fontSize: 12),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: _uploadingQr ? null : _pickAndUploadQr,
+                  icon: _uploadingQr
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))
+                      : const Icon(Icons.upload_rounded, size: 16),
+                  label: Text(_uploadingQr ? 'Subiendo...' : (qrInfo != null ? 'Reemplazar QR' : 'Subir QR')),
+                  style: OutlinedButton.styleFrom(foregroundColor: GardenColors.primary, side: const BorderSide(color: GardenColors.primary)),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -581,14 +791,27 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
     final amountController = TextEditingController();
     bool isSubmitting = false;
 
-    // Verificar si tiene datos bancarios configurados antes de abrir
-    if (_walletData?['bankInfo']?['bankName'] == null) {
+    // Verificar si tiene configurada la modalidad de retiro elegida antes de abrir
+    if (_withdrawalMethod == 'QR_TRANSFER') {
+      if (_qrInfo == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sube tu QR de cobro antes de retirar')),
+        );
+        return;
+      }
+    } else if (_walletData?['bankInfo']?['bankName'] == null) {
       _showBankInfoSheet();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Configura tus datos bancarios antes de retirar')),
       );
       return;
     }
+
+    // Texto de destino legible, según la modalidad elegida (no asume que
+    // bankInfo exista cuando la modalidad es QR_TRANSFER).
+    final destinationLabel = _withdrawalMethod == 'QR_TRANSFER'
+        ? 'tu QR de transferencia'
+        : '${_walletData?['bankInfo']?['bankName']} (${_walletData?['bankInfo']?['bankAccount']})';
 
     showModalBottomSheet(
       context: context,
@@ -615,7 +838,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                   const SizedBox(height: 20),
                   Text('Solicitar retiro', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 12),
-                  Text('Se enviará a: ${_walletData!['bankInfo']!['bankName']} (${_walletData!['bankInfo']!['bankAccount']})',
+                  Text('Se enviará a: $destinationLabel',
                       style: TextStyle(color: subtextColor, fontSize: 12, fontStyle: FontStyle.italic)),
                   const SizedBox(height: 20),
                   // Monto
@@ -661,8 +884,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                           title: const Text('¿Confirmar retiro?'),
                           content: Text(
                             'Se solicitará el retiro de Bs ${amount.toStringAsFixed(2)} '
-                            'a la cuenta ${_walletData!['bankInfo']!['bankName']} '
-                            '(${_walletData!['bankInfo']!['bankAccount']}). '
+                            'a $destinationLabel. '
                             'El proceso puede tardar 1-3 días hábiles.',
                           ),
                           actions: [

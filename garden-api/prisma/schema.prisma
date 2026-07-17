@@ -58,11 +58,14 @@ model User {
   /// Billetera unificada: saldo disponible para retiro o pago de reservas.
   /// Única fuente de verdad independientemente del rol (CLIENT, CAREGIVER o ambos).
   balance                      Decimal                       @default(0) @db.Decimal(10, 2)
-  /// Datos bancarios para retiros (aplica para CLIENT y CAREGIVER).
+  /// Datos bancarios para retiros (aplica para CLIENT y CAREGIVER). Modalidad "transferencia bancaria".
   bankName                     String?                       @db.VarChar(100)
   bankAccount                  String?                       @db.VarChar(50)
   bankHolder                   String?                       @db.VarChar(100)
-  bankType                     String?                       @db.VarChar(20) // 'CUENTA_CORRIENTE' | 'CUENTA_AHORRO' | 'TIGO_MONEY' | 'BILLETERA'
+  bankType                     BankAccountType?
+  /// Modalidad de retiro preferida: transferencia bancaria (default) o QR de cobro propio.
+  withdrawalMethod             WithdrawalMethod              @default(BANK_TRANSFER)
+  withdrawalQrs                WithdrawalQr[]
   phoneOtp                     String?                       @db.VarChar(6)
   phoneOtpExpiresAt            DateTime?
 
@@ -72,62 +75,83 @@ model User {
   @@map("users")
 }
 
+/// Historial de QR de cobro que el cliente/cuidador sube para la modalidad de
+/// retiro "QR de transferencia" (su propio QR de cobro personal, generado por
+/// su banco/billetera). Se mantiene historial (en vez de un solo campo en
+/// User) con flag `isCurrent` para poder auditar qué QR se usó para pagar un
+/// retiro ya procesado ante una disputa — este proyecto ya tuvo incidentes de
+/// datos de dinero mal manejados (ver CLAUDE.md), así que preferimos no perder
+/// el rastro de versiones anteriores.
+model WithdrawalQr {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  imageUrl  String
+  /// true = el QR vigente a usar para el próximo retiro. Al subir uno nuevo,
+  /// el anterior se marca isCurrent=false en vez de borrarse.
+  isCurrent Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isCurrent])
+  @@map("withdrawal_qrs")
+}
+
 model CaregiverProfile {
-  id                              String                  @id @default(uuid())
-  userId                          String                  @unique
+  id                              String                      @id @default(uuid())
+  userId                          String                      @unique
   /// Campo canónico de estado del cuidador. Flujo: DRAFT→PENDING_REVIEW→(APPROVED|REJECTED|NEEDS_REVISION)→SUSPENDED.
-  status                          CaregiverStatus         @default(DRAFT)
+  status                          CaregiverStatus             @default(DRAFT)
   /// Legacy: redundante con status=APPROVED. Se mantiene por compatibilidad con queries existentes.
-  verified                        Boolean                 @default(false)
+  verified                        Boolean                     @default(false)
   verifiedAt                      DateTime?
   verifiedBy                      String?
   verificationNotes               String?
   /// Legacy: redundante con status. Mantiene el detalle del sub-estado de revisión de identidad del admin.
-  verificationStatus              VerificationStatus      @default(PENDING_REVIEW)
+  verificationStatus              VerificationStatus          @default(PENDING_REVIEW)
   rejectionReason                 String?
   adminNotes                      String?
   approvedAt                      DateTime?
   approvedBy                      String?
   reviewedAt                      DateTime?
   /// Legacy: redundante con status=SUSPENDED. Se mantiene por compatibilidad.
-  suspended                       Boolean                 @default(false)
+  suspended                       Boolean                     @default(false)
   suspendedAt                     DateTime?
   suspensionReason                String?
-  rating                          Float                   @default(0)
-  reviewCount                     Int                     @default(0)
-  bio                             String?                 @db.VarChar(500)
-  bioDetail                       String?                 @db.VarChar(300)
+  rating                          Float                       @default(0)
+  reviewCount                     Int                         @default(0)
+  bio                             String?                     @db.VarChar(500)
+  bioDetail                       String?                     @db.VarChar(300)
   zone                            Zone?
   spaceType                       String[]
-  spaceDescription                String?                 @db.VarChar(500)
+  spaceDescription                String?                     @db.VarChar(500)
   photos                          String[] // legacy — reemplazado por caregiverPhotos
-  walkerPhotos                    String[]                @default([]) // legacy
+  walkerPhotos                    String[]                    @default([]) // legacy
   caregiverPhotos                 String[] // fotos del cuidador en acción (min 2, max 6 — todos los servicios)
   placePhotos                     Json? // { sala:[url], descanso:[url], alimentacion:[url], jardin:[url], juego:[url] }
   profilePhoto                    String?
-  address                         String?                 @db.VarChar(500)
+  address                         String?                     @db.VarChar(500)
   addressLat                      Float?
   addressLng                      Float?
-  addressStreet                   String?                 @db.VarChar(200)
-  addressNumber                   String?                 @db.VarChar(20)
-  addressApartment                String?                 @db.VarChar(50)
-  addressCondominio               String?                 @db.VarChar(100)
-  addressReference                String?                 @db.VarChar(200)
-  addressZone                     String?                 @db.VarChar(100)
+  addressStreet                   String?                     @db.VarChar(200)
+  addressNumber                   String?                     @db.VarChar(20)
+  addressApartment                String?                     @db.VarChar(50)
+  addressCondominio               String?                     @db.VarChar(100)
+  addressReference                String?                     @db.VarChar(200)
+  addressZone                     String?                     @db.VarChar(100)
   /// Ciudad/zona reales (multi-ciudad) — reemplazan gradualmente el enum
   /// `zone` fijo a Santa Cruz. Nullable por ahora para no romper perfiles
   /// existentes; se migran con un script aparte.
   cityId                          String?
-  city                            City?                   @relation(fields: [cityId], references: [id])
+  city                            City?                       @relation(fields: [cityId], references: [id])
   zoneId                          String?
-  cityZone                        CityZone?               @relation(fields: [zoneId], references: [id])
+  cityZone                        CityZone?                   @relation(fields: [zoneId], references: [id])
   servicesOffered                 ServiceType[]
   serviceAvailability             Json?
   pricePerDay                     Int?
   pricePerWalk30                  Int?
   pricePerWalk60                  Int?
   pricePerGuarderia               Float?
-  guarderiaIncludeWalk            Boolean                 @default(false)
+  guarderiaIncludeWalk            Boolean                     @default(false)
   rates                           Json?
   termsAccepted                   Boolean?
   privacyAccepted                 Boolean?
@@ -138,21 +162,21 @@ model CaregiverProfile {
   currentPetsDetails              Json?
   caredOthers                     Boolean?
   animalTypes                     AnimalType[]
-  experienceDescription           String?                 @db.Text
-  whyCaregiver                    String?                 @db.Text
-  whatDiffers                     String?                 @db.Text
-  handleAnxious                   String?                 @db.Text
-  emergencyResponse               String?                 @db.Text
+  experienceDescription           String?                     @db.Text
+  whyCaregiver                    String?                     @db.Text
+  whatDiffers                     String?                     @db.Text
+  handleAnxious                   String?                     @db.Text
+  emergencyResponse               String?                     @db.Text
   acceptAggressive                Boolean?
   acceptMedication                MedicationType[]
   acceptPuppies                   Boolean?
   acceptSeniors                   Boolean?
   /// Si es true, el cuidador exige completar un Meet & Greet antes de
   /// confirmar cualquier reserva nueva con un cliente.
-  requireMeetAndGreet             Boolean                 @default(false)
+  requireMeetAndGreet             Boolean                     @default(false)
   sizesAccepted                   String[]
   noAcceptBreeds                  Boolean?
-  breedsWhy                       String?                 @db.VarChar(500)
+  breedsWhy                       String?                     @db.VarChar(500)
   homeType                        HomeType?
   ownHome                         Boolean?
   hasYard                         Boolean?
@@ -171,70 +195,72 @@ model CaregiverProfile {
   /// CI reverso (trasero): obligatorio para enviar solicitud y PENDING_REVIEW. Subida a Cloudinary (garden/ci).
   ciReversoUrl                    String?
   /// Número de CI (obligatorio y único para prevención de fraude)
-  ciNumber                        String?                 @unique @db.VarChar(50)
+  ciNumber                        String?                     @unique @db.VarChar(50)
   /// Horario predeterminado para disponibilidad: { hospedajeDefault?: boolean, paseoTimeBlocks?: { MANANA, TARDE, NOCHE } }
   defaultAvailabilitySchedule     Json?
-  createdAt                       DateTime                @default(now())
-  updatedAt                       DateTime                @updatedAt
+  createdAt                       DateTime                    @default(now())
+  updatedAt                       DateTime                    @updatedAt
   /// Onboarding: { step: number, completed: boolean[] } — paso actual y completados
   onboardingStatus                Json?
   /// Identity status: PENDING | REVIEW | VERIFIED | REJECTED
-  identityVerificationStatus      String?                 @default("PENDING") @db.VarChar(20)
+  identityVerificationStatus      String?                     @default("PENDING") @db.VarChar(20)
   /// Token for verification URL
-  identityVerificationToken       String?                 @unique @db.VarChar(64)
+  identityVerificationToken       String?                     @unique @db.VarChar(64)
   identityVerificationScore       Float?
   identityVerificationSubmittedAt DateTime?
-  emailVerified                   Boolean                 @default(false)
-  phoneVerified                   Boolean                 @default(false)
+  emailVerified                   Boolean                     @default(false)
+  phoneVerified                   Boolean                     @default(false)
   /// Lifecycle del onboarding visto desde el cuidador: INCOMPLETE | SUBMITTED | UNDER_REVIEW | APPROVED.
   /// Complementa a status (que es la vista del admin). Se actualiza en checkAndAutoSubmitProfile.
-  profileStatus                   String?                 @default("INCOMPLETE") @db.VarChar(20)
+  profileStatus                   String?                     @default("INCOMPLETE") @db.VarChar(20)
   /// Flags granulares de completitud calculados por el servidor. Usados para mostrar progreso en el wizard.
-  availabilityComplete            Boolean                 @default(false)
-  caregiverProfileComplete        Boolean                 @default(false)
+  availabilityComplete            Boolean                     @default(false)
+  caregiverProfileComplete        Boolean                     @default(false)
   /// true = no tiene capacitaciones AMATEUR obligatorias pendientes (o no es
   /// amateur). Recalculado cada vez que cambia su progreso de capacitación,
   /// sus servicios ofrecidos, o un admin activa/exime un tema. Se filtra
   /// directamente en el marketplace — evita recalcular con joins en cada
   /// búsqueda de cuidadores.
-  trainingComplete                Boolean                 @default(true)
+  trainingComplete                Boolean                     @default(true)
   /// Se setea la primera (y única) vez que se envía el correo de recordatorio
   /// de capacitación pendiente — el correo va una sola vez por cuidador, a
   /// diferencia de la notificación in-app que el job diario reenvía todos
   /// los días mientras siga pendiente.
   trainingReminderEmailSentAt     DateTime?
-  personalInfoComplete            Boolean                 @default(false)
-  addressDetail                   String?                 @db.VarChar(500)
-  balance                         Decimal                 @default(0) @db.Decimal(10, 2)
-  bankName                        String?                 @db.VarChar(100)
-  bankAccount                     String?                 @db.VarChar(50)
-  bankHolder                      String?                 @db.VarChar(100)
-  bankType                        String?                 @db.VarChar(20) // 'CUENTA_CORRIENTE' | 'CUENTA_AHORRO' | 'TIGO_MONEY' | 'BILLETERA'
-  verificationAttempts            Int                     @default(0)
+  personalInfoComplete            Boolean                     @default(false)
+  addressDetail                   String?                     @db.VarChar(500)
+  balance                         Decimal                     @default(0) @db.Decimal(10, 2)
+  /// Legacy — deprecado en favor de User.bank* (única fuente de verdad para retiros). Se
+  /// mantiene en sync de solo-escritura por compatibilidad con queries admin existentes.
+  bankName                        String?                     @db.VarChar(100)
+  bankAccount                     String?                     @db.VarChar(50)
+  bankHolder                      String?                     @db.VarChar(100)
+  bankType                        BankAccountType?
+  verificationAttempts            Int                         @default(0)
   verificationLockUntil           DateTime?
   /// Detalles adicionales del servicio (JSON): allowsLargePets, acceptsMultiple, etc.
   serviceDetails                  Json?
   /// Checklist items when admin requests revision (e.g. "Foto borrosa", "Documento no legible")
-  reviewChecklist                 Json?                   @db.JsonB
+  reviewChecklist                 Json?                       @db.JsonB
   /// true = cuidador profesional registrado con código de admin (omite verificación CI, aprobado automáticamente)
-  isProfessional                  Boolean                 @default(false)
+  isProfessional                  Boolean                     @default(false)
   /// true = empresa (hotel, hostal, guardería, etc.) registrada con código de empresa
-  isCompany                       Boolean                 @default(false)
+  isCompany                       Boolean                     @default(false)
   /// Nombre comercial de la empresa (solo cuando isCompany=true)
-  companyName                     String?                 @db.VarChar(200)
+  companyName                     String?                     @db.VarChar(200)
   /// Tipo de negocio: HOTEL | HOSTAL | GUARDERIA | PET_HOTEL | OTHER
-  businessType                    String?                 @db.VarChar(50)
+  businessType                    String?                     @db.VarChar(50)
   /// true = sin experiencia previa (experienceYears === 0 al registrarse).
   /// Se recalcula dinámicamente: si approvedAt >= 1 año, se actualiza a false automáticamente.
-  isAmateur                       Boolean                 @default(false)
+  isAmateur                       Boolean                     @default(false)
   /// Número total de incumplimientos registrados (advertencias + multas).
-  infractionCount                 Int                     @default(0)
+  infractionCount                 Int                         @default(0)
   /// Contactos de emergencia obligatorios (1-3): [{ name: string, phone: string }].
   /// Requerido por Términos y Condiciones Sección 17 antes de ofrecer Hospedaje/Guardería.
   emergencyContacts               Json?
   availability                    Availability[]
-  bookings                        Booking[]               @relation("CaregiverBookings")
-  user                            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings                        Booking[]                   @relation("CaregiverBookings")
+  user                            User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
   reviews                         Review[]
   sugerencias                     SugerenciaPrecio[]
   infractions                     CaregiverInfraction[]
@@ -326,7 +352,7 @@ model Booking {
   /// true solo si esta reserva la creó un admin a mano (herramienta de
   /// pruebas, sin pasar por el flujo real de pago/Meet&Greet). Habilita el
   /// botón de borrado directo — nunca se puede borrar una reserva real.
-  createdByAdmin              Boolean          @default(false)
+  createdByAdmin             Boolean          @default(false)
   serviceStartedAt           DateTime?
   serviceEndedAt             DateTime?
   serviceStartPhoto          String?
@@ -822,6 +848,26 @@ enum UserRole {
   CLIENT
   CAREGIVER
   ADMIN
+}
+
+/// Tipo de cuenta/billetera para retiros vía transferencia bancaria.
+/// CUENTA_AHORRO / CUENTA_CORRIENTE piden número de cuenta; las billeteras por
+/// teléfono (YAPE/ZAS/YOLOPAGO/ALTOKE) piden número de teléfono en su lugar
+/// (ver `PHONE_BASED_BANK_TYPES` en bank-info.util.ts).
+enum BankAccountType {
+  CUENTA_AHORRO
+  CUENTA_CORRIENTE
+  YAPE
+  ZAS
+  YOLOPAGO
+  ALTOKE
+}
+
+/// Modalidad de retiro elegida por el usuario: transferencia bancaria
+/// (bankName/bankAccount/bankHolder/bankType) o QR de cobro propio (WithdrawalQr).
+enum WithdrawalMethod {
+  BANK_TRANSFER
+  QR_TRANSFER
 }
 
 enum ServiceType {

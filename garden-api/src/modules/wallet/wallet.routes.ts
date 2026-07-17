@@ -1,10 +1,15 @@
 import { Router, Request, Response } from 'express';
+import multer from 'multer';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import prisma from '../../config/database.js';
 import { track } from '../../shared/analytics.js';
+import { uploadImage } from '../../services/storage.service.js';
+import { assertImageBuffer } from '../../shared/mime-validation.js';
+import { validateBankInfo, persistBankInfo, isPhoneBasedBankType } from './bank-info.util.js';
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 // ──────────────────────────────────────────────────────────────────────────────
 // GET /api/wallet — saldo e historial del usuario autenticado (CLIENT o CAREGIVER)
@@ -21,7 +26,13 @@ router.get('/', authMiddleware, asyncHandler(async (req: Request, res: Response)
       bankAccount: true,
       bankHolder: true,
       bankType: true,
+      withdrawalMethod: true,
     },
+  });
+
+  const currentQr = await prisma.withdrawalQr.findFirst({
+    where: { userId, isCurrent: true },
+    orderBy: { createdAt: 'desc' },
   });
 
   const balance = Number(user?.balance ?? 0);
@@ -90,10 +101,68 @@ router.get('/', authMiddleware, asyncHandler(async (req: Request, res: Response)
         bankAccount: user.bankAccount,
         bankHolder:  user.bankHolder,
         bankType:    user.bankType,
+        isPhoneBased: isPhoneBasedBankType(user.bankType),
+      } : null,
+      withdrawalMethod: user?.withdrawalMethod ?? 'BANK_TRANSFER',
+      qrInfo: currentQr ? {
+        imageUrl:  currentQr.imageUrl,
+        updatedAt: currentQr.createdAt.toISOString(),
       } : null,
     },
   });
 }));
+
+// ──────────────────────────────────────────────────────────────────────────────
+// PUT /api/wallet/withdrawal-method — elegir modalidad de retiro (CLIENT o CAREGIVER)
+// ──────────────────────────────────────────────────────────────────────────────
+router.put('/withdrawal-method', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
+  const userId = (req as any).user.userId;
+  const { withdrawalMethod } = req.body;
+
+  if (!['BANK_TRANSFER', 'QR_TRANSFER'].includes(withdrawalMethod)) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'withdrawalMethod inválido. Debe ser BANK_TRANSFER o QR_TRANSFER' },
+    });
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { withdrawalMethod },
+  });
+
+  res.json({ success: true, data: { withdrawalMethod } });
+}));
+
+// ──────────────────────────────────────────────────────────────────────────────
+// POST /api/wallet/withdrawal-qr — subir/reemplazar el QR de cobro propio (CLIENT o CAREGIVER)
+// ──────────────────────────────────────────────────────────────────────────────
+router.post('/withdrawal-qr', authMiddleware, upload.single('qrImage'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const userId = (req as any).user.userId;
+    const file = req.file;
+    if (!file) return res.status(400).json({ success: false, error: { message: 'No se proporcionó imagen de QR' } });
+    if (!file.mimetype.startsWith('image/')) {
+      return res.status(400).json({ success: false, error: { message: 'Solo se permiten imágenes (JPG/PNG)' } });
+    }
+    await assertImageBuffer(file.buffer);
+
+    const imageUrl = await uploadImage(file.buffer, { folder: 'withdrawal-qr', name: `qr_${userId}_${Date.now()}` });
+
+    // Se mantiene historial (isCurrent) en vez de sobreescribir un solo campo,
+    // para poder auditar qué QR se usó ante una disputa sobre un retiro ya
+    // procesado — ver comentario en el modelo WithdrawalQr.
+    const qr = await prisma.$transaction(async (tx) => {
+      await tx.withdrawalQr.updateMany({ where: { userId, isCurrent: true }, data: { isCurrent: false } });
+      return tx.withdrawalQr.create({ data: { userId, imageUrl, isCurrent: true } });
+    });
+
+    res.json({
+      success: true,
+      data: { imageUrl: qr.imageUrl, updatedAt: qr.createdAt.toISOString(), message: 'QR de cobro actualizado' },
+    });
+  })
+);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // PUT /api/wallet/bank — actualizar datos bancarios (CLIENT o CAREGIVER)
@@ -102,34 +171,13 @@ router.put('/bank', authMiddleware, asyncHandler(async (req: Request, res: Respo
   const userId = (req as any).user.userId;
   const { bankName, bankAccount, bankHolder, bankType } = req.body;
 
-  if (!bankName || !bankAccount || !bankHolder) {
-    return res.status(400).json({
-      success: false,
-      error: { message: 'bankName, bankAccount y bankHolder son obligatorios' },
-    });
+  const validationError = validateBankInfo({ bankName, bankAccount, bankHolder, bankType });
+  if (validationError) {
+    return res.status(400).json({ success: false, error: validationError });
   }
 
-  const validTypes = ['CUENTA_CORRIENTE', 'CUENTA_AHORRO', 'TIGO_MONEY', 'BILLETERA'];
-  if (bankType && !validTypes.includes(bankType)) {
-    return res.status(400).json({
-      success: false,
-      error: { message: 'bankType inválido' },
-    });
-  }
-
-  await prisma.user.update({
-    where: { id: userId },
-    data: { bankName, bankAccount, bankHolder, bankType: bankType ?? 'CUENTA_AHORRO' },
-  });
-
-  // Also keep caregiver_profiles in sync for backward compatibility
   const role = (req as any).user.role;
-  if (role === 'CAREGIVER') {
-    await prisma.caregiverProfile.updateMany({
-      where: { userId },
-      data: { bankName, bankAccount, bankHolder, bankType: bankType ?? 'CUENTA_AHORRO' },
-    });
-  }
+  await persistBankInfo(userId, role, { bankName, bankAccount, bankHolder, bankType });
 
   res.json({ success: true, data: { message: 'Datos bancarios actualizados' } });
 }));
@@ -166,7 +214,10 @@ router.post(
     }
 
     let transactionId: string;
-    let bankSnapshot: { bankName: string; bankAccount: string; bankHolder: string };
+    // Snapshot de a dónde se envía el dinero — texto legible para notificaciones,
+    // independientemente de la modalidad elegida (transferencia bancaria o QR).
+    let destinationSummary: string;
+    let destinationDetail: string;
 
     try {
       await prisma.$transaction(async (tx) => {
@@ -180,14 +231,35 @@ router.post(
 
         const user = await tx.user.findUnique({
           where: { id: userId },
-          select: { balance: true, bankName: true, bankAccount: true, bankHolder: true, bankType: true },
+          select: {
+            balance: true, bankName: true, bankAccount: true, bankHolder: true, bankType: true,
+            withdrawalMethod: true,
+          },
         });
 
-        if (!user?.bankName || !user?.bankAccount || !user?.bankHolder) {
-          throw Object.assign(new Error('NO_BANK_INFO'), { code: 'NO_BANK_INFO' });
+        let description: string;
+
+        if (user?.withdrawalMethod === 'QR_TRANSFER') {
+          const currentQr = await tx.withdrawalQr.findFirst({
+            where: { userId, isCurrent: true },
+            orderBy: { createdAt: 'desc' },
+          });
+          if (!currentQr) {
+            throw Object.assign(new Error('NO_QR_INFO'), { code: 'NO_QR_INFO' });
+          }
+          description = `Retiro vía QR de transferencia (QR subido el ${currentQr.createdAt.toLocaleDateString('es-BO')})`;
+          destinationSummary = 'tu QR de transferencia';
+          destinationDetail = currentQr.imageUrl;
+        } else {
+          if (!user?.bankName || !user?.bankAccount || !user?.bankHolder) {
+            throw Object.assign(new Error('NO_BANK_INFO'), { code: 'NO_BANK_INFO' });
+          }
+          description = `Retiro a ${user.bankName} - ${user.bankHolder} (${user.bankAccount})`;
+          destinationSummary = `${user.bankName} (${user.bankAccount})`;
+          destinationDetail = `${user.bankName} (${user.bankAccount} — ${user.bankHolder})`;
         }
 
-        const currentBalance = Number(user.balance ?? 0);
+        const currentBalance = Number(user!.balance ?? 0);
 
         // Calculate pending withdrawals to avoid double-spending
         const pendingAgg = await tx.walletTransaction.aggregate({
@@ -214,23 +286,24 @@ router.post(
             type: 'WITHDRAWAL',
             amount: parsedAmount,
             balance: currentBalance,
-            description: `Retiro a ${user.bankName} - ${user.bankHolder} (${user.bankAccount})`,
+            description,
             status: 'PENDING',
           },
         });
 
         transactionId = txRecord.id;
-        bankSnapshot = {
-          bankName: user.bankName,
-          bankAccount: user.bankAccount,
-          bankHolder: user.bankHolder,
-        };
       });
     } catch (err: any) {
       if (err.code === 'NO_BANK_INFO') {
         return res.status(400).json({
           success: false,
           error: { message: 'Configura tus datos bancarios antes de solicitar un retiro' },
+        });
+      }
+      if (err.code === 'NO_QR_INFO') {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Sube tu QR de cobro antes de solicitar un retiro' },
         });
       }
       if (err.code === 'INSUFFICIENT_BALANCE') {
@@ -246,13 +319,16 @@ router.post(
     }
 
     // Notify admins and the user (non-critical — outside transaction)
+    const requester = await prisma.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+    const requesterName = requester ? `${requester.firstName} ${requester.lastName}` : 'Un usuario';
+
     const admins = await prisma.user.findMany({ where: { role: 'ADMIN' } });
     await Promise.all(admins.map(admin =>
       prisma.notification.create({
         data: {
           userId: admin.id,
           title: '💰 Solicitud de retiro',
-          message: `${bankSnapshot!.bankHolder} solicita retirar Bs ${parsedAmount} a ${bankSnapshot!.bankName} (${bankSnapshot!.bankAccount})`,
+          message: `${requesterName} solicita retirar Bs ${parsedAmount} a ${destinationDetail!}`,
           type: 'SYSTEM',
         },
       })
@@ -263,8 +339,7 @@ router.post(
         userId,
         title: '✅ Solicitud de retiro recibida',
         message:
-          `Hemos recibido tu solicitud de retiro de Bs ${parsedAmount} a ${bankSnapshot!.bankName} ` +
-          `(${bankSnapshot!.bankAccount} — ${bankSnapshot!.bankHolder}).\n\n` +
+          `Hemos recibido tu solicitud de retiro de Bs ${parsedAmount} a ${destinationSummary!}.\n\n` +
           `El depósito se realizará en un plazo máximo de 5 días hábiles de forma completamente gratuita.\n\n` +
           `Cuando el depósito sea confirmado, te lo notificaremos aquí. ¡Gracias por confiar en Garden!`,
         type: 'SYSTEM',
@@ -274,7 +349,7 @@ router.post(
     track(userId, 'withdrawal_requested', {
       transactionId: transactionId!,
       amount: parsedAmount,
-      bankName: bankSnapshot!.bankName,
+      destination: destinationSummary!,
     });
 
     res.json({

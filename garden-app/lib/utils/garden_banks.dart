@@ -1,8 +1,9 @@
-/// Lista completa de bancos y billeteras digitales disponibles en Bolivia.
-/// Usado en los formularios de datos de cobro del cuidador.
+/// Lista completa de bancos y billeteras (por teléfono) disponibles en Bolivia
+/// para la modalidad de retiro "Transferencia bancaria".
+/// Usado en los formularios de datos de cobro del cuidador/cliente.
 class GardenBanks {
   static const List<Map<String, String>> all = [
-    // ── Bancos tradicionales ──
+    // ── Bancos tradicionales (piden número de cuenta) ──
     {'name': 'Banco BNB', 'type': 'CUENTA_AHORRO', 'category': 'Bancos'},
     {'name': 'Banco Mercantil Santa Cruz', 'type': 'CUENTA_AHORRO', 'category': 'Bancos'},
     {'name': 'Banco BISA', 'type': 'CUENTA_AHORRO', 'category': 'Bancos'},
@@ -15,28 +16,33 @@ class GardenBanks {
     {'name': 'BancoSol', 'type': 'CUENTA_AHORRO', 'category': 'Bancos'},
     {'name': 'Banco Los Andes Procredit', 'type': 'CUENTA_AHORRO', 'category': 'Bancos'},
     {'name': 'Banco Fassil', 'type': 'CUENTA_AHORRO', 'category': 'Bancos'},
-    // ── Billeteras digitales ──
-    {'name': 'Tigo Money', 'type': 'TIGO_MONEY', 'category': 'Billeteras digitales'},
-    {'name': 'Viva Billetera', 'type': 'BILLETERA', 'category': 'Billeteras digitales'},
-    {'name': 'Simple (BNB)', 'type': 'BILLETERA', 'category': 'Billeteras digitales'},
-    {'name': 'Billetera Mercantil', 'type': 'BILLETERA', 'category': 'Billeteras digitales'},
-    {'name': 'Billetera BISA', 'type': 'BILLETERA', 'category': 'Billeteras digitales'},
-    {'name': 'BancoSol App', 'type': 'BILLETERA', 'category': 'Billeteras digitales'},
-    {'name': 'Fassil Digital', 'type': 'BILLETERA', 'category': 'Billeteras digitales'},
+    // ── Billeteras digitales (piden número de teléfono, no de cuenta) ──
+    {'name': 'Yape', 'type': 'YAPE', 'category': 'Billeteras digitales'},
+    {'name': 'Zas', 'type': 'ZAS', 'category': 'Billeteras digitales'},
+    {'name': 'YoloPago', 'type': 'YOLOPAGO', 'category': 'Billeteras digitales'},
+    {'name': 'Altoke', 'type': 'ALTOKE', 'category': 'Billeteras digitales'},
   ];
 
   static const Map<String, String> typeLabels = {
     'CUENTA_AHORRO': 'Cuenta de ahorro',
     'CUENTA_CORRIENTE': 'Cuenta corriente',
-    'TIGO_MONEY': 'Tigo Money',
-    'BILLETERA': 'Billetera digital',
+    'YAPE': 'Yape',
+    'ZAS': 'Zas',
+    'YOLOPAGO': 'YoloPago',
+    'ALTOKE': 'Altoke',
   };
 
-  /// Devuelve true si el banco es una billetera digital (tipo fijo, sin elegir ahorro/corriente).
+  static const Set<String> _phoneBasedTypes = {'YAPE', 'ZAS', 'YOLOPAGO', 'ALTOKE'};
+
+  /// Devuelve true si el banco es una billetera por teléfono (tipo fijo, sin
+  /// elegir ahorro/corriente, y que pide "Número de teléfono" en vez de cuenta).
   static bool isDigitalWallet(String bankName) {
     final bank = all.where((b) => b['name'] == bankName).firstOrNull;
-    return bank != null && (bank['type'] == 'TIGO_MONEY' || bank['type'] == 'BILLETERA');
+    return bank != null && _phoneBasedTypes.contains(bank['type']);
   }
+
+  /// Devuelve true si el bankType (no el nombre) corresponde a una billetera por teléfono.
+  static bool isPhoneBasedType(String bankType) => _phoneBasedTypes.contains(bankType);
 
   /// Devuelve el tipo sugerido para un banco dado su nombre.
   static String typeForBank(String bankName) {
