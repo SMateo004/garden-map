@@ -1,3 +1,5 @@
+import Amplify
+import AWSCognitoAuthPlugin
 import Flutter
 import UIKit
 
@@ -11,9 +13,23 @@ import UIKit
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
+        _configureAmplify()
         GeneratedPluginRegistrant.register(with: self)
         _registerLiveActivityChannel()
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    }
+
+    // Required by amplify-ui-swift-liveness (FaceLivenessDetectorView) to obtain
+    // Cognito credentials for the Rekognition liveness session — without this,
+    // AuthCategory.swift crashes with "Authentication category is not configured"
+    // the instant the liveness screen opens.
+    private func _configureAmplify() {
+        do {
+            try Amplify.add(plugin: AWSCognitoAuthPlugin())
+            try Amplify.configure()
+        } catch {
+            print("Failed to configure Amplify: \(error)")
+        }
     }
 
     private func _registerLiveActivityChannel() {
