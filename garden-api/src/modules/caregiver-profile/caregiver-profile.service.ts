@@ -428,7 +428,7 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
   if (missing.length > 0) {
     const fieldLabels: Record<string, string> = {
       bio: 'descripción del perfil (paso 7)',
-      zone: 'zona de servicio (paso 3)',
+      zone: 'zona de servicio (paso 1)',
       servicesOffered: 'servicios ofrecidos (paso 3)',
       photos: 'fotos del cuidador en acción (paso 6) — mínimo 2',
       placePhotoSala: 'foto de sala/área principal (paso 6)',
@@ -436,8 +436,8 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
       placePhotoAlimentacion: 'foto de área de alimentación (paso 6)',
       profilePhoto: 'foto de perfil (paso 2)',
       identityVerified: 'verificación de identidad (paso 8)',
-      emailVerified: 'verificación de email (paso 10)',
-      emergencyContacts: 'debes registrar exactamente 3 contactos de emergencia (paso 9)',
+      emailVerified: 'verificación de email (paso 9)',
+      emergencyContacts: 'debes registrar exactamente 3 contactos de emergencia (paso 10)',
       experienceYears: 'años de experiencia (paso 7)',
       experienceDescription: 'descripción de experiencia (paso 7)',
       whyCaregiver: 'motivación como cuidador (paso 7)',
