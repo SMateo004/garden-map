@@ -312,6 +312,7 @@ const PUBLIC_SETTING_KEYS = new Set([
   'storeUrlAndroid',
   'forceUpdateEnabled',
   'caregiverAcceptWindowHoras',
+  'noShowGracePeriodMinutos',
 ]);
 
 /** GET /api/settings — public endpoint, no auth required. Only exposes feature-flag keys. */
@@ -343,6 +344,7 @@ app.get('/api/settings', async (_req, res) => {
       storeUrlAndroid: '',
       forceUpdateEnabled: false,
       caregiverAcceptWindowHoras: 3,
+      noShowGracePeriodMinutos: 30,
     };
     res.json({ success: true, data: { ...defaults, ...map } });
   } catch {

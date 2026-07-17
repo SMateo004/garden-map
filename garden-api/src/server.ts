@@ -55,6 +55,7 @@ import { iniciarJobMgExpiry } from './jobs/mg-expiry.job.js';
 import { iniciarJobSlotConflictExpiry } from './jobs/slot-conflict-expiry.job.js';
 import { iniciarJobChatRetention } from './jobs/chat-retention.job.js';
 import { iniciarJobCaregiverAcceptExpiry } from './jobs/caregiver-accept-expiry.job.js';
+import { iniciarJobNoShowExpiry } from './jobs/no-show-expiry.job.js';
 import { iniciarJobRecordatorioCapacitaciones } from './jobs/training-reminder.job.js';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
@@ -193,6 +194,9 @@ async function start() {
         // automáticamente con reembolso completo a billetera. También se usa
         // como anticipación mínima requerida para poder reservar un servicio.
         { key: 'caregiverAcceptWindowHoras', value: '3'   },
+        // Minutos de gracia tras la hora de inicio de un servicio CONFIRMED
+        // antes de marcarlo no-show y cancelarlo automáticamente sin reembolso.
+        { key: 'noShowGracePeriodMinutos', value: '30'  },
         // ── Política cancelación HOSPEDAJE (numeric) ─────────────────────────
         { key: 'hospedajeRefundAdminFeeBS',    value: '10' },
         { key: 'hospedajeRefund100Horas',      value: '48' },
@@ -238,6 +242,7 @@ async function start() {
     iniciarJobSlotConflictExpiry();
     iniciarJobChatRetention();
     iniciarJobCaregiverAcceptExpiry();
+    iniciarJobNoShowExpiry();
     iniciarJobRecordatorioCapacitaciones();
   }, 10000);
 

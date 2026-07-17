@@ -106,6 +106,7 @@ export const ALLOWED_SETTING_KEYS = [
   'autoReleasePaymentHoras',
   'onHoldSlaHoras',
   'caregiverAcceptWindowHoras',
+  'noShowGracePeriodMinutos',
   // Política cancelación HOSPEDAJE (numeric)
   'hospedajeRefundAdminFeeBS',
   'hospedajeRefund100Horas',
