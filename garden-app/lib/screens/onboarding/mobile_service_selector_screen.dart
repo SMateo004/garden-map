@@ -1,8 +1,12 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
+import '../../services/auth_service.dart';
 import '../../services/auth_state.dart';
+import '../client/my_data_screen.dart';
 
 class MobileServiceSelectorScreen extends StatefulWidget {
   const MobileServiceSelectorScreen({super.key});
@@ -73,6 +77,117 @@ class _MobileServiceSelectorScreenState
     );
 
     _entranceCtrl.forward();
+
+    // Da tiempo a la animación de entrada antes de tapar la pantalla con un diálogo.
+    Future.delayed(const Duration(milliseconds: 1000), () {
+      if (mounted) _maybeShowProfileOrPetNudge();
+    });
+  }
+
+  static const _baseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'https://api.gardenbo.com/api',
+  );
+
+  /// Mismos campos que _isClientDataIncomplete en profile_screen.dart —
+  /// si cambian ahí, cambiar acá también.
+  bool _isProfileIncomplete(Map<String, dynamic> user) {
+    final phone = (user['phone'] as String? ?? '').trim();
+    return (user['firstName'] as String? ?? '').trim().isEmpty ||
+        (user['lastName'] as String? ?? '').trim().isEmpty ||
+        !RegExp(r'^[67][0-9]{7}$').hasMatch(phone) ||
+        (user['addressStreet'] as String? ?? '').trim().isEmpty ||
+        (user['dateOfBirth'] == null) ||
+        (user['profilePicture'] as String? ?? '').trim().isEmpty;
+  }
+
+  Future<void> _maybeShowProfileOrPetNudge() async {
+    if (!AuthState.hasSession) return;
+    final token = AuthState.token;
+    if (token.isEmpty) return;
+
+    Map<String, dynamic> user;
+    try {
+      user = await AuthService().getMe(token);
+    } catch (_) {
+      return;
+    }
+    if (!mounted) return;
+
+    if (_isProfileIncomplete(user)) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => GardenGlassDialog(
+          title: const Text('Completa tu perfil'),
+          content: const Text(
+            'Completa tu perfil ahora para poder realizar tu primera reserva.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Ahora no',
+                  style: TextStyle(
+                      color: themeNotifier.isDark
+                          ? GardenColors.darkTextSecondary
+                          : GardenColors.lightTextSecondary)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const MyDataScreen()));
+              },
+              child: const Text('Completar perfil',
+                  style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // Perfil completo — si no tiene mascotas registradas, es obligatorio
+    // agregar una antes de poder reservar, así que se lo sugerimos acá.
+    List<dynamic> pets = [];
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/client/pets'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] == true) pets = data['data'] as List<dynamic>;
+    } catch (_) {
+      return;
+    }
+    if (!mounted || pets.isNotEmpty) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => GardenGlassDialog(
+        title: const Text('Añade a tu mascota'),
+        content: const Text(
+          'Para poder reservar un servicio, primero necesitas registrar a tu mascota.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Ahora no',
+                style: TextStyle(
+                    color: themeNotifier.isDark
+                        ? GardenColors.darkTextSecondary
+                        : GardenColors.lightTextSecondary)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.go('/my-pets-tab');
+            },
+            child: const Text('Añadir mascota',
+                style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadName() async {
