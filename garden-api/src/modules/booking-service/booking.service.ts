@@ -1659,32 +1659,34 @@ export async function requestCancellationByCaregiver(
 
     const now = new Date();
     // Full refund when the caregiver cancels — client is not at fault.
-    // Set refundStatus=PENDING_APPROVAL so admin can process any external (QR) portion.
+    // refundStatus=APPROVED — todo el monto se acredita a la billetera de forma
+    // automática abajo, sin importar el método de pago original (mismo enfoque
+    // que cancelBooking()).
     const updated = await tx.booking.update({
       where: { id: bookingId },
       data: {
         status: BookingStatus.CANCELLED,
         cancelledAt: now,
         cancellationReason: reason,
-        refundAmount: booking.totalAmount,          // full refund
-        refundStatus: RefundStatus.PENDING_APPROVAL, // admin must process QR portion
+        refundAmount: booking.totalAmount,   // full refund
+        refundStatus: RefundStatus.APPROVED,
       },
     });
 
-    // ── Auto-refund wallet portion immediately ───────────────────────────────
-    const walletPaid = Number(booking.walletPaymentAmount ?? 0);
+    // ── Auto-refund completo a la billetera, sin importar el método de pago ──
+    const refundAmount = Number(booking.totalAmount);
     let walletRefundNote = '';
-    if (walletPaid > 0) {
+    if (refundAmount > 0) {
       const updatedClient = await tx.user.update({
         where: { id: (booking as any).client.id },
-        data: { balance: { increment: walletPaid } },
+        data: { balance: { increment: refundAmount } },
         select: { balance: true },
       });
       await tx.walletTransaction.create({
         data: {
           userId: (booking as any).client.id,
           type: 'REFUND',
-          amount: walletPaid,
+          amount: refundAmount,
           balance: Number(updatedClient.balance),
           description: `Reembolso — cuidador canceló la reserva (${bookingId.slice(0, 8)})`,
           bookingId,
@@ -1695,20 +1697,16 @@ export async function requestCancellationByCaregiver(
         where: { id: bookingId },
         data: { walletPaymentAmount: 0 },
       });
-      walletRefundNote = ` Se reembolsaron Bs ${walletPaid.toFixed(2)} a tu billetera Garden de forma automática.`;
-      logger.info('requestCancellationByCaregiver: wallet portion auto-refunded', { bookingId, walletPaid });
+      walletRefundNote = ` Se reembolsaron Bs ${refundAmount.toFixed(2)} a tu billetera Garden de forma automática.`;
+      logger.info('requestCancellationByCaregiver: refund auto-credited to wallet', { bookingId, refundAmount });
     }
 
     // 1. Notificación para el dueño (cliente)
-    const qrPortion = Math.max(0, Number(booking.totalAmount) - walletPaid);
-    const adminMsg = qrPortion > 0
-      ? ` La empresa se contactará contigo en un plazo de 1 día hábil para gestionar la devolución de Bs ${qrPortion.toFixed(2)} según la política de reembolso.`
-      : '';
     await tx.notification.create({
       data: {
         userId: (booking as any).client.id,
         title: 'Tu reserva ha sido cancelada por el cuidador',
-        message: `El cuidador ha cancelado la reserva de ${booking.petName} (ID: ${bookingId.slice(0, 8)}). Motivo: ${reason}.${walletRefundNote}${adminMsg}`,
+        message: `El cuidador ha cancelado la reserva de ${booking.petName} (ID: ${bookingId.slice(0, 8)}). Motivo: ${reason}.${walletRefundNote}`,
         type: 'BOOKING_CANCELLED',
       }
     });
@@ -1718,12 +1716,12 @@ export async function requestCancellationByCaregiver(
       data: {
         userId: caregiverUserId,
         title: 'Has cancelado la reserva exitosamente',
-        message: `Has cancelado la reserva ${bookingId}. El cliente ha sido notificado y se gestionará el reembolso administrativo correspondiente.`,
+        message: `Has cancelado la reserva ${bookingId}. El cliente ha sido notificado y ya recibió el reembolso completo en su billetera Garden.`,
         type: 'BOOKING_CANCELLED',
       }
     });
 
-    // Admin notification so the refund is visible in the admin queue
+    // Admin notification — solo trazabilidad/auditoría, el reembolso ya se procesó automáticamente arriba
     await tx.adminNotification.create({
       data: {
         type: 'CAREGIVER_CANCELLED_REFUND_NEEDED',
@@ -1899,37 +1897,46 @@ export async function cancelBooking(
       },
     });
 
-    // ── Auto-refund wallet portion if applicable ─────────────────────────────
-    // For QR payments the money is external (admin processes manually).
-    // For wallet payments the money is internal — refund immediately.
-    const walletPaid = Number(booking.walletPaymentAmount ?? 0);
-    const walletRefund = Math.min(walletPaid, refundAmount); // can't refund more than was charged
+    // ── Auto-refund to wallet — TODO refundAmount aprobado, sin importar el
+    // método de pago original ─────────────────────────────────────────────
+    // Antes: la porción pagada con billetera se reembolsaba al instante, pero
+    // la porción pagada por QR (dinero externo a la plataforma) quedaba
+    // refundStatus=APPROVED sin acreditar, a la espera de que un admin la
+    // procesara manualmente por fuera de la app (ver admin.service.ts
+    // refundBooking). Ahora TODO refundAmount con status APPROVED se acredita
+    // de forma automática e instantánea a User.balance (Billetera Garden),
+    // sin importar si se pagó con QR, billetera, o una combinación de ambos.
+    // El cliente decide después cuándo retirar ese saldo (flujo aparte).
+    // `increment` es atómico a nivel SQL (UPDATE ... SET balance = balance + X),
+    // por lo que no hace falta un SELECT ... FOR UPDATE adicional aquí — mismo
+    // enfoque que ya usan requestCancellationByCaregiver() y refundBooking()
+    // (destino WALLET) en admin.service.ts para este mismo tipo de crédito.
     let walletRefundNote = '';
-    if (walletRefund > 0 && refundStatus === RefundStatus.APPROVED) {
+    if (refundAmount > 0 && refundStatus === RefundStatus.APPROVED) {
       const updatedClient = await tx.user.update({
         where: { id: clientId },
-        data: { balance: { increment: walletRefund } },
+        data: { balance: { increment: refundAmount } },
         select: { balance: true },
       });
       await tx.walletTransaction.create({
         data: {
           userId: clientId,
           type: 'REFUND',
-          amount: walletRefund,
+          amount: refundAmount,
           balance: Number(updatedClient.balance),
           description: `Reembolso por cancelación — reserva ${bookingId.slice(0, 8)}`,
           bookingId,
           status: 'COMPLETED',
         },
       });
-      walletRefundNote = ` Se reembolsaron Bs ${walletRefund.toFixed(2)} a tu billetera Garden de forma automática.`;
-      logger.info('cancelBooking: wallet portion auto-refunded', { bookingId, walletRefund });
+      walletRefundNote = ` Ya está disponible en tu billetera Garden.`;
+      logger.info('cancelBooking: refund auto-credited to wallet', { bookingId, refundAmount });
     }
 
     // 1 & 2. Notificaciones — solo si el cliente canceló explícitamente (no para QR abandonado o timeout)
     if (cancellationSource === 'CLIENT_REQUEST' || !cancellationSource) {
       const baseMsg = refundAmount > 0
-        ? `Se te devolverá Bs ${refundAmount.toFixed(2)}.${walletRefundNote}${walletRefund < refundAmount ? ' El resto será procesado por el equipo de soporte pronto.' : ''}`
+        ? `Se te devolverá Bs ${refundAmount.toFixed(2)}.${walletRefundNote}`
         : 'No aplica reembolso según la política de cancelación.';
       await tx.notification.create({
         data: {
@@ -1981,7 +1988,7 @@ export async function cancelBooking(
     notificationService
       .onRefundProcessed(
         bookingId,
-        `Tu reserva fue cancelada. Reembolso aprobado: Bs ${result.refundAmount.toFixed(2)}. El soporte se pondrá en contacto.`
+        `Tu reserva fue cancelada. Reembolso aprobado: Bs ${result.refundAmount.toFixed(2)}, ya disponible en tu billetera Garden.`
       )
       .catch((err) => logger.error('Notification onRefundProcessed failed', { bookingId, err }));
   }
@@ -3199,12 +3206,14 @@ export async function rejectBooking(bookingId: string, caregiverUserId: string, 
     }
 
     // Atomic transition — prevents double-reject / race with client cancel
+    // refundStatus=APPROVED — todo el monto se acredita a la billetera de forma
+    // automática abajo, sin importar el método de pago original.
     const result = await tx.booking.updateMany({
       where: { id: bookingId, caregiverId: profile.id, status: BookingStatus.WAITING_CAREGIVER_APPROVAL },
       data: {
         status: BookingStatus.REJECTED_BY_CAREGIVER,
         cancellationReason: reason,
-        refundStatus: RefundStatus.PENDING_APPROVAL,
+        refundStatus: RefundStatus.APPROVED,
         refundAmount: booking.totalAmount,
       },
     });
@@ -3214,40 +3223,39 @@ export async function rejectBooking(bookingId: string, caregiverUserId: string, 
 
     const updated = await tx.booking.findFirst({ where: { id: bookingId } });
 
-    // ── Auto-refund wallet portion if booking was paid (even partially) with wallet ─
-    const walletPaid = Number(booking.walletPaymentAmount ?? 0);
+    // ── Auto-refund completo a la billetera, sin importar el método de pago ──
+    const refundAmount = Number(booking.totalAmount);
     let walletRefundNote = '';
-    if (walletPaid > 0) {
+    if (refundAmount > 0) {
       const updatedClient = await tx.user.update({
         where: { id: booking.clientId },
-        data: { balance: { increment: walletPaid } },
+        data: { balance: { increment: refundAmount } },
         select: { balance: true },
       });
       await tx.walletTransaction.create({
         data: {
           userId: booking.clientId,
           type: 'REFUND',
-          amount: walletPaid,
+          amount: refundAmount,
           balance: Number(updatedClient.balance),
           description: `Reembolso — reserva rechazada por cuidador (${bookingId.slice(0, 8)})`,
           bookingId,
           status: 'COMPLETED',
         },
       });
-      // Update booking to reflect wallet refund processed
       await tx.booking.update({
         where: { id: bookingId },
         data: { walletPaymentAmount: 0 },
       });
-      walletRefundNote = ` Se reembolsaron Bs ${walletPaid.toFixed(2)} a tu billetera Garden automáticamente.`;
-      logger.info('rejectBooking: wallet portion auto-refunded', { bookingId, walletPaid });
+      walletRefundNote = ` Se reembolsaron Bs ${refundAmount.toFixed(2)} a tu billetera Garden automáticamente.`;
+      logger.info('rejectBooking: refund auto-credited to wallet', { bookingId, refundAmount });
     }
 
     await tx.notification.create({
       data: {
         userId: booking.clientId,
         title: 'Reserva rechazada por el cuidador',
-        message: `El cuidador no pudo aceptar tu reserva para ${booking.petName}. Motivo: ${reason}.${walletRefundNote}${walletPaid < Number(booking.totalAmount) ? ' El equipo de GARDEN gestionará el resto del reembolso en 1 día hábil.' : ''}`,
+        message: `El cuidador no pudo aceptar tu reserva para ${booking.petName}. Motivo: ${reason}.${walletRefundNote}`,
         type: 'BOOKING_REJECTED',
       },
     });
