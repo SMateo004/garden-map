@@ -72,6 +72,11 @@ class _ProfileScreenState extends State<ProfileScreen>
     return (percentage ?? 0) < 100;
   }
 
+  /// true = cuidador amateur con capacitación AMATEUR obligatoria pendiente
+  /// (mismo flag que gatea su visibilidad en el marketplace).
+  bool get _hasPendingTraining =>
+      _caregiverProfile?['isAmateur'] == true && _caregiverProfile?['trainingComplete'] == false;
+
   @override
   void initState() {
     super.initState();
@@ -1011,6 +1016,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       _profileTile(icon: Icons.calendar_month, title: 'Mi disponibilidad',
                           onTap: () => context.push('/caregiver/home')),
                       _profileTile(icon: Icons.school_outlined, title: 'Capacitaciones',
+                          highlight: _hasPendingTraining,
                           onTap: () => context.push('/caregiver/trainings')),
                       _profileTile(icon: Icons.account_balance_wallet_outlined, title: 'Mi billetera',
                           onTap: () => context.push('/wallet')),
@@ -1265,7 +1271,8 @@ class _ProfileScreenState extends State<ProfileScreen>
               _caregiverProfile?['identityVerificationStatus'] != 'VERIFIED')
             _profileTile(icon: Icons.verified_user_outlined, title: 'Verificación IA', onTap: () => context.push('/caregiver/verification')),
           _profileTile(icon: Icons.calendar_month, title: 'Mi disponibilidad', onTap: () => context.push('/caregiver/home')),
-          _profileTile(icon: Icons.school_outlined, title: 'Capacitaciones', onTap: () => context.push('/caregiver/trainings')),
+          _profileTile(icon: Icons.school_outlined, title: 'Capacitaciones',
+              highlight: _hasPendingTraining, onTap: () => context.push('/caregiver/trainings')),
           _profileTile(icon: Icons.account_balance_wallet_outlined, title: 'Mi billetera', onTap: () => context.push('/wallet')),
         ],
 

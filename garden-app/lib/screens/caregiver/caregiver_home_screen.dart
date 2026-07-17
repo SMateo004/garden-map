@@ -18,6 +18,7 @@ import '../../widgets/price_suggestion_banner.dart';
 import '../../services/auth_service.dart';
 import '../../services/auth_state.dart';
 import '../../services/secure_storage_service.dart';
+import 'trainings_screen.dart';
 
 
 class CaregiverHomeScreen extends StatefulWidget {
@@ -115,6 +116,17 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     if (!_setupPending && mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _maybeShowTutorial();
+      });
+    }
+
+    // Insiste con la capacitación obligatoria pendiente cada vez que entra a
+    // su panel — mientras no la complete, no aparece en el marketplace.
+    if (!_setupPending &&
+        _caregiver?['isAmateur'] == true &&
+        _caregiver?['trainingComplete'] == false &&
+        mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _maybeShowTrainingReminder();
       });
     }
 
@@ -237,6 +249,37 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         },
       );
     }
+  }
+
+  Future<void> _maybeShowTrainingReminder() async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => GardenGlassDialog(
+        title: const Text('Capacitación pendiente'),
+        content: const Text(
+          'Tienes capacitaciones obligatorias sin completar. Mientras no las termines, tu perfil no es visible para los clientes y no puedes recibir reservas.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Ahora no',
+                style: TextStyle(
+                    color: themeNotifier.isDark
+                        ? GardenColors.darkTextSecondary
+                        : GardenColors.lightTextSecondary)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const TrainingsScreen()));
+            },
+            child: const Text('Completar ahora',
+                style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _computeNextBookingWithin24h() {

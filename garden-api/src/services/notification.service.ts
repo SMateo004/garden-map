@@ -8,6 +8,7 @@
 import prisma from '../config/database.js';
 import logger from '../shared/logger.js';
 import { sendTransactionalEmail } from '../modules/auth/email.service.js';
+import { sendPushToUser } from './firebase.service.js';
 
 // ---------------------------------------------------------------------------
 // WhatsApp placeholder (booking-event notifications — not yet wired to a
@@ -629,6 +630,54 @@ export async function onCaregiverWelcome(userId: string): Promise<void> {
       type: 'CAREGIVER_WELCOME',
     },
   });
+}
+
+/**
+ * Recordatorio de capacitación AMATEUR obligatoria pendiente. Llamado por el
+ * job diario (training-reminder.job.ts) — la notificación in-app + push se
+ * reenvía cada día que siga pendiente; el correo (sendEmail=true) solo la
+ * primera vez, el caller decide eso mirando trainingReminderEmailSentAt.
+ */
+export async function onTrainingReminder(userId: string, pendingTitles: string[], sendEmail: boolean): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, firstName: true, lastName: true },
+  });
+  if (!user) {
+    logger.warn('[NOTIFICATION] onTrainingReminder: user not found', { userId });
+    return;
+  }
+
+  const caregiverName = name(user.firstName, user.lastName, 'Cuidador');
+  const trainingsUrl = 'https://gardenbo.com/app.html#/caregiver/trainings';
+  const list = pendingTitles.map((t) => `<li>${t}</li>`).join('');
+  const title = pendingTitles.length === 1
+    ? `Tienes 1 capacitación pendiente`
+    : `Tienes ${pendingTitles.length} capacitaciones pendientes`;
+  const message = `Completa tus capacitaciones obligatorias para empezar a recibir reservas: ${pendingTitles.join(', ')}.`;
+
+  await prisma.notification.create({
+    data: { userId, title, message, type: 'TRAINING_REMINDER' },
+  });
+  sendPushToUser(userId, title, message).catch((err) =>
+    logger.error('[NOTIFICATION] onTrainingReminder push failed', { userId, err })
+  );
+
+  if (sendEmail) {
+    const html = gardenEmail(
+      `${caregiverName}, te faltan capacitaciones obligatorias 📋`,
+      `<p style="color:#555;font-size:14px;margin:0 0 16px;">
+        Hola <strong>${caregiverName}</strong>, para poder recibir tu primera reserva en GARDEN
+        necesitas completar estas capacitaciones (un video corto + 3 preguntas cada una):
+      </p>
+      <ul style="color:#166534;font-size:14px;margin:0 0 20px;padding-left:20px;line-height:1.9;">${list}</ul>
+      <p style="color:#555;font-size:14px;margin:0 0 4px;">
+        Mientras no las completes, tu perfil no aparece visible para los clientes en el marketplace.
+      </p>` +
+      ctaButton('Completar capacitaciones 📋', trainingsUrl)
+    );
+    fireEmail(user.email, 'Te faltan capacitaciones obligatorias – GARDEN', html, 'TRAINING_REMINDER');
+  }
 }
 
 /**

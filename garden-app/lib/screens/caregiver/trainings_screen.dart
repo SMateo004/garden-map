@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
@@ -191,6 +192,7 @@ class _TrainingTopicScreenState extends State<_TrainingTopicScreen> {
   bool _submitting = false;
   final List<int?> _answers = [];
   Map<String, dynamic>? _result; // { passed, correctCount, total }
+  YoutubeError _videoError = YoutubeError.none;
 
   @override
   void initState() {
@@ -206,6 +208,9 @@ class _TrainingTopicScreenState extends State<_TrainingTopicScreen> {
       params: const YoutubePlayerParams(showControls: true, showFullscreenButton: true),
     );
     _controller.listen((value) {
+      if (value.hasError && value.error != _videoError) {
+        setState(() => _videoError = value.error);
+      }
       if (value.playerState == PlayerState.ended && !_videoEnded) {
         setState(() => _videoEnded = true);
         _markWatched();
@@ -313,13 +318,49 @@ class _TrainingTopicScreenState extends State<_TrainingTopicScreen> {
                 const SizedBox(height: 16),
               ],
               if (!_showQuiz) ...[
-                AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: YoutubePlayer(controller: _controller),
+                if (_videoError != YoutubeError.none) ...[
+                  AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: GardenColors.error.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: GardenColors.error.withValues(alpha: 0.3)),
+                      ),
+                      padding: const EdgeInsets.all(20),
+                      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        const Icon(Icons.error_outline_rounded, color: GardenColors.error, size: 32),
+                        const SizedBox(height: 10),
+                        Text(
+                          _videoError == YoutubeError.notEmbeddable || _videoError == YoutubeError.sameAsNotEmbeddable
+                              ? 'Este video no se puede reproducir dentro de la app.'
+                              : 'No se pudo cargar este video.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 4),
+                        Text('Avísale al equipo GARDEN para que revise el link.',
+                            textAlign: TextAlign.center, style: TextStyle(color: subtextColor, fontSize: 12)),
+                        const SizedBox(height: 12),
+                        TextButton.icon(
+                          onPressed: () async {
+                            final uri = Uri.parse(widget.topic['videoUrl'] as String);
+                            if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          },
+                          icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                          label: const Text('Ver en YouTube'),
+                        ),
+                      ]),
+                    ),
                   ),
-                ),
+                ] else
+                  AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: YoutubePlayer(controller: _controller),
+                    ),
+                  ),
                 const SizedBox(height: 8),
                 Text(
                   _videoEnded ? '✓ Video visto completo' : 'Mira el video completo para continuar',

@@ -198,6 +198,11 @@ model CaregiverProfile {
   /// directamente en el marketplace — evita recalcular con joins en cada
   /// búsqueda de cuidadores.
   trainingComplete                Boolean                 @default(true)
+  /// Se setea la primera (y única) vez que se envía el correo de recordatorio
+  /// de capacitación pendiente — el correo va una sola vez por cuidador, a
+  /// diferencia de la notificación in-app que el job diario reenvía todos
+  /// los días mientras siga pendiente.
+  trainingReminderEmailSentAt     DateTime?
   personalInfoComplete            Boolean                 @default(false)
   addressDetail                   String?                 @db.VarChar(500)
   balance                         Decimal                 @default(0) @db.Decimal(10, 2)
