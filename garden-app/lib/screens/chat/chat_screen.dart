@@ -126,6 +126,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           _iBlockedThem = d['blockedByMe'] as bool? ?? false;
           _theyBlockedMe = d['blockedMe'] as bool? ?? false;
         });
+        if (_otherPersonId != null) {
+          _chatService?.setOtherUserId(_otherPersonId!, initialOnline: d['isOnline'] as bool? ?? false);
+        }
       }
     } catch (_) {}
   }
@@ -708,7 +711,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                             decoration: BoxDecoration(
                               color: !_initialized
                                   ? subtextColor
-                                  : (_chatService?.connected ?? false)
+                                  : (_chatService?.otherOnline ?? false)
                                       ? GardenColors.success
                                       : GardenColors.warning,
                               shape: BoxShape.circle,
@@ -718,9 +721,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           Text(
                             !_initialized
                                 ? 'Cargando...'
-                                : (_chatService?.connected ?? false)
+                                : (_chatService?.otherOnline ?? false)
                                     ? 'En línea'
-                                    : 'Disponible',
+                                    : 'Desconectado',
                             style: TextStyle(color: subtextColor, fontSize: 11),
                           ),
                         ],
@@ -769,9 +772,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                               children: [
                                 Text(widget.otherPersonName, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
                                 Row(children: [
-                                  Container(width: 6, height: 6, decoration: BoxDecoration(color: (_chatService?.connected ?? false) ? GardenColors.success : GardenColors.warning, shape: BoxShape.circle)),
+                                  Container(width: 6, height: 6, decoration: BoxDecoration(color: (_chatService?.otherOnline ?? false) ? GardenColors.success : GardenColors.warning, shape: BoxShape.circle)),
                                   const SizedBox(width: 4),
-                                  Text((_chatService?.connected ?? false) ? 'En línea' : 'Disponible', style: TextStyle(color: subtextColor, fontSize: 11)),
+                                  Text((_chatService?.otherOnline ?? false) ? 'En línea' : 'Desconectado', style: TextStyle(color: subtextColor, fontSize: 11)),
                                 ]),
                               ],
                             )),

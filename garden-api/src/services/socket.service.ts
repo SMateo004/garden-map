@@ -9,6 +9,21 @@ import logger from '../shared/logger.js';
 
 let io: SocketServer | null = null;
 
+// Presencia ("en línea") — registro simple en memoria del proceso, siguiendo el
+// mismo patrón que chatMessageWindows más abajo (no hace falta Redis, con
+// memoria alcanza dado el tráfico actual). userId -> Set de socket.id
+// conectados (un usuario puede tener varias pestañas/dispositivos).
+const onlineSockets = new Map<string, Set<string>>();
+// Debounce de "offline": si el socket se reconecta rápido (breve pase a
+// background, blip de red), no queremos parpadear el estado a offline y de
+// vuelta a online — esperamos unos segundos antes de anunciar offline de verdad.
+const offlineTimers = new Map<string, NodeJS.Timeout>();
+const OFFLINE_DEBOUNCE_MS = 8_000;
+
+export function isUserOnline(userId: string): boolean {
+    return (onlineSockets.get(userId)?.size ?? 0) > 0;
+}
+
 // send_message por WebSocket no pasaba por chatMessageLimiter ni por el
 // límite de 2000 caracteres que sí aplica el endpoint REST equivalente
 // (POST /chat/:bookingId/messages) — cualquiera podía evadir ambos controles
@@ -83,7 +98,18 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
     });
 
     io.on('connection', (socket) => {
-        logger.info('Socket connected', { userId: socket.data.userId });
+        const connUserId = socket.data.userId as string;
+        logger.info('Socket connected', { userId: connUserId });
+
+        // Presencia: registrar este socket como conectado para el usuario y
+        // cancelar cualquier timer de "offline" pendiente (reconexión rápida).
+        if (!onlineSockets.has(connUserId)) onlineSockets.set(connUserId, new Set());
+        onlineSockets.get(connUserId)!.add(socket.id);
+        const pendingOfflineTimer = offlineTimers.get(connUserId);
+        if (pendingOfflineTimer) {
+            clearTimeout(pendingOfflineTimer);
+            offlineTimers.delete(connUserId);
+        }
 
         socket.on('join_booking', async (bookingId: string) => {
             const userId = socket.data.userId as string;
@@ -110,6 +136,27 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
             }
             socket.join(`booking:${bookingId}`);
             logger.info('User joined booking room', { userId, bookingId });
+            // Avisar al otro participante ya presente en la sala que este usuario está en línea.
+            socket.to(`booking:${bookingId}`).emit('user_online', { userId });
+        });
+
+        socket.on('disconnecting', () => {
+            // 'disconnecting' (a diferencia de 'disconnect') corre ANTES de que el
+            // socket abandone sus rooms — es la única oportunidad de saber a qué
+            // bookings avisar que este usuario quedó offline.
+            const bookingRooms = Array.from(socket.rooms).filter((r) => r.startsWith('booking:'));
+            const set = onlineSockets.get(connUserId);
+            if (!set) return;
+            set.delete(socket.id);
+            if (set.size === 0 && bookingRooms.length > 0) {
+                const timer = setTimeout(() => {
+                    offlineTimers.delete(connUserId);
+                    if ((onlineSockets.get(connUserId)?.size ?? 0) === 0) {
+                        bookingRooms.forEach((room) => io!.to(room).emit('user_offline', { userId: connUserId }));
+                    }
+                }, OFFLINE_DEBOUNCE_MS);
+                offlineTimers.set(connUserId, timer);
+            }
         });
 
         socket.on('send_message', async (data: { bookingId: string; message: string }) => {

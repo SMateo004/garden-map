@@ -37,7 +37,12 @@ class ChatMessage {
       message: json['message'] as String,
       read: json['read'] as bool? ?? false,
       isSystem: json['isSystem'] as bool? ?? false,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      // El backend manda el timestamp en UTC (sufijo Z). Sin .toLocal() acá,
+      // cualquier lugar que lea msg.createdAt.hour/.minute (ej. chat_screen.dart)
+      // mostraba la hora UTC directamente — en Bolivia (UTC-4) un mensaje de
+      // las 16:00 se veía como "20:00". Convertir una sola vez acá evita tener
+      // que acordarse de hacerlo en cada punto de la UI que use createdAt.
+      createdAt: DateTime.parse(json['createdAt'] as String).toLocal(),
     );
   }
 }
@@ -63,6 +68,19 @@ class ChatService extends ChangeNotifier {
   int get unreadCount => _unreadCount;
   // true si el último intento de envío falló porque alguna de las partes bloqueó a la otra.
   bool blockedError = false;
+
+  // Presencia de la otra persona en el chat ("en línea"). Se setea el userId
+  // del otro participante desde ChatScreen apenas se conoce (via
+  // GET /chat/:bookingId/other-participant) y se actualiza en vivo con los
+  // eventos de socket user_online/user_offline emitidos por el backend.
+  String? _otherUserId;
+  bool otherOnline = false;
+
+  void setOtherUserId(String userId, {required bool initialOnline}) {
+    _otherUserId = userId;
+    otherOnline = initialOnline;
+    if (!_isDisposed) notifyListeners();
+  }
 
   ChatService({
     required String baseUrl,
@@ -139,6 +157,26 @@ class ChatService extends ChangeNotifier {
         if (_isDisposed) return;
         _unreadCount = 0;
         notifyListeners();
+      });
+
+      _socket!.on('user_online', (data) {
+        if (_isDisposed) return;
+        final raw = (data is List && data.isNotEmpty) ? data.first : data;
+        final userId = (raw is Map) ? raw['userId'] as String? : null;
+        if (userId != null && userId == _otherUserId) {
+          otherOnline = true;
+          notifyListeners();
+        }
+      });
+
+      _socket!.on('user_offline', (data) {
+        if (_isDisposed) return;
+        final raw = (data is List && data.isNotEmpty) ? data.first : data;
+        final userId = (raw is Map) ? raw['userId'] as String? : null;
+        if (userId != null && userId == _otherUserId) {
+          otherOnline = false;
+          notifyListeners();
+        }
       });
 
       _socket!.on('error', (data) {

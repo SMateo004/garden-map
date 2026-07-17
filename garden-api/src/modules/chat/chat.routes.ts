@@ -3,7 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import prisma from '../../config/database.js';
-import { getIO } from '../../services/socket.service.js';
+import { getIO, isUserOnline } from '../../services/socket.service.js';
 import { sendPushToUser, sendPushToAdmins } from '../../services/firebase.service.js';
 
 const REPORT_REASONS = ['HARASSMENT', 'INAPPROPRIATE_CONTENT', 'SPAM', 'SCAM_OR_FRAUD', 'THREATS', 'OTHER'];
@@ -64,6 +64,7 @@ router.get('/:bookingId/other-participant', authMiddleware, asyncHandler(async (
             photo: other.photo,
             blockedByMe: !!blockedByMe,
             blockedMe: !!blockedMe,
+            isOnline: isUserOnline(other.id),
         },
     });
 }));
