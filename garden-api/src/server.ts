@@ -191,9 +191,16 @@ async function start() {
         { key: 'autoReleasePaymentHoras',  value: '24'    },
         { key: 'onHoldSlaHoras',           value: '72'    }, // ← faltaba seed
         // Horas para que el cuidador acepte una reserva antes de cancelarse
-        // automáticamente con reembolso completo a billetera. También se usa
-        // como anticipación mínima requerida para poder reservar un servicio.
+        // automáticamente con reembolso completo a billetera. También actúa
+        // como piso mínimo de anticipación al reservar (ver *MinAdvanceHoras
+        // abajo para el mínimo específico por tipo de servicio).
         { key: 'caregiverAcceptWindowHoras', value: '3'   },
+        // Anticipación mínima (en horas) para poder reservar cada tipo de
+        // servicio, configurable por separado. Default 24 = mantiene el
+        // comportamiento histórico de "mínimo a partir de mañana".
+        { key: 'paseoMinAdvanceHoras',      value: '24'  },
+        { key: 'hospedajeMinAdvanceHoras',  value: '24'  },
+        { key: 'guarderiaMinAdvanceHoras',  value: '24'  },
         // Minutos de gracia tras la hora de inicio de un servicio CONFIRMED
         // antes de marcarlo no-show y cancelarlo automáticamente sin reembolso.
         { key: 'noShowGracePeriodMinutos', value: '30'  },

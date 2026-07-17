@@ -313,6 +313,9 @@ const PUBLIC_SETTING_KEYS = new Set([
   'forceUpdateEnabled',
   'caregiverAcceptWindowHoras',
   'noShowGracePeriodMinutos',
+  'paseoMinAdvanceHoras',
+  'hospedajeMinAdvanceHoras',
+  'guarderiaMinAdvanceHoras',
 ]);
 
 /** GET /api/settings — public endpoint, no auth required. Only exposes feature-flag keys. */
@@ -345,6 +348,9 @@ app.get('/api/settings', async (_req, res) => {
       forceUpdateEnabled: false,
       caregiverAcceptWindowHoras: 3,
       noShowGracePeriodMinutos: 30,
+      paseoMinAdvanceHoras: 24,
+      hospedajeMinAdvanceHoras: 24,
+      guarderiaMinAdvanceHoras: 24,
     };
     res.json({ success: true, data: { ...defaults, ...map } });
   } catch {

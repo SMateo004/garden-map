@@ -107,6 +107,9 @@ export const ALLOWED_SETTING_KEYS = [
   'onHoldSlaHoras',
   'caregiverAcceptWindowHoras',
   'noShowGracePeriodMinutos',
+  'paseoMinAdvanceHoras',
+  'hospedajeMinAdvanceHoras',
+  'guarderiaMinAdvanceHoras',
   // Política cancelación HOSPEDAJE (numeric)
   'hospedajeRefundAdminFeeBS',
   'hospedajeRefund100Horas',

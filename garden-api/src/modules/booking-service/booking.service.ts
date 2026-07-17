@@ -50,6 +50,18 @@ function rangesOverlap(s1: number, e1: number, s2: number, e2: number): boolean 
   return s1 < e2 && s2 < e1;
 }
 
+/**
+ * Convierte "YYYY-MM-DD" (+ opcional "HH:mm") al epoch ms del inicio real del
+ * servicio, asumiendo hora local de Bolivia (UTC-4, sin horario de verano).
+ * Sin `timeStr` se asume el inicio del día (00:00) — usado por HOSPEDAJE, que
+ * no maneja hora exacta de inicio.
+ */
+function boliviaDateTimeToMs(dateStr: string, timeStr?: string): number {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const [hour, minute] = (timeStr || '00:00').split(':').map(Number);
+  return Date.UTC(year as number, (month as number) - 1, day as number, (hour as number) + 4, (minute as number) || 0);
+}
+
 /** Tipos de notificación admin (booking flow). */
 const ADMIN_NOTIFICATION_PAYMENT_APPROVAL = 'PAYMENT_APPROVAL_REQUEST';
 const ADMIN_NOTIFICATION_CANCELLATION_REQUEST = 'CANCELLATION_REQUEST';
@@ -68,6 +80,9 @@ async function getBookingSettings() {
         qrValidityMinutes,
         hospedajeMaxExtensionDays,
         caregiverAcceptWindowHoras,
+        paseoMinAdvanceHoras,
+        hospedajeMinAdvanceHoras,
+        guarderiaMinAdvanceHoras,
     ] = await Promise.all([
         getNumericSetting('platformCommissionPct',         10),
         getNumericSetting('hospedajeRefundAdminFeeBS',     10),
@@ -78,6 +93,9 @@ async function getBookingSettings() {
         getNumericSetting('qrValidityMinutes',             15),
         getNumericSetting('hospedajeMaxExtensionDays',     30),
         getNumericSetting('caregiverAcceptWindowHoras',     3),
+        getNumericSetting('paseoMinAdvanceHoras',          24),
+        getNumericSetting('hospedajeMinAdvanceHoras',      24),
+        getNumericSetting('guarderiaMinAdvanceHoras',      24),
     ]);
     return {
         COMMISSION_RATE:                commissionPct / 100,
@@ -89,6 +107,9 @@ async function getBookingSettings() {
         QR_VALIDITY_MINUTES_PAYMENT:    qrValidityMinutes,
         HOSPEDAJE_MAX_EXTENSION_DAYS:   hospedajeMaxExtensionDays,
         MIN_BOOKING_ADVANCE_HOURS:      caregiverAcceptWindowHoras,
+        PASEO_MIN_ADVANCE_HOURS:        paseoMinAdvanceHoras,
+        HOSPEDAJE_MIN_ADVANCE_HOURS:    hospedajeMinAdvanceHoras,
+        GUARDERIA_MIN_ADVANCE_HOURS:    guarderiaMinAdvanceHoras,
     };
 }
 
@@ -328,29 +349,52 @@ export async function createBooking(
       );
     }
 
-    // VALIDACIÓN: Mínimo 1 día de anticipación (no se puede reservar hoy ni fechas pasadas)
+    // VALIDACIÓN: anticipación mínima configurable POR TIPO DE SERVICIO (en
+    // horas) — reemplaza la antigua regla hardcodeada de "mínimo 1 día". El
+    // admin controla, desde el panel, cuántas horas de anticipación real se
+    // requieren para cada tipo de servicio (puede ser menor a 24h, ej. 3h
+    // para un paseo). Se calcula desde ahora hasta el inicio real del
+    // servicio: fecha + hora si hay horario específico (PASEO/GUARDERIA), o
+    // las 00:00 de la fecha si no hay hora exacta (HOSPEDAJE solo usa
+    // startDate, sin hora de check-in específica).
     const now = new Date();
-    const BOLIVIA_OFFSET_MS = 4 * 60 * 60 * 1000;
-    const todayStr = new Date(now.getTime() - BOLIVIA_OFFSET_MS).toISOString().split('T')[0] || '';
-    const tomorrowDate = new Date(now.getTime() - BOLIVIA_OFFSET_MS + 24 * 60 * 60 * 1000);
-    const tomorrowStr = tomorrowDate.toISOString().split('T')[0] || '';
     if (body.serviceType === ServiceType.HOSPEDAJE) {
+      const minAdvanceHoras = cfg.HOSPEDAJE_MIN_ADVANCE_HOURS;
       const requestedDate = body.startDate;
-      if (requestedDate && requestedDate <= todayStr) {
-        throw new BookingValidationError(
-          'Las reservas deben realizarse con al menos un día de anticipación. Por favor, selecciona una fecha a partir de mañana.',
-          'BOOKING_VALIDATION',
-          'startDate'
-        );
+      if (requestedDate) {
+        const startMs = boliviaDateTimeToMs(requestedDate);
+        const hoursUntilStart = (startMs - now.getTime()) / (60 * 60 * 1000);
+        if (hoursUntilStart < minAdvanceHoras) {
+          throw new BookingValidationError(
+            minAdvanceHoras >= 24
+              ? 'Las reservas de hospedaje deben realizarse con al menos un día de anticipación. Por favor, selecciona una fecha a partir de mañana.'
+              : `Las reservas de hospedaje requieren al menos ${minAdvanceHoras} horas de anticipación. Por favor, selecciona una fecha más adelante.`,
+            'BOOKING_VALIDATION',
+            'startDate'
+          );
+        }
       }
     } else {
+      const minAdvanceHoras =
+        body.serviceType === ServiceType.GUARDERIA
+          ? cfg.GUARDERIA_MIN_ADVANCE_HOURS
+          : cfg.PASEO_MIN_ADVANCE_HOURS;
       const walkDays = (body as any).walkDays as Array<{ date: string; timeSlot: string; startTime?: string }> | undefined;
       const singleDate = (body as any).walkDate as string | undefined;
-      const datesToCheck = walkDays ? walkDays.map((d) => d.date) : singleDate ? [singleDate] : [];
-      for (const d of datesToCheck) {
-        if (d <= todayStr) {
+      const singleStartTime = (body as any).startTime as string | undefined;
+      const slotsToCheck = walkDays
+        ? walkDays.map((d) => ({ date: d.date, startTime: d.startTime }))
+        : singleDate
+        ? [{ date: singleDate, startTime: singleStartTime }]
+        : [];
+      for (const slot of slotsToCheck) {
+        const startMs = boliviaDateTimeToMs(slot.date, slot.startTime);
+        const hoursUntilStart = (startMs - now.getTime()) / (60 * 60 * 1000);
+        if (hoursUntilStart < minAdvanceHoras) {
           throw new BookingValidationError(
-            'Las reservas deben realizarse con al menos un día de anticipación. Por favor, selecciona fechas a partir de mañana.',
+            minAdvanceHoras >= 24
+              ? 'Las reservas deben realizarse con al menos un día de anticipación. Por favor, selecciona fechas a partir de mañana.'
+              : `Este horario empieza en menos de ${minAdvanceHoras} horas de anticipación mínima. Elige una fecha/horario más adelante.`,
             'BOOKING_VALIDATION',
             'walkDate'
           );
@@ -358,11 +402,13 @@ export async function createBooking(
       }
     }
 
-    // VALIDACIÓN: anticipación mínima en horas (configurable, default 3h) —
-    // el cuidador necesita tiempo real para aceptar la reserva antes de que
-    // empiece el servicio. Solo aplica cuando hay una hora de inicio
-    // específica (startTime); reservas de bloque genérico sin hora exacta
-    // ya quedan cubiertas por la validación de "1 día de anticipación" arriba.
+    // VALIDACIÓN: piso adicional de anticipación en horas (configurable,
+    // default 3h, mismo setting que usa el job de expiración de aceptación
+    // del cuidador) — garantiza que, sin importar qué tan bajo configure el
+    // admin el mínimo por tipo de servicio arriba, el cuidador siempre tenga
+    // al menos esta ventana para aceptar la reserva antes de que empiece.
+    // Solo aplica cuando hay una hora de inicio específica (startTime);
+    // HOSPEDAJE no tiene hora exacta y ya queda cubierto arriba.
     if (body.serviceType !== ServiceType.HOSPEDAJE) {
       const walkDaysForAdvance = (body as any).walkDays as Array<{ date: string; startTime?: string }> | undefined;
       const singleDateForAdvance = (body as any).walkDate as string | undefined;
@@ -375,11 +421,8 @@ export async function createBooking(
 
       for (const slot of slotsToCheck) {
         if (!slot.startTime) continue; // sin hora específica, no se puede evaluar con precisión
-        const [year, month, day] = slot.date.split('-').map(Number);
-        const [hour, minute] = slot.startTime.split(':').map(Number);
-        // Bolivia es UTC-4 todo el año (sin horario de verano)
-        const startUtcMs = Date.UTC(year as number, (month as number) - 1, day as number, (hour as number) + 4, (minute as number) || 0);
-        const hoursUntilStart = (startUtcMs - Date.now()) / (60 * 60 * 1000);
+        const startUtcMs = boliviaDateTimeToMs(slot.date, slot.startTime);
+        const hoursUntilStart = (startUtcMs - now.getTime()) / (60 * 60 * 1000);
         if (hoursUntilStart < cfg.MIN_BOOKING_ADVANCE_HOURS) {
           throw new BookingValidationError(
             `Este horario empieza en menos de ${cfg.MIN_BOOKING_ADVANCE_HOURS} horas — el cuidador no tendría tiempo suficiente para aceptar la reserva. Elige un horario más adelante.`,
