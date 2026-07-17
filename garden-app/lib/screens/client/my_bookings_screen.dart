@@ -1197,8 +1197,14 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                       ),
                     ),
                   ],
-                  // Meet & Greet para HOSPEDAJE CONFIRMED (no aplica a GUARDERIA ni PASEO)
-                  if (status == 'CONFIRMED' && serviceType == 'HOSPEDAJE') ...[
+                  // Meet & Greet para HOSPEDAJE (no aplica a GUARDERIA ni PASEO).
+                  // Solo se puede solicitar ANTES de que el cuidador acepte la
+                  // reserva (WAITING_CAREGIVER_APPROVAL). Si ya fue aceptado
+                  // (mgStatus == ACCEPTED), se sigue mostrando la info aunque
+                  // el booking ya haya pasado a CONFIRMED/IN_PROGRESS/etc.
+                  if (serviceType == 'HOSPEDAJE' &&
+                      (status == 'WAITING_CAREGIVER_APPROVAL' ||
+                       (booking['meetAndGreet'] as Map<String, dynamic>?)?['status'] == 'ACCEPTED')) ...[
                     Builder(builder: (_) {
                       final mg = booking['meetAndGreet'] as Map<String, dynamic>?;
                       final mgStatus = mg?['status'] as String?;

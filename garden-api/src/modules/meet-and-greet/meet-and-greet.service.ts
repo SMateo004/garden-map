@@ -88,12 +88,14 @@ export async function propose(bookingId: string, proposedBy: string, body: {
   assertBelongsToBooking(booking, proposedBy);
 
   // Funciona para PASEO y HOSPEDAJE
-  // Permitido en WAITING_CAREGIVER_APPROVAL y CONFIRMED
-  const allowedStatuses = ['WAITING_CAREGIVER_APPROVAL', 'CONFIRMED'];
+  // El Meet & Greet solo tiene sentido ANTES de que el cuidador acepte la
+  // reserva — una vez que el cuidador ya aceptó (CONFIRMED) o el servicio
+  // arrancó (IN_PROGRESS), ya no se puede solicitar.
+  const allowedStatuses = ['WAITING_CAREGIVER_APPROVAL'];
   if (!allowedStatuses.includes(booking.status)) {
     logger.warn('[MG] propose() blocked — invalid status', { bookingId, status: booking.status });
     throw new AppError(
-      `La reserva debe estar en espera de aprobación o confirmada (estado actual: ${booking.status})`,
+      `El Meet & Greet solo se puede solicitar antes de que el cuidador acepte la reserva (estado actual: ${booking.status})`,
       400, 'BAD_REQUEST'
     );
   }
