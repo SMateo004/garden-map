@@ -296,7 +296,7 @@ class _TrainingEditScreenState extends State<_TrainingEditScreen> {
           Row(children: [
             Expanded(
               child: DropdownButtonFormField<String>(
-                initialValue: _service,
+                value: _service,
                 decoration: deco('Servicio'),
                 items: _services.map((s) => DropdownMenuItem(value: s, child: Text(_serviceLabels[s]!))).toList(),
                 onChanged: (v) => setState(() => _service = v!),
@@ -305,7 +305,7 @@ class _TrainingEditScreenState extends State<_TrainingEditScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: DropdownButtonFormField<String>(
-                initialValue: _audience,
+                value: _audience,
                 decoration: deco('Categoría'),
                 items: const [
                   DropdownMenuItem(value: 'AMATEUR', child: Text('Amateur (obligatoria)')),
@@ -327,7 +327,7 @@ class _TrainingEditScreenState extends State<_TrainingEditScreen> {
             onChanged: (v) => setState(() => _isActive = v),
             title: Text('Activo (visible para cuidadores)', style: TextStyle(color: textColor, fontSize: 14)),
             contentPadding: EdgeInsets.zero,
-            activeThumbColor: GardenColors.primary,
+            activeColor: GardenColors.primary,
           ),
           const SizedBox(height: 16),
           Text('Quiz — exactamente 3 preguntas', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
@@ -525,7 +525,7 @@ class CaregiverTrainingsDialogState extends State<CaregiverTrainingsDialog> {
                                 Switch(
                                   value: exempted,
                                   onChanged: (v) => _toggleExemption(t['id'] as String, v),
-                                  activeThumbColor: GardenColors.primary,
+                                  activeColor: GardenColors.primary,
                                 ),
                             ]),
                           ],
