@@ -31,6 +31,18 @@ const phoneClientSchema = z
 
 const MIN_TEXT_DRAFT = 5;
 
+/**
+ * Password reutilizable para los flujos de REGISTRO (no login — ver loginSchema).
+ * Exige longitud mínima + al menos 1 mayúscula, 1 número y 1 símbolo.
+ */
+const strongPasswordSchema = z
+  .string()
+  .min(8, 'Mínimo 8 caracteres')
+  .max(128, 'Máximo 128 caracteres')
+  .regex(/[A-Z]/, 'Debe incluir al menos una mayúscula')
+  .regex(/[0-9]/, 'Debe incluir al menos un número')
+  .regex(/[^A-Za-z0-9]/, 'Debe incluir al menos un símbolo');
+
 /** Disponibilidad por servicio (weekdays, weekends, holidays, times[], lastMinute) */
 export const serviceAvailabilityItemSchema = z.object({
   weekdays: z.boolean(),
@@ -90,7 +102,7 @@ const dateOfBirthSchema = z
 // --- Register caregiver (full submit) ---
 export const registerCaregiverUserSchema = z.object({
   email: z.string().email('Email inválido'),
-  password: z.string().min(8, 'Mínimo 8 caracteres').max(128, 'Máximo 128 caracteres'),
+  password: strongPasswordSchema,
   firstName: z.string().min(1, 'Nombre requerido').max(100),
   lastName: z.string().min(1, 'Apellido requerido').max(100),
   phone: phoneCaregiverSchema,
@@ -261,7 +273,7 @@ export const registerClientSchema = z.object({
   firstName: z.string().min(1, 'Nombre requerido').max(100).transform((v) => v.trim()),
   lastName: z.string().min(1, 'Apellido requerido').max(100).transform((v) => v.trim()),
   email: z.string().email('Email inválido'),
-  password: z.string().min(8, 'Mínimo 8 caracteres').max(128, 'Máximo 128 caracteres'),
+  password: strongPasswordSchema,
   phone: phoneClientSchema,
   address: z.string().max(500, 'Máximo 500 caracteres').optional().transform((v) => (v && v.trim() ? v.trim() : undefined)),
   dateOfBirth: z
@@ -297,7 +309,7 @@ export const registerClientSchema = z.object({
 export const registerProfessionalMinimalSchema = z.object({
   code: z.string().min(1, 'Código de registro requerido'),
   email: z.string().email('Email inválido'),
-  password: z.string().min(8, 'Mínimo 8 caracteres').max(128, 'Máximo 128 caracteres'),
+  password: strongPasswordSchema,
   firstName: z.string().min(1, 'Nombre requerido').max(100),
   lastName: z.string().min(1, 'Apellido requerido').max(100),
   phone: phoneCaregiverSchema,
@@ -312,7 +324,7 @@ export const registerCompanyMinimalSchema = z.object({
   companyName: z.string().min(1, 'Nombre de empresa requerido').max(150),
   businessType: z.string().default('OTHER'),
   email: z.string().email('Email inválido'),
-  password: z.string().min(6, 'Mínimo 6 caracteres').max(128, 'Máximo 128 caracteres'),
+  password: strongPasswordSchema,
   phone: phoneCaregiverSchema,
   bio: z.string().max(500).optional(),
   zone: z.string().optional(),

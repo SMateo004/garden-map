@@ -60,6 +60,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
   late String _selectedRole; // 'owner' o 'caregiver' — fijo según widget.caregiverOnly
   DateTime? _dateOfBirth;
 
+  // Reglas de contraseña — deben reflejar exactamente las mismas reglas que
+  // el backend (strongPasswordSchema en auth.validation.ts) para que el
+  // frontend nunca deje pasar algo que la API va a rechazar.
+  bool get _hasMinLength => _passwordController.text.length >= 8;
+  bool get _hasUppercase => RegExp(r'[A-Z]').hasMatch(_passwordController.text);
+  bool get _hasNumber => RegExp(r'[0-9]').hasMatch(_passwordController.text);
+  bool get _hasSymbol => RegExp(r'[^A-Za-z0-9]').hasMatch(_passwordController.text);
+  bool get _isPasswordValid => _hasMinLength && _hasUppercase && _hasNumber && _hasSymbol;
+
   @override
   void initState() {
     super.initState();
@@ -67,6 +76,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (widget.prefillFirstName != null) _firstNameController.text = widget.prefillFirstName!;
     if (widget.prefillLastName != null) _lastNameController.text = widget.prefillLastName!;
     if (widget.prefillEmail != null) _emailController.text = widget.prefillEmail!;
+    // Feedback en vivo: repinta el checklist de requisitos y el estado del
+    // botón "Crear cuenta" en cada tecla que se escribe en la contraseña.
+    _passwordController.addListener(() => setState(() {}));
   }
 
   @override
@@ -301,9 +313,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
       return;
     }
-    if (password.length < 8) {
+    if (!_isPasswordValid) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('La contraseña debe tener al menos 8 caracteres')),
+        const SnackBar(content: Text('La contraseña debe tener 8+ caracteres, 1 mayúscula, 1 número y 1 símbolo')),
       );
       return;
     }
@@ -626,6 +638,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
             ),
+            const SizedBox(height: 10),
+            _buildPasswordRequirements(subtextColor, borderColor),
             const SizedBox(height: 20),
 
             _fieldLabel('Teléfono boliviano', textColor),
@@ -778,11 +792,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
             const SizedBox(height: 20),
           ],
 
-          // Botón registro
+          // Botón registro — deshabilitado para dueños hasta cumplir las 4
+          // reglas de contraseña (el flujo de cuidador no usa este campo aquí,
+          // la contraseña real se pide más adelante en el wizard de cuidador).
           GardenButton(
             label: _selectedRole == 'caregiver' ? 'Comenzar como cuidador →' : 'Crear cuenta',
             loading: _isLoading,
-            onPressed: _handleRegister,
+            onPressed: (_selectedRole == 'owner' && !_isPasswordValid) ? null : _handleRegister,
           ),
           const SizedBox(height: 16),
 
@@ -846,6 +862,47 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
       ),
       ),
+    );
+  }
+
+  /// Checklist de requisitos de contraseña, actualizado en vivo mientras el
+  /// usuario escribe (ver listener agregado a _passwordController en
+  /// initState). Refleja exactamente las mismas 4 reglas que valida el
+  /// backend en strongPasswordSchema.
+  Widget _buildPasswordRequirements(Color subtextColor, Color borderColor) {
+    final rules = <(String, bool)>[
+      ('8+ caracteres', _hasMinLength),
+      ('1 mayúscula', _hasUppercase),
+      ('1 número', _hasNumber),
+      ('1 símbolo', _hasSymbol),
+    ];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: rules.map((rule) {
+        final (label, met) = rule;
+        final color = met ? GardenColors.success : subtextColor;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: met ? GardenColors.success.withValues(alpha: 0.10) : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: met ? GardenColors.success.withValues(alpha: 0.4) : borderColor),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                met ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                size: 14,
+                color: color,
+              ),
+              const SizedBox(width: 5),
+              Text(label, style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 
