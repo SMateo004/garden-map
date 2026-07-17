@@ -192,6 +192,12 @@ model CaregiverProfile {
   /// Flags granulares de completitud calculados por el servidor. Usados para mostrar progreso en el wizard.
   availabilityComplete            Boolean                 @default(false)
   caregiverProfileComplete        Boolean                 @default(false)
+  /// true = no tiene capacitaciones AMATEUR obligatorias pendientes (o no es
+  /// amateur). Recalculado cada vez que cambia su progreso de capacitación,
+  /// sus servicios ofrecidos, o un admin activa/exime un tema. Se filtra
+  /// directamente en el marketplace — evita recalcular con joins en cada
+  /// búsqueda de cuidadores.
+  trainingComplete                Boolean                 @default(true)
   personalInfoComplete            Boolean                 @default(false)
   addressDetail                   String?                 @db.VarChar(500)
   balance                         Decimal                 @default(0) @db.Decimal(10, 2)
@@ -227,7 +233,7 @@ model CaregiverProfile {
   reviews                         Review[]
   sugerencias                     SugerenciaPrecio[]
   infractions                     CaregiverInfraction[]
-  trainingProgress                TrainingVideoProgress[]
+  trainingProgress                CaregiverTrainingProgress[]
   extraServices                   ExtraService[]
 
   @@index([status])
@@ -1158,42 +1164,81 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
-/// Video de capacitación subido por el admin. Los cuidadores amateurs DEBEN verlos antes de aceptar el primer servicio.
-model TrainingVideo {
-  id                    String                  @id @default(uuid())
-  title                 String                  @db.VarChar(200)
-  description           String?                 @db.Text
-  videoUrl              String                  @db.VarChar(500) // URL YouTube / Vimeo
-  category              String?                 @db.VarChar(100) // ej: "Seguridad", "Primeros auxilios", "Manejo de mascotas"
-  isRequiredForAmateurs Boolean                 @default(true)
-  isActive              Boolean                 @default(true)
-  order                 Int                     @default(0) // orden de visualización
-  createdBy             String? // Admin User.id que lo creó
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-  progress              TrainingVideoProgress[]
-
-  @@index([isActive])
-  @@index([isRequiredForAmateurs])
-  @@map("training_videos")
+/// AMATEUR: obligatoria antes del primer servicio para cuidadores con 0 años
+/// de experiencia declarados (CaregiverProfile.isAmateur). EXPERIENCE: visible
+/// para todos los cuidadores del servicio correspondiente, nunca obligatoria.
+enum TrainingAudience {
+  AMATEUR
+  EXPERIENCE
 }
 
-/// Progreso del cuidador en cada video de capacitación.
-/// completedAt != null = el cuidador marcó el video como completado.
-model TrainingVideoProgress {
-  id          String           @id @default(uuid())
-  caregiverId String // CaregiverProfile.id
-  videoId     String // TrainingVideo.id
-  completedAt DateTime? // null = visto pero no completado
-  watchedSecs Int              @default(0) // segundos vistos (actualizado periódicamente)
-  createdAt   DateTime         @default(now())
-  caregiver   CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
-  video       TrainingVideo    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+/// Tema de capacitación: uno por combinación (servicio, audiencia). Un
+/// cuidador que ofrece PASEO y HOSPEDAJE ve como máximo 2 temas AMATEUR
+/// (uno por cada servicio que ofrece) — nunca ve el tema de un servicio que
+/// no ofrece, aunque sea amateur.
+model TrainingTopic {
+  id           String                      @id @default(uuid())
+  service      ServiceType
+  audience     TrainingAudience
+  title        String                      @db.VarChar(200)
+  /// Breve introducción mostrada antes del video.
+  introduction String?                     @db.Text
+  videoUrl     String                      @db.VarChar(500) // URL de YouTube
+  isActive     Boolean                     @default(true)
+  order        Int                         @default(0)
+  createdBy    String? // Admin User.id que lo creó
+  createdAt    DateTime                    @default(now())
+  updatedAt    DateTime                    @updatedAt
+  questions    TrainingQuestion[]
+  progress     CaregiverTrainingProgress[]
 
-  @@unique([caregiverId, videoId])
+  @@unique([service, audience])
+  @@index([service])
+  @@index([audience])
+  @@index([isActive])
+  @@map("training_topics")
+}
+
+/// Pregunta de opción múltiple del quiz de un tema (3 por tema).
+model TrainingQuestion {
+  id           String        @id @default(uuid())
+  topicId      String
+  topic        TrainingTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  text         String        @db.Text
+  /// Opciones de respuesta en orden — ej: ["Llamar al veterinario", "Ignorarlo", "..."]
+  choices      String[]
+  /// Índice (0-based) de la respuesta correcta dentro de `choices`.
+  correctIndex Int
+  order        Int           @default(0)
+  createdAt    DateTime      @default(now())
+
+  @@index([topicId])
+  @@map("training_questions")
+}
+
+/// Progreso de un cuidador en un tema de capacitación específico.
+/// completedAt != null = video visto Y quiz aprobado (o eximido por admin).
+model CaregiverTrainingProgress {
+  id              String           @id @default(uuid())
+  caregiverId     String
+  caregiver       CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+  topicId         String
+  topic           TrainingTopic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  videoWatchedAt  DateTime?
+  quizPassed      Boolean          @default(false)
+  quizAttempts    Int              @default(0)
+  lastQuizScore   Int?
+  /// El admin puede eximir a un cuidador puntual de esta capacitación aunque
+  /// sea obligatoria para su categoría — override por cuidador, no global.
+  exemptedByAdmin Boolean          @default(false)
+  completedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([caregiverId, topicId])
   @@index([caregiverId])
-  @@index([videoId])
-  @@map("training_video_progress")
+  @@index([topicId])
+  @@map("caregiver_training_progress")
 }
 
 model VetClinic {

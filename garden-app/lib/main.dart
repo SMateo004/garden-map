@@ -22,6 +22,7 @@ import 'screens/client/booking_confirmed_screen.dart';
 import 'screens/caregiver/caregiver_home_screen.dart';
 import 'screens/caregiver/caregiver_pets_screen.dart';
 import 'screens/caregiver/verification_screen.dart';
+import 'screens/caregiver/trainings_screen.dart';
 import 'screens/caregiver/caregiver_edit_profile_screen.dart';
 import 'screens/client/my_bookings_screen.dart';
 import 'screens/profile/profile_screen.dart';
@@ -398,6 +399,11 @@ final GoRouter _router = GoRouter(
       path: '/caregiver/verification',
       name: 'caregiverVerification',
       builder: (context, state) => const VerificationScreen(),
+    ),
+    GoRoute(
+      path: '/caregiver/trainings',
+      name: 'caregiverTrainings',
+      builder: (context, state) => const TrainingsScreen(),
     ),
     GoRoute(
       path: '/booking/:caregiverId',

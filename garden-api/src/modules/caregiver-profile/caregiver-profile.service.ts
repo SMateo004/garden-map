@@ -369,6 +369,17 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
     // Don't throw if check fails, profile was already updated
   }
 
+  // Cambiar servicesOffered o isAmateur cambia qué capacitaciones son
+  // obligatorias — recalcular el flag que gatea el marketplace.
+  if (body.servicesOffered !== undefined || (body as any).isAmateur !== undefined) {
+    try {
+      const { recomputeTrainingComplete } = await import('../training/training.service.js');
+      await recomputeTrainingComplete(updated.id);
+    } catch (err: any) {
+      logger.error('Error recomputing trainingComplete after patch', { userId, error: err.message });
+    }
+  }
+
   if (body.photos !== undefined && ensureAbsoluteUrls(body.photos).length > 0) {
     logger.info('Foto subida y guardada', {
       url: ensureAbsoluteUrls(body.photos)[0],
@@ -486,6 +497,16 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
       },
     });
   });
+
+  // Al quedar APPROVED es la primera vez que puede aparecer en el
+  // marketplace — calcular ya mismo si tiene capacitación AMATEUR
+  // obligatoria pendiente (por defecto el flag es true/sin bloquear).
+  try {
+    const { recomputeTrainingComplete } = await import('../training/training.service.js');
+    await recomputeTrainingComplete(profile.id);
+  } catch (err: any) {
+    logger.error('Error recomputing trainingComplete on submit', { userId, error: err.message });
+  }
 
   // Correo + notificación de bienvenida al nuevo cuidador
   onCaregiverWelcome(userId).catch(err =>

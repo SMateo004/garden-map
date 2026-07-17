@@ -1010,6 +1010,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                             onTap: () => context.push('/caregiver/verification')),
                       _profileTile(icon: Icons.calendar_month, title: 'Mi disponibilidad',
                           onTap: () => context.push('/caregiver/home')),
+                      _profileTile(icon: Icons.school_outlined, title: 'Capacitaciones',
+                          onTap: () => context.push('/caregiver/trainings')),
                       _profileTile(icon: Icons.account_balance_wallet_outlined, title: 'Mi billetera',
                           onTap: () => context.push('/wallet')),
                     ],
@@ -1263,6 +1265,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               _caregiverProfile?['identityVerificationStatus'] != 'VERIFIED')
             _profileTile(icon: Icons.verified_user_outlined, title: 'Verificación IA', onTap: () => context.push('/caregiver/verification')),
           _profileTile(icon: Icons.calendar_month, title: 'Mi disponibilidad', onTap: () => context.push('/caregiver/home')),
+          _profileTile(icon: Icons.school_outlined, title: 'Capacitaciones', onTap: () => context.push('/caregiver/trainings')),
           _profileTile(icon: Icons.account_balance_wallet_outlined, title: 'Mi billetera', onTap: () => context.push('/wallet')),
         ],
 

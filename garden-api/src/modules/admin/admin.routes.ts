@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
 import * as adminController from './admin.controller.js';
+import * as trainingController from '../training/training.controller.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import { exportMonthAsTxt } from '../../services/audit.service.js';
 import prisma from '../../config/database.js';
@@ -89,6 +90,26 @@ router.get('/reservations', adminController.getReservations);
 /** GET /api/admin/reservations/:id — detalle completo de una reserva. */
 router.get('/reservations/:id', adminController.getReservationDetail);
 
+
+// ── Capacitaciones ─────────────────────────────────────────────────────────
+
+/** GET /api/admin/trainings — todos los temas (Amateur + Experiencia), con preguntas. */
+router.get('/trainings', trainingController.adminListTopics);
+
+/** POST /api/admin/trainings — crear tema (video + intro + 3 preguntas). */
+router.post('/trainings', trainingController.adminCreateTopic);
+
+/** PATCH /api/admin/trainings/:topicId — editar tema (parcial). */
+router.patch('/trainings/:topicId', trainingController.adminUpdateTopic);
+
+/** DELETE /api/admin/trainings/:topicId */
+router.delete('/trainings/:topicId', trainingController.adminDeleteTopic);
+
+/** GET /api/admin/caregivers/:caregiverId/trainings — progreso de un cuidador puntual. */
+router.get('/caregivers/:caregiverId/trainings', trainingController.adminGetCaregiverTopics);
+
+/** PATCH /api/admin/caregivers/:caregiverId/trainings/:topicId/exempt — Body: { exempted } */
+router.patch('/caregivers/:caregiverId/trainings/:topicId/exempt', trainingController.adminSetExemption);
 
 /** GET /api/admin/identity-reviews — lista sesiones en REVIEW. */
 router.get('/identity-reviews', adminController.listIdentityReviews);

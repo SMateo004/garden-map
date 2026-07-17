@@ -16,6 +16,7 @@ import 'admin_email_otp_screen.dart';
 import 'admin_donations_screen.dart';
 import 'admin_vets_screen.dart';
 import 'admin_cities_screen.dart';
+import 'admin_trainings_screen.dart';
 import 'admin_test_booking_screen.dart';
 import 'payment_qr_admin_screen.dart';
 import 'audit_screen.dart';
@@ -1037,8 +1038,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ('Verif. de correo', Icons.mark_email_unread_outlined),
     ('Donaciones', Icons.volunteer_activism_outlined),
     ('Ciudades', Icons.map_rounded),
+    ('Capacitaciones', Icons.school_rounded),
     // Solo para pruebas — visible en el sidebar de web (_webNavGroups) pero
-    // excluido a propósito del tab bar de mobile (ver _buildTabBar).
+    // excluido a propósito del tab bar de mobile (ver _buildTabBar, que
+    // asume que el ÚLTIMO tab de esta lista es el de solo-pruebas).
     ('Reserva de prueba', Icons.science_outlined),
   ];
 
@@ -1047,9 +1050,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   // "Finanzas" — no es ingreso de Garden, es dinero de terceros en tránsito
   // hacia refugios, y el admin no puede editar montos ahí.
   static const List<(String, IconData, List<int>)> _webNavGroups = [
-    ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5, 21, 22]),
+    ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5, 21, 23]),
     ('Finanzas', Icons.attach_money_rounded, [3, 6, 7, 15]),
-    ('Personas', Icons.groups_outlined, [8, 9, 20]),
+    ('Personas', Icons.groups_outlined, [8, 9, 20, 22]),
     ('Comunicación', Icons.forum_outlined, [12, 13, 17, 18, 19]),
     ('Sistema', Icons.settings_outlined, [10, 11, 14, 16]),
   ];
@@ -1080,6 +1083,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         AdminEmailOtpScreen(adminToken: _adminToken),
         AdminDonationsScreen(adminToken: _adminToken),
         AdminCitiesScreen(adminToken: _adminToken),
+        AdminTrainingsScreen(adminToken: _adminToken),
         AdminTestBookingScreen(adminToken: _adminToken),
       ],
     );
@@ -4805,6 +4809,38 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                     const SizedBox(height: 8),
                     row('Registrado', detail?['createdAt'] != null ? (detail!['createdAt'] as String).substring(0, 10) : null),
                     row('Última actualización', detail?['updatedAt'] != null ? (detail!['updatedAt'] as String).substring(0, 10) : null),
+                  ])),
+
+                  // CAPACITACIONES
+                  sectionHeader('CAPACITACIONES', Icons.school_rounded),
+                  infoCard(Row(children: [
+                    Expanded(
+                      child: Text(
+                        'Ver progreso y eximir de capacitaciones obligatorias.',
+                        style: TextStyle(fontSize: 13, color: subtextColor),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap: () => showDialog(
+                        context: context,
+                        builder: (_) => CaregiverTrainingsDialog(
+                          caregiverId: detail!['id'] as String,
+                          token: widget.token,
+                          baseUrl: widget.baseUrl,
+                          isDark: isDark,
+                        ),
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(color: GardenColors.primary, borderRadius: BorderRadius.circular(8)),
+                        child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.open_in_new_rounded, size: 13, color: Colors.white),
+                          SizedBox(width: 5),
+                          Text('Ver', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ]),
+                      ),
+                    ),
                   ])),
 
                   const SizedBox(height: 8),

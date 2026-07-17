@@ -96,6 +96,11 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
     // diferencia del individual, donde verified:true ya implica registro
     // 100% completo. No mostrar una empresa a medias en el marketplace.
     OR: [{ isCompany: false }, { isCompany: true, caregiverProfileComplete: true }],
+    // Cuidadores amateur (0 años de experiencia) con capacitación obligatoria
+    // pendiente no reciben reservas hasta completarla — no aparecen en el
+    // marketplace. trainingComplete se recalcula en training.service.ts y
+    // por defecto es true, así que esto no afecta a nadie que no sea amateur.
+    trainingComplete: true,
   } as Prisma.CaregiverProfileWhereInput;
 
   // El marketplace siempre filtra por ciudad — nunca mezcla cuidadores de
