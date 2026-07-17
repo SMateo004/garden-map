@@ -2,15 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import '../../services/gps_tracking_session.dart';
 import '../../theme/garden_theme.dart';
-import 'gps_location.dart';
 
 class GpsTrackingScreen extends StatefulWidget {
   final String bookingId;
@@ -36,16 +35,21 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
   final MapController _mapController = MapController();
   final List<LatLng> _track = [];
   LatLng? _currentPos;
-  StreamSubscription<Map<String, double>>? _gpsSub;
   IO.Socket? _socket;
-  bool _isSharing = true;
-  bool _isSendingTrack = false; // evita requests paralelos (race condition fix)
   bool _gpsBlocked = false;
   bool _socketConnected = false;
   Timer? _socketWatchdog; // alerta si socket no conecta en 10s
   Timer? _pollTimer;       // HTTP polling fallback para el cliente
-  DateTime? _lastSent;
   double _distanceMeters = 0;
+
+  // Cuántos puntos de GpsTrackingSession.instance.track ya copiamos a
+  // _track — nos deja hacer merge incremental (append-only) sin pisar el
+  // historial cargado por _loadTrackHistory().
+  int _sessionTrackSynced = 0;
+
+  // Solo aplica al rol CUIDADOR: permite ocultar el trazo del trayecto en
+  // el mapa (el dueño SIEMPRE lo ve, sin esta opción).
+  bool _showTrailForCaregiver = true;
 
   String get _baseUrl =>
       const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
@@ -56,7 +60,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
     super.initState();
     _loadTrackHistory();
     if (_isCaregiver) {
-      _startGps();
+      _startGpsFromSession();
     } else {
       _connectSocket();
       // HTTP polling fallback: if socket doesn't connect in 12s, poll every 5s
@@ -105,7 +109,13 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
 
   @override
   void dispose() {
-    _gpsSub?.cancel();
+    if (_isCaregiver) {
+      GpsTrackingSession.instance.removeListener(_onSessionUpdate);
+      // OJO: NO llamamos a GpsTrackingSession.instance.stop() acá — el
+      // tracking debe seguir corriendo aunque esta pantalla se cierre (ver
+      // GpsTrackingSession para el contrato completo). Solo se detiene
+      // cuando el servicio termina (COMPLETED/CANCELLED), desde afuera.
+    }
     _socketWatchdog?.cancel();
     _pollTimer?.cancel();
     _socket?.disconnect();
@@ -142,73 +152,38 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
     }
   }
 
-  // ── CUIDADOR: inicia stream GPS ──────────────────────────────────────────
-  Future<void> _startGps() async {
-    if (kIsWeb) {
-      _gpsSub = watchGpsPosition().listen(
-        (pos) => _onLocation(pos['lat']!, pos['lng']!, pos['accuracy'] ?? 0),
-        onError: (_) { if (mounted) setState(() => _gpsBlocked = true); },
-      );
-      return;
-    }
-    // Mobile: request permission via geolocator
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-      if (mounted) setState(() => _gpsBlocked = true);
-      return;
-    }
-    _gpsSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 5,
-      ),
-    ).map((p) => {'lat': p.latitude, 'lng': p.longitude, 'accuracy': p.accuracy})
-     .listen(
-      (pos) => _onLocation(pos['lat']!, pos['lng']!, pos['accuracy'] ?? 0),
-      onError: (_) { if (mounted) setState(() => _gpsBlocked = true); },
-    );
+  // ── CUIDADOR: se conecta a GpsTrackingSession (vive fuera de esta pantalla) ─
+  // Esta pantalla ya NO maneja el stream de Geolocator ni el timer de envío
+  // — eso vive en GpsTrackingSession (ver lib/services/gps_tracking_session.dart)
+  // para que siga corriendo aunque el cuidador navegue a otra pantalla.
+  void _startGpsFromSession() {
+    final session = GpsTrackingSession.instance;
+    session.addListener(_onSessionUpdate);
+    // Red de seguridad: por si esta pantalla se abre antes de que el flujo
+    // de "iniciar servicio" (en service_execution_screen.dart) haya llamado
+    // a GpsTrackingSession.instance.start(). Es idempotente: si la sesión ya
+    // está corriendo para este mismo bookingId, no hace nada.
+    session.start(bookingId: widget.bookingId, token: widget.token);
+    _onSessionUpdate(); // sync inicial con el estado que ya tenga la sesión
   }
 
-  Future<void> _onLocation(double lat, double lng, double accuracy) async {
-    if (!_isSharing || !mounted) return;
-
-    // Validar precisión — descartar si accuracy > 50m (GPS bloqueado o de mala calidad)
-    if (accuracy > 50) {
-      debugPrint('GPS: precisión baja ($accuracy m), ignorando punto');
-      return;
-    }
-
-    final pt = LatLng(lat, lng);
+  void _onSessionUpdate() {
+    if (!mounted) return;
+    final session = GpsTrackingSession.instance;
     setState(() {
-      _track.add(pt);
-      _currentPos = pt;
-      _distanceMeters = _haversineTotal(_track);
-    });
-    try { _mapController.move(pt, _mapController.camera.zoom); } catch (_) {}
-
-    final now = DateTime.now();
-    if (_lastSent == null || now.difference(_lastSent!).inSeconds >= 10) {
-      // Guard: evitar requests paralelos si el anterior no terminó (race condition)
-      if (_isSendingTrack) return;
-      _lastSent = now;
-      _isSendingTrack = true;
-      try {
-        await http.post(
-          Uri.parse('$_baseUrl/bookings/${widget.bookingId}/track'),
-          headers: {
-            'Authorization': 'Bearer ${widget.token}',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode({'lat': lat, 'lng': lng, 'accuracy': accuracy}),
-        );
-      } catch (e) {
-        debugPrint('GPS: envío error: $e');
-      } finally {
-        _isSendingTrack = false;
+      // Merge incremental (append-only): no pisa el historial que ya cargó
+      // _loadTrackHistory() vía HTTP.
+      if (session.track.length > _sessionTrackSynced) {
+        _track.addAll(session.track.sublist(_sessionTrackSynced));
+        _sessionTrackSynced = session.track.length;
       }
+      _currentPos = session.currentPos ?? _currentPos;
+      _distanceMeters = _haversineTotal(_track);
+      _gpsBlocked = session.permissionDenied;
+    });
+    final pos = _currentPos;
+    if (pos != null) {
+      try { _mapController.move(pos, _mapController.camera.zoom); } catch (_) {}
     }
   }
 
@@ -341,7 +316,9 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
 
   Widget _buildHeader(BuildContext context) {
     final headerColor = _isCaregiver ? GardenColors.forest : GardenColors.secondary;
-    final isActive = _isCaregiver ? _isSharing : true;
+    // El tracking del cuidador ya no se puede pausar manualmente — corre
+    // siempre mientras el servicio esté IN_PROGRESS, así que el badge
+    // siempre muestra "activo" (sin estado "pausado").
 
     return Container(
       padding: EdgeInsets.fromLTRB(
@@ -384,21 +361,39 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
               ],
             ),
           ),
-          // Badge activo / pausado
+          // Solo el cuidador puede ocultar/mostrar el trazo del trayecto en
+          // el mapa — el dueño siempre lo ve, sin esta opción.
+          if (_isCaregiver) ...[
+            GestureDetector(
+              onTap: () => setState(() => _showTrailForCaregiver = !_showTrailForCaregiver),
+              child: Container(
+                width: 36, height: 36,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
+                child: Icon(
+                  _showTrailForCaregiver
+                      ? Icons.timeline_rounded
+                      : Icons.timeline_outlined,
+                  color: Colors.white, size: 20,
+                ),
+              ),
+            ),
+          ],
+          // Badge activo
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: isActive ? Colors.white24 : Colors.black26,
+              color: Colors.white24,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _PulsingDotSmall(active: isActive),
+                const _PulsingDotSmall(active: true),
                 const SizedBox(width: 5),
-                Text(
-                  _isCaregiver ? (_isSharing ? 'GPS activo' : 'Pausado') : 'GPS activo',
-                  style: const TextStyle(
+                const Text(
+                  'GPS activo',
+                  style: TextStyle(
                       color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
                 ),
               ],
@@ -439,23 +434,17 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
             ),
           ),
 
-          // Stats
+          // Stats — el conteo de "Puntos GPS" se sacó, no le interesa a
+          // nadie (ni dueño ni cuidador); con 2 chips alcanza spaceEvenly
+          // para que no quede un hueco raro en el medio.
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _StatChip(
                 icon: Icons.route_rounded,
                 label: 'Recorrido',
                 value: _fmtDist(_distanceMeters),
                 color: GardenColors.primary,
-                textColor: textColor,
-                subtextColor: subtextColor,
-              ),
-              _StatChip(
-                icon: Icons.location_on_rounded,
-                label: 'Puntos GPS',
-                value: '${_track.length}',
-                color: GardenColors.secondary,
                 textColor: textColor,
                 subtextColor: subtextColor,
               ),
@@ -469,31 +458,6 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
               ),
             ],
           ),
-
-          // Controles del cuidador
-          if (_isCaregiver && !_gpsBlocked) ...[
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                icon: Icon(
-                  _isSharing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                  color: Colors.white, size: 18,
-                ),
-                label: Text(
-                  _isSharing ? 'Pausar GPS' : 'Reanudar GPS',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-                ),
-                onPressed: () => setState(() => _isSharing = !_isSharing),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _isSharing ? GardenColors.warning : GardenColors.success,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
-                ),
-              ),
-            ),
-          ],
 
           // Nota del cliente
           if (!_isCaregiver) ...[
@@ -537,8 +501,9 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
           userAgentPackageName: 'com.garden.bolivia',
         ),
 
-        // Polilínea del trayecto
-        if (_track.length >= 2)
+        // Polilínea del trayecto — el dueño SIEMPRE la ve; el cuidador puede
+        // ocultarla con el toggle del header (_showTrailForCaregiver).
+        if (_track.length >= 2 && (!_isCaregiver || _showTrailForCaregiver))
           PolylineLayer(
             polylines: [
               Polyline(

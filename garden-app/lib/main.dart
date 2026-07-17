@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'firebase_options.dart';
 import 'package:go_router/go_router.dart';
 import 'screens/auth/login_screen.dart';
@@ -661,6 +662,14 @@ final GoRouter _router = GoRouter(
 // ── App Entry Point ────────────────────────────────────────
 Future<void> _bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Puerto de comunicación entre el foreground service GPS (Android) y el
+  // isolate principal — debe registrarse antes de que cualquier pantalla
+  // pueda llamar a GpsTrackingSession.start(). No aplica a iOS/web (ahí el
+  // tracking en background no usa un isolate de servicio separado).
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    FlutterForegroundTask.initCommunicationPort();
+  }
 
   // Cargar token en memoria PRIMERO — el GoRouter redirect y todas las
   // pantallas usan AuthState.token de forma sincrónica desde aquí en adelante.
