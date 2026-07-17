@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../../widgets/garden_empty_state.dart';
 import '../../theme/garden_theme.dart';
+import '../../utils/garden_banks.dart';
 import 'admin_owners_screen.dart';
 import 'admin_general_screen.dart';
 import 'admin_technical_screen.dart';
@@ -3498,6 +3500,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     };
                     final status = w['status'] as String;
                     final isPending = status == 'PENDING';
+                    final withdrawalMethod = (user['withdrawalMethod'] as String?) ?? 'BANK_TRANSFER';
+                    final qrInfo = user['qrInfo'] as Map<String, dynamic>?;
+                    final userPhone = user['phone'] as String?;
+                    final bankType = profile['bankType'] as String?;
+                    final isPhoneBased = bankType != null && GardenBanks.isPhoneBasedType(bankType);
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -3526,11 +3533,60 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                             ],
                           ),
                           const Divider(height: 24),
-                          Text('DATOS BANCARIOS', style: TextStyle(color: subtextColor, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
-                          const SizedBox(height: 8),
-                          Text(profile['bankName'] ?? '—', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
-                          Text('Cuenta: ${profile['bankAccount'] ?? '—'} (${profile['bankType'] ?? '—'})', style: TextStyle(color: textColor, fontSize: 13)),
-                          Text('Titular: ${profile['bankHolder'] ?? '—'}', style: TextStyle(color: textColor, fontSize: 13)),
+                          // Teléfono del usuario — siempre visible, sin importar la modalidad
+                          // de retiro, para que el admin pueda contactarlo rápido ante dudas.
+                          Row(
+                            children: [
+                              Icon(Icons.phone_rounded, size: 14, color: subtextColor),
+                              const SizedBox(width: 6),
+                              Text(
+                                userPhone ?? 'Sin teléfono',
+                                style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13),
+                              ),
+                              if (userPhone != null) ...[
+                                const SizedBox(width: 6),
+                                GestureDetector(
+                                  onTap: () {
+                                    Clipboard.setData(ClipboardData(text: userPhone));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Teléfono copiado'), duration: Duration(seconds: 1)),
+                                    );
+                                  },
+                                  child: Icon(Icons.copy_rounded, size: 14, color: GardenColors.primary),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          if (withdrawalMethod == 'QR_TRANSFER') ...[
+                            Text('QR DE TRANSFERENCIA', style: TextStyle(color: subtextColor, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
+                            const SizedBox(height: 8),
+                            if (qrInfo != null && qrInfo['imageUrl'] != null)
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  width: 160,
+                                  height: 160,
+                                  color: Colors.white,
+                                  child: Image.network(
+                                    qrInfo['imageUrl'] as String,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: GardenColors.error),
+                                  ),
+                                ),
+                              )
+                            else
+                              Text('El usuario no subió ningún QR todavía.', style: TextStyle(color: GardenColors.error, fontSize: 13)),
+                          ] else ...[
+                            Text('DATOS BANCARIOS', style: TextStyle(color: subtextColor, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
+                            const SizedBox(height: 8),
+                            Text(profile['bankName'] ?? '—', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
+                            Text(
+                              '${isPhoneBased ? 'Teléfono' : 'Cuenta'}: ${profile['bankAccount'] ?? '—'} (${GardenBanks.typeLabels[bankType] ?? bankType ?? '—'})',
+                              style: TextStyle(color: textColor, fontSize: 13),
+                            ),
+                            Text('Titular: ${profile['bankHolder'] ?? '—'}', style: TextStyle(color: textColor, fontSize: 13)),
+                          ],
                           const SizedBox(height: 16),
                           Row(
                             children: [

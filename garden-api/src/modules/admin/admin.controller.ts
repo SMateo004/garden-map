@@ -399,11 +399,18 @@ export const getWithdrawals = asyncHandler(async (req: Request, res: Response) =
         user: {
           select: {
             id: true, firstName: true, lastName: true, email: true, role: true,
-            balance: true,
+            balance: true, phone: true,
             bankName: true, bankAccount: true, bankHolder: true, bankType: true,
+            withdrawalMethod: true,
             caregiverProfile: {
               select: { bankName: true, bankAccount: true, bankHolder: true, bankType: true }
-            }
+            },
+            withdrawalQrs: {
+              where: { isCurrent: true },
+              select: { imageUrl: true, createdAt: true },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
           }
         }
       },
@@ -414,9 +421,23 @@ export const getWithdrawals = asyncHandler(async (req: Request, res: Response) =
     prisma.walletTransaction.count({ where }),
   ]);
 
+  // Aplana withdrawalQrs (relación) a un solo objeto qrInfo (o null) — la
+  // solicitud de retiro solo importa el QR vigente, no el historial completo.
+  const withdrawalsWithQr = withdrawals.map((w) => {
+    const currentQr = w.user.withdrawalQrs[0];
+    const { withdrawalQrs, ...userRest } = w.user;
+    return {
+      ...w,
+      user: {
+        ...userRest,
+        qrInfo: currentQr ? { imageUrl: currentQr.imageUrl, updatedAt: currentQr.createdAt.toISOString() } : null,
+      },
+    };
+  });
+
   res.json({
     success: true,
-    data: { withdrawals, total, pagination: { page, limit, total, pages: Math.ceil(total / limit) } },
+    data: { withdrawals: withdrawalsWithQr, total, pagination: { page, limit, total, pages: Math.ceil(total / limit) } },
   });
 });
 
