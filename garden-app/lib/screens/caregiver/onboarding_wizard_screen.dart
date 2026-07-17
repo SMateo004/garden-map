@@ -805,7 +805,37 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     // sin forma de volver a corregirlo.
     if (_currentStep == 0 && widget.clientConversionMode) {
       if (!_validateCurrentStep()) return;
-      setState(() => _currentStep = 1);
+      setState(() => _isLoading = true);
+      // BUG (encontrado en producción): antes esto solo validaba y avanzaba
+      // el paso local — nunca mandaba la dirección/ubicación exacta que el
+      // usuario acababa de completar acá al backend. Como este modo no pasa
+      // por _registerMinimalAndAdvance (el usuario ya está registrado), sin
+      // este PATCH la ubicación se perdía sin ningún error visible: pasaba
+      // la validación, avanzaba, y "Editar perfil" mostraba todo vacío.
+      String? zoneId;
+      if (_gardenCityId != null && _addressZone != null) {
+        final zones = await CitiesService.getZones(_gardenCityId!);
+        zoneId = zones.where((z) => z.key == _addressZone).firstOrNull?.id;
+      }
+      await _patchProfile({
+        'address': _buildFullAddress(),
+        if (_addressLat != null) 'addressLat': _addressLat,
+        if (_addressLng != null) 'addressLng': _addressLng,
+        if (_addressStreetController.text.trim().isNotEmpty)
+          'addressStreet': _addressStreetController.text.trim(),
+        if (_addressNumberController.text.trim().isNotEmpty)
+          'addressNumber': _addressNumberController.text.trim(),
+        if (_isApartment && _addressApartmentController.text.trim().isNotEmpty)
+          'addressApartment': _addressApartmentController.text.trim(),
+        if (_isApartment && _addressCondominioController.text.trim().isNotEmpty)
+          'addressCondominio': _addressCondominioController.text.trim(),
+        if (_addressReferenceController.text.trim().isNotEmpty)
+          'addressReference': _addressReferenceController.text.trim(),
+        if (_addressZone != null) 'addressZone': _addressZone,
+        if (_gardenCityId != null) 'cityId': _gardenCityId,
+        if (zoneId != null) 'zoneId': zoneId,
+      });
+      if (mounted) setState(() { _isLoading = false; _currentStep = 1; });
       return;
     }
 

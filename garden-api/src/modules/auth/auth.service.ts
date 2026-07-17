@@ -1039,6 +1039,43 @@ export async function switchRole(userId: string, targetRole: UserRole): Promise<
 
   const newActiveRole = isRestoringOwnRole ? null : targetRole;
 
+  // Un CAREGIVER que activa CLIENT por primera vez: asegurar que tenga
+  // ClientProfile, y si su dirección está vacía ahí, copiarla desde su
+  // CaregiverProfile — misma lógica inversa que initCaregiverProfile.
+  // La dirección no vive en User (solo la foto lo hace, vía profilePicture),
+  // así que sin esto cada rol la pide desde cero por separado.
+  if (user.role === UserRole.CAREGIVER && targetRole === UserRole.CLIENT) {
+    const clientProfile = await prisma.clientProfile.findUnique({ where: { userId } });
+    if (!clientProfile || clientProfile.addressStreet == null) {
+      const caregiverProfile = await prisma.caregiverProfile.findUnique({
+        where: { userId },
+        select: {
+          address: true, addressLat: true, addressLng: true, addressStreet: true,
+          addressNumber: true, addressApartment: true, addressCondominio: true,
+          addressReference: true, addressZone: true, cityId: true, zoneId: true,
+        },
+      });
+      const addressData = {
+        ...(caregiverProfile?.address ? { address: caregiverProfile.address } : {}),
+        ...(caregiverProfile?.addressLat != null ? { addressLat: caregiverProfile.addressLat } : {}),
+        ...(caregiverProfile?.addressLng != null ? { addressLng: caregiverProfile.addressLng } : {}),
+        ...(caregiverProfile?.addressStreet ? { addressStreet: caregiverProfile.addressStreet } : {}),
+        ...(caregiverProfile?.addressNumber ? { addressNumber: caregiverProfile.addressNumber } : {}),
+        ...(caregiverProfile?.addressApartment ? { addressApartment: caregiverProfile.addressApartment } : {}),
+        ...(caregiverProfile?.addressCondominio ? { addressCondominio: caregiverProfile.addressCondominio } : {}),
+        ...(caregiverProfile?.addressReference ? { addressReference: caregiverProfile.addressReference } : {}),
+        ...(caregiverProfile?.addressZone ? { addressZone: caregiverProfile.addressZone } : {}),
+        ...(caregiverProfile?.cityId ? { cityId: caregiverProfile.cityId } : {}),
+        ...(caregiverProfile?.zoneId ? { zoneId: caregiverProfile.zoneId } : {}),
+      };
+      await prisma.clientProfile.upsert({
+        where: { userId },
+        update: addressData,
+        create: { userId, ...addressData },
+      });
+    }
+  }
+
   // Persistir en BD
   await prisma.user.update({
     where: { id: userId },
@@ -1073,7 +1110,7 @@ export async function switchRole(userId: string, targetRole: UserRole): Promise<
 export async function initCaregiverProfile(userId: string): Promise<SwitchRoleResult> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, role: true, isDeleted: true, dateOfBirth: true },
+    select: { id: true, role: true, isDeleted: true, dateOfBirth: true, profilePicture: true },
   });
 
   if (!user || user.isDeleted) throw new UnauthorizedError('Usuario no encontrado');
@@ -1100,12 +1137,41 @@ export async function initCaregiverProfile(userId: string): Promise<SwitchRoleRe
     throw new ConflictError('Ya tienes un perfil de cuidador registrado.', 'CAREGIVER_PROFILE_EXISTS');
   }
 
+  // La dirección exacta no vive en User (solo la foto lo hace, vía
+  // profilePicture) — CaregiverProfile y ClientProfile la duplican cada uno
+  // por su lado. Si el usuario ya la cargó como dueño de mascota, se copia acá
+  // para no hacérsela repetir en el wizard de cuidador.
+  const clientProfile = await prisma.clientProfile.findUnique({
+    where: { userId },
+    select: {
+      address: true, addressLat: true, addressLng: true, addressStreet: true,
+      addressNumber: true, addressApartment: true, addressCondominio: true,
+      addressReference: true, addressZone: true, cityId: true, zoneId: true,
+    },
+  });
+
   await prisma.$transaction([
     prisma.caregiverProfile.create({
       data: {
         userId,
         status: CaregiverStatus.DRAFT,
         verificationStatus: VerificationStatus.PENDING_REVIEW,
+        ...(clientProfile?.address ? { address: clientProfile.address } : {}),
+        ...(clientProfile?.addressLat != null ? { addressLat: clientProfile.addressLat } : {}),
+        ...(clientProfile?.addressLng != null ? { addressLng: clientProfile.addressLng } : {}),
+        ...(clientProfile?.addressStreet ? { addressStreet: clientProfile.addressStreet } : {}),
+        ...(clientProfile?.addressNumber ? { addressNumber: clientProfile.addressNumber } : {}),
+        ...(clientProfile?.addressApartment ? { addressApartment: clientProfile.addressApartment } : {}),
+        ...(clientProfile?.addressCondominio ? { addressCondominio: clientProfile.addressCondominio } : {}),
+        ...(clientProfile?.addressReference ? { addressReference: clientProfile.addressReference } : {}),
+        ...(clientProfile?.addressZone ? { addressZone: clientProfile.addressZone } : {}),
+        ...(clientProfile?.cityId ? { cityId: clientProfile.cityId } : {}),
+        ...(clientProfile?.zoneId ? { zoneId: clientProfile.zoneId } : {}),
+        // profilePhoto también se duplica por perfil (User.profilePicture es
+        // el único campo realmente compartido) — el wizard de cuidador lee
+        // CaregiverProfile.profilePhoto directo, sin fallback a User, así que
+        // sin esto la foto ya subida como dueño de mascota no aparecía acá.
+        ...(user.profilePicture ? { profilePhoto: user.profilePicture } : {}),
       },
     }),
     prisma.user.update({
