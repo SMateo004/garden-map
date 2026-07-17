@@ -181,6 +181,20 @@ class _MyDataScreenState extends State<MyDataScreen> {
     return parts.isEmpty ? _addressCtrl.text.trim() : parts.join(', ');
   }
 
+  /// Espejo en vivo de las validaciones de _save() (sin SnackBars), para
+  /// deshabilitar "Guardar cambios" hasta que el perfil esté realmente
+  /// completo — mismos campos que _isClientDataIncomplete en profile_screen.dart.
+  bool get _canSave {
+    final hasPhoto = _pendingPhotoBytes != null ||
+        (_userData?['profilePicture'] as String? ?? '').trim().isNotEmpty;
+    return _firstCtrl.text.trim().isNotEmpty &&
+        _lastCtrl.text.trim().isNotEmpty &&
+        RegExp(r'^[67][0-9]{7}$').hasMatch(_phoneCtrl.text.trim()) &&
+        _streetCtrl.text.trim().isNotEmpty &&
+        _dateOfBirth != null &&
+        hasPhoto;
+  }
+
   Future<void> _save() async {
     final fn = _firstCtrl.text.trim();
     final ln = _lastCtrl.text.trim();
@@ -399,10 +413,12 @@ class _MyDataScreenState extends State<MyDataScreen> {
             Row(children: [
               Expanded(child: TextField(controller: _firstCtrl, style: TextStyle(color: textColor),
                   inputFormatters: [noDigitsFormatter],
+                  onChanged: (_) => setState(() {}),
                   decoration: fieldDeco('Nombre *', Icons.person_outline))),
               const SizedBox(width: 12),
               Expanded(child: TextField(controller: _lastCtrl, style: TextStyle(color: textColor),
                   inputFormatters: [noDigitsFormatter],
+                  onChanged: (_) => setState(() {}),
                   decoration: fieldDeco('Apellido *', Icons.person_outlined))),
             ]),
             const SizedBox(height: 16),
@@ -412,6 +428,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
             const SizedBox(height: 6),
             TextField(controller: _phoneCtrl, style: TextStyle(color: textColor),
                 keyboardType: TextInputType.phone,
+                onChanged: (_) => setState(() {}),
                 decoration: fieldDeco('Número de teléfono', Icons.phone_outlined)),
             const SizedBox(height: 16),
 
@@ -458,6 +475,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                 }
               }),
               onApartmentToggle: (val) => setState(() => _isApartment = val),
+              onFieldsChanged: () => setState(() {}),
             ),
             const SizedBox(height: 16),
 
@@ -517,7 +535,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                   child: GardenButton(
                     label: _saving ? 'Guardando...' : 'Guardar cambios',
                     loading: _saving,
-                    onPressed: _save,
+                    onPressed: (_saving || !_canSave) ? null : _save,
                   ),
                 ),
               ])
@@ -527,7 +545,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                 child: GardenButton(
                   label: _saving ? 'Guardando...' : 'Guardar cambios',
                   loading: _saving,
-                  onPressed: _save,
+                  onPressed: (_saving || !_canSave) ? null : _save,
                 ),
               ),
             const SizedBox(height: 24),

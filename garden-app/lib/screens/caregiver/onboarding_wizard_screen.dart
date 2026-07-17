@@ -203,11 +203,15 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     setState(() => _authToken = token);
 
     // clientConversionMode: the account + empty CaregiverProfile already exist.
-    // Pre-fill step 0 from existing user data, then jump to step 1.
+    // Pre-fill step 0 from existing user data, then jump to step 1 — pero solo
+    // si el prefill realmente completó la zona. El User del cliente no trae
+    // zona (es un campo de CaregiverProfile), así que un cliente existente
+    // suele llegar acá sin zona cargada; si saltamos igual, el dato faltante
+    // recién se detecta al final del wizard, sin forma de volver a corregirlo.
     if (token.isNotEmpty && widget.clientConversionMode) {
       await _prefillFromExistingUser(token);
       await _tryPopulateCaregiverProfile(token);
-      setState(() => _currentStep = 1);
+      if (_addressZone != null) setState(() => _currentStep = 1);
       return;
     }
 
@@ -742,7 +746,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   /// para habilitar/deshabilitar el botón de forma reactiva, en vez de
   /// dejarlo siempre tocable y mostrar el error recién después del tap.
   bool get _canProceed {
-    if (_currentStep == 0 && widget.clientConversionMode) return true;
     switch (_currentStep) {
       case 0:
         return _firstNameController.text.trim().isNotEmpty &&
@@ -795,7 +798,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
   Future<void> _nextStep() async {
     // Step 0: en clientConversionMode el usuario ya está registrado, solo avanzar
+    // (sin llamar a _registerMinimalAndAdvance) — pero igual hay que validar los
+    // campos de este paso (ej. zona), porque un cliente existente puede no tener
+    // esos datos cargados. Antes se saltaba la validación acá y el dato faltante
+    // recién se detectaba al enviar el perfil completo, muchos pasos después,
+    // sin forma de volver a corregirlo.
     if (_currentStep == 0 && widget.clientConversionMode) {
+      if (!_validateCurrentStep()) return;
       setState(() => _currentStep = 1);
       return;
     }

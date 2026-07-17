@@ -39,6 +39,11 @@ class AddressSection extends StatefulWidget {
   final String purposeText;
   final void Function(AddressMapResult) onMapResult;
   final void Function(bool) onApartmentToggle;
+  /// Opcional — se llama en cada tecla de calle/número/etc. para que un padre
+  /// que gatea un botón "Guardar" con un valor derivado de estos controllers
+  /// (ej. MyDataScreen) se entere y se reconstruya. Los demás usuarios de este
+  /// widget no lo necesitan porque ya validan solo al tocar su propio botón.
+  final VoidCallback? onFieldsChanged;
 
   const AddressSection({
     super.key,
@@ -63,6 +68,7 @@ class AddressSection extends StatefulWidget {
     required this.purposeText,
     required this.onMapResult,
     required this.onApartmentToggle,
+    this.onFieldsChanged,
   });
 
   @override
@@ -154,13 +160,26 @@ class _AddressSectionState extends State<AddressSection> {
       final points = zone.points;
       if (points == null || points.length < 4) continue;
       if (_pointInPolygon(point, points)) {
-        setState(() => _zoneLocked = true);
-        if (widget.selectedZone != zone.key) widget.onZoneChanged(zone.key);
+        // _matchZoneByPoint corre sincrónicamente dentro de didUpdateWidget,
+        // que a su vez se dispara en medio del build del padre (ej. justo al
+        // volver del selector de mapa). Llamar a widget.onZoneChanged aquí
+        // dispara un setState() en el padre mientras todavía se está
+        // reconstruyendo — "setState() or markNeedsBuild() called during
+        // build". Se difiere al próximo frame para evitarlo.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() => _zoneLocked = true);
+          if (widget.selectedZone != zone.key) widget.onZoneChanged(zone.key);
+        });
         return;
       }
     }
     // El pin no cae en ningún polígono conocido — queda en selección manual.
-    if (_zoneLocked) setState(() => _zoneLocked = false);
+    if (_zoneLocked) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _zoneLocked = false);
+      });
+    }
   }
 
   @override
@@ -293,6 +312,7 @@ class _AddressSectionState extends State<AddressSection> {
             child: TextFormField(
               controller: widget.streetController,
               style: TextStyle(color: widget.textColor),
+              onChanged: (_) => widget.onFieldsChanged?.call(),
               decoration: _field('Calle / Avenida', Icons.signpost_outlined),
             ),
           ),

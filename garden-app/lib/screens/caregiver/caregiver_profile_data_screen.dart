@@ -358,7 +358,16 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     }
   }
 
-  void _computeCompletion() {
+  /// Este arreglo debe reflejar EXACTAMENTE los mismos 16 campos que
+  /// calculatePercentage() en caregiver-profile-completion.helper.ts (backend),
+  /// mismo orden, mismos umbrales — si difieren, el badge local puede mostrar
+  /// 100% mientras el dashboard sigue "iluminado" (o viceversa).
+  ///
+  /// Recalculado en cada llamada (no cacheado) para que _isProfileComplete
+  /// siempre esté al día — chips y fotos se seleccionan con setState() simple,
+  /// sin pasar por _computeCompletion(), así que un valor cacheado quedaría
+  /// desactualizado y el botón "Guardar y continuar" podría trabarse.
+  List<bool> _completionFields() {
     final services = _effectiveServices;
     final offersPaseo     = services.contains('PASEO');
     final offersHospedaje = services.contains('HOSPEDAJE');
@@ -380,11 +389,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     // Experiencia
     final expYears = int.tryParse(_experienceYearsController.text.replaceAll('+', '')) ?? -1;
 
-    // Este arreglo debe reflejar EXACTAMENTE los mismos 16 campos que
-    // calculatePercentage() en caregiver-profile-completion.helper.ts (backend),
-    // mismo orden, mismos umbrales — si difieren, el badge local puede mostrar
-    // 100% mientras el dashboard sigue "iluminado" (o viceversa).
-    final fields = [
+    return [
       _bioDetailController.text.trim().length >= 3,
       services.isNotEmpty,
       hasPaseoPrice,
@@ -402,10 +407,19 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       true, // acceptPuppies
       true, // acceptSeniors
     ];
+  }
 
+  void _computeCompletion() {
+    final fields = _completionFields();
     final completed = fields.where((f) => f).length;
     setState(() => _completionPercentage = ((completed / fields.length) * 100).round().clamp(0, 100));
   }
+
+  /// Fuente de verdad en tiempo real para habilitar/deshabilitar "Guardar y
+  /// continuar" — a diferencia de _completionPercentage (cacheado), siempre
+  /// refleja el estado actual sin depender de que algo haya disparado
+  /// _computeCompletion() primero.
+  bool get _isProfileComplete => _completionFields().every((f) => f);
 
   void _showValidationError(String msg, {GlobalKey? scrollTo}) {
     if (scrollTo?.currentContext != null) {
@@ -1729,7 +1743,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     elevation: 0,
                   ),
-                  onPressed: _isSaving ? null : _saveAllData,
+                  onPressed: (_isSaving || !_isProfileComplete) ? null : _saveAllData,
                   child: _isSaving
                       ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Text('Guardar y continuar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
@@ -1958,12 +1972,16 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                   const Icon(Icons.check_rounded, color: GardenColors.primary, size: 14),
                   const SizedBox(width: 4),
                 ],
-                Text(
-                  opt,
-                  style: TextStyle(
-                    color: isSel ? GardenColors.primary : GardenColors.textSecondary,
-                    fontSize: 13,
-                    fontWeight: isSel ? FontWeight.w600 : FontWeight.w400,
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width - 80),
+                  child: Text(
+                    opt,
+                    softWrap: true,
+                    style: TextStyle(
+                      color: isSel ? GardenColors.primary : GardenColors.textSecondary,
+                      fontSize: 13,
+                      fontWeight: isSel ? FontWeight.w600 : FontWeight.w400,
+                    ),
                   ),
                 ),
               ],
