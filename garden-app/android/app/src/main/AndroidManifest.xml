@@ -52,14 +52,22 @@
             android:value="2" />
 
         <!-- Foreground service: mantiene vivo el envío de ubicación GPS
-             durante un paseo activo aunque el cuidador minimice la app o
-             bloquee la pantalla (mismo patrón que el "modo conductor" de
-             Uber). Ver GpsTrackingSession/GpsTaskHandler. Requiere declarar
-             foregroundServiceType="location" desde Android 14 (API 34). -->
+             durante un paseo activo aunque el cuidador minimice la app,
+             bloquee la pantalla, O CIERRE LA APP POR COMPLETO (swipe desde
+             apps recientes) — mismo patrón que el "modo conductor" de Uber.
+             Ver GpsTrackingSession/GpsTaskHandler. Requiere declarar
+             foregroundServiceType="location" desde Android 14 (API 34).
+
+             stopWithTask="false" es la parte crítica de este comportamiento:
+             el default de Android es matar el servicio apenas se remueve la
+             app de "recientes", lo cual anulaba por completo el propósito
+             del foreground service (el mismo bug que Uber evita con este
+             mismo flag). Bug real reportado: la ubicación dejaba de
+             transmitirse en cuanto el cuidador cerraba la app del todo. -->
         <service
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
             android:foregroundServiceType="location"
-            android:stopWithTask="true"
+            android:stopWithTask="false"
             android:exported="false" />
     </application>
     <!-- Required to query activities that can process text, see:
