@@ -21,6 +21,7 @@ library;
 import 'package:flutter/foundation.dart' show ValueNotifier, kDebugMode, debugPrint;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'secure_storage_service.dart';
+import 'presence_service.dart';
 
 /// Se emite cuando el servidor devuelve 401 y el refresh token también es inválido.
 /// La app escucha esto en GardenApp para redirigir al login de forma global.
@@ -68,6 +69,7 @@ class AuthState {
       debugPrint('[AuthState] initialized — session: ${_token.isNotEmpty ? "present" : "none"}, '
           'role: $_role, activeRole: $_activeRole');
     }
+    if (hasSession) PresenceService.instance.connect();
   }
 
   /// Update the in-memory token AND persist to SecureStorageService.
@@ -75,6 +77,7 @@ class AuthState {
   static Future<void> update(String newToken) async {
     _token = newToken;
     await SecureStorageService.saveAccessToken(newToken);
+    PresenceService.instance.connect();
   }
 
   /// Update the in-memory role cache. Call alongside every write to
@@ -93,6 +96,7 @@ class AuthState {
     _role = '';
     _activeRole = '';
     await SecureStorageService.clearAll();
+    PresenceService.instance.disconnect();
   }
 
   // ── 401 guard ─────────────────────────────────────────────────────────────

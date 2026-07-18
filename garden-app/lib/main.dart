@@ -65,6 +65,7 @@ import 'services/fcm_service.dart';
 import 'services/auth_state.dart'; // sessionExpiredNotifier + AuthState
 import 'services/web_notification_service.dart';
 import 'services/global_http_client.dart'; // maintenanceNotifier + networkErrorNotifier
+import 'services/presence_service.dart';
 import 'utils/web_redirect.dart';
 import 'package:http/http.dart' as http;
 
@@ -773,12 +774,13 @@ class GardenApp extends StatefulWidget {
   State<GardenApp> createState() => _GardenAppState();
 }
 
-class _GardenAppState extends State<GardenApp> {
+class _GardenAppState extends State<GardenApp> with WidgetsBindingObserver {
   final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Inyectar router en FcmService para navegación desde notificaciones
     FcmService.setRouter(_router);
     // Escuchar sesión expirada globalmente: redirige al login desde cualquier pantalla.
@@ -791,11 +793,25 @@ class _GardenAppState extends State<GardenApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     sessionExpiredNotifier.removeListener(_onSessionExpired);
     maintenanceNotifier.removeListener(_onMaintenanceDetected);
     networkErrorNotifier.removeListener(_onNetworkError);
     _networkErrorTimer?.cancel();
     super.dispose();
+  }
+
+  // Presencia ("en línea" en el chat): conectada mientras la app está en
+  // primer plano, desconectada al pasar a background — así el estado que ve
+  // el otro participante refleja si la app está realmente activa, no solo
+  // si en algún momento se abrió.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      PresenceService.instance.connect();
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      PresenceService.instance.disconnect();
+    }
   }
 
   void _onSessionExpired() {
