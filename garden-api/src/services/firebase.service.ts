@@ -69,15 +69,26 @@ export async function sendPush(
 /**
  * Looks up the user's FCM token and sends a push notification.
  * Silently skips if user has no token registered.
+ *
+ * `data` (opcional) — payload de deep-link que la app usa para navegar a la
+ * pantalla correcta al tocar la notificación (ver FcmService._handleNotificationTap
+ * en el cliente Flutter). Sin esto, la notificación se abre pero no lleva a
+ * ningún lado — quedó así de origen en la mayoría de los call sites de este
+ * proyecto, algo reportado explícitamente como bug por el dueño del negocio.
  */
-export async function sendPushToUser(userId: string, title: string, body: string): Promise<void> {
+export async function sendPushToUser(
+  userId: string,
+  title: string,
+  body: string,
+  data?: Record<string, string>
+): Promise<void> {
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { fcmToken: true },
     });
     if (user?.fcmToken) {
-      await sendPush(user.fcmToken, title, body);
+      await sendPush(user.fcmToken, title, body, data);
     }
   } catch (err: any) {
     logger.warn('[FCM] sendPushToUser error', { userId, error: err.message });

@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'local_notification_service.dart';
 import 'secure_storage_service.dart';
+import 'auth_state.dart';
 
 /// Background message handler — must be top-level function (FCM requirement).
 @pragma('vm:entry-point')
@@ -82,6 +83,21 @@ class FcmService {
   }
 
   /// Navega a la pantalla correcta según el payload de la notificación.
+  ///
+  /// Antes casi ninguna notificación llevaba a ningún lado: la mayoría de
+  /// los `sendPushToUser(...)` en el backend nunca mandaban el `data` con
+  /// `type`/`bookingId` (solo título y cuerpo), así que `type` siempre daba
+  /// `null` acá y caía al `default` sin navegar — reportado explícitamente
+  /// como bug por el dueño del negocio. Además, el ÚNICO caso que sí tenía
+  /// navegación (INCIDENT/ACCIDENT) armaba una URL
+  /// (`/service/$bookingId/CLIENT`) que no coincidía con la ruta real
+  /// registrada en el router (`/service/:bookingId`, con el rol pasado por
+  /// `extra`, no como segmento de la URL) — tampoco funcionaba.
+  ///
+  /// Para las pantallas que distinguen CLIENT/CAREGIVER (`/service/:id`) se
+  /// usa el rol actual de la sesión (`AuthState.effectiveRole`) en vez de
+  /// que el backend intente adivinarlo — es más robusto porque el rol
+  /// correcto siempre es el de quien está mirando el teléfono en este momento.
   static void _handleNotificationTap(RemoteMessage message) {
     final data = message.data;
     final type = data['type'] as String?;
@@ -89,13 +105,24 @@ class FcmService {
 
     if (_router == null) return;
 
+    final role = AuthState.effectiveRole.isNotEmpty ? AuthState.effectiveRole : 'CLIENT';
+    final isCaregiver = role == 'CAREGIVER';
+
     switch (type) {
       case 'BOOKING_CONFIRMED':
       case 'BOOKING_CANCELLED':
       case 'BOOKING_PAYMENT':
-        if (bookingId != null) {
-          _router!.go('/my-bookings-tab');
-        }
+      case 'BOOKING_ACCEPTED':
+      case 'BOOKING_REJECTED':
+        // Reservas del dueño — la lista ya muestra el estado y las acciones
+        // disponibles para cada una (no hay pantalla de detalle separada).
+        _router!.go('/my-bookings-tab');
+        break;
+      case 'BOOKING_WAITING_APPROVAL':
+        // Nueva solicitud de reserva esperando que el cuidador acepte o
+        // rechace — la pantalla de inicio del cuidador ya muestra esta
+        // reserva de forma prominente con los botones Aceptar/Rechazar.
+        _router!.go('/caregiver/home');
         break;
       case 'CHAT_MESSAGE':
         if (bookingId != null) {
@@ -109,9 +136,25 @@ class FcmService {
         break;
       case 'INCIDENT':
       case 'ACCIDENT':
+      case 'SERVICE_STARTED':
+      case 'SERVICE_COMPLETED':
+      case 'SERVICE_EXTENSION':
+      case 'SERVICE_MARKED_ENDED':
+        // Todo lo que pasa durante un servicio activo (emergencia, inicio,
+        // fin, extensión de tiempo/hospedaje, confirmación de fin) lleva
+        // directo a esa pantalla — es donde está la acción que corresponde
+        // tomar (calificar, subir fotos, confirmar, etc.).
         if (bookingId != null) {
-          _router!.go('/service/$bookingId/CLIENT');
+          _router!.go('/service/$bookingId', extra: {'role': isCaregiver ? 'CAREGIVER' : 'CLIENT'});
         }
+        break;
+      case 'MEET_AND_GREET':
+        if (bookingId != null) {
+          _router!.go('/meet-and-greet/$bookingId', extra: {'role': isCaregiver ? 'CAREGIVER' : 'CLIENT'});
+        }
+        break;
+      case 'WALLET':
+        _router!.go('/wallet');
         break;
       default:
         // Sin navegación específica — el usuario ve la notificación en el drawer

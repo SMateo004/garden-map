@@ -197,6 +197,12 @@ export async function onClientCancelled(bookingId: string): Promise<void> {
 
   fireEmail(booking.caregiver.user.email, `Reserva cancelada por el cliente – GARDEN`, html, 'CLIENT_CANCELLED_CAREGIVER', bookingId);
   sendWhatsAppPlaceholder(booking.caregiver.user.phone, `GARDEN: El cliente canceló la reserva ${bookingId}.`, { event: 'CLIENT_CANCELLED_CAREGIVER', bookingId });
+  sendPushToUser(
+    booking.caregiver.user.id,
+    'Reserva cancelada por el cliente',
+    `${clientName} canceló la reserva de ${svc} — las fechas quedaron libres en tu agenda.`,
+    { type: 'BOOKING_CANCELLED', bookingId }
+  ).catch((err) => logger.warn('[NOTIFICATION] push onClientCancelled failed', { bookingId, err }));
 }
 
 /**
@@ -234,6 +240,12 @@ export async function onCaregiverCancelled(bookingId: string, reason: string): P
     `GARDEN: Tu reserva ${bookingId} fue cancelada por el cuidador. Motivo: ${reason}. Te contactaremos en 1 día hábil para tu devolución.`,
     { event: 'CAREGIVER_CANCELLED_CLIENT', bookingId }
   );
+  sendPushToUser(
+    booking.client.id,
+    'Tu reserva fue cancelada',
+    `${caregiverName} canceló tu reserva. Te reembolsamos en un plazo máximo de 1 día hábil.`,
+    { type: 'BOOKING_CANCELLED', bookingId }
+  ).catch((err) => logger.warn('[NOTIFICATION] push onCaregiverCancelled failed', { bookingId, err }));
 }
 
 /**
@@ -271,6 +283,18 @@ export async function onBookingWaitingApproval(bookingId: string): Promise<void>
     `GARDEN: Nueva reserva de ${svc} pagada (${booking.petName}). ID: ${bookingId}. Por favor, ingresa al panel para Aceptar o Rechazar.`,
     { event: 'BOOKING_WAITING_APPROVAL', bookingId }
   );
+  // Push — antes esta era la notificación que el dueño del negocio reportó
+  // como "reserva confirmada, esperando tu aprobación... no me lleva a
+  // ningún lado": el evento solo mandaba email/WhatsApp, nunca push, así
+  // que el caregiver no se enteraba hasta revisar el correo. Con `data` acá,
+  // FcmService._handleNotificationTap (Flutter) navega directo a la pantalla
+  // de "Mis Reservas" del cuidador, donde está el botón Aceptar/Rechazar.
+  sendPushToUser(
+    booking.caregiver.user.id,
+    '⏰ Nueva reserva esperando tu aprobación',
+    `${clientName} reservó ${svc} para ${booking.petName}. Tienes 24h para aceptar o rechazar.`,
+    { type: 'BOOKING_WAITING_APPROVAL', bookingId }
+  ).catch((err) => logger.warn('[NOTIFICATION] push onBookingWaitingApproval failed', { bookingId, err }));
 }
 
 /**

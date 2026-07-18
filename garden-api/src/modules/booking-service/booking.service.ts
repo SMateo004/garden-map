@@ -688,7 +688,7 @@ export async function createBooking(
             message: `Un cliente quiere conocerte antes de reservar. Revisa la fecha propuesta.`,
           },
         }).catch(() => {});
-        sendPushToUser(caregiver.userId, '📅 Meet & Greet solicitado', `Un cliente quiere conocerte antes de la reserva.`).catch(() => {});
+        sendPushToUser(caregiver.userId, '📅 Meet & Greet solicitado', `Un cliente quiere conocerte antes de la reserva.`, { type: 'MEET_AND_GREET', bookingId: booking.id }).catch(() => {});
       });
     }
 
@@ -2455,7 +2455,7 @@ export async function confirmWalkExtensionQr(
   });
 
   if (caregiverUserId) {
-    sendPushToUser(caregiverUserId, '⏱️ Extensión confirmada', `+${additionalMinutes} min · Bs ${extraAmount} adicionales`)
+    sendPushToUser(caregiverUserId, '⏱️ Extensión confirmada', `+${additionalMinutes} min · Bs ${extraAmount} adicionales`, { type: 'SERVICE_EXTENSION', bookingId })
       .catch(() => {});
   }
 
@@ -2689,7 +2689,7 @@ export async function confirmHospedajeExtensionQr(
   });
 
   if (caregiverUserId) {
-    sendPushToUser(caregiverUserId, '🏠 Hospedaje extendido', `+${additionalDays} noche${additionalDays > 1 ? 's' : ''} · Bs ${extraAmount} adicionales`).catch(() => {});
+    sendPushToUser(caregiverUserId, '🏠 Hospedaje extendido', `+${additionalDays} noche${additionalDays > 1 ? 's' : ''} · Bs ${extraAmount} adicionales`, { type: 'SERVICE_EXTENSION', bookingId }).catch(() => {});
   }
 
   // Registro en blockchain (asíncrono — mock si no está configurado)
@@ -3092,7 +3092,7 @@ export async function acceptBooking(bookingId: string, caregiverUserId: string):
         type: 'BOOKING_ACCEPTED',
       },
     });
-    sendPushToUser(booking.clientId, '¡Tu reserva fue aceptada! 🐾', `El cuidador confirmó la reserva para ${booking.petName}.`).catch(() => {});
+    sendPushToUser(booking.clientId, '¡Tu reserva fue aceptada! 🐾', `El cuidador confirmó la reserva para ${booking.petName}.`, { type: 'BOOKING_ACCEPTED', bookingId }).catch(() => {});
 
     notificationService.onBookingAccepted(bookingId).catch(err => {
       logger.error('Error sending onBookingAccepted notification', { bookingId, err });
@@ -3175,7 +3175,7 @@ export async function rejectBooking(bookingId: string, caregiverUserId: string, 
         type: 'BOOKING_REJECTED',
       },
     });
-    sendPushToUser(booking.clientId, 'Reserva rechazada ❌', `El cuidador no pudo aceptar la reserva de ${booking.petName}.`).catch(() => {});
+    sendPushToUser(booking.clientId, 'Reserva rechazada ❌', `El cuidador no pudo aceptar la reserva de ${booking.petName}.`, { type: 'BOOKING_REJECTED', bookingId }).catch(() => {});
 
     await tx.adminNotification.create({
       data: {
@@ -3225,7 +3225,7 @@ export async function startService(bookingId: string, caregiverUserId: string, p
         type: 'SERVICE_STARTED',
       },
     });
-    sendPushToUser(booking.clientId, '¡El servicio ha comenzado! 🐕', `El cuidador está cuidando a ${booking.petName}.`).catch(() => {});
+    sendPushToUser(booking.clientId, '¡El servicio ha comenzado! 🐕', `El cuidador está cuidando a ${booking.petName}.`, { type: 'SERVICE_STARTED', bookingId }).catch(() => {});
     notificationService.onServiceStarted(bookingId).catch(() => {});
 
     return bookingToResponse(updated);
@@ -3331,7 +3331,8 @@ export async function addServiceEvent(
     sendPushToUser(
       booking.clientId,
       '🐾 Novedad con tu mascota',
-      'Tu cuidador reportó algo durante el servicio y GARDEN ya está al tanto. Abre la app para ver los detalles.'
+      'Tu cuidador reportó algo durante el servicio y GARDEN ya está al tanto. Abre la app para ver los detalles.',
+      { type: 'INCIDENT', bookingId }
     ).catch(() => {});
 
     // Admin: lenguaje urgente — es quien debe intervenir si hace falta.
@@ -3361,7 +3362,8 @@ export async function addServiceEvent(
     sendPushToUser(
       booking.clientId,
       '✅ Todo en orden',
-      'La novedad reportada durante el servicio ya fue resuelta. El servicio continúa con normalidad.'
+      'La novedad reportada durante el servicio ya fue resuelta. El servicio continúa con normalidad.',
+      { type: 'SERVICE_STARTED', bookingId }
     ).catch(() => {});
     logger.info('Incident resolved — service timer resumed', { bookingId, totalPausedMinutes: pauseData.totalPausedMinutes });
   }
@@ -3523,7 +3525,8 @@ export async function markServiceEndedByClient(
     sendPushToUser(
       booking.caregiver.userId,
       'El dueño marcó el servicio como terminado',
-      'Sube tus fotos finales para cerrar el servicio y cobrar'
+      'Sube tus fotos finales para cerrar el servicio y cobrar',
+      { type: 'SERVICE_MARKED_ENDED', bookingId }
     ).catch(() => {});
 
     return bookingToResponse(updated);
@@ -3576,7 +3579,8 @@ export async function confirmServiceEndByCaregiver(
       sendPushToUser(
         booking.clientId,
         'El cuidador no confirmó el fin del servicio',
-        'El servicio sigue en curso — el tiempo continúa corriendo con normalidad'
+        'El servicio sigue en curso — el tiempo continúa corriendo con normalidad',
+        { type: 'SERVICE_STARTED', bookingId }
       ).catch(() => {});
 
       logger.info('Caregiver rejected client-marked end — clientMarkedEndAt cleared, timer resumed', { bookingId });
@@ -3592,7 +3596,8 @@ export async function confirmServiceEndByCaregiver(
       sendPushToUser(
         booking.clientId,
         'El cuidador confirmó el fin del servicio',
-        'Está subiendo sus fotos finales para cerrar el servicio'
+        'Está subiendo sus fotos finales para cerrar el servicio',
+        { type: 'SERVICE_STARTED', bookingId }
       ).catch(() => {});
 
       logger.info('Caregiver confirmed client-marked end', { bookingId });
@@ -3743,7 +3748,8 @@ export async function concludeService(
       sendPushToUser(
         booking.clientId,
         '⏰ Cargo por tiempo extra',
-        `${overtimeMins} min extra · Bs ${overtimeFeeGross.toFixed(2)} cargados a tu billetera`
+        `${overtimeMins} min extra · Bs ${overtimeFeeGross.toFixed(2)} cargados a tu billetera`,
+        { type: 'WALLET', bookingId }
       ).catch(() => {});
     }
 
@@ -3770,7 +3776,7 @@ export async function concludeService(
         type: 'SERVICE_COMPLETED',
       },
     });
-    sendPushToUser(booking.clientId, 'Servicio finalizado ✅', '⭐ Tu calificación libera el pago al cuidador').catch(() => {});
+    sendPushToUser(booking.clientId, 'Servicio finalizado ✅', '⭐ Tu calificación libera el pago al cuidador', { type: 'SERVICE_COMPLETED', bookingId }).catch(() => {});
     notificationService.onServiceCompleted(bookingId).catch(() => {});
 
     auditLog({
@@ -3896,7 +3902,7 @@ export async function confirmReceiptByClient(
     }
     const updated = await tx.booking.findUnique({ where: { id: bookingId } });
 
-    sendPushToUser(caregiverUserId, '¡Pago liberado! 💸', `Recibiste el pago por el servicio de ${booking.petName}. Revisa tu billetera.`).catch(() => {});
+    sendPushToUser(caregiverUserId, '¡Pago liberado! 💸', `Recibiste el pago por el servicio de ${booking.petName}. Revisa tu billetera.`, { type: 'WALLET' }).catch(() => {});
     notificationService.onRatingReceived(bookingId, rating, comment).catch(() => {});
     emitWalletUpdated(caregiverUserId);
 
@@ -4017,7 +4023,8 @@ export async function autoReleasePayment(
     sendPushToUser(
       caregiverUserIdAR,
       '💸 Pago liberado automáticamente',
-      `El pago de Bs ${amount.toFixed(2)} por el servicio de ${booking.petName} fue liberado (el cliente no dejó reseña).`
+      `El pago de Bs ${amount.toFixed(2)} por el servicio de ${booking.petName} fue liberado (el cliente no dejó reseña).`,
+      { type: 'WALLET' }
     ).catch(() => {});
     emitWalletUpdated(caregiverUserIdAR);
   });
@@ -4620,7 +4627,7 @@ export async function confirmExtensionQrBySip(bookingId: string, qrId: string): 
   });
 
   if (caregiverUserId) {
-    sendPushToUser(caregiverUserId, pushTitle, pushBody).catch(() => {});
+    sendPushToUser(caregiverUserId, pushTitle, pushBody, { type: 'SERVICE_EXTENSION', bookingId }).catch(() => {});
   }
 
   if (loggedExtensionId) {
