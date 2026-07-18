@@ -146,14 +146,6 @@ router.post(
   bookingController.confirmHospedajeExtensionQr
 );
 
-/** POST /api/bookings/:id/extend-paseo — cliente extiende paseo en curso (15/30/60 min). */
-router.post(
-  '/:id/extend-paseo',
-  authMiddleware,
-  requireRole('CLIENT'),
-  bookingController.extendPaseo
-);
-
 /** POST /api/bookings/:id/accept — cuidador acepta reserva pagada. */
 router.post(
   '/:id/accept',

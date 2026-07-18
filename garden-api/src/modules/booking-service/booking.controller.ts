@@ -11,7 +11,6 @@ import {
   changeDatesBookingBodySchema,
   initPaymentBodySchema,
   cancellationRequestBodySchema,
-  extendPaseoBodySchema,
   requestExtensionPaymentBodySchema,
   confirmExtensionQrBodySchema,
   requestHospedajeExtensionPaymentBodySchema,
@@ -329,18 +328,6 @@ export const confirmHospedajeExtensionQr = asyncHandler(async (req: Request, res
   const body = confirmHospedajeExtensionQrBodySchema.parse(req.body);
   const result = await bookingService.confirmHospedajeExtensionQr(bookingId, clientId, body.qrId);
   res.json({ success: true, data: result });
-});
-
-/**
- * POST /api/bookings/:id/extend-paseo
- * Cliente extiende un paseo en curso (IN_PROGRESS). Body: { additionalMinutes: 15 | 30 | 60 }.
- */
-export const extendPaseo = asyncHandler(async (req: Request, res: Response) => {
-  const bookingId = req.params.id!;
-  const clientId = req.user!.userId;
-  const body = extendPaseoBodySchema.parse(req.body);
-  const booking = await bookingService.extendPaseoWalk(bookingId, clientId, body.additionalMinutes);
-  res.json({ success: true, data: booking });
 });
 
 /**
