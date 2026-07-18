@@ -7,6 +7,7 @@
 import cron from 'node-cron';
 import prisma from '../config/database.js';
 import { sendPushToUser } from '../services/firebase.service.js';
+import { boliviaDateAndTimeToMs } from '../utils/bolivia-time.js';
 import logger from '../shared/logger.js';
 
 export function iniciarJobWalkExpiry() {
@@ -51,13 +52,15 @@ export async function procesarVencimientoPaseos() {
                 if (booking.serviceStartedAt) {
                     endTime = new Date(booking.serviceStartedAt.getTime() + (booking.duration! * 60 * 1000));
                 } else if (booking.walkDate && booking.startTime) {
-                    // Fallback: usar la fecha real del paseo (walkDate) + startTime, no la fecha de hoy
+                    // Fallback: usar la fecha real del paseo (walkDate) + startTime, no la fecha de hoy.
+                    // boliviaDateAndTimeToMs (no Date.setHours, que usaría la TZ del proceso —
+                    // UTC en Render — en vez de la de Bolivia, un desfase de 4h).
                     const parts = (booking.startTime ?? '00:00').split(':');
                     const startMins = parseInt(parts[0] ?? '0') * 60 + parseInt(parts[1] ?? '0');
                     const endMins = startMins + booking.duration!;
-                    const walkDateBase = new Date(booking.walkDate);
-                    walkDateBase.setHours(Math.floor(endMins / 60), endMins % 60, 0, 0);
-                    endTime = walkDateBase;
+                    const endHH = String(Math.floor(endMins / 60)).padStart(2, '0');
+                    const endMM = String(endMins % 60).padStart(2, '0');
+                    endTime = new Date(boliviaDateAndTimeToMs(booking.walkDate, `${endHH}:${endMM}`));
                 } else {
                     // Sin información suficiente: asumir que el paseo vence en 24h desde ahora (no notificar)
                     endTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);

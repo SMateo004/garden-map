@@ -21,6 +21,7 @@ import cron from 'node-cron';
 import { BookingStatus, RefundStatus } from '@prisma/client';
 import prisma from '../config/database.js';
 import { getNumericSetting } from '../utils/settings-cache.js';
+import { boliviaDateAndTimeToMs } from '../utils/bolivia-time.js';
 import { sendPushToUser } from '../services/firebase.service.js';
 import logger from '../shared/logger.js';
 
@@ -31,7 +32,17 @@ export function iniciarJobNoShowExpiry() {
   logger.info('[NO-SHOW-EXPIRY JOB] Monitor de reservas no-show activo.');
 }
 
-/** Hora de inicio efectiva de la reserva, según el tipo de servicio. */
+/**
+ * Hora de inicio efectiva de la reserva, según el tipo de servicio.
+ *
+ * Bug real que esto corrige: antes usaba `Date.setHours()`, que interpreta
+ * la hora en la zona horaria del PROCESO (UTC en Render) en vez de la de
+ * Bolivia (UTC-4) — el cálculo quedaba 4 horas adelantado respecto al
+ * reloj de Bolivia, así que para cuando el reloj de Bolivia llegaba a la
+ * hora real de la reserva, el job ya la consideraba vencida hace rato y la
+ * cancelaba en el primer tick del cron, ignorando por completo el período
+ * de gracia configurado por el admin.
+ */
 function computeStartTime(booking: {
   serviceType: string;
   walkDate: Date | null;
@@ -40,21 +51,11 @@ function computeStartTime(booking: {
 }): Date | null {
   if (booking.serviceType === 'HOSPEDAJE') {
     if (!booking.startDate) return null;
-    return new Date(
-      booking.startDate.getFullYear(),
-      booking.startDate.getMonth(),
-      booking.startDate.getDate(),
-      0, 0, 0
-    );
+    return new Date(boliviaDateAndTimeToMs(booking.startDate));
   }
-  // PASEO / GUARDERIA: walkDate + startTime ("HH:MM"), mismo cálculo que walk-expiry.job.ts
+  // PASEO / GUARDERIA: walkDate + startTime ("HH:MM")
   if (!booking.walkDate) return null;
-  const parts = (booking.startTime ?? '00:00').split(':');
-  const hours = parseInt(parts[0] ?? '0', 10);
-  const minutes = parseInt(parts[1] ?? '0', 10);
-  const start = new Date(booking.walkDate);
-  start.setHours(hours, minutes, 0, 0);
-  return start;
+  return new Date(boliviaDateAndTimeToMs(booking.walkDate, booking.startTime ?? '00:00'));
 }
 
 export async function procesarNoShows() {

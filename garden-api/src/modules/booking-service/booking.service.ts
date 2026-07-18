@@ -24,6 +24,7 @@ import * as notificationService from '../../services/notification.service.js';
 import { blockchainService } from '../../services/blockchain.service.js';
 import { sendPushToUser, sendPushToAdmins } from '../../services/firebase.service.js';
 import { getIO, emitWalletUpdated } from '../../services/socket.service.js';
+import { boliviaDateTimeToMs } from '../../utils/bolivia-time.js';
 import * as sipService from '../../services/sip.service.js';
 import * as paymentQrService from '../../services/payment-qr.service.js';
 import { env } from '../../config/env.js';
@@ -50,17 +51,6 @@ function rangesOverlap(s1: number, e1: number, s2: number, e2: number): boolean 
   return s1 < e2 && s2 < e1;
 }
 
-/**
- * Convierte "YYYY-MM-DD" (+ opcional "HH:mm") al epoch ms del inicio real del
- * servicio, asumiendo hora local de Bolivia (UTC-4, sin horario de verano).
- * Sin `timeStr` se asume el inicio del día (00:00) — usado por HOSPEDAJE, que
- * no maneja hora exacta de inicio.
- */
-function boliviaDateTimeToMs(dateStr: string, timeStr?: string): number {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const [hour, minute] = (timeStr || '00:00').split(':').map(Number);
-  return Date.UTC(year as number, (month as number) - 1, day as number, (hour as number) + 4, (minute as number) || 0);
-}
 
 /** Tipos de notificación admin (booking flow). */
 const ADMIN_NOTIFICATION_PAYMENT_APPROVAL = 'PAYMENT_APPROVAL_REQUEST';
