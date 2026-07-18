@@ -712,9 +712,30 @@ Future<void> _bootstrap() async {
 }
 
 Future<void> _initNotificationsInBackground() async {
-  await LocalNotificationService.init();
-  await FcmService.init();
-  await LocalNotificationService.requestPermission();
+  // Cada paso en su propio try/catch — si uno falla (ej. el plugin de
+  // notificaciones locales no puede inicializar en un dispositivo puntual),
+  // no debe tumbar los demás ni quedar como una excepción sin capturar en
+  // este Future "unawaited" (eso disparaba una alerta de "crash" al agente
+  // de resolución de errores por algo que en realidad es degradación
+  // aislada — la app sigue funcionando, solo sin notificaciones locales).
+  try {
+    await LocalNotificationService.init();
+  } catch (e, st) {
+    debugPrint('LocalNotificationService.init failed: $e');
+    FcmService.reportErrorToAdmin('LocalNotificationService.init failed: $e', st.toString());
+  }
+  try {
+    await FcmService.init();
+  } catch (e, st) {
+    debugPrint('FcmService.init failed: $e');
+    FcmService.reportErrorToAdmin('FcmService.init failed: $e', st.toString());
+  }
+  try {
+    await LocalNotificationService.requestPermission();
+  } catch (e, st) {
+    debugPrint('LocalNotificationService.requestPermission failed: $e');
+    FcmService.reportErrorToAdmin('LocalNotificationService.requestPermission failed: $e', st.toString());
+  }
 }
 
 void main() async {
