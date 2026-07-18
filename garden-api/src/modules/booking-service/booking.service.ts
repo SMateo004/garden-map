@@ -2902,6 +2902,7 @@ export async function getBookingById(
               firstName: true,
               lastName: true,
               email: true,
+              phone: true,
               profilePicture: true,
             },
           },
@@ -3654,6 +3655,91 @@ export async function markServiceEndedByClient(
     ).catch(() => {});
 
     return bookingToResponse(updated);
+  });
+}
+
+/**
+ * El cuidador responde si acepta o no que el servicio ya terminó (tras
+ * markServiceEndedByClient). Si acepta, no hay nada que cambiar server-side
+ * — el reloj ya está congelado desde clientMarkedEndAt y el cuidador sigue
+ * el flujo normal de subir fotos + concludeService para cobrar. Si rechaza,
+ * se limpia clientMarkedEndAt para que el reloj vuelva a correr y el dueño
+ * pueda reintentar marcarlo más tarde si corresponde.
+ */
+export async function confirmServiceEndByCaregiver(
+  bookingId: string,
+  caregiverUserId: string,
+  accepted: boolean
+): Promise<BookingCreateResult> {
+  return prisma.$transaction(async (tx) => {
+    const profile = await tx.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
+    if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
+
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, caregiverId: profile.id },
+      include: { client: { select: { id: true } } },
+    });
+    if (!booking) throw new BookingNotFoundError(bookingId);
+    if (booking.status !== BookingStatus.IN_PROGRESS) {
+      throw new BadRequestError('El servicio debe estar en curso para responder esta confirmación');
+    }
+    if (!booking.clientMarkedEndAt) {
+      throw new BadRequestError('El dueño no marcó este servicio como terminado');
+    }
+
+    if (!accepted) {
+      await tx.booking.update({
+        where: { id: bookingId },
+        data: { clientMarkedEndAt: null },
+      });
+
+      await tx.notification.create({
+        data: {
+          userId: booking.clientId,
+          title: 'El cuidador no confirmó el fin del servicio',
+          message: `El cuidador indicó que el servicio con ${booking.petName ?? 'tu mascota'} todavía no terminó. El tiempo del servicio sigue corriendo normalmente — puedes volver a marcarlo cuando corresponda.`,
+          type: 'SYSTEM',
+        },
+      });
+      sendPushToUser(
+        booking.clientId,
+        'El cuidador no confirmó el fin del servicio',
+        'El servicio sigue en curso — el tiempo continúa corriendo con normalidad'
+      ).catch(() => {});
+
+      logger.info('Caregiver rejected client-marked end — clientMarkedEndAt cleared, timer resumed', { bookingId });
+    } else {
+      await tx.notification.create({
+        data: {
+          userId: booking.clientId,
+          title: 'El cuidador confirmó el fin del servicio',
+          message: 'Está subiendo sus fotos finales para cerrar el servicio.',
+          type: 'SYSTEM',
+        },
+      });
+      sendPushToUser(
+        booking.clientId,
+        'El cuidador confirmó el fin del servicio',
+        'Está subiendo sus fotos finales para cerrar el servicio'
+      ).catch(() => {});
+
+      logger.info('Caregiver confirmed client-marked end', { bookingId });
+    }
+
+    const io = getIO();
+    if (io) {
+      io.to(`booking:${bookingId}`).emit('service_end_confirmation', { bookingId, accepted });
+    }
+
+    const fresh = await tx.booking.findUniqueOrThrow({
+      where: { id: bookingId },
+      include: {
+        caregiver: { include: { user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, profilePicture: true } } } },
+        client: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, profilePicture: true } },
+        dispute: true,
+      },
+    });
+    return bookingToResponse(fresh);
   });
 }
 

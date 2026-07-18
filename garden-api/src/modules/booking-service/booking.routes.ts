@@ -228,6 +228,14 @@ router.post(
 
 /** CAREGIVER ACTIONS */
 
+/** POST /api/bookings/:id/confirm-end — el cuidador acepta o rechaza que el dueño marcó el servicio como terminado. */
+router.post(
+  '/:id/confirm-end',
+  authMiddleware,
+  requireRole('CAREGIVER'),
+  serviceExecutionController.confirmEnd
+);
+
 router.post(
   '/:id/rate-owner',
   authMiddleware,

@@ -315,6 +315,16 @@ export const confirmReceiptBodySchema = z.object({
 });
 export type ConfirmReceiptBody = z.infer<typeof confirmReceiptBodySchema>;
 
+/**
+ * POST /api/bookings/:id/confirm-end — el cuidador responde si acepta que el
+ * servicio ya terminó (tras clientMarkedEndAt). Si accepted=false, se revierte
+ * clientMarkedEndAt para que el reloj del servicio siga corriendo normalmente.
+ */
+export const confirmEndBodySchema = z.object({
+  accepted: z.boolean({ invalid_type_error: 'accepted debe ser true o false' }),
+});
+export type ConfirmEndBody = z.infer<typeof confirmEndBodySchema>;
+
 /** POST /api/bookings/:id/rate-owner — cuidador califica al dueño de mascota. */
 export const rateOwnerBodySchema = z.object({
   rating: z
@@ -328,8 +338,13 @@ export type RateOwnerBody = z.infer<typeof rateOwnerBodySchema>;
 
 /** POST /api/bookings/:id/event — cuidador registra evento durante el servicio. */
 export const addEventBodySchema = z.object({
+  // INCIDENT_RESOLVED faltaba acá — sin él, todo intento de resolver una
+  // emergencia (POST /event con ese type) fallaba con VALIDATION_ERROR antes
+  // de siquiera llegar a addServiceEvent() en booking.service.ts (que sí lo
+  // tenía permitido en ALLOWED_EVENT_TYPES). Bug pre-existente: el botón
+  // "Resolver emergencia" del cuidador nunca funcionó en producción.
   type: z.enum(
-    ['INCIDENT', 'ACCIDENT', 'ILLNESS', 'COMPLICATION', 'NOTE', 'PHOTO', 'WALK_UPDATE'],
+    ['INCIDENT', 'ACCIDENT', 'ILLNESS', 'COMPLICATION', 'NOTE', 'PHOTO', 'WALK_UPDATE', 'INCIDENT_RESOLVED'],
     { errorMap: () => ({ message: 'Tipo de evento inválido' }) }
   ),
   description: z

@@ -13,6 +13,7 @@ import {
   confirmReceiptBodySchema,
   rateOwnerBodySchema,
   addEventBodySchema,
+  confirmEndBodySchema,
 } from './booking.validation.js';
 import { BadRequestError } from '../../shared/errors.js';
 
@@ -164,6 +165,23 @@ export const markEndedByClient = asyncHandler(async (req: Request, res: Response
     const clientId = req.user!.userId;
 
     const booking = await bookingService.markServiceEndedByClient(bookingId, clientId);
+    res.json({ success: true, data: booking });
+});
+
+export const confirmEnd = asyncHandler(async (req: Request, res: Response) => {
+    const bookingId = req.params.id!;
+    const caregiverUserId = req.user!.userId;
+
+    const parsed = confirmEndBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+        throw new BadRequestError(parsed.error.errors[0]?.message ?? 'Datos inválidos', 'VALIDATION_ERROR');
+    }
+
+    const booking = await bookingService.confirmServiceEndByCaregiver(
+        bookingId,
+        caregiverUserId,
+        parsed.data.accepted
+    );
     res.json({ success: true, data: booking });
 });
 

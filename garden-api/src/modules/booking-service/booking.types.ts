@@ -44,6 +44,11 @@ export interface BookingCreateResult {
   serviceStartedAt?: string | null;
   serviceEndedAt?: string | null;
   clientMarkedEndAt?: string | null;
+  /** Momento en que se pausó el servicio por una emergencia (INCIDENT/ACCIDENT)
+   * sin resolver — null si no hay ninguna pausa activa en este momento. */
+  pausedAt?: string | null;
+  /** Minutos acumulados de pausas ya resueltas (no incluye una pausa activa en curso). */
+  totalPausedMinutes?: number;
   serviceEvents?: any[] | null;
   gpsTrack?: any[] | null;
   gpsDistance?: number | null;
@@ -141,6 +146,8 @@ export function bookingToResponse(b: any): BookingCreateResult {
     serviceStartedAt: b.serviceStartedAt?.toISOString() ?? null,
     serviceEndedAt: b.serviceEndedAt?.toISOString() ?? null,
     clientMarkedEndAt: b.clientMarkedEndAt?.toISOString() ?? null,
+    pausedAt: b.pausedAt?.toISOString() ?? null,
+    totalPausedMinutes: b.totalPausedMinutes ?? 0,
     serviceEvents: b.serviceEvents ?? [],
     gpsTrack: b.serviceTrackingData ?? [],
     gpsDistance: b.gpsDistance ?? null,
@@ -175,16 +182,24 @@ export function bookingToResponse(b: any): BookingCreateResult {
     if (additional.length > 0) res.additionalPets = additional;
   }
 
+  // Los teléfonos solo se exponen mientras hay una emergencia activa
+  // (incidente/accidente reportado y no resuelto — pausedAt != null mientras
+  // dure). Fuera de una emergencia no hay necesidad de que dueño y cuidador
+  // se llamen directamente; todo pasa por el chat in-app. (El panel de admin
+  // en admin.service.ts es un caso aparte y sigue exponiendo el teléfono
+  // siempre — no tocar eso.)
+  const hasActiveEmergency = b.pausedAt != null;
+
   if (b.caregiver) {
     res.caregiverName = `${b.caregiver.user.firstName} ${b.caregiver.user.lastName}`;
     res.caregiverPhoto = b.caregiver.profilePhoto || b.caregiver.user.profilePicture;
-    res.caregiverPhone = b.caregiver?.user?.phone ?? null;
+    res.caregiverPhone = hasActiveEmergency ? (b.caregiver?.user?.phone ?? null) : null;
   }
 
   if (b.client) {
     res.clientName = `${b.client.firstName} ${b.client.lastName}`;
     res.clientEmail = b.client.email;
-    res.clientPhone = b.client.phone;
+    res.clientPhone = hasActiveEmergency ? b.client.phone : null;
     res.clientPhoto = b.client.profilePicture;
   }
 

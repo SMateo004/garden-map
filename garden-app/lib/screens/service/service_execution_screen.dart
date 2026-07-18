@@ -36,8 +36,16 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   late AnimationController _pulseController;
   Timer? _serviceTimer;
   Timer? _photoRefreshTimer;
+  Timer? _caregiverRefreshTimer;
   Duration _elapsed = Duration.zero;
   List<Map<String, dynamic>> _serviceEvents = [];
+
+  // Confirmación del cuidador cuando el dueño marca "servicio terminado"
+  // (clientMarkedEndAt) — el diálogo bloqueante solo debe mostrarse una vez
+  // por cada marcado del dueño, no en loop cada vez que se refresca el booking.
+  final Set<String> _respondedEndMarks = {};
+  bool _endConfirmDialogShowing = false;
+  bool _isRespondingToEndConfirm = false;
 
   // Survey state — must be class-level to survive parent rebuilds (e.g. themeNotifier)
   int _surveyRating = 0;
@@ -112,6 +120,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     _pulseController.dispose();
     _serviceTimer?.cancel();
     _photoRefreshTimer?.cancel();
+    _caregiverRefreshTimer?.cancel();
     _surveyCommentController.dispose();
     _caregiverCommentController.dispose();
     _gpsStatusSub?.cancel();
@@ -181,14 +190,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             // First time — start the ticker and calibrate from server timestamp.
             _startTimer();
           } else {
-            // Timer already running — only recalibrate elapsed from server to prevent drift.
-            final startedAt = _booking?['serviceStartedAt'] as String?;
-            if (startedAt != null) {
-              final startTime = DateTime.tryParse(startedAt);
-              if (startTime != null) {
-                setState(() => _elapsed = DateTime.now().difference(startTime));
-              }
-            }
+            // Timer already running — only recalibrate elapsed from server to prevent drift
+            // (respetando pausa por emergencia, ver _computeElapsedNow).
+            setState(() => _elapsed = _computeElapsedNow());
           }
           // Start GPS monitoring for caregiver on PASEO
           if (widget.role == 'CAREGIVER' && _booking?['serviceType'] == 'PASEO') {
@@ -196,6 +200,17 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           }
           if (widget.role == 'CLIENT' && _photoRefreshTimer == null) {
             _photoRefreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _loadBooking());
+          }
+          // Refresco periódico para el cuidador — antes esta pantalla solo
+          // cargaba el booking una vez para el cuidador y nunca más, así que
+          // si el dueño marcaba "servicio terminado" (clientMarkedEndAt) o se
+          // resolvía una emergencia desde el panel de admin, el cuidador no se
+          // enteraba hasta salir y volver a entrar a la pantalla.
+          if (widget.role == 'CAREGIVER' && _caregiverRefreshTimer == null) {
+            _caregiverRefreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _loadBooking());
+          }
+          if (widget.role == 'CAREGIVER') {
+            _maybeShowEndConfirmDialog();
           }
           // GPS live info polling — cliente+PASEO, cada 15s
           if (widget.role == 'CLIENT' && _booking?['serviceType'] == 'PASEO' && _gpsInfoTimer == null) {
@@ -212,6 +227,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           _serviceTimer?.cancel();
           _photoRefreshTimer?.cancel();
           _photoRefreshTimer = null;
+          _caregiverRefreshTimer?.cancel();
+          _caregiverRefreshTimer = null;
           _gpsInfoTimer?.cancel();
           _gpsInfoTimer = null;
           GardenLiveActivity.instance.endActivity();
@@ -412,29 +429,65 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     }
   }
 
+  /// Recalcula `_elapsed` desde cero a partir de los timestamps del server en
+  /// vez de simplemente sumar 1s por tick — esto es lo que hace que el timer
+  /// respete la pausa por emergencia (_isServicePaused) y sea robusto a que
+  /// la app haya estado en background durante toda o parte de la pausa (un
+  /// `+= 1s` en un Timer.periodic no corre en background, así que al volver
+  /// igual habría que resincronizar; recalcular desde el server evita ambos
+  /// problemas de una vez).
+  ///
+  /// Fórmula: tiempo transcurrido desde el inicio del servicio, menos el
+  /// tiempo ya pausado por emergencias resueltas (totalPausedMinutes), menos
+  /// el tiempo de la pausa activa en curso (si la hay) — para esto último el
+  /// "reloj de pared" se congela en pausedAt en vez de seguir hasta ahora.
+  Duration _computeElapsedNow() {
+    final bk = _booking;
+    if (bk == null) return _elapsed;
+    final startedAtStr = bk['serviceStartedAt'] as String?;
+    final startTime = startedAtStr != null ? DateTime.tryParse(startedAtStr) : null;
+    if (startTime == null) return _elapsed;
+
+    final totalPausedMin = (bk['totalPausedMinutes'] as num?)?.toInt() ?? 0;
+    final pausedAtStr = bk['pausedAt'] as String?;
+    final pausedAt = pausedAtStr != null ? DateTime.tryParse(pausedAtStr) : null;
+    final clientMarkedEndAtStr = bk['clientMarkedEndAt'] as String?;
+    final clientMarkedEndAt = clientMarkedEndAtStr != null ? DateTime.tryParse(clientMarkedEndAtStr) : null;
+
+    // El reloj de pared se congela en el primero que ocurra entre: una
+    // emergencia activa (pausedAt) o el dueño marcando el servicio como
+    // terminado mientras se espera la confirmación del cuidador
+    // (clientMarkedEndAt) — ninguno de los dos debe seguir sumando tiempo
+    // visualmente aunque el reloj real siga corriendo.
+    DateTime? freezeAt = pausedAt;
+    if (clientMarkedEndAt != null && (freezeAt == null || clientMarkedEndAt.isBefore(freezeAt))) {
+      freezeAt = clientMarkedEndAt;
+    }
+    final wallClockEnd = freezeAt ?? DateTime.now();
+    var elapsed = wallClockEnd.difference(startTime) - Duration(minutes: totalPausedMin);
+    if (elapsed.isNegative) elapsed = Duration.zero;
+    return elapsed;
+  }
+
   void _startTimer() {
     _serviceTimer?.cancel();
-    DateTime? startTime;
     final startedAt = _booking?['serviceStartedAt'] as String?;
-    if (startedAt != null) {
-      startTime = DateTime.tryParse(startedAt);
-      if (startTime != null) {
-        _elapsed = DateTime.now().difference(startTime);
-      }
-    }
+    final startTime = startedAt != null ? DateTime.tryParse(startedAt) : null;
+    _elapsed = _computeElapsedNow();
 
     // Launch Live Activity / Android notification on first timer start
     _startLiveActivity(startTime ?? DateTime.now());
 
     _serviceTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
-        setState(() => _elapsed += const Duration(seconds: 1));
+        setState(() => _elapsed = _computeElapsedNow());
         // Update Live Activity timer every 10 s (stays within iOS budget)
         if (_elapsed.inSeconds % 10 == 0) {
           GardenLiveActivity.instance.updateTimer(_elapsed);
         }
-        // Photo reminders every 30s
-        if (_elapsed.inSeconds % 30 == 0 && widget.role == 'CAREGIVER') {
+        // Photo reminders every 30s — no tiene sentido recordarlas mientras
+        // el servicio está pausado por emergencia.
+        if (_elapsed.inSeconds % 30 == 0 && widget.role == 'CAREGIVER' && !_isServicePaused) {
           _checkPhotoReminders();
         }
       }
@@ -452,7 +505,77 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       role: widget.role,
       bookingId: widget.bookingId,
       startTime: startTime,
+      totalPaidDurationMinutes: _computeTotalPaidDurationMinutes(bk),
     );
+  }
+
+  /// Total paid duration in minutes — original booked duration plus any
+  /// already-approved & paid extension. Feeds the Live Activity's progress
+  /// bar goal (see [GardenLiveActivity.startActivity] /
+  /// [GardenLiveActivity.updateTotalPaidDuration]).
+  ///
+  /// PASEO / GUARDERIA are booked directly in minutes (`booking['duration']`,
+  /// already mutated server-side on extension confirm). HOSPEDAJE is booked
+  /// in nights — derived from `startDate`/`endDate` when available (accounts
+  /// for confirmed extensions extending `endDate`), falling back to
+  /// `totalDays × 24h`.
+  int _computeTotalPaidDurationMinutes([Map<String, dynamic>? booking]) {
+    final bk = booking ?? _booking;
+    if (bk == null) return 60;
+    final serviceType = bk['serviceType'] as String? ?? 'PASEO';
+    if (serviceType == 'HOSPEDAJE') {
+      final startStr = bk['startDate'] as String?;
+      final endStr = bk['endDate'] as String?;
+      final start = startStr != null ? DateTime.tryParse(startStr) : null;
+      final end = endStr != null ? DateTime.tryParse(endStr) : null;
+      if (start != null && end != null && end.isAfter(start)) {
+        return end.difference(start).inMinutes;
+      }
+      final totalDays = (bk['totalDays'] as num?)?.toInt() ?? 1;
+      return totalDays * 24 * 60;
+    }
+    // PASEO / GUARDERIA: booked duration is expressed directly in minutes.
+    return (bk['duration'] as num?)?.toInt() ?? 60;
+  }
+
+  /// true cuando el tiempo total pagado del servicio (reserva + extensiones
+  /// aprobadas) ya se cumplió — es decir, `DateTime.now()` superó
+  /// `serviceStartedAt + duración total pagada + tiempo pausado` (tanto el ya
+  /// acumulado de emergencias resueltas como el de una pausa activa en curso,
+  /// si la hay). Se usa para gatear el botón "Marcar servicio como terminado"
+  /// del dueño (punto 2) y para bloquear "Resolver emergencia" cuando el
+  /// tiempo ya se agotó con una emergencia sin resolver (punto 4).
+  bool get _isPaidServiceTimeUp {
+    final bk = _booking;
+    if (bk == null) return false;
+    final startedAtStr = bk['serviceStartedAt'] as String?;
+    final startTime = startedAtStr != null ? DateTime.tryParse(startedAtStr) : null;
+    if (startTime == null) return false;
+
+    final totalPaidMin = _computeTotalPaidDurationMinutes();
+    final totalPausedMin = (bk['totalPausedMinutes'] as num?)?.toInt() ?? 0;
+    final pausedAtStr = bk['pausedAt'] as String?;
+    final pausedAt = pausedAtStr != null ? DateTime.tryParse(pausedAtStr) : null;
+    final activePauseMin = pausedAt != null ? DateTime.now().difference(pausedAt).inMinutes : 0;
+
+    final deadline = startTime.add(Duration(minutes: totalPaidMin + totalPausedMin + activePauseMin));
+    return DateTime.now().isAfter(deadline);
+  }
+
+  /// Botón de "volver"/"cerrar" de la pantalla — usa `context.pop()` cuando
+  /// hay algo que popear en el Navigator (llegamos con context.push o
+  /// Navigator.push, típico al abrir desde una lista con un tap), pero cae a
+  /// una ruta explícita con context.go cuando no lo hay (llegamos con
+  /// context.go directo — desde el splash reanudando un servicio activo, o
+  /// desde una notificación push, ambos casos reemplazan el stack). Antes
+  /// siempre usaba context.pop() a secas, que no hacía nada visible en el
+  /// segundo caso — el botón de volver quedaba "roto" en la práctica.
+  void _exitServiceScreen() {
+    if (Navigator.of(context).canPop()) {
+      context.pop();
+    } else {
+      context.go(widget.role == 'CAREGIVER' ? '/caregiver/home' : '/my-bookings-tab');
+    }
   }
 
   @override
@@ -480,7 +603,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             elevation: 0,
             leading: IconButton(
               icon: Icon(Icons.close_rounded, color: textColor),
-              onPressed: () => context.pop(),
+              onPressed: _exitServiceScreen,
             ),
             title: Text(
               _getAppBarTitle(status),
@@ -497,7 +620,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     ),
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Row(children: [
-                      IconButton(icon: Icon(Icons.close_rounded, color: textColor, size: 18), onPressed: () => context.pop()),
+                      IconButton(icon: Icon(Icons.close_rounded, color: textColor, size: 18), onPressed: _exitServiceScreen),
                       const SizedBox(width: 6),
                       Text(_getAppBarTitle(status), style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
                     ]),
@@ -1290,6 +1413,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               onConfirmed: () async {
                 await _loadBooking();
                 await _loadHospedajeExtensionAvailability();
+                // Extension confirmed & paid — update the Live Activity's
+                // progress-bar goal right away.
+                await GardenLiveActivity.instance
+                    .updateTotalPaidDuration(_computeTotalPaidDurationMinutes());
               },
             ),
           ),
@@ -1467,6 +1594,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               onConfirmed: () async {
                 await _loadBooking();
                 await _loadExtensionAvailability();
+                // Extension confirmed & paid — update the Live Activity's
+                // progress-bar goal right away.
+                await GardenLiveActivity.instance
+                    .updateTotalPaidDuration(_computeTotalPaidDurationMinutes());
               },
             ),
           ),
@@ -2340,46 +2471,6 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     const SizedBox(height: 20),
                   ],
 
-                  // ── Marcar servicio como terminado (dueño) ──────────────────
-                  if (_booking?['clientMarkedEndAt'] == null) ...[
-                    OutlinedButton.icon(
-                      onPressed: _markingEnd ? null : _confirmMarkServiceEnded,
-                      icon: _markingEnd
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.success))
-                          : const Icon(Icons.check_circle_outline_rounded, size: 18),
-                      label: const Text('Marcar servicio como terminado', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: GardenColors.success,
-                        side: const BorderSide(color: GardenColors.success),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.md)),
-                        minimumSize: const Size(double.infinity, 48),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ] else ...[
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: GardenColors.success.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(GardenRadius.md),
-                        border: Border.all(color: GardenColors.success.withValues(alpha: 0.25)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Marcaste el servicio como terminado. Esperando que el cuidador suba sus fotos finales.',
-                              style: TextStyle(color: textColor, fontSize: 12.5, height: 1.4),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-
                   // ── Fotos del servicio ──────────────────────────────────────
                   if (_serviceEvents.isNotEmpty) ...[
                     Row(
@@ -2507,6 +2598,69 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       ),
                     ),
                     const SizedBox(height: 20),
+                  ],
+
+                  // ── Marcar servicio como terminado (dueño) ──────────────────
+                  // Al final de la columna (prioridad más baja) — gateado por
+                  // tiempo: solo aparece cuando el tiempo total pagado
+                  // (reserva + extensiones) ya se cumplió, antes de eso no
+                  // tiene sentido que el dueño lo marque como terminado.
+                  if (_booking?['clientMarkedEndAt'] == null && !_isPaidServiceTimeUp) ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: (isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated),
+                        borderRadius: BorderRadius.circular(GardenRadius.md),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.schedule_rounded, color: subtextColor, size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Podrás marcar el servicio como terminado cuando se cumpla el tiempo contratado.',
+                              style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else if (_booking?['clientMarkedEndAt'] == null) ...[
+                    OutlinedButton.icon(
+                      onPressed: _markingEnd ? null : _confirmMarkServiceEnded,
+                      icon: _markingEnd
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.success))
+                          : const Icon(Icons.check_circle_outline_rounded, size: 18),
+                      label: const Text('Marcar servicio como terminado', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: GardenColors.success,
+                        side: const BorderSide(color: GardenColors.success),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.md)),
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                    ),
+                  ] else ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: GardenColors.success.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(GardenRadius.md),
+                        border: Border.all(color: GardenColors.success.withValues(alpha: 0.25)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.check_circle_rounded, color: GardenColors.success, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Marcaste el servicio como terminado. Esperando que el cuidador suba sus fotos finales.',
+                              style: TextStyle(color: textColor, fontSize: 12.5, height: 1.4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -2734,15 +2888,42 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             ],
                           ),
                           const SizedBox(height: 10),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error, foregroundColor: Colors.white),
-                              onPressed: _resolveIncidentCaregiver,
-                              icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
-                              label: const Text('Resolver emergencia'),
+                          // Si ya se pasó el tiempo pagado del servicio Y la
+                          // emergencia sigue sin resolver, ya no se puede
+                          // "solucionar" desde la app — hace falta que un
+                          // admin intervenga. El chat sigue disponible siempre
+                          // (no se deshabilita por esto, ver Row de Acciones).
+                          if (_isPaidServiceTimeUp) ...[
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.04),
+                                borderRadius: BorderRadius.circular(GardenRadius.sm),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(Icons.support_agent_rounded, color: GardenColors.error, size: 16),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'El tiempo del servicio ya se cumplió con la emergencia sin resolver. Contacta a soporte de GARDEN para que un administrador la resuelva — puedes seguir usando el chat mientras tanto.',
+                                      style: TextStyle(color: subtextColor, fontSize: 11.5, height: 1.4),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
+                          ] else
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error, foregroundColor: Colors.white),
+                                onPressed: _resolveIncidentCaregiver,
+                                icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                                label: const Text('Resolver emergencia'),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -4250,17 +4431,119 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
   bool get _isServicePaused => _booking?['pausedAt'] != null;
 
+  /// Muestra el diálogo bloqueante de confirmación al cuidador cuando el
+  /// dueño marcó el servicio como terminado (clientMarkedEndAt) y el cuidador
+  /// todavía no respondió a esta marca específica — usamos el timestamp como
+  /// clave en `_respondedEndMarks` para no repetir el diálogo en loop en cada
+  /// refresco (cada 10s, ver _caregiverRefreshTimer) ni volver a mostrarlo si
+  /// el cuidador ya respondió, pero sí mostrarlo de nuevo si el dueño lo marca
+  /// una segunda vez tras un rechazo anterior (nuevo timestamp).
+  void _maybeShowEndConfirmDialog() {
+    final markedAt = _booking?['clientMarkedEndAt'] as String?;
+    if (markedAt == null) return;
+    if (_respondedEndMarks.contains(markedAt)) return;
+    if (_endConfirmDialogShowing) return;
+    _showEndConfirmDialog(markedAt);
+  }
+
+  void _showEndConfirmDialog(String markedAt) {
+    _endConfirmDialogShowing = true;
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => PopScope(
+          canPop: false,
+          child: AlertDialog(
+            backgroundColor: bg,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.xl)),
+            title: Text('¿Finalizamos el servicio?', style: TextStyle(color: textColor, fontWeight: FontWeight.w800)),
+            content: Text(
+              'El dueño marcó que el servicio ya terminó. ¿Estás de acuerdo? Si dices que no, el servicio sigue en curso con normalidad.',
+              style: TextStyle(color: subtextColor, fontSize: 13, height: 1.4),
+            ),
+            actions: [
+              TextButton(
+                onPressed: _isRespondingToEndConfirm
+                    ? null
+                    : () async {
+                        setDialogState(() {});
+                        await _respondToEndConfirm(markedAt, false, ctx);
+                      },
+                child: const Text('No, todavía no'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: GardenColors.success, foregroundColor: Colors.white),
+                onPressed: _isRespondingToEndConfirm
+                    ? null
+                    : () async {
+                        setDialogState(() {});
+                        await _respondToEndConfirm(markedAt, true, ctx);
+                      },
+                child: const Text('Sí, finalizamos'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ).then((_) => _endConfirmDialogShowing = false);
+  }
+
+  Future<void> _respondToEndConfirm(String markedAt, bool accepted, BuildContext dialogContext) async {
+    setState(() => _isRespondingToEndConfirm = true);
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/confirm-end'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({'accepted': accepted}),
+      );
+      final data = jsonDecode(res.body);
+      _respondedEndMarks.add(markedAt);
+      if (data['success'] == true && mounted) {
+        setState(() {
+          _booking = data['data'] as Map<String, dynamic>;
+          _elapsed = _computeElapsedNow();
+        });
+      }
+    } catch (_) {
+      // Si falla la request, igual cerramos el diálogo — el cuidador puede
+      // seguir usando la pantalla con normalidad y el próximo refresco (10s)
+      // volverá a mostrar el diálogo si clientMarkedEndAt sigue activo, sin
+      // marcar esta respuesta como ya atendida.
+    } finally {
+      if (mounted) setState(() => _isRespondingToEndConfirm = false);
+      if (dialogContext.mounted) Navigator.pop(dialogContext);
+    }
+  }
+
   Future<void> _resolveIncidentCaregiver() async {
     try {
       final res = await http.post(
         Uri.parse('$_baseUrl/bookings/${widget.bookingId}/event'),
         headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
-        body: jsonEncode({'type': 'INCIDENT_RESOLVED'}),
+        // description es obligatoria server-side para todo evento (auditoría) —
+        // antes esta request no la mandaba y siempre fallaba con
+        // VALIDATION_ERROR (silenciado por el catch de abajo), así que
+        // "Resolver emergencia" nunca funcionaba de verdad.
+        body: jsonEncode({'type': 'INCIDENT_RESOLVED', 'description': 'Emergencia resuelta por el cuidador'}),
       );
       final data = jsonDecode(res.body);
       if (data['success'] == true && mounted) {
+        // Usar la respuesta completa del server (no solo poner pausedAt en
+        // null a mano) — así totalPausedMinutes también queda actualizado de
+        // inmediato y el timer no "salta" al recalcularse (ver _computeElapsedNow).
         setState(() {
-          if (_booking != null) _booking!['pausedAt'] = null;
+          if (data['data'] != null) {
+            _booking = data['data'] as Map<String, dynamic>;
+          } else if (_booking != null) {
+            _booking!['pausedAt'] = null;
+          }
+          _elapsed = _computeElapsedNow();
         });
         _showResolvedChoiceDialog();
       }
@@ -5199,7 +5482,16 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       final data = jsonDecode(response.body);
       if (!mounted) return;
       if (data['success'] == true) {
-        await _loadBooking();
+        // Actualizar el flag localmente de inmediato en vez de depender de
+        // _loadBooking() (una carrera contra el rebuild de _buildBody podía
+        // dejar la encuesta visible aunque la calificación ya se había
+        // enviado) — mismo patrón que _skipCaregiverRating, que sí funciona.
+        setState(() {
+          if (data['data'] != null) {
+            _booking = data['data'] as Map<String, dynamic>;
+          }
+          if (_booking != null) _booking!['caregiverRated'] = true;
+        });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
