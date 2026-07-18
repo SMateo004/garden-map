@@ -14,6 +14,7 @@ import * as paymentQrService from '../../services/payment-qr.service.js';
 import { uploadImage } from '../../services/storage.service.js';
 import { assertImageBuffer } from '../../shared/mime-validation.js';
 import { auditLog } from '../../services/audit.service.js';
+import { emitWalletUpdated } from '../../services/socket.service.js';
 
 const paymentQrUpload = multer({
   storage: multer.memoryStorage(),
@@ -554,6 +555,7 @@ export const completeWithdrawal = asyncHandler(async (req: Request, res: Respons
   }
 
   auditLog({ userId: req.user!.userId, action: 'WITHDRAWAL_COMPLETED', entity: 'WalletTransaction', entityId: id, details: { amount: notifyAmount!, caregiverId: notifyUserId! }, ip: req.ip });
+  emitWalletUpdated(notifyUserId!);
   res.json({ success: true, data: { status: 'COMPLETED' } });
 });
 

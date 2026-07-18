@@ -101,6 +101,14 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
         const connUserId = socket.data.userId as string;
         logger.info('Socket connected', { userId: connUserId });
 
+        // Sala personal del usuario — permite emitir eventos dirigidos (ej.
+        // wallet_updated) sin depender de que el usuario esté viendo un booking
+        // en particular. A diferencia de `booking:${id}`, esta sala no requiere
+        // join explícito del cliente: se valida sola porque el JWT ya identificó
+        // al usuario en el middleware de arriba (io.use), así que unirlo acá es
+        // seguro (nadie más puede recibir los eventos de OTRO userId).
+        socket.join(`user:${connUserId}`);
+
         // Presencia: registrar este socket como conectado para el usuario y
         // cancelar cualquier timer de "offline" pendiente (reconexión rápida).
         if (!onlineSockets.has(connUserId)) onlineSockets.set(connUserId, new Set());
@@ -283,4 +291,15 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
 
 export function getIO(): SocketServer | null {
     return io;
+}
+
+// Emite una señal de "tu billetera cambió" al usuario dueño del balance
+// afectado (ganancia liberada, reembolso acreditado, retiro aprobado, etc).
+// El frontend usa esto solo como disparador para refrescar GET /wallet — no
+// mandamos el balance nuevo acá para no duplicar la fuente de verdad (que
+// siempre es un GET fresco a la API, nunca el payload de un socket).
+// No-op seguro si el socket server no está inicializado (ej. en tests).
+export function emitWalletUpdated(userId: string): void {
+    if (!io) return;
+    io.to(`user:${userId}`).emit('wallet_updated', {});
 }

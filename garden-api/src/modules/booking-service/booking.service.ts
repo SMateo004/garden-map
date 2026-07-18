@@ -23,7 +23,7 @@ import { auditLog } from '../../services/audit.service.js';
 import * as notificationService from '../../services/notification.service.js';
 import { blockchainService } from '../../services/blockchain.service.js';
 import { sendPushToUser, sendPushToAdmins } from '../../services/firebase.service.js';
-import { getIO } from '../../services/socket.service.js';
+import { getIO, emitWalletUpdated } from '../../services/socket.service.js';
 import * as sipService from '../../services/sip.service.js';
 import * as paymentQrService from '../../services/payment-qr.service.js';
 import { env } from '../../config/env.js';
@@ -3940,6 +3940,7 @@ export async function confirmReceiptByClient(
 
     sendPushToUser(caregiverUserId, '¡Pago liberado! 💸', `Recibiste el pago por el servicio de ${booking.petName}. Revisa tu billetera.`).catch(() => {});
     notificationService.onRatingReceived(bookingId, rating, comment).catch(() => {});
+    emitWalletUpdated(caregiverUserId);
 
     // Create Review natively
     await tx.review.create({
@@ -4060,6 +4061,7 @@ export async function autoReleasePayment(
       '💸 Pago liberado automáticamente',
       `El pago de Bs ${amount.toFixed(2)} por el servicio de ${booking.petName} fue liberado (el cliente no dejó reseña).`
     ).catch(() => {});
+    emitWalletUpdated(caregiverUserIdAR);
   });
 
   // Blockchain: solo finalizar si aún no tiene txHash (idempotencia — evita doble registro)

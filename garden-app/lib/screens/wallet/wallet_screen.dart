@@ -7,6 +7,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../../theme/garden_theme.dart';
 import '../../utils/garden_banks.dart';
 import '../../services/auth_state.dart';
@@ -26,6 +27,15 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   bool _uploadingQr = false;
   bool _switchingMethod = false;
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
+
+  // Socket liviano solo para escuchar `wallet_updated` (ganancia liberada,
+  // reembolso acreditado, retiro aprobado) y refrescar la billetera al
+  // instante — antes solo se recargaba en initState o con pull-to-refresh,
+  // así que el balance y el historial quedaban desactualizados hasta que el
+  // usuario reabría la app. No se reutiliza ChatService porque esta pantalla
+  // no necesita mensajería, solo la conexión + un listener puntual; se
+  // conecta y desconecta junto con el ciclo de vida de esta pantalla.
+  IO.Socket? _walletSocket;
 
   /// Modalidad de retiro elegida: BANK_TRANSFER (default) o QR_TRANSFER.
   String get _withdrawalMethod => _walletData?['withdrawalMethod'] as String? ?? 'BANK_TRANSFER';
@@ -78,6 +88,8 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   void dispose() {
     _cardPageController.dispose();
     _flipController.dispose();
+    _walletSocket?.disconnect();
+    _walletSocket?.dispose();
     super.dispose();
   }
 
@@ -88,8 +100,39 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
     if (_token.isNotEmpty) {
       await _loadWallet();
       if (_role == 'CLIENT') _loadDonorCard();
+      _connectWalletSocket();
     } else {
       setState(() => _isLoading = false);
+    }
+  }
+
+  /// Conecta al socket del backend y escucha `wallet_updated` — el backend la
+  /// emite a la sala personal `user:${userId}` (a la que el socket se une
+  /// automáticamente al autenticarse) apenas se libera un pago, se acredita
+  /// un reembolso o se aprueba un retiro. No mandamos el balance nuevo por el
+  /// socket a propósito — al recibir la señal simplemente disparamos
+  /// `_loadWallet()`, que es la única fuente de verdad real (GET /wallet), así
+  /// el balance de arriba y el historial de abajo quedan sincronizados porque
+  /// ambos salen de la misma respuesta.
+  void _connectWalletSocket() {
+    try {
+      final wsUrl = _baseUrl.replaceAll('/api', '');
+      _walletSocket = IO.io(wsUrl, <String, dynamic>{
+        'transports': ['polling', 'websocket'],
+        'autoConnect': false,
+        'auth': {'token': _token},
+        'timeout': 10000,
+      });
+      _walletSocket!.onConnect((_) => debugPrint('Wallet: Socket connected'));
+      _walletSocket!.onDisconnect((_) => debugPrint('Wallet: Socket disconnected'));
+      _walletSocket!.onConnectError((data) => debugPrint('Wallet: Connect error: $data'));
+      _walletSocket!.on('wallet_updated', (_) {
+        if (!mounted) return;
+        _loadWallet();
+      });
+      _walletSocket!.connect();
+    } catch (e) {
+      debugPrint('Wallet: Failed to initialize socket: $e');
     }
   }
 
@@ -836,11 +879,51 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                 children: [
                   Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2)))),
                   const SizedBox(height: 20),
-                  Text('Solicitar retiro', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 12),
-                  Text('Se enviará a: $destinationLabel',
-                      style: TextStyle(color: subtextColor, fontSize: 12, fontStyle: FontStyle.italic)),
+                  Row(
+                    children: [
+                      Container(
+                        width: 36, height: 36,
+                        decoration: BoxDecoration(color: GardenColors.success.withValues(alpha: 0.12), shape: BoxShape.circle),
+                        child: const Icon(Icons.lock_rounded, color: GardenColors.success, size: 18),
+                      ),
+                      const SizedBox(width: 10),
+                      Text('Solicitar retiro', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // ── Destino del dinero, en tarjeta propia para que quede claro
+                  // e inequívoco a dónde va el pago antes de pedir el monto ──
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: GardenColors.success.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: GardenColors.success.withValues(alpha: 0.25)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _withdrawalMethod == 'QR_TRANSFER' ? Icons.qr_code_2_rounded : Icons.account_balance_rounded,
+                          color: GardenColors.success, size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('El dinero se enviará a', style: TextStyle(color: subtextColor, fontSize: 11)),
+                              Text(destinationLabel,
+                                  style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 20),
+                  Text('Monto a retirar', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
                   // Monto
                   TextField(
                     controller: amountController,
@@ -857,7 +940,24 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 14),
+                  // ── Nota de confianza — el pedido explícito del dueño de la
+                  // plataforma es que esta parte transmita más seguridad, dado
+                  // que la gente es muy sensible con su dinero.
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.verified_user_rounded, color: subtextColor.withValues(alpha: 0.7), size: 14),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Tus datos de cobro están protegidos y solo se usan para procesar este retiro.',
+                          style: TextStyle(color: subtextColor, fontSize: 11),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
                   GardenButton(
                     label: isSubmitting ? 'Enviando...' : 'Confirmar solicitud',
                     loading: isSubmitting,
@@ -881,11 +981,30 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                       final confirmed = await showDialog<bool>(
                         context: context,
                         builder: (dCtx) => GardenGlassDialog(
-                          title: const Text('¿Confirmar retiro?'),
-                          content: Text(
-                            'Se solicitará el retiro de Bs ${amount.toStringAsFixed(2)} '
-                            'a $destinationLabel. '
-                            'El proceso puede tardar 1-3 días hábiles.',
+                          title: const Row(
+                            children: [
+                              Icon(Icons.lock_rounded, color: GardenColors.success, size: 18),
+                              SizedBox(width: 8),
+                              Text('¿Confirmar retiro?'),
+                            ],
+                          ),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Vas a retirar Bs ${amount.toStringAsFixed(2)} a:',
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                destinationLabel,
+                                style: const TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'Revisa que el destino sea correcto — el proceso puede tardar 1-3 días hábiles.',
+                              ),
+                            ],
                           ),
                           actions: [
                             TextButton(
@@ -987,9 +1106,44 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                 children: [
                   Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2)))),
                   const SizedBox(height: 20),
-                  Text('Datos de cobro', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 4),
-                  Text('Estos datos se usan para depositar tus ganancias.', style: TextStyle(color: subtextColor, fontSize: 12)),
+                  Row(
+                    children: [
+                      Container(
+                        width: 36, height: 36,
+                        decoration: BoxDecoration(color: GardenColors.success.withValues(alpha: 0.12), shape: BoxShape.circle),
+                        child: const Icon(Icons.lock_rounded, color: GardenColors.success, size: 18),
+                      ),
+                      const SizedBox(width: 10),
+                      Text('Datos de cobro', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // ── Nota de confianza — el usuario pidió explícitamente que
+                  // este formulario transmita más seguridad al pedir datos
+                  // bancarios/de billetera, porque la gente es muy sensible
+                  // con su dinero.
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: GardenColors.success.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: GardenColors.success.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.shield_outlined, color: GardenColors.success, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Solo se usan para depositar tus ganancias — nunca se comparten con otros usuarios ni se muestran en tu perfil público.',
+                            style: TextStyle(color: subtextColor, fontSize: 12, height: 1.3),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 20),
 
                   // ── Selector de banco/billetera ──
@@ -1063,7 +1217,19 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                     onPressed: () async {
                       if (selectedBankName.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Selecciona un banco o billetera')),
+                          const SnackBar(content: Text('Selecciona un banco o billetera'), backgroundColor: GardenColors.error),
+                        );
+                        return;
+                      }
+                      if (bankAccountController.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(isWallet ? 'Ingresa tu número de teléfono' : 'Ingresa tu número de cuenta'), backgroundColor: GardenColors.error),
+                        );
+                        return;
+                      }
+                      if (bankHolderController.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Ingresa el nombre del titular de la cuenta'), backgroundColor: GardenColors.error),
                         );
                         return;
                       }
@@ -1085,14 +1251,34 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                           await _loadWallet();
                           if (mounted) {
                             ScaffoldMessenger.of(this.context).showSnackBar(
-                              const SnackBar(content: Text('Datos de cobro guardados'), backgroundColor: GardenColors.success),
+                              const SnackBar(
+                                content: Row(
+                                  children: [
+                                    Icon(Icons.verified_rounded, color: Colors.white, size: 20),
+                                    SizedBox(width: 10),
+                                    Expanded(child: Text('Datos de cobro guardados de forma segura')),
+                                  ],
+                                ),
+                                backgroundColor: GardenColors.success,
+                                behavior: SnackBarBehavior.floating,
+                              ),
                             );
                           }
                         } else {
                           setSheet(() => isSaving = false);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(data['error']?['message'] ?? 'No se pudieron guardar tus datos. Intenta de nuevo.'), backgroundColor: GardenColors.error),
+                            );
+                          }
                         }
                       } catch (e) {
                         setSheet(() => isSaving = false);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Error de conexión. Intenta de nuevo.'), backgroundColor: GardenColors.error),
+                          );
+                        }
                       }
                     },
                   ),
