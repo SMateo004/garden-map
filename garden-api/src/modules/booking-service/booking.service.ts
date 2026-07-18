@@ -224,6 +224,9 @@ export async function createBooking(
         pricePerGuarderia: true,
         servicesOffered: true,
         maxPets: true,
+        maxPetsPaseo: true,
+        maxPetsHospedaje: true,
+        maxPetsGuarderia: true,
         sizesAccepted: true,
         animalTypes: true,
         acceptAggressive: true,
@@ -241,8 +244,15 @@ export async function createBooking(
       );
     }
 
-    // Validate pet count against caregiver's maxPets capacity
-    const caregiverMaxPets = caregiver.maxPets ?? 1;
+    // Validate pet count against caregiver's capacity — por tipo de servicio,
+    // con fallback al maxPets legacy para perfiles sin configurar los campos
+    // específicos.
+    const maxPetsByService = body.serviceType === ServiceType.HOSPEDAJE
+      ? caregiver.maxPetsHospedaje
+      : body.serviceType === ServiceType.GUARDERIA
+        ? caregiver.maxPetsGuarderia
+        : caregiver.maxPetsPaseo;
+    const caregiverMaxPets = maxPetsByService ?? caregiver.maxPets ?? 1;
     if (uniquePetIds.length > caregiverMaxPets) {
       throw new BadRequestError(
         `Este cuidador acepta como máximo ${caregiverMaxPets} mascota${caregiverMaxPets > 1 ? 's' : ''} simultánea${caregiverMaxPets > 1 ? 's' : ''}. Has seleccionado ${uniquePetIds.length}.`,
@@ -442,7 +452,8 @@ export async function createBooking(
         (body as any).timeSlot,
         (body as any).startTime,
         (body as any).duration,
-        petCount
+        petCount,
+        'GUARDERIA'
       );
     } else {
       const walkDays = (body as any).walkDays as Array<{ date: string; timeSlot: string; startTime?: string }> | undefined;
@@ -456,7 +467,8 @@ export async function createBooking(
             day.timeSlot as any,
             day.startTime,
             (body as any).duration,
-            petCount
+            petCount,
+            'PASEO'
           );
         }
       } else {
@@ -467,7 +479,8 @@ export async function createBooking(
           (body as any).timeSlot,
           (body as any).startTime,
           (body as any).duration,
-          petCount
+          petCount,
+          'PASEO'
         );
       }
     }
@@ -793,12 +806,15 @@ async function assertHospedajeAvailability(
   // WAITING_CAREGIVER_APPROVAL, PENDING_MG, o PENDING_PAYMENT reciente (<15 min).
   const expirationDate = new Date(Date.now() - 15 * 60 * 1000);
 
-  // Fetch maxPets to determine how many simultaneous bookings are allowed
+  // Fetch maxPetsHospedaje (capacidad configurable por tipo de servicio) para
+  // determinar cuántas reservas simultáneas de HOSPEDAJE se permiten. Fallback
+  // al maxPets legacy (un solo número para los tres tipos) para perfiles que
+  // todavía no configuraron el campo específico.
   const profileForMaxPets = await tx.caregiverProfile.findUnique({
     where: { id: caregiverId },
-    select: { maxPets: true },
+    select: { maxPetsHospedaje: true, maxPets: true },
   });
-  const maxPets = profileForMaxPets?.maxPets ?? 1;
+  const maxPets = profileForMaxPets?.maxPetsHospedaje ?? profileForMaxPets?.maxPets ?? 1;
 
   // For maxPets > 1, we need to check per-day capacity, not just total count.
   // Find all overlapping bookings and count how many cover each date.
@@ -854,7 +870,8 @@ async function assertPaseoAvailability(
   timeSlot: TimeSlot,
   startTime?: string | null,
   duration?: number | null,
-  newPetCount = 1
+  newPetCount = 1,
+  serviceType: 'PASEO' | 'GUARDERIA' = 'PASEO'
 ): Promise<void> {
   const date = new Date(walkDate);
 
@@ -871,11 +888,17 @@ async function assertPaseoAvailability(
 
   const profile = await tx.caregiverProfile.findUnique({
     where: { id: caregiverId },
-    select: { defaultAvailabilitySchedule: true, maxPets: true },
+    select: { defaultAvailabilitySchedule: true, maxPets: true, maxPetsPaseo: true, maxPetsGuarderia: true },
   });
   const defaultSchedule = (profile?.defaultAvailabilitySchedule as Record<string, unknown>) ?? {};
   const defaultBlocks = defaultSchedule['paseoTimeBlocks'] as Record<string, boolean> | undefined;
-  const maxPets = profile?.maxPets ?? 1;
+  // Capacidad por tipo de servicio — esta función atiende tanto PASEO como
+  // GUARDERIA, cada una con su propio límite configurable. Fallback al
+  // maxPets legacy para perfiles que todavía no configuraron los campos
+  // específicos.
+  const maxPets = (serviceType === 'GUARDERIA' ? profile?.maxPetsGuarderia : profile?.maxPetsPaseo)
+    ?? profile?.maxPets
+    ?? 1;
 
   const avail = await tx.availability.findUnique({
     where: {
@@ -4378,7 +4401,8 @@ export async function resolveSlotConflict(
         newData.newTimeSlot as TimeSlot,
         null,
         null,
-        booking.petCount
+        booking.petCount,
+        'PASEO'
       );
       updateData.walkDate = new Date(newData.newWalkDate);
       updateData.timeSlot = newData.newTimeSlot;

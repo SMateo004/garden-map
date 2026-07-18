@@ -76,7 +76,11 @@ export interface PatchCaregiverProfileBody {
   clientPetsSleep?: any;
   hoursAlone?: number;
   workFromHome?: boolean;
+  /** @deprecated usar maxPetsPaseo/maxPetsHospedaje/maxPetsGuarderia */
   maxPets?: number;
+  maxPetsPaseo?: number;
+  maxPetsHospedaje?: number;
+  maxPetsGuarderia?: number;
   oftenOut?: boolean;
   typicalDay?: string;
   ciAnversoUrl?: string;

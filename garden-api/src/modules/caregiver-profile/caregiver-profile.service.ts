@@ -302,6 +302,11 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.hoursAlone !== undefined) updateData.hoursAlone = body.hoursAlone;
   if (body.workFromHome !== undefined) updateData.workFromHome = body.workFromHome;
   if (body.maxPets !== undefined) updateData.maxPets = body.maxPets;
+  // Capacidad por tipo de servicio — mínimo 1 (nunca 0 o negativo, dejaría al
+  // cuidador/empresa sin poder recibir ninguna reserva de ese tipo).
+  if (body.maxPetsPaseo !== undefined) updateData.maxPetsPaseo = Math.max(1, Math.floor(body.maxPetsPaseo));
+  if (body.maxPetsHospedaje !== undefined) updateData.maxPetsHospedaje = Math.max(1, Math.floor(body.maxPetsHospedaje));
+  if (body.maxPetsGuarderia !== undefined) updateData.maxPetsGuarderia = Math.max(1, Math.floor(body.maxPetsGuarderia));
   if (body.oftenOut !== undefined) updateData.oftenOut = body.oftenOut;
   if (body.typicalDay !== undefined) updateData.typicalDay = body.typicalDay;
   if (body.ciAnversoUrl !== undefined) updateData.ciAnversoUrl = ensureAbsoluteUrl(body.ciAnversoUrl) ?? null;

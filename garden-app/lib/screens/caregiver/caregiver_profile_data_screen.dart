@@ -117,7 +117,14 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   bool _hasYard = false;
   bool _allowsLargePets = false;
   bool _allowsMultiplePets = false;
-  int _maxPets = 1;
+  // Capacidad máxima de reservas simultáneas — configurable por tipo de
+  // servicio (antes era un solo número [1,2,3] para los tres servicios, y
+  // además se guardaba solo dentro de serviceDetails.maxPets, un JSON que el
+  // backend nunca sincronizaba con la columna real usada al validar
+  // capacidad — el límite configurado nunca se aplicaba de verdad).
+  int _maxPetsPaseo = 1;
+  int _maxPetsHospedaje = 1;
+  int _maxPetsGuarderia = 1;
   List<String> _acceptedPetTypes = [];
   List<String> _acceptedSizes = [];
   bool _weekdays = true;
@@ -265,7 +272,13 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     _hasYard = profile['hasYard'] ?? false;
     _allowsLargePets = details['allowsLargePets'] ?? false;
     _allowsMultiplePets = details['allowsMultiplePets'] ?? false;
-    _maxPets = details['maxPets'] ?? 1;
+    // Top-level (columnas reales, no serviceDetails) — con fallback al
+    // maxPets legacy de serviceDetails para perfiles guardados antes de
+    // este cambio, para no resetear a 1 lo que el cuidador ya había puesto.
+    final legacyMaxPets = (profile['maxPets'] as num?)?.toInt() ?? (details['maxPets'] as num?)?.toInt() ?? 1;
+    _maxPetsPaseo = (profile['maxPetsPaseo'] as num?)?.toInt() ?? legacyMaxPets;
+    _maxPetsHospedaje = (profile['maxPetsHospedaje'] as num?)?.toInt() ?? legacyMaxPets;
+    _maxPetsGuarderia = (profile['maxPetsGuarderia'] as num?)?.toInt() ?? legacyMaxPets;
     // Prioridad: campo animalTypes del DB (fuente de verdad para el marketplace)
     // Fallback: serviceDetails.acceptedPetTypes (legacy)
     final dbAnimalTypes = List<String>.from(profile['animalTypes'] ?? []);
@@ -582,6 +595,15 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         'requireMeetAndGreet': _requireMeetAndGreet,
         'sizesAccepted': _acceptedSizes,
         'animalTypes': _acceptedPetTypes,
+        // Top-level, no dentro de serviceDetails — así el backend los guarda
+        // en las columnas reales que usa la validación de capacidad al
+        // crear una reserva (ver booking.service.ts assertPaseoAvailability/
+        // assertHospedajeAvailability). Solo se manda el del servicio que
+        // el cuidador realmente ofrece, para no pisar con "1" un servicio
+        // que ni siquiera tiene habilitado.
+        if (offersPaseo) 'maxPetsPaseo': _maxPetsPaseo,
+        if (offersHospedaje) 'maxPetsHospedaje': _maxPetsHospedaje,
+        if (offersGuarderia) 'maxPetsGuarderia': _maxPetsGuarderia,
         // Cada precio solo se envía si su servicio está realmente activo —
         // de lo contrario un precio pre-rellenado (ej. Guardería copiando el
         // precio de Paseo como sugerencia) podía guardarse en la BD aunque el
@@ -594,7 +616,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         'serviceDetails': {
           'allowsLargePets': _allowsLargePets,
           'allowsMultiplePets': _allowsMultiplePets,
-          'maxPets': _maxPets,
           'acceptedPetTypes': _acceptedPetTypes,
           'acceptedSizes': _acceptedSizes,
           'availability': {
@@ -1534,44 +1555,24 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
               const Divider(height: 48),
             ],
 
-            // Máximo de mascotas simultáneas — siempre visible
-            Text('Máximo de mascotas simultáneas', style: TextStyle(color: subtextColor, fontSize: 14)),
-            const SizedBox(height: 10),
-            Row(
-              children: [1, 2, 3].map((n) {
-                final selected = _maxPets == n;
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _maxPets = n),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: selected ? GardenColors.primary.withValues(alpha: 0.12) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: selected ? GardenColors.primary : borderColor,
-                          width: selected ? 2 : 1,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          Text('$n', style: TextStyle(
-                            color: selected ? GardenColors.primary : textColor,
-                            fontSize: 22, fontWeight: FontWeight.w800,
-                          )),
-                          Text(n == 1 ? 'mascota' : 'mascotas', style: TextStyle(
-                            color: selected ? GardenColors.primary : subtextColor,
-                            fontSize: 10,
-                          )),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
+            // Máximo de reservas simultáneas — por tipo de servicio, no un
+            // solo número para los tres. Sin tope fijo: una empresa puede
+            // atender muchas más mascotas a la vez que un cuidador
+            // individual, así que esto es un campo numérico libre en vez
+            // de opciones fijas [1,2,3].
+            Text('Máximo de reservas simultáneas', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(
+              'Cuántas mascotas puedes atender al mismo tiempo, para cada servicio que ofreces. Si eres empresa, puedes poner un número más alto.',
+              style: TextStyle(color: subtextColor, fontSize: 12.5, height: 1.4),
             ),
+            const SizedBox(height: 14),
+            if (_effectiveServices.contains('PASEO'))
+              _maxPetsStepper('Paseo', _maxPetsPaseo, (v) => setState(() => _maxPetsPaseo = v), textColor, subtextColor, surface, borderColor),
+            if (_effectiveServices.contains('HOSPEDAJE'))
+              _maxPetsStepper('Hospedaje', _maxPetsHospedaje, (v) => setState(() => _maxPetsHospedaje = v), textColor, subtextColor, surface, borderColor),
+            if (_effectiveServices.contains('GUARDERIA'))
+              _maxPetsStepper('Guardería', _maxPetsGuarderia, (v) => setState(() => _maxPetsGuarderia = v), textColor, subtextColor, surface, borderColor),
             const Divider(height: 48),
 
             // Sección 5 — Tipos de mascotas
@@ -1939,6 +1940,54 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(color: isSelected ? GardenColors.primary : border),
+      ),
+    );
+  }
+
+  /// Stepper numérico +/- para el máximo de reservas simultáneas de un
+  /// servicio — sin tope fijo (mínimo 1), a diferencia del selector viejo
+  /// de 3 opciones fijas.
+  Widget _maxPetsStepper(
+    String label,
+    int value,
+    ValueChanged<int> onChanged,
+    Color textColor,
+    Color subtextColor,
+    Color surface,
+    Color borderColor,
+  ) {
+    final enabled = widget.embeddedMode || _isEditing;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(label, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
+            ),
+            IconButton(
+              icon: const Icon(Icons.remove_circle_outline_rounded),
+              color: enabled && value > 1 ? GardenColors.primary : subtextColor.withValues(alpha: 0.3),
+              onPressed: enabled && value > 1 ? () => onChanged(value - 1) : null,
+            ),
+            SizedBox(
+              width: 32,
+              child: Text('$value', textAlign: TextAlign.center,
+                style: TextStyle(color: textColor, fontSize: 17, fontWeight: FontWeight.w800)),
+            ),
+            IconButton(
+              icon: const Icon(Icons.add_circle_outline_rounded),
+              color: enabled ? GardenColors.primary : subtextColor.withValues(alpha: 0.3),
+              onPressed: enabled ? () => onChanged(value + 1) : null,
+            ),
+          ],
+        ),
       ),
     );
   }

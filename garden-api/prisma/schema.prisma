@@ -187,7 +187,18 @@ model CaregiverProfile {
   clientPetsSleep                 ClientPetsSleep?
   hoursAlone                      Int?
   workFromHome                    Boolean?
+  /// DEPRECADO — reemplazado por maxPets{Paseo,Hospedaje,Guarderia} (capacidad
+  /// configurable por tipo de servicio, no un solo número para los tres). Se
+  /// mantiene solo como fallback de lectura para perfiles viejos que nunca
+  /// configuraron los campos nuevos — no escribir acá en código nuevo.
   maxPets                         Int?
+  /// Máximo de paseos simultáneos que puede atender este cuidador/empresa.
+  /// null = usar maxPets (legacy) o 1 si tampoco existe.
+  maxPetsPaseo                    Int?
+  /// Máximo de hospedajes simultáneos (por día).
+  maxPetsHospedaje                Int?
+  /// Máximo de guarderías simultáneas (por bloque horario).
+  maxPetsGuarderia                Int?
   oftenOut                        Boolean?
   typicalDay                      String?
   /// CI anverso (frontal): obligatorio para enviar solicitud y PENDING_REVIEW. Subida a Cloudinary (garden/ci).
