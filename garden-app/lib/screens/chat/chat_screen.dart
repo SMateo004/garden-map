@@ -42,6 +42,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Map<String, dynamic>? _mg;
   bool _mgLoading = false;
 
+  // Foto de la otra persona: arranca con la que pasó el caller (si la pasó) y se
+  // sobreescribe apenas responde GET /chat/:bookingId/other-participant, que
+  // siempre trae la foto actual desde la DB — así el chat muestra la foto
+  // correcta aunque el caller no la haya pasado (bug histórico: casi ningún
+  // call site de ChatScreen pasaba otherPersonPhoto).
+  String? _otherPersonPhoto;
+
   // Bloqueo/reporte de chat
   String? _otherPersonId;
   bool _iBlockedThem = false;
@@ -78,6 +85,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _initChat() async {
+    _otherPersonPhoto = widget.otherPersonPhoto;
     final prefs = await SharedPreferences.getInstance();
     _token = AuthState.token;
     _currentUserId = prefs.getString('user_id') ?? '';
@@ -125,6 +133,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           _otherPersonId = d['userId'] as String?;
           _iBlockedThem = d['blockedByMe'] as bool? ?? false;
           _theyBlockedMe = d['blockedMe'] as bool? ?? false;
+          final fetchedPhoto = d['photo'] as String?;
+          if (fetchedPhoto != null && fetchedPhoto.isNotEmpty) {
+            _otherPersonPhoto = fetchedPhoto;
+          }
         });
         if (_otherPersonId != null) {
           _chatService?.setOtherUserId(_otherPersonId!, initialOnline: d['isOnline'] as bool? ?? false);
@@ -692,7 +704,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             title: Row(
               children: [
                 GardenAvatar(
-                  imageUrl: widget.otherPersonPhoto,
+                  imageUrl: _otherPersonPhoto,
                   size: 36,
                   initials: widget.otherPersonName.isNotEmpty
                     ? widget.otherPersonName[0] : 'U',
@@ -764,7 +776,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         child: Row(
                           children: [
                             IconButton(icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 18), onPressed: () => Navigator.pop(context)),
-                            GardenAvatar(imageUrl: widget.otherPersonPhoto, size: 28, initials: widget.otherPersonName.isNotEmpty ? widget.otherPersonName[0] : 'U'),
+                            GardenAvatar(imageUrl: _otherPersonPhoto, size: 28, initials: widget.otherPersonName.isNotEmpty ? widget.otherPersonName[0] : 'U'),
                             const SizedBox(width: 10),
                             Expanded(child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1095,7 +1107,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         children: [
           if (!isMe) ...[
             GardenAvatar(
-              imageUrl: widget.otherPersonPhoto,
+              imageUrl: _otherPersonPhoto,
               size: 28,
               initials: msg.senderName.isNotEmpty ? msg.senderName[0] : 'U',
             ),

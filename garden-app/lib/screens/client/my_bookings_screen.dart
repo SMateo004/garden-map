@@ -1045,6 +1045,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                             builder: (_) => ChatScreen(
                               bookingId: booking['id'] as String,
                               otherPersonName: booking['caregiverName'] as String? ?? 'Cuidador',
+                              otherPersonPhoto: booking['caregiverPhoto'] as String?,
                               token: _clientToken,
                               role: 'CLIENT',
                               bookingStatus: status,
@@ -1117,6 +1118,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                               builder: (_) => ChatScreen(
                                 bookingId: booking['id'] as String,
                                 otherPersonName: booking['caregiverName'] as String? ?? 'Cuidador',
+                                otherPersonPhoto: booking['caregiverPhoto'] as String?,
                                 token: _clientToken,
                                 role: 'CLIENT',
                                 bookingStatus: status,

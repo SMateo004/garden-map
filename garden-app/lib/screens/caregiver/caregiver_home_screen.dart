@@ -1309,6 +1309,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                           builder: (_) => ChatScreen(
                             bookingId: bookingId,
                             otherPersonName: clientName,
+                            otherPersonPhoto: booking['clientPhoto'] as String?,
                             token: _caregiverToken,
                             role: 'CAREGIVER',
                             bookingStatus: 'WAITING_CAREGIVER_APPROVAL',
@@ -1451,6 +1452,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         builder: (_) => ChatScreen(
           bookingId: bookingId,
           otherPersonName: clientName.isNotEmpty ? clientName : 'Cliente',
+          otherPersonPhoto: booking['clientPhoto'] as String?,
           token: _caregiverToken,
           role: 'CAREGIVER',
           bookingStatus: booking['status'] as String?,
@@ -4342,6 +4344,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                         builder: (_) => ChatScreen(
                           bookingId: booking['id'] as String,
                           otherPersonName: booking['clientName'] as String? ?? 'Cliente',
+                          otherPersonPhoto: booking['clientPhoto'] as String?,
                           token: widget.token,
                           role: 'CAREGIVER',
                           bookingStatus: booking['status'] as String?,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -58,6 +59,12 @@ class ChatService extends ChangeNotifier {
   int _unreadCount = 0;
   bool _isDisposed = false;
   String? _pendingBookingId;
+  // Poll liviano de respaldo: mientras el socket esté desconectado (red
+  // inestable, app recién resumida, etc.), refrescamos el historial por HTTP
+  // cada 2s para que el chat se siga sintiendo "en vivo" aunque el push por
+  // socket no esté llegando. Se cancela apenas el socket reconecta.
+  Timer? _pollTimer;
+  bool _hasConnectedOnce = false;
   // El ChatScreen setea esto en didChangeAppLifecycleState — evita mostrar una
   // notificación local por un mensaje que ya se ve en pantalla porque el chat
   // está abierto y en primer plano ahora mismo.
@@ -108,18 +115,33 @@ class ChatService extends ChangeNotifier {
           _socket!.emit('join_booking', _pendingBookingId!);
           debugPrint('Chat: Auto-joined room $_pendingBookingId on connect');
         }
+        // Ya no hace falta pollear por HTTP — el socket vuelve a entregar en tiempo real.
+        _stopPolling();
+        // Si esto es una RECONEXIÓN (no la primera conexión), puede que se hayan
+        // perdido mensajes mientras estuvo desconectado — traemos el historial
+        // completo de nuevo para no dejar huecos (antes esto no se hacía y un
+        // socket que se caía por red/background nunca recuperaba lo perdido).
+        if (_hasConnectedOnce && _pendingBookingId != null) {
+          loadHistory(_pendingBookingId!);
+        }
+        _hasConnectedOnce = true;
         if (!_isDisposed) notifyListeners();
       });
 
       _socket!.onDisconnect((_) {
         _connected = false;
         debugPrint('Chat: Socket disconnected');
+        _startPolling();
         if (!_isDisposed) notifyListeners();
       });
 
       _socket!.onConnectError((data) {
         debugPrint('Chat: Connect error: $data');
         _connected = false;
+        // Si el socket nunca llegó a conectar (falla desde el arranque), no hay
+        // un onDisconnect previo que dispare el poll — arrancarlo acá también.
+        _startPolling();
+        if (!_isDisposed) notifyListeners();
       });
 
       _socket!.onError((data) {
@@ -187,6 +209,19 @@ class ChatService extends ChangeNotifier {
     } catch (e) {
       debugPrint('Chat: Failed to initialize socket: $e');
     }
+  }
+
+  void _startPolling() {
+    if (_pollTimer != null || _pendingBookingId == null) return;
+    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (_isDisposed || _connected || _pendingBookingId == null) return;
+      loadHistory(_pendingBookingId!);
+    });
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
   }
 
   void joinBooking(String bookingId) {
@@ -284,6 +319,7 @@ class ChatService extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _stopPolling();
     _socket?.disconnect();
     _socket?.dispose();
     super.dispose();
