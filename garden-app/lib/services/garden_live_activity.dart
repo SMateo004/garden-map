@@ -28,6 +28,12 @@ class GardenLiveActivity {
 
   // ── iOS ────────────────────────────────────────────────────────────────────
 
+  /// [totalPaidDurationMinutes] is the "goal" the lock-screen/Dynamic-Island
+  /// progress bar walks towards: the original booked duration + any
+  /// already-approved & paid extension, in minutes (PASEO/GUARDERIA: minutes
+  /// booked; HOSPEDAJE: nights × 24h). Recompute and re-send it (via
+  /// [updateTotalPaidDuration]) every time an extension is confirmed so the
+  /// widget's goal updates immediately.
   Future<void> startActivity({
     required String petName,
     required String caregiverName,
@@ -36,11 +42,20 @@ class GardenLiveActivity {
     required String role,
     required String bookingId,
     required DateTime startTime,
+    required int totalPaidDurationMinutes,
   }) async {
     if (kIsWeb) return;
 
-    final emoji = serviceType == 'PASEO' ? '🐾' : '🏠';
-    final serviceLabel = serviceType == 'PASEO' ? 'paseo' : 'hospedaje';
+    final emoji = serviceType == 'PASEO'
+        ? '🐾'
+        : serviceType == 'GUARDERIA'
+            ? '🏡'
+            : '🏠';
+    final serviceLabel = serviceType == 'PASEO'
+        ? 'paseo'
+        : serviceType == 'GUARDERIA'
+            ? 'guardería'
+            : 'hospedaje';
 
     if (Platform.isIOS) {
       try {
@@ -51,7 +66,8 @@ class GardenLiveActivity {
           'serviceType': serviceType,
           'role': role,
           'bookingId': bookingId,
-          'timerValue': '00:00',
+          'startTimeMs': startTime.millisecondsSinceEpoch,
+          'totalPaidSeconds': totalPaidDurationMinutes * 60,
         });
         debugPrint('[LiveActivity] Started: $_activityId');
       } catch (e) {
@@ -75,22 +91,46 @@ class GardenLiveActivity {
   }
 
   /// Call every N seconds from the service timer (suggested: every 10s for iOS,
-  /// every 30s for Android to stay within OS rate limits).
+  /// every 30s for Android to stay within OS rate limits). The elapsed-time
+  /// digits and the progress-bar animation are computed on-device by the
+  /// widget itself (from the `startedAt`/`totalPaidSeconds` it already has),
+  /// so this is just a lightweight status heartbeat — it does not need to
+  /// carry a formatted timer string.
   Future<void> updateTimer(Duration elapsed) async {
     if (kIsWeb) return;
 
     if (Platform.isIOS && _activityId != null) {
-      final timer = _formatTimer(elapsed);
       try {
         await _iosChannel.invokeMethod('updateActivity', {
           'id': _activityId!,
-          'timerValue': timer,
+          'status': 'IN_PROGRESS',
         });
       } catch (e) {
         debugPrint('[LiveActivity] update error: $e');
       }
     }
     // Android: chronometer counts from startTime automatically — no update needed
+  }
+
+  /// Call whenever a paid time/night extension is confirmed, with the new
+  /// total (original + all approved extensions so far) in minutes. Moves the
+  /// Live Activity's progress-bar goal immediately — this is a real native
+  /// push, but it only happens on the rare extension-confirmation event, so
+  /// it stays well within ActivityKit's update budget.
+  Future<void> updateTotalPaidDuration(int totalPaidDurationMinutes) async {
+    if (kIsWeb) return;
+    if (Platform.isIOS && _activityId != null) {
+      try {
+        await _iosChannel.invokeMethod('updateTotalPaidSeconds', {
+          'id': _activityId!,
+          'totalPaidSeconds': totalPaidDurationMinutes * 60,
+        });
+        debugPrint('[LiveActivity] Updated goal: ${totalPaidDurationMinutes}min');
+      } catch (e) {
+        debugPrint('[LiveActivity] updateTotalPaidDuration error: $e');
+      }
+    }
+    // Android notification doesn't show a paid-duration goal today — no-op.
   }
 
   Future<void> endActivity() async {
@@ -159,14 +199,5 @@ class GardenLiveActivity {
       _lastBody,
       NotificationDetails(android: details),
     );
-  }
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
-
-  static String _formatTimer(Duration d) {
-    final h = d.inHours;
-    final m = (d.inMinutes % 60).toString().padLeft(2, '0');
-    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
-    return h > 0 ? '$h:$m:$s' : '$m:$s';
   }
 }

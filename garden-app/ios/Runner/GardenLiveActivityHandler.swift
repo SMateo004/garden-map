@@ -12,10 +12,11 @@ final class GardenLiveActivityHandler {
 
     func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         switch call.method {
-        case "startActivity":  startActivity(call: call, result: result)
-        case "updateActivity": updateActivity(call: call, result: result)
-        case "endActivity":    endActivity(call: call, result: result)
-        default:               result(FlutterMethodNotImplemented)
+        case "startActivity":         startActivity(call: call, result: result)
+        case "updateActivity":        updateActivity(call: call, result: result)
+        case "updateTotalPaidSeconds": updateTotalPaidSeconds(call: call, result: result)
+        case "endActivity":           endActivity(call: call, result: result)
+        default:                      result(FlutterMethodNotImplemented)
         }
     }
 
@@ -40,8 +41,21 @@ final class GardenLiveActivityHandler {
             role:          args["role"]          as? String ?? "CLIENT",
             bookingId:     args["bookingId"]     as? String ?? ""
         )
+
+        // startTimeMs: epoch millis for when the service started (basis for the
+        // on-device elapsed-time calc). Falls back to "now" if missing.
+        let startTimeMs = args["startTimeMs"] as? Double
+        let startedAt = startTimeMs != nil
+            ? Date(timeIntervalSince1970: startTimeMs! / 1000)
+            : Date()
+
+        // totalPaidSeconds: original booked duration + any already-approved
+        // extension, in seconds. Falls back to 1 hour if not provided.
+        let totalPaidSeconds = (args["totalPaidSeconds"] as? NSNumber)?.intValue ?? 3600
+
         let initialState = GardenServiceAttributes.ContentState(
-            timerValue: args["timerValue"] as? String ?? "00:00",
+            startedAt: startedAt,
+            totalPaidSeconds: totalPaidSeconds,
             status: "IN_PROGRESS"
         )
 
@@ -58,7 +72,7 @@ final class GardenLiveActivityHandler {
         }
     }
 
-    // MARK: – Update
+    // MARK: – Update (status heartbeat; cheap, called periodically from Flutter)
 
     private func updateActivity(call: FlutterMethodCall, result: @escaping FlutterResult) {
         guard let args = call.arguments as? [String: Any],
@@ -67,9 +81,34 @@ final class GardenLiveActivityHandler {
             result(nil)
             return
         }
+        let current = activity.contentState
         let newState = GardenServiceAttributes.ContentState(
-            timerValue: args["timerValue"] as? String ?? "00:00",
-            status: "IN_PROGRESS"
+            startedAt: current.startedAt,
+            totalPaidSeconds: current.totalPaidSeconds,
+            status: args["status"] as? String ?? current.status
+        )
+        Task {
+            await activity.update(using: newState)
+        }
+        result(nil)
+    }
+
+    // MARK: – Update goal (called whenever a paid extension is confirmed —
+    // low-frequency, so it's safe/cheap against ActivityKit's update budget)
+
+    private func updateTotalPaidSeconds(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let id = args["id"] as? String,
+              let activity = activities[id],
+              let totalPaidSeconds = (args["totalPaidSeconds"] as? NSNumber)?.intValue else {
+            result(nil)
+            return
+        }
+        let current = activity.contentState
+        let newState = GardenServiceAttributes.ContentState(
+            startedAt: current.startedAt,
+            totalPaidSeconds: totalPaidSeconds,
+            status: current.status
         )
         Task {
             await activity.update(using: newState)
@@ -86,8 +125,10 @@ final class GardenLiveActivityHandler {
             result(nil)
             return
         }
+        let current = activity.contentState
         let finalState = GardenServiceAttributes.ContentState(
-            timerValue: activity.contentState.timerValue,
+            startedAt: current.startedAt,
+            totalPaidSeconds: current.totalPaidSeconds,
             status: "COMPLETED"
         )
         Task {
