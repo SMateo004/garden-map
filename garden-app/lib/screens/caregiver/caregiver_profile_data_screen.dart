@@ -1029,7 +1029,13 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                               _webSection(surface, borderColor, textColor,
                                 title: 'Servicios extra',
                                 icon: Icons.add_business_outlined,
-                                child: ExtraServicesEditor(token: _caregiverToken, baseUrl: _baseUrl),
+                                child: IgnorePointer(
+                                  ignoring: !_isEditing,
+                                  child: Opacity(
+                                    opacity: _isEditing ? 1 : 0.6,
+                                    child: ExtraServicesEditor(token: _caregiverToken, baseUrl: _baseUrl),
+                                  ),
+                                ),
                               ),
                               const SizedBox(height: 14),
                             ],

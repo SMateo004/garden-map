@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -8,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/slide_to_confirm_button.dart';
 import '../chat/chat_screen.dart';
@@ -2231,126 +2233,116 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     const SizedBox(height: 14),
                   ],
 
-                  // ── Card: Cuidador ──────────────────────────────────────────
-                  GestureDetector(
-                    onTap: _showServiceInfoSheet,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: surface,
-                        borderRadius: BorderRadius.circular(GardenRadius.xl),
-                        border: Border.all(color: borderColor),
-                        boxShadow: GardenShadows.card,
-                      ),
-                      child: Row(
-                        children: [
-                          GardenAvatar(
-                            imageUrl: _booking?['caregiverPhoto'] as String?,
-                            size: 54,
-                            initials: (_booking?['caregiverName'] as String? ?? 'C')[0],
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                  // ── Trip card: cuidador + mascota unificados ────────────────
+                  // Antes eran dos cajas separadas con bordes propios — mismo
+                  // peso visual para info del cuidador y de la mascota, sin
+                  // ninguna jerarquía clara. Unificadas en una sola tarjeta con
+                  // sombra suave (menos "cajas apiladas", más estilo
+                  // Airbnb/Uber: una fila principal tappable + un divisor fino
+                  // + una fila secundaria de detalle).
+                  Container(
+                    decoration: BoxDecoration(
+                      color: surface,
+                      borderRadius: BorderRadius.circular(GardenRadius.xl),
+                      boxShadow: GardenShadows.card,
+                    ),
+                    child: Column(
+                      children: [
+                        GestureDetector(
+                          onTap: _showServiceInfoSheet,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
                               children: [
-                                Text(
-                                  _booking?['caregiverName'] as String? ?? 'Cuidador',
-                                  style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15),
+                                GardenAvatar(
+                                  imageUrl: _booking?['caregiverPhoto'] as String?,
+                                  size: 52,
+                                  initials: (_booking?['caregiverName'] as String? ?? 'C')[0],
                                 ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.star_rounded, color: GardenColors.star, size: 13),
-                                    const SizedBox(width: 3),
-                                    Text(
-                                      _booking?['caregiverRating'] != null
-                                          ? '${(_booking!['caregiverRating'] as num).toStringAsFixed(1)} · Tu cuidador'
-                                          : 'Nuevo · Tu cuidador',
-                                      style: TextStyle(color: subtextColor, fontSize: 12),
-                                    ),
-                                  ],
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _booking?['caregiverName'] as String? ?? 'Cuidador',
+                                        style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.star_rounded, color: GardenColors.star, size: 13),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            _booking?['caregiverRating'] != null
+                                                ? '${(_booking!['caregiverRating'] as num).toStringAsFixed(1)} · Tu cuidador'
+                                                : 'Nuevo · Tu cuidador',
+                                            style: TextStyle(color: subtextColor, fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: GardenColors.success.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(GardenRadius.full),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _PulsingDot(size: 6, color: GardenColors.success),
+                                      const SizedBox(width: 5),
+                                      const Text('Activo',
+                                        style: TextStyle(color: GardenColors.success, fontSize: 11, fontWeight: FontWeight.w700)),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(Icons.chevron_right_rounded, color: subtextColor, size: 18),
                               ],
                             ),
                           ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
+                        ),
+                        Divider(height: 1, thickness: 1, color: borderColor, indent: 16, endIndent: 16),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+                          child: Row(
                             children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: GardenColors.success.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(GardenRadius.full),
-                                  border: Border.all(color: GardenColors.success.withValues(alpha: 0.25)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    _PulsingDot(size: 6, color: GardenColors.success),
-                                    const SizedBox(width: 5),
-                                    const Text('Activo',
-                                      style: TextStyle(color: GardenColors.success, fontSize: 11, fontWeight: FontWeight.w700)),
-                                  ],
+                              const Text('🐾', style: TextStyle(fontSize: 16)),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: RichText(
+                                  text: TextSpan(
+                                    style: TextStyle(color: subtextColor, fontSize: 12.5),
+                                    children: [
+                                      TextSpan(
+                                        text: _booking?['petName'] as String? ?? '—',
+                                        style: TextStyle(color: textColor, fontWeight: FontWeight.w700),
+                                      ),
+                                      if ((_booking?['petBreed'] as String? ?? '').isNotEmpty)
+                                        TextSpan(text: ' · ${_booking!['petBreed']}'),
+                                    ],
+                                  ),
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                              Icon(Icons.chevron_right_rounded, color: subtextColor, size: 18),
+                              Icon(Icons.shield_outlined, color: GardenColors.polygon, size: 13),
+                              const SizedBox(width: 4),
+                              Text('Pago en escrow',
+                                style: TextStyle(color: GardenColors.polygon, fontSize: 11.5, fontWeight: FontWeight.w600)),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-
-                  // ── Card: Mascota + Escrow ──────────────────────────────────
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: surface,
-                      borderRadius: BorderRadius.circular(GardenRadius.lg),
-                      border: Border.all(color: borderColor),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 42, height: 42,
-                          decoration: BoxDecoration(
-                            color: GardenColors.primary.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(GardenRadius.md),
-                          ),
-                          child: const Center(child: Text('🐾', style: TextStyle(fontSize: 20))),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(_booking?['petName'] as String? ?? '—',
-                                style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
-                              if ((_booking?['petBreed'] as String? ?? '').isNotEmpty)
-                                Text(_booking!['petBreed'] as String,
-                                  style: TextStyle(color: subtextColor, fontSize: 12)),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: GardenColors.polygon.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(GardenRadius.sm),
-                            border: Border.all(color: GardenColors.polygon.withValues(alpha: 0.2)),
-                          ),
-                          child: const Text('⬡ Escrow',
-                            style: TextStyle(color: GardenColors.polygon, fontSize: 11, fontWeight: FontWeight.w600)),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
                   // ── Acciones GPS/Extensión (PASEO) ──────────────────────────
+                  if (_booking?['serviceType'] == 'PASEO' || _booking?['serviceType'] == 'HOSPEDAJE')
+                    _sectionHeader('Seguimiento en vivo', Icons.sensors_rounded, textColor, subtextColor),
                   if (_booking?['serviceType'] == 'PASEO') ...[
                     // ── Card GPS en vivo ──────────────────────────────────────
                     GestureDetector(
@@ -2471,13 +2463,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     const SizedBox(height: 20),
                   ],
 
-                  // ── Fotos del servicio ──────────────────────────────────────
+                  // ── Actualizaciones del servicio (fotos y videos) ───────────
                   if (_serviceEvents.isNotEmpty) ...[
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Fotos del servicio',
-                          style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+                        _sectionHeader('Actualizaciones del servicio', Icons.photo_camera_back_outlined, textColor, subtextColor),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                           decoration: BoxDecoration(
@@ -2485,13 +2476,13 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             borderRadius: BorderRadius.circular(GardenRadius.full),
                           ),
                           child: Text(
-                            '${_serviceEvents.length} foto${_serviceEvents.length == 1 ? '' : 's'}',
+                            '${_serviceEvents.length}',
                             style: const TextStyle(color: GardenColors.primary, fontSize: 11, fontWeight: FontWeight.w700),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 4),
                     SizedBox(
                       height: 220,
                       child: PageView.builder(
@@ -2499,21 +2490,17 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         itemBuilder: (ctx, i) {
                           final photo = _serviceEvents[i];
                           return GestureDetector(
-                            onTap: () => _showPhotoFullscreen(photo['photoUrl'] as String),
+                            onTap: () => _openEventMedia(photo),
                             child: Container(
                               margin: const EdgeInsets.symmetric(horizontal: 2),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(GardenRadius.xl),
                                 child: Stack(
                                   children: [
-                                    Image.network(
-                                      fixImageUrl(photo['photoUrl'] as String),
-                                      width: double.infinity, height: 220, fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(
-                                        height: 220,
-                                        color: GardenColors.primary.withValues(alpha: 0.08),
-                                        child: const Center(child: Icon(Icons.image_outlined, color: GardenColors.primary, size: 40)),
-                                      ),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      height: 220,
+                                      child: _eventMediaPreview(photo, height: 220),
                                     ),
                                     Positioned(
                                       bottom: 0, left: 0, right: 0,
@@ -3153,10 +3140,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                         itemCount: _serviceEvents.length,
                         itemBuilder: (_, i) {
                           final e = _serviceEvents[_serviceEvents.length - 1 - i];
-                          final url = e['photoUrl']?.toString() ?? '';
+                          final url = _eventMediaUrl(e) ?? '';
                           if (url.isEmpty) return const SizedBox();
                           return GestureDetector(
-                            onTap: () => _showPhotoFullscreen(url),
+                            onTap: () => _openEventMedia(e),
                             child: Container(
                               margin: const EdgeInsets.only(right: 10),
                               width: 110,
@@ -3169,11 +3156,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                                 child: Stack(
                                   fit: StackFit.expand,
                                   children: [
-                                    Image.network(fixImageUrl(url), fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(
-                                        color: GardenColors.primary.withValues(alpha: 0.1),
-                                        child: const Icon(Icons.image_outlined, color: GardenColors.primary),
-                                      )),
+                                    _eventMediaPreview(e, height: 110),
                                     Positioned(
                                       bottom: 0, left: 0, right: 0,
                                       child: Container(
@@ -3489,6 +3472,110 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     );
   }
 
+  /// Reproductor de video en pantalla completa — antes esto no existía en
+  /// ningún lado de la app: el cuidador podía enviar un video, pero no había
+  /// forma de verlo (la galería solo sabía renderizar photoUrl como imagen,
+  /// y un evento de solo-video sin photoUrl podía incluso crashear la
+  /// pantalla al forzar el cast a String no-nulo).
+  void _showVideoFullscreen(String url) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            Center(child: _FullscreenVideoPlayer(url: fixImageUrl(url))),
+            Positioned(
+              top: 40, right: 16,
+              child: GestureDetector(
+                onTap: () => Navigator.pop(ctx),
+                child: Container(
+                  width: 36, height: 36,
+                  decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                  child: const Icon(Icons.close, color: Colors.white, size: 20),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  bool _isVideoEvent(Map<String, dynamic> e) => (e['videoUrl'] as String?)?.isNotEmpty == true;
+  String? _eventMediaUrl(Map<String, dynamic> e) =>
+      _isVideoEvent(e) ? e['videoUrl'] as String? : e['photoUrl'] as String?;
+
+  void _openEventMedia(Map<String, dynamic> e) {
+    final url = _eventMediaUrl(e);
+    if (url == null || url.isEmpty) return;
+    _isVideoEvent(e) ? _showVideoFullscreen(url) : _showPhotoFullscreen(url);
+  }
+
+  /// Capa de imagen/video para una miniatura de la galería. Para video usamos
+  /// un placeholder estático (fondo oscuro + ícono de play) en vez de un
+  /// VideoPlayerController real — inicializar un controller por cada
+  /// miniatura en una lista/carrusel sería costoso y no hace falta, el
+  /// video real recién se decodifica al abrir en pantalla completa.
+  Widget _eventMediaPreview(Map<String, dynamic> e, {required double height}) {
+    if (_isVideoEvent(e)) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Container(color: const Color(0xFF1A1A1A)),
+          const Center(
+            child: Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 46),
+          ),
+          Positioned(
+            top: 8, left: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(GardenRadius.full),
+              ),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.videocam_rounded, color: Colors.white, size: 11),
+                SizedBox(width: 3),
+                Text('VIDEO', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.3)),
+              ]),
+            ),
+          ),
+        ],
+      );
+    }
+    final url = e['photoUrl'] as String? ?? '';
+    return Image.network(
+      fixImageUrl(url),
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => Container(
+        color: GardenColors.primary.withValues(alpha: 0.08),
+        child: const Center(child: Icon(Icons.image_outlined, color: GardenColors.primary, size: 32)),
+      ),
+    );
+  }
+
+  /// Encabezado de sección estilo Airbnb/Uber — un ícono chico + label en
+  /// mayúsculas espaciadas, para agrupar visualmente bloques de contenido
+  /// relacionado sin necesitar otra caja/borde.
+  Widget _sectionHeader(String label, IconData icon, Color textColor, Color subtextColor) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, color: subtextColor, size: 15),
+          const SizedBox(width: 6),
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(color: subtextColor, fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _formatEventTime(String isoDate) {
     if (isoDate.isEmpty) return '';
     try {
@@ -3750,6 +3837,31 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
   // --- LOGICA DE ACCIONES ---
   Future<void> _startService() async {
+    // iOS mata la ubicación en segundo plano si el cuidador cierra la app
+    // por completo (restricción de la plataforma, no un bug nuestro) — avisar
+    // antes de iniciar para que no lo descubra a mitad de un paseo.
+    if (!kIsWeb && Platform.isIOS && mounted) {
+      final understood = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(Icons.info_outline_rounded, color: GardenColors.primary, size: 32),
+          title: const Text('No cierres la app durante el servicio'),
+          content: const Text(
+            'En iPhone, si cierras la app por completo (deslizándola desde el '
+            'multitarea) se detiene el seguimiento GPS y el dueño deja de ver tu '
+            'ubicación en vivo. Podés minimizarla o usar otras apps con normalidad, '
+            'solo evitá cerrarla del todo hasta terminar el servicio.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Entendido', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+      if (understood != true) return;
+    }
     // Para paseos en móvil, verificar permiso de ubicación antes de iniciar
     if (!kIsWeb && _booking?['serviceType'] == 'PASEO') {
       LocationPermission permission = await Geolocator.checkPermission();
@@ -5520,6 +5632,83 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 }
 
 // --- HELPERS LOCALES PARA EL DISEÑO ---
+
+/// Reproductor de video simple: autoplay + loop, tap para pausar/reanudar.
+/// Sin controles de scrubbing a propósito — son videos cortos de servicio,
+/// no contenido largo que necesite avanzar/retroceder.
+class _FullscreenVideoPlayer extends StatefulWidget {
+  final String url;
+  const _FullscreenVideoPlayer({required this.url});
+
+  @override
+  State<_FullscreenVideoPlayer> createState() => _FullscreenVideoPlayerState();
+}
+
+class _FullscreenVideoPlayerState extends State<_FullscreenVideoPlayer> {
+  late final VideoPlayerController _controller;
+  bool _initError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
+      ..initialize().then((_) {
+        if (!mounted) return;
+        setState(() {});
+        _controller.setLooping(true);
+        _controller.play();
+      }).catchError((_) {
+        if (mounted) setState(() => _initError = true);
+      });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_initError) {
+      return const Padding(
+        padding: EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline_rounded, color: Colors.white54, size: 40),
+            SizedBox(height: 12),
+            Text('No se pudo cargar el video', style: TextStyle(color: Colors.white70)),
+          ],
+        ),
+      );
+    }
+    if (!_controller.value.isInitialized) {
+      return const CircularProgressIndicator(color: Colors.white);
+    }
+    return GestureDetector(
+      onTap: () => setState(() => _controller.value.isPlaying ? _controller.pause() : _controller.play()),
+      child: AspectRatio(
+        aspectRatio: _controller.value.aspectRatio,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            VideoPlayer(_controller),
+            AnimatedOpacity(
+              opacity: _controller.value.isPlaying ? 0 : 1,
+              duration: const Duration(milliseconds: 150),
+              child: Container(
+                width: 64, height: 64,
+                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.4), shape: BoxShape.circle),
+                child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 36),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _PulsingDot extends StatefulWidget {
   final double size;
