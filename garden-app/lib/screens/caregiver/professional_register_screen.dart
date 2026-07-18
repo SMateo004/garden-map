@@ -24,6 +24,7 @@ import 'package:image_picker/image_picker.dart' as image_picker_pkg;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart' show fixImageUrl, GardenColors, GardenButton, themeNotifier;
 import '../../services/auth_service.dart';
+import '../../services/auth_state.dart';
 import '../../services/cities_service.dart';
 import '../../utils/input_formatters.dart';
 import 'caregiver_profile_data_screen.dart';
@@ -388,7 +389,10 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
 
   // ── Final registration (called after step 7 — CaregiverProfileDataScreen) ──
 
-  Future<void> _registerProfessional() async {
+  /// Crea la cuenta profesional. Devuelve true si tuvo éxito (y ya dejó la
+  /// sesión lista via AuthState) — false si falló (ya mostró el diálogo de
+  /// error). Se llama al pasar del paso 6 al 7, no al revés.
+  Future<bool> _registerProfessional() async {
     setState(() => _isLoading = true);
     try {
       // El enum legado `zone` solo cubre las zonas de Santa Cruz — para
@@ -432,21 +436,24 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
 
       if ((response.statusCode == 200 || response.statusCode == 201) && data['success'] == true) {
         final authService = AuthService();
+        // saveToken también hace AuthState.update(...) — necesario para que
+        // el PATCH interno de CaregiverProfileDataScreen (paso 7) tenga una
+        // sesión válida, ya que ese widget lee AuthState.token directamente.
         await authService.saveToken(data['data']['accessToken']);
         await authService.saveUserData(data['data']['user']);
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('caregiver_setup_complete', true);
+        await prefs.setString('user_role', 'CAREGIVER');
+        await prefs.setString('active_role', 'CAREGIVER');
+        AuthState.updateRole(role: 'CAREGIVER', activeRole: 'CAREGIVER');
         // Save token for patching steps after registration
         setState(() => _authToken = data['data']['accessToken'] as String? ?? '');
-        if (!mounted) return;
-        context.go('/caregiver/home');
+        return true;
       } else {
         final msg = data['error']?['message'] ?? data['message'] ?? 'Error al crear la cuenta';
         throw Exception(msg);
       }
     } catch (e) {
-      setState(() => _isLoading = false);
-      if (!mounted) return;
+      if (!mounted) return false;
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
@@ -466,6 +473,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           ],
         ),
       );
+      return false;
     }
   }
 
@@ -565,11 +573,26 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           return;
         }
       }
-      setState(() { _isLoading = false; _currentStep++; });
+      // Crear la cuenta ACÁ, antes de mostrar el paso 7 — no al revés.
+      // Bug real que esto corrige: el paso 7 (CaregiverProfileDataScreen
+      // embebido) intentaba guardarse a sí mismo primero con su propio botón
+      // "Guardar" (PATCH /caregiver/profile, que requiere un token válido),
+      // y solo SI ese guardado tenía éxito llamaba a _registerProfessional()
+      // para recién ahí crear la cuenta. Como la cuenta todavía no existía,
+      // AuthState.token estaba vacío, el PATCH siempre fallaba con 401, y
+      // _registerProfessional() nunca se llegaba a ejecutar — el registro
+      // profesional quedaba trabado sin salida en el último paso. El flujo
+      // de empresa (company_register_screen.dart) ya lo hacía bien: crea la
+      // cuenta primero, y el paso de perfil detallado solo agrega datos
+      // sobre una cuenta que ya existe.
+      final created = await _registerProfessional();
+      setState(() => _isLoading = false);
+      if (!created) return; // el error ya se mostró dentro de _registerProfessional
+      setState(() => _currentStep++);
       return;
     }
 
-    // Step 7: handled by CaregiverProfileDataScreen
+    // Step 7: CaregiverProfileDataScreen agrega datos sobre la cuenta ya creada.
   }
 
   void _prevStep() {
@@ -1236,8 +1259,10 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
         final subtextColor= isDark ? GardenColors.darkTextSecondary    : GardenColors.lightTextSecondary;
         final borderColor = isDark ? GardenColors.darkBorder           : GardenColors.lightBorder;
 
-        // Step 7: CaregiverProfileDataScreen handles its own UI and "save" button.
-        // After save it calls _registerProfessional.
+        // Step 7: CaregiverProfileDataScreen handles its own UI and "save"
+        // button — la cuenta ya se creó al pasar del paso 6 al 7, así que
+        // acá solo agrega datos de perfil detallado sobre una cuenta que ya
+        // existe (mismo patrón que company_register_screen.dart).
         if (_currentStep == 7) {
           return Theme(
             data: ThemeData(
@@ -1251,8 +1276,10 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
             child: CaregiverProfileDataScreen(
               embeddedMode: true,
               onSaveComplete: () async {
-                // After profile data saved, create the account
-                await _registerProfessional();
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('caregiver_setup_complete', true);
+                if (!mounted) return;
+                context.go('/caregiver/home');
               },
             ),
           );

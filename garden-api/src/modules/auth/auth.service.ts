@@ -814,6 +814,11 @@ export async function registerProfessional(body: RegisterProfessionalBody): Prom
         identityVerificationToken: randomBytes(32).toString('hex'),
         emailVerified: true,
         isProfessional: true,
+        // Campo legacy que la respuesta de este endpoint todavía expone
+        // (verificationStatus) — sin esto quedaba en su default
+        // PENDING_REVIEW aunque el resto de los campos ya reflejaran una
+        // cuenta aprobada y verificada, dando una respuesta inconsistente.
+        verificationStatus: VerificationStatus.APPROVED,
         defaultAvailabilitySchedule: {
           hospedajeDefault: true,
           paseoTimeBlocks: {
@@ -943,6 +948,11 @@ export async function registerCompany(body: RegisterCompanyBody): Promise<Regist
         identityVerificationToken: randomBytes(32).toString('hex'),
         emailVerified: false,
         phoneVerified: false,
+        // Campo legacy que la respuesta de este endpoint todavía expone
+        // (verificationStatus) — igual que en registerProfessional, sin
+        // esto quedaba en su default PENDING_REVIEW aunque `status` ya
+        // fuera APPROVED, dando una respuesta inconsistente.
+        verificationStatus: VerificationStatus.APPROVED,
         isProfessional: true,
         isCompany: true,
         companyName: body.companyName.trim(),
