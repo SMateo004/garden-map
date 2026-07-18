@@ -794,6 +794,7 @@ class _GardenAppState extends State<GardenApp> {
     sessionExpiredNotifier.removeListener(_onSessionExpired);
     maintenanceNotifier.removeListener(_onMaintenanceDetected);
     networkErrorNotifier.removeListener(_onNetworkError);
+    _networkErrorTimer?.cancel();
     super.dispose();
   }
 
@@ -827,19 +828,33 @@ class _GardenAppState extends State<GardenApp> {
     });
   }
 
+  // Debounce de 5s antes de mostrar el banner de "sin conexión" — sin esto,
+  // el primer request que falla justo al reabrir la app (típico: la red/socket
+  // todavía no terminó de reconectarse) disparaba el snackbar de inmediato,
+  // aunque la siguiente request 1 segundo después ya funcionara bien. Ahora
+  // solo se muestra si la falla de red sigue activa 5 segundos después.
+  Timer? _networkErrorTimer;
+
   void _onNetworkError() {
     final message = networkErrorNotifier.value;
-    if (message == null) return; // recovery: let the existing banner expire on its own
-    final messenger = _scaffoldMessengerKey.currentState;
-    if (messenger == null) return;
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: const Color(0xFF424242),
-        duration: const Duration(seconds: 6),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    _networkErrorTimer?.cancel();
+    if (message == null) return; // recovery: cancelar cualquier aviso pendiente
+    _networkErrorTimer = Timer(const Duration(seconds: 5), () {
+      // Puede haber cambiado (o recuperado) mientras esperábamos — solo
+      // mostrar si la falla sigue siendo la misma que disparó el timer.
+      final stillFailing = networkErrorNotifier.value;
+      if (stillFailing == null) return;
+      final messenger = _scaffoldMessengerKey.currentState;
+      if (messenger == null) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(stillFailing),
+          backgroundColor: const Color(0xFF424242),
+          duration: const Duration(seconds: 6),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    });
   }
 
   @override
