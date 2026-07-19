@@ -19,6 +19,7 @@ import '../../services/gps_tracking_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_state.dart';
 import '../../services/garden_live_activity.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class ServiceExecutionScreen extends StatefulWidget {
   final String bookingId;
@@ -592,7 +593,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         if (_isLoading) {
           return Scaffold(
             backgroundColor: bg,
-            body: const Center(child: CircularProgressIndicator(color: GardenColors.primary)),
+            body: const Center(child: GardenLoadingIndicator(color: GardenColors.primary)),
           );
         }
 
@@ -2427,7 +2428,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     OutlinedButton.icon(
                       onPressed: _loadingExtension ? null : _showExtendTimeSheet,
                       icon: _loadingExtension
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))
+                          ? const GardenLoadingIndicator(size: 16, color: GardenColors.primary)
                           : const Icon(Icons.add_alarm_rounded, size: 18),
                       label: Text(
                         _allowedExtensionMinutes == 0
@@ -2450,7 +2451,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     OutlinedButton.icon(
                       onPressed: _loadingExtension ? null : _showExtendHospedajeSheet,
                       icon: _loadingExtension
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))
+                          ? const GardenLoadingIndicator(size: 16, color: GardenColors.primary)
                           : const Icon(Icons.nightlight_round, size: 18),
                       label: const Text('Agregar noches al hospedaje', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                       style: OutlinedButton.styleFrom(
@@ -2617,7 +2618,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     OutlinedButton.icon(
                       onPressed: _markingEnd ? null : _confirmMarkServiceEnded,
                       icon: _markingEnd
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.success))
+                          ? const GardenLoadingIndicator(size: 16, color: GardenColors.success)
                           : const Icon(Icons.check_circle_outline_rounded, size: 18),
                       label: const Text('Marcar servicio como terminado', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                       style: OutlinedButton.styleFrom(
@@ -4878,7 +4879,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   Text('🏥 Veterinarias cercanas', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 10),
                   if (loadingVets)
-                    const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
+                    const Center(child: Padding(padding: EdgeInsets.all(16), child: GardenLoadingIndicator()))
                   else if (nearestVets.isEmpty)
                     Container(
                       margin: const EdgeInsets.only(bottom: 8),
@@ -5684,7 +5685,7 @@ class _FullscreenVideoPlayerState extends State<_FullscreenVideoPlayer> {
       );
     }
     if (!_controller.value.isInitialized) {
-      return const CircularProgressIndicator(color: Colors.white);
+      return const GardenLoadingIndicator(color: Colors.white);
     }
     return GestureDetector(
       onTap: () => setState(() => _controller.value.isPlaying ? _controller.pause() : _controller.play()),
@@ -5841,7 +5842,7 @@ class _ActionTile extends StatelessWidget {
                 child: loading
                     ? Padding(
                         padding: const EdgeInsets.all(9),
-                        child: CircularProgressIndicator(strokeWidth: 2, color: color),
+                        child: GardenLoadingIndicator(color: color),
                       )
                     : Icon(icon, color: color, size: 20),
               ),
@@ -6288,10 +6289,7 @@ class _WalkExtensionPaymentScreenState extends State<_WalkExtensionPaymentScreen
               ),
             ),
             const SizedBox(height: 32),
-            const SizedBox(
-              width: 28, height: 28,
-              child: CircularProgressIndicator(strokeWidth: 2.5, color: GardenColors.primary),
-            ),
+            const GardenLoadingIndicator(size: 28, color: GardenColors.primary),
             const SizedBox(height: 8),
             Text('Verificando automáticamente...', style: TextStyle(color: subtextColor, fontSize: 12)),
             const SizedBox(height: 28),
