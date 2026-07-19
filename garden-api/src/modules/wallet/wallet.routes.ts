@@ -46,12 +46,23 @@ router.get('/', authMiddleware, asyncHandler(async (req: Request, res: Response)
 
   // Aggregate lifetime stats
   const [earnedAgg, paidAgg, withdrawnAgg, pendingAgg, refundAgg] = await Promise.all([
+    // "Ganado" = ganancia bruta de por vida, independiente de retiros. Incluye
+    // OVERTIME_EARNING (pago por espera extra) además de EARNING (pago normal
+    // por servicio) — antes solo sumaba EARNING, así que apenas un cuidador
+    // cobraba tiempo extra, su balance real subía pero "Ganado" se quedaba
+    // atrás, mostrando menos de lo que en verdad tenía en la billetera.
     prisma.walletTransaction.aggregate({
-      where: { userId, type: 'EARNING', status: 'COMPLETED' },
+      where: { userId, type: { in: ['EARNING', 'OVERTIME_EARNING'] }, status: 'COMPLETED' },
       _sum: { amount: true },
     }),
+    // "Pagado" = plata que salió de la billetera por servicios, incluye
+    // OVERTIME_FEE (cargo por tiempo extra) además de PAYMENT/WALLET_PAYMENT
+    // — mismo bug que "Ganado" con OVERTIME_EARNING: OVERTIME_FEE sí
+    // descuenta User.balance (ver booking.service.ts, cálculo de overtime),
+    // pero no estaba en este agregado, así que un cliente con cargos de
+    // tiempo extra veía su saldo bajar sin que "Pagado" lo reflejara.
     prisma.walletTransaction.aggregate({
-      where: { userId, type: { in: ['PAYMENT', 'WALLET_PAYMENT'] }, status: 'COMPLETED' },
+      where: { userId, type: { in: ['PAYMENT', 'WALLET_PAYMENT', 'OVERTIME_FEE'] }, status: 'COMPLETED' },
       _sum: { amount: true },
     }),
     prisma.walletTransaction.aggregate({

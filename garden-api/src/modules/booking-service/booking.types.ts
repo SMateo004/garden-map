@@ -76,6 +76,7 @@ export interface BookingCreateResult {
   ownerRated?: boolean;
   ownerRating?: number | null;
   ownerComment?: string | null;
+  caregiverRated?: boolean;
   caregiverRating?: number | null;
   caregiverComment?: string | null;
   /** Chips de cualidades del cuidador (Amable, Puntual, etc.) seleccionados por el dueño al calificar. */
@@ -154,6 +155,7 @@ export function bookingToResponse(b: any): BookingCreateResult {
     ownerRated: b.ownerRated ?? false,
     ownerRating: b.ownerRating,
     ownerComment: b.ownerComment,
+    caregiverRated: b.caregiverRated ?? false,
     caregiverRating: b.caregiverRating,
     caregiverComment: b.caregiverComment,
     caregiverSkillTags: b.caregiverSkillTags ?? [],

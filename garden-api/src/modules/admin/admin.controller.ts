@@ -456,6 +456,7 @@ export const processWithdrawal = asyncHandler(async (req: Request, res: Response
   });
 
   auditLog({ userId: req.user!.userId, action: 'WITHDRAWAL_PROCESSING', entity: 'WalletTransaction', entityId: id, details: { amount: Number(tx.amount), caregiverId: tx.userId }, ip: req.ip });
+  emitWalletUpdated(tx.userId);
 
   // Notificar al cuidador
   await prisma.notification.create({
@@ -605,6 +606,10 @@ export const rejectWithdrawal = asyncHandler(async (req: Request, res: Response)
   });
 
   auditLog({ userId: req.user!.userId, action: 'WITHDRAWAL_REJECTED', entity: 'WalletTransaction', entityId: id, details: { amount: Number(tx.amount), caregiverId: tx.userId, reason: reason ?? null }, ip: req.ip });
+  // Sin esto, el "Pendiente" de la billetera del usuario solo se corregía
+  // si volvía a abrir la app o hacía pull-to-refresh — el mismo patrón que
+  // completeWithdrawal ya usa para reflejar la aprobación al instante.
+  emitWalletUpdated(tx.userId);
   res.json({ success: true, data: { status: 'REJECTED' } });
 });
 
@@ -919,6 +924,57 @@ export const updateSetting = asyncHandler(async (req: Request, res: Response) =>
   const { invalidateSetting } = await import('../../utils/settings-cache.js');
   invalidateSetting(key);
   res.json({ success: true, data: stored });
+});
+
+// ── Icon Schedule ────────────────────────────────────────────────────────
+// NOTA DE PLATAFORMA: estas reglas solo eligen ENTRE variantes de icono ya
+// empaquetadas en el build actual (ver adminService.KNOWN_ICON_VARIANTS).
+// No es posible subir arte nuevo desde este panel y que se vuelva el icono
+// en vivo sin publicar un nuevo build — eso es una limitación de iOS/Android,
+// no de este backend.
+
+/** GET /api/admin/icon-schedule — lista todas las reglas + variantes conocidas + activa hoy. */
+export const getIconSchedule = asyncHandler(async (_req: Request, res: Response) => {
+  const [rules, active] = await Promise.all([
+    adminService.listIconScheduleRules(),
+    adminService.getActiveIconVariant(),
+  ]);
+  res.json({
+    success: true,
+    data: { rules, active, knownVariants: adminService.KNOWN_ICON_VARIANTS },
+  });
+});
+
+/** POST /api/admin/icon-schedule — crea una regla nueva. */
+export const createIconScheduleRule = asyncHandler(async (req: Request, res: Response) => {
+  const adminId = req.user?.userId ?? (req.user as { id?: string })?.id;
+  const { variant, startDate, endDate, label } = req.body as {
+    variant?: string; startDate?: string; endDate?: string; label?: string;
+  };
+  if (!variant || !startDate || !endDate) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'MISSING_FIELDS', message: 'variant, startDate y endDate son requeridos' },
+    });
+  }
+  const rule = await adminService.createIconScheduleRule({ variant, startDate, endDate, label }, adminId);
+  res.status(201).json({ success: true, data: rule });
+});
+
+/** PATCH /api/admin/icon-schedule/:id — edita una regla existente. */
+export const updateIconScheduleRule = asyncHandler(async (req: Request, res: Response) => {
+  const adminId = req.user?.userId ?? (req.user as { id?: string })?.id;
+  const id = req.params.id as string;
+  const rule = await adminService.updateIconScheduleRule(id, req.body ?? {}, adminId);
+  res.json({ success: true, data: rule });
+});
+
+/** DELETE /api/admin/icon-schedule/:id — elimina una regla. */
+export const deleteIconScheduleRule = asyncHandler(async (req: Request, res: Response) => {
+  const adminId = req.user?.userId ?? (req.user as { id?: string })?.id;
+  const id = req.params.id as string;
+  await adminService.deleteIconScheduleRule(id, adminId);
+  res.json({ success: true });
 });
 
 /** GET /api/admin/agent-logs — soporta ?type=PRECIO|... y ?limit= */

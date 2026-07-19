@@ -7,6 +7,7 @@ import 'package:http_parser/http_parser.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/extra_services_editor.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class CaregiverProfileDataScreen extends StatefulWidget {
   /// When true, the screen hides its own AppBar/Scaffold and calls
@@ -862,11 +863,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   Widget build(BuildContext context) {
     if (_isLoading) {
       if (widget.embeddedMode) {
-        return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
+        return const Center(child: GardenLoadingIndicator(color: GardenColors.primary));
       }
       return Scaffold(
         appBar: AppBar(title: const Text('Perfil profesional')),
-        body: const Center(child: CircularProgressIndicator(color: GardenColors.primary)),
+        body: const Center(child: GardenLoadingIndicator(color: GardenColors.primary)),
       );
     }
 
@@ -889,7 +890,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         title: const Text('Perfil profesional'),
         actions: [
           if (_isSaving)
-            const Center(child: Padding(padding: EdgeInsets.only(right: 16), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))))
+            const Center(child: Padding(padding: EdgeInsets.only(right: 16), child: GardenLoadingIndicator(size: 20, color: GardenColors.primary)))
           else if (_isEditing) ...[
             TextButton(onPressed: () { setState(() => _isEditing = false); _loadData(); }, child: Text('Cancelar', style: TextStyle(color: textColor))),
             TextButton(onPressed: _saveAllData, child: const Text('Guardar', style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.bold, fontSize: 15))),
@@ -958,7 +959,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                 if (_isSaving)
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary)),
+                    child: GardenLoadingIndicator(size: 20, color: GardenColors.primary),
                   )
                 else if (_isEditing) ...[
                   TextButton(
@@ -1089,7 +1090,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                     const SizedBox(height: 12),
                                     if (_uploadingCaregiverPhoto)
                                       const Padding(padding: EdgeInsets.only(bottom: 8), child: LinearProgressIndicator(color: GardenColors.primary)),
-                                    _buildCaregiverPhotoGrid(borderColor),
+                                    IgnorePointer(ignoring: !_isEditing, child: _buildCaregiverPhotoGrid(borderColor)),
                                   ],
                                 ),
                               ),
@@ -1107,8 +1108,15 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                       const SizedBox(height: 12),
                                       if (_uploadingPlacePhoto)
                                         const Padding(padding: EdgeInsets.only(bottom: 8), child: LinearProgressIndicator(color: GardenColors.primary)),
-                                      for (final (key, label, required) in _placeSections)
-                                        _buildPlaceSectionBlock(key, label, required, borderColor, textColor, subtextColor),
+                                      IgnorePointer(
+                                        ignoring: !_isEditing,
+                                        child: Column(
+                                          children: [
+                                            for (final (key, label, required) in _placeSections)
+                                              _buildPlaceSectionBlock(key, label, required, borderColor, textColor, subtextColor),
+                                          ],
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -1235,13 +1243,13 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                         ]),
                                       ),
                                     ] else ...[
-                                      _sectionField(_lExpDesc, _experienceDescController, _lExpDescHint, maxLines: 3),
+                                      IgnorePointer(ignoring: !_isEditing, child: _sectionField(_lExpDesc, _experienceDescController, _lExpDescHint, maxLines: 3)),
                                       const SizedBox(height: 10),
                                     ],
                                     // whyCaregiver y whatDiffers — siempre visibles
-                                    _sectionField(_lWhyLabel, _whyCaregiverController, _lWhyHint, maxLines: 2),
+                                    IgnorePointer(ignoring: !_isEditing, child: _sectionField(_lWhyLabel, _whyCaregiverController, _lWhyHint, maxLines: 2)),
                                     const SizedBox(height: 10),
-                                    _sectionField(_lDiffersLabel, _whatDiffersController, _lDiffersHint, maxLines: 2),
+                                    IgnorePointer(ignoring: !_isEditing, child: _sectionField(_lDiffersLabel, _whatDiffersController, _lDiffersHint, maxLines: 2)),
                                   ],
                                 ],
                               ),
@@ -1553,11 +1561,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             if (_needsSpaceSection) ...[
               SizedBox(key: _keySpaceType, height: 0),
               _sectionTitle('Tu espacio', textColor),
-              _buildHomeTypes(surface, borderColor),
+              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _buildHomeTypes(surface, borderColor)),
               const SizedBox(height: 16),
-              _buildSwitchTile('¿Tiene jardín o patio?', _hasYard, (v) => setState(() => _hasYard = v)),
-              _buildSwitchTile('¿Permite mascotas grandes?', _allowsLargePets, (v) => setState(() => _allowsLargePets = v)),
-              _buildSwitchTile('¿Permite múltiples mascotas?', _allowsMultiplePets, (v) => setState(() => _allowsMultiplePets = v)),
+              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _buildSwitchTile('¿Tiene jardín o patio?', _hasYard, (v) => setState(() => _hasYard = v))),
+              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _buildSwitchTile('¿Permite mascotas grandes?', _allowsLargePets, (v) => setState(() => _allowsLargePets = v))),
+              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _buildSwitchTile('¿Permite múltiples mascotas?', _allowsMultiplePets, (v) => setState(() => _allowsMultiplePets = v))),
               const Divider(height: 48),
             ],
 
@@ -1584,23 +1592,29 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             // Sección 5 — Tipos de mascotas
             SizedBox(key: _keyPetTypes, height: 0),
             _sectionTitle('Mascotas que aceptas', textColor),
-            Wrap(
-              spacing: 8,
-              children: _petTypes.map((t) => _filterChip(t, _petTypeLabels[t]!, _acceptedPetTypes, surface, borderColor)).toList(),
+            IgnorePointer(
+              ignoring: !widget.embeddedMode && !_isEditing,
+              child: Wrap(
+                spacing: 8,
+                children: _petTypes.map((t) => _filterChip(t, _petTypeLabels[t]!, _acceptedPetTypes, surface, borderColor)).toList(),
+              ),
             ),
             const Divider(height: 48),
 
             // Sección 7 — Tamaños
             SizedBox(key: _keySizes, height: 0),
             _sectionTitle('Tamaños aceptados', textColor),
-            Column(
-              children: _petSizes.map((s) => _buildCheckTile(_petSizeLabels[s]!, _acceptedSizes.contains(s), (v) {
-                setState(() { if (v!) {
-                  _acceptedSizes.add(s);
-                } else {
-                  _acceptedSizes.remove(s);
-                } });
-              })).toList(),
+            IgnorePointer(
+              ignoring: !widget.embeddedMode && !_isEditing,
+              child: Column(
+                children: _petSizes.map((s) => _buildCheckTile(_petSizeLabels[s]!, _acceptedSizes.contains(s), (v) {
+                  setState(() { if (v!) {
+                    _acceptedSizes.add(s);
+                  } else {
+                    _acceptedSizes.remove(s);
+                  } });
+                })).toList(),
+              ),
             ),
             const Divider(height: 48),
 
@@ -1618,7 +1632,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                   padding: EdgeInsets.symmetric(vertical: 8),
                   child: LinearProgressIndicator(color: GardenColors.primary),
                 ),
-              _buildCaregiverPhotoGrid(borderColor),
+              IgnorePointer(
+                ignoring: !widget.embeddedMode && !_isEditing,
+                child: _buildCaregiverPhotoGrid(borderColor),
+              ),
 
               if (_needsPlacePhotos) ...[
                 const SizedBox(height: 28),
@@ -1633,8 +1650,15 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                     padding: EdgeInsets.symmetric(vertical: 8),
                     child: LinearProgressIndicator(color: GardenColors.primary),
                   ),
-                for (final (key, label, required) in _placeSections)
-                  _buildPlaceSectionBlock(key, label, required, borderColor, textColor, subtextColor),
+                IgnorePointer(
+                  ignoring: !widget.embeddedMode && !_isEditing,
+                  child: Column(
+                    children: [
+                      for (final (key, label, required) in _placeSections)
+                        _buildPlaceSectionBlock(key, label, required, borderColor, textColor, subtextColor),
+                    ],
+                  ),
+                ),
               ],
               const Divider(height: 48),
             ],
@@ -1670,41 +1694,44 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             _sectionTitle(_lExpTitle, textColor),
             Text(_lYearsLabel, style: TextStyle(color: subtextColor, fontSize: 13)),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: [
-                for (final years in ['0', '1', '2', '3', '4', '5+'])
-                  GestureDetector(
-                    onTap: () => setState(() => _experienceYearsController.text = years),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      margin: const EdgeInsets.only(bottom: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: _experienceYearsController.text == years ? GardenColors.primary : surface,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: _experienceYearsController.text == years ? GardenColors.primary : borderColor,
+            IgnorePointer(
+              ignoring: !widget.embeddedMode && !_isEditing,
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  for (final years in ['0', '1', '2', '3', '4', '5+'])
+                    GestureDetector(
+                      onTap: () => setState(() => _experienceYearsController.text = years),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        margin: const EdgeInsets.only(bottom: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _experienceYearsController.text == years ? GardenColors.primary : surface,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: _experienceYearsController.text == years ? GardenColors.primary : borderColor,
+                          ),
                         ),
+                        child: Text(years,
+                          style: TextStyle(
+                            color: _experienceYearsController.text == years ? Colors.white : subtextColor,
+                            fontWeight: FontWeight.w600,
+                          )),
                       ),
-                      child: Text(years,
-                        style: TextStyle(
-                          color: _experienceYearsController.text == years ? Colors.white : subtextColor,
-                          fontWeight: FontWeight.w600,
-                        )),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
 
             // Follow-up: solo cuando experienceYears >= 1
             if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
               const SizedBox(height: 16),
-              _sectionField(_lExpDesc, _experienceDescController, _lExpDescHint, maxLines: 4),
+              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _sectionField(_lExpDesc, _experienceDescController, _lExpDescHint, maxLines: 4)),
               const SizedBox(height: 16),
-              _sectionField(_lWhyLabel, _whyCaregiverController, _lWhyHint, maxLines: 3),
+              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _sectionField(_lWhyLabel, _whyCaregiverController, _lWhyHint, maxLines: 3)),
               const SizedBox(height: 16),
-              _sectionField(_lDiffersLabel, _whatDiffersController, _lDiffersHint, maxLines: 3),
+              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _sectionField(_lDiffersLabel, _whatDiffersController, _lDiffersHint, maxLines: 3)),
             ],
 
             if (_isAmateur && _experienceYearsController.text == '0') ...[
@@ -1736,13 +1763,13 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             // Políticas de mascotas — siempre visibles (No/Sí desde el inicio)
             SizedBox(key: _keyPolicies, height: 0),
             _sectionTitle(_lPoliciesTitle, textColor),
-            _acceptSwitch('¿Aceptas mascotas agresivas?', _acceptAggressive, (val) => setState(() => _acceptAggressive = val), textColor, subtextColor, surface, borderColor),
+            IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _acceptSwitch('¿Aceptas mascotas agresivas?', _acceptAggressive, (val) => setState(() => _acceptAggressive = val), textColor, subtextColor, surface, borderColor)),
             const SizedBox(height: 8),
-            _acceptSwitch('¿Aceptas cachorros?', _acceptPuppies, (val) => setState(() => _acceptPuppies = val), textColor, subtextColor, surface, borderColor),
+            IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _acceptSwitch('¿Aceptas cachorros?', _acceptPuppies, (val) => setState(() => _acceptPuppies = val), textColor, subtextColor, surface, borderColor)),
             const SizedBox(height: 8),
-            _acceptSwitch('¿Aceptas mascotas mayores?', _acceptSeniors, (val) => setState(() => _acceptSeniors = val), textColor, subtextColor, surface, borderColor),
+            IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _acceptSwitch('¿Aceptas mascotas mayores?', _acceptSeniors, (val) => setState(() => _acceptSeniors = val), textColor, subtextColor, surface, borderColor)),
             const SizedBox(height: 8),
-            _acceptSwitch('¿Exiges Meet & Greet antes del primer servicio?', _requireMeetAndGreet, (val) => setState(() => _requireMeetAndGreet = val), textColor, subtextColor, surface, borderColor),
+            IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _acceptSwitch('¿Exiges Meet & Greet antes del primer servicio?', _requireMeetAndGreet, (val) => setState(() => _requireMeetAndGreet = val), textColor, subtextColor, surface, borderColor)),
 
             // Situaciones especiales — solo para no-amateurs
             if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
@@ -1751,12 +1778,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
               SizedBox(key: _keyHandleAnxious, height: 0),
               Text(_lAnxious, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
-              _buildChipsSection(_anxiousOptions, _selectedAnxiousOptions, surface, borderColor),
+              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _buildChipsSection(_anxiousOptions, _selectedAnxiousOptions, surface, borderColor)),
               const SizedBox(height: 20),
               SizedBox(key: _keyEmergencyResponse, height: 0),
               Text(_lEmergency, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
-              _buildChipsSection(_emergencyOptions, _selectedEmergencyOptions, surface, borderColor),
+              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _buildChipsSection(_emergencyOptions, _selectedEmergencyOptions, surface, borderColor)),
             ],
 
             const Divider(height: 48),
@@ -1775,7 +1802,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                   ),
                   onPressed: (_isSaving || !_isProfileComplete) ? null : _saveAllData,
                   child: _isSaving
-                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      ? const GardenLoadingIndicator(size: 24, color: Colors.white)
                       : const Text('Guardar y continuar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                 ),
               ),

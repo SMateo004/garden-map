@@ -10,6 +10,7 @@ import '../../utils/garden_banks.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/address_section.dart';
 import '../../services/cities_service.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class CaregiverEditProfileScreen extends StatefulWidget {
   const CaregiverEditProfileScreen({super.key});
@@ -51,6 +52,15 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
   String _selectedBankName = '';
   String _selectedBankType = 'CUENTA_AHORRO';
 
+  // Modalidad de cobro (transferencia bancaria vs QR de transferencia) y QR de
+  // cobro propio — mismo dato/endpoints que en la billetera (`/api/wallet`,
+  // `/api/wallet/withdrawal-method`, `/api/wallet/withdrawal-qr`). Vive en
+  // `User`, no en `CaregiverProfile`, por eso se carga aparte de `/caregiver/my-profile`.
+  String _withdrawalMethod = 'BANK_TRANSFER';
+  Map<String, dynamic>? _qrInfo;
+  bool _uploadingQr = false;
+  bool _switchingMethod = false;
+
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   @override
@@ -66,7 +76,106 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
       token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjOWViOGU0NS1hZTIwLTQyYTYtOGI5NC0wNmYzYTBiOTE4YjciLCJyb2xlIjoiQ0FSRUdJVkVSIiwiaWQiOiJjOWViOGU0NS1hZTIwLTQyYTYtOGI5NC0wNmYzYTBiOTE4YjciLCJpYXQiOjE3NDI0MjI3MTYsImV4cCI6MTc0NTAxNDcxNn0.8mIu-oA7N_R2xWj4J5_vC_REj78Vp2LMTM7R_g_J8-w';
     }
     setState(() => _caregiverToken = token);
-    await _loadProfile();
+    await Future.wait([_loadProfile(), _loadWithdrawalInfo()]);
+  }
+
+  /// Carga modalidad de cobro (BANK_TRANSFER/QR_TRANSFER) y el QR de cobro
+  /// vigente desde `/api/wallet` — el mismo endpoint que usa la billetera, ya
+  /// que ambos datos viven en `User`, no en `CaregiverProfile`.
+  Future<void> _loadWithdrawalInfo() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/wallet'),
+        headers: {'Authorization': 'Bearer $_caregiverToken'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true && mounted) {
+        final walletData = data['data'] as Map<String, dynamic>;
+        setState(() {
+          _withdrawalMethod = walletData['withdrawalMethod'] as String? ?? 'BANK_TRANSFER';
+          _qrInfo = walletData['qrInfo'] as Map<String, dynamic>?;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading withdrawal info: $e');
+    }
+  }
+
+  /// Cambia la modalidad de cobro preferida (transferencia bancaria vs QR de
+  /// transferencia). Persiste de inmediato en el backend, igual que en la
+  /// billetera — el backend valida cuál usar al procesar un retiro.
+  Future<void> _setWithdrawalMethod(String method) async {
+    if (_switchingMethod || _withdrawalMethod == method) return;
+    setState(() => _switchingMethod = true);
+    try {
+      final response = await http.put(
+        Uri.parse('$_baseUrl/wallet/withdrawal-method'),
+        headers: {'Authorization': 'Bearer $_caregiverToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'withdrawalMethod': method}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true && mounted) {
+        setState(() => _withdrawalMethod = method);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['error']?['message'] ?? 'No se pudo cambiar la modalidad de cobro'), backgroundColor: GardenColors.error),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error de conexión. Intenta de nuevo.'), backgroundColor: GardenColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _switchingMethod = false);
+    }
+  }
+
+  /// Sube (o reemplaza) el QR de cobro propio del cuidador para la modalidad
+  /// "QR de transferencia". El backend guarda historial (isCurrent) — ver
+  /// comentario en el modelo WithdrawalQr del schema.
+  Future<void> _pickAndUploadQr() async {
+    if (_uploadingQr) return;
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+    if (picked == null) return;
+
+    setState(() => _uploadingQr = true);
+    try {
+      final bytes = await picked.readAsBytes();
+      final fileName = picked.name.isEmpty ? 'qr.jpg' : picked.name;
+      final uri = Uri.parse('$_baseUrl/wallet/withdrawal-qr');
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Authorization'] = 'Bearer $_caregiverToken';
+      request.files.add(http.MultipartFile.fromBytes(
+        'qrImage', bytes, filename: fileName,
+        contentType: MediaType('image', 'jpeg'),
+      ));
+      final response = await http.Response.fromStream(await request.send());
+      final data = jsonDecode(response.body);
+      if (!mounted) return;
+      if (response.statusCode == 200 && data['success'] == true) {
+        setState(() {
+          _qrInfo = {'imageUrl': data['data']['imageUrl'], 'updatedAt': data['data']['updatedAt']};
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('QR de cobro actualizado'), backgroundColor: GardenColors.success),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['error']?['message'] ?? 'Error al subir el QR'), backgroundColor: GardenColors.error),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error de conexión. Intenta de nuevo.'), backgroundColor: GardenColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingQr = false);
+    }
   }
 
   Future<void> _loadProfile() async {
@@ -307,7 +416,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
           ),
           bottomNavigationBar: _buildEditBarSimple(surface, borderColor, subtextColor),
           body: _isLoading
-              ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+              ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
                   child: Column(
@@ -329,15 +438,18 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                                 ),
                             Positioned(
                               bottom: 0, right: 0,
-                              child: GestureDetector(
-                                onTap: _pickProfilePhoto,
-                                child: Container(
-                                  width: 32, height: 32,
-                                  decoration: const BoxDecoration(
-                                    color: GardenColors.primary,
-                                    shape: BoxShape.circle,
+                              child: IgnorePointer(
+                                ignoring: !_isEditing,
+                                child: GestureDetector(
+                                  onTap: _pickProfilePhoto,
+                                  child: Container(
+                                    width: 32, height: 32,
+                                    decoration: const BoxDecoration(
+                                      color: GardenColors.primary,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
                                   ),
-                                  child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
                                 ),
                               ),
                             ),
@@ -494,7 +606,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                 if (_isSaving)
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary)),
+                    child: GardenLoadingIndicator(size: 20, color: GardenColors.primary),
                   )
                 else if (_isEditing) ...[
                   TextButton(
@@ -540,7 +652,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
           // ── Body — sin AbsorbPointer ───────────────────────────────────────
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+                ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
                 : SingleChildScrollView(
                     padding: const EdgeInsets.only(top: 28, left: 24, right: 24, bottom: 100),
                     child: Center(
@@ -713,7 +825,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
       child: Row(
         children: [
           if (_isSaving) ...[
-            const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary)),
+            const GardenLoadingIndicator(size: 18, color: GardenColors.primary),
             const SizedBox(width: 12),
             Text('Guardando...', style: TextStyle(color: subtextColor, fontSize: 13)),
           ] else if (_isEditing) ...[
@@ -792,12 +904,15 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
                     ),
               Positioned(
                 bottom: 0, right: 0,
-                child: GestureDetector(
-                  onTap: _pickProfilePhoto,
-                  child: Container(
-                    width: 24, height: 24,
-                    decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
-                    child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 13),
+                child: IgnorePointer(
+                  ignoring: !_isEditing,
+                  child: GestureDetector(
+                    onTap: _pickProfilePhoto,
+                    child: Container(
+                      width: 24, height: 24,
+                      decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),
+                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 13),
+                    ),
                   ),
                 ),
               ),
@@ -938,66 +1053,192 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
           const SizedBox(height: 12),
         ],
 
-        // Selector banco/billetera
-        GestureDetector(
-          onTap: () => _showBankPickerSheet(context, isDark),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: surfaceEl,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _selectedBankName.isEmpty ? borderColor : GardenColors.primary.withValues(alpha: 0.5)),
+        // ── Selector de modalidad: transferencia bancaria vs QR de transferencia ──
+        // Mismo selector que en la billetera — persiste de inmediato, no
+        // espera al botón "Guardar cambios" de esta pantalla.
+        Row(
+          children: [
+            Expanded(
+              child: _withdrawalMethodChip(
+                'Transferencia bancaria', Icons.account_balance_rounded, 'BANK_TRANSFER',
+                textColor, subtextColor, surfaceEl, borderColor,
+              ),
             ),
-            child: Row(
-              children: [
-                Icon(
-                  _selectedBankName.isEmpty ? Icons.account_balance_rounded : (isWallet ? Icons.account_balance_wallet_rounded : Icons.account_balance_rounded),
-                  color: _selectedBankName.isEmpty ? subtextColor : GardenColors.primary, size: 20,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _selectedBankName.isEmpty
-                      ? Text('Selecciona banco o billetera', style: TextStyle(color: subtextColor, fontSize: 14))
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(_selectedBankName, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
-                            Text(GardenBanks.typeLabels[_selectedBankType] ?? _selectedBankType, style: TextStyle(color: subtextColor, fontSize: 11)),
-                          ],
-                        ),
-                ),
-                Icon(Icons.keyboard_arrow_down_rounded, color: subtextColor, size: 20),
-              ],
+            const SizedBox(width: 10),
+            Expanded(
+              child: _withdrawalMethodChip(
+                'QR de transferencia', Icons.qr_code_2_rounded, 'QR_TRANSFER',
+                textColor, subtextColor, surfaceEl, borderColor,
+              ),
             ),
-          ),
+          ],
         ),
+        const SizedBox(height: 14),
 
-        if (_selectedBankName.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          // Tipo de cuenta (solo bancos tradicionales)
-          if (!isWallet)
-            Row(
-              children: [
-                _accountTypeChip('Cuenta de ahorro', 'CUENTA_AHORRO', textColor, subtextColor),
-                const SizedBox(width: 10),
-                _accountTypeChip('Cuenta corriente', 'CUENTA_CORRIENTE', textColor, subtextColor),
-              ],
+        if (_withdrawalMethod == 'QR_TRANSFER')
+          _buildQrSection(textColor, subtextColor, surfaceEl, borderColor)
+        else ...[
+          // Selector banco/billetera
+          GestureDetector(
+            onTap: () => _showBankPickerSheet(context, isDark),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: surfaceEl,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _selectedBankName.isEmpty ? borderColor : GardenColors.primary.withValues(alpha: 0.5)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _selectedBankName.isEmpty ? Icons.account_balance_rounded : (isWallet ? Icons.account_balance_wallet_rounded : Icons.account_balance_rounded),
+                    color: _selectedBankName.isEmpty ? subtextColor : GardenColors.primary, size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _selectedBankName.isEmpty
+                        ? Text('Selecciona banco o billetera', style: TextStyle(color: subtextColor, fontSize: 14))
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(_selectedBankName, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
+                              Text(GardenBanks.typeLabels[_selectedBankType] ?? _selectedBankType, style: TextStyle(color: subtextColor, fontSize: 11)),
+                            ],
+                          ),
+                  ),
+                  Icon(Icons.keyboard_arrow_down_rounded, color: subtextColor, size: 20),
+                ],
+              ),
             ),
-          if (!isWallet) const SizedBox(height: 10),
-          TextField(
-            controller: _bankAccountController,
-            keyboardType: TextInputType.number,
-            style: TextStyle(color: textColor),
-            decoration: _inputDecoration(isWallet ? 'Número de teléfono (ej: 70012345)' : 'Número de cuenta bancaria', isDark),
           ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _bankHolderController,
-            style: TextStyle(color: textColor),
-            decoration: _inputDecoration('Nombre completo del titular', isDark),
-          ),
+
+          if (_selectedBankName.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            // Tipo de cuenta (solo bancos tradicionales)
+            if (!isWallet)
+              Row(
+                children: [
+                  _accountTypeChip('Cuenta de ahorro', 'CUENTA_AHORRO', textColor, subtextColor),
+                  const SizedBox(width: 10),
+                  _accountTypeChip('Cuenta corriente', 'CUENTA_CORRIENTE', textColor, subtextColor),
+                ],
+              ),
+            if (!isWallet) const SizedBox(height: 10),
+            TextField(
+              controller: _bankAccountController,
+              keyboardType: TextInputType.number,
+              style: TextStyle(color: textColor),
+              decoration: _inputDecoration(isWallet ? 'Número de teléfono (ej: 70012345)' : 'Número de cuenta bancaria', isDark),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _bankHolderController,
+              style: TextStyle(color: textColor),
+              decoration: _inputDecoration('Nombre completo del titular', isDark),
+            ),
+          ],
         ],
       ],
+    );
+  }
+
+  /// Chip seleccionable para elegir la modalidad de cobro (transferencia
+  /// bancaria vs QR de transferencia) — mismo widget/estilo que en la billetera.
+  Widget _withdrawalMethodChip(
+    String label, IconData icon, String method,
+    Color textColor, Color subtextColor, Color surface, Color borderColor,
+  ) {
+    final isSelected = _withdrawalMethod == method;
+    return GestureDetector(
+      onTap: _switchingMethod ? null : () => _setWithdrawalMethod(method),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? GardenColors.primary.withValues(alpha: 0.1) : surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: isSelected ? GardenColors.primary : borderColor),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: isSelected ? GardenColors.primary : subtextColor, size: 20),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isSelected ? GardenColors.primary : textColor,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Sección "QR de transferencia": muestra el QR de cobro vigente (si hay
+  /// uno) y permite subir/reemplazar uno nuevo — mismo widget/estilo que en
+  /// la billetera. El cuidador sube su propio QR de cobro (el que genera su
+  /// banco o billetera personal para recibir pagos).
+  Widget _buildQrSection(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    final qrInfo = _qrInfo;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 64, height: 64,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor),
+            ),
+            child: qrInfo != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(11),
+                    child: Image.network(qrInfo['imageUrl'] as String, fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: GardenColors.error)),
+                  )
+                : Icon(Icons.qr_code_2_rounded, color: subtextColor.withValues(alpha: 0.4), size: 28),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  qrInfo != null ? 'QR de cobro cargado' : 'Sube tu QR de cobro',
+                  style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  qrInfo != null
+                      ? 'Es el que genera tu banco o billetera para recibir pagos. Puedes reemplazarlo cuando quieras.'
+                      : 'Sube el QR de cobro que genera tu banco o billetera para recibir pagos.',
+                  style: TextStyle(color: subtextColor, fontSize: 12),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: _uploadingQr ? null : _pickAndUploadQr,
+                  icon: _uploadingQr
+                      ? const GardenLoadingIndicator(size: 14, color: GardenColors.primary)
+                      : const Icon(Icons.upload_rounded, size: 16),
+                  label: Text(_uploadingQr ? 'Subiendo...' : (qrInfo != null ? 'Reemplazar QR' : 'Subir QR')),
+                  style: OutlinedButton.styleFrom(foregroundColor: GardenColors.primary, side: const BorderSide(color: GardenColors.primary)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

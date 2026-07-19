@@ -305,11 +305,19 @@ router.get('/dashboard-stats', authMiddleware, requireRole('CAREGIVER'),
     const profile = await prisma.caregiverProfile.findUnique({
       where: { userId },
       select: {
-        id: true, balance: true, rating: true, reviewCount: true,
+        id: true, rating: true, reviewCount: true,
         onboardingStatus: true, profilePhoto: true, status: true,
       },
     });
     if (!profile) return res.status(404).json({ success: false });
+
+    // Balance real vive en User.balance (única fuente de verdad — ver
+    // wallet.routes.ts). CaregiverProfile.balance está @deprecated y nunca lo
+    // actualiza el sistema de retiros/ganancias, así que leerlo de ahí
+    // devolvía siempre un número desactualizado (típicamente 0) sin importar
+    // cuánto tuviera el cuidador en realidad.
+    const userRecord = await prisma.user.findUnique({ where: { id: userId }, select: { balance: true } });
+    const realBalance = Number(userRecord?.balance ?? 0);
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -352,12 +360,16 @@ router.get('/dashboard-stats', authMiddleware, requireRole('CAREGIVER'),
         orderBy: [{ walkDate: 'asc' }, { startDate: 'asc' }],
         select: { id: true, walkDate: true, startDate: true, petName: true, serviceType: true, startTime: true },
       }),
+      // Incluye OVERTIME_EARNING (pago por espera extra) además de EARNING —
+      // mismo fix que en wallet.routes.ts: ambos tipos incrementan
+      // User.balance, así que "Ganado" debe sumar los dos o queda por debajo
+      // del saldo real apenas hay un cobro de tiempo extra.
       prisma.walletTransaction.aggregate({
-        where: { userId, type: 'EARNING', createdAt: { gte: startOfMonth } },
+        where: { userId, type: { in: ['EARNING', 'OVERTIME_EARNING'] }, status: 'COMPLETED', createdAt: { gte: startOfMonth } },
         _sum: { amount: true },
       }),
       prisma.walletTransaction.aggregate({
-        where: { userId, type: 'EARNING' },
+        where: { userId, type: { in: ['EARNING', 'OVERTIME_EARNING'] }, status: 'COMPLETED' },
         _sum: { amount: true },
       }),
     ]);
@@ -399,7 +411,7 @@ router.get('/dashboard-stats', authMiddleware, requireRole('CAREGIVER'),
       success: true,
       data: {
         // Campos existentes (retrocompat)
-        balance: Number(profile.balance),
+        balance: realBalance,
         totalBookings,
         monthBookings,
         completedBookings,

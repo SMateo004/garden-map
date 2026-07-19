@@ -11,6 +11,7 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../../theme/garden_theme.dart';
 import '../../utils/garden_banks.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -19,13 +20,19 @@ class WalletScreen extends StatefulWidget {
   State<WalletScreen> createState() => _WalletScreenState();
 }
 
-class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderStateMixin {
+class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   Map<String, dynamic>? _walletData;
   bool _isLoading = true;
   String _token = '';
   String _role = '';
   bool _uploadingQr = false;
   bool _switchingMethod = false;
+  // Los datos de cobro (número de cuenta, titular, QR de pago) son
+  // información sensible que antes se mostraba siempre expandida en la
+  // billetera — el dueño de la plataforma pidió ocultarla por defecto y
+  // solo revelarla a pedido ("que solo se vean si los necesitamos"), para
+  // no exponerla de entrada y limpiar el ruido visual de la pantalla.
+  bool _showPayoutDetails = false;
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   // Socket liviano solo para escuchar `wallet_updated` (ganancia liberada,
@@ -50,6 +57,15 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   late final AnimationController _flipController =
       AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
 
+  /// Enmascara un número de cuenta/teléfono dejando solo los últimos 4
+  /// dígitos visibles (ej. "77712345" → "•••• 2345"). Si el valor es muy
+  /// corto (4 o menos caracteres) se enmascara por completo para no perder
+  /// el propósito de ocultarlo.
+  String _maskAccount(String value) {
+    if (value.length <= 4) return '•' * value.length;
+    return '•••• ${value.substring(value.length - 4)}';
+  }
+
   void _toggleDonorFlip() {
     if (_donorCardFlipped) {
       _flipController.reverse();
@@ -62,7 +78,27 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initWallet();
+  }
+
+  // Un retiro puede aprobarse (o rechazarse) mientras la app está en segundo
+  // plano: en iOS/Android el socket se corta al suspender y, aunque
+  // socket.io reconecta solo al volver, el evento `wallet_updated` emitido
+  // *mientras* estuvo desconectado no se reenvía — el backend solo emite una
+  // vez, no encola. Resultado: el usuario reabre la app, ve la pantalla de
+  // billetera que ya tenía montada y sigue mostrando "pendiente" un retiro
+  // que el admin ya completó, hasta que hace pull-to-refresh a mano. Forzar
+  // un refetch al volver a foreground cierra ese hueco sin depender de que
+  // el socket haya alcanzado a reconectar y recibir el evento a tiempo.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _token.isNotEmpty) {
+      _loadWallet();
+      if (_walletSocket != null && _walletSocket!.disconnected) {
+        _walletSocket!.connect();
+      }
+    }
   }
 
   Future<void> _loadDonorCard() async {
@@ -86,6 +122,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _cardPageController.dispose();
     _flipController.dispose();
     _walletSocket?.disconnect();
@@ -275,7 +312,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                   ),
                 ),
               Expanded(child: _isLoading
-              ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+              ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
               : RefreshIndicator(
                 // El saldo se carga una sola vez en initState — si el usuario paga
                 // algo desde otra pantalla y vuelve a la wallet, no hay ningún
@@ -390,14 +427,30 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                                         children: [
                                           Text(_walletData!['bankInfo']!['bankName'] as String,
                                               style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
-                                          Text('${_walletData!['bankInfo']!['bankHolder']} · ${_walletData!['bankInfo']!['bankAccount']}',
-                                              style: TextStyle(color: subtextColor, fontSize: 13)),
+                                          Text(
+                                            _showPayoutDetails
+                                                ? '${_walletData!['bankInfo']!['bankHolder']} · ${_walletData!['bankInfo']!['bankAccount']}'
+                                                : _maskAccount(_walletData!['bankInfo']!['bankAccount'] as String? ?? ''),
+                                            style: TextStyle(color: subtextColor, fontSize: 13),
+                                          ),
                                         ],
                                       )
                                     : Text('Configura tus datos para cobrar',
                                         style: TextStyle(color: subtextColor, fontSize: 13, fontStyle: FontStyle.italic)),
                               ),
-                              const SizedBox(width: 8),
+                              if (_walletData?['bankInfo']?['bankName'] != null) ...[
+                                const SizedBox(width: 4),
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  icon: Icon(
+                                    _showPayoutDetails ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                                    color: subtextColor, size: 18,
+                                  ),
+                                  tooltip: _showPayoutDetails ? 'Ocultar datos de cobro' : 'Ver datos de cobro',
+                                  onPressed: () => setState(() => _showPayoutDetails = !_showPayoutDetails),
+                                ),
+                              ],
+                              const SizedBox(width: 4),
                               TextButton(
                                 onPressed: _showBankInfoSheet,
                                 child: Text(
@@ -502,7 +555,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
               ] else ...[
                 _walletStat('Pagado', 'Bs ${(_walletData?['totalPaid'] ?? 0).toStringAsFixed(0)}', Colors.white70),
                 const SizedBox(width: 20),
-                _walletStat('Reembolsos', 'Bs ${(_walletData?['totalRefunded'] ?? 0).toStringAsFixed(0)}', GardenColors.info),
+                _walletStat('Reembolsos', 'Bs ${(_walletData?['totalRefunds'] ?? 0).toStringAsFixed(0)}', GardenColors.info),
               ],
             ],
           ),
@@ -562,29 +615,53 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 64, height: 64,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: borderColor),
+          GestureDetector(
+            onTap: qrInfo != null ? () => setState(() => _showPayoutDetails = !_showPayoutDetails) : null,
+            child: Container(
+              width: 64, height: 64,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: borderColor),
+              ),
+              child: qrInfo != null
+                  ? (_showPayoutDetails
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(11),
+                          child: Image.network(qrInfo['imageUrl'] as String, fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: GardenColors.error)),
+                        )
+                      // El QR es un dato de cobro escaneable — se oculta por
+                      // defecto igual que el número de cuenta, y se revela
+                      // con el mismo toque que el ojo de "Datos bancarios".
+                      : Icon(Icons.visibility_off_rounded, color: subtextColor.withValues(alpha: 0.5), size: 24))
+                  : Icon(Icons.qr_code_2_rounded, color: subtextColor.withValues(alpha: 0.4), size: 28),
             ),
-            child: qrInfo != null
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(11),
-                    child: Image.network(qrInfo['imageUrl'] as String, fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: GardenColors.error)),
-                  )
-                : Icon(Icons.qr_code_2_rounded, color: subtextColor.withValues(alpha: 0.4), size: 28),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  qrInfo != null ? 'QR de cobro cargado' : 'Sube tu QR de cobro',
-                  style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        qrInfo != null ? 'QR de cobro cargado' : 'Sube tu QR de cobro',
+                        style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13),
+                      ),
+                    ),
+                    if (qrInfo != null)
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        icon: Icon(
+                          _showPayoutDetails ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                          color: subtextColor, size: 18,
+                        ),
+                        tooltip: _showPayoutDetails ? 'Ocultar QR' : 'Ver QR',
+                        onPressed: () => setState(() => _showPayoutDetails = !_showPayoutDetails),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -597,7 +674,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                 OutlinedButton.icon(
                   onPressed: _uploadingQr ? null : _pickAndUploadQr,
                   icon: _uploadingQr
-                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))
+                      ? const GardenLoadingIndicator(size: 14, color: GardenColors.primary)
                       : const Icon(Icons.upload_rounded, size: 16),
                   label: Text(_uploadingQr ? 'Subiendo...' : (qrInfo != null ? 'Reemplazar QR' : 'Subir QR')),
                   style: OutlinedButton.styleFrom(foregroundColor: GardenColors.primary, side: const BorderSide(color: GardenColors.primary)),
@@ -686,10 +763,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
           ),
           const Spacer(),
           if (_loadingDonorCard)
-            const SizedBox(
-              width: 22, height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2, color: _donorGold),
-            )
+            const GardenLoadingIndicator(size: 22, color: _donorGold)
           else ...[
             Text('Bs ${total.toStringAsFixed(0)} donados',
                 style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),

@@ -66,8 +66,10 @@ import 'services/auth_state.dart'; // sessionExpiredNotifier + AuthState
 import 'services/web_notification_service.dart';
 import 'services/global_http_client.dart'; // maintenanceNotifier + networkErrorNotifier
 import 'services/presence_service.dart';
+import 'services/icon_schedule_service.dart';
 import 'utils/web_redirect.dart';
 import 'package:http/http.dart' as http;
+import './widgets/garden_loading_indicator.dart';
 
 // ── Build-time env (set via --dart-define) ─────────────────
 const _kSentryDsn    = String.fromEnvironment('SENTRY_DSN');
@@ -103,7 +105,7 @@ class _MobileAuthGateState extends State<_MobileAuthGate> {
   Widget build(BuildContext context) {
     return const Scaffold(
       backgroundColor: GardenColors.background,
-      body: Center(child: CircularProgressIndicator(color: GardenColors.primary, strokeWidth: 2)),
+      body: Center(child: GardenLoadingIndicator(color: GardenColors.primary)),
     );
   }
 }
@@ -710,6 +712,15 @@ Future<void> _bootstrap() async {
   if (!kIsWeb) {
     unawaited(_initNotificationsInBackground());
   }
+
+  // Icono estacional: chequea la variante activa configurada en el panel admin y la
+  // aplica vía plataforma nativa si cambió (ver icon_schedule_service.dart — límite
+  // real: solo puede alternar entre variantes ya empaquetadas en este build). No
+  // bloquea el primer frame; en iOS un cambio real dispara un diálogo del sistema,
+  // por eso no conviene esperarlo aquí.
+  if (!kIsWeb) {
+    unawaited(IconScheduleService.instance.checkAndApplyOnLaunch());
+  }
 }
 
 Future<void> _initNotificationsInBackground() async {
@@ -787,8 +798,10 @@ class _GardenAppState extends State<GardenApp> with WidgetsBindingObserver {
     sessionExpiredNotifier.addListener(_onSessionExpired);
     // Escuchar mantenimiento activado mid-sesión (no solo al abrir la app).
     maintenanceNotifier.addListener(_onMaintenanceDetected);
-    // Escuchar errores de red para mostrar un banner global.
+    // Escuchar errores de red para mostrar un diálogo global de "sin conexión".
     networkErrorNotifier.addListener(_onNetworkError);
+    // Recheck automático cada 3s mientras estemos offline — ver global_http_client.dart.
+    ConnectivityMonitor.instance.start();
   }
 
   @override
@@ -844,33 +857,72 @@ class _GardenAppState extends State<GardenApp> with WidgetsBindingObserver {
     });
   }
 
-  // Debounce de 5s antes de mostrar el banner de "sin conexión" — sin esto,
+  // Debounce de 5s antes de mostrar el diálogo de "sin conexión" — sin esto,
   // el primer request que falla justo al reabrir la app (típico: la red/socket
-  // todavía no terminó de reconectarse) disparaba el snackbar de inmediato,
+  // todavía no terminó de reconectarse) disparaba el aviso de inmediato,
   // aunque la siguiente request 1 segundo después ya funcionara bien. Ahora
   // solo se muestra si la falla de red sigue activa 5 segundos después.
   Timer? _networkErrorTimer;
 
+  // Evita que el diálogo se apile si el chequeo de fondo (cada 3s, ver
+  // ConnectivityMonitor) y una llamada real de la app fallan casi al mismo
+  // tiempo — solo puede haber una instancia visible.
+  bool _offlineDialogOpen = false;
+
   void _onNetworkError() {
     final message = networkErrorNotifier.value;
     _networkErrorTimer?.cancel();
-    if (message == null) return; // recovery: cancelar cualquier aviso pendiente
+    if (message == null) {
+      // Recuperado: cancelar cualquier aviso pendiente y cerrar el diálogo
+      // si estaba abierto — el usuario no tiene que hacer nada.
+      _dismissOfflineDialog();
+      return;
+    }
+    if (_offlineDialogOpen) return; // ya se está mostrando, no reprogramar
     _networkErrorTimer = Timer(const Duration(seconds: 5), () {
       // Puede haber cambiado (o recuperado) mientras esperábamos — solo
       // mostrar si la falla sigue siendo la misma que disparó el timer.
       final stillFailing = networkErrorNotifier.value;
-      if (stillFailing == null) return;
-      final messenger = _scaffoldMessengerKey.currentState;
-      if (messenger == null) return;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(stillFailing),
-          backgroundColor: const Color(0xFF424242),
-          duration: const Duration(seconds: 6),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (stillFailing == null || _offlineDialogOpen) return;
+      _showOfflineDialog(stillFailing);
     });
+  }
+
+  void _showOfflineDialog(String message) {
+    final context = _router.routerDelegate.navigatorKey.currentContext;
+    if (context == null || !mounted) return;
+    _offlineDialogOpen = true;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => _OfflineDialog(
+        message: message,
+        onRetry: () async {
+          final restored = await ConnectivityMonitor.instance.checkNow();
+          if (restored && dialogContext.mounted) {
+            Navigator.of(dialogContext).pop();
+          }
+        },
+      ),
+    ).then((_) {
+      // Se cerró (por auto-dismiss al recuperar, o el usuario lo cerró).
+      _offlineDialogOpen = false;
+    });
+  }
+
+  void _dismissOfflineDialog() {
+    if (!_offlineDialogOpen) return;
+    final context = _router.routerDelegate.navigatorKey.currentContext;
+    if (context != null) {
+      // showDialog pushes onto the root navigator by default (useRootNavigator:
+      // true) — pop from there specifically so we close the dialog route and
+      // not whatever's on top of the nested go_router navigator.
+      final rootNavigator = Navigator.of(context, rootNavigator: true);
+      if (rootNavigator.canPop()) {
+        rootNavigator.pop();
+      }
+    }
+    _offlineDialogOpen = false;
   }
 
   @override
@@ -958,6 +1010,66 @@ class _GardenErrorWidget extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Diálogo de "sin conexión" ────────────────────────────────
+// Reemplaza al viejo snackbar gris: en vez de un aviso pasajero que se
+// mostraba de inmediato (y a veces por un blip de un segundo), ahora es un
+// diálogo modal que solo aparece tras 5s de falla continua (ver
+// _GardenAppState._onNetworkError), con retry manual y auto-dismiss cuando
+// ConnectivityMonitor detecta que la conexión volvió.
+class _OfflineDialog extends StatefulWidget {
+  final String message;
+  final Future<void> Function() onRetry;
+
+  const _OfflineDialog({required this.message, required this.onRetry});
+
+  @override
+  State<_OfflineDialog> createState() => _OfflineDialogState();
+}
+
+class _OfflineDialogState extends State<_OfflineDialog> {
+  bool _retrying = false;
+
+  Future<void> _handleRetry() async {
+    if (_retrying) return;
+    setState(() => _retrying = true);
+    try {
+      await widget.onRetry();
+    } finally {
+      if (mounted) setState(() => _retrying = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    return AlertDialog(
+      icon: const Text('📡', style: TextStyle(fontSize: 32)),
+      title: const Text('Sin conexión'),
+      content: Text(
+        'No pudimos conectar con el servidor. Revisa tu conexión a internet '
+        'e intenta de nuevo.\n\n'
+        '(${widget.message})',
+        style: TextStyle(
+          fontSize: 13,
+          color: isDark ? Colors.white70 : Colors.black54,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _retrying ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cerrar'),
+        ),
+        FilledButton(
+          onPressed: _retrying ? null : _handleRetry,
+          child: _retrying
+              ? const GardenLoadingIndicator(size: 16)
+              : const Text('Reintentar'),
+        ),
+      ],
     );
   }
 }

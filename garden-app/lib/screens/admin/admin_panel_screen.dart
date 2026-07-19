@@ -24,6 +24,7 @@ import 'payment_qr_admin_screen.dart';
 import 'audit_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -130,7 +131,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         setState(() => _pendingPayments = (pending['data']['bookings'] as List).cast<Map<String, dynamic>>());
       }
       if (history['success'] == true) {
-        setState(() => _paymentsHistory = (history['data'] as List).cast<Map<String, dynamic>>());
+        // El backend devuelve { data: { payments: [...], total, pagination } },
+        // no una lista directa — castear `data` a List siempre tiraba un
+        // TypeError silencioso acá, dejando el historial vacío para siempre.
+        setState(() => _paymentsHistory = (history['data']['payments'] as List).cast<Map<String, dynamic>>());
       }
     } catch (e) {
       debugPrint('Error loading main payments: $e');
@@ -1252,7 +1256,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         _buildCaregiverStatusFilter(subtextColor, borderColor),
         Expanded(
           child: _isLoading 
-            ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+            ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
             : filtered.isEmpty
               ? const GardenEmptyState(
                   type: GardenEmptyType.caregivers,
@@ -1644,7 +1648,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         ),
         Expanded(
           child: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+            ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
             : _identityReviews.isEmpty
               ? const GardenEmptyState(
                   type: GardenEmptyType.identity,
@@ -1816,7 +1820,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         // ── Dispute list ───────────────────────────────────────────
         Expanded(
           child: _isLoadingDisputes
-              ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+              ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
               : _disputes.isEmpty
                   ? const GardenEmptyState(
                       type: GardenEmptyType.bookings,
@@ -2523,7 +2527,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
     if (_isLoadingPayments) {
-      return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
+      return const Center(child: GardenLoadingIndicator(color: GardenColors.primary));
     }
 
     // ── Computed stats from history ──────────────────────────────
@@ -3475,7 +3479,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         ),
         Expanded(
           child: _isLoading 
-            ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+            ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
             : _withdrawals.isEmpty
               ? const GardenEmptyState(
                   type: GardenEmptyType.withdrawals,
@@ -3718,7 +3722,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         ),
         Expanded(
           child: _isLoading
-              ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+              ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
               : filtered.isEmpty
                   ? const GardenEmptyState(type: GardenEmptyType.bookings, title: 'Sin reservas', subtitle: 'No hay reservas con este filtro.', compact: true)
                   : ListView.builder(
@@ -3840,7 +3844,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         ),
         Expanded(
           child: _isLoading
-              ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+              ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
               : _giftCodes.isEmpty
                   ? const GardenEmptyState(type: GardenEmptyType.bookings, title: 'Sin códigos', subtitle: 'Crea el primer código de regalo.', compact: true)
                   : ListView.builder(
@@ -4167,7 +4171,7 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
             decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
           ),
           if (_loading)
-            const Expanded(child: Center(child: CircularProgressIndicator(color: GardenColors.primary)))
+            const Expanded(child: Center(child: GardenLoadingIndicator(color: GardenColors.primary)))
           else if (_error != null && _detail == null) ...[
             // Show summary data + error banner as fallback
             Container(
@@ -5356,7 +5360,7 @@ class _AdminBannersViewState extends State<_AdminBannersView> {
         label: const Text('Nuevo Banner', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+          ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
           : ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), children: [
               Text('Banners del Marketplace', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
               const SizedBox(height: 4),
@@ -5484,7 +5488,7 @@ class _AdminFeatureFlagsViewState extends State<_AdminFeatureFlagsView> {
         label: const Text('Asignar Flag', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+          ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
           : ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), children: [
               Text('Feature Flags por Usuario', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
               const SizedBox(height: 4),
