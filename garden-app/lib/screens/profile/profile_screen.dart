@@ -12,6 +12,7 @@ import '../client/nearby_vets_screen.dart';
 import 'blocked_users_screen.dart';
 import '../../services/auth_state.dart';
 import '../../services/secure_storage_service.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -693,7 +694,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   ),
                 ),
               Expanded(child: _isLoading
-              ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+              ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
                   child: Center(child: ConstrainedBox(
@@ -1087,8 +1088,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       child: GestureDetector(
                         onTap: _isDeletingAccount ? null : _deleteAccount,
                         child: _isDeletingAccount
-                            ? const SizedBox(width: 14, height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 1.5, color: GardenColors.error))
+                            ? const GardenLoadingIndicator(size: 14, color: GardenColors.error)
                             : Text('Eliminar cuenta', style: TextStyle(
                                 color: GardenColors.error.withValues(alpha: 0.45),
                                 fontSize: 12, fontWeight: FontWeight.w400,
@@ -1401,10 +1401,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           child: GestureDetector(
             onTap: _isDeletingAccount ? null : _deleteAccount,
             child: _isDeletingAccount
-                ? const SizedBox(
-                    width: 14, height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 1.5, color: GardenColors.error),
-                  )
+                ? const GardenLoadingIndicator(size: 14, color: GardenColors.error)
                 : Text(
                     'Eliminar cuenta',
                     style: TextStyle(
@@ -1456,10 +1453,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     borderRadius: BorderRadius.circular(GardenRadius.sm),
                   ),
                   child: _isSwitchingRole
-                      ? SizedBox(
-                          width: 17, height: 17,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: accent),
-                        )
+                      ? GardenLoadingIndicator(size: 17, color: accent)
                       : Icon(icon, color: accent, size: 17),
                 ),
                 const SizedBox(width: 14),
@@ -1676,11 +1670,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             child: GestureDetector(
               onTap: _isAbandoningConversion ? null : _confirmAbandonConversion,
               child: _isAbandoningConversion
-                  ? const SizedBox(
-                      width: 14, height: 14,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 1.5, color: GardenColors.error),
-                    )
+                  ? const GardenLoadingIndicator(size: 14, color: GardenColors.error)
                   : Text(
                       'Abandonar formulario',
                       style: TextStyle(
