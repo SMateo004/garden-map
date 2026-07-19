@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class AdminGeneralScreen extends StatefulWidget {
   final String adminToken;
@@ -20,7 +21,7 @@ class _AdminGeneralScreenState extends State<AdminGeneralScreen>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 4, vsync: this);
+    _tabCtrl = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -54,6 +55,7 @@ class _AdminGeneralScreenState extends State<AdminGeneralScreen>
               Tab(icon: Icon(Icons.account_balance_rounded, size: 16), text: 'Financiero'),
               Tab(icon: Icon(Icons.map_rounded, size: 16), text: 'Zonas'),
               Tab(icon: Icon(Icons.favorite_rounded, size: 16), text: 'Donaciones'),
+              Tab(icon: Icon(Icons.image_rounded, size: 16), text: 'Icono'),
             ],
           ),
         ),
@@ -65,6 +67,7 @@ class _AdminGeneralScreenState extends State<AdminGeneralScreen>
               _FinancialTab(adminToken: widget.adminToken),
               _ZonesTab(adminToken: widget.adminToken),
               _DonationsTab(adminToken: widget.adminToken),
+              _IconScheduleTab(adminToken: widget.adminToken),
             ],
           ),
         ),
@@ -145,7 +148,7 @@ class _LiveStatsTabState extends State<_LiveStatsTab> {
 
     if (_isLoading) {
       return const Center(
-          child: CircularProgressIndicator(color: GardenColors.primary));
+          child: GardenLoadingIndicator(color: GardenColors.primary));
     }
     if (_data == null) {
       return Center(child: Text('Error al cargar', style: TextStyle(color: subtextColor)));
@@ -548,7 +551,7 @@ class _FinancialTabState extends State<_FinancialTab>
 
     if (_isLoading) {
       return const Center(
-          child: CircularProgressIndicator(color: GardenColors.primary));
+          child: GardenLoadingIndicator(color: GardenColors.primary));
     }
     if (_data == null) {
       return Center(child: Text('Error', style: TextStyle(color: subtextColor)));
@@ -1440,7 +1443,7 @@ class _ZonesTabState extends State<_ZonesTab> {
 
     if (_isLoading) {
       return const Center(
-          child: CircularProgressIndicator(color: GardenColors.primary));
+          child: GardenLoadingIndicator(color: GardenColors.primary));
     }
 
     final active = _zones.where((z) => !(z['blocked'] as bool)).length;
@@ -1609,13 +1612,7 @@ class _ZonesTabState extends State<_ZonesTab> {
                       ),
                     ),
                     isToggling
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: GardenColors.primary),
-                          )
+                        ? const GardenLoadingIndicator(size: 22, color: GardenColors.primary)
                         : Switch.adaptive(
                             value: !isBlocked,
                             onChanged: (_) => _toggle(zone),
@@ -1712,7 +1709,7 @@ class _DonationsTabState extends State<_DonationsTab> {
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: GardenLoadingIndicator());
     if (_error != null) return Center(child: Text(_error!, style: TextStyle(color: GardenColors.error)));
 
     return RefreshIndicator(
@@ -1851,6 +1848,405 @@ class _DonationsTabState extends State<_DonationsTab> {
               );
             }),
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ICONO ESTACIONAL TAB
+//
+// IMPORTANTE — límite real de plataforma (leer antes de tocar esta sección):
+// Este panel SOLO puede elegir cuál de las variantes de icono YA EMPAQUETADAS en el
+// build actual de la app debe estar activa hoy (iOS: alternate icons declarados en
+// Info.plist; Android: activity-alias declarados en AndroidManifest.xml). Ambos
+// mecanismos están fijados en tiempo de compilación por Apple/Google — NO existe forma
+// de que este panel suba una imagen nueva y la vuelva el icono en vivo sin publicar un
+// nuevo build y pasar de nuevo por revisión de tienda. Si en el futuro se agregan más
+// variantes de temporada (Navidad, Halloween, etc.), hay que:
+//   1. Diseñar el arte real (esto no lo genera este panel).
+//   2. Agregar la variante a `KNOWN_ICON_VARIANTS` en el backend
+//      (garden-api/src/modules/admin/admin.service.ts) y a los activity-alias /
+//      CFBundleAlternateIcons del cliente (ver android/app/src/main/AndroidManifest.xml
+//      e ios/Runner/Info.plist).
+//   3. Publicar un nuevo build en App Store / Play Store.
+// Solo después de ese build existir, este panel puede programar cuándo se activa.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _IconScheduleTab extends StatefulWidget {
+  final String adminToken;
+  const _IconScheduleTab({required this.adminToken});
+
+  @override
+  State<_IconScheduleTab> createState() => _IconScheduleTabState();
+}
+
+class _IconScheduleTabState extends State<_IconScheduleTab> {
+  List<Map<String, dynamic>> _rules = [];
+  Map<String, dynamic>? _active;
+  List<String> _knownVariants = ['default'];
+  bool _isLoading = true;
+  bool _submitting = false;
+
+  final _labelCtrl = TextEditingController();
+  String _selectedVariant = 'default';
+  DateTime? _startDate;
+  DateTime? _endDate;
+
+  String get _baseUrl => const String.fromEnvironment(
+        'API_URL',
+        defaultValue: 'https://api.gardenbo.com/api',
+      );
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _labelCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() => _isLoading = true);
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/admin/icon-schedule'),
+        headers: {'Authorization': 'Bearer ${widget.adminToken}'},
+      );
+      final d = jsonDecode(res.body);
+      if (d['success'] == true) {
+        setState(() {
+          _rules = (d['data']['rules'] as List).cast<Map<String, dynamic>>();
+          _active = d['data']['active'] as Map<String, dynamic>;
+          _knownVariants = (d['data']['knownVariants'] as List).cast<String>();
+          if (!_knownVariants.contains(_selectedVariant) && _knownVariants.isNotEmpty) {
+            _selectedVariant = _knownVariants.first;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint(e.toString());
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  String _fmtDate(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> _pickDate({required bool isStart}) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: (isStart ? _startDate : _endDate) ?? now,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 3),
+    );
+    if (picked != null) {
+      setState(() {
+        if (isStart) {
+          _startDate = picked;
+        } else {
+          _endDate = picked;
+        }
+      });
+    }
+  }
+
+  Future<void> _createRule() async {
+    if (_startDate == null || _endDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Elegí fecha de inicio y fin')),
+      );
+      return;
+    }
+    setState(() => _submitting = true);
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/admin/icon-schedule'),
+        headers: {
+          'Authorization': 'Bearer ${widget.adminToken}',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'variant': _selectedVariant,
+          'startDate': _fmtDate(_startDate!),
+          'endDate': _fmtDate(_endDate!),
+          if (_labelCtrl.text.trim().isNotEmpty) 'label': _labelCtrl.text.trim(),
+        }),
+      );
+      final d = jsonDecode(res.body);
+      if (d['success'] == true) {
+        _labelCtrl.clear();
+        setState(() {
+          _startDate = null;
+          _endDate = null;
+        });
+        await _load();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(d['error']?['message'] ?? 'Error al crear la regla'),
+            backgroundColor: GardenColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _toggleEnabled(Map<String, dynamic> rule) async {
+    try {
+      final res = await http.patch(
+        Uri.parse('$_baseUrl/admin/icon-schedule/${rule['id']}'),
+        headers: {
+          'Authorization': 'Bearer ${widget.adminToken}',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'enabled': !(rule['enabled'] as bool)}),
+      );
+      final d = jsonDecode(res.body);
+      if (d['success'] == true) await _load();
+    } catch (e) {
+      debugPrint(e.toString());
+    }
+  }
+
+  Future<void> _deleteRule(String id) async {
+    try {
+      final res = await http.delete(
+        Uri.parse('$_baseUrl/admin/icon-schedule/$id'),
+        headers: {'Authorization': 'Bearer ${widget.adminToken}'},
+      );
+      final d = jsonDecode(res.body);
+      if (d['success'] == true) await _load();
+    } catch (e) {
+      debugPrint(e.toString());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    final surface = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+
+    if (_isLoading) {
+      return const Center(child: GardenLoadingIndicator(color: GardenColors.primary));
+    }
+
+    return RefreshIndicator(
+      color: GardenColors.primary,
+      onRefresh: _load,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Aviso de límite de plataforma ──────────────────────────────
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: GardenColors.warning.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: GardenColors.warning.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('⚠️', style: TextStyle(fontSize: 14)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Solo se puede elegir ENTRE variantes de icono ya incluidas en el build '
+                      'actual de la app (App Store / Play Store). Para agregar arte nuevo hace '
+                      'falta un build y una revisión de tienda nuevos — esto no es evitable en '
+                      'iOS ni Android.',
+                      style: TextStyle(color: subtextColor, fontSize: 11, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Variante activa hoy ─────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: GardenColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.image_rounded, color: GardenColors.primary, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Variante activa hoy (${_active?['date'] ?? ''})',
+                          style: TextStyle(color: subtextColor, fontSize: 11)),
+                      Text(_active?['variant'] ?? 'default',
+                          style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 16)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Formulario nueva regla ──────────────────────────────────────
+            Text('Nueva regla de temporada', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 14)),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: borderColor),
+              ),
+              child: Column(
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedVariant,
+                    decoration: const InputDecoration(labelText: 'Variante de icono'),
+                    items: _knownVariants
+                        .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+                        .toList(),
+                    onChanged: (v) => setState(() => _selectedVariant = v ?? _selectedVariant),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _labelCtrl,
+                    decoration: const InputDecoration(labelText: 'Etiqueta (opcional, ej: Navidad 2026)'),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => _pickDate(isStart: true),
+                          child: Text(_startDate == null ? 'Fecha inicio' : _fmtDate(_startDate!)),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => _pickDate(isStart: false),
+                          child: Text(_endDate == null ? 'Fecha fin' : _fmtDate(_endDate!)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _submitting ? null : _createRule,
+                      style: ElevatedButton.styleFrom(backgroundColor: GardenColors.primary),
+                      child: _submitting
+                          ? const GardenLoadingIndicator(size: 16, color: Colors.white)
+                          : const Text('Crear regla'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Lista de reglas ──────────────────────────────────────────────
+            Text('Reglas configuradas', style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 14)),
+            const SizedBox(height: 10),
+            if (_rules.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Text('Sin reglas todavía', style: TextStyle(color: subtextColor)),
+                ),
+              )
+            else
+              ..._rules.map((r) {
+                final isActive = _active?['ruleId'] == r['id'];
+                final enabled = r['enabled'] as bool;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: isActive ? GardenColors.success : borderColor,
+                        width: isActive ? 1.5 : 1),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(r['variant'] as String,
+                                    style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
+                                if (isActive) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: GardenColors.success.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Text('ACTIVA HOY',
+                                        style: TextStyle(color: GardenColors.success, fontSize: 9, fontWeight: FontWeight.w800)),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            if ((r['label'] as String?)?.isNotEmpty == true)
+                              Text(r['label'] as String, style: TextStyle(color: subtextColor, fontSize: 11)),
+                            Text('${r['startDate']} → ${r['endDate']}',
+                                style: TextStyle(color: subtextColor, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        value: enabled,
+                        activeThumbColor: GardenColors.primary,
+                        onChanged: (_) => _toggleEnabled(r),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                        color: GardenColors.error,
+                        onPressed: () => _deleteRule(r['id'] as String),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+          ],
+        ),
       ),
     );
   }

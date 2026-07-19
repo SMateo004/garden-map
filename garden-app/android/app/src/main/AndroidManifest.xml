@@ -23,11 +23,49 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- El intent-filter MAIN/LAUNCHER vive en los activity-alias de abajo
+                 (.IconDefault / .IconVariantB), no acá — así el ícono mostrado en el
+                 launcher depende de cuál alias está enabled, en vez de fijarse siempre
+                 al ic_launcher de esta Activity real. -->
+        </activity>
+        <!-- Icono estacional en runtime — mecanismo real de Android: cada variante es un
+             activity-alias que apunta a .MainActivity con su propio android:icon. Solo se
+             puede alternar ENTRE variantes que ya están declaradas acá y empaquetadas en
+             este APK/AAB — agregar una variante nueva (arte real de temporada) requiere un
+             build nuevo + una nueva publicación en Play Store, no hay forma de evitarlo.
+             Se activa/desactiva por código con
+             PackageManager.setComponentEnabledSetting (ver IconSwitcher.kt) — exactamente
+             un alias debe estar enabled a la vez, el resto disabled, o el launcher del
+             usuario muestra íconos duplicados o ninguno.
+             "VariantB" ahora mismo es un PLACEHOLDER: mismo arte adaptativo que el ícono
+             default (ic_launcher_variant_b.xml duplica ic_launcher.xml) — solo prueba que
+             el mecanismo end-to-end funciona, no es arte estacional real todavía.
+             NOTA: según el lanzador (launcher) del teléfono, el ícono nuevo puede tardar en
+             refrescarse hasta que se reinicie la app o el launcher — no siempre es
+             instantáneo como en iOS. -->
+        <activity-alias
+            android:name=".IconDefault"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-        </activity>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconVariantB"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_variant_b"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+
         <!-- Facebook Login -->
         <meta-data android:name="com.facebook.sdk.ApplicationId" android:value="@string/facebook_app_id"/>
         <meta-data android:name="com.facebook.sdk.ClientToken" android:value="@string/facebook_client_token"/>

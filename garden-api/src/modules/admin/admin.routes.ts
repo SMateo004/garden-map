@@ -206,6 +206,17 @@ router.patch('/zones/:zone/toggle', adminController.toggleZone);
 router.get('/settings', adminController.getSettings);
 /** PATCH /api/admin/settings/:key — update a setting value */
 router.patch('/settings/:key', adminController.updateSetting);
+
+/** GET /api/admin/icon-schedule — reglas de icono estacional + variante activa hoy.
+ * IMPORTANTE: solo elige entre variantes ya empaquetadas en el build actual — ver nota
+ * de plataforma en admin.controller.ts / admin.service.ts. */
+router.get('/icon-schedule', adminController.getIconSchedule);
+/** POST /api/admin/icon-schedule — crear regla { variant, startDate, endDate, label? } */
+router.post('/icon-schedule', adminController.createIconScheduleRule);
+/** PATCH /api/admin/icon-schedule/:id — editar regla */
+router.patch('/icon-schedule/:id', adminController.updateIconScheduleRule);
+/** DELETE /api/admin/icon-schedule/:id — eliminar regla */
+router.delete('/icon-schedule/:id', adminController.deleteIconScheduleRule);
 /** GET /api/admin/agent-logs — get recent agent logs (?type=PRECIO|...) */
 router.get('/agent-logs', adminController.getAgentLogs);
 /** GET /api/admin/agent-stats — conteo por tipo y estado */

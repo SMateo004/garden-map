@@ -2969,6 +2969,155 @@ export async function getBlockedZonesList(): Promise<string[]> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ICON SCHEDULE — persistido en AppSettings como JSON array (clave: iconScheduleRules)
+//
+// IMPORTANTE — límite real de plataforma, no solo de este código:
+// Estas reglas solo pueden elegir ENTRE variantes de icono que ya fueron empaquetadas
+// en el binario de la app (alternate icons de iOS / activity-alias de Android) en un
+// build previamente publicado en las tiendas. Este mecanismo NO puede subir arte nuevo
+// y hacerlo aparecer como icono en vivo — eso siempre requiere un nuevo build + nueva
+// revisión de tienda. Ver `KNOWN_ICON_VARIANTS` más abajo: es la lista fija de variantes
+// que la app YA sabe aplicar (definida en el cliente Flutter, no en este backend).
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Variantes de icono conocidas por el cliente (deben existir ya bundleadas en el build). */
+export const KNOWN_ICON_VARIANTS = ['default', 'variantB'] as const;
+export type IconVariant = typeof KNOWN_ICON_VARIANTS[number];
+
+export interface IconScheduleRule {
+  id: string;
+  variant: IconVariant;
+  /** Fecha de inicio inclusive, formato YYYY-MM-DD (interpretada en horario de Bolivia, UTC-4). */
+  startDate: string;
+  /** Fecha de fin inclusive, formato YYYY-MM-DD. */
+  endDate: string;
+  label?: string;
+  enabled: boolean;
+}
+
+const ICON_SCHEDULE_KEY = 'iconScheduleRules';
+
+async function _getIconScheduleRules(): Promise<IconScheduleRule[]> {
+  try {
+    const setting = await prisma.appSettings.findUnique({ where: { key: ICON_SCHEDULE_KEY } });
+    if (!setting || setting.value === 'null' || setting.value === '[]') return [];
+    const parsed = JSON.parse(setting.value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function _saveIconScheduleRules(rules: IconScheduleRule[], adminId?: string): Promise<void> {
+  const value = JSON.stringify(rules);
+  await prisma.appSettings.upsert({
+    where: { key: ICON_SCHEDULE_KEY },
+    update: { value, updatedBy: adminId },
+    create: { key: ICON_SCHEDULE_KEY, value, updatedBy: adminId },
+  });
+}
+
+/** Bolivia no usa horario de verano — UTC-4 fijo todo el año. */
+function todayInBolivia(): string {
+  const now = new Date();
+  const bolivia = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+  return bolivia.toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+/** GET /api/admin/icon-schedule — lista todas las reglas configuradas. */
+export async function listIconScheduleRules(): Promise<IconScheduleRule[]> {
+  const rules = await _getIconScheduleRules();
+  return rules.sort((a, b) => a.startDate.localeCompare(b.startDate));
+}
+
+/** POST /api/admin/icon-schedule — crea una regla nueva. */
+export async function createIconScheduleRule(
+  input: { variant: string; startDate: string; endDate: string; label?: string },
+  adminId?: string,
+): Promise<IconScheduleRule> {
+  if (!(KNOWN_ICON_VARIANTS as readonly string[]).includes(input.variant)) {
+    throw new BadRequestError(
+      `Variante de icono desconocida: "${input.variant}". Variantes disponibles (ya empaquetadas en el build actual): ${KNOWN_ICON_VARIANTS.join(', ')}`,
+    );
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(input.endDate)) {
+    throw new BadRequestError('startDate/endDate deben tener formato YYYY-MM-DD');
+  }
+  if (input.startDate > input.endDate) {
+    throw new BadRequestError('startDate no puede ser posterior a endDate');
+  }
+  const rules = await _getIconScheduleRules();
+  const rule: IconScheduleRule = {
+    id: `icon_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    variant: input.variant as IconVariant,
+    startDate: input.startDate,
+    endDate: input.endDate,
+    label: input.label,
+    enabled: true,
+  };
+  rules.push(rule);
+  await _saveIconScheduleRules(rules, adminId);
+  return rule;
+}
+
+/** PATCH /api/admin/icon-schedule/:id — edita una regla existente. */
+export async function updateIconScheduleRule(
+  id: string,
+  input: Partial<{ variant: string; startDate: string; endDate: string; label: string; enabled: boolean }>,
+  adminId?: string,
+): Promise<IconScheduleRule> {
+  const rules = await _getIconScheduleRules();
+  const idx = rules.findIndex((r) => r.id === id);
+  if (idx === -1) throw new NotFoundError('Regla de icono no encontrada');
+
+  if (input.variant !== undefined && !(KNOWN_ICON_VARIANTS as readonly string[]).includes(input.variant)) {
+    throw new BadRequestError(
+      `Variante de icono desconocida: "${input.variant}". Variantes disponibles: ${KNOWN_ICON_VARIANTS.join(', ')}`,
+    );
+  }
+  const next: IconScheduleRule = {
+    ...rules[idx]!,
+    ...(input.variant !== undefined ? { variant: input.variant as IconVariant } : {}),
+    ...(input.startDate !== undefined ? { startDate: input.startDate } : {}),
+    ...(input.endDate !== undefined ? { endDate: input.endDate } : {}),
+    ...(input.label !== undefined ? { label: input.label } : {}),
+    ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+  };
+  if (next.startDate > next.endDate) {
+    throw new BadRequestError('startDate no puede ser posterior a endDate');
+  }
+  rules[idx] = next;
+  await _saveIconScheduleRules(rules, adminId);
+  return next;
+}
+
+/** DELETE /api/admin/icon-schedule/:id — elimina una regla. */
+export async function deleteIconScheduleRule(id: string, adminId?: string): Promise<void> {
+  const rules = await _getIconScheduleRules();
+  const next = rules.filter((r) => r.id !== id);
+  if (next.length === rules.length) throw new NotFoundError('Regla de icono no encontrada');
+  await _saveIconScheduleRules(next, adminId);
+}
+
+/**
+ * Variante activa para "hoy" (horario Bolivia). Si varias reglas habilitadas se solapan,
+ * gana la de startDate más reciente (última en aplicar). Si ninguna aplica, 'default'.
+ */
+export async function getActiveIconVariant(): Promise<{ variant: IconVariant; ruleId: string | null; date: string }> {
+  const rules = await _getIconScheduleRules();
+  const today = todayInBolivia();
+  const applicable = rules
+    .filter((r) => r.enabled && r.startDate <= today && today <= r.endDate)
+    .sort((a, b) => b.startDate.localeCompare(a.startDate));
+  const winner = applicable[0];
+  return {
+    variant: winner ? winner.variant : 'default',
+    ruleId: winner ? winner.id : null,
+    date: today,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // REPORTES DE CHAT (App Store 1.2 UGC / Google Play — moderación)
 // ═══════════════════════════════════════════════════════════════════════════
 

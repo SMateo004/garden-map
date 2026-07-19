@@ -12,6 +12,52 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>Garden App</string>
+	<!-- Iconos alternativos (icono estacional) — mecanismo de runtime real de iOS:
+	     UIApplication.setAlternateIconName() SOLO puede alternar entre los sets de
+	     iconos que ya están aquí declarados y empaquetados en el binario compilado.
+	     Agregar una variante nueva (ej. Navidad) requiere: 1) diseñar el arte real,
+	     2) crear su .appiconset en Assets.xcassets, 3) agregar la entrada acá abajo,
+	     4) publicar un build nuevo + pasar de nuevo por App Store Review. No hay forma
+	     de que un panel admin suba arte nuevo y aparezca como icono sin ese ciclo.
+	     "variantB" en este momento es un PLACEHOLDER — mismo arte que el icono
+	     default, duplicado solo para probar que el mecanismo funciona de punta a
+	     punta (ver AppDelegate.swift `_registerIconSwitcherChannel`). -->
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconName</key>
+			<string>AppIcon</string>
+		</dict>
+		<key>CFBundleAlternateIcons</key>
+		<dict>
+			<key>variantB</key>
+			<dict>
+				<key>CFBundleIconName</key>
+				<string>AppIcon-VariantB</string>
+				<key>UIPrerenderedIcon</key>
+				<false/>
+			</dict>
+		</dict>
+	</dict>
+	<key>CFBundleIcons~ipad</key>
+	<dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconName</key>
+			<string>AppIcon</string>
+		</dict>
+		<key>CFBundleAlternateIcons</key>
+		<dict>
+			<key>variantB</key>
+			<dict>
+				<key>CFBundleIconName</key>
+				<string>AppIcon-VariantB</string>
+				<key>UIPrerenderedIcon</key>
+				<false/>
+			</dict>
+		</dict>
+	</dict>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

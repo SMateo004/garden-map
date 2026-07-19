@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PLACEHOLDER — mismo arte adaptativo que ic_launcher.xml (foreground/background reales
+     de la app), duplicado solo para probar de punta a punta el mecanismo de cambio de
+     icono en runtime (activity-alias + PackageManager.setComponentEnabledSetting). Antes
+     de usar esto en producción hay que reemplazar el foreground/background por el arte
+     estacional real y volver a generar los mipmaps legacy (pre-API26) también. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+  <background android:drawable="@color/ic_launcher_background"/>
+  <foreground>
+      <inset
+          android:drawable="@drawable/ic_launcher_foreground"
+          android:inset="16%" />
+  </foreground>
+</adaptive-icon>

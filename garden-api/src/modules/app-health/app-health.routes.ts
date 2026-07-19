@@ -155,4 +155,22 @@ router.post('/error-report', errorReportLimiter, asyncHandler(async (req, res) =
   });
 }));
 
+/**
+ * GET /api/app/active-icon — público, sin auth. Devuelve la variante de icono que
+ * corresponde aplicar hoy según las reglas configuradas en el panel admin.
+ *
+ * IMPORTANTE (limitación real de plataforma, no de este endpoint): la app cliente solo
+ * puede aplicar variantes que ya fueron empaquetadas en el build que tiene instalado
+ * (alternate icons de iOS / activity-alias de Android). Si el admin agrega una regla que
+ * apunta a una variante que esa versión de la app no conoce, el cliente debe ignorarla y
+ * quedarse en 'default' — nunca puede "inventar" el icono nuevo sin una actualización de
+ * la app. Este endpoint solo informa qué variante correspondería; no garantiza que el
+ * cliente instalado sepa aplicarla.
+ */
+router.get('/active-icon', asyncHandler(async (_req, res) => {
+  const { getActiveIconVariant } = await import('../admin/admin.service.js');
+  const active = await getActiveIconVariant();
+  res.json({ success: true, data: active });
+}));
+
 export default router;
