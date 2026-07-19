@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class AccountDataScreen extends StatefulWidget {
   const AccountDataScreen({super.key});
@@ -186,7 +187,7 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                         }
                       },
                       child: loading
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        ? const GardenLoadingIndicator(size: 20, color: Colors.white)
                         : const Text('Eliminar', style: TextStyle(fontWeight: FontWeight.w700)),
                     ),
                   ),
@@ -231,7 +232,7 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
               ),
             ),
           Expanded(child: _isLoading
-        ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+        ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
         : SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Center(child: ConstrainedBox(

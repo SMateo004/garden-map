@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 /// Los 3 tipos de servicio que aceptan un QR de pago provisional propio
 /// (mientras SIP_ENABLED=false) — deben coincidir con el enum ServiceType
@@ -96,7 +97,7 @@ class _PaymentQrAdminScreenState extends State<PaymentQrAdminScreen> {
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
 
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
+      return const Center(child: GardenLoadingIndicator(color: GardenColors.primary));
     }
 
     return SingleChildScrollView(
@@ -161,7 +162,7 @@ class _PaymentQrAdminScreenState extends State<PaymentQrAdminScreen> {
                         OutlinedButton.icon(
                           onPressed: _uploadingServiceType == serviceType ? null : () => _pickAndUpload(serviceType),
                           icon: _uploadingServiceType == serviceType
-                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))
+                              ? const GardenLoadingIndicator(size: 14, color: GardenColors.primary)
                               : const Icon(Icons.upload_rounded, size: 16),
                           label: Text(_uploadingServiceType == serviceType
                               ? 'Subiendo...'

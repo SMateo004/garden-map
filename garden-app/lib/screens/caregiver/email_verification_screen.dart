@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
   final VoidCallback? onComplete;
@@ -393,7 +394,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
               elevation: 0,
             ),
             child: _isLoading
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const GardenLoadingIndicator(size: 20, color: Colors.white)
                 : Text('Verificar', style: TextStyle(fontSize: kIsWeb ? 14 : 16, fontWeight: FontWeight.w600)),
           ),
         ),
@@ -401,14 +402,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
 
         // Resend link
         _isSending
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: GardenColors.primary,
-                ),
-              )
+            ? const GardenLoadingIndicator(size: 20, color: GardenColors.primary)
             : TextButton(
                 onPressed: _resendCooldown > 0 ? null : _sendVerificationEmail,
                 child: Text(

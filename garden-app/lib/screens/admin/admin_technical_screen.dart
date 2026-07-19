@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class AdminTechnicalScreen extends StatefulWidget {
   final String adminToken;
@@ -359,7 +360,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
             const SizedBox(height: 12),
 
             if (_loadingSettings)
-              const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+              const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
             else
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 // ── Categoría: Servicios ───────────────────
@@ -778,8 +779,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
               ),
               child: _loadingLogs
                   ? const Center(
-                      child: CircularProgressIndicator(
-                          color: GardenColors.primary))
+                      child: GardenLoadingIndicator(color: GardenColors.primary))
                   : _agentLogs.isEmpty
                       ? Center(
                           child: Column(
@@ -892,7 +892,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
       return const SizedBox(
           height: 80,
           child: Center(
-              child: CircularProgressIndicator(color: GardenColors.primary)));
+              child: GardenLoadingIndicator(color: GardenColors.primary)));
     }
     final total = _agentStats['total'] as int? ?? 0;
     final last24h = _agentStats['last24h'] as int? ?? 0;
@@ -1003,8 +1003,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
         ],
       ]),
       trailing: _savingSetting
-          ? const SizedBox(width: 24, height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))
+          ? const GardenLoadingIndicator(size: 24, color: GardenColors.primary)
           : Switch(
               value: value,
               onChanged: enabled ? (v) => _updateSetting(settingKey, v) : null,

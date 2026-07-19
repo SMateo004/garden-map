@@ -8,6 +8,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class AdminReservationDetailScreen extends StatefulWidget {
   final String bookingId;
@@ -308,7 +309,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
             ),
           ),
           body: _loading
-            ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+            ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
             : _error != null
               ? _buildError()
               : TabBarView(
@@ -1487,7 +1488,7 @@ class _AdminLiveTrackMapState extends State<_AdminLiveTrackMap> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: GardenLoadingIndicator());
     if (_track.isEmpty) {
       return Center(
         child: Text(_error ?? 'Aún no hay datos de ubicación para este paseo',

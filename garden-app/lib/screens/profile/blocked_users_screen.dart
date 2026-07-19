@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 /// Lista de usuarios bloqueados en el chat, con opción de desbloquear.
 /// Requerido por App Store (1.2 UGC) y Google Play — el usuario debe poder
@@ -84,7 +85,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
             elevation: 0,
           ),
           body: _isLoading
-              ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+              ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
               : _blocked.isEmpty
                   ? Center(
                       child: Padding(
@@ -138,7 +139,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                   ),
                                   child: isBusy
-                                      ? const SizedBox(height: 14, width: 14, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))
+                                      ? const GardenLoadingIndicator(size: 14, color: GardenColors.primary)
                                       : const Text('Desbloquear', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                                 ),
                               ],

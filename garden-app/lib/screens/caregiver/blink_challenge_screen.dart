@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 /// Blink liveness challenge for Flutter web (QR flow).
 ///
@@ -233,7 +234,7 @@ class _BlinkChallengeScreenState extends State<BlinkChallengeScreen> {
   Widget _buildCameraPreview() {
     if (_camera == null || !_camera!.value.isInitialized) {
       return const Center(
-        child: CircularProgressIndicator(color: Colors.white38, strokeWidth: 2),
+        child: GardenLoadingIndicator(color: Colors.white38),
       );
     }
     return ClipRect(

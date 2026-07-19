@@ -7,6 +7,7 @@ import '../../services/chat_service.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class ChatScreen extends StatefulWidget {
   final String bookingId;
@@ -632,7 +633,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         }
                       },
                       child: submitting
-                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          ? const GardenLoadingIndicator(size: 20, color: Colors.white)
                           : const Text('Enviar reporte', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
@@ -762,7 +763,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ],
           ),
           body: !_initialized
-            ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+            ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
             : Center(child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: kIsWeb ? 780.0 : double.infinity),
                 child: Column(
@@ -1010,7 +1011,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 Padding(
                   padding: const EdgeInsets.all(10),
                   child: _mgLoading
-                      ? const Center(child: SizedBox(height: 28, width: 28, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary)))
+                      ? const Center(child: GardenLoadingIndicator(size: 28, color: GardenColors.primary))
                       : Row(
                           children: [
                             Expanded(

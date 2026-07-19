@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 /// Panel admin: verificación telefónica manual — fallback mientras WhatsApp
 /// (pendiente de aprobación de Meta) y SMS (entrega no garantizada a
@@ -88,7 +89,7 @@ class _AdminPhoneOtpScreenState extends State<AdminPhoneOtpScreen> {
           ),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+                ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
                 : _requests.isEmpty
                     ? const GardenEmptyState(
                         type: GardenEmptyType.bookings,
@@ -264,7 +265,7 @@ class _PhoneOtpDetailSheetState extends State<_PhoneOtpDetailSheet> {
           const SizedBox(height: 20),
 
           if (_generating)
-            const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator(color: GardenColors.primary)))
+            const Center(child: Padding(padding: EdgeInsets.all(24), child: GardenLoadingIndicator(color: GardenColors.primary)))
           else if (_message != null) ...[
             Text(
               _reused ? 'CÓDIGO REAL YA ENVIADO' : 'MENSAJE LISTO PARA ENVIAR',

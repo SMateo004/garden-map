@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 /// Implementación WEB de la pantalla de verificación de identidad.
 /// Muestra un QR que el cuidador escanea con su teléfono.
@@ -286,7 +287,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
           SizedBox(
             width: double.infinity,
             child: _generatingToken
-                ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+                ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
                 : ElevatedButton.icon(
                     icon: const Icon(Icons.qr_code_2_rounded),
                     label: const Text('Generar QR',
@@ -391,10 +392,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const SizedBox(
-                    width: 18, height: 18,
-                    child: CircularProgressIndicator(color: GardenColors.primary, strokeWidth: 2.5),
-                  ),
+                  const GardenLoadingIndicator(size: 18, color: GardenColors.primary),
                   const SizedBox(width: 12),
                   Text('Esperando verificación desde tu teléfono...',
                       style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w600, fontSize: 13)),

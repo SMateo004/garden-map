@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class MyRatingsScreen extends StatefulWidget {
   const MyRatingsScreen({super.key});
@@ -65,7 +66,7 @@ class _MyRatingsScreenState extends State<MyRatingsScreen> {
             elevation: 0,
           ),
           body: _isLoading
-              ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+              ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
               : _reviews.isEmpty
                   ? _buildEmpty(textColor, subtextColor)
                   : RefreshIndicator(

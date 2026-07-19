@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class AdminNotificationsScreen extends StatefulWidget {
   final String adminToken;
@@ -516,11 +517,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
               ),
               onPressed: _sending ? null : _send,
               icon: _sending
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
+                  ? const GardenLoadingIndicator(size: 18, color: Colors.white)
                   : Icon(
                       _scheduleMode
                           ? Icons.schedule_send_rounded
@@ -749,7 +746,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
   Widget _buildScheduledTab(Color bg, Color surface, Color textColor,
       Color subtextColor, Color borderColor) {
     if (_loadingScheduled) {
-      return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
+      return const Center(child: GardenLoadingIndicator(color: GardenColors.primary));
     }
     return RefreshIndicator(
       onRefresh: _loadScheduled,
@@ -853,7 +850,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen>
   Widget _buildHistoryTab(Color bg, Color surface, Color textColor,
       Color subtextColor, Color borderColor) {
     if (_loadingHistory) {
-      return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
+      return const Center(child: GardenLoadingIndicator(color: GardenColors.primary));
     }
     return RefreshIndicator(
       onRefresh: _loadHistory,
@@ -1078,7 +1075,7 @@ class _AdminMassNotifViewState extends State<_AdminMassNotifView> {
         label: const Text('Nueva Notificación', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+          ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
           : ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), children: [
               Text('Notificaciones Masivas', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
               const SizedBox(height: 4),

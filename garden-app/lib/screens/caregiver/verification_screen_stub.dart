@@ -11,6 +11,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import 'camera_overlay_screen.dart';
+import '../../widgets/garden_loading_indicator.dart';
 import 'liveness_detector_native.dart'
     if (dart.library.html) 'liveness_detector_web.dart';
 
@@ -383,7 +384,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
           _buildRequirementItem(Icons.credit_card_outlined, 'Foto del reverso (atrás) de tu CI.'),
           const SizedBox(height: 48),
           _generatingToken
-              ? const CircularProgressIndicator(color: GardenColors.primary)
+              ? const GardenLoadingIndicator(color: GardenColors.primary)
               : SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -596,10 +597,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const SizedBox(
-              width: 64, height: 64,
-              child: CircularProgressIndicator(color: GardenColors.primary, strokeWidth: 3),
-            ),
+            const GardenLoadingIndicator(size: 64, color: GardenColors.primary),
             const SizedBox(height: 32),
             Text(
               'Analizando tus documentos con IA...',

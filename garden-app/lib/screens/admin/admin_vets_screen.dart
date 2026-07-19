@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class AdminVetsScreen extends StatefulWidget {
   final String adminToken;
@@ -149,7 +150,7 @@ class _AdminVetsScreenState extends State<AdminVetsScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+          ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
           : RefreshIndicator(
               color: GardenColors.primary,
               onRefresh: _load,
@@ -739,12 +740,7 @@ class _VetFormSheetState extends State<_VetFormSheet> {
                     elevation: 0,
                   ),
                   child: _saving
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
-                        )
+                      ? const GardenLoadingIndicator(size: 20, color: Colors.white)
                       : Text(
                           _isEditing ? 'Guardar cambios' : 'Agregar veterinaria',
                           style: const TextStyle(
@@ -923,7 +919,7 @@ class _RedemptionFormSheetState extends State<_RedemptionFormSheet> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.md)),
                   ),
                   child: _saving
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFD4AF37)))
+                      ? const GardenLoadingIndicator(size: 20, color: Color(0xFFD4AF37))
                       : const Text('Registrar canje', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                 ),
               ),

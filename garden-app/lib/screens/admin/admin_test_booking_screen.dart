@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 /// Herramienta de admin EXCLUSIVA para pruebas: crea una reserva a mano
 /// (cuidador + dueño + horario elegidos manualmente, sin Meet&Greet, sin
@@ -331,7 +332,7 @@ class _AdminTestBookingScreenState extends State<AdminTestBookingScreen> {
                 style: TextStyle(color: textColor),
                 decoration: deco.copyWith(
                   hintText: 'Buscar por nombre o email...',
-                  suffixIcon: _searchingCaregiver ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))) : null,
+                  suffixIcon: _searchingCaregiver ? const Padding(padding: EdgeInsets.all(12), child: GardenLoadingIndicator(size: 16)) : null,
                 ),
                 onChanged: (v) {
                   setState(() => _selectedCaregiver = null);
@@ -376,7 +377,7 @@ class _AdminTestBookingScreenState extends State<AdminTestBookingScreen> {
                 style: TextStyle(color: textColor),
                 decoration: deco.copyWith(
                   hintText: 'Buscar por nombre o email...',
-                  suffixIcon: _searchingOwner ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))) : null,
+                  suffixIcon: _searchingOwner ? const Padding(padding: EdgeInsets.all(12), child: GardenLoadingIndicator(size: 16)) : null,
                 ),
                 onChanged: (v) {
                   setState(() => _selectedOwner = null);
@@ -409,7 +410,7 @@ class _AdminTestBookingScreenState extends State<AdminTestBookingScreen> {
                 ),
                 const SizedBox(height: 10),
                 if (_loadingPets)
-                  const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))
+                  const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: GardenLoadingIndicator(size: 18))
                 else if (_ownerPets.isNotEmpty) ...[
                   Text('Mascota', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 6),
@@ -525,7 +526,7 @@ class _AdminTestBookingScreenState extends State<AdminTestBookingScreen> {
                   onPressed: _creating ? null : _create,
                   style: ElevatedButton.styleFrom(backgroundColor: GardenColors.primary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.md))),
                   child: _creating
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      ? const GardenLoadingIndicator(size: 20, color: Colors.white)
                       : const Text('Crear reserva de prueba', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                 ),
               ),
@@ -549,7 +550,7 @@ class _AdminTestBookingScreenState extends State<AdminTestBookingScreen> {
                           ),
                         ),
                         _deleting.contains(b['id'])
-                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                            ? const GardenLoadingIndicator(size: 18)
                             : IconButton(
                                 icon: const Icon(Icons.delete_outline, color: GardenColors.error, size: 20),
                                 onPressed: () => _deleteTestBooking(b['id'] as String),

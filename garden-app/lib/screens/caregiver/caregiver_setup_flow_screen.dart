@@ -9,6 +9,7 @@ import 'caregiver_profile_data_screen.dart';
 import 'verification_screen.dart';
 import 'email_verification_screen.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 /// Post-registration guided setup flow for caregivers.
 ///
@@ -196,14 +197,14 @@ class _CaregiverSetupFlowScreenState extends State<CaregiverSetupFlowScreen> {
     if (_isLoading) {
       return Scaffold(
         backgroundColor: bg,
-        body: const Center(child: CircularProgressIndicator(color: GardenColors.primary)),
+        body: const Center(child: GardenLoadingIndicator(color: GardenColors.primary)),
       );
     }
 
     // If all steps done already, go home
     if (_currentStep >= _totalSteps) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _completeFlow());
-      return Scaffold(backgroundColor: bg, body: const Center(child: CircularProgressIndicator(color: GardenColors.primary)));
+      return Scaffold(backgroundColor: bg, body: const Center(child: GardenLoadingIndicator(color: GardenColors.primary)));
     }
 
     return PopScope(
@@ -341,7 +342,7 @@ class _CaregiverSetupFlowScreenState extends State<CaregiverSetupFlowScreen> {
           showAppBar: false,
         );
       default:
-        return const Center(child: CircularProgressIndicator(color: GardenColors.primary));
+        return const Center(child: GardenLoadingIndicator(color: GardenColors.primary));
     }
   }
 }

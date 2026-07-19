@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../theme/garden_theme.dart';
+import './garden_loading_indicator.dart';
 
 class PriceSuggestionBanner extends StatefulWidget {
   final String token;
@@ -292,8 +293,7 @@ class _PriceSuggestionBannerState extends State<PriceSuggestionBanner> {
                           elevation: 0,
                         ),
                         child: _processing
-                            ? const SizedBox(width: 18, height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            ? const GardenLoadingIndicator(size: 18, color: Colors.white)
                             : Text('Confirmar Bs $precioSugerido',
                                 style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
                       ),

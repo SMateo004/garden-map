@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../theme/garden_theme.dart';
+import './garden_loading_indicator.dart';
 
 /// Muestra el perfil completo de una mascota en un bottom sheet.
 /// Si se pasa [bookingId], se obtiene de GET /api/caregiver/bookings/:bookingId/pet.
@@ -149,7 +150,7 @@ class _PetProfileSheetState extends State<_PetProfileSheet> {
             // Body
             Expanded(
               child: _loading
-                  ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+                  ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
                   : _error != null
                       ? Center(
                           child: Padding(

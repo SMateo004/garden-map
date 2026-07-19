@@ -5,6 +5,7 @@ import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../widgets/pet_profile_sheet.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 /// Pantalla de solo lectura para que un cuidador vea las mascotas que ha
 /// cuidado (o va a cuidar). No incluye alta/edición/eliminación — el
@@ -104,7 +105,7 @@ class _CaregiverPetsScreenState extends State<CaregiverPetsScreen> {
             centerTitle: true,
           ),
           body: _isLoading
-              ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+              ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
               : _hasError
                   ? _buildErrorState(textColor, subtextColor)
                   : _pets.isEmpty

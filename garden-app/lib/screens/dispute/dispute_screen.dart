@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class DisputeScreen extends StatefulWidget {
   final String bookingId;
@@ -520,7 +521,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const CircularProgressIndicator(color: GardenColors.primary, strokeWidth: 3),
+            const GardenLoadingIndicator(color: GardenColors.primary),
             const SizedBox(height: 32),
             Text(
               widget.role == 'CLIENT'

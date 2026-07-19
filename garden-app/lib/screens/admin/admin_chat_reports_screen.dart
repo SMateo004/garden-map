@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 /// Panel admin: reportes de chat (acoso, spam, contenido inapropiado, etc.)
 /// enviados por clientes/cuidadores. Requerido por App Store 1.2 (UGC) y
@@ -118,7 +119,7 @@ class _AdminChatReportsScreenState extends State<AdminChatReportsScreen> {
           ),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+                ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
                 : _reports.isEmpty
                     ? Center(
                         child: Padding(
@@ -388,7 +389,7 @@ class _ChatReportDetailSheetState extends State<_ChatReportDetailSheet> {
                       onPressed: _submitting ? null : () => _resolve('ACTION_TAKEN'),
                       style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 12)),
                       child: _submitting
-                          ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          ? const GardenLoadingIndicator(size: 18, color: Colors.white)
                           : const Text('Acción tomada', style: TextStyle(fontWeight: FontWeight.w700)),
                     ),
                   ),

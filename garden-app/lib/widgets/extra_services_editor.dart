@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../theme/garden_theme.dart';
+import './garden_loading_indicator.dart';
 
 /// Servicio principal al que puede asociarse un "servicio extra".
 class _ServicioPrincipal {
@@ -214,7 +215,7 @@ class _ExtraServicesEditorState extends State<ExtraServicesEditor> {
     if (_isLoading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 24),
-        child: Center(child: CircularProgressIndicator(color: GardenColors.primary)),
+        child: Center(child: GardenLoadingIndicator(color: GardenColors.primary)),
       );
     }
 

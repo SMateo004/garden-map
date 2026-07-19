@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 /// Panel admin de capacitaciones de cuidadores. Dos categorías: AMATEUR
 /// (obligatoria para cuidadores con 0 años de experiencia, una por servicio)
@@ -75,7 +76,7 @@ class _AdminTrainingsScreenState extends State<AdminTrainingsScreen> {
         label: const Text('Nuevo tema'),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: GardenLoadingIndicator())
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(
@@ -493,7 +494,7 @@ class CaregiverTrainingsDialogState extends State<CaregiverTrainingsDialog> {
       content: SizedBox(
         width: 420,
         child: _loading
-            ? const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()))
+            ? const Padding(padding: EdgeInsets.all(20), child: Center(child: GardenLoadingIndicator()))
             : _topics.isEmpty
                 ? Text('Este cuidador no ofrece ningún servicio con capacitaciones todavía.', style: TextStyle(color: subtextColor))
                 : Column(
@@ -520,7 +521,7 @@ class CaregiverTrainingsDialogState extends State<CaregiverTrainingsDialog> {
                             Row(children: [
                               Expanded(child: Text('Eximir de esta capacitación', style: TextStyle(color: textColor, fontSize: 12))),
                               if (updating)
-                                const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                                const GardenLoadingIndicator(size: 18)
                               else
                                 Switch(
                                   value: exempted,

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class MaintenanceScreen extends StatefulWidget {
   const MaintenanceScreen({super.key});
@@ -175,14 +176,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white.withValues(alpha: 0.6),
-                        ),
-                      ),
+                      GardenLoadingIndicator(size: 16, color: Colors.white.withValues(alpha: 0.6)),
                       const SizedBox(width: 12),
                       Text(
                         'Verificando cada 30 segundos...',
@@ -201,11 +195,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen>
                 TextButton.icon(
                   onPressed: _checking ? null : _checkStatus,
                   icon: _checking
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white54))
+                      ? const GardenLoadingIndicator(size: 14, color: Colors.white54)
                       : const Icon(Icons.refresh_rounded,
                           color: Colors.white54, size: 16),
                   label: Text(

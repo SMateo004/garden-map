@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/garden_theme.dart';
+import './garden_loading_indicator.dart';
 
 /// Botón deslizante de confirmación.
 /// El usuario debe arrastrar el thumb de izquierda a derecha hasta el
@@ -145,13 +146,7 @@ class _SlideToConfirmButtonState extends State<SlideToConfirmButton>
                 // ── Label centrado ─────────────────────────────────────
                 Center(
                   child: widget.loading
-                      ? SizedBox(
-                          width: 22, height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: widget.color,
-                          ),
-                        )
+                      ? GardenLoadingIndicator(size: 22, color: widget.color)
                       : AnimatedOpacity(
                           opacity: _confirmed ? 0.0 : (1.0 - _position * 1.4).clamp(0.0, 1.0),
                           duration: const Duration(milliseconds: 80),

@@ -8,6 +8,7 @@ import '../../widgets/temporada_alta_badge.dart';
 import '../../services/agentes_service.dart';
 import '../../widgets/garden_logo_loader.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class CaregiverProfileScreen extends StatefulWidget {
   final String caregiverId;
@@ -405,7 +406,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                       ),
                       child: Row(children: [
                         _isTogglingFavorite
-                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.error))
+                            ? const GardenLoadingIndicator(size: 14, color: GardenColors.error)
                             : Icon(_isFavorite ? Icons.favorite : Icons.favorite_border, size: 16, color: _isFavorite ? GardenColors.error : subtextColor),
                         const SizedBox(width: 6),
                         Text(_isFavorite ? 'Guardado' : 'Guardar', style: TextStyle(color: _isFavorite ? GardenColors.error : subtextColor, fontSize: 13, fontWeight: FontWeight.w500)),
@@ -764,7 +765,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                                       elevation: 0,
                                     ),
                                     icon: _petsLoading
-                                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                        ? const GardenLoadingIndicator(size: 18, color: Colors.white)
                                         : const Icon(Icons.calendar_today_outlined, size: 18),
                                     label: const Text('Reservar ahora', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                                     onPressed: _petsLoading ? null : _onReserve,
@@ -865,7 +866,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                       child: GestureDetector(onTap: _toggleFavorite,
                         child: Container(width: 40, height: 40, decoration: BoxDecoration(color: surface.withValues(alpha: 0.9), shape: BoxShape.circle, boxShadow: GardenShadows.card),
                           child: _isTogglingFavorite
-                              ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))
+                              ? const Padding(padding: EdgeInsets.all(12), child: GardenLoadingIndicator(color: GardenColors.primary))
                               : Icon(_isFavorite ? Icons.favorite : Icons.favorite_border, color: _isFavorite ? GardenColors.error : textColor, size: 20)))),
                     if (photos.length > 1)
                       Positioned(bottom: 16, right: 16,

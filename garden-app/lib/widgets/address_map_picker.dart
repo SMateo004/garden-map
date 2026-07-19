@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import './garden_loading_indicator.dart';
 
 /// Resultado del mapa picker.
 class AddressMapResult {
@@ -323,11 +324,7 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
                         foregroundColor: const Color(0xFF16a34a),
                         onPressed: _locating ? null : _locateMe,
                         child: _locating
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
+                            ? const GardenLoadingIndicator(size: 18)
                             : const Icon(Icons.my_location),
                       ),
                     ),
@@ -356,11 +353,7 @@ class _AddressMapPickerState extends State<_AddressMapPicker> {
                         padding: EdgeInsets.only(bottom: 12),
                         child: Row(
                           children: [
-                            SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
+                            GardenLoadingIndicator(size: 14),
                             SizedBox(width: 8),
                             Text('Detectando dirección...', style: TextStyle(fontSize: 13)),
                           ],

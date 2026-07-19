@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class AdminOwnersScreen extends StatefulWidget {
   final String adminToken;
@@ -187,7 +188,7 @@ class _AdminOwnersScreenState extends State<AdminOwnersScreen> {
         // List
         Expanded(
           child: _isLoading
-              ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+              ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
               : _owners.isEmpty
                   ? Center(
                       child: Column(
@@ -212,8 +213,7 @@ class _AdminOwnersScreenState extends State<AdminOwnersScreen> {
                             return const Center(
                               child: Padding(
                                 padding: EdgeInsets.all(16),
-                                child: CircularProgressIndicator(
-                                    color: GardenColors.primary, strokeWidth: 2),
+                                child: GardenLoadingIndicator(color: GardenColors.primary),
                               ),
                             );
                           }
@@ -460,7 +460,7 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
           if (_isLoading)
             const Expanded(
               child: Center(
-                  child: CircularProgressIndicator(color: GardenColors.primary)),
+                  child: GardenLoadingIndicator(color: GardenColors.primary)),
             )
           else if (_data == null)
             Expanded(

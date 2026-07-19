@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 /// Veterinarias cercanas a la dirección guardada del usuario (Mi Perfil).
 /// Pensada para casos de emergencia: mismo dato que usa el cuidador durante
@@ -78,7 +79,7 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+          ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
           : RefreshIndicator(
               color: GardenColors.primary,
               onRefresh: _load,

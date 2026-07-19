@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 /// Paso 8 del wizard de cuidador: verificación combinada de teléfono + email.
 /// Reemplaza los antiguos pasos separados 8 (teléfono) y 9 (email) — ambos
@@ -334,7 +335,7 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
         final bothVerified = _phoneVerified && _emailVerified;
 
         final body = _loadingProfile
-            ? const Center(child: Padding(padding: EdgeInsets.all(48), child: CircularProgressIndicator(color: GardenColors.primary)))
+            ? const Center(child: Padding(padding: EdgeInsets.all(48), child: GardenLoadingIndicator(color: GardenColors.primary)))
             : SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
                 child: Column(
@@ -523,7 +524,7 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
 
             if (sending && !codeSent) ...[
               const SizedBox(height: 16),
-              const Center(child: CircularProgressIndicator(color: GardenColors.primary, strokeWidth: 2)),
+              const Center(child: GardenLoadingIndicator(color: GardenColors.primary)),
             ],
 
             if (codeSent) ...[
@@ -565,7 +566,7 @@ class _CombinedVerificationStepState extends State<CombinedVerificationStep> {
               ),
               const SizedBox(height: 14),
               if (verifying)
-                const Center(child: CircularProgressIndicator(color: GardenColors.primary, strokeWidth: 2))
+                const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
               else
                 SizedBox(
                   width: double.infinity,

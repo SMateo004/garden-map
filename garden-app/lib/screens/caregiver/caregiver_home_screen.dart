@@ -19,6 +19,7 @@ import '../../services/auth_service.dart';
 import '../../services/auth_state.dart';
 import '../../services/secure_storage_service.dart';
 import 'trainings_screen.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 
 class CaregiverHomeScreen extends StatefulWidget {
@@ -3221,7 +3222,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           return Scaffold(
             backgroundColor: bg,
             body: _isLoading
-              ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+              ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
               : Column(
                   children: [
                     // ── TOP HEADER ──────────────────────────────────────────
@@ -3326,7 +3327,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             ],
           ),
           body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+            ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
             : _setupPending
               ? _buildResumeRegistrationScreen(isDark)
               : [
@@ -3706,11 +3707,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 _isAbandoningConversion
                     ? const Padding(
                         padding: EdgeInsets.symmetric(vertical: 8),
-                        child: SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
+                        child: GardenLoadingIndicator(size: 20),
                       )
                     : TextButton(
                         onPressed: _confirmAbandonConversion,

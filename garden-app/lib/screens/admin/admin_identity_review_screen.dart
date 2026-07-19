@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class AdminIdentityReviewScreen extends StatefulWidget {
   final String sessionId;
@@ -149,7 +150,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
           ],
         ),
         body: _loading
-          ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+          ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
           : _error != null
             ? _buildError()
             : _buildContent(surface, bg, textColor, subtextColor, borderColor),
@@ -459,7 +460,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
                 loadingBuilder: (_, child, loadingProgress) {
                   if (loadingProgress == null) return child;
                   return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const CircularProgressIndicator(color: GardenColors.primary),
+                    const GardenLoadingIndicator(color: GardenColors.primary),
                     const SizedBox(height: 8),
                     Text('Cargando imagen…', style: TextStyle(color: subtextColor, fontSize: 12)),
                   ]));

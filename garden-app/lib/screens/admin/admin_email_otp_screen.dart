@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 /// Panel admin: verificación de correo manual — normalmente SOLO recibe
 /// entradas cuando Resend realmente falla al enviar el correo. Con el
@@ -85,7 +86,7 @@ class _AdminEmailOtpScreenState extends State<AdminEmailOtpScreen> {
           ),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+                ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
                 : _requests.isEmpty
                     ? const GardenEmptyState(
                         type: GardenEmptyType.bookings,
@@ -278,7 +279,7 @@ class _EmailOtpDetailSheetState extends State<_EmailOtpDetailSheet> {
           const SizedBox(height: 20),
 
           if (_generating)
-            const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator(color: GardenColors.primary)))
+            const Center(child: Padding(padding: EdgeInsets.all(24), child: GardenLoadingIndicator(color: GardenColors.primary)))
           else if (_message != null) ...[
             Text(
               _reused ? 'CÓDIGO REAL YA ENVIADO POR RESEND' : 'MENSAJE LISTO PARA ENVIAR',

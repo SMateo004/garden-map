@@ -9,6 +9,7 @@ import '../legal/legal_screen.dart';
 import '../../widgets/address_section.dart';
 import '../../services/cities_service.dart';
 import '../../utils/input_formatters.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class RegisterScreen extends StatefulWidget {
   final String? prefillFirstName;
@@ -1058,10 +1059,7 @@ class _RegisterSocialBtn extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: loading
               ? Center(
-                  child: SizedBox(
-                    width: 18, height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 1.5, color: progressColor),
-                  ),
+                  child: GardenLoadingIndicator(size: 18, color: progressColor),
                 )
               : Row(
                   children: [

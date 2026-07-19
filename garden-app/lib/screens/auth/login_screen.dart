@@ -6,6 +6,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
 import '../../services/fcm_service.dart';
 import '../../services/social_auth_service.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -165,7 +166,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_checkingRedirect) {
       return Scaffold(
         backgroundColor: bg,
-        body: const Center(child: CircularProgressIndicator(color: GardenColors.primary)),
+        body: const Center(child: GardenLoadingIndicator(color: GardenColors.primary)),
       );
     }
 
@@ -555,10 +556,7 @@ class _SocialBtn extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: loading
               ? Center(
-                  child: SizedBox(
-                    width: 18, height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 1.5, color: progressColor),
-                  ),
+                  child: GardenLoadingIndicator(size: 18, color: progressColor),
                 )
               : Row(
                   children: [

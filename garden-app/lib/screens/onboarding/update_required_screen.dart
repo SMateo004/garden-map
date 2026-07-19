@@ -8,6 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 /// Pantalla de actualización obligatoria — bloquea el acceso a la app cuando
 /// la versión instalada es menor a `minAppVersion` (AppSettings).
@@ -181,14 +182,7 @@ class _UpdateRequiredScreenState extends State<UpdateRequiredScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white.withValues(alpha: 0.6),
-                        ),
-                      ),
+                      GardenLoadingIndicator(size: 16, color: Colors.white.withValues(alpha: 0.6)),
                       const SizedBox(width: 12),
                       Text(
                         'Verificando cada 30 segundos...',
@@ -201,11 +195,7 @@ class _UpdateRequiredScreenState extends State<UpdateRequiredScreen> {
                 TextButton.icon(
                   onPressed: _checking ? null : _checkStatus,
                   icon: _checking
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54),
-                        )
+                      ? const GardenLoadingIndicator(size: 14, color: Colors.white54)
                       : const Icon(Icons.refresh_rounded, color: Colors.white54, size: 16),
                   label: Text(
                     _checking ? 'Verificando...' : 'Ya actualicé / verificar ahora',

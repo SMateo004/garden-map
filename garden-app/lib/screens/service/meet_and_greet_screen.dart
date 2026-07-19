@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../chat/chat_screen.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class MeetAndGreetScreen extends StatefulWidget {
   final String bookingId;
@@ -298,7 +299,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
               ),
             ),
           Expanded(child: _loading
-          ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+          ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
           : RefreshIndicator(
               onRefresh: _load,
               color: GardenColors.primary,

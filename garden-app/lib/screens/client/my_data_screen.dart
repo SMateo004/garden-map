@@ -10,6 +10,7 @@ import '../../services/auth_state.dart';
 import '../../widgets/address_section.dart';
 import '../../services/cities_service.dart';
 import '../../utils/input_formatters.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class MyDataScreen extends StatefulWidget {
   const MyDataScreen({super.key});
@@ -339,7 +340,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                       child: _uploadingPhoto
                           ? Padding(
                               padding: EdgeInsets.all(kIsWeb ? 26 : 30),
-                              child: const CircularProgressIndicator(color: GardenColors.primary, strokeWidth: 2))
+                              child: const GardenLoadingIndicator(color: GardenColors.primary))
                           : ClipOval(
                               child: _pendingPhotoBytes != null
                                   ? Image.memory(_pendingPhotoBytes!,
@@ -589,7 +590,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
                 ),
               Expanded(
                 child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+                    ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
                     : SingleChildScrollView(
                         padding: EdgeInsets.all(kIsWeb ? 28 : 24),
                         child: Center(

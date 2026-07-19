@@ -7,6 +7,7 @@ import 'package:http_parser/http_parser.dart';
 import '../../theme/garden_theme.dart';
 import 'blink_challenge_screen.dart';
 import 'camera_overlay_screen.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 /// Pantalla de verificación de identidad para móvil.
 /// Se accede escaneando el QR que muestra la web — el token llega como parámetro.
@@ -266,8 +267,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const SizedBox(width: 64, height: 64,
-              child: CircularProgressIndicator(color: GardenColors.primary, strokeWidth: 3)),
+            const GardenLoadingIndicator(size: 64, color: GardenColors.primary),
             const SizedBox(height: 28),
             Text(msg, textAlign: TextAlign.center,
                 style: TextStyle(color: _text, fontSize: 16, height: 1.6)),

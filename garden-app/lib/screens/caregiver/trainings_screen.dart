@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 const _baseUrl = String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
@@ -75,7 +76,7 @@ class _TrainingsScreenState extends State<TrainingsScreen> {
         iconTheme: IconThemeData(color: textColor),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: GardenLoadingIndicator())
           : _error != null
               ? Center(child: Text(_error!, style: TextStyle(color: subtextColor)))
               : RefreshIndicator(

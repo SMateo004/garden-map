@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 /// Panel admin: trazabilidad completa de donaciones a hogares de mascotas.
 /// Deliberadamente SEPARADO del área financiera — no representa ingresos de
@@ -167,7 +168,7 @@ class _AdminDonationsScreenState extends State<AdminDonationsScreen> {
           // ── Lista ──────────────────────────────────────────────────────
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+                ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
                 : _donations.isEmpty
                     ? const GardenEmptyState(
                         type: GardenEmptyType.bookings,
@@ -421,7 +422,7 @@ class _DisburseSheetState extends State<_DisburseSheet> {
               const SizedBox(height: 10),
 
               if (_loadingBeneficiaries)
-                const Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(color: GardenColors.primary)))
+                const Center(child: Padding(padding: EdgeInsets.all(12), child: GardenLoadingIndicator(color: GardenColors.primary)))
               else if (!_creatingNew) ...[
                 for (final b in _beneficiaries)
                   RadioListTile<String>(

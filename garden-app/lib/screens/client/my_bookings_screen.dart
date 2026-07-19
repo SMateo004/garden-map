@@ -10,6 +10,7 @@ import '../../widgets/notification_bell.dart';
 import '../service/meet_and_greet_screen.dart';
 import '../chat/chat_screen.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class MyBookingsScreen extends StatefulWidget {
   const MyBookingsScreen({super.key});
@@ -1208,7 +1209,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                 ),
                 Expanded(
                   child: _isLoading
-                      ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+                      ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
                       : _filteredBookings.isEmpty
                           ? _buildEmptyState(isDark)
                           : Align(
@@ -1480,7 +1481,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                     child: isSubmitting
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        ? const GardenLoadingIndicator(size: 20, color: Colors.white)
                         : const Text('Enviar reporte y solicitar reembolso',
                             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
                   ),

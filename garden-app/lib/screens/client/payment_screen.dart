@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../utils/qr_saver.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class PaymentScreen extends StatefulWidget {
   /// Existing booking (M&G follow-up, back navigation recovery, etc.)
@@ -738,7 +739,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         if (_isLoading) {
           return Scaffold(
             backgroundColor: bg,
-            body: const Center(child: CircularProgressIndicator(color: GardenColors.primary)),
+            body: const Center(child: GardenLoadingIndicator(color: GardenColors.primary)),
           );
         }
 
@@ -1085,11 +1086,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             TextButton.icon(
               onPressed: _isSavingQr ? null : _saveQr,
               icon: _isSavingQr
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary),
-                    )
+                  ? const GardenLoadingIndicator(size: 14, color: GardenColors.primary)
                   : const Icon(Icons.download_rounded, size: 16, color: GardenColors.primary),
               label: Text(
                 _isSavingQr ? 'Guardando...' : 'Guardar QR',
@@ -1558,7 +1555,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   OutlinedButton.icon(
                     onPressed: _requestingManual ? null : _requestManualPayment,
                     icon: _requestingManual
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.warning))
+                        ? const GardenLoadingIndicator(size: 16, color: GardenColors.warning)
                         : const Icon(Icons.support_agent_rounded, size: 16),
                     label: const Text('Solicitar aprobación manual', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                     style: OutlinedButton.styleFrom(
@@ -1920,7 +1917,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
-              const CircularProgressIndicator(color: GardenColors.warning),
+              const GardenLoadingIndicator(color: GardenColors.warning),
               const SizedBox(height: 24),
               TextButton(
                 onPressed: () => context.go('/my-bookings-tab'),

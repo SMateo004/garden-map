@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class BookingScreen extends StatefulWidget {
   final String caregiverId;
@@ -892,7 +893,7 @@ class _BookingScreenState extends State<BookingScreen> {
       if (_isLoading) {
         return Scaffold(
           backgroundColor: bg,
-          body: const Center(child: CircularProgressIndicator(color: GardenColors.primary)),
+          body: const Center(child: GardenLoadingIndicator(color: GardenColors.primary)),
         );
       }
 
@@ -1223,7 +1224,7 @@ class _BookingScreenState extends State<BookingScreen> {
                   if (!_isMultiDay) ...[
                     // ── Modo un día: chips de fecha ──
                     if (_loadingMultiDayData)
-                      const SizedBox(height: 72, child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+                      const SizedBox(height: 72, child: Center(child: GardenLoadingIndicator()))
                     else SizedBox(
                       height: 72,
                       child: ListView.builder(
@@ -1341,7 +1342,7 @@ class _BookingScreenState extends State<BookingScreen> {
                     if (_loadingSlots)
                       const Padding(
                         padding: EdgeInsets.all(24),
-                        child: Center(child: CircularProgressIndicator(color: GardenColors.primary)),
+                        child: Center(child: GardenLoadingIndicator(color: GardenColors.primary)),
                       ),
                     if (_availableSlots.isNotEmpty) ...[
                       const SizedBox(height: 24),
@@ -1531,7 +1532,7 @@ class _BookingScreenState extends State<BookingScreen> {
                   Text('Fecha', style: GardenText.h4.copyWith(color: textColor)),
                   const SizedBox(height: 12),
                   if (_loadingMultiDayData)
-                    const SizedBox(height: 72, child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+                    const SizedBox(height: 72, child: Center(child: GardenLoadingIndicator()))
                   else SizedBox(
                     height: 72,
                     child: ListView.builder(
@@ -1617,7 +1618,7 @@ class _BookingScreenState extends State<BookingScreen> {
                   if (_loadingSlots)
                     const Padding(
                       padding: EdgeInsets.all(24),
-                      child: Center(child: CircularProgressIndicator(color: GardenColors.primary)),
+                      child: Center(child: GardenLoadingIndicator(color: GardenColors.primary)),
                     ),
                   // ── Guardería: horario (solo MANANA y TARDE) ──
                   if (_selectedDate != null && _availableSlots.isNotEmpty) ...[
@@ -2099,8 +2100,7 @@ class _BookingScreenState extends State<BookingScreen> {
         if (_loadingMultiDayData)
           const Center(child: Padding(
             padding: EdgeInsets.only(bottom: 8),
-            child: SizedBox(width: 16, height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary)),
+            child: GardenLoadingIndicator(size: 16, color: GardenColors.primary),
           )),
         Text(
           'Toca los días para seleccionar o quitar. Días grises = no disponible.',
@@ -2450,7 +2450,7 @@ class _BookingScreenState extends State<BookingScreen> {
       return const Center(
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: 20),
-          child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary),
+          child: GardenLoadingIndicator(color: GardenColors.primary),
         ),
       );
     }

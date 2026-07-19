@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 /// Panel admin de ciudades y zonas (multi-ciudad). Reemplaza el enum fijo
 /// `Zone` — acá se agregan ciudades nuevas (ej. Cochabamba) y sus zonas
@@ -114,7 +115,7 @@ class _AdminCitiesScreenState extends State<AdminCitiesScreen> {
         label: const Text('Agregar ciudad', style: TextStyle(fontWeight: FontWeight.w700)),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+          ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
           : RefreshIndicator(
               color: GardenColors.primary,
               onRefresh: _load,
@@ -328,7 +329,7 @@ class _CityFormSheetState extends State<_CityFormSheet> {
                   onPressed: _saving ? null : _save,
                   style: ElevatedButton.styleFrom(backgroundColor: GardenColors.primary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.md))),
                   child: _saving
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      ? const GardenLoadingIndicator(size: 20, color: Colors.white)
                       : const Text('Crear ciudad', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                 ),
               ),
@@ -578,7 +579,7 @@ class _ZoneFormSheetState extends State<_ZoneFormSheet> {
                   onPressed: _saving ? null : _save,
                   style: ElevatedButton.styleFrom(backgroundColor: GardenColors.primary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GardenRadius.md))),
                   child: _saving
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      ? const GardenLoadingIndicator(size: 20, color: Colors.white)
                       : Text(_isEditing ? 'Guardar cambios' : 'Crear zona', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                 ),
               ),

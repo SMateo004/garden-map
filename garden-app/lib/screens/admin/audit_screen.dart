@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../utils/txt_saver.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 /// Pantalla de solo-auditoría: un archivo .txt descargable por mes, con TODO
 /// el registro de auditoría del sistema (AuditLog) — quién hizo qué, cuándo,
@@ -132,7 +133,7 @@ class _AuditScreenState extends State<AuditScreen> {
                 OutlinedButton.icon(
                   onPressed: isDownloading ? null : () => _download(year, month),
                   icon: isDownloading
-                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary))
+                      ? const GardenLoadingIndicator(size: 14, color: GardenColors.primary)
                       : const Icon(Icons.download_rounded, size: 16),
                   label: Text(isDownloading ? 'Generando...' : 'Descargar .txt'),
                   style: OutlinedButton.styleFrom(foregroundColor: GardenColors.primary, side: const BorderSide(color: GardenColors.primary)),

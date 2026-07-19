@@ -9,6 +9,7 @@ import '../../theme/garden_theme.dart';
 import '../../utils/web_file_picker.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class MyPetsScreen extends StatefulWidget {
   const MyPetsScreen({super.key});
@@ -151,7 +152,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
             ],
           ),
           body: _isLoading
-              ? const Center(child: CircularProgressIndicator(color: GardenColors.primary))
+              ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
               : _pets.isEmpty
                   ? _buildEmpty(textColor, subtextColor)
                   : RefreshIndicator(
@@ -664,7 +665,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
               ),
               child: uploading
                   ? const Padding(padding: EdgeInsets.all(22),
-                      child: CircularProgressIndicator(color: GardenColors.primary, strokeWidth: 2))
+                      child: GardenLoadingIndicator(color: GardenColors.primary))
                   : const Icon(Icons.add_photo_alternate_outlined, color: GardenColors.primary, size: 24),
             ),
           ),
@@ -724,7 +725,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
                     ),
                     child: _uploadingPhoto
                         ? const Padding(padding: EdgeInsets.all(28),
-                            child: CircularProgressIndicator(color: GardenColors.primary, strokeWidth: 2))
+                            child: GardenLoadingIndicator(color: GardenColors.primary))
                         : _photoUrl != null && _photoUrl!.isNotEmpty
                             ? ClipOval(child: Image.network(fixImageUrl(_photoUrl!),
                                 width: 90, height: 90, fit: BoxFit.cover,

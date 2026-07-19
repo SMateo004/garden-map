@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 enum CameraFrameShape { oval, rectangle }
 
@@ -245,7 +246,7 @@ class _CameraOverlayScreenState extends State<CameraOverlayScreen>
     if (!_isInitialized || _controller == null) {
       return const Scaffold(
         backgroundColor: Colors.black,
-        body: Center(child: CircularProgressIndicator(color: Colors.white)),
+        body: Center(child: GardenLoadingIndicator(color: Colors.white)),
       );
     }
 
@@ -381,10 +382,7 @@ class _CameraOverlayScreenState extends State<CameraOverlayScreen>
                   child: _isCapturing
                       ? const Padding(
                           padding: EdgeInsets.all(18),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3,
-                            color: GardenColors.primary,
-                          ),
+                          child: GardenLoadingIndicator(color: GardenColors.primary),
                         )
                       : Container(
                           margin: const EdgeInsets.all(6),

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../widgets/garden_loading_indicator.dart';
+
 // ── PALETA OFICIAL GARDEN ──────────────────────────────────────────────────
 // Paleta: oliva #778C43 · vivid-green #58E262 · lima #D9EF9F · beige #DBD0C4
 class GardenColors {
@@ -1172,10 +1174,7 @@ class GardenButton extends StatelessWidget {
 
   Widget _buildChild(Color textColor) {
     if (loading) {
-      return SizedBox(
-        width: 20, height: 20,
-        child: CircularProgressIndicator(color: textColor, strokeWidth: 2),
-      );
+      return GardenLoadingIndicator(size: 20, color: textColor);
     }
     // GardenButton text — ExtraBold 800 (primary actions per spec)
     if (icon != null) {

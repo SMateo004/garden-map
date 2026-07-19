@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class PhoneVerificationScreen extends StatefulWidget {
   final String phoneNumber; // 8-digit Bolivian number (without country code)
@@ -254,7 +255,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
               const SizedBox(height: 20),
 
               if (_isSending && !_codeSent) ...[
-                const CircularProgressIndicator(color: GardenColors.primary),
+                const GardenLoadingIndicator(color: GardenColors.primary),
                 const SizedBox(height: 16),
                 Text('Enviando código...', style: TextStyle(color: subtextColor, fontSize: 14)),
               ],
@@ -304,7 +305,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
                 const SizedBox(height: 28),
 
                 if (_isLoading)
-                  const CircularProgressIndicator(color: GardenColors.primary)
+                  const GardenLoadingIndicator(color: GardenColors.primary)
                 else
                   SizedBox(
                     width: double.infinity,
