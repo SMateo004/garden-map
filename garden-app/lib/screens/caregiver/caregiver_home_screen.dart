@@ -3774,10 +3774,15 @@ class _ExpandableBookingCard extends StatefulWidget {
 
 class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
   bool _expanded = false;
+  // Evita doble-tap / doble submit en las acciones de cancelación de esta
+  // tarjeta — sin esto, dos toques rápidos (o un reintento antes de ver la
+  // respuesta) pueden disparar dos POST de cancelación para la misma reserva.
+  bool _isCancelling = false;
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   Future<void> _cancelMGBooking(String bookingId) async {
+    if (_isCancelling) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -3793,6 +3798,8 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
       ),
     );
     if (confirmed != true) return;
+    if (_isCancelling) return; // re-chequeo tras cerrar el diálogo
+    setState(() => _isCancelling = true);
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/bookings/$bookingId/cancel-mg'),
@@ -3815,10 +3822,13 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
           SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isCancelling = false);
     }
   }
 
   Future<void> _showCancellationDialog(String bookingId) async {
+    if (_isCancelling) return;
     final reasonController = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
@@ -3861,8 +3871,13 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
         ],
       ),
     );
-    if (confirmed == true) {
-      widget.onRequestCancellation(bookingId, reasonController.text.trim());
+    if (confirmed == true && !_isCancelling) {
+      setState(() => _isCancelling = true);
+      try {
+        await Future.sync(() => widget.onRequestCancellation(bookingId, reasonController.text.trim()));
+      } finally {
+        if (mounted) setState(() => _isCancelling = false);
+      }
     }
     reasonController.dispose();
   }
@@ -4230,13 +4245,18 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                         if (mgPassed) ...[
                           const SizedBox(height: 10),
                           OutlinedButton(
-                            onPressed: () => _cancelMGBooking(booking['id'] as String),
+                            onPressed: _isCancelling ? null : () => _cancelMGBooking(booking['id'] as String),
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(color: GardenColors.error),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               minimumSize: const Size(double.infinity, 40),
                             ),
-                            child: const Text('Cancelar — M&G no salió bien', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.bold, fontSize: 12)),
+                            child: _isCancelling
+                                ? const SizedBox(
+                                    height: 16, width: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.error),
+                                  )
+                                : const Text('Cancelar — M&G no salió bien', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.bold, fontSize: 12)),
                           ),
                         ],
                       ],
@@ -4301,12 +4321,13 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                   child: GardenButton(
-                    label: 'Solicitar cancelación',
+                    label: _isCancelling ? 'Enviando...' : 'Solicitar cancelación',
                     icon: Icons.cancel_outlined,
                     height: 40,
                     color: GardenColors.error,
                     outline: true,
-                    onPressed: () => _showCancellationDialog(booking['id'] as String),
+                    loading: _isCancelling,
+                    onPressed: _isCancelling ? null : () => _showCancellationDialog(booking['id'] as String),
                   ),
                 ),
 

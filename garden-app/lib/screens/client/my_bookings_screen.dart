@@ -27,6 +27,10 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   // IDs donde ya se mostró la decisión M&G (se persiste en SharedPreferences)
   final Set<String> _shownMGDecisionIds = {};
   SharedPreferences? _prefs;
+  // Bookings con una cancelación en curso — evita doble-tap / doble submit
+  // (dos taps rápidos, o un reintento antes de que llegue la respuesta)
+  // disparando dos POST /cancel para la misma reserva.
+  final Set<String> _cancellingIds = {};
 
   String? _highlightBookingId;
   Timer? _highlightClearTimer;
@@ -229,6 +233,8 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   }
 
   Future<void> _cancelBookingPostMG(String bookingId) async {
+    if (_cancellingIds.contains(bookingId)) return; // ya hay una cancelación en curso
+    setState(() => _cancellingIds.add(bookingId));
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/bookings/$bookingId/cancel'),
@@ -250,6 +256,8 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       if (mounted) {
         GardenSnackBar.error(context, 'Error: $e');
       }
+    } finally {
+      if (mounted) setState(() => _cancellingIds.remove(bookingId));
     }
   }
 
@@ -314,6 +322,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   }
 
   Future<void> _cancelBooking(String bookingId) async {
+    if (_cancellingIds.contains(bookingId)) return; // ya hay una cancelación en curso
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -321,6 +330,8 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       builder: (ctx) => _buildCancelSheet(ctx),
     );
     if (confirmed != true) return;
+    if (_cancellingIds.contains(bookingId)) return; // re-chequeo tras cerrar el sheet
+    setState(() => _cancellingIds.add(bookingId));
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/bookings/$bookingId/cancel'),
@@ -337,6 +348,8 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       if (mounted) {
         GardenSnackBar.error(context, e.toString());
       }
+    } finally {
+      if (mounted) setState(() => _cancellingIds.remove(bookingId));
     }
   }
 
@@ -842,15 +855,23 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         ),
                         if (mgPassed) ...[
                           const SizedBox(height: 8),
-                          OutlinedButton(
-                            onPressed: () => _showMGDecisionSheet(booking['id'] as String),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: GardenColors.error),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              minimumSize: const Size(double.infinity, 40),
-                            ),
-                            child: const Text('Cancelar — M&G no salió bien', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.bold, fontSize: 12)),
-                          ),
+                          Builder(builder: (_) {
+                            final isCancelling = _cancellingIds.contains(booking['id'] as String);
+                            return OutlinedButton(
+                              onPressed: isCancelling ? null : () => _showMGDecisionSheet(booking['id'] as String),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: GardenColors.error),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                minimumSize: const Size(double.infinity, 40),
+                              ),
+                              child: isCancelling
+                                  ? const SizedBox(
+                                      height: 16, width: 16,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.error),
+                                    )
+                                  : const Text('Cancelar — M&G no salió bien', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.bold, fontSize: 12)),
+                            );
+                          }),
                         ],
                         const SizedBox(height: 8),
                         OutlinedButton.icon(
@@ -899,16 +920,24 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         const SizedBox(width: 8),
                       if (status == 'WAITING_CAREGIVER_APPROVAL' || status == 'CONFIRMED')
                         Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => _cancelBooking(booking['id']),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: GardenColors.error),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              padding: const EdgeInsets.symmetric(vertical: 0),
-                              minimumSize: const Size(0, 40),
-                            ),
-                            child: const Text('Cancelar', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.bold, fontSize: 12)),
-                          ),
+                          child: Builder(builder: (_) {
+                            final isCancelling = _cancellingIds.contains(booking['id'] as String);
+                            return OutlinedButton(
+                              onPressed: isCancelling ? null : () => _cancelBooking(booking['id']),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: GardenColors.error),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding: const EdgeInsets.symmetric(vertical: 0),
+                                minimumSize: const Size(0, 40),
+                              ),
+                              child: isCancelling
+                                  ? const SizedBox(
+                                      height: 16, width: 16,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.error),
+                                    )
+                                  : const Text('Cancelar', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.bold, fontSize: 12)),
+                            );
+                          }),
                         ),
                       if (status == 'COMPLETED' && booking['ownerRating'] == null)
                         Expanded(

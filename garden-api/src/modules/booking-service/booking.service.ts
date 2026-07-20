@@ -701,7 +701,7 @@ export async function createBooking(
             message: `Un cliente quiere conocerte antes de reservar. Revisa la fecha propuesta.`,
           },
         }).catch(() => {});
-        sendPushToUser(caregiver.userId, '📅 Meet & Greet solicitado', `Un cliente quiere conocerte antes de la reserva.`, { type: 'MEET_AND_GREET', bookingId: booking.id }).catch(() => {});
+        sendPushToUser(caregiver.userId, '📅 Quieren conocerte antes', `Un cliente propone un Meet & Greet para presentarte a ${booking.petName} antes de confirmar.`, { type: 'MEET_AND_GREET', bookingId: booking.id }).catch(() => {});
       });
     }
 
@@ -1313,8 +1313,15 @@ export async function cancelMGBooking(bookingId: string, userId: string): Promis
       throw new BookingValidationError('Solo puedes cancelar después de la fecha del Meet & Greet');
     }
 
-    await tx.booking.update({
-      where: { id: bookingId },
+    // Guard atómico — igual que no-show-expiry.job.ts: el `where` exige que el
+    // status siga siendo PENDING_MG en el momento del UPDATE. Sin esto, un
+    // doble-tap o un reintento del cliente podía pasar el findFirst de arriba
+    // dos veces (ambas lecturas ven PENDING_MG bajo Read Committed) y ambas
+    // llamadas terminaban creando la notificación de "Reserva cancelada"
+    // duplicada. Con `updateMany` + chequeo de `count`, la segunda llamada es
+    // un no-op seguro.
+    const updated = await tx.booking.updateMany({
+      where: { id: bookingId, status: BookingStatus.PENDING_MG },
       data: {
         status: BookingStatus.CANCELLED,
         cancelledAt: new Date(),
@@ -1323,6 +1330,11 @@ export async function cancelMGBooking(bookingId: string, userId: string): Promis
         refundStatus: RefundStatus.REJECTED,
       },
     });
+    if (updated.count === 0) {
+      // Ya fue cancelada por otra llamada concurrente (doble-tap/reintento) —
+      // no se repite la notificación.
+      return;
+    }
 
     const otherId = booking.clientId === userId ? booking.caregiverId : booking.clientId;
     await tx.notification.create({
@@ -1718,8 +1730,16 @@ export async function requestCancellationByCaregiver(
     // refundStatus=APPROVED — todo el monto se acredita a la billetera de forma
     // automática abajo, sin importar el método de pago original (mismo enfoque
     // que cancelBooking()).
-    const updated = await tx.booking.update({
-      where: { id: bookingId },
+    //
+    // Guard atómico — igual que no-show-expiry.job.ts: el `where` exige que el
+    // status siga siendo CONFIRMED en el momento del UPDATE. Sin esto, un
+    // doble-tap del cuidador (o un reintento de red) podía pasar el findFirst
+    // de arriba dos veces bajo Read Committed, y ambas llamadas terminaban
+    // acreditando el reembolso DOS VECES a la billetera del cliente además de
+    // duplicar la notificación "Reserva cancelada". Con `updateMany` + chequeo
+    // de `count`, la segunda llamada concurrente es un no-op seguro.
+    const updateResult = await tx.booking.updateMany({
+      where: { id: bookingId, caregiverId: profile.id, status: BookingStatus.CONFIRMED },
       data: {
         status: BookingStatus.CANCELLED,
         cancelledAt: now,
@@ -1728,6 +1748,12 @@ export async function requestCancellationByCaregiver(
         refundStatus: RefundStatus.APPROVED,
       },
     });
+    if (updateResult.count === 0) {
+      // Ya fue cancelada por otra llamada concurrente — no se repite el
+      // reembolso ni la notificación.
+      throw new BookingValidationError('Esta reserva ya fue cancelada.');
+    }
+    const updated = { ...booking, status: BookingStatus.CANCELLED, cancelledAt: now, cancellationReason: reason, refundAmount: booking.totalAmount, refundStatus: RefundStatus.APPROVED };
 
     // ── Auto-refund completo a la billetera, sin importar el método de pago ──
     const refundAmount = Number(booking.totalAmount);
@@ -1941,8 +1967,22 @@ export async function cancelBooking(
       refundStatus = refundCalc.refundStatus;
     }
 
-    const updated = await tx.booking.update({
-      where: { id: bookingId },
+    // Guard atómico — igual que no-show-expiry.job.ts: el `where` exige que el
+    // status siga siendo el mismo que validamos arriba (no CANCELLED/COMPLETED/
+    // IN_PROGRESS) en el momento del UPDATE. Sin esto, un doble-tap del cliente
+    // en el botón "Cancelar" (o un reintento tras una respuesta lenta) podía
+    // pasar las validaciones de arriba dos veces bajo Read Committed —
+    // confirmado en producción: la misma reserva recibió DOS notificaciones
+    // BOOKING_CANCELLED idénticas con 8 segundos de diferencia. Además de
+    // duplicar la notificación, una carrera así podía duplicar el reembolso
+    // a la billetera. Con `updateMany` + chequeo de `count`, la segunda
+    // llamada concurrente es un no-op seguro.
+    const updateResult = await tx.booking.updateMany({
+      where: {
+        id: bookingId,
+        clientId,
+        status: { notIn: [BookingStatus.CANCELLED, BookingStatus.COMPLETED, BookingStatus.IN_PROGRESS] },
+      },
       data: {
         status: BookingStatus.CANCELLED,
         cancelledAt: now,
@@ -1952,6 +1992,20 @@ export async function cancelBooking(
         refundStatus,
       },
     });
+    if (updateResult.count === 0) {
+      // Ya fue cancelada por otra llamada concurrente — no se repite el
+      // reembolso ni la notificación.
+      throw new BookingValidationError('La reserva ya está cancelada');
+    }
+    const updated = {
+      ...booking,
+      status: BookingStatus.CANCELLED,
+      cancelledAt: now,
+      cancellationReason: cancellationReason ?? null,
+      cancellationSource: cancellationSource ?? null,
+      refundAmount: new Prisma.Decimal(refundAmount),
+      refundStatus,
+    };
 
     // ── Auto-refund to wallet — TODO refundAmount aprobado, sin importar el
     // método de pago original ─────────────────────────────────────────────
@@ -2389,6 +2443,7 @@ export async function confirmWalkExtensionQr(
   let additionalMinutes = 0;
   let extraAmount = 0;
   let newTotal = 0;
+  let extPetName: string | null = null;
 
   // Todo el read-compute-write debe pasar por el mismo lock de fila: antes
   // `booking`/`events` se leían ANTES de la transacción, así que dos
@@ -2426,6 +2481,7 @@ export async function confirmWalkExtensionQr(
     const extensionId = pending.extensionId;
     additionalMinutes = pending.additionalMinutes;
     extraAmount = pending.extraAmount;
+    extPetName = booking.petName;
 
     // Aplicar extensión
     const pricePerUnitClient = Number(booking.pricePerUnit);
@@ -2478,7 +2534,7 @@ export async function confirmWalkExtensionQr(
   });
 
   if (caregiverUserId) {
-    sendPushToUser(caregiverUserId, '⏱️ Extensión confirmada', `+${additionalMinutes} min · Bs ${extraAmount} adicionales`, { type: 'SERVICE_EXTENSION', bookingId })
+    sendPushToUser(caregiverUserId, '⏱️ Te compraron más tiempo', `+${additionalMinutes} min con ${extPetName ?? 'tu paseo'} · Bs ${extraAmount} extra ya son tuyos`, { type: 'SERVICE_EXTENSION', bookingId })
       .catch(() => {});
   }
 
@@ -2603,6 +2659,7 @@ export async function confirmHospedajeExtensionQr(
   let additionalDays = 0;
   let extraAmount = 0;
   let newTotal = 0;
+  let extPetName: string | null = null;
 
   // Mismo fix que confirmWalkExtensionQr: todo el read-compute-write (incluida
   // la verificación de disponibilidad, que antes corría en una transacción
@@ -2638,6 +2695,7 @@ export async function confirmHospedajeExtensionQr(
     const extensionId = pending.extensionId;
     additionalDays = pending.additionalDays;
     extraAmount = pending.extraAmount;
+    extPetName = booking.petName;
 
     const pricePerUnitClient = Number(booking.pricePerUnit);
     const pricePerUnitCaregiver = Math.round(pricePerUnitClient / (1 + cfg.COMMISSION_RATE));
@@ -2712,7 +2770,7 @@ export async function confirmHospedajeExtensionQr(
   });
 
   if (caregiverUserId) {
-    sendPushToUser(caregiverUserId, '🏠 Hospedaje extendido', `+${additionalDays} noche${additionalDays > 1 ? 's' : ''} · Bs ${extraAmount} adicionales`, { type: 'SERVICE_EXTENSION', bookingId }).catch(() => {});
+    sendPushToUser(caregiverUserId, '🏠 Se alargó el hospedaje', `${extPetName ?? 'Tu huésped'} se queda ${additionalDays} noche${additionalDays > 1 ? 's' : ''} más · Bs ${extraAmount} extra ya son tuyos`, { type: 'SERVICE_EXTENSION', bookingId }).catch(() => {});
   }
 
   // Registro en blockchain (asíncrono — mock si no está configurado)
@@ -3115,7 +3173,12 @@ export async function acceptBooking(bookingId: string, caregiverUserId: string):
         type: 'BOOKING_ACCEPTED',
       },
     });
-    sendPushToUser(booking.clientId, '¡Tu reserva fue aceptada! 🐾', `El cuidador confirmó la reserva para ${booking.petName}.`, { type: 'BOOKING_ACCEPTED', bookingId }).catch(() => {});
+    sendPushToUser(
+      booking.clientId,
+      '¡Tu reserva fue aceptada! 🐾',
+      `${updated?.caregiver?.user?.firstName ?? 'El cuidador'} va a cuidar a ${booking.petName}. Ya está todo confirmado.`,
+      { type: 'BOOKING_ACCEPTED', bookingId }
+    ).catch(() => {});
 
     notificationService.onBookingAccepted(bookingId).catch(err => {
       logger.error('Error sending onBookingAccepted notification', { bookingId, err });
@@ -3198,7 +3261,14 @@ export async function rejectBooking(bookingId: string, caregiverUserId: string, 
         type: 'BOOKING_REJECTED',
       },
     });
-    sendPushToUser(booking.clientId, 'Reserva rechazada ❌', `El cuidador no pudo aceptar la reserva de ${booking.petName}.`, { type: 'BOOKING_REJECTED', bookingId }).catch(() => {});
+    sendPushToUser(
+      booking.clientId,
+      'El cuidador no pudo tomar tu reserva ❌',
+      refundAmount > 0
+        ? `${booking.petName}: motivo "${reason}". Ya te devolvimos Bs ${refundAmount.toFixed(2)} a tu billetera Garden.`
+        : `${booking.petName}: motivo "${reason}". Busca otro cuidador disponible para esas fechas.`,
+      { type: 'BOOKING_REJECTED', bookingId }
+    ).catch(() => {});
 
     await tx.adminNotification.create({
       data: {
@@ -3248,7 +3318,12 @@ export async function startService(bookingId: string, caregiverUserId: string, p
         type: 'SERVICE_STARTED',
       },
     });
-    sendPushToUser(booking.clientId, '¡El servicio ha comenzado! 🐕', `El cuidador está cuidando a ${booking.petName}.`, { type: 'SERVICE_STARTED', bookingId }).catch(() => {});
+    sendPushToUser(
+      booking.clientId,
+      '¡Empezó el servicio! 🐕',
+      `${booking.petName} ya está con su cuidador. Sigue el paso a paso en vivo desde "Mis reservas".`,
+      { type: 'SERVICE_STARTED', bookingId }
+    ).catch(() => {});
     notificationService.onServiceStarted(bookingId).catch(() => {});
 
     return bookingToResponse(updated);
@@ -3353,8 +3428,10 @@ export async function addServiceEvent(
     });
     sendPushToUser(
       booking.clientId,
-      '🐾 Novedad con tu mascota',
-      'Tu cuidador reportó algo durante el servicio y GARDEN ya está al tanto. Abre la app para ver los detalles.',
+      `🐾 Novedad con ${booking.petName ?? 'tu mascota'}`,
+      incidentType
+        ? `Tu cuidador reportó: ${incidentType}. Ya estamos al tanto — abre la app para ver los detalles.`
+        : 'Tu cuidador reportó algo durante el servicio. Ya estamos al tanto — abre la app para ver los detalles.',
       { type: 'INCIDENT', bookingId }
     ).catch(() => {});
 
@@ -3384,8 +3461,8 @@ export async function addServiceEvent(
   if (type === 'INCIDENT_RESOLVED') {
     sendPushToUser(
       booking.clientId,
-      '✅ Todo en orden',
-      'La novedad reportada durante el servicio ya fue resuelta. El servicio continúa con normalidad.',
+      `✅ ${booking.petName ?? 'Tu mascota'} está bien`,
+      'La novedad ya quedó resuelta y el servicio sigue su curso normal.',
       { type: 'SERVICE_STARTED', bookingId }
     ).catch(() => {});
     logger.info('Incident resolved — service timer resumed', { bookingId, totalPausedMinutes: pauseData.totalPausedMinutes });
@@ -3547,8 +3624,8 @@ export async function markServiceEndedByClient(
     });
     sendPushToUser(
       booking.caregiver.userId,
-      'El dueño marcó el servicio como terminado',
-      'Sube tus fotos finales para cerrar el servicio y cobrar',
+      'El dueño dice que ya terminaste 🏁',
+      `Sube tus fotos finales de ${booking.petName ?? 'la mascota'} para cerrar el servicio y cobrar.`,
       { type: 'SERVICE_MARKED_ENDED', bookingId }
     ).catch(() => {});
 
@@ -3601,8 +3678,8 @@ export async function confirmServiceEndByCaregiver(
       });
       sendPushToUser(
         booking.clientId,
-        'El cuidador no confirmó el fin del servicio',
-        'El servicio sigue en curso — el tiempo continúa corriendo con normalidad',
+        'Todavía no terminaron 🐾',
+        `El cuidador dice que el servicio con ${booking.petName ?? 'tu mascota'} sigue en curso — el tiempo sigue corriendo con normalidad.`,
         { type: 'SERVICE_STARTED', bookingId }
       ).catch(() => {});
 
@@ -3618,8 +3695,8 @@ export async function confirmServiceEndByCaregiver(
       });
       sendPushToUser(
         booking.clientId,
-        'El cuidador confirmó el fin del servicio',
-        'Está subiendo sus fotos finales para cerrar el servicio',
+        'Cuidador confirmó: listo ✅',
+        `Está subiendo las fotos finales de ${booking.petName ?? 'tu mascota'} para cerrar el servicio.`,
         { type: 'SERVICE_STARTED', bookingId }
       ).catch(() => {});
 
@@ -3770,8 +3847,8 @@ export async function concludeService(
       });
       sendPushToUser(
         booking.clientId,
-        '⏰ Cargo por tiempo extra',
-        `${overtimeMins} min extra · Bs ${overtimeFeeGross.toFixed(2)} cargados a tu billetera`,
+        '⏰ Se pasó del tiempo contratado',
+        `El ${svcLabel} de ${booking.petName ?? 'tu mascota'} duró ${overtimeMins} min más (15 de gracia ya incluidos). Bs ${overtimeFeeGross.toFixed(2)} se descontaron de tu billetera.`,
         { type: 'WALLET', bookingId }
       ).catch(() => {});
     }
@@ -3799,7 +3876,12 @@ export async function concludeService(
         type: 'SERVICE_COMPLETED',
       },
     });
-    sendPushToUser(booking.clientId, 'Servicio finalizado ✅', '⭐ Tu calificación libera el pago al cuidador', { type: 'SERVICE_COMPLETED', bookingId }).catch(() => {});
+    sendPushToUser(
+      booking.clientId,
+      `${booking.petName} ya volvió a casa ✅`,
+      '⭐ Califica el servicio para liberar el pago a tu cuidador.',
+      { type: 'SERVICE_COMPLETED', bookingId }
+    ).catch(() => {});
     notificationService.onServiceCompleted(bookingId).catch(() => {});
 
     auditLog({
@@ -3925,7 +4007,12 @@ export async function confirmReceiptByClient(
     }
     const updated = await tx.booking.findUnique({ where: { id: bookingId } });
 
-    sendPushToUser(caregiverUserId, '¡Pago liberado! 💸', `Recibiste el pago por el servicio de ${booking.petName}. Revisa tu billetera.`, { type: 'WALLET' }).catch(() => {});
+    sendPushToUser(
+      caregiverUserId,
+      '¡Ya te pagaron! 💸',
+      `Bs ${amount.toFixed(2)} por ${booking.petName} ya están en tu billetera — el dueño te calificó con ${rating}⭐.`,
+      { type: 'WALLET' }
+    ).catch(() => {});
     notificationService.onRatingReceived(bookingId, rating, comment).catch(() => {});
     emitWalletUpdated(caregiverUserId);
 
@@ -4045,8 +4132,8 @@ export async function autoReleasePayment(
 
     sendPushToUser(
       caregiverUserIdAR,
-      '💸 Pago liberado automáticamente',
-      `El pago de Bs ${amount.toFixed(2)} por el servicio de ${booking.petName} fue liberado (el cliente no dejó reseña).`,
+      '💸 Pago liberado (sin reseña)',
+      `Bs ${amount.toFixed(2)} por ${booking.petName} ya están en tu billetera. El cliente no calificó a tiempo, así que lo liberamos por ti.`,
       { type: 'WALLET' }
     ).catch(() => {});
     emitWalletUpdated(caregiverUserIdAR);
@@ -4612,8 +4699,8 @@ export async function confirmExtensionQrBySip(bookingId: string, qrId: string): 
         commissionAmount: new Prisma.Decimal(Number(booking.commissionAmount) + extraCommission),
         serviceEvents: events,
       };
-      pushTitle = '⏱️ Extensión confirmada';
-      pushBody = `+${additionalMinutes} min · Bs ${extraAmount} adicionales`;
+      pushTitle = '⏱️ Te compraron más tiempo';
+      pushBody = `+${additionalMinutes} min con ${booking.petName ?? 'tu paseo'} · Bs ${extraAmount} extra ya son tuyos`;
       notifMessage = `El pago de +${additionalMinutes} min fue confirmado por el banco. Bs ${extraAmount} adicionales — ${booking.petName ?? 'mascota'}.`;
     } else {
       const additionalDays: number = pending.additionalDays;
@@ -4627,8 +4714,8 @@ export async function confirmExtensionQrBySip(bookingId: string, qrId: string): 
         commissionAmount: new Prisma.Decimal(Number(booking.commissionAmount) + extraCommission),
         serviceEvents: events,
       };
-      pushTitle = '🏠 Hospedaje extendido';
-      pushBody = `+${additionalDays} noche${additionalDays > 1 ? 's' : ''} · Bs ${extraAmount} adicionales`;
+      pushTitle = '🏠 Se alargó el hospedaje';
+      pushBody = `${booking.petName ?? 'Tu huésped'} se queda ${additionalDays} noche${additionalDays > 1 ? 's' : ''} más · Bs ${extraAmount} extra ya son tuyos`;
       notifMessage = `El pago de +${additionalDays} noche${additionalDays > 1 ? 's' : ''} fue confirmado por el banco. Bs ${extraAmount} adicionales — ${booking.petName ?? 'mascota'}.`;
     }
 

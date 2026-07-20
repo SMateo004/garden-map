@@ -126,8 +126,8 @@ export async function onBookingConfirmed(bookingId: string): Promise<void> {
 
   // Email to client
   const clientHtml = gardenEmail(
-    `¡Tu reserva de ${svc} está confirmada! 🎉`,
-    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, ¡todo listo! Tu reserva ha sido confirmada exitosamente.</p>` +
+    `Pago recibido: ${svc} de ${booking.petName} el ${dates} 🎉`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, tu pago de <strong>Bs ${booking.totalAmount}</strong> ya quedó registrado y <strong>${caregiverName}</strong> tiene la reserva de <strong>${booking.petName}</strong> anotada en su agenda.</p>` +
     bookingTable([
       ['Servicio', svc],
       ['Cuidador', caregiverName],
@@ -136,15 +136,15 @@ export async function onBookingConfirmed(bookingId: string): Promise<void> {
       ['Total pagado', `Bs ${booking.totalAmount}`],
       ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
     ]) +
-    `<p style="color:#555;font-size:14px;margin:0;">Si tienes alguna pregunta, puedes comunicarte directamente con tu cuidador a través del chat de la app. ¡Que disfruten el servicio! 🐾</p>`
+    `<p style="color:#555;font-size:14px;margin:0;">Cualquier detalle de último momento sobre ${booking.petName}, coordínalo directo con ${caregiverName} por el chat de la app. ¡Buen servicio! 🐾</p>`
   );
-  fireEmail(booking.client.email, `Reserva confirmada – GARDEN`, clientHtml, 'BOOKING_CONFIRMED_CLIENT', bookingId);
+  fireEmail(booking.client.email, `Pago recibido — ${svc} de ${booking.petName} el ${dates}`, clientHtml, 'BOOKING_CONFIRMED_CLIENT', bookingId);
 
   // Email to caregiver
   if (booking.caregiver?.user) {
     const caregiverHtml = gardenEmail(
-      `Nueva reserva confirmada 🗓️`,
-      `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, tienes una nueva reserva confirmada.</p>` +
+      `${clientName} ya pagó: ${svc} para ${booking.petName} 🗓️`,
+      `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, el pago de <strong>${clientName}</strong> se acreditó y la reserva de <strong>${booking.petName}</strong> quedó agendada para el <strong>${dates}</strong>.</p>` +
       bookingTable([
         ['Servicio', svc],
         ['Cliente', clientName],
@@ -152,20 +152,20 @@ export async function onBookingConfirmed(bookingId: string): Promise<void> {
         ['Fechas', dates],
         ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
       ]) +
-      `<p style="color:#555;font-size:14px;margin:0;">Recuerda estar disponible en las fechas acordadas. Puedes hablar con el cliente a través del chat de la app. ¡Mucho éxito! 🌿</p>`
+      `<p style="color:#555;font-size:14px;margin:0;">Márcate esa fecha y coordina con ${clientName} la entrega de ${booking.petName} por el chat de la app. ¡Mucho éxito! 🌿</p>`
     );
-    fireEmail(booking.caregiver.user.email, `Nueva reserva confirmada – GARDEN`, caregiverHtml, 'BOOKING_CONFIRMED_CAREGIVER', bookingId);
+    fireEmail(booking.caregiver.user.email, `Reserva agendada — ${svc} para ${booking.petName}`, caregiverHtml, 'BOOKING_CONFIRMED_CAREGIVER', bookingId);
 
     sendWhatsAppPlaceholder(
       booking.caregiver.user.phone,
-      `GARDEN: Nueva reserva confirmada. Cliente: ${clientName}. ${svc} - ${dates}. ID: ${bookingId}.`,
+      `GARDEN: ${clientName} pagó y agendó ${svc} para ${booking.petName} el ${dates}. ID: ${bookingId}.`,
       { event: 'BOOKING_CONFIRMED_CAREGIVER', bookingId }
     );
   }
 
   sendWhatsAppPlaceholder(
     booking.client.phone,
-    `GARDEN: Tu reserva de ${svc} está confirmada. Fechas: ${dates}. Reserva ${bookingId}.`,
+    `GARDEN: Listo, ${svc} de ${booking.petName} quedó agendado con ${caregiverName} para el ${dates}. Reserva ${bookingId}.`,
     { event: 'BOOKING_CONFIRMED_CLIENT', bookingId }
   );
 }
@@ -183,8 +183,8 @@ export async function onClientCancelled(bookingId: string): Promise<void> {
   const dates = dateRange(booking);
 
   const html = gardenEmail(
-    `Reserva cancelada por el cliente`,
-    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, te informamos que el cliente ha cancelado la reserva.</p>` +
+    `Se liberó tu agenda del ${dates}`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, <strong>${clientName}</strong> canceló la reserva de <strong>${svc}</strong> para <strong>${booking.petName}</strong> que tenías anotada el <strong>${dates}</strong>.</p>` +
     bookingTable([
       ['Cliente', clientName],
       ['Servicio', svc],
@@ -192,15 +192,15 @@ export async function onClientCancelled(bookingId: string): Promise<void> {
       ['Fechas', dates],
       ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
     ]) +
-    `<p style="color:#555;font-size:14px;margin:0;">Las fechas han quedado liberadas en tu agenda. Si tienes preguntas, contacta a nuestro soporte.</p>`
+    `<p style="color:#555;font-size:14px;margin:0;">Ese espacio ya está libre en tu calendario para otra reserva. Si tienes dudas, escríbenos a soporte.</p>`
   );
 
-  fireEmail(booking.caregiver.user.email, `Reserva cancelada por el cliente – GARDEN`, html, 'CLIENT_CANCELLED_CAREGIVER', bookingId);
-  sendWhatsAppPlaceholder(booking.caregiver.user.phone, `GARDEN: El cliente canceló la reserva ${bookingId}.`, { event: 'CLIENT_CANCELLED_CAREGIVER', bookingId });
+  fireEmail(booking.caregiver.user.email, `Se liberó tu agenda del ${dates} – GARDEN`, html, 'CLIENT_CANCELLED_CAREGIVER', bookingId);
+  sendWhatsAppPlaceholder(booking.caregiver.user.phone, `GARDEN: ${clientName} canceló ${svc} de ${booking.petName} del ${dates}. Reserva ${bookingId}.`, { event: 'CLIENT_CANCELLED_CAREGIVER', bookingId });
   sendPushToUser(
     booking.caregiver.user.id,
-    'Reserva cancelada por el cliente',
-    `${clientName} canceló la reserva de ${svc} — las fechas quedaron libres en tu agenda.`,
+    `Se canceló una reserva`,
+    `${clientName} canceló ${svc} de ${booking.petName}. Ya puedes agendar otra reserva el ${dates}.`,
     { type: 'BOOKING_CANCELLED', bookingId }
   ).catch((err) => logger.warn('[NOTIFICATION] push onClientCancelled failed', { bookingId, err }));
 }
@@ -218,8 +218,8 @@ export async function onCaregiverCancelled(bookingId: string, reason: string): P
   const dates = dateRange(booking);
 
   const html = gardenEmail(
-    `Tu reserva fue cancelada`,
-    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, lamentamos informarte que ${caregiverName} tuvo que cancelar tu reserva.</p>` +
+    `${caregiverName} no podrá atender a ${booking.petName} el ${dates}`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, ${caregiverName} tuvo que cancelar la reserva de <strong>${svc}</strong> que tenías para <strong>${booking.petName}</strong> el <strong>${dates}</strong>.</p>` +
     bookingTable([
       ['Servicio', svc],
       ['Mascota', booking.petName],
@@ -228,22 +228,22 @@ export async function onCaregiverCancelled(bookingId: string, reason: string): P
       ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
     ]) +
     `<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin:0 0 20px;">
-       <p style="color:#92400e;font-size:14px;font-weight:700;margin:0 0 6px;">💰 Política de reembolso</p>
-       <p style="color:#92400e;font-size:13px;margin:0;">Realizaremos la devolución total de tu dinero en un plazo máximo de 1 día hábil. Nuestro equipo de soporte se pondrá en contacto contigo a la brevedad.</p>
+       <p style="color:#92400e;font-size:14px;font-weight:700;margin:0 0 6px;">💰 Te devolvemos tus Bs ${booking.totalAmount}</p>
+       <p style="color:#92400e;font-size:13px;margin:0;">El reembolso completo llega en un plazo máximo de 1 día hábil. Nuestro equipo de soporte se pondrá en contacto contigo a la brevedad.</p>
      </div>
-     <p style="color:#555;font-size:14px;margin:0;">Sentimos los inconvenientes causados. Estamos aquí para ayudarte a encontrar un nuevo cuidador. 🌿</p>`
+     <p style="color:#555;font-size:14px;margin:0;">Ya puedes buscar otro cuidador disponible para ${booking.petName} el ${dates} directo desde la app. 🌿</p>`
   );
 
-  fireEmail(booking.client.email, `Tu reserva fue cancelada – GARDEN`, html, 'CAREGIVER_CANCELLED_CLIENT', bookingId);
+  fireEmail(booking.client.email, `${caregiverName} canceló tu reserva del ${dates} – GARDEN`, html, 'CAREGIVER_CANCELLED_CLIENT', bookingId);
   sendWhatsAppPlaceholder(
     booking.client.phone,
-    `GARDEN: Tu reserva ${bookingId} fue cancelada por el cuidador. Motivo: ${reason}. Te contactaremos en 1 día hábil para tu devolución.`,
+    `GARDEN: ${caregiverName} canceló ${svc} de ${booking.petName} del ${dates}. Te devolvemos tus Bs ${booking.totalAmount} en 1 día hábil.`,
     { event: 'CAREGIVER_CANCELLED_CLIENT', bookingId }
   );
   sendPushToUser(
     booking.client.id,
-    'Tu reserva fue cancelada',
-    `${caregiverName} canceló tu reserva. Te reembolsamos en un plazo máximo de 1 día hábil.`,
+    `${caregiverName} canceló tu reserva`,
+    `${booking.petName} se quedó sin cuidador el ${dates}. Te devolvemos tus Bs ${booking.totalAmount} en máx. 1 día hábil.`,
     { type: 'BOOKING_CANCELLED', bookingId }
   ).catch((err) => logger.warn('[NOTIFICATION] push onCaregiverCancelled failed', { bookingId, err }));
 }
@@ -261,8 +261,8 @@ export async function onBookingWaitingApproval(bookingId: string): Promise<void>
   const dates = dateRange(booking);
 
   const html = gardenEmail(
-    `Nueva solicitud de reserva — ¡Acción requerida! ⏰`,
-    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, tienes una nueva solicitud de reserva pagada esperando tu aprobación.</p>` +
+    `${clientName} quiere reservarte para ${booking.petName} — respondé antes de 24h ⏰`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, <strong>${clientName}</strong> ya pagó por <strong>${svc}</strong> para <strong>${booking.petName}</strong> y está esperando que aceptes.</p>` +
     bookingTable([
       ['Servicio', svc],
       ['Cliente', clientName],
@@ -277,10 +277,10 @@ export async function onBookingWaitingApproval(bookingId: string): Promise<void>
      <p style="color:#555;font-size:14px;margin:0;">Ingresa a la app para <strong>Aceptar</strong> o <strong>Rechazar</strong> esta solicitud.</p>`
   );
 
-  fireEmail(booking.caregiver.user.email, `Nueva solicitud de reserva pendiente – GARDEN`, html, 'BOOKING_WAITING_APPROVAL', bookingId);
+  fireEmail(booking.caregiver.user.email, `${clientName} espera tu respuesta — ${svc} de ${booking.petName}`, html, 'BOOKING_WAITING_APPROVAL', bookingId);
   sendWhatsAppPlaceholder(
     booking.caregiver.user.phone,
-    `GARDEN: Nueva reserva de ${svc} pagada (${booking.petName}). ID: ${bookingId}. Por favor, ingresa al panel para Aceptar o Rechazar.`,
+    `GARDEN: ${clientName} pagó ${svc} para ${booking.petName} (${dates}). ID: ${bookingId}. Ingresa al panel para Aceptar o Rechazar antes de 24h.`,
     { event: 'BOOKING_WAITING_APPROVAL', bookingId }
   );
   // Push — antes esta era la notificación que el dueño del negocio reportó
@@ -291,8 +291,8 @@ export async function onBookingWaitingApproval(bookingId: string): Promise<void>
   // de "Mis Reservas" del cuidador, donde está el botón Aceptar/Rechazar.
   sendPushToUser(
     booking.caregiver.user.id,
-    '⏰ Nueva reserva esperando tu aprobación',
-    `${clientName} reservó ${svc} para ${booking.petName}. Tienes 24h para aceptar o rechazar.`,
+    `⏰ ${clientName} te espera`,
+    `${booking.petName} necesita ${svc} el ${dates}. Tienes 24h para aceptar o rechazar.`,
     { type: 'BOOKING_WAITING_APPROVAL', bookingId }
   ).catch((err) => logger.warn('[NOTIFICATION] push onBookingWaitingApproval failed', { bookingId, err }));
 }
@@ -310,8 +310,8 @@ export async function onBookingAccepted(bookingId: string): Promise<void> {
   const dates = dateRange(booking);
 
   const html = gardenEmail(
-    `¡Tu reserva fue aceptada! 🎉`,
-    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, ¡buenas noticias! <strong>${caregiverName}</strong> ha aceptado tu reserva.</p>` +
+    `${caregiverName} dijo que sí 🎉`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, <strong>${caregiverName}</strong> acaba de aceptar cuidar a <strong>${booking.petName}</strong> el <strong>${dates}</strong>.</p>` +
     bookingTable([
       ['Servicio', svc],
       ['Cuidador', caregiverName],
@@ -320,13 +320,13 @@ export async function onBookingAccepted(bookingId: string): Promise<void> {
       ['Estado', 'CONFIRMADA ✅'],
       ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
     ]) +
-    `<p style="color:#555;font-size:14px;margin:0;">Puedes comunicarte con tu cuidador a través del chat de la app. ¡Que disfruten el servicio! 🐾</p>`
+    `<p style="color:#555;font-size:14px;margin:0;">Coordina con ${caregiverName} los detalles de entrega de ${booking.petName} por el chat de la app. 🐾</p>`
   );
 
-  fireEmail(booking.client.email, `¡Tu reserva fue aceptada! – GARDEN`, html, 'BOOKING_ACCEPTED_CLIENT', bookingId);
+  fireEmail(booking.client.email, `${caregiverName} aceptó — ${svc} de ${booking.petName} confirmado`, html, 'BOOKING_ACCEPTED_CLIENT', bookingId);
   sendWhatsAppPlaceholder(
     booking.client.phone,
-    `GARDEN: ¡Tu reserva ${bookingId} ha sido aceptada por ${caregiverName}! Ya está CONFIRMADA.`,
+    `GARDEN: ${caregiverName} aceptó cuidar a ${booking.petName} el ${dates}. Tu reserva ${bookingId} ya está CONFIRMADA.`,
     { event: 'BOOKING_ACCEPTED_CLIENT', bookingId }
   );
 }
@@ -344,8 +344,8 @@ export async function onBookingRejected(bookingId: string, reason: string): Prom
   const dates = dateRange(booking);
 
   const html = gardenEmail(
-    `Actualización sobre tu reserva`,
-    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, lamentamos informarte que ${caregiverName} no puede atender tu reserva en esta ocasión.</p>` +
+    `${caregiverName} no podrá atender a ${booking.petName} esta vez`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, ${caregiverName} no podrá tomar la reserva de <strong>${svc}</strong> que pediste para <strong>${booking.petName}</strong> el <strong>${dates}</strong>.</p>` +
     bookingTable([
       ['Servicio', svc],
       ['Mascota', booking.petName],
@@ -357,13 +357,13 @@ export async function onBookingRejected(bookingId: string, reason: string): Prom
        <p style="color:#92400e;font-size:14px;font-weight:700;margin:0 0 6px;">💰 Reembolso automático</p>
        <p style="color:#92400e;font-size:13px;margin:0;">Se realizará la <strong>devolución total</strong> de tu dinero en un plazo máximo de <strong>24 horas hábiles</strong>. Nuestro equipo de soporte se contactará contigo a la brevedad.</p>
      </div>
-     <p style="color:#555;font-size:14px;margin:0;">Sentimos los inconvenientes. Puedes buscar otro cuidador disponible en la app. 🌿</p>`
+     <p style="color:#555;font-size:14px;margin:0;">Aún puedes conseguir a alguien para ${booking.petName} el ${dates} — entra a la app y busca otro cuidador disponible esa fecha. 🌿</p>`
   );
 
-  fireEmail(booking.client.email, `Actualización sobre tu reserva – GARDEN`, html, 'BOOKING_REJECTED_CLIENT', bookingId);
+  fireEmail(booking.client.email, `${caregiverName} no podrá atender esta reserva – GARDEN`, html, 'BOOKING_REJECTED_CLIENT', bookingId);
   sendWhatsAppPlaceholder(
     booking.client.phone,
-    `GARDEN: Tu reserva ${bookingId} no pudo ser aceptada por el cuidador. Motivo: ${reason}. Recibirás tu reembolso total en 24 horas hábiles.`,
+    `GARDEN: ${caregiverName} no pudo tomar ${svc} de ${booking.petName} del ${dates}. Motivo: ${reason}. Reembolso total en 24h hábiles.`,
     { event: 'BOOKING_REJECTED_CLIENT', bookingId }
   );
 }
@@ -379,20 +379,21 @@ export async function onServiceStarted(bookingId: string): Promise<void> {
   const caregiverName = name(booking.caregiver?.user?.firstName, booking.caregiver?.user?.lastName, 'Tu cuidador');
   const svc = serviceLabel(booking.serviceType);
 
+  const startedAt = new Date().toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' });
   const html = gardenEmail(
-    `¡El servicio ha comenzado! 🐕`,
-    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, tu cuidador <strong>${caregiverName}</strong> acaba de iniciar el servicio.</p>` +
+    `${caregiverName} ya está con ${booking.petName} 🐕`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, <strong>${caregiverName}</strong> acaba de arrancar el ${svc.toLowerCase()} de <strong>${booking.petName}</strong>, a las <strong>${startedAt}</strong>.</p>` +
     bookingTable([
       ['Servicio', svc],
       ['Mascota', booking.petName],
-      ['Inicio', new Date().toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' })],
+      ['Inicio', startedAt],
       ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
     ]) +
-    `<p style="color:#555;font-size:14px;margin:0;">Puedes seguir el progreso en tiempo real desde la sección <strong>"Mis reservas"</strong> en la app. Si necesitas contactar a tu cuidador, hazlo a través del chat. 🐾</p>`
+    `<p style="color:#555;font-size:14px;margin:0;">Sigue el avance en tiempo real desde <strong>"Mis reservas"</strong> en la app. Cualquier cosa sobre ${booking.petName}, escríbele a ${caregiverName} por el chat. 🐾</p>`
   );
 
-  fireEmail(booking.client.email, `¡El servicio comenzó! – GARDEN`, html, 'SERVICE_STARTED_CLIENT', bookingId);
-  sendWhatsAppPlaceholder(booking.client.phone, `GARDEN: ${caregiverName} inició el servicio para ${booking.petName}. Síguelo en la app.`, { event: 'SERVICE_STARTED_CLIENT', bookingId });
+  fireEmail(booking.client.email, `${caregiverName} ya empezó con ${booking.petName} – GARDEN`, html, 'SERVICE_STARTED_CLIENT', bookingId);
+  sendWhatsAppPlaceholder(booking.client.phone, `GARDEN: ${caregiverName} arrancó el ${svc.toLowerCase()} de ${booking.petName} a las ${startedAt}. Síguelo en la app.`, { event: 'SERVICE_STARTED_CLIENT', bookingId });
 }
 
 /**
@@ -407,8 +408,8 @@ export async function onServiceCompleted(bookingId: string): Promise<void> {
   const svc = serviceLabel(booking.serviceType);
 
   const html = gardenEmail(
-    `Servicio finalizado ✅`,
-    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, el servicio de <strong>${svc}</strong> para <strong>${booking.petName}</strong> ha finalizado correctamente.</p>` +
+    `${booking.petName} ya está de vuelta contigo ✅`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, ${caregiverName} terminó el ${svc.toLowerCase()} de <strong>${booking.petName}</strong> sin novedades.</p>` +
     bookingTable([
       ['Servicio', svc],
       ['Cuidador', caregiverName],
@@ -417,14 +418,14 @@ export async function onServiceCompleted(bookingId: string): Promise<void> {
       ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
     ]) +
     `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;margin:0 0 20px;">
-       <p style="color:#166534;font-size:14px;font-weight:700;margin:0 0 6px;">⭐ ¡Deja tu reseña!</p>
-       <p style="color:#166534;font-size:13px;margin:0;">Tu opinión ayuda a otros dueños a encontrar cuidadores confiables. Ingresa a la app y califica el servicio para liberar el pago al cuidador.</p>
+       <p style="color:#166534;font-size:14px;font-weight:700;margin:0 0 6px;">⭐ Califica a ${caregiverName}</p>
+       <p style="color:#166534;font-size:13px;margin:0;">Contá cómo le fue a ${booking.petName}. Tu reseña libera el pago de Bs ${booking.totalAmount} para ${caregiverName} y guía a otros dueños en Santa Cruz.</p>
      </div>
-     <p style="color:#555;font-size:14px;margin:0;">Gracias por confiar en GARDEN. ¡Esperamos verte pronto! 🌿</p>`
+     <p style="color:#555;font-size:14px;margin:0;">Gracias por confiar en GARDEN para cuidar a ${booking.petName}. ¡Hasta la próxima! 🌿</p>`
   );
 
-  fireEmail(booking.client.email, `Servicio finalizado – GARDEN`, html, 'SERVICE_COMPLETED_CLIENT', bookingId);
-  sendWhatsAppPlaceholder(booking.client.phone, `GARDEN: El servicio de ${svc} para ${booking.petName} finalizó. Entra a la app para dejar tu reseña y liberar el pago.`, { event: 'SERVICE_COMPLETED_CLIENT', bookingId });
+  fireEmail(booking.client.email, `${booking.petName} ya volvió — califica a ${caregiverName}`, html, 'SERVICE_COMPLETED_CLIENT', bookingId);
+  sendWhatsAppPlaceholder(booking.client.phone, `GARDEN: ${caregiverName} terminó el ${svc.toLowerCase()} de ${booking.petName}. Entra a la app y califica para liberar el pago.`, { event: 'SERVICE_COMPLETED_CLIENT', bookingId });
 }
 
 /**
@@ -440,24 +441,23 @@ export async function onCaregiverApproved(caregiverUserId: string): Promise<void
 
     const caregiverName = name(user.firstName, user.lastName, 'Cuidador');
     const html = gardenEmail(
-      `¡Tu perfil fue aprobado! 🎉`,
-      `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, ¡estamos felices de darte la bienvenida como cuidador verificado de GARDEN!</p>` +
+      `Listo, ${caregiverName}: tu perfil ya es visible 🎉`,
+      `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, revisamos tu perfil y quedó aprobado — ya apareces en las búsquedas de dueños de mascotas en Santa Cruz.</p>` +
       `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:20px;margin:0 0 20px;text-align:center;">
          <p style="color:#166534;font-size:32px;margin:0 0 8px;">✅</p>
          <p style="color:#166534;font-size:16px;font-weight:700;margin:0 0 6px;">Perfil Aprobado</p>
          <p style="color:#166534;font-size:13px;margin:0;">Tu perfil ya es visible en el marketplace de GARDEN</p>
        </div>
-       <p style="color:#555;font-size:14px;margin:0 0 16px;">A partir de ahora puedes:</p>
+       <p style="color:#555;font-size:14px;margin:0 0 16px;">Antes de tu primera reserva, dale un vistazo a esto:</p>
        <ul style="color:#555;font-size:14px;margin:0 0 20px;padding-left:20px;line-height:1.8;">
-         <li>Recibir solicitudes de reserva de dueños de mascotas</li>
-         <li>Configurar tu disponibilidad y tarifas</li>
-         <li>Aceptar o rechazar reservas según tu agenda</li>
-         <li>Ganar dinero haciendo lo que más te gusta</li>
+         <li>Activa tu disponibilidad para que te empiecen a llegar solicitudes</li>
+         <li>Revisa las tarifas que fijaste para paseo, guardería y hospedaje</li>
+         <li>Responde rápido cuando llegue una solicitud — eso mejora tu ranking</li>
        </ul>
-       <p style="color:#555;font-size:14px;margin:0;">¡Mucho éxito y bienvenido a la familia GARDEN! 🌿🐾</p>`
+       <p style="color:#555;font-size:14px;margin:0;">Mucho éxito con tus primeras reservas, ${caregiverName}. 🌿🐾</p>`
     );
 
-    fireEmail(user.email, `¡Tu perfil fue aprobado! – GARDEN`, html, 'CAREGIVER_APPROVED', caregiverUserId);
+    fireEmail(user.email, `${caregiverName}, tu perfil ya está aprobado – GARDEN`, html, 'CAREGIVER_APPROVED', caregiverUserId);
   } catch (err: any) {
     logger.error('[NOTIFICATION] onCaregiverApproved error', { caregiverUserId, error: err.message });
   }
@@ -478,17 +478,17 @@ export async function onCaregiverRejected(caregiverUserId: string, reason: strin
     const displayReason = adminMessage || reason || 'No se especificó un motivo.';
 
     const html = gardenEmail(
-      `Actualización sobre tu solicitud de cuidador`,
-      `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, hemos revisado tu solicitud para ser cuidador en GARDEN.</p>` +
+      `Tu solicitud de cuidador necesita ajustes`,
+      `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, revisamos tu solicitud para ser cuidador en GARDEN y todavía no la podemos aprobar.</p>` +
       `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px;margin:0 0 20px;">
          <p style="color:#991b1b;font-size:14px;font-weight:700;margin:0 0 8px;">❌ Solicitud no aprobada</p>
          <p style="color:#991b1b;font-size:13px;margin:0;"><strong>Motivo:</strong> ${displayReason}</p>
        </div>
-       <p style="color:#555;font-size:14px;margin:0 0 16px;">No te desanimes — puedes corregir los puntos indicados y enviar nuevamente tu solicitud desde la app.</p>
-       <p style="color:#555;font-size:14px;margin:0;">Si tienes dudas sobre el proceso, escríbenos a través del chat de soporte en la app. Estamos aquí para ayudarte. 🌿</p>`
+       <p style="color:#555;font-size:14px;margin:0 0 16px;">Corrige ese punto puntual y vuelve a enviar tu solicitud desde la app — la revisamos de nuevo apenas llegue.</p>
+       <p style="color:#555;font-size:14px;margin:0;">Si algo no te queda claro, escríbenos por el chat de soporte en la app. 🌿</p>`
     );
 
-    fireEmail(user.email, `Actualización sobre tu solicitud – GARDEN`, html, 'CAREGIVER_REJECTED', caregiverUserId);
+    fireEmail(user.email, `${caregiverName}, tu solicitud necesita un ajuste – GARDEN`, html, 'CAREGIVER_REJECTED', caregiverUserId);
   } catch (err: any) {
     logger.error('[NOTIFICATION] onCaregiverRejected error', { caregiverUserId, error: err.message });
   }
@@ -507,8 +507,8 @@ export async function onRatingReceived(bookingId: string, rating: number, commen
   const stars = '⭐'.repeat(rating) + '☆'.repeat(5 - rating);
 
   const html = gardenEmail(
-    `Nueva reseña de ${clientName} ${stars}`,
-    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, recibiste una reseña por tu servicio de <strong>${svc}</strong>.</p>` +
+    `${clientName} te calificó con ${rating}/5 ${stars}`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, <strong>${clientName}</strong> te dejó una reseña por el <strong>${svc.toLowerCase()}</strong> de <strong>${booking.petName}</strong>.</p>` +
     bookingTable([
       ['Cliente', clientName],
       ['Servicio', svc],
@@ -527,7 +527,7 @@ export async function onRatingReceived(bookingId: string, rating: number, commen
     `<p style="color:#555;font-size:14px;margin:0;">Puedes ver todas tus reseñas en tu perfil dentro de la app. ¡Sigue así! 🌿</p>`
   );
 
-  fireEmail(booking.caregiver.user.email, `Nueva reseña recibida – GARDEN`, html, 'RATING_RECEIVED_CAREGIVER', bookingId);
+  fireEmail(booking.caregiver.user.email, `${clientName} te calificó ${rating}/5 – GARDEN`, html, 'RATING_RECEIVED_CAREGIVER', bookingId);
 }
 
 /**
@@ -542,12 +542,16 @@ export async function onServiceReminder(bookingId: string, hoursUntil: number): 
   const caregiverName = name(booking.caregiver?.user?.firstName, booking.caregiver?.user?.lastName, 'Tu cuidador');
   const svc = serviceLabel(booking.serviceType);
   const dates = dateRange(booking);
-  const timeLabel = hoursUntil === 24 ? 'mañana' : `en ${hoursUntil} horas`;
+  const timeLabel = hoursUntil === 24
+    ? 'mañana'
+    : hoursUntil < 1
+      ? `en ${Math.round(hoursUntil * 60)} minutos`
+      : `en ${hoursUntil} horas`;
 
   // Email to client
   const clientHtml = gardenEmail(
-    `Recordatorio: tu servicio es ${timeLabel} ⏰`,
-    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, te recordamos que tienes un servicio programado <strong>${timeLabel}</strong>.</p>` +
+    `${booking.petName} tiene ${svc.toLowerCase()} ${timeLabel} ⏰`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, ${timeLabel} le toca ${svc.toLowerCase()} a <strong>${booking.petName}</strong> con <strong>${caregiverName}</strong>.</p>` +
     bookingTable([
       ['Servicio', svc],
       ['Cuidador', caregiverName],
@@ -555,16 +559,16 @@ export async function onServiceReminder(bookingId: string, hoursUntil: number): 
       ['Fecha', dates],
       ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
     ]) +
-    `<p style="color:#555;font-size:14px;margin:0;">Asegúrate de coordinar la entrega de tu mascota con el cuidador a través del chat de la app. 🐾</p>`
+    `<p style="color:#555;font-size:14px;margin:0;">Coordina con ${caregiverName} la hora y el punto de entrega de ${booking.petName} por el chat de la app. 🐾</p>`
   );
-  fireEmail(booking.client.email, `Recordatorio de servicio – GARDEN`, clientHtml, 'SERVICE_REMINDER_CLIENT', bookingId);
-  sendWhatsAppPlaceholder(booking.client.phone, `GARDEN: Recordatorio — tu servicio de ${svc} para ${booking.petName} es ${timeLabel}. ID: ${bookingId.slice(0, 8).toUpperCase()}.`, { event: 'SERVICE_REMINDER_CLIENT', bookingId });
+  fireEmail(booking.client.email, `${booking.petName}: ${svc.toLowerCase()} ${timeLabel} – GARDEN`, clientHtml, 'SERVICE_REMINDER_CLIENT', bookingId);
+  sendWhatsAppPlaceholder(booking.client.phone, `GARDEN: ${booking.petName} tiene ${svc.toLowerCase()} con ${caregiverName} ${timeLabel}. ID: ${bookingId.slice(0, 8).toUpperCase()}.`, { event: 'SERVICE_REMINDER_CLIENT', bookingId });
 
   // Email to caregiver
   if (booking.caregiver?.user) {
     const caregiverHtml = gardenEmail(
-      `Recordatorio: tienes un servicio ${timeLabel} ⏰`,
-      `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, te recordamos que tienes un servicio programado <strong>${timeLabel}</strong>.</p>` +
+      `Recibes a ${booking.petName} ${timeLabel} ⏰`,
+      `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${caregiverName}</strong>, ${timeLabel} arranca el ${svc.toLowerCase()} de <strong>${booking.petName}</strong>, reservado por <strong>${clientName}</strong>.</p>` +
       bookingTable([
         ['Servicio', svc],
         ['Cliente', clientName],
@@ -572,10 +576,10 @@ export async function onServiceReminder(bookingId: string, hoursUntil: number): 
         ['Fecha', dates],
         ['ID de reserva', bookingId.slice(0, 8).toUpperCase()],
       ]) +
-      `<p style="color:#555;font-size:14px;margin:0;">Coordina la recepción de la mascota con el cliente a través del chat. ¡Mucho éxito! 🌿</p>`
+      `<p style="color:#555;font-size:14px;margin:0;">Confirma con ${clientName} el punto y la hora de recepción de ${booking.petName} por el chat. ¡Mucho éxito! 🌿</p>`
     );
-    fireEmail(booking.caregiver.user.email, `Recordatorio de servicio – GARDEN`, caregiverHtml, 'SERVICE_REMINDER_CAREGIVER', bookingId);
-    sendWhatsAppPlaceholder(booking.caregiver.user.phone, `GARDEN: Recordatorio — tienes el servicio de ${svc} (${booking.petName}) ${timeLabel}. ID: ${bookingId.slice(0, 8).toUpperCase()}.`, { event: 'SERVICE_REMINDER_CAREGIVER', bookingId });
+    fireEmail(booking.caregiver.user.email, `${booking.petName} llega ${timeLabel} – GARDEN`, caregiverHtml, 'SERVICE_REMINDER_CAREGIVER', bookingId);
+    sendWhatsAppPlaceholder(booking.caregiver.user.phone, `GARDEN: Recibes a ${booking.petName} para ${svc.toLowerCase()} ${timeLabel}. ID: ${bookingId.slice(0, 8).toUpperCase()}.`, { event: 'SERVICE_REMINDER_CAREGIVER', bookingId });
   }
 }
 
@@ -599,10 +603,10 @@ export async function onCaregiverWelcome(userId: string): Promise<void> {
   const html = gardenEmail(
     `¡Bienvenido a GARDEN, ${caregiverName}! 🌿`,
     `<p style="color:#555;font-size:14px;margin:0 0 16px;">
-      Hola <strong>${caregiverName}</strong>, ¡tu perfil ha sido aprobado y ya eres parte de la familia GARDEN! 🎉
+      Hola <strong>${caregiverName}</strong>, tu perfil quedó aprobado — desde ahora ya puedes recibir solicitudes de paseo, guardería y hospedaje en tu zona. 🎉
     </p>
     <p style="color:#555;font-size:14px;margin:0 0 20px;">
-      A partir de ahora puedes recibir solicitudes de reserva y empezar a ganar dinero haciendo lo que te apasiona: cuidar mascotas.
+      Estas primeras semanas son clave para armar tu reputación en el marketplace, así que vale la pena dejar todo bien configurado desde el día uno.
     </p>
 
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px;margin:0 0 20px;">
@@ -650,7 +654,7 @@ export async function onCaregiverWelcome(userId: string): Promise<void> {
     data: {
       userId,
       title: '¡Bienvenido a GARDEN! 🌿',
-      message: `¡Hola ${caregiverName}! Tu perfil está aprobado. Lee la guía completa para cuidadores para saber cómo recibir reservas, cobrar y aprovechar al máximo la plataforma.`,
+      message: `${caregiverName}, tu perfil ya está activo y visible. Lee la guía del cuidador para configurar disponibilidad, tarifas y empezar a recibir reservas.`,
       type: 'CAREGIVER_WELCOME',
     },
   });
@@ -675,10 +679,13 @@ export async function onTrainingReminder(userId: string, pendingTitles: string[]
   const caregiverName = name(user.firstName, user.lastName, 'Cuidador');
   const trainingsUrl = 'https://gardenbo.com/app.html#/caregiver/trainings';
   const list = pendingTitles.map((t) => `<li>${t}</li>`).join('');
+  const firstPending = pendingTitles[0];
   const title = pendingTitles.length === 1
-    ? `Tienes 1 capacitación pendiente`
-    : `Tienes ${pendingTitles.length} capacitaciones pendientes`;
-  const message = `Completa tus capacitaciones obligatorias para empezar a recibir reservas: ${pendingTitles.join(', ')}.`;
+    ? `Te falta "${firstPending}"`
+    : `Te faltan ${pendingTitles.length} capacitaciones`;
+  const message = pendingTitles.length === 1
+    ? `Completa "${firstPending}" para que tu perfil quede visible y puedas recibir tu primera reserva.`
+    : `Empieza por "${firstPending}" (y ${pendingTitles.length - 1} más) para que tu perfil quede visible.`;
 
   await prisma.notification.create({
     data: { userId, title, message, type: 'TRAINING_REMINDER' },
@@ -689,18 +696,18 @@ export async function onTrainingReminder(userId: string, pendingTitles: string[]
 
   if (sendEmail) {
     const html = gardenEmail(
-      `${caregiverName}, te faltan capacitaciones obligatorias 📋`,
+      `${caregiverName}, tu perfil está invisible hasta completar esto 📋`,
       `<p style="color:#555;font-size:14px;margin:0 0 16px;">
-        Hola <strong>${caregiverName}</strong>, para poder recibir tu primera reserva en GARDEN
-        necesitas completar estas capacitaciones (un video corto + 3 preguntas cada una):
+        Hola <strong>${caregiverName}</strong>, tu perfil de cuidador ya está armado, pero todavía no aparece
+        para los clientes porque te faltan estas capacitaciones (un video corto + 3 preguntas cada una):
       </p>
       <ul style="color:#166534;font-size:14px;margin:0 0 20px;padding-left:20px;line-height:1.9;">${list}</ul>
       <p style="color:#555;font-size:14px;margin:0 0 4px;">
-        Mientras no las completes, tu perfil no aparece visible para los clientes en el marketplace.
+        En cuanto las completes, quedas visible en el marketplace y puedes empezar a recibir solicitudes.
       </p>` +
       ctaButton('Completar capacitaciones 📋', trainingsUrl)
     );
-    fireEmail(user.email, 'Te faltan capacitaciones obligatorias – GARDEN', html, 'TRAINING_REMINDER');
+    fireEmail(user.email, `${caregiverName}, completa tus capacitaciones – GARDEN`, html, 'TRAINING_REMINDER');
   }
 }
 
@@ -718,8 +725,8 @@ export async function onRefundProcessed(bookingId: string, message: string): Pro
   const svc = serviceLabel(booking.serviceType);
 
   const html = gardenEmail(
-    `Información sobre tu reembolso 💰`,
-    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, aquí tienes una actualización sobre tu reembolso.</p>` +
+    `Novedad sobre el reembolso de ${booking.petName} 💰`,
+    `<p style="color:#555;font-size:14px;margin:0 0 20px;">Hola <strong>${clientName}</strong>, esto es lo que pasó con el reembolso de la reserva de <strong>${svc}</strong> para <strong>${booking.petName}</strong>.</p>` +
     bookingTable([
       ['Servicio', svc],
       ['Mascota', booking.petName],
@@ -728,13 +735,13 @@ export async function onRefundProcessed(bookingId: string, message: string): Pro
     `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;margin:0 0 20px;">
        <p style="color:#166534;font-size:14px;margin:0;">${message}</p>
      </div>
-     <p style="color:#555;font-size:14px;margin:0;">El soporte de GARDEN se pondrá en contacto contigo para completar el proceso si aplica. Gracias por tu paciencia. 🌿</p>`
+     <p style="color:#555;font-size:14px;margin:0;">Si necesitas más detalles sobre este reembolso, escríbenos por el chat de soporte de la app y seguimos desde ahí. 🌿</p>`
   );
 
-  fireEmail(booking.client.email, `Información sobre tu reembolso – GARDEN`, html, 'REFUND_PROCESSED_CLIENT', bookingId);
+  fireEmail(booking.client.email, `Reembolso de ${booking.petName}: novedades – GARDEN`, html, 'REFUND_PROCESSED_CLIENT', bookingId);
   sendWhatsAppPlaceholder(
     booking.client.phone,
-    `GARDEN: ${message} El soporte se pondrá en contacto.`,
+    `GARDEN: Sobre el reembolso de ${booking.petName} (${svc}) — ${message}`,
     { event: 'REFUND_PROCESSED_CLIENT', bookingId }
   );
 }
