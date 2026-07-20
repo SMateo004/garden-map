@@ -604,6 +604,21 @@ export const updateFcmToken = asyncHandler(async (req: Request, res: Response) =
     return;
   }
 
+  // Un token FCM identifica un dispositivo físico, no una sesión de la app.
+  // Si el mismo teléfono tuvo login previo con otra cuenta (ej. admin cambia
+  // a cuidador), esa otra cuenta puede seguir teniendo este mismo token
+  // guardado — y FCM entrega por token, no por "quién está logueado ahora",
+  // así que ambas cuentas recibirían pushes en ese teléfono. Para garantizar
+  // que un token pertenezca a lo sumo a un usuario a la vez, primero lo
+  // limpiamos de cualquier otra cuenta antes de asignarlo a esta. No hace
+  // falta $transaction/FOR UPDATE acá: son dos updates independientes por
+  // clave (fcmToken es efectivamente único por dispositivo), no hay lectura-
+  // luego-escritura de un valor compartido como con los balances.
+  await prisma.user.updateMany({
+    where: { fcmToken, id: { not: userId } },
+    data: { fcmToken: null },
+  });
+
   await prisma.user.update({
     where: { id: userId },
     data: { fcmToken },
@@ -664,6 +679,12 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
   await Promise.all([
     authService.revokeAllRefreshTokens(userId),
     blacklistToken(rawToken),
+    // Un dispositivo sin sesión activa no debería seguir recibiendo pushes
+    // de esta cuenta (ej. el usuario cierra sesión y nadie más entra en ese
+    // teléfono por un tiempo). Complementa la limpieza de updateFcmToken:
+    // esa resuelve el caso "otra cuenta se loguea en el mismo dispositivo",
+    // esta resuelve el caso "nadie se loguea después".
+    prisma.user.update({ where: { id: userId }, data: { fcmToken: null } }),
   ]);
 
   logger.info('User logged out — refresh tokens revoked + access token blacklisted', { userId });
