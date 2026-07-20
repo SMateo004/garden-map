@@ -129,10 +129,13 @@ async function _expirarSlotConflict(booking: {
     });
   });
 
+  const walletPaidOutside = Number(booking.walletPaymentAmount ?? 0);
   sendPushToUser(
     booking.clientId,
     'Reserva cancelada',
-    'Tu reserva con conflicto de horario se canceló automáticamente. Revisa tu reembolso en la app.'
+    walletPaidOutside > 0
+      ? `Tu reserva de ${booking.petName} por conflicto de horario se canceló. Ya reembolsamos Bs ${walletPaidOutside.toFixed(2)} a tu billetera.`
+      : `Tu reserva de ${booking.petName} por conflicto de horario se canceló. El equipo Garden gestionará tu reembolso en 1 día hábil.`
   ).catch(() => {});
 
   logger.info('[SLOT-CONFLICT-EXPIRY] Reserva cancelada automáticamente', { bookingId: booking.id });

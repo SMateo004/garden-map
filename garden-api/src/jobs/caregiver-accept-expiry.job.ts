@@ -122,8 +122,8 @@ async function _expirarAceptacion(booking: {
 
   sendPushToUser(
     booking.clientId,
-    'Reserva cancelada',
-    'El cuidador no respondió a tiempo. Se reembolsó el monto completo a tu billetera Garden.'
+    'Reserva cancelada — reembolso',
+    `El cuidador no respondió a tu solicitud para ${booking.petName}. Reembolsamos Bs ${Number(booking.totalAmount).toFixed(2)} a tu billetera Garden.`
   ).catch(() => {});
 
   logger.info('[CAREGIVER-ACCEPT-EXPIRY] Reserva cancelada automáticamente', { bookingId: booking.id });

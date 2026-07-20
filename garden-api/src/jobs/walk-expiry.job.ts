@@ -99,7 +99,7 @@ export async function procesarVencimientoPaseos() {
                     sendPushToUser(
                         booking.clientId,
                         '⏱️ ¡Quedan 5 minutos!',
-                        `La ${serviceLabel} de ${booking.petName ?? 'tu mascota'} termina pronto. ¡Ve a buscarla!`
+                        `${isGuarderia ? 'La' : 'El'} ${serviceLabel} de ${booking.petName ?? 'tu mascota'} termina en 5 min. ¡Ve a recogerla!`
                     ).catch(() => {});
 
                     logger.info('[WALK-EXPIRY] 5-min warning sent', { bookingId: booking.id });
@@ -132,7 +132,9 @@ export async function procesarVencimientoPaseos() {
                     sendPushToUser(
                         booking.clientId,
                         '🐾 Tu mascota está lista',
-                        `La ${serviceLabelEnd} de ${booking.petName ?? 'tu mascota'} terminó.`
+                        booking.duration
+                            ? `Los ${booking.duration} min de ${serviceLabelEnd} de ${booking.petName ?? 'tu mascota'} se cumplieron. ¡Es hora de recogerla!`
+                            : `${isGuarderiaEnd ? 'La' : 'El'} ${serviceLabelEnd} de ${booking.petName ?? 'tu mascota'} terminó. ¡Es hora de recogerla!`
                     ).catch(() => {});
 
                     logger.info('[WALK-EXPIRY] End warning sent', { bookingId: booking.id });

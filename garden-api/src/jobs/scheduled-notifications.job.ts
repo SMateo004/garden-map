@@ -26,11 +26,18 @@ export async function procesarNotificacionesProgramadas() {
 
     for (const notif of pendientes) {
         try {
-            // Marcar como enviando (evitar doble proceso)
-            await prisma.adminBroadcastNotification.update({
-                where: { id: notif.id },
+            // Guard contra race condition: solo procesar si sigue SCHEDULED. Un
+            // `update` plano por id no protegía contra dos corridas del cron
+            // solapadas (p.ej. si el envío a muchos usuarios tarda más de 1 min,
+            // el próximo tick podía recoger la misma notificación "SCHEDULED" y
+            // reenviarla por completo a todos los usuarios). Con `updateMany`
+            // condicionado al estado previo, la segunda corrida obtiene count=0
+            // y no reprocesa — mismo patrón que el resto de jobs de expiración.
+            const claimed = await prisma.adminBroadcastNotification.updateMany({
+                where: { id: notif.id, status: 'SCHEDULED' },
                 data: { status: 'SENT', sentAt: new Date() },
             });
+            if (claimed.count === 0) continue; // otra corrida ya la está procesando/procesó
 
             let whereRole: object = {};
             if (notif.target === 'CUIDADORES') whereRole = { role: 'CAREGIVER' };

@@ -1,6 +1,7 @@
 /**
  * Cron job que envía recordatorios a clientes y cuidadores antes del inicio del servicio.
- * Se ejecuta cada hora. Envía recordatorio a las 24h y a las 2h antes del servicio.
+ * Se ejecuta cada 15 min. Envía recordatorio a las 24h, a las 2h y a los 30 min antes del
+ * servicio (ventana ±10 min alrededor de cada umbral, con guard de idempotencia por booking).
  * También monitorea hospedajes activos cuya endDate se acerca o ya pasó.
  */
 import cron from 'node-cron';
@@ -10,12 +11,34 @@ import { sendPushToUser } from '../services/firebase.service.js';
 import logger from '../shared/logger.js';
 import { autoPayoutExpiredReviews, calcOvertimeMinutes } from '../modules/booking-service/booking.service.js';
 
+// Ventana alrededor de cada umbral (24h / 2h). Corre cada 15 min (ver
+// cron abajo) con una ventana de ±10 min: da precisión real ("el momento
+// preciso" que pide el usuario, en vez de la vieja ±30min/hora que dejaba
+// el aviso caer en cualquier punto entre 23.5h y 24.5h antes) y además dos
+// corridas consecutivas se solapan un poco (10 min de margen contra un tick
+// de cron saltado), lo cual ahora es seguro gracias al guard de
+// idempotencia de abajo (antes esta función no tenía ninguno — a
+// diferencia de todos los demás recordatorios de este archivo).
+const REMINDER_WINDOW_MARGIN_MS = 10 * 60 * 1000;
+
+// Token legible sin puntos decimales, usado tanto para el texto del push
+// como para el tipo de evento guardado en el ledger `serviceEvents`
+// (ej. "30 minutos" / "SERVICE_REMINDER_30MIN_SENT" en vez de "0.5 horas" /
+// "SERVICE_REMINDER_0.5H_SENT").
+function reminderLabel(hoursUntil: number): string {
+  return hoursUntil < 1 ? `${Math.round(hoursUntil * 60)} minutos` : `${hoursUntil} horas`;
+}
+function reminderEventToken(hoursUntil: number): string {
+  return hoursUntil < 1 ? `${Math.round(hoursUntil * 60)}MIN` : `${hoursUntil}H`;
+}
+
 async function procesarRecordatoriosDeServicio() {
   const now = new Date();
 
-  for (const hoursUntil of [24, 2]) {
-    const windowStart = new Date(now.getTime() + (hoursUntil - 0.5) * 60 * 60 * 1000);
-    const windowEnd = new Date(now.getTime() + (hoursUntil + 0.5) * 60 * 60 * 1000);
+  for (const hoursUntil of [24, 2, 0.5]) {
+    const windowStart = new Date(now.getTime() + hoursUntil * 60 * 60 * 1000 - REMINDER_WINDOW_MARGIN_MS);
+    const windowEnd = new Date(now.getTime() + hoursUntil * 60 * 60 * 1000 + REMINDER_WINDOW_MARGIN_MS);
+    const eventType = `SERVICE_REMINDER_${reminderEventToken(hoursUntil)}_SENT`;
 
     const bookings = await prisma.booking.findMany({
       where: {
@@ -28,6 +51,9 @@ async function procesarRecordatoriosDeServicio() {
       select: {
         id: true,
         clientId: true,
+        petName: true,
+        startTime: true,
+        serviceEvents: true,
         caregiver: { select: { userId: true } },
       },
     });
@@ -36,9 +62,28 @@ async function procesarRecordatoriosDeServicio() {
 
     for (const booking of bookings) {
       try {
+        // Idempotencia: cada (booking, umbral) solo se notifica una vez, sin
+        // importar cuántas veces el cron vuelva a escanear la ventana (server
+        // restart, tick perdido y recuperado, ventanas solapadas, etc.). Mismo
+        // patrón de ledger en `serviceEvents` que ya usa el aviso de
+        // hospedaje-vencido más abajo.
+        const events = (booking.serviceEvents as any[]) ?? [];
+        const alreadyNotified = events.some((e: any) => e.type === eventType);
+        if (alreadyNotified) continue;
+
+        await prisma.booking.update({
+          where: { id: booking.id },
+          data: {
+            serviceEvents: [...events, { type: eventType, timestamp: new Date().toISOString() }],
+          },
+        });
+
         await onServiceReminder(booking.id, hoursUntil);
 
-        const pushMsg = `Tu servicio empieza en ${hoursUntil === 24 ? '24 horas' : '2 horas'}. ¡Prepárate!`;
+        // Incluye mascota y hora para que dos recordatorios de bookings
+        // distintos no se lean como "la misma notificación repetida".
+        const timeLabel = booking.startTime ? ` (${booking.startTime})` : '';
+        const pushMsg = `El servicio de ${booking.petName ?? 'tu mascota'}${timeLabel} empieza en ${reminderLabel(hoursUntil)}. ¡Prepárate!`;
         sendPushToUser(booking.clientId, '⏰ Recordatorio de servicio', pushMsg).catch(() => {});
         if (booking.caregiver?.userId) {
           sendPushToUser(booking.caregiver.userId, '⏰ Recordatorio de servicio', pushMsg).catch(() => {});
@@ -53,7 +98,7 @@ async function procesarRecordatoriosDeServicio() {
 }
 
 // ── Aviso de fin de hospedaje ────────────────────────────────────────────────
-// Corre cada hora. Avisa al cliente 24h antes y 2h antes de endDate.
+// Corre cada 15 min (ventana ±10min por umbral). Avisa al cliente 24h antes y 2h antes de endDate.
 // Si endDate ya pasó y el servicio sigue IN_PROGRESS, recuerda al cuidador concluirlo.
 
 async function procesarAvisosFinHospedaje() {
@@ -61,8 +106,9 @@ async function procesarAvisosFinHospedaje() {
 
   // 1. Avisos preventivos: 24h y 2h antes del checkout
   for (const hoursUntil of [24, 2]) {
-    const windowStart = new Date(now.getTime() + (hoursUntil - 0.5) * 60 * 60 * 1000);
-    const windowEnd   = new Date(now.getTime() + (hoursUntil + 0.5) * 60 * 60 * 1000);
+    const windowStart = new Date(now.getTime() + hoursUntil * 60 * 60 * 1000 - REMINDER_WINDOW_MARGIN_MS);
+    const windowEnd   = new Date(now.getTime() + hoursUntil * 60 * 60 * 1000 + REMINDER_WINDOW_MARGIN_MS);
+    const eventType = `HOSPEDAJE_EXPIRY_${hoursUntil}H_SENT`;
 
     const hospedajes = await prisma.booking.findMany({
       where: {
@@ -71,16 +117,33 @@ async function procesarAvisosFinHospedaje() {
         endDate: { gte: windowStart, lte: windowEnd },
       },
       select: {
-        id: true, clientId: true, petName: true, endDate: true,
+        id: true, clientId: true, petName: true, endDate: true, serviceEvents: true,
         caregiver: { select: { userId: true } },
       },
     });
 
     for (const b of hospedajes) {
+      // Mismo guard de idempotencia que el resto de esta ventana: evita
+      // reenviar el mismo aviso si el cron vuelve a escanear la ventana.
+      const events = (b.serviceEvents as any[]) ?? [];
+      if (events.some((e: any) => e.type === eventType)) continue;
+
       try {
+        await prisma.booking.update({
+          where: { id: b.id },
+          data: { serviceEvents: [...events, { type: eventType, timestamp: new Date().toISOString() }] },
+        });
+
         const label = hoursUntil === 24 ? '24 horas' : '2 horas';
-        const title = `🏠 Hospedaje finaliza en ${label}`;
-        const msg   = `El hospedaje de ${b.petName ?? 'tu mascota'} termina en ${label}. ¿Necesitas más días?`;
+        // Checkout exacto (día + hora), no solo "en 24 horas" — dos hospedajes
+        // que vencen el mismo día ya no se leen como el mismo aviso genérico.
+        // b.endDate viene filtrado por el where (gte/lte) así que siempre existe en
+        // este punto — el fallback a `now` es solo para satisfacer el tipo nullable de Prisma.
+        const effectiveEndDate = b.endDate ?? now;
+        const checkoutDay  = effectiveEndDate.toLocaleDateString('es-BO', { day: 'numeric', month: 'short' });
+        const checkoutTime = effectiveEndDate.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
+        const title = `🏠 Hospedaje de ${b.petName ?? 'tu mascota'} finaliza en ${label}`;
+        const msg   = `El hospedaje de ${b.petName ?? 'tu mascota'} termina el ${checkoutDay} a las ${checkoutTime}. ¿Necesitas sumar más días?`;
 
         await prisma.notification.create({
           data: { userId: b.clientId, title, message: msg, type: 'WALK_EXPIRY_WARNING' },
@@ -88,8 +151,8 @@ async function procesarAvisosFinHospedaje() {
         sendPushToUser(b.clientId, title, msg).catch(() => {});
 
         if (b.caregiver?.userId) {
-          const caregiverTitle = `🏠 Hospedaje termina en ${label}`;
-          const caregiverMsg   = `El hospedaje de ${b.petName ?? 'la mascota'} finaliza en ${label}. Prepara el resumen del servicio.`;
+          const caregiverTitle = `🏠 Checkout de ${b.petName ?? 'la mascota'} en ${label}`;
+          const caregiverMsg   = `El hospedaje de ${b.petName ?? 'la mascota'} termina el ${checkoutDay} a las ${checkoutTime}. Ten listas las fotos y el resumen del servicio.`;
           sendPushToUser(b.caregiver.userId, caregiverTitle, caregiverMsg).catch(() => {});
         }
 
@@ -109,7 +172,7 @@ async function procesarAvisosFinHospedaje() {
       endDate: { lt: now, gte: overdueWindow },
     },
     select: {
-      id: true, clientId: true, petName: true,
+      id: true, clientId: true, petName: true, endDate: true,
       caregiver: { select: { userId: true } },
       serviceEvents: true,
     },
@@ -132,16 +195,23 @@ async function procesarAvisosFinHospedaje() {
         },
       });
 
+      // Cuánto tiempo pasó desde el checkout acordado — da peso real al aviso
+      // en vez del genérico "ya terminó" (que se siente igual sea 1h o 2h tarde).
+      const overdueMs = b.endDate ? now.getTime() - b.endDate.getTime() : 0;
+      const overdueLabel = overdueMs >= 60 * 60 * 1000
+        ? `${Math.floor(overdueMs / (60 * 60 * 1000))}h`
+        : `${Math.max(1, Math.round(overdueMs / 60000))} min`;
+
       const clientTitle = '📋 Hospedaje finalizado — confirma la recepción';
-      const clientMsg   = `El período de hospedaje de ${b.petName ?? 'tu mascota'} ha terminado. El cuidador debe concluir el servicio pronto.`;
+      const clientMsg   = `El hospedaje de ${b.petName ?? 'tu mascota'} terminó hace ${overdueLabel}. Tu cuidador debe concluirlo pronto para liberar tu pago.`;
       await prisma.notification.create({
         data: { userId: b.clientId, title: clientTitle, message: clientMsg, type: 'WALK_EXPIRY_END' },
       });
       sendPushToUser(b.clientId, clientTitle, clientMsg).catch(() => {});
 
       if (b.caregiver?.userId) {
-        const caregiverTitle = '⚠️ Hospedaje vencido — concluye el servicio';
-        const caregiverMsg   = `El hospedaje de ${b.petName ?? 'la mascota'} ya terminó. Por favor sube las fotos y concluye el servicio en la app.`;
+        const caregiverTitle = '⚠️ Hospedaje vencido — concluye ya';
+        const caregiverMsg   = `El hospedaje de ${b.petName ?? 'la mascota'} terminó hace ${overdueLabel}. Sube las fotos finales y concluye el servicio para cobrar.`;
         await prisma.notification.create({
           data: { userId: b.caregiver.userId, title: caregiverTitle, message: caregiverMsg, type: 'WALK_EXPIRY_END' },
         });
@@ -156,7 +226,7 @@ async function procesarAvisosFinHospedaje() {
 }
 
 // ── Recordatorio de calificación post-servicio ───────────────────────────────
-// Corre cada hora. Si el servicio lleva ~22-26h completado sin calificación,
+// Corre cada 15 min. Si el servicio lleva ~22-26h completado sin calificación,
 // envía un segundo push + email recordando que la calificación libera el pago.
 
 async function procesarRecordatoriosCalificacion() {
@@ -199,7 +269,7 @@ async function procesarRecordatoriosCalificacion() {
       sendPushToUser(
         b.clientId,
         '⭐ ¡Califica el servicio!',
-        `Recuerda calificar el ${svcLabel} de ${b.petName ?? 'tu mascota'}. El cuidador espera su pago.`
+        `${caregiverName} cuidó a ${b.petName ?? 'tu mascota'} en su ${svcLabel}. Calificalo para liberar su pago.`
       ).catch(() => {});
 
       await prisma.booking.update({ where: { id: b.id }, data: { ratingReminderSentAt: new Date() } });
@@ -212,7 +282,7 @@ async function procesarRecordatoriosCalificacion() {
 }
 
 // ── Recordatorio de fin de servicio sin marcar (ningún lado lo cerró) ────────
-// Corre cada hora. Cubre los 3 tipos de servicio (paseo, guardería, hospedaje):
+// Corre cada 15 min. Cubre los 3 tipos de servicio (paseo, guardería, hospedaje):
 // si ya pasó el horario acordado + los 15 min de gracia y nadie (ni cuidador
 // concluyendo, ni dueño marcando fin) cerró el servicio, insiste con push a
 // ambos hasta que uno de los dos actúe. Throttle de 30 min via lastEndReminderAt
@@ -247,9 +317,14 @@ async function procesarRecordatoriosFinServicioSinMarcar() {
       await prisma.booking.update({ where: { id: b.id }, data: { lastEndReminderAt: now } });
 
       const svcLabel = b.serviceType === 'PASEO' ? 'paseo' : b.serviceType === 'GUARDERIA' ? 'guardería' : 'hospedaje';
+      // El minutaje real de atraso (ya calculado arriba) hace que el aviso escale
+      // con la situación real, en vez de sonar igual a los 5 min que a las 2 horas.
+      const overtimeLabel = overtimeMins >= 60
+        ? `${(overtimeMins / 60).toFixed(1)}h`
+        : `${overtimeMins} min`;
 
       const clientTitle = '⏰ ¿Ya terminó el servicio?';
-      const clientMsg = `El ${svcLabel} de ${b.petName ?? 'tu mascota'} ya pasó su horario acordado. Si ya terminó, márcalo en la app para evitar cargos de tiempo extra.`;
+      const clientMsg = `El ${svcLabel} de ${b.petName ?? 'tu mascota'} lleva ${overtimeLabel} de más sobre el horario acordado. Si ya terminó, márcalo en la app para evitar cargos de tiempo extra.`;
       await prisma.notification.create({
         data: { userId: b.clientId, title: clientTitle, message: clientMsg, type: 'SYSTEM' },
       });
@@ -257,7 +332,7 @@ async function procesarRecordatoriosFinServicioSinMarcar() {
 
       if (b.caregiver?.userId) {
         const caregiverTitle = '⏰ Cierra el servicio';
-        const caregiverMsg = `El ${svcLabel} de ${b.petName ?? 'la mascota'} ya pasó su horario acordado. Sube tus fotos y concluye el servicio para cobrar.`;
+        const caregiverMsg = `El ${svcLabel} de ${b.petName ?? 'la mascota'} lleva ${overtimeLabel} fuera de horario. Sube tus fotos y concluye para cobrar el tiempo extra.`;
         await prisma.notification.create({
           data: { userId: b.caregiver.userId, title: caregiverTitle, message: caregiverMsg, type: 'SYSTEM' },
         });
@@ -286,12 +361,21 @@ async function procesarNotificacionesMasivasProgramadas() {
         { status: 'SENDING' }, // retomar envíos interrumpidos
       ],
     },
-    select: { id: true, title: true, message: true, targetType: true, targetZone: true, sentCount: true },
+    select: { id: true, title: true, message: true, targetType: true, targetZone: true, sentCount: true, status: true },
   });
 
   for (const n of pendientes) {
     try {
-      await prisma.massNotification.update({ where: { id: n.id }, data: { status: 'SENDING' } });
+      // Guard atómico: si dos corridas del cron (solapadas, o una interrumpida
+      // que otra retoma) ven la misma fila antes de que cualquiera la marque
+      // SENDING, esto asegura que solo una la "reclame" — la otra recibe
+      // count === 0 y no reenvía el broadcast completo a toda la audiencia
+      // por segunda vez. Mismo patrón que scheduled-notifications.job.ts.
+      const claimed = await prisma.massNotification.updateMany({
+        where: { id: n.id, status: n.status },
+        data: { status: 'SENDING' },
+      });
+      if (claimed.count === 0) continue; // otra corrida ya la está procesando
 
       const where: any = { isDeleted: { not: true } };
       if (n.targetType === 'clients') where.role = 'CLIENT';
@@ -351,7 +435,13 @@ export function iniciarJobServiceReminders() {
   });
 
   // Recordatorios de inicio de servicio + avisos de fin de hospedaje + recordatorios de calificación
-  cron.schedule('0 * * * *', async () => {
+  // Corre cada 15 min (antes cada hora) para que los recordatorios de "24h antes" /
+  // "2h antes" caigan cerca del momento preciso (ventana ±10min, ver
+  // REMINDER_WINDOW_MARGIN_MS) en vez de en cualquier punto de una ventana de
+  // ±30min chequeada una sola vez por hora. Ahora es seguro correrlo más seguido
+  // porque cada función de este bloque tiene guard de idempotencia (ver
+  // serviceEvents / ratingReminderSentAt / lastEndReminderAt).
+  cron.schedule('*/15 * * * *', async () => {
     await procesarRecordatoriosDeServicio();
     await procesarAvisosFinHospedaje().catch(err =>
       logger.error('[HOSPEDAJE-EXPIRY] Job falló', { err })

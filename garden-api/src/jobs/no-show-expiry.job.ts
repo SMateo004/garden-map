@@ -142,10 +142,18 @@ async function _cancelarPorNoShow(booking: {
         type: 'BOOKING_CANCELLED',
       },
     });
-    sendPushToUser(caregiver.userId, 'Reserva cancelada', 'Se canceló automáticamente por no presentación (no-show).').catch(() => {});
+    sendPushToUser(
+      caregiver.userId,
+      'Reserva cancelada — no-show',
+      `La reserva de ${booking.petName ?? 'la mascota'} se canceló automáticamente: el servicio nunca comenzó dentro del plazo.`
+    ).catch(() => {});
   }
 
-  sendPushToUser(booking.clientId, 'Reserva cancelada', 'Se canceló automáticamente porque el servicio no comenzó a tiempo (no-show).').catch(() => {});
+  sendPushToUser(
+    booking.clientId,
+    'Reserva cancelada — no-show',
+    `La reserva de ${booking.petName ?? 'tu mascota'} se canceló porque el servicio no comenzó a tiempo. Según la política, no aplica reembolso.`
+  ).catch(() => {});
 
   logger.info('[NO-SHOW-EXPIRY] Reserva cancelada automáticamente por no-show', { bookingId: booking.id });
 }
