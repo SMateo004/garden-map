@@ -64,6 +64,14 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+            // isMinifyEnabled queda en su default (false) — no lo activamos acá porque
+            // no está probado. proguard-rules.pro ya queda listo (regla de
+            // flutter_local_notifications/Gson) para el día que se active shrinking,
+            // así R8 no rompe la (de)serialización de notificaciones programadas.
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
