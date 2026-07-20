@@ -1534,6 +1534,20 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             const SizedBox(height: 32),
           ],
 
+            // Sección — Servicios y precios. Solo fuera del wizard de
+            // onboarding (embeddedMode): ahí los servicios ofrecidos y
+            // precios ya se definen en un paso dedicado del wizard, y este
+            // widget se autogatea con _isEditing (que nunca se activa dentro
+            // del wizard), así que mostrarlo ahí lo dejaría en solo-lectura.
+            // Antes esta sección solo existía en la vista web
+            // (_buildWebScaffold) — en la app real (iOS/Android) un
+            // cuidador jamás podía cambiar su precio después del registro.
+            if (!widget.embeddedMode) ...[
+              _sectionTitle('Servicios y precios', textColor),
+              _buildServicesPricesSection(surface, borderColor, textColor, subtextColor),
+              const Divider(height: 48),
+            ],
+
             // Sección 2 — Sobre ti
             SizedBox(key: _keyBio, height: 0),
             _sectionTitle(_lAboutTitle, textColor),
