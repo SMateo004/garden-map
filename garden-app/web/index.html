@@ -83,6 +83,10 @@ const { useState, useEffect, useRef } = React;
 const APP_STORE_URL  = 'https://apps.apple.com/app/garden-cuidadores/id000000000';
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.garden.bolivia';
 
+// Ciudades/zonas vienen del backend (config real del admin) — endpoints
+// públicos, sin auth: GET /cities y GET /cities/:cityId/zones.
+const API_BASE = 'https://api.gardenbo.com/api';
+
 // Flutter usa hash URL strategy → todas las rutas van a app.html#/ruta
 const FLUTTER = '/app.html';
 const flutterUrl = (route, params) => {
@@ -154,17 +158,6 @@ const SERVICES = [
   { id:'paseo', label:'Paseo', desc:'Salidas con seguimiento GPS', Icon:IcoWalk },
   { id:'hospedaje', label:'Hospedaje', desc:'En casa del cuidador', Icon:IcoHome },
   { id:'guarderia', label:'Guardería de día', desc:'Mientras trabajás', Icon:IcoSun },
-];
-// key = clave interna Flutter (uppercase, se lowercase antes del API call),
-// label = lo que ve el usuario
-const ZONES = [
-  { key:'EQUIPETROL', label:'Equipetrol' },
-  { key:'LAS_PALMAS', label:'Las Palmas' },
-  { key:'NORTE',      label:'Zona Norte' },
-  { key:'URUBO_NORTE',label:'Urubó' },
-  { key:'CENTRO',     label:'Centro' },
-  { key:'SUR',        label:'Sur' },
-  { key:'REMANZO',    label:'Remanzo' },
 ];
 const WHENS = ['Hoy','Mañana','Este fin de semana','Elegir fechas'];
 const PETS = [
@@ -267,6 +260,41 @@ const SearchBar = ({ onSearch }) => {
   const [petStep, setPetStep] = useState('species'); // 'species'|'size'
   const wrapRef = useRef(null);
 
+  // Ciudades y zonas activas configuradas por el admin — nunca hardcodeadas.
+  // Flujo de dos pasos dentro de "Dónde": primero ciudad, recién ahí zona.
+  const [cities, setCities] = useState([]);
+  const [citiesLoaded, setCitiesLoaded] = useState(false);
+  const [cityId, setCityId] = useState(null);
+  const [zonesByCity, setZonesByCity] = useState({}); // { [cityId]: zone[] }
+  const [zonesLoading, setZonesLoading] = useState(false);
+  const [whereStep, setWhereStep] = useState('city'); // 'city'|'zone'
+
+  useEffect(() => {
+    fetch(`${API_BASE}/cities`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setCities(d.data); })
+      .catch(() => {})
+      .finally(() => setCitiesLoaded(true));
+  }, []);
+
+  const selectCity = (city) => {
+    if (city.id !== cityId) setZone(null); // la zona anterior no aplica a otra ciudad
+    setCityId(city.id);
+    setWhereStep('zone');
+    if (!zonesByCity[city.id]) {
+      setZonesLoading(true);
+      fetch(`${API_BASE}/cities/${city.id}/zones`)
+        .then(r => r.json())
+        .then(d => { if (d.success) setZonesByCity(prev => ({ ...prev, [city.id]: d.data })); })
+        .catch(() => {})
+        .finally(() => setZonesLoading(false));
+    }
+  };
+
+  const selectedCity = cities.find(c => c.id === cityId) || null;
+  const currentZones = zonesByCity[cityId] || [];
+  const selectedZoneLabel = zone ? currentZones.find(z => z.key === zone)?.label : null;
+
   useEffect(()=>{
     const h = (e)=>{ if(wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(null); };
     document.addEventListener('mousedown', h);
@@ -306,7 +334,7 @@ const SearchBar = ({ onSearch }) => {
       }}>
         <Seg id="service" label="Servicio" value={service?svcLabel:null} placeholder="Elegí un servicio" first/>
         <Divider/>
-        <Seg id="where" label="Dónde" value={zone ? ZONES.find(z=>z.key===zone)?.label : null} placeholder="Tu zona en SCZ"/>
+        <Seg id="where" label="Dónde" value={selectedZoneLabel} placeholder={selectedCity ? `Zona en ${selectedCity.name}` : 'Ciudad y zona'}/>
         <Divider/>
         <Seg id="when" label="Cuándo" value={when} placeholder="Agregá fecha"/>
         <Divider/>
@@ -359,18 +387,54 @@ const SearchBar = ({ onSearch }) => {
 
           {open==='where' && (
             <div>
-              <div className="mono" style={{ fontSize:12, letterSpacing:'0.1em', textTransform:'uppercase', color:'var(--text-hint)', marginBottom:16, fontWeight:600 }}>Zonas de Santa Cruz de la Sierra</div>
-              <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
-                {ZONES.map(z=>{
-                  const on = zone===z.key;
-                  return <button key={z.key} onClick={()=>{setZone(z.key);setOpen('when');}} style={{
-                    display:'flex', alignItems:'center', gap:8, padding:'12px 18px', borderRadius:999,
-                    background:on?'var(--primary)':'var(--surface-elev)', color:on?'var(--bg)':'var(--text)',
-                    border:`1.5px solid ${on?'var(--primary)':'var(--border)'}`, fontWeight:700, fontSize:15,
-                    transition:'all .2s ease',
-                  }}><IcoPin size={16} stroke={on?'var(--bg)':'var(--primary)'}/>{z.label}</button>;
-                })}
-              </div>
+              {whereStep==='city' ? (
+                <>
+                  <div className="mono" style={{ fontSize:12, letterSpacing:'0.1em', textTransform:'uppercase', color:'var(--text-hint)', marginBottom:16, fontWeight:600 }}>¿En qué ciudad?</div>
+                  {!citiesLoaded ? (
+                    <div style={{ color:'var(--text-hint)', fontSize:14 }}>Cargando ciudades…</div>
+                  ) : cities.length===0 ? (
+                    <div style={{ color:'var(--text-hint)', fontSize:14 }}>Por ahora no hay ciudades activas.</div>
+                  ) : (
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
+                      {cities.map(c=>{
+                        const on = cityId===c.id;
+                        return <button key={c.id} onClick={()=>selectCity(c)} style={{
+                          display:'flex', alignItems:'center', gap:8, padding:'12px 18px', borderRadius:999,
+                          background:on?'var(--primary)':'var(--surface-elev)', color:on?'var(--bg)':'var(--text)',
+                          border:`1.5px solid ${on?'var(--primary)':'var(--border)'}`, fontWeight:700, fontSize:15,
+                          transition:'all .2s ease',
+                        }}><IcoPin size={16} stroke={on?'var(--bg)':'var(--primary)'}/>{c.name}</button>;
+                      })}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <button onClick={()=>setWhereStep('city')} style={{
+                    display:'flex', alignItems:'center', gap:6, marginBottom:12, padding:'4px 0',
+                    background:'none', border:'none', color:'var(--text-sec)', fontSize:13,
+                    fontWeight:600, cursor:'pointer',
+                  }}>← Cambiar ciudad</button>
+                  <div className="mono" style={{ fontSize:12, letterSpacing:'0.1em', textTransform:'uppercase', color:'var(--text-hint)', marginBottom:16, fontWeight:600 }}>Zonas de {selectedCity?.name || 'tu ciudad'}</div>
+                  {zonesLoading ? (
+                    <div style={{ color:'var(--text-hint)', fontSize:14 }}>Cargando zonas…</div>
+                  ) : currentZones.length===0 ? (
+                    <div style={{ color:'var(--text-hint)', fontSize:14 }}>Por ahora no hay zonas activas en esta ciudad.</div>
+                  ) : (
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
+                      {currentZones.map(z=>{
+                        const on = zone===z.key;
+                        return <button key={z.key} onClick={()=>{setZone(z.key);setOpen('when');}} style={{
+                          display:'flex', alignItems:'center', gap:8, padding:'12px 18px', borderRadius:999,
+                          background:on?'var(--primary)':'var(--surface-elev)', color:on?'var(--bg)':'var(--text)',
+                          border:`1.5px solid ${on?'var(--primary)':'var(--border)'}`, fontWeight:700, fontSize:15,
+                          transition:'all .2s ease',
+                        }}><IcoPin size={16} stroke={on?'var(--bg)':'var(--primary)'}/>{z.label}</button>;
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 
