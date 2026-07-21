@@ -331,10 +331,24 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     }
   }
 
+  /// Cuántos días hacia adelante hay que cubrir (desde hoy) para incluir tanto
+  /// la ventana por defecto de 90 días como el mes que el cuidador esté viendo
+  /// en el calendario — si navegó más allá de 90 días con las flechas del mes,
+  /// sin esto los días de ese mes quedaban sin estado calculado y se mostraban
+  /// como "disponible" por defecto aunque el servidor tuviera un override real.
+  int _daysToCoverCalendar() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final calendarMonthEnd = DateTime(_calendarMonth.year, _calendarMonth.month + 1, 0);
+    final daysToCalendarEnd = calendarMonthEnd.difference(today).inDays + 1;
+    return daysToCalendarEnd > 90 ? daysToCalendarEnd : 90;
+  }
+
   void _computeDayStatuses() {
     final statuses = <String, String>{};
     final now = DateTime.now();
-    
+    final totalDays = _daysToCoverCalendar();
+
     // Leer flags de días habilitados del schedule predeterminado
     final defaultSchedule = (_availability?['defaultSchedule'] as Map?) ?? {};
     final weekdaysEnabled = defaultSchedule['weekdays'] as bool? ?? true;
@@ -350,8 +364,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       '2026-11-02','2026-12-25',
     };
 
-    // Generar los próximos 90 días
-    for (int i = 0; i < 90; i++) {
+    // Generar los días necesarios (al menos 90, o más si el mes visible del
+    // calendario cae más adelante que eso)
+    for (int i = 0; i < totalDays; i++) {
       final date = now.add(Duration(days: i));
       final dateStr = date.toIso8601String().split('T')[0];
 
@@ -406,8 +421,16 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
   }
 
   Future<void> _loadAvailability() async {
+    // Pide un rango que siempre cubra el mes que el cuidador esté viendo en el
+    // calendario — si se navegó más allá de los 90 días por defecto, sin esto
+    // el servidor nunca devolvía los overrides de esas fechas.
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final to = today.add(Duration(days: _daysToCoverCalendar()));
+    final fromStr = today.toIso8601String().split('T')[0];
+    final toStr = to.toIso8601String().split('T')[0];
     final response = await http.get(
-      Uri.parse('$_baseUrl/caregiver/availability'),
+      Uri.parse('$_baseUrl/caregiver/availability?from=$fromStr&to=$toStr'),
       headers: {'Authorization': 'Bearer $_caregiverToken'},
     );
     final data = jsonDecode(response.body);
@@ -1440,12 +1463,18 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       }
     }
 
-    void openService() => Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ServiceExecutionScreen(bookingId: bookingId, role: 'CAREGIVER'),
-      ),
-    );
+    void openService() async {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ServiceExecutionScreen(bookingId: bookingId, role: 'CAREGIVER'),
+        ),
+      );
+      // Al volver del detalle del servicio, el estado (CONFIRMED → IN_PROGRESS →
+      // COMPLETED, etc.) puede haber cambiado ahí dentro — refrescar de inmediato
+      // en vez de dejar esta tarjeta mostrando el estado viejo hasta un pull-to-refresh.
+      if (mounted) await Future.wait([_loadBookings(), _loadDashboardStats()]);
+    }
 
     void openChat() => Navigator.push(
       context,
@@ -1692,12 +1721,18 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final bookingId  = booking['id']         as String? ?? '';
     final isPaseo    = serviceType == 'PASEO';
 
-    void openService() => Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ServiceExecutionScreen(bookingId: bookingId, role: 'CAREGIVER'),
-      ),
-    );
+    void openService() async {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ServiceExecutionScreen(bookingId: bookingId, role: 'CAREGIVER'),
+        ),
+      );
+      // Igual que en la tarjeta de "Reservas recientes": refrescar al volver
+      // para que esta card deje de aparecer como "EN CURSO" si el servicio ya
+      // terminó/canceló mientras estaba abierto.
+      if (mounted) await Future.wait([_loadBookings(), _loadDashboardStats()]);
+    }
 
     return GestureDetector(
       onTap: openService,
@@ -1793,10 +1828,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     final isUrgent = countdown != null;
 
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         final bookingId = nextBooking['id'] as String?;
         if (bookingId == null) return;
-        Navigator.push(
+        await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => ServiceExecutionScreen(
@@ -1806,6 +1841,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             ),
           ),
         );
+        // Refrescar al volver del servicio: la "Próxima reserva" debe dejar de
+        // mostrarse (o actualizar su countdown) de inmediato si el servicio
+        // cambió de estado mientras estaba abierto.
+        if (mounted) await Future.wait([_loadBookings(), _loadDashboardStats()]);
       },
       child: Container(
       padding: const EdgeInsets.all(16),
@@ -2063,12 +2102,17 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
 
     return GestureDetector(
       onTap: canOpen && bookingId.isNotEmpty
-          ? () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ServiceExecutionScreen(bookingId: bookingId, role: 'CAREGIVER'),
-              ),
-            )
+          ? () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ServiceExecutionScreen(bookingId: bookingId, role: 'CAREGIVER'),
+                ),
+              );
+              // Refrescar al volver para que esta preview card no quede
+              // mostrando un estado/monto viejo tras cambios dentro del servicio.
+              if (mounted) await Future.wait([_loadBookings(), _loadDashboardStats()]);
+            }
           : null,
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
@@ -2196,11 +2240,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           Text(_monthName(_calendarMonth),
               style: TextStyle(color: textColor, fontSize: 17, fontWeight: FontWeight.w700)),
           Row(children: [
-            _calNavBtn(Icons.chevron_left, () => setState(() =>
-                _calendarMonth = DateTime(_calendarMonth.year, _calendarMonth.month - 1))),
+            _calNavBtn(Icons.chevron_left, () => _navigateCalendarMonth(-1)),
             const SizedBox(width: 6),
-            _calNavBtn(Icons.chevron_right, () => setState(() =>
-                _calendarMonth = DateTime(_calendarMonth.year, _calendarMonth.month + 1))),
+            _calNavBtn(Icons.chevron_right, () => _navigateCalendarMonth(1)),
           ]),
         ]),
         const SizedBox(height: 12),
@@ -2346,60 +2388,53 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       {'key': 'holidays',  'label': 'Feriados',  'icon': Icons.celebration_outlined,     'value': holidays},
     ];
 
-    return Row(
-      children: items.asMap().entries.map((entry) {
-        final i = entry.key;
-        final item = entry.value;
-        final isEnabled = item['value'] as bool;
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: GardenRadius.md_,
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        children: items.asMap().entries.map((entry) {
+          final i = entry.key;
+          final item = entry.value;
+          final key = item['key'] as String;
+          final isEnabled = item['value'] as bool;
 
-        return Expanded(
-          child: TapScale(
-            onTap: () => _toggleDayType(item['key'] as String, !isEnabled),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutCubic,
-              margin: EdgeInsets.only(right: i < 2 ? 10 : 0),
-              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 10),
-              decoration: BoxDecoration(
-                color: isEnabled
-                  ? GardenColors.success.withValues(alpha: 0.12)
-                  : surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isEnabled
-                    ? GardenColors.success.withValues(alpha: 0.6)
-                    : borderColor,
-                  width: isEnabled ? 1.5 : 1,
+          return Column(
+            children: [
+              if (i > 0) Divider(height: 1, color: borderColor),
+              TapScale(
+                onTap: () => _toggleDayType(key, !isEnabled),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  child: Row(
+                    children: [
+                      Icon(item['icon'] as IconData,
+                        color: isEnabled ? GardenColors.primary : subtextColor, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(item['label'] as String,
+                          style: TextStyle(
+                            color: isEnabled ? textColor : subtextColor,
+                            fontSize: 14, fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Switch(
+                        value: isEnabled,
+                        activeColor: GardenColors.primary,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        onChanged: (v) => _toggleDayType(key, v),
+                      ),
+                    ],
+                  ),
                 ),
-                boxShadow: isEnabled
-                  ? [BoxShadow(color: GardenColors.success.withValues(alpha: 0.18), blurRadius: 14, offset: const Offset(0, 4))]
-                  : null,
               ),
-              child: Column(
-                children: [
-                  AnimatedScale(
-                    scale: isEnabled ? 1.08 : 1.0,
-                    duration: const Duration(milliseconds: 260),
-                    curve: Curves.easeOutBack,
-                    child: Icon(item['icon'] as IconData,
-                      color: isEnabled ? GardenColors.success : subtextColor, size: 26),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(item['label'] as String,
-                    style: TextStyle(
-                      color: isEnabled ? textColor : subtextColor,
-                      fontSize: 13, fontWeight: FontWeight.w700,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  _miniToggle(isEnabled, GardenColors.success),
-                ],
-              ),
-            ),
-          ),
-        );
-      }).toList(),
+            ],
+          );
+        }).toList(),
+      ),
     );
   }
 
@@ -2443,6 +2478,17 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     );
   }
 
+  /// Cambia el mes mostrado en el calendario y, si el nuevo mes cae fuera de
+  /// la ventana ya cargada (más de 90 días desde hoy), refresca la
+  /// disponibilidad desde el servidor para que los overrides de ese mes no se
+  /// muestren como "disponible" por defecto sin datos reales detrás.
+  Future<void> _navigateCalendarMonth(int deltaMonths) async {
+    setState(() => _calendarMonth =
+        DateTime(_calendarMonth.year, _calendarMonth.month + deltaMonths));
+    await _loadAvailability();
+    _computeDayStatuses();
+  }
+
   Widget _calNavBtn(IconData icon, VoidCallback onTap) {
     return TapScale(
       pressedScale: 0.88,
@@ -2476,123 +2522,75 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     }();
 
     final blockDefs = [
-      {'key': 'morning',   'label': 'Mañana', 'icon': Icons.wb_sunny_rounded,   'color': const Color(0xFFFFB347), 'ds': '08:00', 'de': '11:00'},
-      {'key': 'afternoon', 'label': 'Tarde',  'icon': Icons.wb_cloudy_rounded,  'color': const Color(0xFF5BB8FF), 'ds': '13:00', 'de': '17:00'},
-      {'key': 'night',     'label': 'Noche',  'icon': Icons.nights_stay_rounded,'color': const Color(0xFF9B8AFB), 'ds': '19:00', 'de': '22:00'},
+      {'key': 'morning',   'label': 'Mañana', 'icon': Icons.wb_sunny_rounded,    'ds': '08:00', 'de': '11:00'},
+      {'key': 'afternoon', 'label': 'Tarde',  'icon': Icons.wb_cloudy_rounded,   'ds': '13:00', 'de': '17:00'},
+      {'key': 'night',     'label': 'Noche',  'icon': Icons.nights_stay_rounded, 'ds': '19:00', 'de': '22:00'},
     ];
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: blockDefs.asMap().entries.map((entry) {
-        final i = entry.key;
-        final b = entry.value;
-        final key = b['key'] as String;
-        final rawBlock = rawBlocks[key];
-        final block = rawBlock is Map
-          ? Map<String, dynamic>.from(rawBlock)
-          : {'enabled': true, 'start': b['ds'], 'end': b['de']};
-        final isEnabled = block['enabled'] == true;
-        final color = b['color'] as Color;
-        final icon = b['icon'] as IconData;
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: GardenRadius.md_,
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        children: blockDefs.asMap().entries.map((entry) {
+          final i = entry.key;
+          final b = entry.value;
+          final key = b['key'] as String;
+          final rawBlock = rawBlocks[key];
+          final block = rawBlock is Map
+            ? Map<String, dynamic>.from(rawBlock)
+            : {'enabled': true, 'start': b['ds'], 'end': b['de']};
+          final isEnabled = block['enabled'] == true;
+          final icon = b['icon'] as IconData;
 
-        return Expanded(
-          child: Container(
-            margin: EdgeInsets.only(right: i < 2 ? 10 : 0),
-            child: TapScale(
-              onTap: () => _toggleTimeBlock(key, !isEnabled),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isEnabled ? color.withValues(alpha: 0.12) : surface,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: isEnabled ? color.withValues(alpha: 0.6) : borderColor,
-                    width: isEnabled ? 1.5 : 1,
-                  ),
-                  boxShadow: isEnabled
-                    ? [BoxShadow(color: color.withValues(alpha: 0.2), blurRadius: 14, offset: const Offset(0, 4))]
-                    : null,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          return Column(
+            children: [
+              if (i > 0) Divider(height: 1, color: borderColor),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        AnimatedScale(
-                          scale: isEnabled ? 1.1 : 1.0,
-                          duration: const Duration(milliseconds: 260),
-                          curve: Curves.easeOutBack,
-                          child: Icon(icon, color: isEnabled ? color : subtextColor, size: 23),
-                        ),
-                        _miniToggle(isEnabled, color),
-                      ],
+                    Icon(icon, color: isEnabled ? GardenColors.primary : subtextColor, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(b['label'] as String,
+                            style: TextStyle(
+                              color: isEnabled ? textColor : subtextColor,
+                              fontWeight: FontWeight.w600, fontSize: 14,
+                            )),
+                          const SizedBox(height: 2),
+                          Text('${block['start']} - ${block['end']}',
+                            style: TextStyle(color: subtextColor, fontSize: 12)),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 12),
-                    Text(b['label'] as String,
-                      style: TextStyle(
-                        color: isEnabled ? textColor : subtextColor,
-                        fontWeight: FontWeight.w700, fontSize: 14,
-                      )),
-                    const SizedBox(height: 4),
-                    Text('${block['start']} - ${block['end']}',
-                      style: TextStyle(
-                        color: isEnabled ? color : subtextColor,
-                        fontSize: 12, fontWeight: FontWeight.w600,
-                      )),
-                    AnimatedSize(
-                      duration: const Duration(milliseconds: 220),
-                      curve: Curves.easeOutCubic,
-                      alignment: Alignment.topLeft,
-                      child: isEnabled
-                        ? Padding(
-                            padding: const EdgeInsets.only(top: 10),
-                            child: TapScale(
-                              onTap: () => _showEditBlockSheet(key, block),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: color.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(7),
-                                ),
-                                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                  Icon(Icons.access_time, size: 11, color: color),
-                                  const SizedBox(width: 4),
-                                  Text('Editar hora', style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
-                                ]),
-                              ),
-                            ),
-                          )
-                        : const SizedBox(width: double.infinity),
+                    if (isEnabled)
+                      TapScale(
+                        onTap: () => _showEditBlockSheet(key, block),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          child: Text('Editar hora',
+                            style: TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                    const SizedBox(width: 2),
+                    Switch(
+                      value: isEnabled,
+                      activeColor: GardenColors.primary,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      onChanged: (v) => _toggleTimeBlock(key, v),
                     ),
                   ],
                 ),
               ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _miniToggle(bool isEnabled, Color color) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      width: 30, height: 17,
-      decoration: BoxDecoration(
-        color: isEnabled ? color : kTextSecondary.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: AnimatedAlign(
-        duration: const Duration(milliseconds: 220),
-        alignment: isEnabled ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          margin: const EdgeInsets.all(2),
-          width: 13, height: 13,
-          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-        ),
+            ],
+          );
+        }).toList(),
       ),
     );
   }
@@ -2602,30 +2600,47 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     String end = block['end'] as String? ?? '11:00';
     final label = blockKey == 'morning' ? 'Mañana' : blockKey == 'afternoon' ? 'Tarde' : 'Noche';
 
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final surfaceEl = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
     await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => GlassBox(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        builder: (ctx, setSheetState) => Container(
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
           padding: EdgeInsets.only(
-            left: 24, right: 24, top: 24,
+            left: 24, right: 24, top: 12,
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Center(
+                child: Container(
+                  width: 36, height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
               Text('Horario de $label',
-                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
               const SizedBox(height: 6),
-              const Text('Ajusta el rango horario para este bloque',
-                style: TextStyle(color: kTextSecondary, fontSize: 13)),
+              Text('Ajusta el rango horario para este bloque',
+                style: TextStyle(color: subtextColor, fontSize: 13)),
               const SizedBox(height: 24),
               Row(children: [
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Inicio', style: TextStyle(color: kTextSecondary, fontSize: 12)),
+                  Text('Inicio', style: TextStyle(color: subtextColor, fontSize: 12)),
                   const SizedBox(height: 6),
                   GestureDetector(
                     onTap: () async {
@@ -2634,7 +2649,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                         context: ctx,
                         initialTime: TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1])),
                         builder: (c, child) => Theme(
-                          data: ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: kPrimaryColor)),
+                          data: Theme.of(c).copyWith(
+                            colorScheme: Theme.of(c).colorScheme.copyWith(primary: GardenColors.primary),
+                          ),
                           child: child!,
                         ),
                       );
@@ -2643,21 +2660,21 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       decoration: BoxDecoration(
-                        color: kBackgroundColor,
+                        color: surfaceEl,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: kPrimaryColor.withValues(alpha: 0.4)),
+                        border: Border.all(color: borderColor),
                       ),
                       child: Row(children: [
-                        const Icon(Icons.access_time, color: kPrimaryColor, size: 16),
+                        const Icon(Icons.access_time, color: GardenColors.primary, size: 16),
                         const SizedBox(width: 8),
-                        Text(start, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+                        Text(start, style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 16)),
                       ]),
                     ),
                   ),
                 ])),
                 const SizedBox(width: 16),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Fin', style: TextStyle(color: kTextSecondary, fontSize: 12)),
+                  Text('Fin', style: TextStyle(color: subtextColor, fontSize: 12)),
                   const SizedBox(height: 6),
                   GestureDetector(
                     onTap: () async {
@@ -2666,7 +2683,9 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                         context: ctx,
                         initialTime: TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1])),
                         builder: (c, child) => Theme(
-                          data: ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: kPrimaryColor)),
+                          data: Theme.of(c).copyWith(
+                            colorScheme: Theme.of(c).colorScheme.copyWith(primary: GardenColors.primary),
+                          ),
                           child: child!,
                         ),
                       );
@@ -2675,14 +2694,14 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       decoration: BoxDecoration(
-                        color: kBackgroundColor,
+                        color: surfaceEl,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: kPrimaryColor.withValues(alpha: 0.4)),
+                        border: Border.all(color: borderColor),
                       ),
                       child: Row(children: [
-                        const Icon(Icons.access_time, color: kPrimaryColor, size: 16),
+                        const Icon(Icons.access_time, color: GardenColors.primary, size: 16),
                         const SizedBox(width: 8),
-                        Text(end, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+                        Text(end, style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 16)),
                       ]),
                     ),
                   ),
@@ -2693,7 +2712,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: kPrimaryColor,
+                    backgroundColor: GardenColors.primary,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
@@ -4305,15 +4324,21 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                     icon: status == 'CONFIRMED' ? Icons.pets_outlined : Icons.play_circle_outline,
                     height: 42,
                     color: status == 'IN_PROGRESS' ? GardenColors.success : GardenColors.primary,
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ServiceExecutionScreen(
-                          bookingId: booking['id'] as String,
-                          role: 'CAREGIVER',
+                    onPressed: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ServiceExecutionScreen(
+                            bookingId: booking['id'] as String,
+                            role: 'CAREGIVER',
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                      // Refrescar al volver: el estado del servicio puede haber
+                      // cambiado (iniciado, finalizado, cancelado) mientras la
+                      // pantalla de ejecución estaba abierta.
+                      widget.onRefresh?.call();
+                    },
                   ),
                 ),
 
@@ -4331,22 +4356,79 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
                   ),
                 ),
 
-              // Verificar si hay disputa pendiente para el cuidador
-              if (status == 'COMPLETED' && booking['hasDisputePending'] == true)
+              // Verificar si hay disputa pendiente para el cuidador — ya sea
+              // una disputa de calidad (COMPLETED) o una de no-show donde el
+              // DUEÑO reportó primero (CANCELLED/NO_SHOW + PENDING_CAREGIVER).
+              if ((status == 'COMPLETED' && booking['hasDisputePending'] == true) ||
+                  (status == 'CANCELLED' && booking['cancellationSource'] == 'NO_SHOW' && booking['disputeStatus'] == 'PENDING_CAREGIVER'))
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                   child: GardenButton(
                     label: '⚠️ Responder disputa',
                     height: 42,
                     color: GardenColors.warning,
-                    onPressed: () => context.push(
-                      '/dispute/${booking['id']}',
-                      extra: {
-                        'role': 'CAREGIVER',
-                        'clientReasons': (booking['disputeReasons'] as List?)?.cast<String>(),
-                      },
-                    ),
+                    onPressed: () async {
+                      await context.push(
+                        '/dispute/${booking['id']}',
+                        extra: {
+                          'role': 'CAREGIVER',
+                          'clientReasons': (booking['disputeReasons'] as List?)?.cast<String>(),
+                          'isNoShowDispute': status == 'CANCELLED',
+                        },
+                      );
+                      // Al volver de responder la disputa, este botón debe
+                      // desaparecer/actualizarse de inmediato (disputeStatus
+                      // ya cambió en el backend), no quedar esperando un refresh manual.
+                      widget.onRefresh?.call();
+                    },
                   ),
+                ),
+
+              // El cuidador ya reportó este no-show y está esperando la
+              // versión del dueño — estado neutral, no accionable. Solo texto
+              // pequeño de bajo contraste, sin banner ni fondo de color.
+              if (status == 'CANCELLED' && booking['cancellationSource'] == 'NO_SHOW' && booking['disputeStatus'] == 'PENDING_CLIENT')
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                  child: Text('Esperando respuesta del dueño',
+                      style: TextStyle(color: widget.subtextColor, fontSize: 12.5, fontWeight: FontWeight.w500)),
+                ),
+
+              // Sin disputa todavía sobre un no-show — el cuidador puede
+              // reportar proactivamente que el cliente nunca apareció, dentro
+              // de las mismas 24h que rigen el "Reclamar" del cliente.
+              if (status == 'CANCELLED' && booking['cancellationSource'] == 'NO_SHOW' && booking['disputeStatus'] == null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                  child: Builder(builder: (context) {
+                    final cancelledAtRaw = booking['cancelledAt'] as String?;
+                    final cancelledAt = cancelledAtRaw != null ? DateTime.tryParse(cancelledAtRaw) : null;
+                    final hoursSince = cancelledAt != null
+                        ? DateTime.now().toUtc().difference(cancelledAt.toUtc()).inMinutes / 60.0
+                        : double.infinity;
+                    if (hoursSince > 24) {
+                      return Text('Plazo para reportar cerrado',
+                          style: TextStyle(color: widget.subtextColor, fontSize: 12.5, fontWeight: FontWeight.w500));
+                    }
+                    // Outline, no relleno — misma familia visual que
+                    // "Solicitar cancelación": acción seria, tono calmo.
+                    return GardenButton(
+                      label: 'Reportar cliente ausente',
+                      height: 40,
+                      color: GardenColors.error,
+                      outline: true,
+                      onPressed: () async {
+                        await context.push(
+                          '/dispute/${booking['id']}',
+                          extra: {'role': 'CAREGIVER', 'isNoShowDispute': true},
+                        );
+                        // Igual que "Responder disputa": refrescar de inmediato
+                        // al volver, para que este botón pase a "Esperando
+                        // respuesta del dueño" sin necesitar un refresh manual.
+                        widget.onRefresh?.call();
+                      },
+                    );
+                  }),
                 ),
 
               if (status == 'CONFIRMED' || status == 'IN_PROGRESS' || status == 'WAITING_CAREGIVER_APPROVAL' || status == 'PENDING_MG')

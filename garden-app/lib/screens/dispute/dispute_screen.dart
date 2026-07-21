@@ -10,12 +10,17 @@ class DisputeScreen extends StatefulWidget {
   final String bookingId;
   final String role; // 'CLIENT' o 'CAREGIVER'
   final List<String>? clientReasons; // para el cuidador, las razones del cliente
+  // true cuando se llega desde una reserva CANCELADA por no-show (en vez del
+  // flujo normal de calificación baja en un servicio COMPLETADO). Cambia el
+  // copy de la encuesta inicial, que de otro modo asume un pago retenido.
+  final bool isNoShowDispute;
 
   const DisputeScreen({
     super.key,
     required this.bookingId,
     required this.role,
     this.clientReasons,
+    this.isNoShowDispute = false,
   });
 
   @override
@@ -27,6 +32,19 @@ class _DisputeScreenState extends State<DisputeScreen> {
   int _step = 0; // 0: encuesta, 1: procesando IA, 2: resultado, 3: formulario de apelación
   final List<String> _selectedReasons = [];
   Map<String, dynamic>? _resolution;
+
+  // Estado de la disputa fetched de GET /disputes/:bookingId — null mientras
+  // no se conoce todavía (carga inicial). Determina, junto con widget.role,
+  // qué encuesta bidireccional mostrar (ver _buildBody).
+  String? _disputeStatus;
+  bool _statusLoaded = false;
+
+  // true mientras el paso 1 (processing) corresponde a una acción de
+  // "reportar/iniciar" (client-report, caregiver-report — solo notifica a la
+  // otra parte, sin IA todavía); false cuando corresponde a una acción de
+  // "responder" (caregiver-response, client-response — dispara la IA). Usado
+  // por _buildProcessing para mostrar el copy correcto en ambas direcciones.
+  bool _isInitiatingAction = true;
 
   // Estado persistido de la disputa (incluye campos de apelación) — se carga
   // al entrar a la pantalla para saber si ya hay un veredicto, si se puede
@@ -41,6 +59,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
   // Opciones para el cliente
   static const List<Map<String, dynamic>> _clientOptions = [
     {'id': 'late', 'label': 'El cuidador no llegó a tiempo', 'icon': '⏰'},
+    {'id': 'noshow', 'label': 'El cuidador nunca llegó / no inició el servicio', 'icon': '🚫'},
     {'id': 'injured', 'label': 'Mi mascota se lastimó o enfermó', 'icon': '🤕'},
     {'id': 'different', 'label': 'El servicio fue diferente a lo prometido', 'icon': '📋'},
     {'id': 'irresponsible', 'label': 'El cuidador fue irresponsable', 'icon': '😤'},
@@ -56,6 +75,25 @@ class _DisputeScreenState extends State<DisputeScreen> {
     {'id': 'partial', 'label': 'Hubo un malentendido entre ambas partes', 'icon': '🤝'},
     {'id': 'emergency', 'label': 'Tuve una emergencia y no pude comunicarme', 'icon': '🚨'},
     {'id': 'evidence', 'label': 'Tengo fotos/evidencia que demuestra mi trabajo', 'icon': '📸'},
+  ];
+
+  // Opciones para el cliente cuando RESPONDE a un reporte del cuidador
+  // (caregiver-report → PENDING_CLIENT). Distintas de _clientOptions porque
+  // acá el cliente está replicando a un reclamo específico, no abriendo uno.
+  static const List<Map<String, dynamic>> _clientResponseOptions = [
+    {'id': 'i_was_there', 'label': 'Sí estuve, esperando en la dirección acordada', 'icon': '📍'},
+    {'id': 'tried_contact', 'label': 'Intenté contactar al cuidador y no respondió', 'icon': '📵'},
+    {'id': 'confusion', 'label': 'Hubo una confusión de horario o dirección', 'icon': '🕐'},
+    {'id': 'disagree', 'label': 'No es correcto lo que dice el cuidador', 'icon': '❌'},
+  ];
+
+  // Opciones para el cuidador cuando INICIA un reporte (caregiver-report,
+  // sin disputa previa) — simétrico a _clientOptions pero desde su lado.
+  static const List<Map<String, dynamic>> _caregiverReportOptions = [
+    {'id': 'no_answer', 'label': 'El cliente no contestó ni WhatsApp ni llamadas', 'icon': '📵'},
+    {'id': 'nobody_home', 'label': 'No había nadie en la dirección acordada', 'icon': '🚪'},
+    {'id': 'bad_address', 'label': 'La dirección no era correcta o no existía', 'icon': '📍'},
+    {'id': 'other', 'label': 'Otro motivo', 'icon': '❓'},
   ];
 
   @override
@@ -96,6 +134,8 @@ class _DisputeScreenState extends State<DisputeScreen> {
         if (!mounted) return;
         setState(() {
           _fullDispute = dispute;
+          _disputeStatus = status;
+          _statusLoaded = true;
           if (status == 'RESOLVED' || status == 'APPEALED') {
             List<String> recs = [];
             try {
@@ -112,9 +152,17 @@ class _DisputeScreenState extends State<DisputeScreen> {
           }
           // PENDING_CLIENT / PENDING_CAREGIVER: se mantiene la encuesta (step 0)
         });
+        return;
       }
+      // 404 con success:false (sin disputa todavía) — igual marcamos que la
+      // consulta ya se resolvió, para no dejar el spinner de carga infinito.
+      if (!mounted) return;
+      setState(() { _statusLoaded = true; });
     } catch (_) {
-      // Sin disputa previa (404) u otro error de red: se mantiene la encuesta inicial.
+      // Error de red: se mantiene la encuesta inicial, marcamos igual como
+      // "consultado" para no bloquear la UI indefinidamente.
+      if (!mounted) return;
+      setState(() { _statusLoaded = true; });
     }
   }
 
@@ -177,7 +225,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
 
   Future<void> _submitClientReport() async {
     if (_selectedReasons.isEmpty) return;
-    setState(() { _step = 1; });
+    setState(() { _step = 1; _isInitiatingAction = true; });
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/disputes/${widget.bookingId}/client-report'),
@@ -201,7 +249,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
 
   Future<void> _submitCaregiverResponse() async {
     if (_selectedReasons.isEmpty) return;
-    setState(() { _step = 1; });
+    setState(() { _step = 1; _isInitiatingAction = false; });
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/disputes/${widget.bookingId}/caregiver-response'),
@@ -225,6 +273,66 @@ class _DisputeScreenState extends State<DisputeScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
+      );
+    }
+  }
+
+  /// El CUIDADOR reporta que el cliente nunca apareció (dirección simétrica
+  /// de _submitClientReport). Solo alcanzable cuando aún no existe disputa.
+  Future<void> _submitCaregiverReport() async {
+    if (_selectedReasons.isEmpty) return;
+    setState(() { _step = 1; _isInitiatingAction = true; });
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/disputes/${widget.bookingId}/caregiver-report'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({'reasons': _selectedReasons}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        setState(() {
+          _disputeStatus = 'PENDING_CLIENT';
+          _step = 2;
+        });
+      } else {
+        throw Exception(data['error']?['message'] ?? 'Error');
+      }
+    } catch (e) {
+      setState(() { _step = 0; });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error),
+      );
+    }
+  }
+
+  /// El CLIENTE responde a un reporte que el cuidador ya inició
+  /// (caregiver-report → PENDING_CLIENT). Dispara la resolución por IA igual
+  /// que _submitCaregiverResponse.
+  Future<void> _submitClientResponse() async {
+    if (_selectedReasons.isEmpty) return;
+    setState(() { _step = 1; _isInitiatingAction = false; });
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/disputes/${widget.bookingId}/client-response'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({'responses': _selectedReasons}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        setState(() {
+          _resolution = data['data'];
+          _step = 2;
+        });
+        await _checkDisputeStatus();
+      } else {
+        throw Exception(data['error']?['message'] ?? 'Error');
+      }
+    } catch (e) {
+      setState(() { _step = 0; });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error),
       );
     }
   }
@@ -259,15 +367,66 @@ class _DisputeScreenState extends State<DisputeScreen> {
     if (_step == 1) return _buildProcessing();
     if (_step == 3) return _buildAppealForm();
     if (_step == 2) {
-      // El cliente solo ve la confirmación genérica justo después de reportar
-      // (paso síncrono, sin veredicto todavía). Una vez que la disputa ya
-      // tiene un veredicto (RESOLVED/APPEALED, cargado por _checkDisputeStatus),
-      // ambas partes ven la misma pantalla de resolución + apelación.
-      if (widget.role == 'CLIENT' && _resolution == null) return _buildClientConfirmation();
+      // Ambos lados de un reporte "inicial" (sin veredicto todavía, paso
+      // síncrono) ven una confirmación genérica en vez del resultado. Una vez
+      // que la disputa ya tiene un veredicto (RESOLVED/APPEALED, cargado por
+      // _checkDisputeStatus) o se acaba de resolver (client-response /
+      // caregiver-response), ambas partes ven la misma pantalla de resultado.
+      if (_resolution == null) {
+        if (widget.role == 'CLIENT') return _buildClientConfirmation();
+        return _buildCaregiverReportConfirmation();
+      }
       return _buildResolution();
     }
-    if (widget.role == 'CLIENT') return _buildClientSurvey();
-    return _buildCaregiverSurvey();
+
+    // Encuesta inicial (step 0) — esperar a conocer el estado real de la
+    // disputa antes de decidir cuál encuesta mostrar, para no mostrar
+    // brevemente la encuesta equivocada mientras carga.
+    if (!_statusLoaded) {
+      return const Center(child: GardenLoadingIndicator(color: GardenColors.primary));
+    }
+
+    if (widget.role == 'CLIENT') {
+      if (_disputeStatus == 'PENDING_CLIENT') return _buildClientResponseSurvey();
+      if (_disputeStatus == 'PENDING_CAREGIVER') {
+        return _buildWaitingState('Ya enviaste tu reclamo — esperando la respuesta del cuidador.');
+      }
+      return _buildClientSurvey();
+    }
+
+    // role == CAREGIVER
+    if (_disputeStatus == 'PENDING_CAREGIVER') return _buildCaregiverSurvey();
+    if (_disputeStatus == 'PENDING_CLIENT') {
+      return _buildWaitingState('Ya reportaste este caso — esperando la respuesta del dueño.');
+    }
+    return _buildCaregiverReportSurvey();
+  }
+
+  Widget _buildWaitingState(String message) {
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('⏳', style: TextStyle(fontSize: 56)),
+            const SizedBox(height: 20),
+            Text('Esperando respuesta', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
+            Text(message, style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5), textAlign: TextAlign.center),
+            const SizedBox(height: 28),
+            GardenButton(
+              label: 'Volver al inicio',
+              outline: true,
+              onPressed: () => context.go('/marketplace'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildClientSurvey() {
@@ -291,8 +450,16 @@ class _DisputeScreenState extends State<DisputeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Calificación baja detectada', style: TextStyle(color: GardenColors.warning, fontWeight: FontWeight.w700, fontSize: 14)),
-                    Text('El pago al cuidador está retenido. Cuéntanos qué pasó.', style: TextStyle(color: subtextColor, fontSize: 12)),
+                    Text(
+                      widget.isNoShowDispute ? 'Reserva cancelada por no presentación' : 'Calificación baja detectada',
+                      style: const TextStyle(color: GardenColors.warning, fontWeight: FontWeight.w700, fontSize: 14),
+                    ),
+                    Text(
+                      widget.isNoShowDispute
+                          ? 'Si crees que la cancelación no fue tu responsabilidad, cuéntanos qué pasó.'
+                          : 'El pago al cuidador está retenido. Cuéntanos qué pasó.',
+                      style: TextStyle(color: subtextColor, fontSize: 12),
+                    ),
                   ],
                 ),
               ),
@@ -510,6 +677,260 @@ class _DisputeScreenState extends State<DisputeScreen> {
     );
   }
 
+  /// El CLIENTE responde a un reporte que el cuidador ya inició
+  /// (caregiver-report → PENDING_CLIENT). Simétrico de _buildCaregiverSurvey,
+  /// mostrando las razones que dio el cuidador (dispute.caregiverResponse).
+  Widget _buildClientResponseSurvey() {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    final caregiverReasonIds = ((_fullDispute?['caregiverResponse'] as List?) ?? []).cast<String>();
+    final caregiverReasonsLabels = caregiverReasonIds.map((id) {
+      final option = _caregiverReportOptions.firstWhere((o) => o['id'] == id, orElse: () => {'label': id, 'icon': '❓'});
+      return '${option['icon']} ${option['label']}';
+    }).toList();
+
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Lo que dijo el cuidador
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: GardenColors.warning.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: GardenColors.warning.withValues(alpha: 0.25)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Tu cuidador reportó:', style: TextStyle(color: GardenColors.warning, fontWeight: FontWeight.w700, fontSize: 14)),
+                      const SizedBox(height: 8),
+                      ...caregiverReasonsLabels.map((r) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text('• $r', style: TextStyle(color: subtextColor, fontSize: 13)),
+                      )),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                Text('¿Cuál es tu versión?', style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                Text('Selecciona la opción que mejor describe lo que pasó. La IA de GARDEN evaluará ambas versiones por igual.', style: TextStyle(color: subtextColor, fontSize: 13)),
+                const SizedBox(height: 16),
+
+                ...(_clientResponseOptions.map((option) {
+                  final selected = _selectedReasons.contains(option['id'] as String);
+                  return GestureDetector(
+                    onTap: () => setState(() {
+                      if (selected) {
+                        _selectedReasons.remove(option['id'] as String);
+                      } else {
+                        _selectedReasons.add(option['id'] as String);
+                      }
+                    }),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: selected ? GardenColors.primary.withValues(alpha: 0.08) : surface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: selected ? GardenColors.primary : borderColor,
+                          width: selected ? 2 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(option['icon'] as String, style: const TextStyle(fontSize: 24)),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Text(option['label'] as String,
+                              style: TextStyle(
+                                color: selected ? GardenColors.primary : textColor,
+                                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                                fontSize: 14,
+                              )),
+                          ),
+                          if (selected)
+                            const Icon(Icons.check_circle_rounded, color: GardenColors.primary, size: 20),
+                        ],
+                      ),
+                    ),
+                  );
+                })),
+                const SizedBox(height: 80),
+              ],
+            ),
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+          decoration: BoxDecoration(
+            color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+            border: Border(top: BorderSide(color: borderColor)),
+          ),
+          child: GardenButton(
+            label: 'Enviar mi versión',
+            icon: Icons.send_rounded,
+            onPressed: _selectedReasons.isEmpty ? null : _submitClientResponse,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// El CUIDADOR inicia un reporte de no-show (dirección simétrica de
+  /// _buildClientSurvey) — solo alcanzable cuando aún no existe disputa.
+  Widget _buildCaregiverReportSurvey() {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          color: GardenColors.warning.withValues(alpha: 0.08),
+          child: Row(
+            children: [
+              const Text('⚠️', style: TextStyle(fontSize: 20)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Reportar cliente ausente',
+                      style: TextStyle(color: GardenColors.warning, fontWeight: FontWeight.w700, fontSize: 14),
+                    ),
+                    Text(
+                      'El dueño todavía puede dar su versión — la IA de GARDEN evaluará ambas antes de decidir.',
+                      style: TextStyle(color: subtextColor, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('¿Qué pasó?', style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                Text('Selecciona todo lo que aplique.', style: TextStyle(color: subtextColor, fontSize: 13)),
+                const SizedBox(height: 20),
+
+                ...(_caregiverReportOptions.map((option) {
+                  final selected = _selectedReasons.contains(option['id'] as String);
+                  return GestureDetector(
+                    onTap: () => setState(() {
+                      if (selected) {
+                        _selectedReasons.remove(option['id'] as String);
+                      } else {
+                        _selectedReasons.add(option['id'] as String);
+                      }
+                    }),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: selected ? GardenColors.error.withValues(alpha: 0.08) : surface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: selected ? GardenColors.error : borderColor,
+                          width: selected ? 2 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(option['icon'] as String, style: const TextStyle(fontSize: 24)),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Text(option['label'] as String,
+                              style: TextStyle(
+                                color: selected ? GardenColors.error : textColor,
+                                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                                fontSize: 14,
+                              )),
+                          ),
+                          if (selected)
+                            const Icon(Icons.check_circle_rounded, color: GardenColors.error, size: 20),
+                        ],
+                      ),
+                    ),
+                  );
+                })),
+                const SizedBox(height: 80),
+              ],
+            ),
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+          decoration: BoxDecoration(
+            color: isDark ? GardenColors.darkSurface : GardenColors.lightSurface,
+            border: Border(top: BorderSide(color: borderColor)),
+          ),
+          child: GardenButton(
+            label: 'Enviar reporte',
+            icon: Icons.send_rounded,
+            color: GardenColors.error,
+            onPressed: _selectedReasons.isEmpty ? null : _submitCaregiverReport,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCaregiverReportConfirmation() {
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('📋', style: TextStyle(fontSize: 64)),
+            const SizedBox(height: 20),
+            Text('Reporte enviado', style: TextStyle(color: textColor, fontSize: 24, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 12),
+            Text(
+              'Notificamos al dueño para que dé su versión. Una vez que responda, la IA de GARDEN analizará el caso y tomará una decisión. Te notificaremos el resultado.',
+              style: TextStyle(color: subtextColor, fontSize: 14, height: 1.6),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            GardenButton(
+              label: 'Volver al inicio',
+              onPressed: () => context.go('/marketplace'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildProcessing() {
     final isDark = themeNotifier.isDark;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
@@ -524,20 +945,22 @@ class _DisputeScreenState extends State<DisputeScreen> {
             const GardenLoadingIndicator(color: GardenColors.primary),
             const SizedBox(height: 32),
             Text(
-              widget.role == 'CLIENT'
+              _isInitiatingAction
                 ? 'Reporte enviado'
                 : 'Analizando con IA...',
               style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 12),
             Text(
-              widget.role == 'CLIENT'
-                ? 'Notificamos al cuidador para que dé su versión. Te avisaremos del resultado.'
+              _isInitiatingAction
+                ? (widget.role == 'CLIENT'
+                    ? 'Notificamos al cuidador para que dé su versión. Te avisaremos del resultado.'
+                    : 'Notificamos al dueño para que dé su versión. Te avisaremos del resultado.')
                 : 'El agente de GARDEN está analizando ambas versiones para emitir un veredicto justo.',
               style: TextStyle(color: subtextColor, fontSize: 14, height: 1.6),
               textAlign: TextAlign.center,
             ),
-            if (widget.role == 'CAREGIVER') ...[
+            if (!_isInitiatingAction) ...[
               const SizedBox(height: 24),
               Container(
                 padding: const EdgeInsets.all(14),

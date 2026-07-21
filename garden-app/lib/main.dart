@@ -555,6 +555,7 @@ final GoRouter _router = GoRouter(
           bookingId: bookingId,
           role: extra['role'] as String? ?? 'CLIENT',
           clientReasons: (extra['clientReasons'] as List?)?.cast<String>(),
+          isNoShowDispute: extra['isNoShowDispute'] as bool? ?? false,
         );
       },
     ),
@@ -1001,8 +1002,7 @@ class _GardenErrorWidget extends StatelessWidget {
                   ),
                   child: Text(
                     error,
-                    style: const TextStyle(
-                        color: Colors.red, fontSize: 11, fontFamily: 'monospace'),
+                    style: const TextStyle(color: Colors.red, fontSize: 11),
                   ),
                 ),
               ],

@@ -643,6 +643,90 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         if (mounted) _loadBookings();
                       },
                     ),
+                  if (status == 'CANCELLED' && booking['cancellationSource'] == 'NO_SHOW')
+                    Builder(builder: (context) {
+                      final disputeStatus = booking['disputeStatus'] as String?;
+
+                      // El cuidador ya reportó este no-show primero y está
+                      // esperando la versión del cliente — mostrar el flujo
+                      // de "Responder", no el de "Reclamar" desde cero.
+                      // Outline, no relleno — misma familia visual que
+                      // "Solicitar cancelación" en el lado del cuidador:
+                      // acción seria pero sin gritar.
+                      if (disputeStatus == 'PENDING_CLIENT') {
+                        return GardenButton(
+                          label: 'Responder',
+                          height: 36,
+                          color: GardenColors.error,
+                          outline: true,
+                          onPressed: () async {
+                            await context.push(
+                              '/dispute/${booking['id']}',
+                              extra: {'role': 'CLIENT', 'isNoShowDispute': true},
+                            );
+                            if (mounted) _loadBookings();
+                          },
+                        );
+                      }
+
+                      // Estados informativos: solo texto pequeño de bajo
+                      // contraste, sin fondo de color ni banner — el cliente
+                      // ya reportó y está esperando al cuidador (sin esto, el
+                      // botón "Reclamar" seguiría apareciendo indefinidamente
+                      // en cada apertura de la app).
+                      if (disputeStatus == 'PENDING_CAREGIVER') {
+                        return Text('Esperando respuesta del cuidador',
+                            style: TextStyle(color: subtextColor, fontSize: 11.5, fontWeight: FontWeight.w500));
+                      }
+
+                      if (disputeStatus == 'PENDING_AI') {
+                        return Text('Evaluando tu reclamo...',
+                            style: TextStyle(color: subtextColor, fontSize: 11.5, fontWeight: FontWeight.w500));
+                      }
+
+                      if (disputeStatus == 'RESOLVED') {
+                        return GardenButton(
+                          label: 'Reclamo resuelto',
+                          height: 36,
+                          outline: true,
+                          onPressed: () async {
+                            await context.push(
+                              '/dispute/${booking['id']}',
+                              extra: {'role': 'CLIENT', 'isNoShowDispute': true},
+                            );
+                            if (mounted) _loadBookings();
+                          },
+                        );
+                      }
+
+                      // Sin disputa todavía — flujo original: "Reclamar",
+                      // con el mismo límite de 24h que valida el backend
+                      // (mostrar el botón solo mientras el reclamo todavía
+                      // puede enviarse, en vez de dejar que el cliente lo
+                      // intente y recién ahí se entere de que el plazo cerró).
+                      final cancelledAtRaw = booking['cancelledAt'] as String?;
+                      final cancelledAt = cancelledAtRaw != null ? DateTime.tryParse(cancelledAtRaw) : null;
+                      final hoursSince = cancelledAt != null
+                          ? DateTime.now().toUtc().difference(cancelledAt.toUtc()).inMinutes / 60.0
+                          : double.infinity;
+                      if (hoursSince > 24) {
+                        return Text('Plazo de reclamo cerrado',
+                            style: TextStyle(color: subtextColor, fontSize: 11.5, fontWeight: FontWeight.w500));
+                      }
+                      return GardenButton(
+                        label: 'Reclamar',
+                        height: 36,
+                        color: GardenColors.error,
+                        outline: true,
+                        onPressed: () async {
+                          await context.push(
+                            '/dispute/${booking['id']}',
+                            extra: {'role': 'CLIENT', 'isNoShowDispute': true},
+                          );
+                          if (mounted) _loadBookings();
+                        },
+                      );
+                    }),
                 ],
               ),
             ),
