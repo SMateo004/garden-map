@@ -53,6 +53,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   double? _addressLat;
   double? _addressLng;
   bool _isApartment               = false;
+  // true cuando AddressSection confirmó que el pin no cae en ninguna zona
+  // conocida — caso excepcional: se permite continuar sin zona (ver
+  // _handleRegister) en vez de exigir "selecciona tu zona / barrio".
+  bool _zoneCoverageUnavailable    = false;
 
   final _authService  = AuthService();
   bool _isLoading     = false;
@@ -70,6 +74,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool get _hasSymbol => RegExp(r'[^A-Za-z0-9]').hasMatch(_passwordController.text);
   bool get _isPasswordValid => _hasMinLength && _hasUppercase && _hasNumber && _hasSymbol;
 
+  // ── Revelado progresivo (registro de dueño) ───────────────────────────────
+  // Cada sección solo aparece cuando la anterior quedó válidamente completa —
+  // evita mostrar el formulario entero de una y que el cliente lo abandone
+  // por parecer largo. Son getters simples recalculados en cada build/
+  // setState (listeners de los controllers abajo se encargan de eso).
+  bool get _showEmailStep =>
+      _firstNameController.text.trim().isNotEmpty && _lastNameController.text.trim().isNotEmpty;
+  bool get _showPasswordStep => _showEmailStep && _emailController.text.trim().contains('@');
+  bool get _showPhoneStep => _showPasswordStep && _isPasswordValid;
+  bool get _showAddressStep => _showPhoneStep && _phoneController.text.trim().length >= 8;
+  bool get _showDobStep =>
+      _showAddressStep &&
+      _addressLat != null &&
+      _addressStreetController.text.trim().isNotEmpty &&
+      (_addressZone != null || _zoneCoverageUnavailable);
+  bool get _showBioStep => _showDobStep && _dateOfBirth != null;
+  bool get _showTermsStep => _showBioStep && _bioController.text.trim().length >= 20;
+
   @override
   void initState() {
     super.initState();
@@ -77,9 +99,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (widget.prefillFirstName != null) _firstNameController.text = widget.prefillFirstName!;
     if (widget.prefillLastName != null) _lastNameController.text = widget.prefillLastName!;
     if (widget.prefillEmail != null) _emailController.text = widget.prefillEmail!;
-    // Feedback en vivo: repinta el checklist de requisitos y el estado del
-    // botón "Crear cuenta" en cada tecla que se escribe en la contraseña.
-    _passwordController.addListener(() => setState(() {}));
+    // Feedback en vivo: repinta el checklist de requisitos, el estado del
+    // botón "Crear cuenta" y qué sección del registro progresivo debe
+    // mostrarse, en cada tecla que se escribe en cualquiera de estos campos.
+    for (final c in [_firstNameController, _lastNameController, _emailController, _passwordController, _phoneController, _bioController]) {
+      c.addListener(() => setState(() {}));
+    }
   }
 
   @override
@@ -305,7 +330,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       GardenSnackBar.warning(context, 'Confirma tu dirección en el mapa');
       return;
     }
-    if (_addressZone == null) {
+    if (_addressZone == null && !_zoneCoverageUnavailable) {
       GardenSnackBar.warning(context, 'Selecciona tu zona / barrio');
       return;
     }
@@ -569,7 +594,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
             const SizedBox(height: 24),
           ],
 
-          // Campos solo para dueños
+          // Campos solo para dueños — revelado progresivo: cada sección
+          // aparece recién cuando la anterior queda válidamente completa
+          // (ver los getters _showXStep arriba), en vez de mostrar el
+          // formulario entero de una — más amigable, menos abandono.
           if (_selectedRole == 'owner') ...[
             Row(
               children: [
@@ -598,146 +626,181 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             const SizedBox(height: 20),
 
-            _fieldLabel('Correo electrónico', textColor),
-            const SizedBox(height: 8),
-            _textField(controller: _emailController, hint: 'tu@email.com', icon: Icons.email_outlined, keyboardType: TextInputType.emailAddress, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-            const SizedBox(height: 20),
-
-            _fieldLabel('Contraseña', textColor),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _passwordController,
-              obscureText: _obscurePassword,
-              style: TextStyle(color: textColor),
-              decoration: InputDecoration(
-                hintText: '••••••••',
-                hintStyle: TextStyle(color: subtextColor),
-                prefixIcon: Icon(Icons.lock_outlined, color: subtextColor, size: 20),
-                suffixIcon: IconButton(
-                  icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: subtextColor, size: 20),
-                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                ),
-                filled: true, fillColor: surfaceEl,
-                border: OutlineInputBorder(borderRadius: GardenRadius.md_, borderSide: BorderSide.none),
-                enabledBorder: OutlineInputBorder(borderRadius: GardenRadius.md_, borderSide: BorderSide(color: borderColor)),
-                focusedBorder: OutlineInputBorder(borderRadius: GardenRadius.md_, borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: GardenSpacing.lg, vertical: 14),
-              ),
+            _revealStep(
+              show: _showEmailStep,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _fieldLabel('Correo electrónico', textColor),
+                const SizedBox(height: 8),
+                _textField(controller: _emailController, hint: 'tu@email.com', icon: Icons.email_outlined, keyboardType: TextInputType.emailAddress, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                const SizedBox(height: 20),
+              ]),
             ),
-            const SizedBox(height: 10),
-            _buildPasswordRequirements(subtextColor, borderColor),
-            const SizedBox(height: 20),
 
-            _fieldLabel('Teléfono boliviano', textColor),
-            const SizedBox(height: 8),
-            _textField(controller: _phoneController, hint: '76543210', icon: Icons.phone_outlined, keyboardType: TextInputType.phone, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
-            const SizedBox(height: 8),
-            Text('8 dígitos, empieza con 6 o 7', style: TextStyle(color: subtextColor, fontSize: 12)),
-            const SizedBox(height: 20),
-
-            _fieldLabel('Dirección', textColor),
-            const SizedBox(height: 8),
-            AddressSection(
-              isDark: isDark,
-              textColor: textColor,
-              subtextColor: subtextColor,
-              borderColor: borderColor,
-              surfaceEl: surfaceEl,
-              streetController: _addressStreetController,
-              numberController: _addressNumberController,
-              apartmentController: _addressApartmentController,
-              condominioController: _addressCondominioController,
-              referenceController: _addressReferenceController,
-              selectedZone: _addressZone,
-              onZoneChanged: (val) => setState(() => _addressZone = val),
-              initialCityId: _gardenCityId,
-              onCityChanged: (cityId, _) => setState(() => _gardenCityId = cityId),
-              onCityChangeReset: () => setState(() {
-                _addressLat = null;
-                _addressLng = null;
-                _addressStreetController.clear();
-                _addressNumberController.clear();
-                _addressApartmentController.clear();
-                _addressCondominioController.clear();
-                _addressReferenceController.clear();
-              }),
-              addressLat: _addressLat,
-              addressLng: _addressLng,
-              isApartment: _isApartment,
-              purposeText: 'Tu dirección se usa para que el cuidador pueda llegar a tu hogar.',
-              onMapResult: (result) => setState(() {
-                _addressLat = result.lat;
-                _addressLng = result.lng;
-                if (result.formattedAddress != null && result.formattedAddress!.isNotEmpty) {
-                  _addressStreetController.text = result.formattedAddress!;
-                }
-              }),
-              onApartmentToggle: (val) => setState(() => _isApartment = val),
-            ),
-            const SizedBox(height: 20),
-
-            _fieldLabel('Fecha de nacimiento', textColor),
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: DateTime(2000),
-                  firstDate: DateTime(1940),
-                  lastDate: DateTime.now().subtract(const Duration(days: 365 * 13)),
-                );
-                if (picked != null) setState(() => _dateOfBirth = picked);
-              },
-              child: Container(
-                height: 52,
-                padding: const EdgeInsets.symmetric(horizontal: GardenSpacing.lg),
-                decoration: BoxDecoration(
-                  color: surfaceEl,
-                  borderRadius: GardenRadius.md_,
-                  border: Border.all(color: borderColor),
-                ),
-                child: Row(children: [
-                  Icon(Icons.cake_outlined, color: subtextColor, size: 20),
-                  const SizedBox(width: 12),
-                  Text(
-                    _dateOfBirth == null
-                        ? 'Seleccionar fecha'
-                        : '${_dateOfBirth!.day.toString().padLeft(2, '0')}/${_dateOfBirth!.month.toString().padLeft(2, '0')}/${_dateOfBirth!.year}',
-                    style: TextStyle(color: _dateOfBirth == null ? subtextColor : textColor, fontSize: 14),
+            _revealStep(
+              show: _showPasswordStep,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _fieldLabel('Contraseña', textColor),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  style: TextStyle(color: textColor),
+                  decoration: InputDecoration(
+                    hintText: '••••••••',
+                    hintStyle: TextStyle(color: subtextColor),
+                    prefixIcon: Icon(Icons.lock_outlined, color: subtextColor, size: 20),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: subtextColor, size: 20),
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    ),
+                    filled: true, fillColor: surfaceEl,
+                    border: OutlineInputBorder(borderRadius: GardenRadius.md_, borderSide: BorderSide.none),
+                    enabledBorder: OutlineInputBorder(borderRadius: GardenRadius.md_, borderSide: BorderSide(color: borderColor)),
+                    focusedBorder: OutlineInputBorder(borderRadius: GardenRadius.md_, borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: GardenSpacing.lg, vertical: 14),
                   ),
-                ]),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            _fieldLabel('Descripción breve de ti', textColor),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _bioController,
-              maxLines: 3,
-              maxLength: 300,
-              style: TextStyle(color: textColor, fontSize: 14),
-              decoration: InputDecoration(
-                hintText: 'Cuéntanos un poco sobre ti...',
-                hintStyle: TextStyle(color: subtextColor),
-                prefixIcon: Padding(
-                  padding: const EdgeInsets.only(bottom: 40),
-                  child: Icon(Icons.description_outlined, color: subtextColor, size: 20),
                 ),
-                filled: true, fillColor: surfaceEl,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              ),
+                const SizedBox(height: 10),
+                _buildPasswordRequirements(subtextColor, borderColor),
+                const SizedBox(height: 20),
+              ]),
             ),
-            const SizedBox(height: 12),
+
+            _revealStep(
+              show: _showPhoneStep,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _fieldLabel('Teléfono boliviano', textColor),
+                const SizedBox(height: 8),
+                _textField(controller: _phoneController, hint: '76543210', icon: Icons.phone_outlined, keyboardType: TextInputType.phone, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor),
+                const SizedBox(height: 8),
+                Text('8 dígitos, empieza con 6 o 7', style: TextStyle(color: subtextColor, fontSize: 12)),
+                const SizedBox(height: 20),
+              ]),
+            ),
+
+            _revealStep(
+              show: _showAddressStep,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _fieldLabel('Dirección', textColor),
+                const SizedBox(height: 8),
+                AddressSection(
+                  isDark: isDark,
+                  textColor: textColor,
+                  subtextColor: subtextColor,
+                  borderColor: borderColor,
+                  surfaceEl: surfaceEl,
+                  streetController: _addressStreetController,
+                  numberController: _addressNumberController,
+                  apartmentController: _addressApartmentController,
+                  condominioController: _addressCondominioController,
+                  referenceController: _addressReferenceController,
+                  selectedZone: _addressZone,
+                  onZoneChanged: (val) => setState(() => _addressZone = val),
+                  initialCityId: _gardenCityId,
+                  onCityChanged: (cityId, _) => setState(() => _gardenCityId = cityId),
+                  onCityChangeReset: () => setState(() {
+                    _addressLat = null;
+                    _addressLng = null;
+                    _addressStreetController.clear();
+                    _addressNumberController.clear();
+                    _addressApartmentController.clear();
+                    _addressCondominioController.clear();
+                    _addressReferenceController.clear();
+                  }),
+                  addressLat: _addressLat,
+                  addressLng: _addressLng,
+                  isApartment: _isApartment,
+                  purposeText: 'Tu dirección se usa para que el cuidador pueda llegar a tu hogar.',
+                  onMapResult: (result) => setState(() {
+                    _addressLat = result.lat;
+                    _addressLng = result.lng;
+                    if (result.formattedAddress != null && result.formattedAddress!.isNotEmpty) {
+                      _addressStreetController.text = result.formattedAddress!;
+                    }
+                  }),
+                  onApartmentToggle: (val) => setState(() => _isApartment = val),
+                  onFieldsChanged: () => setState(() {}),
+                  onZoneCoverageResolved: (unavailable) => setState(() => _zoneCoverageUnavailable = unavailable),
+                  progressive: true,
+                ),
+                const SizedBox(height: 20),
+              ]),
+            ),
+
+            _revealStep(
+              show: _showDobStep,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _fieldLabel('Fecha de nacimiento', textColor),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: DateTime(2000),
+                      firstDate: DateTime(1940),
+                      lastDate: DateTime.now().subtract(const Duration(days: 365 * 13)),
+                    );
+                    if (picked != null) setState(() => _dateOfBirth = picked);
+                  },
+                  child: Container(
+                    height: 52,
+                    padding: const EdgeInsets.symmetric(horizontal: GardenSpacing.lg),
+                    decoration: BoxDecoration(
+                      color: surfaceEl,
+                      borderRadius: GardenRadius.md_,
+                      border: Border.all(color: borderColor),
+                    ),
+                    child: Row(children: [
+                      Icon(Icons.cake_outlined, color: subtextColor, size: 20),
+                      const SizedBox(width: 12),
+                      Text(
+                        _dateOfBirth == null
+                            ? 'Seleccionar fecha'
+                            : '${_dateOfBirth!.day.toString().padLeft(2, '0')}/${_dateOfBirth!.month.toString().padLeft(2, '0')}/${_dateOfBirth!.year}',
+                        style: TextStyle(color: _dateOfBirth == null ? subtextColor : textColor, fontSize: 14),
+                      ),
+                    ]),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ]),
+            ),
+
+            _revealStep(
+              show: _showBioStep,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _fieldLabel('Descripción breve de ti', textColor),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _bioController,
+                  maxLines: 3,
+                  maxLength: 300,
+                  style: TextStyle(color: textColor, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: 'Cuéntanos un poco sobre ti...',
+                    hintStyle: TextStyle(color: subtextColor),
+                    prefixIcon: Padding(
+                      padding: const EdgeInsets.only(bottom: 40),
+                      child: Icon(Icons.description_outlined, color: subtextColor, size: 20),
+                    ),
+                    filled: true, fillColor: surfaceEl,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ]),
+            ),
           ],
 
           // Checkbox de términos — solo para dueños: el flujo de cuidador
           // captura la aceptación exclusivamente vía el modal de _showTermsDialog,
           // este checkbox nunca se valida en esa rama (ver _handleRegister).
-          if (_selectedRole == 'owner') ...[
+          // Aparece junto con el resto del cierre del formulario, recién
+          // cuando ya se completó la descripción (última sección progresiva).
+          if (_selectedRole == 'owner' && _showTermsStep) ...[
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -778,15 +841,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
             const SizedBox(height: 20),
           ],
 
-          // Botón registro — deshabilitado para dueños hasta cumplir las 4
-          // reglas de contraseña (el flujo de cuidador no usa este campo aquí,
-          // la contraseña real se pide más adelante en el wizard de cuidador).
-          GardenButton(
-            label: _selectedRole == 'caregiver' ? 'Comenzar como cuidador →' : 'Crear cuenta',
-            loading: _isLoading,
-            onPressed: (_selectedRole == 'owner' && !_isPasswordValid) ? null : _handleRegister,
-          ),
-          const SizedBox(height: 16),
+          // Botón registro — para dueños, recién aparece cuando el revelado
+          // progresivo llegó al final (checkbox de términos visible); el
+          // flujo de cuidador no pasa por ninguna de estas secciones, así
+          // que siempre lo muestra.
+          if (_selectedRole == 'caregiver' || _showTermsStep) ...[
+            GardenButton(
+              label: _selectedRole == 'caregiver' ? 'Comenzar como cuidador →' : 'Crear cuenta',
+              loading: _isLoading,
+              onPressed: (_selectedRole == 'owner' && !_isPasswordValid) ? null : _handleRegister,
+            ),
+            const SizedBox(height: 16),
+          ],
 
           // Botones sociales — solo para dueños de mascotas
           if (_selectedRole == 'owner' && !widget.fromSocial) ...[
@@ -903,6 +969,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Widget _fieldLabel(String label, Color textColor) =>
     Text(label, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600));
+
+  /// Envuelve una sección del registro progresivo — aparece con una
+  /// animación de crecimiento suave apenas la sección anterior queda
+  /// válidamente completa, en vez de mostrar el formulario entero de una.
+  Widget _revealStep({required bool show, required Widget child}) {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: show ? child : const SizedBox(width: double.infinity, height: 0),
+    );
+  }
 
   Widget _textField({
     required TextEditingController controller,

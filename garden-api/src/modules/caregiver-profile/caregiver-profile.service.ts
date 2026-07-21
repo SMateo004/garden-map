@@ -230,7 +230,8 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.bioDetail !== undefined) updateData.bioDetail = body.bioDetail;
   if (body.zone !== undefined) updateData.zone = body.zone;
   if ((body as any).cityId !== undefined) updateData.cityId = (body as any).cityId;
-  if ((body as any).zoneId !== undefined) updateData.zoneId = (body as any).zoneId;
+  // zoneId no se copia directo del body — se recalcula más abajo solo si
+  // vino un pin nuevo (ver bloque de resolveAuthoritativeZone).
   if (body.spaceType !== undefined) {
     updateData.spaceType = Array.isArray(body.spaceType) ? body.spaceType : (body.spaceType ? [body.spaceType] : []);
   }
@@ -243,7 +244,22 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if ((body as any).addressApartment !== undefined) updateData.addressApartment = (body as any).addressApartment;
   if ((body as any).addressCondominio !== undefined) updateData.addressCondominio = (body as any).addressCondominio;
   if ((body as any).addressReference !== undefined) updateData.addressReference = (body as any).addressReference;
-  if ((body as any).addressZone !== undefined) updateData.addressZone = (body as any).addressZone;
+  // zoneId/addressZone: nunca se toman directo del body — solo se recalculan
+  // cuando el cuidador re-marca su ubicación exacta (addressLat+addressLng
+  // nuevos), por coordenadas server-side (misma lógica que en registro y en
+  // PATCH /auth/me, ver resolveAuthoritativeZone). Si no tocó el pin, su
+  // zona actual queda intacta.
+  {
+    const newLat = (body as any).addressLat;
+    const newLng = (body as any).addressLng;
+    if (newLat != null && newLng != null) {
+      const effectiveCityId = (body as any).cityId ?? profile.cityId ?? undefined;
+      const { resolveAuthoritativeZone } = await import('../auth/auth.service.js');
+      const resolved = await resolveAuthoritativeZone(effectiveCityId, newLat, newLng);
+      updateData.zoneId = resolved.zoneId;
+      updateData.addressZone = resolved.addressZone;
+    }
+  }
   if (body.servicesOffered !== undefined) updateData.servicesOffered = body.servicesOffered;
   if (body.serviceAvailability !== undefined) updateData.serviceAvailability = body.serviceAvailability;
   if (body.pricePerDay !== undefined) updateData.pricePerDay = body.pricePerDay;

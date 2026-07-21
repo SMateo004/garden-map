@@ -158,6 +158,18 @@ export async function createBooking(
       );
     }
 
+    // Caso excepcional: el pin del cliente no cae dentro de ninguna zona
+    // configurada (ver matchZoneForPoint) — se le permitió registrarse igual
+    // (para no bloquear el alta ni mendigarle que "complete su zona"), pero
+    // no puede reservar hasta que Garden tenga cobertura ahí. zoneId se
+    // reasigna solo cuando un admin agrega/edita un polígono que lo cubra.
+    if (!clientProfile.zoneId) {
+      throw new ForbiddenError(
+        'Todavía no llegamos a tu zona — muy pronto vamos a estar ahí. Te avisaremos apenas puedas reservar.',
+        'ZONE_NOT_COVERED'
+      );
+    }
+
     // Block new reservations if client has a completed service pending review (within 24h window)
     const pendingReview = await tx.booking.findFirst({
       where: {

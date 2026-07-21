@@ -34,6 +34,11 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   String _authToken = '';
   bool _isFavorite = false;
   bool _isTogglingFavorite = false;
+  // true por defecto — "no bloquear si no se pudo confirmar" (falla abierto).
+  // El bloqueo real de verdad lo hace el backend en POST /bookings
+  // (ZONE_NOT_COVERED); esto es solo para avisar antes, sin hacer perder
+  // tiempo al cliente llenando todo el flujo de reserva.
+  bool _clientHasZone = true;
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
@@ -54,9 +59,26 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     await Future.wait([
       _fetchCaregiver(),
       if (token.isNotEmpty) _fetchClientPets(token),
+      if (token.isNotEmpty) _fetchClientZoneStatus(token),
     ]);
     if (mounted) setState(() => _isLoading = false);
     if (token.isNotEmpty) _fetchFavoriteStatus(token);
+  }
+
+  Future<void> _fetchClientZoneStatus(String token) async {
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/auth/me'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 8));
+      final data = jsonDecode(res.body);
+      if (data['success'] == true && mounted) {
+        setState(() => _clientHasZone = data['data']?['zoneId'] != null);
+      }
+    } catch (_) {
+      // Falla de red — se deja en true (no bloquear); el backend igual
+      // valida de verdad en POST /bookings si el caso llegara a darse.
+    }
   }
 
   Future<void> _fetchCaregiver() async {
@@ -160,6 +182,26 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
         const SnackBar(content: Text('Inicia sesión para hacer una reserva'), backgroundColor: GardenColors.primary, duration: Duration(seconds: 2)),
       );
       Future.delayed(const Duration(seconds: 1), () { if (context.mounted) context.push('/login'); });
+      return;
+    }
+    if (!_clientHasZone) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(Icons.schedule_rounded, color: GardenColors.primary, size: 32),
+          title: const Text('Todavía no llegamos a tu zona'),
+          content: const Text(
+            'Muy pronto vamos a estar ahí — puedes seguir explorando cuidadores, y te avisaremos '
+            'apenas puedas reservar.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Entendido', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
       return;
     }
     if (_clientPets.isEmpty) {

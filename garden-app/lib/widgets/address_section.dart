@@ -44,6 +44,20 @@ class AddressSection extends StatefulWidget {
   /// (ej. MyDataScreen) se entere y se reconstruya. Los demás usuarios de este
   /// widget no lo necesitan porque ya validan solo al tocar su propio botón.
   final VoidCallback? onFieldsChanged;
+  /// Se llama con `true` cuando el pin cae fuera de todos los polígonos de
+  /// zona conocidos (Garden todavía no cubre esa zona — caso excepcional, se
+  /// permite continuar sin zona) y con `false` cuando el pin sí matchea una
+  /// zona o vuelve a quedar indeterminado (sin pin, cambio de ciudad, etc).
+  /// El padre lo usa para no exigir "selecciona tu zona" en el caso
+  /// excepcional confirmado.
+  final ValueChanged<bool>? onZoneCoverageResolved;
+  /// Cuando es true (solo el registro de dueño de mascota lo usa hoy), las
+  /// sub-secciones internas (calle/número, zona+dpto+referencia) aparecen
+  /// recién cuando la anterior está completa, en vez de mostrarse todas de
+  /// una — mismo espíritu de revelado progresivo que el resto del formulario
+  /// de registro. El resto de los usuarios de este widget (wizard de
+  /// cuidador, Mis Datos) no lo pasan y mantienen el comportamiento actual.
+  final bool progressive;
 
   const AddressSection({
     super.key,
@@ -69,6 +83,8 @@ class AddressSection extends StatefulWidget {
     required this.onMapResult,
     required this.onApartmentToggle,
     this.onFieldsChanged,
+    this.onZoneCoverageResolved,
+    this.progressive = false,
   });
 
   @override
@@ -88,6 +104,11 @@ class _AddressSectionState extends State<AddressSection> {
   // cargado no bloquean nada — el usuario sigue eligiendo a mano.
   List<GardenZone> _zonesForMatch = [];
   bool _zoneLocked = false;
+  // true cuando ya se cargaron las zonas de la ciudad y el pin confirmado no
+  // cae en ninguna — a diferencia de _zoneLocked==false "normal" (todavía no
+  // hay pin, o las zonas ni cargaron), este es un resultado definitivo.
+  bool _zoneNoMatch = false;
+  bool _loadingZonesForMatch = true;
 
   InputDecoration _field(String hint, IconData icon) => InputDecoration(
         hintText: hint,
@@ -98,6 +119,26 @@ class _AddressSectionState extends State<AddressSection> {
   void initState() {
     super.initState();
     _loadCities();
+    // Modo progresivo: la sub-sección de zona depende de que calle/avenida
+    // ya tenga texto — sin este listener, el widget no se repinta solo con
+    // el controller cambiando (el padre sí lo hace vía onFieldsChanged, pero
+    // esa reconstrucción es de afuera hacia adentro, no alcanza para que
+    // ESTE widget decida mostrar u ocultar su propia sub-sección).
+    if (widget.progressive) {
+      widget.streetController.addListener(_onProgressiveFieldChanged);
+    }
+  }
+
+  void _onProgressiveFieldChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    if (widget.progressive) {
+      widget.streetController.removeListener(_onProgressiveFieldChanged);
+    }
+    super.dispose();
   }
 
   @override
@@ -139,7 +180,10 @@ class _AddressSectionState extends State<AddressSection> {
 
   Future<void> _loadZonesForMatch(String cityId) async {
     final zones = await CitiesService.getZones(cityId);
-    if (mounted) setState(() => _zonesForMatch = zones);
+    if (mounted) setState(() {
+      _zonesForMatch = zones;
+      _loadingZonesForMatch = false;
+    });
   }
 
   /// Ray casting estándar — true si [point] cae dentro de [polygon].
@@ -168,18 +212,32 @@ class _AddressSectionState extends State<AddressSection> {
         // build". Se difiere al próximo frame para evitarlo.
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          setState(() => _zoneLocked = true);
+          setState(() {
+            _zoneLocked = true;
+            _zoneNoMatch = false;
+          });
           if (widget.selectedZone != zone.key) widget.onZoneChanged(zone.key);
+          widget.onZoneCoverageResolved?.call(false);
         });
         return;
       }
     }
-    // El pin no cae en ningún polígono conocido — queda en selección manual.
-    if (_zoneLocked) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _zoneLocked = false);
+    // El pin no cae en ningún polígono conocido. Si las zonas de la ciudad ya
+    // cargaron, es un resultado definitivo: Garden todavía no cubre ese
+    // punto — se bloquea la selección manual (en vez de dejarla abierta,
+    // como antes) y se avisa al padre para que permita continuar sin zona.
+    final zonesLoaded = _zonesForMatch.isNotEmpty || !_loadingZonesForMatch;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _zoneLocked = false;
+        _zoneNoMatch = zonesLoaded;
       });
-    }
+      if (zonesLoaded) {
+        if (widget.selectedZone != null) widget.onZoneChanged(null);
+        widget.onZoneCoverageResolved?.call(true);
+      }
+    });
   }
 
   @override
@@ -248,9 +306,12 @@ class _AddressSectionState extends State<AddressSection> {
                 setState(() {
                   _selectedCityId = cityId;
                   _zoneLocked = false;
+                  _zoneNoMatch = false;
+                  _loadingZonesForMatch = true;
                   _zonesForMatch = [];
                 });
                 widget.onZoneChanged(null); // cambiar de ciudad resetea la zona elegida
+                widget.onZoneCoverageResolved?.call(false);
                 _loadZonesForMatch(cityId);
                 final city = _cities.firstWhere((c) => c.id == cityId);
                 widget.onCityChanged?.call(cityId, city.name);
@@ -306,120 +367,162 @@ class _AddressSectionState extends State<AddressSection> {
         const SizedBox(height: 16),
 
         // ── Campos de dirección ───────────────────────────────────
-        Row(children: [
-          Expanded(
-            flex: 3,
-            child: TextFormField(
-              controller: widget.streetController,
-              style: TextStyle(color: widget.textColor),
-              onChanged: (_) => widget.onFieldsChanged?.call(),
-              decoration: _field('Calle / Avenida', Icons.signpost_outlined),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            flex: 2,
-            child: TextFormField(
-              controller: widget.numberController,
-              style: TextStyle(color: widget.textColor),
-              decoration: _field('N° casa', Icons.tag),
-              keyboardType: TextInputType.text,
-            ),
-          ),
-        ]),
-        const SizedBox(height: 12),
-
-        // ── Zona / Barrio — dropdown dinámico según la ciudad ─────
-        if (_selectedCityId != null)
-          _ZoneDropdownWithMap(
-            key: ValueKey(_selectedCityId),
-            isDark: widget.isDark,
-            textColor: widget.textColor,
-            subtextColor: widget.subtextColor,
-            borderColor: widget.borderColor,
-            surfaceEl: widget.surfaceEl,
-            cityId: _selectedCityId!,
-            selectedZone: widget.selectedZone,
-            onZoneChanged: widget.onZoneChanged,
-            locked: _zoneLocked,
-          ),
-        if (_zoneLocked)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Row(children: [
-              Icon(Icons.lock_outline_rounded, size: 14, color: widget.subtextColor),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Zona detectada automáticamente según tu ubicación exacta — no se puede cambiar a mano.',
-                  style: TextStyle(color: widget.subtextColor, fontSize: 11.5),
-                ),
-              ),
-            ]),
-          ),
-
-        const SizedBox(height: 12),
-
-        // Checkbox departamento
-        GestureDetector(
-          onTap: () => widget.onApartmentToggle(!widget.isApartment),
-          child: Row(
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: widget.isApartment ? const Color(0xFF16a34a) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: widget.isApartment ? const Color(0xFF16a34a) : Colors.grey.shade400,
-                    width: 2,
-                  ),
-                ),
-                child: widget.isApartment
-                    ? const Icon(Icons.check, color: Colors.white, size: 14)
-                    : null,
-              ),
-              const SizedBox(width: 10),
-              Text(
-                'Vivo en departamento / edificio',
-                style: TextStyle(color: widget.textColor, fontSize: 14),
-              ),
-            ],
-          ),
+        // En modo progresivo, calle/avenida recién aparece una vez hay pin
+        // confirmado — evita mostrar todo el bloque de dirección de una.
+        AnimatedSize(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: (!widget.progressive || hasPin)
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Expanded(
+                        flex: 3,
+                        child: TextFormField(
+                          controller: widget.streetController,
+                          style: TextStyle(color: widget.textColor),
+                          onChanged: (_) => widget.onFieldsChanged?.call(),
+                          decoration: _field('Calle / Avenida', Icons.signpost_outlined),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 2,
+                        child: TextFormField(
+                          controller: widget.numberController,
+                          style: TextStyle(color: widget.textColor),
+                          decoration: _field('N° casa', Icons.tag),
+                          keyboardType: TextInputType.text,
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 12),
+                  ],
+                )
+              : const SizedBox.shrink(),
         ),
 
-        if (widget.isApartment) ...[
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(
-              child: TextFormField(
-                controller: widget.apartmentController,
-                style: TextStyle(color: widget.textColor),
-                decoration: _field('Número de dpto.', Icons.meeting_room_outlined),
-                keyboardType: TextInputType.text,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextFormField(
-                controller: widget.condominioController,
-                style: TextStyle(color: widget.textColor),
-                decoration: _field('Nombre del condominio', Icons.apartment_outlined),
-              ),
-            ),
-          ]),
-        ],
+        // ── Zona / Barrio + departamento + referencia ─────────────
+        // En modo progresivo, recién aparece cuando ya se escribió la calle.
+        AnimatedSize(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: (!widget.progressive || (hasPin && widget.streetController.text.trim().isNotEmpty))
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_selectedCityId != null)
+                      _ZoneDropdownWithMap(
+                        key: ValueKey(_selectedCityId),
+                        isDark: widget.isDark,
+                        textColor: widget.textColor,
+                        subtextColor: widget.subtextColor,
+                        borderColor: widget.borderColor,
+                        surfaceEl: widget.surfaceEl,
+                        cityId: _selectedCityId!,
+                        selectedZone: widget.selectedZone,
+                        onZoneChanged: widget.onZoneChanged,
+                        locked: _zoneLocked || _zoneNoMatch,
+                        noMatchHint: _zoneNoMatch,
+                      ),
+                    if (_zoneLocked)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Row(children: [
+                          Icon(Icons.lock_outline_rounded, size: 14, color: widget.subtextColor),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Zona detectada automáticamente según tu ubicación exacta — no se puede cambiar a mano.',
+                              style: TextStyle(color: widget.subtextColor, fontSize: 11.5),
+                            ),
+                          ),
+                        ]),
+                      ),
+                    if (_zoneNoMatch)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Row(children: [
+                          Icon(Icons.schedule_rounded, size: 14, color: widget.subtextColor),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Todavía no llegamos a tu zona — puedes crear tu cuenta igual, y te avisaremos apenas esté disponible para reservar.',
+                              style: TextStyle(color: widget.subtextColor, fontSize: 11.5),
+                            ),
+                          ),
+                        ]),
+                      ),
 
-        const SizedBox(height: 12),
-        TextFormField(
-          controller: widget.referenceController,
-          style: TextStyle(color: widget.textColor),
-          decoration: _field(
-            'Referencia (ej: frente al parque, casa verde)',
-            Icons.place_outlined,
-          ),
+                    const SizedBox(height: 12),
+
+                    // Checkbox departamento
+                    GestureDetector(
+                      onTap: () => widget.onApartmentToggle(!widget.isApartment),
+                      child: Row(
+                        children: [
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              color: widget.isApartment ? const Color(0xFF16a34a) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: widget.isApartment ? const Color(0xFF16a34a) : Colors.grey.shade400,
+                                width: 2,
+                              ),
+                            ),
+                            child: widget.isApartment
+                                ? const Icon(Icons.check, color: Colors.white, size: 14)
+                                : null,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Vivo en departamento / edificio',
+                            style: TextStyle(color: widget.textColor, fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    if (widget.isApartment) ...[
+                      const SizedBox(height: 12),
+                      Row(children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: widget.apartmentController,
+                            style: TextStyle(color: widget.textColor),
+                            decoration: _field('Número de dpto.', Icons.meeting_room_outlined),
+                            keyboardType: TextInputType.text,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextFormField(
+                            controller: widget.condominioController,
+                            style: TextStyle(color: widget.textColor),
+                            decoration: _field('Nombre del condominio', Icons.apartment_outlined),
+                          ),
+                        ),
+                      ]),
+                    ],
+
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: widget.referenceController,
+                      style: TextStyle(color: widget.textColor),
+                      decoration: _field(
+                        'Referencia (ej: frente al parque, casa verde)',
+                        Icons.place_outlined,
+                      ),
+                    ),
+                  ],
+                )
+              : const SizedBox.shrink(),
         ),
       ],
     );
@@ -438,6 +541,7 @@ class _ZoneDropdownWithMap extends StatefulWidget {
   final String? selectedZone;
   final void Function(String?) onZoneChanged;
   final bool locked;
+  final bool noMatchHint;
 
   const _ZoneDropdownWithMap({
     super.key,
@@ -450,6 +554,7 @@ class _ZoneDropdownWithMap extends StatefulWidget {
     required this.selectedZone,
     required this.onZoneChanged,
     this.locked = false,
+    this.noMatchHint = false,
   });
 
   @override
@@ -531,7 +636,9 @@ class _ZoneDropdownWithMapState extends State<_ZoneDropdownWithMap> {
                 Icon(Icons.map_outlined, color: widget.subtextColor, size: 20),
                 const SizedBox(width: 10),
                 Text(
-                  _loadingZones ? 'Cargando zonas...' : 'Selecciona tu zona / barrio',
+                  _loadingZones
+                      ? 'Cargando zonas...'
+                      : (widget.noMatchHint ? 'Sin zona disponible por ahora' : 'Selecciona tu zona / barrio'),
                   style: TextStyle(color: widget.subtextColor, fontSize: 14),
                 ),
               ]),

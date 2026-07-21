@@ -369,6 +369,13 @@ router.post('/city-zones', asyncHandler(async (req, res) => {
     },
   });
   res.json({ success: true, data: zone });
+  // Zona nueva con polígono — re-chequea perfiles que quedaron sin zona por
+  // no caer en ningún polígono conocido hasta ahora. Después de responder,
+  // no bloquea al admin esperando el scan.
+  if (validatedPoints) {
+    const { recheckUnassignedProfilesForZone } = await import('./admin.service.js');
+    recheckUnassignedProfilesForZone(cityId).catch(() => {});
+  }
 }));
 
 /** PATCH /api/admin/city-zones/:id — editar zona (label, color, coords, polígono, activar/desactivar) */
@@ -393,6 +400,12 @@ router.patch('/city-zones/:id', asyncHandler(async (req, res) => {
     },
   });
   res.json({ success: true, data: zone });
+  // Polígono creado o ampliado — re-chequea perfiles sin zona de esta misma
+  // ciudad, por si ahora caen dentro. No bloquea la respuesta al admin.
+  if (validatedPoints) {
+    const { recheckUnassignedProfilesForZone } = await import('./admin.service.js');
+    recheckUnassignedProfilesForZone(zone.cityId).catch(() => {});
+  }
 }));
 
 /** GET /api/admin/vets — listar veterinarias */

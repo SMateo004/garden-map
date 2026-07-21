@@ -367,15 +367,17 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
   const {
     firstName, lastName, phone, city, country, dateOfBirth, address, bio, email,
     addressLat, addressLng, addressStreet, addressNumber, addressApartment,
-    addressCondominio, addressReference, addressZone, cityId, zoneId,
+    addressCondominio, addressReference, cityId,
+    // zoneId/addressZone del body se ignoran a propósito — se recalculan
+    // server-side por coordenadas más abajo (resolveAuthoritativeZone).
   } = req.body as {
     firstName?: string; lastName?: string; phone?: string; city?: string; country?: string;
     dateOfBirth?: string; address?: string; bio?: string; email?: string;
     addressLat?: number; addressLng?: number;
     addressStreet?: string; addressNumber?: string; addressApartment?: string;
-    addressCondominio?: string; addressReference?: string; addressZone?: string;
-    /** Ciudad/zona reales (multi-ciudad) — ids de City/CityZone, no el enum legado. */
-    cityId?: string; zoneId?: string;
+    addressCondominio?: string; addressReference?: string;
+    /** Ciudad real (multi-ciudad) — id de City, no el enum legado. */
+    cityId?: string;
   };
   const userData: Record<string, unknown> = {};
   if (firstName && firstName.trim()) userData.firstName = firstName.trim();
@@ -423,18 +425,34 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
   if (addressApartment !== undefined) profileData.addressApartment = addressApartment?.trim() || null;
   if (addressCondominio !== undefined) profileData.addressCondominio = addressCondominio?.trim() || null;
   if (addressReference !== undefined) profileData.addressReference = addressReference?.trim() || null;
-  if (addressZone !== undefined) profileData.addressZone = addressZone?.trim() || null;
   if (cityId !== undefined) profileData.cityId = cityId || null;
-  if (zoneId !== undefined) profileData.zoneId = zoneId || null;
-
-  if (Object.keys(userData).length === 0 && Object.keys(profileData).length === 0) {
-    return res.status(400).json({ success: false, error: { code: 'EMPTY_BODY', message: 'Nada que actualizar' } });
-  }
 
   // Rol ACTIVO, no el rol base (ver mismo fix en `me` arriba) — evita que un
   // dual-role usuario guarde/lea su dirección en la tabla equivocada según
   // cuál rol tenía cuando se emitió el JWT.
   const effectiveRole = (req.user as { activeRole?: string })?.activeRole ?? req.user?.role;
+
+  // zoneId/addressZone nunca se toman directo del body — solo cambian cuando
+  // el usuario re-marca su ubicación exacta (addressLat+addressLng nuevos),
+  // recalculados server-side por coordenadas (misma lógica que en registro,
+  // ver resolveAuthoritativeZone). Si no tocó el pin, su zona actual queda
+  // intacta aunque el body no la incluya.
+  if (addressLat != null && addressLng != null) {
+    let effectiveCityId = cityId;
+    if (!effectiveCityId) {
+      const existing = effectiveRole === 'CAREGIVER'
+        ? await prisma.caregiverProfile.findUnique({ where: { userId }, select: { cityId: true } })
+        : await prisma.clientProfile.findUnique({ where: { userId }, select: { cityId: true } });
+      effectiveCityId = existing?.cityId ?? undefined;
+    }
+    const resolved = await authService.resolveAuthoritativeZone(effectiveCityId, addressLat, addressLng);
+    profileData.zoneId = resolved.zoneId;
+    profileData.addressZone = resolved.addressZone;
+  }
+
+  if (Object.keys(userData).length === 0 && Object.keys(profileData).length === 0) {
+    return res.status(400).json({ success: false, error: { code: 'EMPTY_BODY', message: 'Nada que actualizar' } });
+  }
 
   let updated: { firstName: string; lastName: string; phone: string; city: string | null; country: string | null; dateOfBirth: Date | null } | null = null;
   if (Object.keys(userData).length > 0) {

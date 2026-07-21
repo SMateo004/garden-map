@@ -661,6 +661,26 @@ export async function onCaregiverWelcome(userId: string): Promise<void> {
 }
 
 /**
+ * Un admin agregó o amplió un polígono de zona y el perfil de este usuario
+ * (cliente o cuidador), que estaba en el caso excepcional de "sin zona"
+ * (registrado igual, pero sin poder reservar), ahora sí cae dentro de una
+ * zona cubierta. Aviso cálido, sin tecnicismos — solo la buena noticia.
+ */
+export async function onZoneNowAvailable(userId: string): Promise<void> {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { firstName: true } });
+    const title = '¡Ya llegamos a tu zona! 🌿';
+    const message = user?.firstName
+      ? `${user.firstName}, ya tenemos cobertura en tu zona — puedes reservar servicios en GARDEN cuando quieras.`
+      : 'Ya tenemos cobertura en tu zona — puedes reservar servicios en GARDEN cuando quieras.';
+    await prisma.notification.create({ data: { userId, title, message, type: 'ZONE_NOW_AVAILABLE' } });
+    sendPushToUser(userId, title, message).catch(() => {});
+  } catch (err: any) {
+    logger.error('[NOTIFICATION] onZoneNowAvailable error', { userId, error: err.message });
+  }
+}
+
+/**
  * Recordatorio de capacitación AMATEUR obligatoria pendiente. Llamado por el
  * job diario (training-reminder.job.ts) — la notificación in-app + push se
  * reenvía cada día que siga pendiente; el correo (sendEmail=true) solo la

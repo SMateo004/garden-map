@@ -13,6 +13,7 @@ import logger from '../../shared/logger.js';
 import { track, identify } from '../../shared/analytics.js';
 import { blockchainService } from '../../services/blockchain.service.js';
 import { getBoolSetting, getStringSetting } from '../../utils/settings-cache.js';
+import { matchZoneForPoint } from '../../utils/geo.js';
 
 const SALT_ROUNDS = 12;
 
@@ -24,6 +25,24 @@ function safeZoneEnum(value: unknown): Zone | undefined {
   return typeof value === 'string' && (Object.values(Zone) as string[]).includes(value)
     ? (value as Zone)
     : undefined;
+}
+
+/**
+ * Resuelve la zona real a partir de coordenadas — fuente de verdad única
+ * server-side, ignora cualquier zoneId que mande el cliente (el cliente solo
+ * hace el mismo match para dar feedback visual inmediato, ver
+ * garden-app/lib/widgets/address_section.dart). Si el pin no cae en ningún
+ * polígono conocido, devuelve zoneId/addressZone null — caso esperado
+ * ("Garden todavía no llega a esa zona"), no bloquea el registro.
+ */
+export async function resolveAuthoritativeZone(
+  cityId: string | undefined,
+  lat: number | undefined,
+  lng: number | undefined
+): Promise<{ zoneId: string | null; addressZone: string | null }> {
+  if (!cityId || lat == null || lng == null) return { zoneId: null, addressZone: null };
+  const match = await matchZoneForPoint(cityId, lat, lng);
+  return match ? { zoneId: match.id, addressZone: match.key } : { zoneId: null, addressZone: null };
 }
 
 /** Edad en años cumplidos a partir de una fecha de nacimiento. */
@@ -232,6 +251,8 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
     cityId?: string; zoneId?: string;
   };
 
+  const resolvedZoneCaregiver = await resolveAuthoritativeZone(profileAddr.cityId, profileAddr.addressLat, profileAddr.addressLng);
+
   let result: { user: Awaited<ReturnType<typeof prisma.user.create>>; profile: Awaited<ReturnType<typeof prisma.caregiverProfile.create>> };
   try {
     result = await prisma.$transaction(async (tx) => {
@@ -268,9 +289,11 @@ export async function registerCaregiver(body: RegisterCaregiverBody): Promise<Re
           ...(profileAddr.addressApartment ? { addressApartment: profileAddr.addressApartment } : {}),
           ...(profileAddr.addressCondominio ? { addressCondominio: profileAddr.addressCondominio } : {}),
           ...(profileAddr.addressReference ? { addressReference: profileAddr.addressReference } : {}),
-          ...(profileAddr.addressZone ? { addressZone: profileAddr.addressZone } : {}),
           ...(profileAddr.cityId ? { cityId: profileAddr.cityId } : {}),
-          ...(profileAddr.zoneId ? { zoneId: profileAddr.zoneId } : {}),
+          // zoneId/addressZone: recalculados server-side por coordenadas, no
+          // se confía en lo que mande el cliente (ver resolveAuthoritativeZone).
+          ...(resolvedZoneCaregiver.zoneId ? { zoneId: resolvedZoneCaregiver.zoneId } : {}),
+          ...(resolvedZoneCaregiver.addressZone ? { addressZone: resolvedZoneCaregiver.addressZone } : {}),
           photos: ensureAbsoluteUrls(profileInput.photos ?? []),
           walkerPhotos: [],
           servicesOffered: profileInput.servicesOffered ?? [],
@@ -493,16 +516,19 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
   let user: { id: string; email: string; role: string; firstName: string; lastName: string; profilePicture?: string | null };
   let profile: { id: string };
 
+  const bodyAddrPre = body as {
+    addressLat?: number; addressLng?: number;
+    addressStreet?: string; addressNumber?: string; addressApartment?: string;
+    addressCondominio?: string; addressReference?: string; addressZone?: string;
+    cityId?: string; zoneId?: string;
+  };
+  const resolvedZone = await resolveAuthoritativeZone(bodyAddrPre.cityId, bodyAddrPre.addressLat, bodyAddrPre.addressLng);
+
   try {
     const result = await prisma.$transaction(async (tx) => {
       const created = await tx.user.create({ data: userData });
       logger.info('User creado (tx)', { id: created.id, email: created.email });
-      const bodyAddr = body as {
-        addressLat?: number; addressLng?: number;
-        addressStreet?: string; addressNumber?: string; addressApartment?: string;
-        addressCondominio?: string; addressReference?: string; addressZone?: string;
-        cityId?: string; zoneId?: string;
-      };
+      const bodyAddr = bodyAddrPre;
       const prof = await tx.clientProfile.create({
         data: {
           userId: created.id,
@@ -519,9 +545,11 @@ export async function registerClient(body: RegisterClientBody): Promise<Register
           ...(bodyAddr.addressApartment ? { addressApartment: bodyAddr.addressApartment } : {}),
           ...(bodyAddr.addressCondominio ? { addressCondominio: bodyAddr.addressCondominio } : {}),
           ...(bodyAddr.addressReference ? { addressReference: bodyAddr.addressReference } : {}),
-          ...(bodyAddr.addressZone ? { addressZone: bodyAddr.addressZone } : {}),
           ...(bodyAddr.cityId ? { cityId: bodyAddr.cityId } : {}),
-          ...(bodyAddr.zoneId ? { zoneId: bodyAddr.zoneId } : {}),
+          // zoneId/addressZone: nunca se confía en lo que mande el cliente —
+          // se recalculan server-side por coordenadas (resolveAuthoritativeZone).
+          ...(resolvedZone.zoneId ? { zoneId: resolvedZone.zoneId } : {}),
+          ...(resolvedZone.addressZone ? { addressZone: resolvedZone.addressZone } : {}),
         },
       });
       logger.info('ClientProfile creado (tx)', { id: prof.id });

@@ -2968,6 +2968,55 @@ export async function getBlockedZonesList(): Promise<string[]> {
   return [...blocked];
 }
 
+/**
+ * Cuando un admin crea o edita el polígono de una CityZone, re-chequea a
+ * todos los perfiles (cliente y cuidador) de esa ciudad que quedaron sin
+ * zona (zoneId null) porque su pin no caía en ningún polígono conocido en
+ * su momento — si ahora caen dentro del polígono nuevo/editado, se les
+ * asigna la zona sola, sin que el usuario tenga que tocar nada ni volver a
+ * su perfil. Se les notifica que ya pueden reservar. No lanza — un fallo
+ * acá nunca debe romper el guardado de la zona en sí.
+ */
+export async function recheckUnassignedProfilesForZone(cityId: string): Promise<void> {
+  try {
+    const { matchZoneForPoint } = await import('../../utils/geo.js');
+    const { onZoneNowAvailable } = await import('../../services/notification.service.js');
+
+    const [clients, caregivers] = await Promise.all([
+      prisma.clientProfile.findMany({
+        where: { cityId, zoneId: null, addressLat: { not: null }, addressLng: { not: null } },
+        select: { id: true, userId: true, addressLat: true, addressLng: true },
+      }),
+      prisma.caregiverProfile.findMany({
+        where: { cityId, zoneId: null, addressLat: { not: null }, addressLng: { not: null } },
+        select: { id: true, userId: true, addressLat: true, addressLng: true },
+      }),
+    ]);
+
+    for (const c of clients) {
+      const match = await matchZoneForPoint(cityId, c.addressLat!, c.addressLng!);
+      if (!match) continue;
+      await prisma.clientProfile.update({
+        where: { id: c.id },
+        data: { zoneId: match.id, addressZone: match.key },
+      });
+      onZoneNowAvailable(c.userId).catch(() => {});
+    }
+
+    for (const cg of caregivers) {
+      const match = await matchZoneForPoint(cityId, cg.addressLat!, cg.addressLng!);
+      if (!match) continue;
+      await prisma.caregiverProfile.update({
+        where: { id: cg.id },
+        data: { zoneId: match.id, addressZone: match.key },
+      });
+      onZoneNowAvailable(cg.userId).catch(() => {});
+    }
+  } catch (err) {
+    logger.error('recheckUnassignedProfilesForZone failed', { cityId, error: (err as Error).message });
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ICON SCHEDULE — persistido en AppSettings como JSON array (clave: iconScheduleRules)
 //
