@@ -316,6 +316,7 @@ const PUBLIC_SETTING_KEYS = new Set([
   'paseoMinAdvanceHoras',
   'hospedajeMinAdvanceHoras',
   'guarderiaMinAdvanceHoras',
+  'cardPaymentEnabled',
 ]);
 
 /** GET /api/settings — public endpoint, no auth required. Only exposes feature-flag keys. */
@@ -351,6 +352,7 @@ app.get('/api/settings', async (_req, res) => {
       paseoMinAdvanceHoras: 24,
       hospedajeMinAdvanceHoras: 24,
       guarderiaMinAdvanceHoras: 24,
+      cardPaymentEnabled: false,
     };
     res.json({ success: true, data: { ...defaults, ...map } });
   } catch {

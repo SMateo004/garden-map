@@ -96,6 +96,7 @@ export const ALLOWED_SETTING_KEYS = [
   'preciosDinamicosEnabled',
   'meetGreetEnabled',
   'otpVisibleToAdminEnabled',
+  'cardPaymentEnabled',
   // Beta access control
   'betaInviteRequired',
   'betaInviteCodes',

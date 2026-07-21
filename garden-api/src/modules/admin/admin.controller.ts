@@ -890,6 +890,7 @@ export const getSettings = asyncHandler(async (req: Request, res: Response) => {
     marketplaceEnabled: true,
     paymentsEnabled: true,
     otpVisibleToAdminEnabled: true,
+    cardPaymentEnabled: false,
   };
   res.json({ success: true, data: { ...defaults, ...map } });
 });
