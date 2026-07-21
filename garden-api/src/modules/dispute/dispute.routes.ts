@@ -12,6 +12,15 @@ import prisma from '../../config/database.js';
 const router = Router();
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// Ventana de 24h para reportar un no-show, contada desde la cancelación
+// automática (booking.cancelledAt). Compartida por client-report y
+// caregiver-report — ambas direcciones tienen el mismo plazo, así ninguna
+// de las dos partes tiene más tiempo que la otra para reaccionar.
+function isWithinNoShowReportWindow(cancelledAt: Date | null): boolean {
+  const hoursSinceCancelled = cancelledAt ? (Date.now() - cancelledAt.getTime()) / (1000 * 60 * 60) : Infinity;
+  return hoursSinceCancelled <= 24;
+}
+
 // POST /api/disputes/:bookingId/client-report — cliente reporta razones
 router.post('/:bookingId/client-report', authMiddleware, requireRole('CLIENT'),
   asyncHandler(async (req: Request, res: Response) => {
@@ -38,12 +47,36 @@ router.post('/:bookingId/client-report', authMiddleware, requireRole('CLIENT'),
     });
     if (!booking) return res.status(404).json({ success: false, error: { message: 'Reserva no encontrada' } });
 
-    // Only allow disputes on COMPLETED bookings whose payment is ON_HOLD (i.e. client rated <3)
-    if (booking.status !== 'COMPLETED' || booking.payoutStatus !== 'ON_HOLD') {
+    // Allow disputes in two scenarios:
+    //   1) COMPLETED bookings whose payment is ON_HOLD (i.e. client rated <3)
+    //   2) CANCELLED bookings auto-cancelled by the no-show job (cancellationSource
+    //      'NO_SHOW') — the client can contest a no-show cancellation even though
+    //      no service was ever rendered and payoutStatus never left 'PENDING'.
+    const isQualityDisputeEligible = booking.status === 'COMPLETED' && booking.payoutStatus === 'ON_HOLD';
+    const isNoShowDisputeEligible = booking.status === 'CANCELLED' && booking.cancellationSource === 'NO_SHOW';
+    if (!isQualityDisputeEligible && !isNoShowDisputeEligible) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Solo puedes disputar servicios completados con pago retenido. Califica el servicio primero.' },
+        error: { message: 'Solo puedes disputar servicios completados con pago retenido, o reservas canceladas por no presentación (no-show). Califica el servicio primero si ya se completó.' },
       });
+    }
+
+    // Ventana de 24h para reclamar un no-show, contadas desde la cancelación
+    // automática (booking.cancelledAt). Sin esto, un cliente podría abrir un
+    // reclamo semanas después, cuando ya no hay chat/evidencia fresca para que
+    // la IA investigue con confianza — y le da al cuidador certeza de que,
+    // pasado ese plazo, el caso quedó cerrado. La disputa por calificación
+    // baja (isQualityDisputeEligible) no tiene este límite — ya está acotada
+    // por tener que calificar primero, que el cliente hace apenas termina el
+    // servicio.
+    if (isNoShowDisputeEligible) {
+      const cancelledAt = (booking as any).cancelledAt as Date | null;
+      if (!isWithinNoShowReportWindow(cancelledAt)) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Ya pasaron más de 24 horas desde que se canceló esta reserva por no presentación. El plazo para reclamar se cerró — si crees que esto es un error, contacta a soporte.' },
+        });
+      }
     }
 
     // Prevent re-opening a dispute that's already resolved OR actively being
@@ -55,6 +88,16 @@ router.post('/:bookingId/client-report', authMiddleware, requireRole('CLIENT'),
       return res.status(409).json({
         success: false,
         error: { message: 'Esta disputa ya fue resuelta o está siendo evaluada y no puede modificarse.' },
+      });
+    }
+    // El cuidador ya reportó este no-show primero (caregiver-report) y está
+    // esperando la versión del cliente — no dejar que el cliente abra un
+    // reclamo "nuevo" desde cero, que pisotearía el flujo simétrico de
+    // "Responder" (client-response) pensado para este caso.
+    if (existingDispute?.status === 'PENDING_CLIENT') {
+      return res.status(409).json({
+        success: false,
+        error: { message: 'Tu cuidador ya reportó su versión sobre esta reserva — respondé a su reclamo en vez de abrir uno nuevo.' },
       });
     }
 
@@ -113,87 +156,163 @@ router.post('/:bookingId/caregiver-response', authMiddleware, requireRole('CAREG
       });
     }
 
-    // ── Recopilar toda la evidencia disponible para el agente ────────────────
-    const [chatMessages, review, fullBooking] = await Promise.all([
-      prisma.chatMessage.findMany({
-        where: { bookingId },
-        orderBy: { createdAt: 'asc' },
-        select: { senderRole: true, message: true, createdAt: true },
-      }),
-      prisma.review.findFirst({
-        where: { bookingId },
-        select: { rating: true, comment: true, createdAt: true },
-      }),
-      prisma.booking.findFirst({
-        where: { id: bookingId },
-        include: {
-          caregiver: {
-            select: {
-              rating: true,
-              reviewCount: true,
-              experienceYears: true,
-              bio: true,
-            },
-          },
-        },
-      }),
-    ]);
-
-    const evidence = {
-      booking: {
-        serviceType: (fullBooking as any)?.serviceType,
-        status: (fullBooking as any)?.status,
-        totalAmount: Number((fullBooking as any)?.totalAmount),
-        startDate: (fullBooking as any)?.startDate,
-        endDate: (fullBooking as any)?.endDate,
-        walkDate: (fullBooking as any)?.walkDate,
-        petName: (fullBooking as any)?.petName,
-        petBreed: (fullBooking as any)?.petBreed,
-        petSize: (fullBooking as any)?.petSize,
-        specialNeeds: (fullBooking as any)?.specialNeeds,
-        serviceStartPhoto: (fullBooking as any)?.serviceStartPhoto,
-        serviceEndPhoto: (fullBooking as any)?.serviceEndPhoto,
-        serviceStartedAt: (fullBooking as any)?.serviceStartedAt,
-        serviceEndedAt: (fullBooking as any)?.serviceEndedAt,
-        trackingPoints: Array.isArray((fullBooking as any)?.serviceTrackingData)
-          ? ((fullBooking as any).serviceTrackingData as any[]).length
-          : null,
-        serviceEvents: Array.isArray((fullBooking as any)?.serviceEvents)
-          ? (fullBooking as any).serviceEvents
-          : [],
-      },
-      caregiver: {
-        rating: (fullBooking as any)?.caregiver?.rating,
-        reviewCount: (fullBooking as any)?.caregiver?.reviewCount,
-        experienceYears: (fullBooking as any)?.caregiver?.experienceYears,
-      },
-      chat: chatMessages.map(m => ({
-        role: m.senderRole,
-        text: m.message,
-        at: m.createdAt,
-      })),
-      review: review && review.rating != null
-        ? { rating: review.rating as number, comment: review.comment, at: review.createdAt }
-        : null,
-    };
-
-    // El agente de IA investiga toda la evidencia y toma la decisión definitiva
-    const resolution = await resolveDisputeWithAI(
+    // En este flujo el cliente reportó primero (client-report → PENDING_CAREGIVER)
+    // y el cuidador acaba de dar su versión.
+    const resolution = await resolveAndApplyDispute(
+      bookingId!,
       (booking as any).dispute!.clientReasons,
       responses,
-      bookingId!,
-      Number((booking as any).totalAmount),
-      evidence,
-    );
-
-    try {
-      await applyResolution(bookingId!, resolution, booking);
-    } catch (err: any) {
+      booking,
+      'CLIENT',
+    ).catch((err: any) => {
       if (err.code === 'DISPUTE_ALREADY_RESOLVED') {
         return res.status(409).json({ success: false, error: { message: err.message } });
       }
       throw err;
+    });
+    if (res.headersSent) return;
+
+    res.json({ success: true, data: resolution });
+  })
+);
+
+// POST /api/disputes/:bookingId/caregiver-report — el cuidador reporta que el
+// cliente nunca apareció (dirección simétrica de client-report). Solo aplica
+// a reservas CANCELADAS por el job de no-show — no unilateralmente cierra el
+// caso: el cliente todavía puede dar su versión vía client-response, que
+// alimenta el mismo pipeline de resolución por IA.
+router.post('/:bookingId/caregiver-report', authMiddleware, requireRole('CAREGIVER'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { getBoolSetting } = await import('../../utils/settings-cache.js');
+    if (!await getBoolSetting('disputasEnabled', true)) {
+      return res.status(503).json({
+        success: false,
+        error: { code: 'DISPUTAS_DISABLED', message: 'El sistema de disputas está temporalmente deshabilitado. Contacta al soporte.' },
+      });
     }
+
+    const { bookingId } = req.params;
+    const userId = (req as any).user.userId;
+    const { reasons } = req.body; // string[]
+
+    if (!reasons || !Array.isArray(reasons) || reasons.length === 0) {
+      return res.status(400).json({ success: false, error: { message: 'Selecciona al menos una razón' } });
+    }
+
+    // req.user.userId es el User.id del cuidador — booking.caregiverId
+    // referencia CaregiverProfile.id, así que hay que resolver vía la
+    // relación caregiver.userId (mismo patrón que caregiver-response).
+    const booking = await prisma.booking.findFirst({
+      where: { id: bookingId },
+      include: { caregiver: { include: { user: true } }, dispute: true } as any,
+    });
+    if (!booking || (booking as any).caregiver.userId !== userId) {
+      return res.status(404).json({ success: false, error: { message: 'Reserva no encontrada' } });
+    }
+
+    if (!(booking.status === 'CANCELLED' && (booking as any).cancellationSource === 'NO_SHOW')) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Solo puedes reportar reservas canceladas por no presentación (no-show).' },
+      });
+    }
+
+    const cancelledAt = (booking as any).cancelledAt as Date | null;
+    if (!isWithinNoShowReportWindow(cancelledAt)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Ya pasaron más de 24 horas desde que se canceló esta reserva por no presentación. El plazo para reportar se cerró — si crees que esto es un error, contacta a soporte.' },
+      });
+    }
+
+    const existingDispute = (booking as any).dispute;
+    if (existingDispute?.status === 'RESOLVED' || existingDispute?.status === 'PENDING_AI') {
+      return res.status(409).json({
+        success: false,
+        error: { message: 'Esta disputa ya fue resuelta o está siendo evaluada y no puede modificarse.' },
+      });
+    }
+    if (existingDispute?.status === 'PENDING_CAREGIVER') {
+      return res.status(409).json({
+        success: false,
+        error: { message: 'El dueño ya abrió un reclamo sobre esta reserva — respondé a esa disputa en vez de reportar una nueva.' },
+      });
+    }
+
+    // No dispute yet, o ya existe una con PENDING_CLIENT (el cuidador está
+    // editando su propio reporte todavía no respondido) — en ambos casos es
+    // un upsert idempotente sobre caregiverResponse.
+    const dispute = await (prisma as any).dispute.upsert({
+      where: { bookingId },
+      create: { bookingId, caregiverResponse: reasons, status: 'PENDING_CLIENT' },
+      update: { caregiverResponse: reasons, status: 'PENDING_CLIENT' },
+    });
+
+    await prisma.notification.create({
+      data: {
+        userId: booking.clientId,
+        title: '⚠️ Tu cuidador reportó un problema',
+        message: `Tu cuidador reportó que no pudiste ser contactado/a para el servicio. Abre la app para dar tu versión — la IA de GARDEN evaluará ambas versiones antes de decidir.`,
+        type: 'SYSTEM',
+      },
+    });
+
+    track(userId, 'caregiver_reported_client_noshow', { bookingId, disputeId: dispute.id, reasons });
+    res.json({ success: true, data: { disputeId: dispute.id, status: dispute.status } });
+  })
+);
+
+// POST /api/disputes/:bookingId/client-response — el cliente responde a un
+// reporte de no-show iniciado por el cuidador (caregiver-report). Dispara la
+// misma resolución automática por IA que caregiver-response.
+router.post('/:bookingId/client-response', authMiddleware, requireRole('CLIENT'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { bookingId } = req.params;
+    const userId = (req as any).user.userId;
+    const { responses } = req.body; // string[]
+
+    if (!responses || !Array.isArray(responses) || responses.length === 0) {
+      return res.status(400).json({ success: false, error: { message: 'Selecciona al menos una razón' } });
+    }
+
+    const booking = await prisma.booking.findFirst({
+      where: { id: bookingId, clientId: userId },
+      include: { caregiver: { include: { user: true } }, dispute: true } as any,
+    });
+    if (!booking) {
+      return res.status(404).json({ success: false, error: { message: 'Reserva no encontrada' } });
+    }
+    if (!(booking as any).dispute) {
+      return res.status(404).json({ success: false, error: { message: 'No hay disputa activa' } });
+    }
+
+    // Atomic claim — mismo patrón que caregiver-response.
+    const claimedResponse = await prisma.dispute.updateMany({
+      where: { bookingId, status: 'PENDING_CLIENT' },
+      data: { clientReasons: responses, status: 'PENDING_AI' },
+    });
+    if (claimedResponse.count === 0) {
+      return res.status(409).json({
+        success: false,
+        error: { message: 'Esta disputa ya fue respondida o está siendo evaluada.' },
+      });
+    }
+
+    // En este flujo el cuidador reportó primero (caregiver-report → PENDING_CLIENT)
+    // y el cliente acaba de dar su versión.
+    const resolution = await resolveAndApplyDispute(
+      bookingId!,
+      responses,
+      (booking as any).dispute!.caregiverResponse,
+      booking,
+      'CAREGIVER',
+    ).catch((err: any) => {
+      if (err.code === 'DISPUTE_ALREADY_RESOLVED') {
+        return res.status(409).json({ success: false, error: { message: err.message } });
+      }
+      throw err;
+    });
+    if (res.headersSent) return;
 
     res.json({ success: true, data: resolution });
   })
@@ -333,6 +452,98 @@ export function addBusinessDays(start: Date, days: number): Date {
 }
 
 // ---------------------------------------------------------------------------
+// Recopila evidencia, llama al agente de IA, y aplica la resolución. Usado
+// tanto por caregiver-response (cliente reportó primero) como por
+// client-response (cuidador reportó primero) — misma lógica de dinero real,
+// un solo camino de código para no divergir entre ambas direcciones.
+// ---------------------------------------------------------------------------
+async function resolveAndApplyDispute(
+  bookingId: string,
+  clientReasons: string[],
+  caregiverResponse: string[],
+  booking: any,
+  firstReporter: 'CLIENT' | 'CAREGIVER',
+) {
+  const [chatMessages, review, fullBooking] = await Promise.all([
+    prisma.chatMessage.findMany({
+      where: { bookingId },
+      orderBy: { createdAt: 'asc' },
+      select: { senderRole: true, message: true, createdAt: true },
+    }),
+    prisma.review.findFirst({
+      where: { bookingId },
+      select: { rating: true, comment: true, createdAt: true },
+    }),
+    prisma.booking.findFirst({
+      where: { id: bookingId },
+      include: {
+        caregiver: {
+          select: {
+            rating: true,
+            reviewCount: true,
+            experienceYears: true,
+            bio: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  const evidence = {
+    booking: {
+      serviceType: (fullBooking as any)?.serviceType,
+      status: (fullBooking as any)?.status,
+      totalAmount: Number((fullBooking as any)?.totalAmount),
+      startDate: (fullBooking as any)?.startDate,
+      endDate: (fullBooking as any)?.endDate,
+      walkDate: (fullBooking as any)?.walkDate,
+      petName: (fullBooking as any)?.petName,
+      petBreed: (fullBooking as any)?.petBreed,
+      petSize: (fullBooking as any)?.petSize,
+      specialNeeds: (fullBooking as any)?.specialNeeds,
+      serviceStartPhoto: (fullBooking as any)?.serviceStartPhoto,
+      serviceEndPhoto: (fullBooking as any)?.serviceEndPhoto,
+      serviceStartedAt: (fullBooking as any)?.serviceStartedAt,
+      serviceEndedAt: (fullBooking as any)?.serviceEndedAt,
+      cancellationReason: (fullBooking as any)?.cancellationReason,
+      cancellationSource: (fullBooking as any)?.cancellationSource,
+      trackingPoints: Array.isArray((fullBooking as any)?.serviceTrackingData)
+        ? ((fullBooking as any).serviceTrackingData as any[]).length
+        : null,
+      serviceEvents: Array.isArray((fullBooking as any)?.serviceEvents)
+        ? (fullBooking as any).serviceEvents
+        : [],
+    },
+    caregiver: {
+      rating: (fullBooking as any)?.caregiver?.rating,
+      reviewCount: (fullBooking as any)?.caregiver?.reviewCount,
+      experienceYears: (fullBooking as any)?.caregiver?.experienceYears,
+    },
+    chat: chatMessages.map(m => ({
+      role: m.senderRole,
+      text: m.message,
+      at: m.createdAt,
+    })),
+    review: review && review.rating != null
+      ? { rating: review.rating as number, comment: review.comment, at: review.createdAt }
+      : null,
+  };
+
+  // El agente de IA investiga toda la evidencia y toma la decisión definitiva
+  const resolution = await resolveDisputeWithAI(
+    clientReasons,
+    caregiverResponse,
+    bookingId,
+    Number(booking.totalAmount),
+    evidence,
+    firstReporter,
+  );
+
+  await applyResolution(bookingId, resolution, booking);
+  return resolution;
+}
+
+// ---------------------------------------------------------------------------
 // Agente de IA investigador — analiza TODA la evidencia y siempre decide un ganador
 // ---------------------------------------------------------------------------
 async function resolveDisputeWithAI(
@@ -346,6 +557,7 @@ async function resolveDisputeWithAI(
     chat: Array<{ role: string; text: string; at: any }>;
     review: { rating: number; comment: string | null; at: any } | null;
   },
+  firstReporter: 'CLIENT' | 'CAREGIVER',
 ) {
   // Formatear chat para el prompt (máx 30 mensajes para no exceder tokens)
   const chatSample = evidence.chat.slice(-30);
@@ -363,6 +575,9 @@ async function resolveDisputeWithAI(
     `Mascota: ${b.petName ?? '—'} (${b.petBreed ?? '—'}, talla ${b.petSize ?? '—'})`,
     b.specialNeeds ? `Necesidades especiales: ${b.specialNeeds}` : null,
     b.startDate || b.walkDate ? `Fecha: ${b.startDate ?? b.walkDate}` : null,
+    b.cancellationSource === 'NO_SHOW'
+      ? `⚠️ IMPORTANTE: Esta reserva fue CANCELADA AUTOMÁTICAMENTE por el sistema por no-show (motivo: "${b.cancellationReason ?? 'sin detalle'}"). El servicio nunca llegó a iniciarse on-app. Esta disputa NO es sobre la calidad de un servicio prestado, sino sobre a quién corresponde la responsabilidad de que el servicio nunca comenzara.`
+      : null,
     b.serviceStartedAt ? `Servicio iniciado: ${b.serviceStartedAt}` : 'Servicio NO iniciado on-app.',
     b.serviceEndedAt ? `Servicio finalizado: ${b.serviceEndedAt}` : 'Servicio NO finalizado on-app.',
     b.serviceStartPhoto ? '✅ Foto de inicio del servicio disponible (cuidador la subió).' : '⚠️ Sin foto de inicio de servicio.',
@@ -412,11 +627,42 @@ INSTRUCCIONES DEL JUEZ (OBLIGATORIAS — no negociables):
    - CAREGIVER_WINS → si el cuidador cumplió con el servicio o las pruebas lo respaldan.
    - CLIENT_WINS → si el cuidador falló, no completó el servicio, o el dueño tiene evidencia.
 3. PARTIAL solo como ÚLTIMO RECURSO absoluto: únicamente si las pruebas objetivas son completamente idénticas en peso para ambos lados y es imposible determinar un responsable. Esto debe ser muy raro.
+7. Siempre incluye qué evidencia específica fue DETERMINANTE en tu decisión.
+8. La comisión de GARDEN (10%) se mantiene en cualquier veredicto.
+${b.cancellationSource === 'NO_SHOW' ? `
+━━━━━━━━━━━━━━━━━━━━━━━
+REGLAS ESPECÍFICAS PARA DISPUTAS DE NO-SHOW (esta reserva es una — reemplazan
+las reglas 4-6 de calidad, que NO aplican acá):
+
+4a. Esto NO es una disputa de calidad de servicio — nadie prestó el servicio,
+    así que la AUSENCIA DE FOTOS/GPS/EVENTOS ES NORMAL Y ESPERADA PARA AMBAS
+    PARTES. No la uses como señal en contra del cuidador ni a favor del
+    cliente — eso sería sesgar el veredicto hacia quien reclama primero, sin
+    importar quién realmente falló. La única evidencia real disponible acá es
+    el CHAT (¿hubo intentos de contacto? ¿de quién? ¿a qué hora, respecto a la
+    hora acordada del servicio?) y la coherencia interna de cada versión.
+4b. Sé escéptico por defecto de AMBAS versiones — ni el reclamo del cliente ni
+    la respuesta del cuidador son ciertos solo por presentarse primero. Un
+    cliente puede reclamar "no-show" para evitar la política de "no-show sin
+    reembolso" aunque en realidad haya sido él quien no estuvo disponible.
+    Busca especificidad y coherencia temporal en cada versión (direcciones,
+    horarios exactos, quién intentó contactar a quién) — una versión vaga o
+    genérica pesa menos que una con detalles verificables contra el chat.
+4c. Si el chat muestra al cuidador intentando activamente contactar al
+    cliente cerca de la hora acordada sin respuesta → señal fuerte para
+    CAREGIVER_WINS. Si el chat muestra al cliente intentando contactar al
+    cuidador sin respuesta, o sin ningún mensaje de ninguna de las dos partes
+    cerca de la hora del servicio → evalúa con más cautela, tendiendo a
+    PARTIAL si de verdad no hay forma de distinguir quién falló.
+4d. Quien reportó primero fue: ${firstReporter === 'CLIENT' ? 'EL DUEÑO' : 'EL CUIDADOR'}. El orden
+    de quién reportó primero NO es evidencia de quién tiene razón — cualquiera
+    de las dos partes puede simplemente revisar la app más seguido. Evalúa el
+    contenido y la coherencia de cada versión, nunca el orden de llegada.
+` : `
 4. La AUSENCIA DE EVIDENCIA (sin fotos, sin GPS, sin chat) cuenta EN CONTRA del cuidador, ya que es su responsabilidad documentar el servicio.
 5. Un rating bajo (1-2 estrellas) + chat con quejas = señal fuerte en favor del cliente.
 6. Un cuidador que sí subió fotos, tiene GPS, y buena comunicación en el chat = señal fuerte en su favor.
-7. Siempre incluye qué evidencia específica fue DETERMINANTE en tu decisión.
-8. La comisión de GARDEN (10%) se mantiene en cualquier veredicto.
+`}
 
 Responde SOLO en este formato JSON exacto (sin texto adicional):
 {
@@ -497,13 +743,25 @@ export async function applyResolution(bookingId: string, resolution: any, bookin
     // antes de que la IA resuelva) moverían dinero dos veces sobre el mismo
     // totalAmount. Cada rama de abajo sigue seteando el payoutStatus final
     // (PAID/REFUNDED) al terminar — este claim solo protege el punto de partida.
+    // Matches either starting state this dispute could come from:
+    //   - quality dispute: COMPLETED booking with payment ON_HOLD
+    //   - no-show dispute: CANCELLED booking (cancellationSource NO_SHOW) whose
+    //     payoutStatus never left the default 'PENDING' (no-show job doesn't touch it)
     const claimed = await tx.booking.updateMany({
-      where: { id: bookingId, payoutStatus: 'ON_HOLD' },
+      where: {
+        id: bookingId,
+        OR: [
+          { payoutStatus: 'ON_HOLD' },
+          { status: 'CANCELLED', cancellationSource: 'NO_SHOW', payoutStatus: 'PENDING' },
+        ],
+      },
       data: { payoutStatus: 'RESOLVING_DISPUTE' },
     });
     if (claimed.count === 0) {
       throw Object.assign(new Error('La disputa ya fue resuelta o el pago ya no está retenido'), { code: 'DISPUTE_ALREADY_RESOLVED' });
     }
+
+    const isNoShowDispute = booking.cancellationSource === 'NO_SHOW' && booking.status === 'CANCELLED';
 
     // Toda disputa que llega acá viene de una calificación <3 estrellas (ver
     // comentario en dispute.routes.ts: "Only allow disputes on COMPLETED
@@ -580,7 +838,10 @@ export async function applyResolution(bookingId: string, resolution: any, bookin
       });
       await tx.booking.update({
         where: { id: bookingId },
-        data: { status: 'COMPLETED', payoutStatus: 'PAID' },
+        // No-show disputes never had a rendered service — leave status CANCELLED
+        // instead of forcing COMPLETED, which would be semantically wrong (no
+        // serviceStartedAt/GPS/photos exist for these bookings).
+        data: { status: isNoShowDispute ? 'CANCELLED' : 'COMPLETED', payoutStatus: 'PAID' },
       });
       await tx.notification.create({
         data: {
@@ -706,7 +967,8 @@ export async function applyResolution(bookingId: string, resolution: any, bookin
       });
       await tx.booking.update({
         where: { id: bookingId },
-        data: { status: 'COMPLETED', payoutStatus: 'PAID' },
+        // Same reasoning as CAREGIVER_WINS above: no-show disputes leave status CANCELLED.
+        data: { status: isNoShowDispute ? 'CANCELLED' : 'COMPLETED', payoutStatus: 'PAID' },
       });
 
       // Notificar al dueño con el código de descuento (va directo a notificaciones)

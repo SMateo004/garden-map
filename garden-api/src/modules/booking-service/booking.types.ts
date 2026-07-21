@@ -31,6 +31,7 @@ export interface BookingCreateResult {
   createdAt: Date;
   cancelledAt?: string | null;
   cancellationReason?: string | null;
+  cancellationSource?: string | null;
   refundAmount?: string | null;
   refundStatus?: string | null;
   paidAt?: string | null;
@@ -83,6 +84,13 @@ export interface BookingCreateResult {
   caregiverSkillTags?: string[];
   hasDisputePending?: boolean;
   disputeReasons?: string[];
+  /** Estado crudo de la disputa (PENDING_CAREGIVER | PENDING_CLIENT | PENDING_AI |
+   * RESOLVED | APPEALED), o null si no hay disputa — permite a las pantallas de
+   * lista distinguir quién debe actuar a continuación sin un round-trip extra. */
+  disputeStatus?: string | null;
+  /** Razones que dio el cuidador cuando ES QUIEN reportó (dispute.caregiverResponse),
+   * para que la pantalla de "Responder" del cliente muestre lo que dijo el cuidador. */
+  disputeCaregiverReasons?: string[] | null;
   meetAndGreet?: any;
   walletPaymentAmount?: number;
   donationAmount?: number;
@@ -141,6 +149,7 @@ export function bookingToResponse(b: any): BookingCreateResult {
     createdAt: b.createdAt,
     cancelledAt: b.cancelledAt?.toISOString() ?? null,
     cancellationReason: b.cancellationReason ?? null,
+    cancellationSource: b.cancellationSource ?? null,
     refundAmount: b.refundAmount != null ? String(b.refundAmount) : null,
     refundStatus: b.refundStatus ?? null,
     paidAt: b.paidAt?.toISOString() ?? null,
@@ -161,6 +170,8 @@ export function bookingToResponse(b: any): BookingCreateResult {
     caregiverSkillTags: b.caregiverSkillTags ?? [],
     hasDisputePending: !!(b.dispute && b.dispute.status !== 'RESOLVED'),
     disputeReasons: b.dispute?.clientReasons ?? [],
+    disputeStatus: b.dispute?.status ?? null,
+    disputeCaregiverReasons: b.dispute?.caregiverResponse ?? null,
     meetAndGreet: b.meetAndGreet ?? null,
     walletPaymentAmount: Number(b.walletPaymentAmount ?? 0),
     donationAmount: Number(b.donationAmount ?? 0),

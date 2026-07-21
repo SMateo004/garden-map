@@ -24,6 +24,42 @@ export function isUserOnline(userId: string): boolean {
     return (onlineSockets.get(userId)?.size ?? 0) > 0;
 }
 
+// El push en vivo de user_online/user_offline (ver join_booking/disconnecting
+// abajo) estaba atado a que EL PROPIO socket que conecta/desconecta haya
+// hecho join_booking — es decir, que esté con esa conversación específica
+// abierta. El socket liviano de PresenceService (agregado para que el chat
+// no dependa de tener la pantalla de chat abierta) deliberadamente nunca
+// hace join_booking, así que conectarse/desconectarse desde ahí actualizaba
+// bien el mapa `onlineSockets` (el snapshot inicial de GET /chat/:id salía
+// correcto), pero nunca empujaba la actualización en vivo a quien ya tenía
+// el chat abierto mirando a este usuario — quedaba "Desconectado" hasta que
+// esa persona recargara la pantalla. Esto avisa, de forma más amplia, a
+// cualquier sala booking:X (de una reserva real de este usuario) que tenga
+// gente escuchando en este momento, sin importar por qué socket se originó
+// el cambio de presencia.
+async function broadcastPresenceToActiveBookingRooms(userId: string, event: 'user_online' | 'user_offline') {
+    if (!io) return;
+    try {
+        const bookings = await prisma.booking.findMany({
+            where: {
+                OR: [{ clientId: userId }, { caregiver: { userId } }],
+                status: { in: ['PENDING_MG', 'WAITING_CAREGIVER_APPROVAL', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED'] },
+            },
+            select: { id: true },
+            orderBy: { updatedAt: 'desc' },
+            take: 30,
+        });
+        for (const b of bookings) {
+            const room = `booking:${b.id}`;
+            if ((io.sockets.adapter.rooms.get(room)?.size ?? 0) > 0) {
+                io.to(room).emit(event, { userId });
+            }
+        }
+    } catch (err) {
+        logger.error('broadcastPresenceToActiveBookingRooms failed', { userId, event, error: (err as Error).message });
+    }
+}
+
 // send_message por WebSocket no pasaba por chatMessageLimiter ni por el
 // límite de 2000 caracteres que sí aplica el endpoint REST equivalente
 // (POST /chat/:bookingId/messages) — cualquiera podía evadir ambos controles
@@ -113,10 +149,16 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
         // cancelar cualquier timer de "offline" pendiente (reconexión rápida).
         if (!onlineSockets.has(connUserId)) onlineSockets.set(connUserId, new Set());
         onlineSockets.get(connUserId)!.add(socket.id);
+        const isFirstSocketForUser = onlineSockets.get(connUserId)!.size === 1;
         const pendingOfflineTimer = offlineTimers.get(connUserId);
         if (pendingOfflineTimer) {
             clearTimeout(pendingOfflineTimer);
             offlineTimers.delete(connUserId);
+        }
+        // Solo la PRIMERA conexión de este usuario (no cada pestaña/dispositivo
+        // adicional) representa una transición real de offline→online.
+        if (isFirstSocketForUser) {
+            broadcastPresenceToActiveBookingRooms(connUserId, 'user_online');
         }
 
         socket.on('join_booking', async (bookingId: string) => {
@@ -152,15 +194,17 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
             // 'disconnecting' (a diferencia de 'disconnect') corre ANTES de que el
             // socket abandone sus rooms — es la única oportunidad de saber a qué
             // bookings avisar que este usuario quedó offline.
-            const bookingRooms = Array.from(socket.rooms).filter((r) => r.startsWith('booking:'));
             const set = onlineSockets.get(connUserId);
             if (!set) return;
             set.delete(socket.id);
-            if (set.size === 0 && bookingRooms.length > 0) {
+            if (set.size === 0) {
                 const timer = setTimeout(() => {
                     offlineTimers.delete(connUserId);
                     if ((onlineSockets.get(connUserId)?.size ?? 0) === 0) {
-                        bookingRooms.forEach((room) => io!.to(room).emit('user_offline', { userId: connUserId }));
+                        // Cubre tanto el chat activo (join_booking) como cualquier
+                        // otra sala de reserva real donde el otro participante
+                        // siga escuchando, aunque este socket no la haya unido.
+                        broadcastPresenceToActiveBookingRooms(connUserId, 'user_offline');
                     }
                 }, OFFLINE_DEBOUNCE_MS);
                 offlineTimers.set(connUserId, timer);
