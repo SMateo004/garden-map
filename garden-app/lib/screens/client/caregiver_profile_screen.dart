@@ -32,8 +32,6 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   List<dynamic> _clientPets = [];
   bool _petsLoading = true;
   String _authToken = '';
-  int _selectedPhotoIndex = 0;
-  bool _showAllReviews = false;
   bool _isFavorite = false;
   bool _isTogglingFavorite = false;
 
@@ -486,10 +484,10 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         Text('Sobre ${_caregiver!['firstName']}', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
                         const SizedBox(height: 12),
                         if (bio.isNotEmpty)
-                          _ExpandableText(text: bio, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.7), maxLines: 4),
+                          _ExpandableText(text: bio, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.7), maxLines: 3),
                         if (bioDetail.isNotEmpty) ...[
                           const SizedBox(height: 12),
-                          _ExpandableText(text: bioDetail, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.7), maxLines: 4),
+                          _ExpandableText(text: bioDetail, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.7), maxLines: 3),
                         ],
                         const SizedBox(height: 32),
 
@@ -517,7 +515,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                             _ExpandableText(
                               text: _caregiver!['experienceDescription'] as String,
                               style: TextStyle(color: subtextColor, fontSize: 15, height: 1.7),
-                              maxLines: 4,
+                              maxLines: 3,
                             ),
                           ],
                         ],
@@ -844,24 +842,21 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
         children: [
           CustomScrollView(
             slivers: [
-              // Hero foto
+              // Hero foto — carrusel horizontal deslizable, tap para ampliar
               SliverToBoxAdapter(
                 child: Stack(
                   children: [
-                    SizedBox(
-                      width: double.infinity, height: 320,
-                      child: photos.isNotEmpty
-                          ? GestureDetector(
-                              onTap: () => _openPhotoViewer(photos, _selectedPhotoIndex),
-                              child: Image.network(fixImageUrl(photos[_selectedPhotoIndex]), fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(color: GardenColors.primary.withValues(alpha: 0.1), child: const Icon(Icons.pets, size: 80, color: GardenColors.primary))),
-                            )
-                          : Container(color: GardenColors.primary.withValues(alpha: 0.1), child: const Icon(Icons.pets, size: 80, color: GardenColors.primary)),
+                    _PhotoCarousel(
+                      photos: photos,
+                      height: 320,
+                      onTapPhoto: (index) => _openPhotoViewer(photos, index),
                     ),
                     Positioned(bottom: 0, left: 0, right: 0,
-                      child: Container(height: 120, decoration: BoxDecoration(
-                        gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, bg.withValues(alpha: 0.95)]),
-                      ))),
+                      child: IgnorePointer(
+                        child: Container(height: 120, decoration: BoxDecoration(
+                          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, bg.withValues(alpha: 0.95)]),
+                        )),
+                      )),
                     Positioned(top: 48, left: 16,
                       child: GardenPressable(pressedScale: 0.88, onTap: () => context.pop(),
                         child: Container(width: 40, height: 40, decoration: BoxDecoration(color: surface.withValues(alpha: 0.9), shape: BoxShape.circle, boxShadow: GardenShadows.card),
@@ -872,20 +867,6 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           child: _isTogglingFavorite
                               ? const Padding(padding: EdgeInsets.all(12), child: GardenLoadingIndicator(color: GardenColors.primary))
                               : Icon(_isFavorite ? Icons.favorite : Icons.favorite_border, color: _isFavorite ? GardenColors.error : textColor, size: 20)))),
-                    if (photos.length > 1)
-                      Positioned(bottom: 16, right: 16,
-                        child: Row(children: photos.asMap().entries.map((e) {
-                          final sel = e.key == _selectedPhotoIndex;
-                          return GestureDetector(
-                            onTap: () {
-                              HapticFeedback.selectionClick();
-                              setState(() => _selectedPhotoIndex = e.key);
-                            },
-                            child: Container(margin: const EdgeInsets.only(left: 6), width: sel ? 32 : 24, height: sel ? 32 : 24,
-                              decoration: BoxDecoration(borderRadius: BorderRadius.circular(6), border: Border.all(color: sel ? GardenColors.primary : Colors.white.withValues(alpha: 0.5), width: sel ? 2 : 1)),
-                              child: ClipRRect(borderRadius: BorderRadius.circular(4), child: Image.network(fixImageUrl(e.value), fit: BoxFit.cover))),
-                          );
-                        }).toList())),
                   ],
                 ),
               ),
@@ -967,10 +948,10 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                       Text('Sobre ${_caregiver!['firstName']}', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 12),
                       if (bio.isNotEmpty)
-                        _ExpandableText(text: bio, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6), maxLines: 4),
+                        _ExpandableText(text: bio, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6), maxLines: 3),
                       if (bioDetail.isNotEmpty) ...[
                         const SizedBox(height: 10),
-                        _ExpandableText(text: bioDetail, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6), maxLines: 4),
+                        _ExpandableText(text: bioDetail, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6), maxLines: 3),
                       ],
                       const SizedBox(height: 24),
                       // Experiencia
@@ -992,7 +973,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           _ExpandableText(
                             text: _caregiver!['experienceDescription'] as String,
                             style: TextStyle(color: subtextColor, fontSize: 14, height: 1.6),
-                            maxLines: 4,
+                            maxLines: 3,
                           ),
                         ],
                       ],
@@ -1042,35 +1023,11 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         ]),
                       ],
                       const SizedBox(height: 24),
-                      if (photos.isNotEmpty) ...[
-                        Divider(color: borderColor), const SizedBox(height: 20),
-                        Text('Fotos del cuidador',
-                          style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          height: 110,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: photos.length,
-                            itemBuilder: (_, index) => GestureDetector(
-                              onTap: () => _openPhotoViewer(photos, index),
-                              child: Container(
-                                margin: const EdgeInsets.only(right: 10),
-                                width: 130,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: _selectedPhotoIndex == index ? GardenColors.primary : borderColor, width: _selectedPhotoIndex == index ? 2 : 1),
-                                ),
-                                child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(fixImageUrl(photos[index]), fit: BoxFit.cover)),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Divider(color: borderColor),
-                        const SizedBox(height: 20),
-                      ],
+                      // Nota: las fotos propias del cuidador (`photos`) ya se muestran arriba
+                      // en el carrusel hero — no se repiten aquí. Solo se listan las fotos
+                      // del espacio (sala, descanso, etc.), que son un contenido distinto.
                       if (placePhotoSections.isNotEmpty) ...[
+                        Divider(color: borderColor), const SizedBox(height: 20),
                         Text('Fotos del lugar',
                           style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 12),
@@ -1315,37 +1272,94 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
         if (reviews.isEmpty)
           GardenEmptyState(type: GardenEmptyType.reviews, title: 'Sin reseñas todavía', subtitle: 'Sé el primero en reservar con $firstName y dejar una opinión.', compact: true)
         else ...[
-          ...() {
-            final visible = _showAllReviews ? reviews : reviews.take(5).toList();
-            return visible.map((r) => _buildReviewCard(r, textColor, subtextColor, surface, borderColor));
-          }(),
-          if (reviews.length > 5) ...[
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                setState(() => _showAllReviews = !_showAllReviews);
-              },
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(color: surface, borderRadius: GardenRadius.md_, border: Border.all(color: borderColor)),
-                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Text(_showAllReviews ? 'Mostrar menos' : 'Ver todas las reseñas (${reviews.length})', style: const TextStyle(color: GardenColors.primary, fontSize: 14, fontWeight: FontWeight.w600)),
-                  const SizedBox(width: 6),
-                  Icon(_showAllReviews ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: GardenColors.primary, size: 18),
-                ]),
-              ),
+          // Carrusel horizontal deslizable — estilo Airbnb, en vez de una
+          // lista vertical con expandir/colapsar. Tocar una tarjeta abre el
+          // listado completo (misma hoja que "Ver todas las reseñas").
+          _buildReviewsCarousel(reviews, textColor, subtextColor, surface, borderColor),
+          const SizedBox(height: 12),
+          GardenPressable(
+            pressedScale: 0.97,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              _showAllReviewsSheet(reviews, textColor, subtextColor, surface, borderColor);
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(color: surface, borderRadius: GardenRadius.md_, border: Border.all(color: borderColor)),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Text('Ver todas las reseñas (${reviews.length})', style: const TextStyle(color: GardenColors.primary, fontSize: 14, fontWeight: FontWeight.w600)),
+                const SizedBox(width: 6),
+                const Icon(Icons.keyboard_arrow_down, color: GardenColors.primary, size: 18),
+              ]),
             ),
-          ],
-          const SizedBox(height: 24),
-          const SizedBox(height: 20),
+          ),
         ],
       ],
     );
   }
 
-  Widget _buildReviewCard(dynamic r, Color textColor, Color subtextColor, Color surface, Color borderColor) {
+  Widget _buildReviewsCarousel(List reviews, Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    return SizedBox(
+      height: 176,
+      child: PageView.builder(
+        controller: PageController(viewportFraction: 0.82),
+        itemCount: reviews.length,
+        onPageChanged: (_) => HapticFeedback.selectionClick(),
+        itemBuilder: (_, i) => Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: GardenPressable(
+            pressedScale: 0.97,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              _showAllReviewsSheet(reviews, textColor, subtextColor, surface, borderColor);
+            },
+            child: _buildReviewCard(reviews[i], textColor, subtextColor, surface, borderColor, compact: true),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAllReviewsSheet(List reviews, Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    final isDark = themeNotifier.isDark;
+    final sheetBg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (_, scrollController) => Container(
+          decoration: BoxDecoration(color: sheetBg, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(width: 40, height: 4, decoration: BoxDecoration(color: GardenColors.textHint, borderRadius: BorderRadius.circular(2))),
+              ),
+              const SizedBox(height: 16),
+              Text('Todas las reseñas (${reviews.length})', style: TextStyle(color: textColor, fontSize: 17, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 16),
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollController,
+                  itemCount: reviews.length,
+                  itemBuilder: (_, i) => _buildReviewCard(reviews[i], textColor, subtextColor, surface, borderColor),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReviewCard(dynamic r, Color textColor, Color subtextColor, Color surface, Color borderColor, {bool compact = false}) {
     final clientName = r['clientName'] as String? ?? 'Anónimo';
     final initial = clientName.isNotEmpty ? clientName[0].toUpperCase() : '?';
     final rating = (r['rating'] as num? ?? 0).toInt();
@@ -1354,40 +1368,56 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     final serviceType = r['serviceType'] as String?;
     final createdAt = r['createdAt'] != null ? _formatDate(r['createdAt'].toString()) : '';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: surface, borderRadius: GardenRadius.lg_, border: Border.all(color: borderColor)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.12), shape: BoxShape.circle, border: Border.all(color: GardenColors.primary.withValues(alpha: 0.25))),
-            child: Center(child: Text(initial, style: const TextStyle(color: GardenColors.primary, fontSize: 16, fontWeight: FontWeight.w700))),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(clientName, style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
-            const SizedBox(height: 2),
-            Row(children: [
-              ...List.generate(5, (i) => Icon(i < rating ? Icons.star_rounded : Icons.star_outline_rounded, color: GardenColors.star, size: 13)),
-              const SizedBox(width: 8),
-              Text(createdAt, style: TextStyle(color: subtextColor, fontSize: 11)),
-            ]),
-          ])),
-        ]),
-        if (petName != null || serviceType != null) ...[
-          const SizedBox(height: 10),
-          Wrap(spacing: 6, children: [
-            if (petName != null) _reviewChip('🐾 $petName', subtextColor, borderColor, surface),
-            if (serviceType != null) _reviewChip(serviceType == 'PASEO' ? '🦮 Paseo' : serviceType == 'GUARDERIA' ? '🏡 Guardería' : '🏠 Hospedaje', subtextColor, borderColor, surface),
+    final content = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 40, height: 40,
+          decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.12), shape: BoxShape.circle, border: Border.all(color: GardenColors.primary.withValues(alpha: 0.25))),
+          child: Center(child: Text(initial, style: const TextStyle(color: GardenColors.primary, fontSize: 16, fontWeight: FontWeight.w700))),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(clientName, style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 2),
+          Row(children: [
+            ...List.generate(5, (i) => Icon(i < rating ? Icons.star_rounded : Icons.star_outline_rounded, color: GardenColors.star, size: 13)),
+            const SizedBox(width: 8),
+            Text(createdAt, style: TextStyle(color: subtextColor, fontSize: 11)),
           ]),
-        ],
-        if (comment != null && comment.trim().isNotEmpty) ...[
-          const SizedBox(height: 10),
-          Text('"$comment"', style: TextStyle(color: subtextColor, fontSize: 14, height: 1.55, fontStyle: FontStyle.italic)),
-        ],
+        ])),
       ]),
+      if (petName != null || serviceType != null) ...[
+        const SizedBox(height: 10),
+        Wrap(spacing: 6, children: [
+          if (petName != null) _reviewChip('🐾 $petName', subtextColor, borderColor, surface),
+          if (serviceType != null) _reviewChip(serviceType == 'PASEO' ? '🦮 Paseo' : serviceType == 'GUARDERIA' ? '🏡 Guardería' : '🏠 Hospedaje', subtextColor, borderColor, surface),
+        ]),
+      ],
+      if (comment != null && comment.trim().isNotEmpty) ...[
+        const SizedBox(height: 10),
+        compact
+            ? Expanded(
+                child: Text(
+                  '"$comment"',
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5, fontStyle: FontStyle.italic),
+                ),
+              )
+            : Text('"$comment"', style: TextStyle(color: subtextColor, fontSize: 14, height: 1.55, fontStyle: FontStyle.italic)),
+      ],
+    ]);
+
+    return Container(
+      margin: compact ? EdgeInsets.zero : const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: GardenRadius.lg_,
+        border: Border.all(color: borderColor),
+        boxShadow: compact ? GardenShadows.card : null,
+      ),
+      child: content,
     );
   }
 
@@ -1531,6 +1561,103 @@ class _ExpandableTextState extends State<_ExpandableText> {
 }
 
 // ── Lightbox para ver fotos en pantalla completa ─────────────────────────────
+
+// ── Carrusel horizontal de fotos (hero) — swipe + dots + tap para ampliar ────
+
+class _PhotoCarousel extends StatefulWidget {
+  final List<String> photos;
+  final double height;
+  final void Function(int index) onTapPhoto;
+
+  const _PhotoCarousel({
+    required this.photos,
+    required this.onTapPhoto,
+    this.height = 320,
+  });
+
+  @override
+  State<_PhotoCarousel> createState() => _PhotoCarouselState();
+}
+
+class _PhotoCarouselState extends State<_PhotoCarousel> {
+  late final PageController _controller = PageController();
+  int _index = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.photos.isEmpty) {
+      return Container(
+        width: double.infinity,
+        height: widget.height,
+        color: GardenColors.primary.withValues(alpha: 0.1),
+        child: const Icon(Icons.pets, size: 80, color: GardenColors.primary),
+      );
+    }
+    return SizedBox(
+      width: double.infinity,
+      height: widget.height,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          PageView.builder(
+            controller: _controller,
+            itemCount: widget.photos.length,
+            onPageChanged: (i) {
+              HapticFeedback.selectionClick();
+              setState(() => _index = i);
+            },
+            itemBuilder: (_, i) => GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                widget.onTapPhoto(i);
+              },
+              child: Image.network(
+                fixImageUrl(widget.photos[i]),
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+                errorBuilder: (_, __, ___) => Container(
+                  color: GardenColors.primary.withValues(alpha: 0.1),
+                  child: const Icon(Icons.pets, size: 80, color: GardenColors.primary),
+                ),
+              ),
+            ),
+          ),
+          if (widget.photos.length > 1)
+            Positioned(
+              bottom: 16,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(widget.photos.length, (i) {
+                  final sel = i == _index;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: sel ? 20 : 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: sel ? Colors.white : Colors.white.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(3),
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 4)],
+                    ),
+                  );
+                }),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
 
 class _PhotoLightbox extends StatefulWidget {
   final List<String> photos;

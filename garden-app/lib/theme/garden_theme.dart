@@ -1061,6 +1061,15 @@ class GardenButton extends StatelessWidget {
 
     final radius = BorderRadius.circular(GardenRadius.lg);
 
+    // El padding horizontal fijo de 24px por lado (pensado para botones de
+    // ancho libre/completo) le dejaba casi nada de espacio real al texto en
+    // botones angostos con `width` chico (ej. "Ver" en 56px de ancho) — el
+    // label terminaba pegado al borde o directamente desbordado. Escala el
+    // padding hacia abajo cuando el llamador pidió un ancho explícito y
+    // compacto, sin tocar el caso de ancho libre/completo (donde 24px sigue
+    // siendo el valor correcto).
+    final horizontalPadding = (width != null && width! < 120) ? 10.0 : 24.0;
+
     if (outline) {
       final useBlur = kIsWeb ||
           defaultTargetPlatform == TargetPlatform.iOS ||
@@ -1072,7 +1081,7 @@ class GardenButton extends StatelessWidget {
           backgroundColor: btnColor.withValues(alpha: useBlur ? 0.06 : 0.10),
           side: BorderSide(color: btnColor, width: 1.5),
           shape: RoundedRectangleBorder(borderRadius: radius),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 0),
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 0),
           minimumSize: Size(0, height),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
@@ -1160,7 +1169,7 @@ class GardenButton extends StatelessWidget {
                 shadowColor: Colors.transparent,
                 overlayColor: Colors.white.withValues(alpha: 0.08),
                 shape: RoundedRectangleBorder(borderRadius: radius),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 0),
+                padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 0),
                 minimumSize: Size(0, height),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),

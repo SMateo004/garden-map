@@ -334,6 +334,34 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     }
   }
 
+  /// Autocompleta el filtro de tipo de mascota según las mascotas del cliente
+  /// (mismo criterio de coherencia que _loadZones usa para la ubicación): si
+  /// tiene solo perros o solo gatos, se preselecciona ese tipo; si tiene
+  /// ambos o ninguno, se deja en "Todos" (null). Nunca pisa un valor ya
+  /// explícito (ej. venir de un link con initialPetType) ni un guest sin
+  /// sesión.
+  Future<void> _autoSelectPetTypeFromClientPets() async {
+    if (widget.initialPetType != null) return;
+    final token = AuthState.token;
+    if (token.isEmpty) return;
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/client/pets'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (res.statusCode != 200) return;
+      final data = jsonDecode(res.body);
+      if (data['success'] != true) return;
+      final pets = (data['data'] as List? ?? []).cast<Map<String, dynamic>>();
+      final types = pets.map((p) => p['animalType']?.toString()).whereType<String>().toSet();
+      if (types.length == 1 && mounted) {
+        setState(() => _selectedPetType = types.first);
+      }
+    } catch (_) {
+      // Sin conexión o error — se mantiene el default "Todos", no es crítico.
+    }
+  }
+
   Future<void> _loadInitialData() async {
     await _loadToken();
     // Resolver la ciudad ANTES de pedir cuidadores — si no, la primera carga
@@ -341,6 +369,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     // por un instante (o directamente, si el usuario no scrollea) cuidadores
     // de la ciudad equivocada para alguien en Cochabamba.
     await _loadZones();
+    await _autoSelectPetTypeFromClientPets();
     await Future.wait([_loadCaregivers(reset: true), _loadActiveBooking()]);
     _activeBookingTimer?.cancel();
     _activeBookingTimer = Timer.periodic(const Duration(seconds: 60), (_) {
@@ -864,19 +893,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 ],
               ),
             ),
-            // ── Chips de mascota ───────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-              child: Row(
-                children: [
-                  _mobilePetChip(null, '🐾 Todos', isDark),
-                  const SizedBox(width: 8),
-                  _mobilePetChip('DOGS', '🐕 Perro', isDark),
-                  const SizedBox(width: 8),
-                  _mobilePetChip('CATS', '🐱 Gato', isDark),
-                ],
-              ),
-            ),
+            // El filtro de tipo de mascota ya no vive acá suelto — ahora se
+            // autocompleta según las mascotas del cliente (ver
+            // _autoSelectPetTypeFromClientPets) y solo queda editable dentro
+            // de "Todos los filtros", para no duplicar el control en dos
+            // lugares de la pantalla principal.
+            const SizedBox(height: 6),
             Container(height: 1, color: border),
 
             // ── Lista de cuidadores ────────────────────────────────────
@@ -1033,47 +1055,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         ),
       ),
     );
-
-  Widget _mobilePetChip(String? value, String label, bool isDark) {
-    final isSelected = _selectedPetType == value;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          setState(() => _selectedPetType = value);
-          _loadCaregivers(reset: true);
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? GardenColors.primary
-                : (isDark
-                    ? GardenColors.primary.withValues(alpha: 0.12)
-                    : GardenColors.lime.withValues(alpha: 0.75)),
-            borderRadius: BorderRadius.circular(GardenRadius.full),
-            boxShadow: isSelected
-                ? [BoxShadow(
-                    color: GardenColors.primary.withValues(alpha: 0.28),
-                    blurRadius: 10, offset: const Offset(0, 3),
-                  )]
-                : null,
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? Colors.white : GardenColors.primary,
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   void _showMobileFilterSheet(ThemeData theme, bool isDark, Color surface, Color border) {
     showModalBottomSheet(
