@@ -288,6 +288,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   Future<void> _loadZones() async {
     try {
       String? profileCityId;
+      String? profileZoneKey;
       final token = AuthState.token;
       if (token.isNotEmpty) {
         try {
@@ -297,9 +298,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           );
           final data = jsonDecode(res.body);
           if (data['success'] == true) {
-            profileCityId = (data['data'] as Map<String, dynamic>)['cityId'] as String?;
+            final profile = data['data'] as Map<String, dynamic>;
+            profileCityId = profile['cityId'] as String?;
+            profileZoneKey = profile['addressZone'] as String?;
           }
         } catch (_) {}
+      }
+      // Autocompleta el filtro de zona con la del cliente — mismo criterio de
+      // coherencia que la ciudad y el tipo de mascota (puede cambiarlo
+      // manualmente después). Solo si no vino ya explícito desde un link
+      // (initialZone) ni fue tocado a mano antes de que esto resuelva.
+      if (widget.initialZone == null && _selectedZone == null && profileZoneKey != null && mounted) {
+        setState(() => _selectedZone = profileZoneKey);
       }
 
       final cities = await CitiesService.getCities();

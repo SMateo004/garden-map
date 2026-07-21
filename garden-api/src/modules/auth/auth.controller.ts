@@ -437,7 +437,13 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
   // recalculados server-side por coordenadas (misma lógica que en registro,
   // ver resolveAuthoritativeZone). Si no tocó el pin, su zona actual queda
   // intacta aunque el body no la incluya.
-  if (addressLat != null && addressLng != null) {
+  if (addressLat !== undefined && addressLng !== undefined && (addressLat === null || addressLng === null)) {
+    // El cliente borró el pin explícitamente (lo mandó como null) — la zona
+    // anterior ya no es válida, se limpia junto con las coordenadas en vez
+    // de quedar "huérfana" apuntando a un lugar que ya no es el suyo.
+    profileData.zoneId = null;
+    profileData.addressZone = null;
+  } else if (addressLat != null && addressLng != null) {
     let effectiveCityId = cityId;
     if (!effectiveCityId) {
       const existing = effectiveRole === 'CAREGIVER'
