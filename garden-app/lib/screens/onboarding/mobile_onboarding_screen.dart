@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
@@ -99,6 +100,7 @@ class _MobileOnboardingScreenState extends State<MobileOnboardingScreen>
   }
 
   void _next() {
+    HapticFeedback.selectionClick();
     if (_page < _kSteps.length - 1) {
       _fadeCtrl.reverse().then((_) {
         _pageCtrl.nextPage(
@@ -233,7 +235,8 @@ class _MobileOnboardingScreenState extends State<MobileOnboardingScreen>
                     // Saltar
                     if (_page < _kSteps.length - 1) ...[
                       const SizedBox(height: 14),
-                      GestureDetector(
+                      GardenPressable(
+                        pressedScale: 0.94,
                         onTap: _finish,
                         child: Text(
                           'Saltar introducción',

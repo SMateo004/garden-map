@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -66,6 +67,11 @@ class _BookingScreenState extends State<BookingScreen> {
   List<Map<String, dynamic>> _multiDayRangeBookings = []; // reservas activas en el rango
   bool _loadingMultiDayData = false;
   bool _multiDayDataLoaded = false; // true una vez que la llamada API terminó (éxito o error)
+  // Cuándo se cargaron por última vez los datos de disponibilidad/bloqueos —
+  // usado para refrescar en segundo plano si el cliente lleva un rato en esta
+  // pantalla y el cuidador bloqueó un día mientras tanto (ver
+  // _refreshMultiDayDataIfStale).
+  DateTime? _lastMultiDayLoadAt;
 
   // Meet & Greet opcional
   bool _includeMG = false;
@@ -753,11 +759,14 @@ class _BookingScreenState extends State<BookingScreen> {
     final isSelected = _selectedDuration == minutes;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() {
-          _selectedDuration = minutes;
-          _selectedTimeSlot = null;
-          _selectedStartTime = null;
-        }),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          setState(() {
+            _selectedDuration = minutes;
+            _selectedTimeSlot = null;
+            _selectedStartTime = null;
+          });
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
@@ -969,7 +978,10 @@ class _BookingScreenState extends State<BookingScreen> {
                   GardenButton(
                     label: 'Agregar mascota',
                     outline: true,
-                    onPressed: () => context.push('/my-pets'),
+                    onPressed: () async {
+                      await context.push('/my-pets');
+                      if (mounted) _loadPets();
+                    },
                   )
                 else
                   Column(
@@ -989,13 +1001,16 @@ class _BookingScreenState extends State<BookingScreen> {
                       if (isSelected && petIndex == 1) discountLabel = '-25%';
                       if (isSelected && petIndex == 2) discountLabel = '-50%';
                       return GestureDetector(
-                        onTap: sizeNotAccepted ? null : () => setState(() {
-                          if (isSelected) {
-                            _selectedPetIds.remove(petId);
-                          } else if (!atMax) {
-                            _selectedPetIds.add(petId);
-                          }
-                        }),
+                        onTap: sizeNotAccepted ? null : () {
+                          HapticFeedback.selectionClick();
+                          setState(() {
+                            if (isSelected) {
+                              _selectedPetIds.remove(petId);
+                            } else if (!atMax) {
+                              _selectedPetIds.add(petId);
+                            }
+                          });
+                        },
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 180),
                           margin: const EdgeInsets.only(bottom: 10),
@@ -1211,8 +1226,10 @@ class _BookingScreenState extends State<BookingScreen> {
                                 _bookedPaseos = [];        // clear stale conflict data
                                 _includeMG = false; _mgDate = null;
                               });
-                              // Datos ya cargados en init; recargar solo si falta
-                              if (_multiDaySlotsByDate.isEmpty) _loadMultiDayData();
+                              // Refresca si los datos ya cargados llevan un rato
+                              // desactualizados (el cuidador pudo bloquear un día
+                              // mientras el cliente estaba en esta pantalla).
+                              _refreshMultiDayDataIfStale();
                             }),
                           ],
                         ),
@@ -1255,6 +1272,14 @@ class _BookingScreenState extends State<BookingScreen> {
 
                           return GestureDetector(
                             onTap: isDayUnavailable ? null : () async {
+                              HapticFeedback.selectionClick();
+                              await _refreshMultiDayDataIfStale();
+                              if (!context.mounted) return;
+                              if (_blockedDates.contains(ds)) {
+                                GardenSnackBar.warning(context, 'Este día ya no está disponible, elige otra fecha');
+                                setState(() {});
+                                return;
+                              }
                               setState(() {
                                 _selectedDate = date;
                                 // Clear M&G date if it's no longer before the booking date
@@ -1555,6 +1580,14 @@ class _BookingScreenState extends State<BookingScreen> {
                             _guarderiaHasNoTimeAvailable(ds);
                         return GestureDetector(
                           onTap: isDayUnavailable ? null : () async {
+                            HapticFeedback.selectionClick();
+                            await _refreshMultiDayDataIfStale();
+                            if (!context.mounted) return;
+                            if (_blockedDates.contains(ds)) {
+                              GardenSnackBar.warning(context, 'Este día ya no está disponible, elige otra fecha');
+                              setState(() {});
+                              return;
+                            }
                             setState(() {
                               _selectedDate = date;
                               _selectedTimeSlot = null;
@@ -1878,10 +1911,38 @@ class _BookingScreenState extends State<BookingScreen> {
                   constraints: BoxConstraints(maxWidth: isWide ? 860 : double.infinity),
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(isWide ? 40 : 20, 16, isWide ? 40 : 20, 32),
-                    child: GardenButton(
-                      label: _isSubmitting ? 'Procesando...' : 'Continuar al pago',
-                      loading: _isSubmitting,
-                      onPressed: (_isSubmitting || !_isFormValid) ? null : _createBooking,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Total siempre visible mientras se elige — evita que
+                        // el usuario tenga que volver a scrollear hasta el
+                        // resumen para saber cuánto va a pagar (estilo Airbnb:
+                        // el total corre junto al CTA, no escondido arriba).
+                        if (calculatedPrice != null && _selectedPetIds.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('Total estimado',
+                                    style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                                Text('Bs ${calculatedPrice.round()}',
+                                    style: const TextStyle(
+                                        color: GardenColors.primary, fontSize: 20, fontWeight: FontWeight.w900)),
+                              ],
+                            ),
+                          ),
+                        GardenButton(
+                          label: _isSubmitting ? 'Procesando...' : 'Continuar al pago',
+                          loading: _isSubmitting,
+                          onPressed: (_isSubmitting || !_isFormValid)
+                              ? null
+                              : () {
+                                  HapticFeedback.mediumImpact();
+                                  _createBooking();
+                                },
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -1941,7 +2002,10 @@ class _BookingScreenState extends State<BookingScreen> {
   /// Tab del toggle "1 día / Varios días"
   Widget _buildDayModeTab(String label, bool isActive, VoidCallback onTap) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
@@ -2038,7 +2102,16 @@ class _BookingScreenState extends State<BookingScreen> {
                 (_multiDayDataLoaded && !_multiDaySlotsByDate.containsKey(ds));
 
             return GestureDetector(
-              onTap: isUnavailable ? null : () => _toggleDate(date),
+              onTap: isUnavailable ? null : () async {
+                await _refreshMultiDayDataIfStale();
+                if (!mounted) return;
+                if (_blockedDates.contains(ds)) {
+                  GardenSnackBar.warning(context, 'Este día ya no está disponible, elige otra fecha');
+                  setState(() {});
+                  return;
+                }
+                _toggleDate(date);
+              },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 decoration: BoxDecoration(
@@ -2216,10 +2289,24 @@ class _BookingScreenState extends State<BookingScreen> {
     } catch (e) {
       debugPrint('Error loading multi-day data: $e');
     } finally {
+      _lastMultiDayLoadAt = DateTime.now();
       if (mounted) setState(() {
         _loadingMultiDayData = false;
         _multiDayDataLoaded = true;
       });
+    }
+  }
+
+  /// `_multiDaySlotsByDate`/`_blockedDates` se cargan una sola vez al entrar a
+  /// la pantalla. Si el cliente se queda un rato aquí (eligiendo mascota,
+  /// addons, etc.) y el cuidador bloquea un día mientras tanto, esos datos
+  /// quedan obsoletos. Se llama justo antes de que el cliente interactúe con
+  /// el selector de fecha (tocar un día) para refrescar en segundo plano sin
+  /// bloquear la UI en cada rebuild ni hacer polling constante.
+  Future<void> _refreshMultiDayDataIfStale() async {
+    final last = _lastMultiDayLoadAt;
+    if (last == null || DateTime.now().difference(last) > const Duration(seconds: 45)) {
+      await _loadMultiDayData();
     }
   }
 
@@ -3332,14 +3419,17 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Widget _summaryRow(IconData icon, String label, String value) {
+    final isDark = themeNotifier.isDark;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
           Icon(icon, size: 14, color: GardenColors.primary),
           const SizedBox(width: 8),
-          Text('$label: ', style: const TextStyle(color: GardenColors.darkTextSecondary, fontSize: 13)),
-          Text(value, style: TextStyle(color: themeNotifier.isDark ? Colors.white : Colors.black87, fontSize: 13, fontWeight: FontWeight.w600)),
+          Text('$label: ', style: TextStyle(color: subtextColor, fontSize: 13)),
+          Text(value, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
         ],
       ),
     );

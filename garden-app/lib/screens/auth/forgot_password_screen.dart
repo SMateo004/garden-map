@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
@@ -13,6 +14,9 @@ class ForgotPasswordScreen extends StatefulWidget {
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _emailCtrl = TextEditingController();
   bool _loading = false;
+  String? _emailError;
+
+  static final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
   String get _baseUrl => const String.fromEnvironment(
         'API_URL',
@@ -28,12 +32,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Future<void> _send() async {
     final email = _emailCtrl.text.trim();
     if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ingresa tu correo electrónico')),
-      );
+      setState(() => _emailError = 'Ingresa tu correo electrónico');
       return;
     }
-    setState(() => _loading = true);
+    if (!_emailRegex.hasMatch(email)) {
+      setState(() => _emailError = 'Ingresa un correo válido, ej: tu@correo.com');
+      return;
+    }
+    setState(() { _loading = true; _emailError = null; });
+    HapticFeedback.lightImpact();
     try {
       final res = await http.post(
         Uri.parse('$_baseUrl/auth/forgot-password/send-code'),
@@ -49,18 +56,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       } else {
         Map<String, dynamic>? data;
         try { data = jsonDecode(res.body) as Map<String, dynamic>; } catch (_) {}
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-            (data?['error'] as Map<String, dynamic>?)?['message'] as String? ??
-                'No se pudo enviar el código. Intenta de nuevo.',
-          ),
-        ));
+        GardenSnackBar.error(
+          context,
+          (data?['error'] as Map<String, dynamic>?)?['message'] as String? ??
+              'No se pudo enviar el código. Intenta de nuevo.',
+        );
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error de conexión. Intenta de nuevo.')),
-        );
+        GardenSnackBar.error(context, 'Error de conexión. Revisa tu internet e intenta de nuevo.');
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -124,21 +128,28 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     keyboardType: TextInputType.emailAddress,
                     autofocus: true,
                     style: TextStyle(color: textColor),
+                    onChanged: (_) {
+                      if (_emailError != null) setState(() => _emailError = null);
+                    },
                     onSubmitted: (_) => _send(),
                     decoration: InputDecoration(
                       hintText: 'tu@correo.com',
                       hintStyle: TextStyle(color: subtextColor),
                       prefixIcon: Icon(Icons.email_outlined, color: subtextColor, size: 20),
+                      errorText: _emailError,
                       filled: true,
                       fillColor: surfaceEl,
                       border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          borderRadius: GardenRadius.md_, borderSide: BorderSide.none),
                       enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
+                          borderRadius: GardenRadius.md_, borderSide: BorderSide(color: borderColor)),
                       focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: GardenRadius.md_,
                           borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      errorBorder: OutlineInputBorder(
+                          borderRadius: GardenRadius.md_,
+                          borderSide: const BorderSide(color: GardenColors.error, width: 1)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: GardenSpacing.lg, vertical: 14),
                     ),
                   ),
                   const SizedBox(height: 28),

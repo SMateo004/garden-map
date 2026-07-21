@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_tutorial.dart';
@@ -104,7 +105,11 @@ class _ClientShellScreenState extends State<ClientShellScreen> {
           ),
           bottomNavigationBar: LiquidGlassNavBar(
             selectedIndex: _selectedTab,
-            onTap: (i) => setState(() => _selectedTab = i),
+            onTap: (i) {
+              if (i == _selectedTab) return;
+              HapticFeedback.selectionClick();
+              setState(() => _selectedTab = i);
+            },
             items: _items,
           ),
         );

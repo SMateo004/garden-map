@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 
@@ -44,11 +44,6 @@ class _SlotConflictScreenState extends State<SlotConflictScreen> {
     return _startDate != null && _endDate != null;
   }
 
-  Future<String?> _getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('token');
-  }
-
   Future<void> _pickDate({bool isStart = true}) async {
     final now = DateTime.now();
     final firstDate = now;
@@ -74,6 +69,7 @@ class _SlotConflictScreenState extends State<SlotConflictScreen> {
       ),
     );
     if (picked == null) return;
+    HapticFeedback.selectionClick();
     setState(() {
       if (_isPaseo) {
         _selectedDate = picked;
@@ -93,7 +89,7 @@ class _SlotConflictScreenState extends State<SlotConflictScreen> {
       _errorMessage = null;
     });
     try {
-      final token = await _getToken();
+      final token = AuthState.token;
       final Map<String, dynamic> body = {};
 
       if (_isPaseo) {
@@ -222,11 +218,15 @@ class _SlotConflictScreenState extends State<SlotConflictScreen> {
                     return Expanded(
                       child: Padding(
                         padding: const EdgeInsets.only(right: 8),
-                        child: GestureDetector(
-                          onTap: () => setState(() {
-                            _selectedTimeSlot = slot;
-                            _errorMessage = null;
-                          }),
+                        child: GardenPressable(
+                          pressedScale: 0.95,
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            setState(() {
+                              _selectedTimeSlot = slot;
+                              _errorMessage = null;
+                            });
+                          },
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
                             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -323,7 +323,12 @@ class _SlotConflictScreenState extends State<SlotConflictScreen> {
               GardenButton(
                 label: _isSubmitting ? 'Confirmando...' : 'Confirmar nueva hora',
                 icon: Icons.check_circle_outline_rounded,
-                onPressed: (_canConfirm && !_isSubmitting) ? _confirm : null,
+                onPressed: (_canConfirm && !_isSubmitting)
+                    ? () {
+                        HapticFeedback.mediumImpact();
+                        _confirm();
+                      }
+                    : null,
                 loading: _isSubmitting,
               ),
 
@@ -357,8 +362,12 @@ class _SlotConflictScreenState extends State<SlotConflictScreen> {
     bool disabled = false,
   }) {
     final isDark = themeNotifier.isDark;
-    return GestureDetector(
-      onTap: disabled ? null : onTap,
+    return GardenPressable(
+      pressedScale: 0.97,
+      onTap: disabled ? null : () {
+        HapticFeedback.selectionClick();
+        onTap!();
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(

@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../services/auth_state.dart';
-import '../../widgets/garden_loading_indicator.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -87,7 +87,11 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         surfaceTintColor: Colors.transparent,
       ),
       body: _isLoading
-          ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
+          ? ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+              itemCount: 3,
+              itemBuilder: (_, __) => _buildFavoriteCardSkeleton(surface, borderColor),
+            )
           : _favorites.isEmpty
               ? _buildEmptyState()
               : RefreshIndicator(
@@ -95,6 +99,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   color: GardenColors.primary,
                   child: ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                    physics: const AlwaysScrollableScrollPhysics(),
                     itemCount: _favorites.length,
                     itemBuilder: (context, index) {
                       final c = _favorites[index];
@@ -122,8 +127,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     final verified = c['verified'] == true;
     final profilePicture = c['profilePicture'] as String?;
 
-    return GestureDetector(
+    return GardenPressable(
+      pressedScale: 0.98,
       onTap: () async {
+        HapticFeedback.lightImpact();
         await context.push('/caregiver/${c['id']}');
         if (mounted) _loadFavorites();
       },
@@ -157,8 +164,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   Positioned(
                     top: 10,
                     right: 10,
-                    child: GestureDetector(
-                      onTap: () => _removeFavorite(c['id']),
+                    child: GardenPressable(
+                      pressedScale: 0.85,
+                      onTap: () {
+                        HapticFeedback.mediumImpact();
+                        _removeFavorite(c['id']);
+                      },
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
@@ -256,8 +267,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      GestureDetector(
+                      GardenPressable(
+                        pressedScale: 0.94,
                         onTap: () async {
+                          HapticFeedback.lightImpact();
                           await context.push('/booking/${c['id']}');
                           if (mounted) _loadFavorites();
                         },
@@ -280,6 +293,50 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Skeleton que calca el layout de [_buildFavoriteCard] mientras carga.
+  Widget _buildFavoriteCardSkeleton(Color surface, Color borderColor) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+        boxShadow: GardenShadows.card,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            child: AspectRatio(
+              aspectRatio: 16 / 8,
+              child: GardenSkeleton(width: double.infinity, height: double.infinity, radius: 0),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const GardenSkeleton(width: 140, height: 14),
+                const SizedBox(height: GardenSpacing.sm),
+                const GardenSkeleton(width: 80, height: 11),
+                const SizedBox(height: GardenSpacing.md),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const GardenSkeleton(width: 90, height: 14),
+                    GardenSkeleton(width: 70, height: 26, radius: GardenRadius.full),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

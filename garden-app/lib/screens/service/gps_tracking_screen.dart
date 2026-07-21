@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
@@ -10,6 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../../services/gps_tracking_session.dart';
 import '../../theme/garden_theme.dart';
+import '../../widgets/garden_loading_indicator.dart';
 
 class GpsTrackingScreen extends StatefulWidget {
   final String bookingId;
@@ -294,6 +296,13 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
                   ? _buildBlocked(bg, textColor, subtextColor)
                   : _buildMap(isDark),
 
+              // ── Estado "conectando" — mientras no llega la primera
+              // posición del cuidador, un mapa vacío se siente roto. Esto
+              // le da al dueño una señal clara de que todo está bien y
+              // seguimos esperando la señal GPS, no que la app se colgó.
+              if (!_gpsBlocked && !_isCaregiver && _currentPos == null)
+                _buildConnectingOverlay(surface, textColor, subtextColor),
+
               // ── Header con gradiente ───────────────────────────────────
               Positioned(
                 top: 0, left: 0, right: 0,
@@ -336,8 +345,12 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
       ),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
+          GardenPressable(
+            pressedScale: 0.85,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              Navigator.pop(context);
+            },
             child: Container(
               width: 36, height: 36,
               decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
@@ -364,8 +377,12 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
           // Solo el cuidador puede ocultar/mostrar el trazo del trayecto en
           // el mapa — el dueño siempre lo ve, sin esta opción.
           if (_isCaregiver) ...[
-            GestureDetector(
-              onTap: () => setState(() => _showTrailForCaregiver = !_showTrailForCaregiver),
+            GardenPressable(
+              pressedScale: 0.85,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                setState(() => _showTrailForCaregiver = !_showTrailForCaregiver);
+              },
               child: Container(
                 width: 36, height: 36,
                 margin: const EdgeInsets.only(right: 8),
@@ -612,6 +629,49 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
         ]),
         child: child,
       );
+
+  /// Overlay reasegurante mientras esperamos la primera posición GPS del
+  /// cuidador — evita que el dueño vea un mapa vacío y piense que la
+  /// pantalla se congeló o que perdió al cuidador.
+  Widget _buildConnectingOverlay(Color surface, Color textColor, Color subtextColor) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Container(
+          color: (themeNotifier.isDark ? GardenColors.darkBackground : GardenColors.lightBackground)
+              .withValues(alpha: 0.72),
+          child: Center(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 40),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius: GardenRadius.xl_,
+                boxShadow: GardenShadows.elevated,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const GardenLoadingIndicator(color: GardenColors.secondary),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Conectando con ${widget.petName}…',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Estamos recibiendo la ubicación del cuidador en tiempo real. Esto puede tardar unos segundos.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildBlocked(Color bg, Color textColor, Color subtextColor) => Container(
         color: bg,

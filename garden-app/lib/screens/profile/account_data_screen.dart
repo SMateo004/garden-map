@@ -408,8 +408,12 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
             ),
           ),
           if (canCopy)
-            GestureDetector(
-              onTap: () => _copyToClipboard(value, label),
+            GardenPressable(
+              pressedScale: 0.8,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                _copyToClipboard(value, label);
+              },
               child: Padding(
                 padding: const EdgeInsets.only(left: 8),
                 child: Icon(Icons.copy_rounded, size: 16, color: GardenColors.primary),

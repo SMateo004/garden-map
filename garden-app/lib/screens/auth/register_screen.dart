@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/services.dart' show TextInputFormatter;
+import 'package:flutter/services.dart' show TextInputFormatter, HapticFeedback;
 import 'package:go_router/go_router.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
@@ -282,6 +282,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   void _handleRegister() async {
     if (_selectedRole == 'caregiver') {
+      HapticFeedback.lightImpact();
       final accepted = await _showTermsDialog();
       if (!accepted || !mounted) return;
       context.go('/caregiver/onboarding', extra: {'email': '', 'password': ''}); // ignore: use_build_context_synchronously
@@ -297,42 +298,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final street    = _addressStreetController.text.trim();
 
     if (firstName.isEmpty || lastName.isEmpty || email.isEmpty || password.isEmpty || phone.isEmpty || _dateOfBirth == null || bio.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Completa todos los campos')),
-      );
+      GardenSnackBar.warning(context, 'Completa todos los campos para continuar');
       return;
     }
     if (_addressLat == null || street.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Confirma tu dirección en el mapa')),
-      );
+      GardenSnackBar.warning(context, 'Confirma tu dirección en el mapa');
       return;
     }
     if (_addressZone == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selecciona tu zona / barrio')),
-      );
+      GardenSnackBar.warning(context, 'Selecciona tu zona / barrio');
       return;
     }
     if (!_isPasswordValid) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('La contraseña debe tener 8+ caracteres, 1 mayúscula, 1 número y 1 símbolo')),
-      );
+      GardenSnackBar.warning(context, 'La contraseña debe tener 8+ caracteres, 1 mayúscula, 1 número y 1 símbolo');
       return;
     }
     if (bio.length < 20) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('La descripción debe tener al menos 20 caracteres')),
-      );
+      GardenSnackBar.warning(context, 'La descripción debe tener al menos 20 caracteres');
       return;
     }
     if (!_acceptedTerms) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Debes aceptar los Términos de Servicio y la Política de Privacidad')),
-      );
+      GardenSnackBar.warning(context, 'Debes aceptar los Términos de Servicio y la Política de Privacidad');
       return;
     }
 
+    HapticFeedback.lightImpact();
     final accepted = await _showTermsDialog();
     if (!accepted) return;
 
@@ -377,12 +367,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: GardenColors.error,
-        ),
-      );
+      GardenSnackBar.error(context, e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -633,10 +618,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                 ),
                 filled: true, fillColor: surfaceEl,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                border: OutlineInputBorder(borderRadius: GardenRadius.md_, borderSide: BorderSide.none),
+                enabledBorder: OutlineInputBorder(borderRadius: GardenRadius.md_, borderSide: BorderSide(color: borderColor)),
+                focusedBorder: OutlineInputBorder(borderRadius: GardenRadius.md_, borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: GardenSpacing.lg, vertical: 14),
               ),
             ),
             const SizedBox(height: 10),
@@ -705,10 +690,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
               },
               child: Container(
                 height: 52,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: GardenSpacing.lg),
                 decoration: BoxDecoration(
                   color: surfaceEl,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: GardenRadius.md_,
                   border: Border.all(color: borderColor),
                 ),
                 child: Row(children: [
@@ -819,22 +804,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
             _SocialRegisterButtons(
               onResult: (result) {
                 if (!result.success) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(result.error ?? 'Error al registrarse'),
-                    backgroundColor: GardenColors.error,
-                  ));
+                  GardenSnackBar.error(context, result.error ?? 'No pudimos crear tu cuenta. Intenta de nuevo.');
                   return;
                 }
                 // Cuenta creada (o ya existente) y logueada directo — sin
                 // pedir teléfono/fecha de nacimiento aquí. Se completan
                 // después desde "Mi Perfil" (resaltado hasta completarse).
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(result.isNewAccount
+                GardenSnackBar.success(
+                  context,
+                  result.isNewAccount
                       ? '¡Bienvenido a GARDEN! Completa tu perfil en "Mi Perfil" antes de reservar.'
-                      : 'Ya tenías una cuenta — iniciando sesión.'),
-                  backgroundColor: GardenColors.primary,
+                      : 'Ya tenías una cuenta — iniciando sesión.',
                   duration: const Duration(seconds: 5),
-                ));
+                );
                 final nextRoute = kIsWeb ? '/marketplace' : '/service-selector';
                 if (result.profilePicture == null || result.profilePicture!.isEmpty) {
                   context.go('/upload-profile-photo', extra: {'nextRoute': nextRoute});
@@ -943,10 +925,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         hintStyle: TextStyle(color: subtextColor),
         prefixIcon: Icon(icon, color: subtextColor, size: 20),
         filled: true, fillColor: surfaceEl,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: OutlineInputBorder(borderRadius: GardenRadius.md_, borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: GardenRadius.md_, borderSide: BorderSide(color: borderColor)),
+        focusedBorder: OutlineInputBorder(borderRadius: GardenRadius.md_, borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: GardenSpacing.lg, vertical: 14),
       ),
     );
   }
@@ -1044,7 +1026,8 @@ class _RegisterSocialBtn extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       height: 48,
-      child: GestureDetector(
+      child: GardenPressable(
+        pressedScale: 0.97,
         onTap: loading ? null : onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
@@ -98,21 +99,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _handleSocialResult(SocialLoginResult result) {
     if (!result.success) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result.error ?? 'Error al iniciar sesión'),
-        backgroundColor: GardenColors.error,
-      ));
+      GardenSnackBar.error(context, result.error ?? 'No pudimos iniciar tu sesión. Intenta de nuevo.');
       return;
     }
     if (result.isNewAccount) {
       // Cuenta recién creada vía login social — falta completar teléfono,
       // fecha de nacimiento y dirección antes de poder reservar. "Mi Perfil"
       // ya resalta esos campos en naranja (_isClientDataIncomplete).
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('¡Bienvenido a GARDEN! Completa tu perfil en "Mi Perfil" antes de reservar.'),
-        backgroundColor: GardenColors.primary,
-        duration: Duration(seconds: 5),
-      ));
+      GardenSnackBar.success(
+        context,
+        '¡Bienvenido a GARDEN! Completa tu perfil en "Mi Perfil" antes de reservar.',
+        duration: const Duration(seconds: 5),
+      );
     }
     final needsPhoto = _needsProfilePhoto(result.role ?? 'CLIENT', result.profilePicture);
     _navigateAfterLogin(result.role ?? 'CLIENT', activeRole: result.activeRole, needsProfilePhoto: needsPhoto);
@@ -122,11 +120,10 @@ class _LoginScreenState extends State<LoginScreen> {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ingresa tu correo y contraseña')),
-      );
+      GardenSnackBar.warning(context, 'Ingresa tu correo y contraseña para continuar');
       return;
     }
+    HapticFeedback.lightImpact();
     setState(() => _isLoading = true);
     try {
       await _authService.login(email: email, password: password);
@@ -140,12 +137,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _navigateAfterLogin(role, activeRole: activeRole, needsProfilePhoto: needsPhoto);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: GardenColors.error,
-        ),
-      );
+      GardenSnackBar.error(context, e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -311,21 +303,11 @@ class _LoginScreenState extends State<LoginScreen> {
           // Campo email
           Text('Correo electrónico', style: GardenText.metadata.copyWith(color: textColor, fontSize: 14)),
           const SizedBox(height: 8),
-          TextField(
+          GardenInput(
+            hint: 'tu@email.com',
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
-            style: TextStyle(color: textColor),
-            decoration: InputDecoration(
-              hintText: 'tu@email.com',
-              hintStyle: TextStyle(color: subtextColor),
-              prefixIcon: Icon(Icons.email_outlined, color: subtextColor, size: 20),
-              filled: true,
-              fillColor: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            ),
+            prefixIcon: Icons.email_outlined,
           ),
           const SizedBox(height: 20),
 
@@ -347,10 +329,10 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               filled: true,
               fillColor: isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              border: OutlineInputBorder(borderRadius: GardenRadius.md_, borderSide: BorderSide.none),
+              enabledBorder: OutlineInputBorder(borderRadius: GardenRadius.md_, borderSide: BorderSide(color: borderColor)),
+              focusedBorder: OutlineInputBorder(borderRadius: GardenRadius.md_, borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: GardenSpacing.lg, vertical: 14),
             ),
           ),
           const SizedBox(height: 8),
@@ -358,19 +340,18 @@ class _LoginScreenState extends State<LoginScreen> {
           // ¿Olvidaste tu contraseña?
           Align(
             alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () => context.push('/forgot-password'),
-              style: TextButton.styleFrom(
+            child: GardenPressable(
+              pressedScale: 0.94,
+              onTap: () => context.push('/forgot-password'),
+              child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: Text(
-                '¿Olvidaste tu contraseña?',
-                style: TextStyle(
-                  color: GardenColors.primary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
+                child: Text(
+                  '¿Olvidaste tu contraseña?',
+                  style: TextStyle(
+                    color: GardenColors.primary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ),
@@ -418,7 +399,8 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text('¿No tienes cuenta? ', style: GardenText.metadata.copyWith(color: subtextColor, fontSize: 14)),
-                GestureDetector(
+                GardenPressable(
+                  pressedScale: 0.94,
                   onTap: () => context.go('/register'),
                   child: Text('Regístrate', style: GardenText.metadata.copyWith(color: GardenColors.primary, fontSize: 14, fontWeight: FontWeight.w700)),
                 ),
@@ -541,7 +523,8 @@ class _SocialBtn extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       height: 48,
-      child: GestureDetector(
+      child: GardenPressable(
+        pressedScale: 0.97,
         onTap: loading ? null : onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),

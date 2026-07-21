@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -117,7 +118,10 @@ class _LandingState extends State<LandingScreen> {
     if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
-  void _goToMarketplace() => context.go('/marketplace?service=${_svc.toLowerCase()}');
+  void _goToMarketplace() {
+    HapticFeedback.lightImpact();
+    context.go('/marketplace?service=${_svc.toLowerCase()}');
+  }
 
   void _scrollTo(GlobalKey key) {
     final ctx = key.currentContext;
@@ -125,6 +129,7 @@ class _LandingState extends State<LandingScreen> {
   }
 
   void _showMobileSearchDialog() {
+    HapticFeedback.selectionClick();
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -174,7 +179,7 @@ class _LandingState extends State<LandingScreen> {
 
   Widget _storeBtn(BuildContext ctx, IconData icon, String label, String url) =>
     GestureDetector(
-      onTap: () { Navigator.pop(ctx); _openUrl(url); },
+      onTap: () { HapticFeedback.lightImpact(); Navigator.pop(ctx); _openUrl(url); },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(color: _primary, borderRadius: BorderRadius.circular(18)),
@@ -658,10 +663,17 @@ class _SearchBarState extends State<_SearchBar> {
           label: 'SERVICIO',
           value: _services[widget.selectedSvc] ?? 'Elegí un servicio',
           isOpen: _svcOpen,
-          onTap: () => setState(() => _svcOpen = !_svcOpen),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            setState(() => _svcOpen = !_svcOpen);
+          },
           dropdown: _svcOpen ? _SvcDropdown(
             selected: widget.selectedSvc,
-            onSelect: (v) { widget.onSvcChange(v); setState(() => _svcOpen = false); },
+            onSelect: (v) {
+              HapticFeedback.selectionClick();
+              widget.onSvcChange(v);
+              setState(() => _svcOpen = false);
+            },
           ) : null,
         )),
         _divider(),
@@ -868,7 +880,10 @@ class _ServiceCardState extends State<_ServiceCard> {
     onEnter: (_) => setState(() => _hov = true),
     onExit:  (_) => setState(() => _hov = false),
     child: GestureDetector(
-      onTap: widget.onTap,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        widget.onTap();
+      },
       child: AnimatedContainer(
         duration: 300.ms,
         padding: const EdgeInsets.all(28),
@@ -1183,7 +1198,10 @@ class _StoreButtonState extends State<_StoreButton> {
     onEnter: (_) => setState(() => _hov = true),
     onExit:  (_) => setState(() => _hov = false),
     child: GestureDetector(
-      onTap: widget.onTap,
+      onTap: () {
+        HapticFeedback.lightImpact();
+        widget.onTap();
+      },
       child: AnimatedContainer(
         duration: 200.ms,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),

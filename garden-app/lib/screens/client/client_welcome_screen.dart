@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
@@ -63,6 +64,7 @@ class _ClientWelcomeScreenState extends State<ClientWelcomeScreen>
   }
 
   void _nextPage() {
+    HapticFeedback.selectionClick();
     if (_currentPage < 2) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 380),

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
@@ -44,6 +45,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
   }
 
   Future<void> _unblock(String userId) async {
+    HapticFeedback.selectionClick();
     setState(() => _unblocking.add(userId));
     try {
       final res = await http.delete(
@@ -91,13 +93,20 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                       child: Padding(
                         padding: const EdgeInsets.all(40),
                         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          Icon(Icons.block_rounded, size: 64, color: subtextColor.withValues(alpha: 0.4)),
-                          const SizedBox(height: 16),
+                          Container(
+                            width: 88, height: 88,
+                            decoration: BoxDecoration(
+                              color: subtextColor.withValues(alpha: 0.08),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.block_rounded, size: 40, color: subtextColor.withValues(alpha: 0.6)),
+                          ),
+                          const SizedBox(height: 18),
                           Text('No has bloqueado a nadie',
-                              style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w600)),
+                              style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
                           const SizedBox(height: 8),
                           Text('Los usuarios que bloquees en el chat aparecerán aquí.',
-                              style: TextStyle(color: subtextColor, fontSize: 13), textAlign: TextAlign.center),
+                              style: TextStyle(color: subtextColor, fontSize: 13, height: 1.4), textAlign: TextAlign.center),
                         ]),
                       ),
                     )

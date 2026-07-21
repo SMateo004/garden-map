@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -276,7 +277,11 @@ class _WebShellScreenState extends State<WebShellScreen> {
                                   label: tab.label,
                                   isActive: isActive,
                                   isDark: isDark,
-                                  onTap: () => setState(() => _selectedTab = tabIndex),
+                                  onTap: () {
+                                    if (isActive) return;
+                                    HapticFeedback.selectionClick();
+                                    setState(() => _selectedTab = tabIndex);
+                                  },
                                 ),
                               ),
                             );
@@ -404,7 +409,9 @@ class _WebNavButton extends StatelessWidget {
     return Tooltip(
       message: label,
       preferBelow: true,
-      child: GestureDetector(
+      child: GardenPressable(
+        pressedScale: 0.88,
+        borderRadius: BorderRadius.circular(10),
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),

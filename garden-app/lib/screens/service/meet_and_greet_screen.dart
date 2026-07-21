@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
@@ -113,6 +114,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
       );
       final data = jsonDecode(res.body);
       if (data['success'] == true) {
+        HapticFeedback.mediumImpact();
         if (mounted) setState(() => _mg = data['data'] as Map<String, dynamic>);
         if (mounted) Navigator.pop(context);
         _snack('Propuesta enviada');
@@ -134,6 +136,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
       );
       final data = jsonDecode(res.body);
       if (data['success'] == true) {
+        HapticFeedback.mediumImpact();
         if (mounted) setState(() => _mg = data['data'] as Map<String, dynamic>);
         _snack('¡Meet & Greet confirmado!');
       } else {
@@ -148,16 +151,27 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
   Future<void> _cancel() async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => GardenGlassDialog(
         title: const Text('Cancelar Meet & Greet'),
         content: const Text('¿Seguro que quieres cancelar el Meet & Greet?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sí, cancelar')),
+          GardenButton(
+            label: 'No',
+            outline: true,
+            height: 44,
+            onPressed: () => Navigator.pop(ctx, false),
+          ),
+          GardenButton(
+            label: 'Sí, cancelar',
+            color: GardenColors.error,
+            height: 44,
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
         ],
       ),
     );
     if (confirm != true) return;
+    HapticFeedback.mediumImpact();
     if (mounted) setState(() => _submitting = true);
     try {
       final res = await http.post(
@@ -785,7 +799,10 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(
+                  color: (Theme.of(context).brightness == Brightness.dark ? GardenColors.darkBorder : GardenColors.lightBorder),
+                  borderRadius: BorderRadius.circular(2),
+                ))),
                 const SizedBox(height: 16),
                 const Text('Completar Meet & Greet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 16),
@@ -809,6 +826,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
                         height: 48,
                         color: GardenColors.success,
                         onPressed: () {
+                          HapticFeedback.mediumImpact();
                           Navigator.pop(ctx);
                           setState(() => _approved = true);
                           _complete();
@@ -823,6 +841,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
                         color: GardenColors.error,
                         outline: true,
                         onPressed: () {
+                          HapticFeedback.selectionClick();
                           Navigator.pop(ctx);
                           setState(() => _approved = false);
                           _complete();
@@ -904,7 +923,7 @@ class _ProposalSheetState extends State<_ProposalSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(2)))),
+          Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: borderColor, borderRadius: BorderRadius.circular(2)))),
           const SizedBox(height: 16),
           Text('Proponer Meet & Greet', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
           const SizedBox(height: 20),
@@ -931,6 +950,7 @@ class _ProposalSheetState extends State<_ProposalSheet> {
                 lastDate: DateTime.now().add(const Duration(days: 60)),
               );
               if (picked != null) {
+                HapticFeedback.selectionClick();
                 setState(() => _date = picked);
                 widget.onDateChanged(picked);
               }
@@ -963,6 +983,7 @@ class _ProposalSheetState extends State<_ProposalSheet> {
                   initialTime: const TimeOfDay(hour: 10, minute: 0),
                 );
                 if (picked != null) {
+                  HapticFeedback.selectionClick();
                   setState(() => _time = picked);
                   widget.onTimeChanged(picked);
                 }
@@ -1055,6 +1076,7 @@ class _ProposalSheetState extends State<_ProposalSheet> {
     final selected = _modalidad == value;
     return GestureDetector(
       onTap: () {
+        HapticFeedback.selectionClick();
         setState(() => _modalidad = value);
         widget.onModalidadChanged(value);
       },

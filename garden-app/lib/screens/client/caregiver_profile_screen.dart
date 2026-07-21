@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import '../../widgets/garden_empty_state.dart';
 import 'package:http/http.dart' as http;
@@ -113,6 +114,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   }
 
   Future<void> _toggleFavorite() async {
+    HapticFeedback.mediumImpact();
     final token = _authToken;
     if (token.isEmpty) {
       if (!mounted) return;
@@ -386,7 +388,8 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Row(
                 children: [
-                  GestureDetector(
+                  GardenPressable(
+                    pressedScale: 0.96,
                     onTap: () => context.pop(),
                     child: Row(children: [
                       Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: textColor),
@@ -395,7 +398,8 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                     ]),
                   ),
                   const Spacer(),
-                  GestureDetector(
+                  GardenPressable(
+                    pressedScale: 0.92,
                     onTap: _toggleFavorite,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -859,11 +863,11 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, bg.withValues(alpha: 0.95)]),
                       ))),
                     Positioned(top: 48, left: 16,
-                      child: GestureDetector(onTap: () => context.pop(),
+                      child: GardenPressable(pressedScale: 0.88, onTap: () => context.pop(),
                         child: Container(width: 40, height: 40, decoration: BoxDecoration(color: surface.withValues(alpha: 0.9), shape: BoxShape.circle, boxShadow: GardenShadows.card),
                           child: Icon(Icons.arrow_back, color: textColor, size: 20)))),
                     Positioned(top: 48, right: 16,
-                      child: GestureDetector(onTap: _toggleFavorite,
+                      child: GardenPressable(pressedScale: 0.88, onTap: _toggleFavorite,
                         child: Container(width: 40, height: 40, decoration: BoxDecoration(color: surface.withValues(alpha: 0.9), shape: BoxShape.circle, boxShadow: GardenShadows.card),
                           child: _isTogglingFavorite
                               ? const Padding(padding: EdgeInsets.all(12), child: GardenLoadingIndicator(color: GardenColors.primary))
@@ -873,7 +877,10 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         child: Row(children: photos.asMap().entries.map((e) {
                           final sel = e.key == _selectedPhotoIndex;
                           return GestureDetector(
-                            onTap: () => setState(() => _selectedPhotoIndex = e.key),
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              setState(() => _selectedPhotoIndex = e.key);
+                            },
                             child: Container(margin: const EdgeInsets.only(left: 6), width: sel ? 32 : 24, height: sel ? 32 : 24,
                               decoration: BoxDecoration(borderRadius: BorderRadius.circular(6), border: Border.all(color: sel ? GardenColors.primary : Colors.white.withValues(alpha: 0.5), width: sel ? 2 : 1)),
                               child: ClipRRect(borderRadius: BorderRadius.circular(4), child: Image.network(fixImageUrl(e.value), fit: BoxFit.cover))),
@@ -1315,7 +1322,10 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
           if (reviews.length > 5) ...[
             const SizedBox(height: 8),
             GestureDetector(
-              onTap: () => setState(() => _showAllReviews = !_showAllReviews),
+              onTap: () {
+                HapticFeedback.selectionClick();
+                setState(() => _showAllReviews = !_showAllReviews);
+              },
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1650,8 +1660,12 @@ class _ServiceOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return GestureDetector(
-      onTap: onTap,
+    return GardenPressable(
+      pressedScale: 0.97,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(

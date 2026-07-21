@@ -94,15 +94,22 @@ class _MyRatingsScreenState extends State<MyRatingsScreen> {
       child: Padding(
         padding: const EdgeInsets.all(40),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.star_outline_rounded, size: 72,
-            color: GardenColors.primary.withValues(alpha: 0.4)),
-          const SizedBox(height: 16),
+          Container(
+            width: 88, height: 88,
+            decoration: BoxDecoration(
+              color: GardenColors.primary.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.star_outline_rounded, size: 40,
+              color: GardenColors.primary.withValues(alpha: 0.6)),
+          ),
+          const SizedBox(height: 18),
           Text('Aún no has calificado ningún servicio',
-            style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w600),
+            style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700),
             textAlign: TextAlign.center),
           const SizedBox(height: 8),
-          Text('Después de finalizar un servicio podrás dejar tu reseña',
-            style: TextStyle(color: subtextColor, fontSize: 13),
+          Text('Cuando termines un servicio, tu reseña aparecerá aquí.',
+            style: TextStyle(color: subtextColor, fontSize: 13, height: 1.4),
             textAlign: TextAlign.center),
         ]),
       ),
@@ -157,15 +164,10 @@ class _ReviewCard extends StatelessWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           // Header: avatar + name + date
           Row(children: [
-            CircleAvatar(
-              radius: 22,
-              backgroundColor: GardenColors.primary.withValues(alpha: 0.15),
-              backgroundImage: photoUrl != null && photoUrl.isNotEmpty
-                  ? NetworkImage(fixImageUrl(photoUrl)) : null,
-              child: (photoUrl == null || photoUrl.isEmpty)
-                  ? Text(caregiverName.isNotEmpty ? caregiverName[0].toUpperCase() : '?',
-                      style: const TextStyle(color: GardenColors.primary, fontWeight: FontWeight.bold))
-                  : null,
+            GardenAvatar(
+              imageUrl: photoUrl,
+              size: 44,
+              initials: caregiverName.isNotEmpty ? caregiverName : '?',
             ),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

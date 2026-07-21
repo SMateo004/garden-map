@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -26,6 +27,7 @@ class _UploadProfilePhotoScreenState extends State<UploadProfilePhotoScreen> {
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
   Future<void> _pickAndUpload() async {
+    HapticFeedback.lightImpact();
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (picked == null) return;
@@ -97,7 +99,24 @@ class _UploadProfilePhotoScreenState extends State<UploadProfilePhotoScreen> {
                   ),
                   const SizedBox(height: 28),
                   if (_error != null) ...[
-                    Text(_error!, style: const TextStyle(color: GardenColors.error, fontSize: 13), textAlign: TextAlign.center),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: GardenSpacing.lg, vertical: GardenSpacing.md),
+                      decoration: BoxDecoration(
+                        color: GardenColors.error.withValues(alpha: 0.08),
+                        borderRadius: GardenRadius.md_,
+                        border: Border.all(color: GardenColors.error.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline_rounded, color: GardenColors.error, size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(_error!,
+                                style: const TextStyle(color: GardenColors.error, fontSize: 13, fontWeight: FontWeight.w600)),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 12),
                   ],
                   SizedBox(

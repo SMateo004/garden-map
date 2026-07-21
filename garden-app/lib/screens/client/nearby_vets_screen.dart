@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
-import '../../widgets/garden_loading_indicator.dart';
+import '../../widgets/garden_empty_state.dart';
 
 /// Veterinarias cercanas a la dirección guardada del usuario (Mi Perfil).
 /// Pensada para casos de emergencia: mismo dato que usa el cuidador durante
@@ -58,6 +59,38 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
     if (await canLaunchUrl(uri)) await launchUrl(uri);
   }
 
+  /// Skeleton que calca el layout de la tarjeta de veterinaria mientras carga.
+  Widget _buildVetCardSkeleton(Color surface, Color borderColor) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        children: [
+          const GardenSkeleton(width: 48, height: 48, radius: 12),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const GardenSkeleton(width: 150, height: 14),
+                const SizedBox(height: 6),
+                const GardenSkeleton(width: 110, height: 11),
+                const SizedBox(height: 6),
+                const GardenSkeleton(width: 90, height: 11),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          const GardenSkeleton(width: 40, height: 40, radius: 20),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = themeNotifier.isDark;
@@ -79,37 +112,50 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
         ),
       ),
       body: _isLoading
-          ? const Center(child: GardenLoadingIndicator(color: GardenColors.primary))
+          ? ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: 4,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (_, __) => _buildVetCardSkeleton(surface, borderColor),
+            )
           : RefreshIndicator(
               color: GardenColors.primary,
               onRefresh: _load,
               child: _errorMessage != null
                   ? ListView(
-                      padding: const EdgeInsets.all(20),
+                      physics: const AlwaysScrollableScrollPhysics(),
                       children: [
-                        const SizedBox(height: 60),
-                        Icon(Icons.location_off_outlined, size: 56, color: subtextColor.withValues(alpha: 0.5)),
-                        const SizedBox(height: 16),
-                        Center(
-                          child: Text(_errorMessage!, textAlign: TextAlign.center, style: TextStyle(color: subtextColor, fontSize: 14)),
+                        SizedBox(
+                          height: 480,
+                          child: GardenEmptyState(
+                            type: GardenEmptyType.generic,
+                            title: 'No pudimos encontrar veterinarias',
+                            subtitle: '$_errorMessage — revisá tu conexión y volvé a intentar.',
+                            ctaLabel: 'Reintentar',
+                            onCta: _load,
+                          ),
                         ),
                       ],
                     )
                   : _vets.isEmpty
                       ? ListView(
-                          padding: const EdgeInsets.all(20),
+                          physics: const AlwaysScrollableScrollPhysics(),
                           children: [
-                            const SizedBox(height: 60),
-                            Icon(Icons.local_hospital_outlined, size: 56, color: subtextColor.withValues(alpha: 0.5)),
-                            const SizedBox(height: 16),
-                            Center(
-                              child: Text('Todavía no hay veterinarias cargadas en tu zona',
-                                  textAlign: TextAlign.center, style: TextStyle(color: subtextColor, fontSize: 14)),
+                            SizedBox(
+                              height: 480,
+                              child: GardenEmptyState(
+                                type: GardenEmptyType.generic,
+                                title: 'Sin veterinarias cercanas',
+                                subtitle: 'Todavía no hay veterinarias cargadas en tu zona. Probá de nuevo más tarde.',
+                                ctaLabel: 'Actualizar',
+                                onCta: _load,
+                              ),
                             ),
                           ],
                         )
                       : ListView.separated(
                           padding: const EdgeInsets.all(16),
+                          physics: const AlwaysScrollableScrollPhysics(),
                           itemCount: _vets.length,
                           separatorBuilder: (_, __) => const SizedBox(height: 10),
                           itemBuilder: (_, i) {
@@ -148,9 +194,20 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
                                       ],
                                     ),
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.phone_rounded, color: GardenColors.success),
-                                    onPressed: () => _call(vet['phone'] as String),
+                                  GardenPressable(
+                                    pressedScale: 0.85,
+                                    onTap: () {
+                                      HapticFeedback.mediumImpact();
+                                      _call(vet['phone'] as String);
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: GardenColors.success.withValues(alpha: 0.12),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.phone_rounded, color: GardenColors.success, size: 20),
+                                    ),
                                   ),
                                 ],
                               ),

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
@@ -329,8 +330,13 @@ class _MyDataScreenState extends State<MyDataScreen> {
             Center(
               child: Stack(
                 children: [
-                  GestureDetector(
-                    onTap: _uploadingPhoto ? null : _pickAndUploadPhoto,
+                  GardenPressable(
+                    pressedScale: 0.94,
+                    borderRadius: BorderRadius.circular(kIsWeb ? 44 : 50),
+                    onTap: _uploadingPhoto ? null : () {
+                      HapticFeedback.selectionClick();
+                      _pickAndUploadPhoto();
+                    },
                     child: Container(
                       width: kIsWeb ? 88 : 100, height: kIsWeb ? 88 : 100,
                       decoration: BoxDecoration(
@@ -357,8 +363,13 @@ class _MyDataScreenState extends State<MyDataScreen> {
                   ),
                   Positioned(
                     bottom: 0, right: 0,
-                    child: GestureDetector(
-                      onTap: _uploadingPhoto ? null : _pickAndUploadPhoto,
+                    child: GardenPressable(
+                      pressedScale: 0.85,
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: _uploadingPhoto ? null : () {
+                        HapticFeedback.selectionClick();
+                        _pickAndUploadPhoto();
+                      },
                       child: Container(
                         width: 28, height: 28,
                         decoration: const BoxDecoration(color: GardenColors.primary, shape: BoxShape.circle),

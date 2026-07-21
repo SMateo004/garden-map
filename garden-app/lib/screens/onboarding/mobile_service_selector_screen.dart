@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -196,6 +197,7 @@ class _MobileServiceSelectorScreenState
   }
 
   Future<void> _select(String service) async {
+    HapticFeedback.selectionClick();
     setState(() => _tapping = service);
     await Future.delayed(const Duration(milliseconds: 180));
     if (!mounted) return;

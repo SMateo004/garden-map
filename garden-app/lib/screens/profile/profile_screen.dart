@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -343,6 +344,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Future<void> _deleteAccount() async {
+    HapticFeedback.mediumImpact();
     final isDark = themeNotifier.isDark;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
@@ -1436,7 +1438,10 @@ class _ProfileScreenState extends State<ProfileScreen>
         color: surface,
         borderRadius: BorderRadius.circular(GardenRadius.md),
         child: InkWell(
-          onTap: _isSwitchingRole ? null : () => _onSwitchRoleTap(isSwitchedToClient),
+          onTap: _isSwitchingRole ? null : () {
+            HapticFeedback.selectionClick();
+            _onSwitchRoleTap(isSwitchedToClient);
+          },
           borderRadius: BorderRadius.circular(GardenRadius.md),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
@@ -1837,7 +1842,11 @@ class _ThemeOptionBtn extends StatelessWidget {
 
     return Expanded(
       child: GestureDetector(
-        onTap: onTap,
+        onTap: () {
+          if (selected) return;
+          HapticFeedback.selectionClick();
+          onTap();
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 7),

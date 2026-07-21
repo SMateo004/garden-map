@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -351,7 +352,9 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                       const SizedBox(height: 16),
 
                       // Botón código de regalo
-                      GestureDetector(
+                      GardenPressable(
+                        pressedScale: 0.97,
+                        borderRadius: BorderRadius.circular(16),
                         onTap: () => _showRedeemDialog(),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -427,11 +430,19 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                                         children: [
                                           Text(_walletData!['bankInfo']!['bankName'] as String,
                                               style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13)),
-                                          Text(
-                                            _showPayoutDetails
-                                                ? '${_walletData!['bankInfo']!['bankHolder']} · ${_walletData!['bankInfo']!['bankAccount']}'
-                                                : _maskAccount(_walletData!['bankInfo']!['bankAccount'] as String? ?? ''),
-                                            style: TextStyle(color: subtextColor, fontSize: 13),
+                                          AnimatedSwitcher(
+                                            duration: const Duration(milliseconds: 220),
+                                            transitionBuilder: (child, anim) => FadeTransition(
+                                              opacity: anim,
+                                              child: SizeTransition(sizeFactor: anim, axis: Axis.horizontal, child: child),
+                                            ),
+                                            child: Text(
+                                              _showPayoutDetails
+                                                  ? '${_walletData!['bankInfo']!['bankHolder']} · ${_walletData!['bankInfo']!['bankAccount']}'
+                                                  : _maskAccount(_walletData!['bankInfo']!['bankAccount'] as String? ?? ''),
+                                              key: ValueKey(_showPayoutDetails),
+                                              style: TextStyle(color: subtextColor, fontSize: 13),
+                                            ),
                                           ),
                                         ],
                                       )
@@ -442,12 +453,20 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                                 const SizedBox(width: 4),
                                 IconButton(
                                   visualDensity: VisualDensity.compact,
-                                  icon: Icon(
-                                    _showPayoutDetails ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                                    color: subtextColor, size: 18,
+                                  icon: AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 200),
+                                    transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                                    child: Icon(
+                                      _showPayoutDetails ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                                      key: ValueKey(_showPayoutDetails),
+                                      color: subtextColor, size: 18,
+                                    ),
                                   ),
                                   tooltip: _showPayoutDetails ? 'Ocultar datos de cobro' : 'Ver datos de cobro',
-                                  onPressed: () => setState(() => _showPayoutDetails = !_showPayoutDetails),
+                                  onPressed: () {
+                                    HapticFeedback.selectionClick();
+                                    setState(() => _showPayoutDetails = !_showPayoutDetails);
+                                  },
                                 ),
                               ],
                               const SizedBox(width: 4),
@@ -475,10 +494,27 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                         Center(
                           child: Column(
                             children: [
-                              const SizedBox(height: 40),
-                              Icon(Icons.receipt_long_outlined, size: 48, color: subtextColor.withValues(alpha: 0.5)),
-                              const SizedBox(height: 12),
-                              Text('Sin transacciones aún', style: TextStyle(color: subtextColor, fontSize: 14)),
+                              const SizedBox(height: 32),
+                              Container(
+                                width: 72, height: 72,
+                                decoration: BoxDecoration(
+                                  color: GardenColors.primary.withValues(alpha: 0.08),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(Icons.receipt_long_outlined, size: 32, color: GardenColors.primary.withValues(alpha: 0.6)),
+                              ),
+                              const SizedBox(height: 16),
+                              Text('Todavía no hay movimientos',
+                                  style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+                              const SizedBox(height: 6),
+                              Text(
+                                _role == 'CAREGIVER'
+                                    ? 'Tus ganancias y retiros aparecerán aquí apenas completes tu primer servicio.'
+                                    : 'Tus pagos, reembolsos y retiros aparecerán aquí apenas hagas tu primera reserva.',
+                                style: TextStyle(color: subtextColor, fontSize: 13, height: 1.4),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 32),
                             ],
                           ),
                         )
@@ -571,8 +607,13 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
     Color textColor, Color subtextColor, Color surface, Color borderColor,
   ) {
     final isSelected = _withdrawalMethod == method;
-    return GestureDetector(
-      onTap: _switchingMethod ? null : () => _setWithdrawalMethod(method),
+    return GardenPressable(
+      pressedScale: 0.96,
+      borderRadius: BorderRadius.circular(14),
+      onTap: _switchingMethod || isSelected ? null : () {
+        HapticFeedback.selectionClick();
+        _setWithdrawalMethod(method);
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
         decoration: BoxDecoration(
@@ -615,8 +656,13 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
-            onTap: qrInfo != null ? () => setState(() => _showPayoutDetails = !_showPayoutDetails) : null,
+          GardenPressable(
+            pressedScale: 0.92,
+            borderRadius: BorderRadius.circular(12),
+            onTap: qrInfo != null ? () {
+              HapticFeedback.selectionClick();
+              setState(() => _showPayoutDetails = !_showPayoutDetails);
+            } : null,
             child: Container(
               width: 64, height: 64,
               decoration: BoxDecoration(
@@ -625,16 +671,21 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                 border: Border.all(color: borderColor),
               ),
               child: qrInfo != null
-                  ? (_showPayoutDetails
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(11),
-                          child: Image.network(qrInfo['imageUrl'] as String, fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: GardenColors.error)),
-                        )
-                      // El QR es un dato de cobro escaneable — se oculta por
-                      // defecto igual que el número de cuenta, y se revela
-                      // con el mismo toque que el ojo de "Datos bancarios".
-                      : Icon(Icons.visibility_off_rounded, color: subtextColor.withValues(alpha: 0.5), size: 24))
+                  ? AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: ScaleTransition(scale: anim, child: child)),
+                      child: _showPayoutDetails
+                          ? ClipRRect(
+                              key: const ValueKey('qr-visible'),
+                              borderRadius: BorderRadius.circular(11),
+                              child: Image.network(qrInfo['imageUrl'] as String, fit: BoxFit.contain,
+                                  errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: GardenColors.error)),
+                            )
+                          // El QR es un dato de cobro escaneable — se oculta por
+                          // defecto igual que el número de cuenta, y se revela
+                          // con el mismo toque que el ojo de "Datos bancarios".
+                          : Icon(Icons.visibility_off_rounded, key: const ValueKey('qr-hidden'), color: subtextColor.withValues(alpha: 0.5), size: 24),
+                    )
                   : Icon(Icons.qr_code_2_rounded, color: subtextColor.withValues(alpha: 0.4), size: 28),
             ),
           ),
@@ -654,12 +705,20 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                     if (qrInfo != null)
                       IconButton(
                         visualDensity: VisualDensity.compact,
-                        icon: Icon(
-                          _showPayoutDetails ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                          color: subtextColor, size: 18,
+                        icon: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                          child: Icon(
+                            _showPayoutDetails ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                            key: ValueKey(_showPayoutDetails),
+                            color: subtextColor, size: 18,
+                          ),
                         ),
                         tooltip: _showPayoutDetails ? 'Ocultar QR' : 'Ver QR',
-                        onPressed: () => setState(() => _showPayoutDetails = !_showPayoutDetails),
+                        onPressed: () {
+                          HapticFeedback.selectionClick();
+                          setState(() => _showPayoutDetails = !_showPayoutDetails);
+                        },
                       ),
                   ],
                 ),
@@ -803,7 +862,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
           const SizedBox(height: 22),
           Text(
             code,
-            style: const TextStyle(color: _donorGold, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 2.5, fontFamily: 'monospace'),
+            style: const TextStyle(color: _donorGold, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 2.5),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),

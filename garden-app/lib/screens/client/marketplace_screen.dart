@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -476,6 +478,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   void _selectZone(String? zone) {
+    HapticFeedback.selectionClick();
     setState(() => _selectedZone = zone);
     _refreshSheet?.call();
     _loadCaregivers(reset: true);
@@ -807,7 +810,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   const SizedBox(width: 8),
                   // Botón filtros
                   GestureDetector(
-                    onTap: () => _showMobileFilterSheet(theme, isDark, surface, border),
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      _showMobileFilterSheet(theme, isDark, surface, border);
+                    },
                     child: Container(
                       height: 40, width: 40,
                       decoration: BoxDecoration(
@@ -881,7 +887,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       // FAB: mapa
       floatingActionButton: FloatingActionButton.small(
         backgroundColor: GardenColors.primary,
-        onPressed: () => _showMobileMapSheet(isDark),
+        onPressed: () {
+          HapticFeedback.selectionClick();
+          _showMobileMapSheet(isDark);
+        },
         child: const Icon(Icons.map_outlined, color: Colors.white, size: 20),
       ),
     );
@@ -891,6 +900,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final isSelected = _selectedService == value;
     return GestureDetector(
       onTap: () {
+        HapticFeedback.selectionClick();
         setState(() => _selectedService = value);
         _loadCaregivers(reset: true);
       },
@@ -1029,6 +1039,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     return Expanded(
       child: GestureDetector(
         onTap: () {
+          HapticFeedback.selectionClick();
           setState(() => _selectedPetType = value);
           _loadCaregivers(reset: true);
         },
@@ -1260,7 +1271,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             label: _showFilters ? 'Ocultar filtros' : 'Filtros',
             badge: _activeFilterCount,
             active: _showFilters,
-            onTap: () => setState(() => _showFilters = !_showFilters),
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _showFilters = !_showFilters);
+            },
             textColor: textColor,
           ),
           const SizedBox(width: 12),
@@ -1313,6 +1327,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             badge: 0,
             active: _showMap,
             onTap: () {
+              HapticFeedback.selectionClick();
               setState(() => _showMap = !_showMap);
               if (!_showMap) return;
               // Animate to selected zone if any
@@ -1730,6 +1745,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final selected = _selectedService == value;
     return GestureDetector(
       onTap: () {
+        HapticFeedback.selectionClick();
         setState(() => _selectedService = value);
         _refreshSheet?.call();
         _loadCaregivers(reset: true);
@@ -1757,6 +1773,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final selected = _selectedPetType == val;
     return GestureDetector(
         onTap: () {
+          HapticFeedback.selectionClick();
           setState(() => _selectedPetType = val);
           _refreshSheet?.call();
           _loadCaregivers(reset: true);
@@ -1784,6 +1801,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final selected = _minExperienceYears == val;
     return GestureDetector(
       onTap: () {
+        HapticFeedback.selectionClick();
         setState(() => _minExperienceYears = selected ? null : val);
         _refreshSheet?.call();
         _loadCaregivers(reset: true);
@@ -1796,6 +1814,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final selected = _selectedSizes.contains(val);
     return GestureDetector(
       onTap: () {
+        HapticFeedback.selectionClick();
         setState(() => selected ? _selectedSizes.remove(val) : _selectedSizes.add(val));
         _refreshSheet?.call();
         _loadCaregivers(reset: true);
@@ -1808,6 +1827,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final selected = _minRating == val;
     return GestureDetector(
       onTap: () {
+        HapticFeedback.selectionClick();
         setState(() => _minRating = selected ? 0 : val);
         _refreshSheet?.call();
       },
@@ -1819,6 +1839,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final selected = _filterMinSimultaneous == val;
     return GestureDetector(
       onTap: () {
+        HapticFeedback.selectionClick();
         setState(() => _filterMinSimultaneous = selected ? null : val);
         _refreshSheet?.call();
       },
@@ -1852,7 +1873,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           Expanded(child: Text(label, style: TextStyle(color: textColor, fontSize: 12))),
           Transform.scale(
             scale: 0.8,
-            child: Switch(value: value, onChanged: onChanged, activeColor: GardenColors.primary),
+            child: Switch(
+              value: value,
+              onChanged: (v) {
+                HapticFeedback.selectionClick();
+                onChanged(v);
+              },
+              activeColor: GardenColors.primary,
+            ),
           ),
         ]),
       );
@@ -1862,19 +1890,23 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   Widget _buildCaregiverList(ThemeData theme, bool isDark) {
     final displayed = _displayCaregivers;
 
-    if (_isLoading && _caregivers.isEmpty) return const GardenLogoLoader();
+    // Skeleton cards que calcan el layout final de la tarjeta de cuidador —
+    // se percibe mucho más premium que un spinner genérico en una pantalla
+    // tan cargada de listas como el marketplace.
+    if (_isLoading && _caregivers.isEmpty) {
+      return ListView.builder(
+        padding: const EdgeInsets.all(GardenSpacing.lg),
+        itemCount: 5,
+        itemBuilder: (_, __) => _buildCaregiverCardSkeleton(isDark),
+      );
+    }
     if (_hasError && _caregivers.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline_rounded, color: GardenColors.error, size: 50),
-            const SizedBox(height: 16),
-            Text('No pudimos conectar', style: GardenText.headingMedium),
-            const SizedBox(height: 20),
-            GardenButton(label: 'Reintentar', onPressed: () => _loadCaregivers(reset: true), width: 140),
-          ],
-        ),
+      return GardenEmptyState(
+        type: GardenEmptyType.generic,
+        title: 'No pudimos conectar',
+        subtitle: 'Revisá tu conexión a internet e intentá de nuevo — tus filtros quedaron guardados.',
+        ctaLabel: 'Reintentar',
+        onCta: () => _loadCaregivers(reset: true),
       );
     }
     if (displayed.isEmpty && !_isLoading) {
@@ -1882,8 +1914,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         type: GardenEmptyType.caregivers,
         title: 'Sin cuidadores disponibles',
         subtitle: _activeFilterCount > 0
-            ? 'Ningún cuidador coincide con los filtros aplicados.'
-            : 'No hay cuidadores disponibles en este momento.',
+            ? 'Ningún cuidador coincide con los filtros aplicados. Probá ampliar la zona o quitar algún filtro.'
+            : 'No hay cuidadores disponibles en este momento. Volvé a intentar en un rato.',
         ctaLabel: _activeFilterCount > 0 ? 'Limpiar filtros' : null,
         onCta: _activeFilterCount > 0 ? _clearAllFilters : null,
       );
@@ -1903,21 +1935,79 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       }
     }
 
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.all(16),
-      itemCount: items.length + (_hasMore ? 1 : 0),
-      itemBuilder: (context, i) {
-        if (i == items.length) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: GardenLogoLoader(size: 120),
-          );
-        }
-        final item = items[i];
-        if (item['type'] == 'banner') return _buildBannerCard(item['data'] as Map<String, dynamic>);
-        return _buildCaregiverCard(item['data'] as Map<String, dynamic>);
-      },
+    return RefreshIndicator(
+      color: GardenColors.primary,
+      onRefresh: () => _loadCaregivers(reset: true),
+      child: ListView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.all(GardenSpacing.lg),
+        // Siempre scrolleable para que el pull-to-refresh funcione incluso
+        // con pocos resultados que no llenan la pantalla.
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: items.length + (_hasMore ? 1 : 0),
+        itemBuilder: (context, i) {
+          if (i == items.length) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: GardenLogoLoader(size: 120),
+            );
+          }
+          final item = items[i];
+          // Entrada escalonada sutil — no gratuita: duración corta y delay
+          // acotado para que no se sienta lenta ni en listas largas.
+          final delayMs = (i.clamp(0, 6) * 40);
+          Widget card = item['type'] == 'banner'
+              ? _buildBannerCard(item['data'] as Map<String, dynamic>)
+              : _buildCaregiverCard(item['data'] as Map<String, dynamic>);
+          return card
+              .animate()
+              .fadeIn(duration: 220.ms, delay: delayMs.ms)
+              .slideY(begin: 0.04, end: 0, duration: 220.ms, curve: Curves.easeOut);
+        },
+      ),
+    );
+  }
+
+  /// Skeleton que calca el layout de [_buildCaregiverCard] mientras carga.
+  Widget _buildCaregiverCardSkeleton(bool isDark) {
+    final cardBg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    return Container(
+      margin: const EdgeInsets.only(bottom: GardenSpacing.md),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: GardenRadius.lg_,
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const GardenSkeleton(width: 58, height: 58, radius: 29),
+          const SizedBox(width: GardenSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const GardenSkeleton(width: 130, height: 14),
+                const SizedBox(height: GardenSpacing.sm),
+                const GardenSkeleton(width: 90, height: 11),
+                const SizedBox(height: GardenSpacing.sm + 2),
+                GardenSkeleton(width: 100, height: 18, radius: GardenRadius.full),
+              ],
+            ),
+          ),
+          const SizedBox(width: GardenSpacing.sm),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              const GardenSkeleton(width: 50, height: 14),
+              const SizedBox(height: GardenSpacing.sm),
+              GardenSkeleton(width: 70, height: 28, radius: GardenRadius.full),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -1950,8 +2040,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       }
     }
 
-    return GestureDetector(
-      onTap: actionType != 'none' ? handleTap : null,
+    return GardenPressable(
+      pressedScale: 0.97,
+      onTap: actionType != 'none'
+          ? () {
+              HapticFeedback.selectionClick();
+              handleTap();
+            }
+          : null,
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         height: 180, // mismo alto que tarjeta de cuidador
@@ -2080,8 +2176,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       }
     }
 
-    return GestureDetector(
+    return GardenPressable(
+      pressedScale: 0.97,
       onTap: () {
+        HapticFeedback.lightImpact();
         if (!AuthState.hasSession) {
           context.push('/login', extra: {
             'returnTo': '/caregiver/${caregiver['id']}',
@@ -2265,7 +2363,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         point: e.value,
         width: 120,
         height: 40,
-        child: GestureDetector(
+        child: GardenPressable(
+          pressedScale: 0.88,
           onTap: () => _selectZone(_selectedZone == e.key ? null : e.key),
           child: Column(
             mainAxisSize: MainAxisSize.min,

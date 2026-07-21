@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
@@ -74,6 +75,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       ),
     );
     if (confirmed != true) return;
+    HapticFeedback.mediumImpact();
     try {
       final res = await http.delete(
         Uri.parse('$_baseUrl/client/pets/$petId'),
@@ -136,8 +138,12 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
             actions: [
               Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: GestureDetector(
-                  onTap: () => _showPetForm(),
+                child: GardenPressable(
+                  pressedScale: 0.88,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    _showPetForm();
+                  },
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                     decoration: BoxDecoration(
@@ -542,6 +548,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
+    HapticFeedback.lightImpact();
     setState(() => _saving = true);
     try {
       final body = <String, dynamic>{'name': _nameCtrl.text.trim()};

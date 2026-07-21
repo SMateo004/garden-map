@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../../theme/garden_theme.dart';
@@ -18,6 +19,16 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
   bool _obscure1 = true;
   bool _obscure2 = true;
 
+  @override
+  void initState() {
+    super.initState();
+    // Feedback en vivo: repinta el checklist de requisitos mientras se escribe.
+    _passwordCtrl.addListener(() => setState(() {}));
+  }
+
+  bool get _hasMinLength => _passwordCtrl.text.length >= 8;
+  bool get _passwordsMatch => _confirmCtrl.text.isNotEmpty && _confirmCtrl.text == _passwordCtrl.text;
+
   String get _baseUrl => const String.fromEnvironment(
         'API_URL',
         defaultValue: 'https://api.gardenbo.com/api',
@@ -34,17 +45,14 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
     final pass = _passwordCtrl.text;
     final confirm = _confirmCtrl.text;
     if (pass.length < 8) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('La contraseña debe tener al menos 8 caracteres')),
-      );
+      GardenSnackBar.warning(context, 'La contraseña debe tener al menos 8 caracteres');
       return;
     }
     if (pass != confirm) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Las contraseñas no coinciden')),
-      );
+      GardenSnackBar.warning(context, 'Las contraseñas no coinciden');
       return;
     }
+    HapticFeedback.lightImpact();
     setState(() => _loading = true);
     try {
       final res = await http.post(
@@ -55,25 +63,15 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
       if (!mounted) return;
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       if (data['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('¡Contraseña actualizada! Ahora puedes iniciar sesión.'),
-            backgroundColor: GardenColors.success,
-          ),
-        );
+        GardenSnackBar.success(context, '¡Contraseña actualizada! Ahora puedes iniciar sesión.');
         // Volver al login limpiando el stack
         context.go('/login');
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(data['error']?['message'] as String? ?? 'Error al actualizar contraseña'),
-          backgroundColor: GardenColors.error,
-        ));
+        GardenSnackBar.error(context, data['error']?['message'] as String? ?? 'No se pudo actualizar tu contraseña. Intenta de nuevo.');
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error de conexión. Intenta de nuevo.')),
-        );
+        GardenSnackBar.error(context, 'Error de conexión. Revisa tu internet e intenta de nuevo.');
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -108,13 +106,13 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
               filled: true,
               fillColor: surfaceEl,
               border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  borderRadius: GardenRadius.md_, borderSide: BorderSide.none),
               enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
+                  borderRadius: GardenRadius.md_, borderSide: BorderSide(color: borderColor)),
               focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: GardenRadius.md_,
                   borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              contentPadding: const EdgeInsets.symmetric(horizontal: GardenSpacing.lg, vertical: 14),
             );
 
         return Scaffold(
@@ -162,6 +160,23 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
                       () => setState(() => _obscure1 = !_obscure1),
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(
+                        _hasMinLength ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                        size: 14,
+                        color: _hasMinLength ? GardenColors.success : subtextColor,
+                      ),
+                      const SizedBox(width: 6),
+                      Text('Al menos 8 caracteres',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: _hasMinLength ? GardenColors.success : subtextColor,
+                          )),
+                    ],
+                  ),
                   const SizedBox(height: 16),
 
                   Text('Confirmar contraseña',
@@ -171,6 +186,7 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
                     controller: _confirmCtrl,
                     obscureText: _obscure2,
                     style: TextStyle(color: textColor),
+                    onChanged: (_) => setState(() {}),
                     onSubmitted: (_) => _submit(),
                     decoration: _field(
                       '••••••••',
@@ -179,6 +195,27 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
                       () => setState(() => _obscure2 = !_obscure2),
                     ),
                   ),
+                  if (_confirmCtrl.text.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          _passwordsMatch ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+                          size: 14,
+                          color: _passwordsMatch ? GardenColors.success : GardenColors.error,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _passwordsMatch ? 'Las contraseñas coinciden' : 'Las contraseñas no coinciden',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: _passwordsMatch ? GardenColors.success : GardenColors.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 32),
 
                   SizedBox(

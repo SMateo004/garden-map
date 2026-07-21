@@ -40,6 +40,7 @@ class _ForgotPasswordCodeScreenState extends State<ForgotPasswordCodeScreen> {
       );
       return;
     }
+    HapticFeedback.lightImpact();
     setState(() => _loading = true);
     try {
       final res = await http.post(
@@ -53,19 +54,15 @@ class _ForgotPasswordCodeScreenState extends State<ForgotPasswordCodeScreen> {
         final tempToken = data['data']['tempToken'] as String;
         context.push('/forgot-password/new', extra: tempToken);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(data['error']?['message'] as String? ?? 'Código incorrecto'),
-          backgroundColor: GardenColors.error,
-        ));
+        HapticFeedback.heavyImpact();
+        GardenSnackBar.error(context, data['error']?['message'] as String? ?? 'El código no es correcto. Intenta de nuevo.');
         // Limpiar campos
         for (final c in _ctrls) c.clear();
         _nodes[0].requestFocus();
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error de conexión. Intenta de nuevo.')),
-        );
+        GardenSnackBar.error(context, 'Error de conexión. Revisa tu internet e intenta de nuevo.');
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -81,13 +78,14 @@ class _ForgotPasswordCodeScreenState extends State<ForgotPasswordCodeScreen> {
         body: jsonEncode({'email': widget.email}),
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Código reenviado'), backgroundColor: GardenColors.success),
-        );
+        GardenSnackBar.success(context, 'Código reenviado — revisa tu correo');
         setState(() => _cooldown = 60);
         _startCooldown();
       }
     } catch (_) {
+      if (mounted) {
+        GardenSnackBar.error(context, 'No se pudo reenviar el código. Intenta de nuevo.');
+      }
     } finally {
       if (mounted) setState(() => _resending = false);
     }

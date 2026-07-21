@@ -204,8 +204,10 @@ class BookingConfirmedScreen extends StatelessWidget {
 
                   // ── BLOCKCHAIN TX HASH (si existe) ────────────────────
                   if (blockchainTxHash != null && blockchainTxHash.isNotEmpty) ...[
-                    GestureDetector(
+                    GardenPressable(
+                      pressedScale: 0.97,
                       onTap: () {
+                        HapticFeedback.lightImpact();
                         Clipboard.setData(ClipboardData(text: blockchainTxHash));
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
@@ -238,7 +240,7 @@ class BookingConfirmedScreen extends StatelessWidget {
                                   const SizedBox(height: 2),
                                   Text(
                                     '${blockchainTxHash.substring(0, 10)}...${blockchainTxHash.substring(blockchainTxHash.length - 8)}',
-                                    style: TextStyle(color: subtextColor, fontSize: 11, fontFamily: 'monospace'),
+                                    style: TextStyle(color: subtextColor, fontSize: 11),
                                   ),
                                 ],
                               ),
@@ -279,13 +281,19 @@ class BookingConfirmedScreen extends StatelessWidget {
                   // ── BOTONES ───────────────────────────────────────────
                   GardenButton(
                     label: 'Ver mis reservas',
-                    onPressed: () => context.go('/my-bookings'),
+                    onPressed: () {
+                      HapticFeedback.selectionClick();
+                      context.go('/my-bookings');
+                    },
                   ),
                   const SizedBox(height: 12),
                   GardenButton(
                     label: 'Volver al inicio',
                     outline: true,
-                    onPressed: () => context.go('/marketplace'),
+                    onPressed: () {
+                      HapticFeedback.selectionClick();
+                      context.go('/marketplace');
+                    },
                   ),
                   const SizedBox(height: 16),
                 ],
