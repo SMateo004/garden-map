@@ -33,6 +33,7 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
     'preciosDinamicosEnabled': true,
     'meetGreetEnabled':        true,
     'otpVisibleToAdminEnabled': true,
+    'cardPaymentEnabled':      false,
   };
 
   static const Map<String, num> _numericDefaults = {
@@ -463,6 +464,10 @@ class _AdminTechnicalScreenState extends State<AdminTechnicalScreen>
                   _buildBoolTile(icon: Icons.gavel_rounded, iconColor: Colors.purple,
                     title: 'Disputas habilitadas', subtitle: 'Clientes pueden abrir disputas',
                     settingKey: 'disputasEnabled', surface: surface, textColor: textColor,
+                    subtextColor: subtextColor, borderColor: borderColor),
+                  _buildBoolTile(icon: Icons.credit_card_rounded, iconColor: Colors.indigo,
+                    title: 'Pago con tarjeta', subtitle: 'Muestra la opción de tarjeta de crédito/débito como método de pago (aún sin pasarela real conectada)',
+                    settingKey: 'cardPaymentEnabled', surface: surface, textColor: textColor,
                     subtextColor: subtextColor, borderColor: borderColor),
                   _buildNumericTile(icon: Icons.percent_rounded, iconColor: Colors.green,
                     title: 'Comisión GARDEN', subtitle: 'Porcentaje aplicado a cada reserva',

@@ -106,6 +106,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
   bool get _alreadyRated => _booking?['ownerRating'] != null;
 
+  // Setting admin `cardPaymentEnabled` para el chip "Tarjeta" en los sheets
+  // de ampliación de tiempo/hospedaje — fail-closed (false) si el fetch
+  // falla, igual que en payment_screen.dart.
+  bool _cardPaymentEnabled = false;
+
   @override
   void initState() {
     super.initState();
@@ -116,6 +121,19 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     // Rebuild when comment text changes so the submit button enables/disables correctly
     _surveyCommentController.addListener(() { if (mounted) setState(() {}); });
     _loadInitialData();
+    _loadCardPaymentSetting();
+  }
+
+  Future<void> _loadCardPaymentSetting() async {
+    try {
+      final res = await http.get(Uri.parse('$_baseUrl/settings'));
+      final data = jsonDecode(res.body);
+      if (mounted && data['success'] == true) {
+        setState(() => _cardPaymentEnabled = data['data']?['cardPaymentEnabled'] == true);
+      }
+    } catch (_) {
+      // Fallo de red → se queda en false (fail-closed).
+    }
   }
 
   @override
@@ -1482,27 +1500,34 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             );
           }
 
-          Widget methodChip(String method, String label, IconData icon) {
+          Widget methodChip(String method, String label, IconData icon, {bool enabled = true}) {
             final isSelected = selectedMethod == method;
+            final chip = AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: isSelected ? GardenColors.primary.withValues(alpha: 0.12) : (isDark ? GardenColors.darkBackground : GardenColors.lightBackground),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: isSelected ? GardenColors.primary : (isDark ? GardenColors.darkBorder : GardenColors.lightBorder), width: isSelected ? 1.5 : 1),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 16, color: isSelected ? GardenColors.primary : subtextColor),
+                  const SizedBox(width: 6),
+                  Text(label, style: TextStyle(color: isSelected ? GardenColors.primary : subtextColor, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, fontSize: 13)),
+                ],
+              ),
+            );
             return Expanded(
-              child: GestureDetector(
-                onTap: () => setSheetState(() => selectedMethod = method),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isSelected ? GardenColors.primary.withValues(alpha: 0.12) : (isDark ? GardenColors.darkBackground : GardenColors.lightBackground),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: isSelected ? GardenColors.primary : (isDark ? GardenColors.darkBorder : GardenColors.lightBorder), width: isSelected ? 1.5 : 1),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(icon, size: 16, color: isSelected ? GardenColors.primary : subtextColor),
-                      const SizedBox(width: 6),
-                      Text(label, style: TextStyle(color: isSelected ? GardenColors.primary : subtextColor, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, fontSize: 13)),
-                    ],
+              child: Opacity(
+                opacity: enabled ? 1.0 : 0.42,
+                child: AbsorbPointer(
+                  absorbing: !enabled,
+                  child: GestureDetector(
+                    onTap: () => setSheetState(() => selectedMethod = method),
+                    child: chip,
                   ),
                 ),
               ),
@@ -1541,6 +1566,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 Row(children: [
                   methodChip('qr', 'QR', Icons.qr_code_rounded),
                   methodChip('manual', 'Transferencia', Icons.account_balance_rounded),
+                  methodChip('card', 'Tarjeta', Icons.credit_card_rounded, enabled: _cardPaymentEnabled),
                 ]),
                 const SizedBox(height: 20),
                 SizedBox(
@@ -1548,6 +1574,16 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   child: GardenButton(
                     label: 'Ir a pagar',
                     onPressed: () {
+                      // El cobro con tarjeta todavía no está conectado a una
+                      // pasarela real — comunicarlo claro en vez de intentar
+                      // iniciar un pago que no existe de verdad.
+                      if (selectedMethod == 'card') {
+                        ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                          content: Text('El pago con tarjeta aún no está disponible. Elige QR o transferencia.'),
+                          backgroundColor: Colors.orange,
+                        ));
+                        return;
+                      }
                       Navigator.pop(ctx);
                       _requestHospedajeExtensionPayment(selectedDays, selectedMethod);
                     },
@@ -1665,27 +1701,34 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             );
           }
 
-          Widget methodChip(String method, String label, IconData icon) {
+          Widget methodChip(String method, String label, IconData icon, {bool enabled = true}) {
             final isSelected = selectedMethod == method;
+            final chip = AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: isSelected ? GardenColors.primary.withValues(alpha: 0.12) : (isDark ? GardenColors.darkBackground : GardenColors.lightBackground),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: isSelected ? GardenColors.primary : (isDark ? GardenColors.darkBorder : GardenColors.lightBorder), width: isSelected ? 1.5 : 1),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 16, color: isSelected ? GardenColors.primary : subtextColor),
+                  const SizedBox(width: 6),
+                  Text(label, style: TextStyle(color: isSelected ? GardenColors.primary : subtextColor, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, fontSize: 13)),
+                ],
+              ),
+            );
             return Expanded(
-              child: GestureDetector(
-                onTap: () => setSheetState(() => selectedMethod = method),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isSelected ? GardenColors.primary.withValues(alpha: 0.12) : (isDark ? GardenColors.darkBackground : GardenColors.lightBackground),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: isSelected ? GardenColors.primary : (isDark ? GardenColors.darkBorder : GardenColors.lightBorder), width: isSelected ? 1.5 : 1),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(icon, size: 16, color: isSelected ? GardenColors.primary : subtextColor),
-                      const SizedBox(width: 6),
-                      Text(label, style: TextStyle(color: isSelected ? GardenColors.primary : subtextColor, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, fontSize: 13)),
-                    ],
+              child: Opacity(
+                opacity: enabled ? 1.0 : 0.42,
+                child: AbsorbPointer(
+                  absorbing: !enabled,
+                  child: GestureDetector(
+                    onTap: () => setSheetState(() => selectedMethod = method),
+                    child: chip,
                   ),
                 ),
               ),
@@ -1736,6 +1779,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   Row(children: [
                     methodChip('qr', 'QR', Icons.qr_code_rounded),
                     methodChip('manual', 'Transferencia', Icons.account_balance_rounded),
+                    methodChip('card', 'Tarjeta', Icons.credit_card_rounded, enabled: _cardPaymentEnabled),
                   ]),
                   const SizedBox(height: 20),
                   SizedBox(
@@ -1743,6 +1787,16 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     child: GardenButton(
                       label: 'Ir a pagar',
                       onPressed: selectedMinutes == 0 ? null : () {
+                        // El cobro con tarjeta todavía no está conectado a una
+                        // pasarela real — comunicarlo claro en vez de intentar
+                        // iniciar un pago que no existe de verdad.
+                        if (selectedMethod == 'card') {
+                          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                            content: Text('El pago con tarjeta aún no está disponible. Elige QR o transferencia.'),
+                            backgroundColor: Colors.orange,
+                          ));
+                          return;
+                        }
                         Navigator.pop(ctx);
                         _requestExtensionPayment(selectedMinutes, selectedMethod);
                       },
@@ -2045,8 +2099,27 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
-    final isPaseo = _booking?['serviceType'] == 'PASEO';
-    final timerStr = isPaseo
+    final serviceType = _booking?['serviceType'] as String? ?? 'PASEO';
+    final isPaseo = serviceType == 'PASEO';
+    final isHospedaje = serviceType == 'HOSPEDAJE';
+    final isGuarderia = serviceType == 'GUARDERIA';
+    // ── Acento visual por tipo de servicio ──────────────────────────────────
+    // Cada servicio ancla su propio color de acento dentro de la paleta
+    // GARDEN ya existente (nunca un color nuevo) — sutil, no un rediseño:
+    //   PASEO      → forest (verde bosque) — aire libre / caminata
+    //   HOSPEDAJE  → orange (naranja cálido) — hogar acogedor / noches
+    //   GUARDERIA  → info (azul brillante) — día soleado / guardería
+    // Antes HOSPEDAJE y GUARDERIA compartían el mismo tratamiento visual
+    // (incluso un tono café fuera de paleta, 0xFF8C5200) — ahora cada uno
+    // tiene su propio anclaje coherente con la marca.
+    final serviceAccent = isPaseo
+        ? GardenColors.forest
+        : isHospedaje
+            ? GardenColors.orange
+            : GardenColors.info;
+    final serviceEmoji = isPaseo ? '🦮' : (isHospedaje ? '🏠' : '🏡');
+    final serviceTypeLabel = isPaseo ? 'Paseo' : (isHospedaje ? 'Hospedaje' : 'Guardería');
+    final timerStr = (isPaseo || isGuarderia)
         ? '${_elapsed.inHours.toString().padLeft(2,'0')}:${(_elapsed.inMinutes%60).toString().padLeft(2,'0')}:${(_elapsed.inSeconds%60).toString().padLeft(2,'0')}'
         : _buildHospedajeDayLabel();
     final incidents = (_booking?['serviceEvents'] as List<dynamic>? ?? [])
@@ -2054,7 +2127,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final lastPhoto = _serviceEvents.isNotEmpty ? _serviceEvents.last : null;
     final heroColors = isPaseo
         ? [GardenColors.forest, const Color(0xFF0B5C2E)]
-        : [const Color(0xFF8C5200), GardenColors.primaryDark];
+        : isHospedaje
+            ? [GardenColors.orange, GardenColors.orangeDark]
+            : [GardenColors.info, GardenColors.infoDark];
 
     return Scaffold(
       backgroundColor: bg,
@@ -2340,6 +2415,86 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     ),
                   ),
                   const SizedBox(height: 24),
+
+                  // ── Progreso del servicio (barra de tiempo por tipo) ────────
+                  // Mismo concepto de "estado del viaje" estilo Airbnb, pero el
+                  // dato que llena la barra cambia según el servicio: minutos
+                  // transcurridos/pagados en Paseo, ventana de horario en
+                  // Guardería (mismo día), noche actual/total en Hospedaje.
+                  // Usa _computeTotalPaidDurationMinutes(), la misma fuente que
+                  // ya gatea "marcar como terminado" — el progreso mostrado
+                  // siempre coincide con la lógica real de fin de servicio
+                  // (incluye extensiones ya aprobadas).
+                  Builder(builder: (context) {
+                    final elapsedMin = _elapsed.inMinutes;
+                    final totalPaidMin = _computeTotalPaidDurationMinutes();
+                    final progress = totalPaidMin > 0
+                        ? (elapsedMin / totalPaidMin).clamp(0.0, 1.0)
+                        : 0.0;
+
+                    String progressLabel;
+                    String progressCaption;
+                    if (isHospedaje) {
+                      progressLabel = _buildHospedajeDayLabel();
+                      progressCaption = '${(progress * 100).round()}% de la estadía completada';
+                    } else if (isGuarderia) {
+                      final startedAtStr = _booking?['serviceStartedAt'] as String?;
+                      final startedAt = startedAtStr != null ? DateTime.tryParse(startedAtStr) : null;
+                      if (startedAt != null) {
+                        final pickupEstimate = startedAt.add(Duration(minutes: totalPaidMin));
+                        progressLabel = 'Desde las ${_formatClockTime(startedAt)}';
+                        progressCaption = 'Recogida estimada ${_formatClockTime(pickupEstimate)}';
+                      } else {
+                        progressLabel = 'En guardería';
+                        progressCaption = '$elapsedMin min transcurridos';
+                      }
+                    } else {
+                      progressLabel = '$elapsedMin min de $totalPaidMin min';
+                      progressCaption = '${(progress * 100).round()}% del paseo completado';
+                    }
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 24),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: serviceAccent.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(GardenRadius.xl),
+                        border: Border.all(color: serviceAccent.withValues(alpha: 0.18)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(serviceEmoji, style: const TextStyle(fontSize: 15)),
+                              const SizedBox(width: 8),
+                              Text(
+                                serviceTypeLabel.toUpperCase(),
+                                style: TextStyle(color: serviceAccent, fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                              ),
+                              const Spacer(),
+                              Text(
+                                progressLabel,
+                                style: TextStyle(color: textColor, fontSize: 12.5, fontWeight: FontWeight.w700),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(GardenRadius.full),
+                            child: LinearProgressIndicator(
+                              value: progress,
+                              minHeight: 6,
+                              backgroundColor: serviceAccent.withValues(alpha: 0.12),
+                              valueColor: AlwaysStoppedAnimation<Color>(serviceAccent),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(progressCaption, style: TextStyle(color: subtextColor, fontSize: 11.5)),
+                        ],
+                      ),
+                    );
+                  }),
 
                   // ── Acciones GPS/Extensión (PASEO) ──────────────────────────
                   if (_booking?['serviceType'] == 'PASEO' || _booking?['serviceType'] == 'HOSPEDAJE')
@@ -3577,6 +3732,13 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     );
   }
 
+  /// Formatea una hora local como "HH:MM" — usado por la barra de progreso
+  /// de Guardería (ventana de horario entre-vivo → recogida estimada).
+  String _formatClockTime(DateTime dt) {
+    final local = dt.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
+
   String _formatEventTime(String isoDate) {
     if (isoDate.isEmpty) return '';
     try {
@@ -3866,6 +4028,37 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     // Para paseos en móvil, verificar permiso de ubicación antes de iniciar
     if (!kIsWeb && _booking?['serviceType'] == 'PASEO') {
       LocationPermission permission = await Geolocator.checkPermission();
+      // Divulgación destacada, DENTRO de la app, mostrada antes del diálogo
+      // del sistema operativo — requisito de Google Play para apps que piden
+      // ubicación en segundo plano (Política de Permisos de Ubicación). Solo
+      // se muestra la primera vez (permiso aún "denied" = nunca se decidió),
+      // no en cada paseo una vez que el cuidador ya lo concedió.
+      if (permission == LocationPermission.denied && mounted) {
+        final understood = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            icon: const Icon(Icons.location_on_rounded, color: GardenColors.primary, size: 32),
+            title: const Text('Ubicación en tiempo real durante el paseo'),
+            content: const Text(
+              'Garden usa tu ubicación GPS mientras un paseo está en curso — incluso '
+              'con la pantalla bloqueada o la app minimizada — para que el dueño de '
+              'la mascota pueda ver el recorrido en vivo en el mapa, igual que el '
+              '"modo conductor" de una app de transporte. Esta transmisión ocurre '
+              'solo durante el paseo activo y se detiene automáticamente al '
+              'finalizar el servicio. En la siguiente pantalla, elegí "Permitir '
+              'todo el tiempo" para que el seguimiento no se corte.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Entendido, continuar', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+        if (understood != true) return;
+      }
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
@@ -3889,44 +4082,32 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     // El backend exige una foto de inicio (serviceStartPhoto) — pedirla y
     // subirla ANTES de llamar a /start, si no el servicio nunca puede
     // iniciarse (no hay otra forma de conseguir esa foto una vez arrancado).
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 8, 20, 4),
-                child: Text('Foto de inicio del servicio',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-              ),
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: Text('Es obligatoria — deja constancia del estado inicial de la mascota/espacio.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey)),
-              ),
-              ListTile(
-                leading: const Icon(Icons.camera_alt_rounded),
-                title: const Text('Cámara', style: TextStyle(fontWeight: FontWeight.w600)),
-                onTap: () => Navigator.pop(ctx, ImageSource.camera),
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_library_rounded),
-                title: const Text('Galería'),
-                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-              ),
-            ],
+    // Va directo a cámara (sin elegir cámara/galería) — debe ser una foto
+    // real del momento, no una vieja de la galería. Aviso de "que se vea la
+    // mascota" una sola vez por cuidador (persistido), no en cada servicio.
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted && prefs.getBool('seen_start_photo_pet_reminder') != true) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(Icons.pets_rounded, color: GardenColors.primary, size: 32),
+          title: const Text('Que se vea la mascota'),
+          content: const Text(
+            'Antes de iniciar, toma una foto donde se vea claramente a la '
+            'mascota — deja constancia de su estado inicial.',
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Entendido', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
         ),
-      ),
-    );
-    if (source == null) return;
+      );
+      await prefs.setBool('seen_start_photo_pet_reminder', true);
+    }
     if (!mounted) return;
+    const source = ImageSource.camera;
 
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: source, imageQuality: 85);

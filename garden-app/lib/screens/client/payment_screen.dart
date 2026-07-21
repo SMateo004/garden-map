@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
@@ -12,6 +13,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../utils/qr_saver.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../widgets/card_payment_widgets.dart';
 
 class PaymentScreen extends StatefulWidget {
   /// Existing booking (M&G follow-up, back navigation recovery, etc.)
@@ -85,10 +87,106 @@ class _PaymentScreenState extends State<PaymentScreen> {
   double _donationAmount = 0.0;
   final TextEditingController _donationController = TextEditingController();
 
+  // Payment-method carousel state ("QR bancario" vs "Tarjeta")
+  String _selectedMethod = 'qr'; // 'qr' | 'card'
+  bool _cardPaymentEnabled = false; // fail-closed default — never fail open on a payment feature
+  SavedCard? _savedCard;
+
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadCardPaymentInfo();
+  }
+
+  /// Carga el setting admin `cardPaymentEnabled` (público, sin auth) y la
+  /// tarjeta guardada localmente, si existe. Ninguno de los dos bloquea la
+  /// carga principal de la reserva — corren en paralelo/independientes.
+  Future<void> _loadCardPaymentInfo() async {
+    try {
+      final res = await http.get(Uri.parse('$_baseUrl/settings'));
+      final data = jsonDecode(res.body);
+      if (mounted && data['success'] == true) {
+        setState(() => _cardPaymentEnabled = data['data']?['cardPaymentEnabled'] == true);
+      }
+    } catch (_) {
+      // Fallo de red → se queda en false (fail-closed), como pide el spec.
+    }
+    final saved = await SavedCardStore.load();
+    if (mounted) setState(() => _savedCard = saved);
+  }
+
+  Future<void> _onTapCardMethod() async {
+    if (!_cardPaymentEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Este método aún no está disponible'),
+        duration: Duration(seconds: 2),
+      ));
+      return;
+    }
+    HapticFeedback.selectionClick();
+    if (_savedCard == null) {
+      final result = await showAddCardSheet(context);
+      if (result != null) {
+        await SavedCardStore.save(result);
+        if (mounted) setState(() {
+          _savedCard = result;
+          _selectedMethod = 'card';
+        });
+      }
+      return;
+    }
+    if (_selectedMethod != 'card') {
+      setState(() => _selectedMethod = 'card');
+      return;
+    }
+    // Ya estaba seleccionada — ofrecer cambiar o quitar la tarjeta guardada.
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = themeNotifier.isDark;
+        final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+        final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+        return SafeArea(
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(GardenRadius.xxl)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.credit_card_rounded, color: GardenColors.primary),
+                  title: Text('Cambiar tarjeta', style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
+                  onTap: () => Navigator.pop(ctx, 'change'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline_rounded, color: GardenColors.error),
+                  title: const Text('Eliminar tarjeta', style: TextStyle(color: GardenColors.error, fontWeight: FontWeight.w600)),
+                  onTap: () => Navigator.pop(ctx, 'remove'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (action == 'change') {
+      final result = await showAddCardSheet(context);
+      if (result != null) {
+        await SavedCardStore.save(result);
+        if (mounted) setState(() => _savedCard = result);
+      }
+    } else if (action == 'remove') {
+      await SavedCardStore.clear();
+      if (mounted) setState(() {
+        _savedCard = null;
+        if (_selectedMethod == 'card') _selectedMethod = 'qr';
+      });
+    }
   }
 
   @override
@@ -162,7 +260,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
         final walletData = jsonDecode(walletRes.body);
         if (mounted && walletData['success'] == true) {
           setState(() {
-            _walletBalance = double.tryParse(walletData['data']?['balance']?.toString() ?? '0') ?? 0.0;
+            // Usar availableBalance (no balance) — el backend descuenta retiros
+            // pendientes al validar el pago (ver _getAvailableBalance en
+            // booking.service.ts). Si usábamos balance crudo, un cliente con un
+            // retiro pendiente veía "cubre todo con billetera" y el pago fallaba
+            // con "Saldo disponible insuficiente" al confirmar (bug encontrado en
+            // QA pre-lanzamiento: reviewer.cliente con balance 240 / disponible
+            // 140 por un retiro pendiente de 100).
+            _walletBalance = double.tryParse(walletData['data']?['availableBalance']?.toString() ??
+                    walletData['data']?['balance']?.toString() ??
+                    '0') ??
+                0.0;
             _walletLoaded = true;
           });
         }
@@ -242,8 +350,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
       final walletData = jsonDecode(results[1].body);
       if (walletData['success'] == true) {
         setState(() {
-          _walletBalance =
-              double.tryParse(walletData['data']?['balance']?.toString() ?? '0') ?? 0.0;
+          // Ver comentario equivalente arriba (modo params): usar
+          // availableBalance, no balance, para que coincida con lo que el
+          // backend realmente permite gastar.
+          _walletBalance = double.tryParse(walletData['data']?['availableBalance']?.toString() ??
+                  walletData['data']?['balance']?.toString() ??
+                  '0') ??
+              0.0;
           _walletLoaded = true;
         });
       }
@@ -292,6 +405,20 @@ class _PaymentScreenState extends State<PaymentScreen> {
   // ── Payment ─────────────────────────────────────────────────────────────────
 
   Future<void> _initPayment() async {
+    // El cobro real con tarjeta no está implementado todavía (sin pasarela
+    // conectada) — si el usuario dejó "Tarjeta" seleccionada en el carrusel
+    // y no hay billetera cubriendo el 100%, no hay nada que de verdad se
+    // pueda procesar por ese método. Se comunica claro en vez de intentar
+    // algo roto.
+    if (_selectedMethod == 'card' && !_walletCoversAll) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('El pago con tarjeta aún no está disponible para procesar. Elige QR bancario por ahora.'),
+        backgroundColor: GardenColors.warning,
+        duration: Duration(seconds: 4),
+      ));
+      return;
+    }
+    HapticFeedback.mediumImpact();
     setState(() => _isSubmitting = true);
     try {
       // ── Params mode: create the booking NOW (first time user presses "Generar QR") ──
@@ -509,6 +636,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           }
         } else if (status == 'CANCELLED') {
           _stopPolling();
+          HapticFeedback.heavyImpact();
           setState(() => _paymentRejected = true);
         } else if (status == 'PENDING_PAYMENT' && qrId == null && (_qrResponse != null || _manualRequested)) {
           // También cubre el caso de solicitud manual rechazada por el admin
@@ -516,6 +644,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           // sin el flag _manualRequested aquí, el polling nunca lo detectaba
           // porque _qrResponse nunca se setea en el flujo manual.
           _stopPolling();
+          HapticFeedback.heavyImpact();
           setState(() {
             _manualRequested = false;
             _paymentRejected = true;
@@ -628,6 +757,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   // ── Payment success overlay ─────────────────────────────────────────────────
 
   Future<void> _showPaymentSuccessOverlay() async {
+    HapticFeedback.heavyImpact();
     try {
       final player = AudioPlayer();
       await player.play(AssetSource('sounds/payment_success.mp3'));
@@ -739,7 +869,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
         if (_isLoading) {
           return Scaffold(
             backgroundColor: bg,
-            body: const Center(child: GardenLoadingIndicator(color: GardenColors.primary)),
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const GardenLoadingIndicator(color: GardenColors.primary),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Preparando tu pago…',
+                    style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
           );
         }
 
@@ -782,51 +924,130 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   // ── Donación voluntaria ─────────────────────────────────────────────────────
 
+  // ── Carrusel compacto de métodos de pago ────────────────────────────────
+  // Solo dos ítems reales: QR bancario (siempre disponible) y Tarjeta
+  // (gateado por el setting admin `cardPaymentEnabled`, atenuada/no
+  // interactiva mientras esté apagado — mismo patrón que la opción de
+  // billetera con saldo 0 en esta misma pantalla).
+  Widget _buildMethodCarousel(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    Widget methodCard({
+      required String method,
+      required String label,
+      required Widget iconWidget,
+      required bool enabled,
+      required VoidCallback onTap,
+    }) {
+      final selected = _selectedMethod == method;
+      final card = AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 112,
+        margin: const EdgeInsets.only(right: 10),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+        decoration: BoxDecoration(
+          color: selected ? GardenColors.primary.withValues(alpha: 0.10) : surface,
+          borderRadius: BorderRadius.circular(GardenRadius.lg),
+          border: Border.all(
+            color: selected ? GardenColors.primary : borderColor,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            iconWidget,
+            const SizedBox(height: 8),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: selected ? GardenColors.primary : textColor,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                fontSize: 12.5,
+              ),
+            ),
+          ],
+        ),
+      );
+      return Opacity(
+        opacity: enabled ? 1.0 : 0.42,
+        child: AbsorbPointer(
+          absorbing: !enabled,
+          child: GestureDetector(onTap: onTap, child: card),
+        ),
+      );
+    }
+
+    final cardIconColor = _cardPaymentEnabled
+        ? (_selectedMethod == 'card' ? GardenColors.primary : brandColor(_savedCard?.brand ?? CardBrand.unknown))
+        : subtextColor;
+
+    return SizedBox(
+      height: 88,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        children: [
+          methodCard(
+            method: 'qr',
+            label: 'QR bancario',
+            iconWidget: Icon(Icons.qr_code_2_rounded,
+                color: _selectedMethod == 'qr' ? GardenColors.primary : subtextColor, size: 26),
+            enabled: true,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _selectedMethod = 'qr');
+            },
+          ),
+          methodCard(
+            method: 'card',
+            label: _savedCard != null ? _savedCard!.maskedLabel : 'Tarjeta',
+            iconWidget: Icon(brandIcon(_savedCard?.brand ?? CardBrand.unknown), color: cardIconColor, size: 26),
+            enabled: _cardPaymentEnabled,
+            onTap: _onTapCardMethod,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDonationSection(Color textColor, Color subtextColor, Color surface, Color borderColor) {
     final presets = [5.0, 10.0, 20.0];
+    // Antes usaba una paleta crema/amarillo/marrón totalmente ajena a la
+    // marca, hardcodeada sin importar modo claro/oscuro. Ahora reusa el
+    // mismo acento (warning, cálido) y el mismo patrón alpha 0.08/0.3 que ya
+    // usa el resto de la pantalla (ver _buildCountdown), para que se sienta
+    // parte del mismo sistema en vez de una sección aparte.
+    const accent = GardenColors.warning;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF8E1),
+        color: accent.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFFFCC02).withValues(alpha: 0.6)),
+        border: Border.all(color: accent.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFCC02).withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Text('🐾', style: TextStyle(fontSize: 16)),
-              ),
-              const SizedBox(width: 10),
+              const Text('🐾', style: TextStyle(fontSize: 16)),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Donar a hogares de perros',
-                      style: TextStyle(
-                        color: Color(0xFF5D4037),
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const Text(
-                      '100% va al hogar — Garden no retiene nada',
-                      style: TextStyle(color: Color(0xFF8D6E63), fontSize: 11),
-                    ),
+                    Text('Donar a hogares de perros',
+                        style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13.5)),
+                    Text('100% va al hogar — Garden no retiene nada',
+                        style: TextStyle(color: subtextColor, fontSize: 11)),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Row(
             children: [
               ...presets.map((p) {
@@ -834,31 +1055,32 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: GestureDetector(
-                    onTap: () => setState(() {
-                      if (selected) {
-                        _donationAmount = 0;
-                        _donationController.clear();
-                      } else {
-                        _donationAmount = p;
-                        _donationController.text = p.toStringAsFixed(0);
-                      }
-                    }),
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() {
+                        if (selected) {
+                          _donationAmount = 0;
+                          _donationController.clear();
+                        } else {
+                          _donationAmount = p;
+                          _donationController.text = p.toStringAsFixed(0);
+                        }
+                      });
+                    },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
                       decoration: BoxDecoration(
-                        color: selected ? const Color(0xFFFFCC02) : Colors.white,
+                        color: selected ? accent : surface,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: selected ? const Color(0xFFFFCC02) : const Color(0xFFBCAAA4),
-                        ),
+                        border: Border.all(color: selected ? accent : borderColor),
                       ),
                       child: Text(
                         'Bs ${p.toStringAsFixed(0)}',
                         style: TextStyle(
-                          color: selected ? const Color(0xFF5D4037) : const Color(0xFF8D6E63),
+                          color: selected ? Colors.white : textColor,
                           fontWeight: FontWeight.w700,
-                          fontSize: 13,
+                          fontSize: 12.5,
                         ),
                       ),
                     ),
@@ -869,24 +1091,24 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 child: TextField(
                   controller: _donationController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(color: Color(0xFF5D4037), fontSize: 13),
+                  style: TextStyle(color: textColor, fontSize: 13),
                   decoration: InputDecoration(
                     hintText: 'Otro monto',
-                    hintStyle: const TextStyle(color: Color(0xFF8D6E63), fontSize: 12),
+                    hintStyle: TextStyle(color: subtextColor, fontSize: 12),
                     prefixText: 'Bs ',
-                    prefixStyle: const TextStyle(color: Color(0xFF5D4037), fontWeight: FontWeight.w700),
+                    prefixStyle: TextStyle(color: textColor, fontWeight: FontWeight.w700),
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
-                      borderSide: const BorderSide(color: Color(0xFFBCAAA4)),
+                      borderSide: BorderSide(color: borderColor),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
-                      borderSide: const BorderSide(color: Color(0xFFFFCC02), width: 2),
+                      borderSide: const BorderSide(color: accent, width: 2),
                     ),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: surface,
                   ),
                   onChanged: (v) {
                     // Tope de seguridad: sin límite, un typo (ej. "5000" en vez
@@ -916,15 +1138,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
             const SizedBox(height: 10),
             Row(
               children: [
-                const Icon(Icons.favorite_rounded, color: Color(0xFFFFCC02), size: 14),
+                const Icon(Icons.favorite_rounded, color: accent, size: 14),
                 const SizedBox(width: 6),
                 Text(
                   'Bs ${_donationAmount.toStringAsFixed(2)} se donarán al hogar 🐶',
-                  style: const TextStyle(
-                    color: Color(0xFF5D4037),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 12),
                 ),
               ],
             ),
@@ -1133,6 +1351,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               onPressed: _isCheckingNow
                   ? null
                   : () async {
+                      HapticFeedback.selectionClick();
                       setState(() => _isCheckingNow = true);
                       await _checkPaymentStatus();
                       if (mounted) setState(() => _isCheckingNow = false);
@@ -1176,17 +1395,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
     if (_booking != null) {
       final bk = _booking!;
       summaryCard = Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(GardenRadius.xl),
           border: Border.all(color: borderColor),
+          boxShadow: GardenShadows.card,
         ),
         child: Column(
           children: [
             _summaryRow(Icons.pets_outlined, 'Mascota', bk['petName'] ?? '—',
                 textColor, subtextColor),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             _summaryRow(
               bk['serviceType'] == 'PASEO'
                   ? Icons.directions_walk_outlined
@@ -1196,25 +1416,43 @@ class _PaymentScreenState extends State<PaymentScreen> {
               textColor,
               subtextColor,
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             _summaryRow(Icons.calendar_today_outlined, 'Fecha',
                 bk['walkDate'] ?? bk['startDate'] ?? '—', textColor, subtextColor),
-            Divider(height: 24, color: borderColor),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text('Total a pagar',
-                    style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
-                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Text('Bs ${_totalAmount.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                          color: GardenColors.primary, fontSize: 24, fontWeight: FontWeight.w900)),
-                  if (_donationAmount > 0)
-                    Text('servicio Bs ${_serviceAmount.toStringAsFixed(2)} + donación Bs ${_donationAmount.toStringAsFixed(2)}',
-                        style: TextStyle(color: subtextColor, fontSize: 11)),
-                ]),
-              ],
+            const SizedBox(height: 18),
+            Divider(height: 1, color: borderColor),
+            const SizedBox(height: 18),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    GardenColors.primary.withValues(alpha: 0.10),
+                    GardenColors.accent.withValues(alpha: 0.06),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(GardenRadius.lg),
+                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.18)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('Total a pagar',
+                      style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                    Text('Bs ${_totalAmount.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                            color: GardenColors.primary, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                    if (_donationAmount > 0)
+                      Text('servicio Bs ${_serviceAmount.toStringAsFixed(2)} + donación Bs ${_donationAmount.toStringAsFixed(2)}',
+                          style: TextStyle(color: subtextColor, fontSize: 11)),
+                  ]),
+                ],
+              ),
             ),
           ],
         ),
@@ -1226,18 +1464,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
       final petIds = params['petIds'] as List? ?? [];
       final date = (params['walkDate'] ?? params['startDate'] ?? '') as String;
       summaryCard = Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(GardenRadius.xl),
           border: Border.all(color: borderColor),
+          boxShadow: GardenShadows.card,
         ),
         child: Column(
           children: [
             _summaryRow(Icons.pets_outlined, 'Mascotas',
                 '${petIds.length} mascota${petIds.length == 1 ? '' : 's'}',
                 textColor, subtextColor),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             _summaryRow(
               serviceType == 'PASEO' ? Icons.directions_walk_outlined : Icons.home_outlined,
               'Servicio',
@@ -1246,19 +1485,37 @@ class _PaymentScreenState extends State<PaymentScreen> {
               subtextColor,
             ),
             if (date.isNotEmpty) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               _summaryRow(Icons.calendar_today_outlined, 'Fecha', date, textColor, subtextColor),
             ],
-            Divider(height: 24, color: borderColor),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text('Total a pagar',
-                    style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
-                Text('Se calculará al generar el QR',
-                    style: TextStyle(color: subtextColor, fontSize: 13)),
-              ],
+            const SizedBox(height: 18),
+            Divider(height: 1, color: borderColor),
+            const SizedBox(height: 18),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    GardenColors.primary.withValues(alpha: 0.10),
+                    GardenColors.accent.withValues(alpha: 0.06),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(GardenRadius.lg),
+                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.18)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('Total a pagar',
+                      style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+                  Text('Se calculará al generar el QR',
+                      style: TextStyle(color: subtextColor, fontSize: 13)),
+                ],
+              ),
             ),
           ],
         ),
@@ -1278,7 +1535,41 @@ class _PaymentScreenState extends State<PaymentScreen> {
           // _loadData), no al presionar el botón.
           Text('Método de pago',
               style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text('Elige cómo vas a pagar el saldo que no cubra tu billetera.',
+              style: TextStyle(color: subtextColor, fontSize: 12.5)),
           const SizedBox(height: 12),
+
+          // ── Carrusel de métodos (compacto, rounded — estilo Uber/PedidosYa) ──
+          // Solo elecciones de MÉTODO real (QR bancario, Tarjeta). La
+          // billetera y la donación NO son ítems del carrusel — viven en sus
+          // propias secciones abajo, con su lógica intacta.
+          _buildMethodCarousel(textColor, subtextColor, surface, borderColor),
+          const SizedBox(height: 10),
+          if (_selectedMethod == 'card' && _cardPaymentEnabled && _savedCard != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, size: 13, color: subtextColor),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'El cobro con tarjeta aún no está conectado a una pasarela real — por ahora, completa el pago con QR bancario.',
+                      style: TextStyle(color: subtextColor, fontSize: 11.5, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 8),
+          Divider(height: 1, color: borderColor),
+          const SizedBox(height: 20),
+
+          // ── Billetera Garden — sección separada, lógica intacta ──────────
+          Text('Billetera',
+              style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 0.2)),
+          const SizedBox(height: 10),
 
           // ── Wallet option ────────────────────────────────────────────────
           // Siempre visible cuando ya cargó el saldo — con saldo 0 se muestra
@@ -1290,55 +1581,56 @@ class _PaymentScreenState extends State<PaymentScreen> {
               child: AbsorbPointer(
                 absorbing: _walletBalance <= 0,
                 child: GestureDetector(
-                  onTap: () => setState(() => _useWallet = !_useWallet),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _useWallet = !_useWallet);
+                  },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: _useWallet ? GardenColors.primary.withValues(alpha: 0.08) : surface,
-                      borderRadius: BorderRadius.circular(14),
+                      color: _useWallet ? GardenColors.primary.withValues(alpha: 0.06) : surface,
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: _useWallet ? GardenColors.primary : borderColor,
-                        width: _useWallet ? 2 : 1,
+                        color: _useWallet ? GardenColors.primary.withValues(alpha: 0.6) : borderColor,
+                        width: 1,
                       ),
                     ),
                     child: Row(
                       children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: _useWallet
-                                ? GardenColors.primary.withValues(alpha: 0.15)
-                                : borderColor.withValues(alpha: 0.4),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(Icons.account_balance_wallet_rounded,
-                              color: _useWallet ? GardenColors.primary : subtextColor, size: 24),
-                        ),
-                        const SizedBox(width: 14),
+                        Icon(Icons.account_balance_wallet_rounded,
+                            color: _useWallet ? GardenColors.primary : subtextColor, size: 20),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('Billetera Garden',
                                   style: TextStyle(
-                                      color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                                      color: textColor, fontWeight: FontWeight.w700, fontSize: 13.5)),
                               Text(
                                   _walletBalance > 0
                                       ? 'Saldo disponible: Bs ${_walletBalance.toStringAsFixed(2)}'
                                       : 'Sin saldo disponible',
                                   style: TextStyle(
                                       color: _useWallet ? GardenColors.primary : subtextColor,
-                                      fontSize: 13,
+                                      fontSize: 11.5,
                                       fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ),
-                        Switch(
-                          value: _useWallet,
-                          onChanged: _walletBalance > 0 ? (v) => setState(() => _useWallet = v) : null,
-                          activeColor: GardenColors.primary,
+                        Transform.scale(
+                          scale: 0.85,
+                          child: Switch(
+                            value: _useWallet,
+                            onChanged: _walletBalance > 0
+                                ? (v) {
+                                    HapticFeedback.selectionClick();
+                                    setState(() => _useWallet = v);
+                                  }
+                                : null,
+                            activeColor: GardenColors.primary,
+                          ),
                         ),
                       ],
                     ),
@@ -1399,62 +1691,32 @@ class _PaymentScreenState extends State<PaymentScreen> {
             if (_useWallet) const SizedBox(height: 12),
           ],
 
-          // ── QR Bancario option ───────────────────────────────────────────
-          if (!_walletCoversAll)
-            AnimatedOpacity(
-              duration: const Duration(milliseconds: 200),
-              opacity: _useWallet && _walletBalance > 0 ? 0.6 : 1.0,
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: !_useWallet ? GardenColors.primary.withValues(alpha: 0.08) : surface,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: !_useWallet ? GardenColors.primary : borderColor,
-                    width: !_useWallet ? 2 : 1,
+          // La elección QR-vs-Tarjeta ahora vive en el carrusel de arriba —
+          // aquí solo queda, si corresponde, el detalle de cuánto se paga
+          // por QR cuando la billetera cubre una parte (complemento).
+          if (!_walletCoversAll && _useWallet && _walletBalance > 0) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: GardenColors.primary.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.qr_code_2_rounded, size: 16, color: GardenColors.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Pagarás Bs ${_remainingAfterWallet.toStringAsFixed(2)} por QR (complemento a tu billetera)',
+                      style: TextStyle(color: textColor, fontSize: 12.5, fontWeight: FontWeight.w600),
+                    ),
                   ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: GardenColors.primary.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.qr_code_2_outlined, color: GardenColors.primary, size: 24),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(_useWallet ? 'QR Bancario (complemento)' : 'QR Bancario',
-                              style: TextStyle(
-                                  color: textColor, fontWeight: FontWeight.w700, fontSize: 15)),
-                          Text(
-                            _useWallet
-                                ? 'Pagarás Bs ${_remainingAfterWallet.toStringAsFixed(2)} por QR'
-                                : 'Paga con cualquier banco o Tigo Money',
-                            style: TextStyle(color: subtextColor, fontSize: 13),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (!_useWallet)
-                      Container(
-                        width: 22,
-                        height: 22,
-                        decoration: const BoxDecoration(
-                            color: GardenColors.primary, shape: BoxShape.circle),
-                        child: const Icon(Icons.check, color: Colors.white, size: 14),
-                      ),
-                  ],
-                ),
+                ],
               ),
             ),
-          const SizedBox(height: 20),
+            const SizedBox(height: 12),
+          ],
+          const SizedBox(height: 8),
 
           // ── Security note ────────────────────────────────────────────────
           Container(
