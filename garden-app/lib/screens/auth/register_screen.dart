@@ -57,6 +57,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   // conocida — caso excepcional: se permite continuar sin zona (ver
   // _handleRegister) en vez de exigir "selecciona tu zona / barrio".
   bool _zoneCoverageUnavailable    = false;
+  // true recién cuando el dueño de mascota toca "Empezar" — antes de eso se
+  // muestra solo ese botón + las opciones sociales, para no abrumar con el
+  // formulario entero apenas se entra a la pantalla.
+  bool _manualStarted             = false;
 
   final _authService  = AuthService();
   bool _isLoading     = false;
@@ -597,34 +601,56 @@ class _RegisterScreenState extends State<RegisterScreen> {
           // Campos solo para dueños — revelado progresivo: cada sección
           // aparece recién cuando la anterior queda válidamente completa
           // (ver los getters _showXStep arriba), en vez de mostrar el
-          // formulario entero de una — más amigable, menos abandono.
+          // formulario entero de una — más amigable, menos abandono. El
+          // primer paso (nombre/apellido) queda oculto detrás de un botón
+          // "Empezar" — así la pantalla inicial solo muestra ese botón + las
+          // opciones sociales, sin verse larga ni abrumar de entrada.
           if (_selectedRole == 'owner') ...[
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _fieldLabel('Nombre', textColor),
-                      const SizedBox(height: 8),
-                      _textField(controller: _firstNameController, hint: 'Tu nombre', icon: Icons.person_outlined, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor, inputFormatters: [noDigitsFormatter]),
-                    ],
-                  ),
+            _revealStep(
+              show: !_manualStarted,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 20),
+                child: GardenButton(
+                  label: 'Empezar',
+                  icon: Icons.arrow_forward_rounded,
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    setState(() => _manualStarted = true);
+                  },
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _fieldLabel('Apellido', textColor),
-                      const SizedBox(height: 8),
-                      _textField(controller: _lastNameController, hint: 'Tu apellido', icon: Icons.person_outline, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor, inputFormatters: [noDigitsFormatter]),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
-            const SizedBox(height: 20),
+            _revealStep(
+              show: _manualStarted,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _fieldLabel('Nombre', textColor),
+                          const SizedBox(height: 8),
+                          _textField(controller: _firstNameController, hint: 'Tu nombre', icon: Icons.person_outlined, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor, inputFormatters: [noDigitsFormatter]),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _fieldLabel('Apellido', textColor),
+                          const SizedBox(height: 8),
+                          _textField(controller: _lastNameController, hint: 'Tu apellido', icon: Icons.person_outline, surfaceEl: surfaceEl, textColor: textColor, subtextColor: subtextColor, borderColor: borderColor, inputFormatters: [noDigitsFormatter]),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+              ]),
+            ),
 
             _revealStep(
               show: _showEmailStep,
@@ -854,8 +880,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
             const SizedBox(height: 16),
           ],
 
-          // Botones sociales — solo para dueños de mascotas
-          if (_selectedRole == 'owner' && !widget.fromSocial) ...[
+          // Botones sociales — solo para dueños de mascotas, y solo antes de
+          // tocar "Empezar" (el registro manual y el social son alternativas
+          // — una vez que eligió llenar el formulario a mano, no tiene
+          // sentido seguir ofreciendo el atajo social debajo).
+          if (_selectedRole == 'owner' && !widget.fromSocial && !_manualStarted) ...[
             Row(
               children: [
                 Expanded(child: Divider(color: borderColor)),
