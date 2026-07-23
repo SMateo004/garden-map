@@ -134,6 +134,12 @@ model CaregiverProfile {
   suspended                       Boolean                     @default(false)
   suspendedAt                     DateTime?
   suspensionReason                String?
+  /// Se marca cada vez que un admin reactiva la cuenta (activateCaregiver) —
+  /// maybeAutoSuspendForLowRating() solo cuenta reservas posteriores a esta
+  /// fecha. Sin esto, reactivar a un cuidador auto-suspendido por 5+
+  /// calificaciones bajas era un no-op: el conteo histórico seguía en 5+ y
+  /// la siguiente reserva calificada lo volvía a auto-suspender al instante.
+  lowRatingSuspensionClearedAt    DateTime?
   rating                          Float                       @default(0)
   reviewCount                     Int                         @default(0)
   bio                             String?                     @db.VarChar(500)

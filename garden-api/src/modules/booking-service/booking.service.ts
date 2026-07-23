@@ -4328,7 +4328,7 @@ const BAD_REVIEW_SUSPEND_THRESHOLD = 5;
 export async function maybeAutoSuspendForLowRating(caregiverId: string): Promise<void> {
   const profile = await prisma.caregiverProfile.findUnique({
     where: { id: caregiverId },
-    select: { suspended: true },
+    select: { suspended: true, lowRatingSuspensionClearedAt: true },
   });
   if (!profile || profile.suspended) return; // ya suspendido — no repetir la acción
 
@@ -4341,8 +4341,23 @@ export async function maybeAutoSuspendForLowRating(caregiverId: string): Promise
   // inalcanzable, porque la mayoría de las calificaciones bajas ni siquiera
   // llegan a disputarse. ownerRating, en cambio, queda seteado en el momento
   // mismo en que el cliente califica, sin importar qué pase después.
+  //
+  // Si el admin reactivó la cuenta alguna vez (lowRatingSuspensionClearedAt),
+  // solo cuentan calificaciones posteriores a esa reactivación — sin este
+  // filtro, reactivar a un cuidador auto-suspendido por rating era un no-op:
+  // el conteo histórico seguía en 5+ y la siguiente reserva calificada lo
+  // volvía a auto-suspender al instante, sin importar qué tan bien le hubiera
+  // ido desde entonces. updatedAt se usa como proxy de "cuándo se calificó"
+  // (confirmReceiptByClient escribe ownerRating con un updateMany, que
+  // bumpea updatedAt en ese momento) — no hay un campo dedicado "ratedAt".
   const badReviewCount = await prisma.booking.count({
-    where: { caregiverId, ownerRating: { lte: BAD_REVIEW_MAX_RATING } },
+    where: {
+      caregiverId,
+      ownerRating: { lte: BAD_REVIEW_MAX_RATING },
+      ...(profile.lowRatingSuspensionClearedAt
+        ? { updatedAt: { gt: profile.lowRatingSuspensionClearedAt } }
+        : {}),
+    },
   });
   if (badReviewCount < BAD_REVIEW_SUSPEND_THRESHOLD) return;
 

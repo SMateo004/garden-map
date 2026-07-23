@@ -2454,6 +2454,14 @@ export async function activateCaregiver(
       // detalle del cuidador, no solo en logs). El flag `suspended: false`
       // ya es suficiente para saber que está activo hoy.
       status: CaregiverStatus.APPROVED, // Asumimos que vuelve a aprobado si se activa
+      // Reactivación manual = borrón y cuenta nueva para el conteo de
+      // calificaciones bajas (maybeAutoSuspendForLowRating en
+      // booking.service.ts) — sin esto, reactivar a alguien auto-suspendido
+      // por 5+ calificaciones malas era inútil: el conteo histórico seguía
+      // en 5+ y la siguiente reserva calificada lo re-suspendía al toque.
+      // Se marca en TODA reactivación, no solo si fue por rating bajo —
+      // decisión del admin de reactivar implica que ya revisó la cuenta.
+      lowRatingSuspensionClearedAt: new Date(),
     },
   });
 
