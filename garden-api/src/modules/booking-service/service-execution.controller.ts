@@ -14,6 +14,7 @@ import {
   rateOwnerBodySchema,
   addEventBodySchema,
   confirmEndBodySchema,
+  reportSosBodySchema,
 } from './booking.validation.js';
 import { BadRequestError } from '../../shared/errors.js';
 
@@ -96,6 +97,30 @@ export const addEvent = asyncHandler(async (req: Request, res: Response) => {
     res.json({ success: true, data: booking });
 });
 
+/**
+ * POST /api/bookings/:id/sos — el dueño reporta un SOS durante el servicio.
+ * El cuidador nunca es notificado de esto (ver reportClientSos en
+ * booking.service.ts) — pensado para el caso en que el cuidador sea la
+ * parte cuestionada (posible robo/retención indebida de la mascota).
+ */
+export const reportSos = asyncHandler(async (req: Request, res: Response) => {
+    const bookingId = req.params.id!;
+    const clientUserId = req.user!.userId;
+
+    const parsed = reportSosBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+        throw new BadRequestError(parsed.error.errors[0]?.message ?? 'Datos inválidos', 'VALIDATION_ERROR');
+    }
+
+    const booking = await bookingService.reportClientSos(
+        bookingId,
+        clientUserId,
+        parsed.data.description,
+        parsed.data.incidentType,
+    );
+    res.json({ success: true, data: booking });
+});
+
 export const track = asyncHandler(async (req: Request, res: Response) => {
     const bookingId = req.params.id!;
     const caregiverUserId = req.user!.userId;
@@ -106,6 +131,30 @@ export const track = asyncHandler(async (req: Request, res: Response) => {
     }
 
     await bookingService.trackServiceLocation(
+        bookingId,
+        caregiverUserId,
+        parsed.data.lat,
+        parsed.data.lng,
+        parsed.data.accuracy
+    );
+    res.json({ success: true });
+});
+
+/**
+ * POST /api/bookings/:id/location-ping — punto de ubicación puntual de
+ * Hospedaje/Guardería (respuesta al push silencioso horario). Reusa el
+ * mismo schema de trackServiceLocation (mismos campos lat/lng/accuracy).
+ */
+export const locationPing = asyncHandler(async (req: Request, res: Response) => {
+    const bookingId = req.params.id!;
+    const caregiverUserId = req.user!.userId;
+
+    const parsed = trackLocationBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+        throw new BadRequestError(parsed.error.errors[0]?.message ?? 'Coordenadas inválidas', 'VALIDATION_ERROR');
+    }
+
+    await bookingService.recordHospedajeLocationPing(
         bookingId,
         caregiverUserId,
         parsed.data.lat,

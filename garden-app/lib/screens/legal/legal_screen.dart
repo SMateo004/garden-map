@@ -318,6 +318,7 @@ class TermsOfServiceScreen extends StatelessWidget {
           '• Cancelación con menos de 24 horas: reembolso del 50%.\n\n'
           'CANCELACIÓN POR EL CUIDADOR: Si el Cuidador cancela con menos de 24 horas de anticipación, el Cliente recibe reembolso del 100% y el Cuidador recibe una penalización en su perfil. Tres cancelaciones tardías en 90 días resultan en suspensión temporal de 30 días.\n\n'
           'CASOS DE FUERZA MAYOR (bloqueos, paros, desastres naturales): Si un bloqueo de calles, paro cívico, estado de emergencia declarado o un desastre natural impide físicamente que el Cliente o el Cuidador cumplan con el horario acordado, ninguna de las partes sufre penalización — la reserva puede reprogramarse sin costo o cancelarse con reembolso del 100%, sin importar la ventana de tiempo indicada arriba. Quien solicita esta excepción debe notificar a Garden apenas sea razonablemente posible, idealmente con evidencia de la situación (noticias, fotos, comunicados oficiales).\n\n'
+          'MOTIVO OBLIGATORIO Y MAL CLIMA: Toda cancelación (por el Cliente o por el Cuidador) antes de que inicie el servicio requiere indicar un motivo. Si el motivo es "Mal clima", se garantiza reembolso del 100% al Cliente sin importar cuánto faltaba para el servicio. Para cualquier otro motivo, se aplica la tabla de reembolso escalonado por tiempo indicada arriba.\n\n'
           'REEMBOLSOS: Los reembolsos se acreditan en la Billetera Garden en un plazo de 1-3 días hábiles. El retiro a cuenta bancaria puede demorar hasta 5 días hábiles adicionales.',
         ),
 
@@ -569,7 +570,8 @@ class TermsOfServiceScreen extends StatelessWidget {
           '25. Privacidad y protección de datos',
           'El tratamiento de tus datos personales se rige por la Política de Privacidad de Garden, disponible en la app y en garden.bo/privacidad.\n\n'
           'Garden cumple con los principios de protección de datos establecidos en la Constitución Política del Estado Plurinacional de Bolivia (Art. 130 — Habeas Data) y la Ley N° 164 de Telecomunicaciones.\n\n'
-          'Tienes derecho a acceder, corregir y solicitar la eliminación de tus datos personales en cualquier momento contactando a privacidad@garden.bo.',
+          'Tienes derecho a acceder, corregir y solicitar la eliminación de tus datos personales en cualquier momento contactando a privacidad@garden.bo.\n\n'
+          'UBICACIÓN DURANTE SERVICIOS ACTIVOS: Durante un Paseo, Garden registra la ubicación en tiempo real del Cuidador para mostrar el recorrido al Dueño. Durante un servicio de Hospedaje o Guardería, Garden recolecta periódicamente puntos de ubicación del dispositivo del Cuidador mientras el servicio esté en curso, además de un punto al finalizarlo — esto es una medida de seguridad frente a robo o retención indebida de la mascota (ver Sección 16), y el registro solo es accesible para el equipo de Garden y, en caso de una denuncia, para la autoridad competente. Al solicitar la eliminación de su cuenta, un Cuidador también puede quedar registrado con un último punto de ubicación conocido, por el mismo motivo de seguridad.',
         ),
 
         // ── 26. PROPIEDAD INTELECTUAL ────────────────────────────────────────

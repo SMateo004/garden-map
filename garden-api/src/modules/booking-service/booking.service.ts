@@ -36,6 +36,7 @@ import type {
 import type { BookingCreateResult } from './booking.types.js';
 import { bookingToResponse } from './booking.types.js';
 import { parseTimeBlocks, BOLIVIA_HOLIDAYS } from '../../shared/availability-utils.js';
+import { combinedHospedajeGuarderiaMax } from '../../utils/caregiver-capacity.js';
 
 /** Helper: HH:mm strings to minutes since midnight. */
 function timeToMins(t: string | null | undefined): number {
@@ -818,35 +819,52 @@ async function assertHospedajeAvailability(
   // WAITING_CAREGIVER_APPROVAL, PENDING_MG, o PENDING_PAYMENT reciente (<15 min).
   const expirationDate = new Date(Date.now() - 15 * 60 * 1000);
 
-  // Fetch maxPetsHospedaje (capacidad configurable por tipo de servicio) para
-  // determinar cuántas reservas simultáneas de HOSPEDAJE se permiten. Fallback
-  // al maxPets legacy (un solo número para los tres tipos) para perfiles que
-  // todavía no configuraron el campo específico.
+  // Hospedaje y Guardería comparten UN solo cupo simultáneo (no uno cada
+  // uno) — si el cuidador atiende ambos servicios a la vez, consume el mismo
+  // pool de mascotas. Ver combinedHospedajeGuarderiaMax().
   const profileForMaxPets = await tx.caregiverProfile.findUnique({
     where: { id: caregiverId },
-    select: { maxPetsHospedaje: true, maxPets: true },
+    select: { maxPetsHospedaje: true, maxPetsGuarderia: true, maxPets: true },
   });
-  const maxPets = profileForMaxPets?.maxPetsHospedaje ?? profileForMaxPets?.maxPets ?? 1;
+  const maxPets = combinedHospedajeGuarderiaMax(profileForMaxPets ?? {});
+
+  const activeStatusFilter = {
+    OR: [
+      {
+        status: { in: [BookingStatus.PAYMENT_PENDING_APPROVAL, BookingStatus.WAITING_CAREGIVER_APPROVAL, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS, BookingStatus.PENDING_MG] },
+      },
+      {
+        status: BookingStatus.PENDING_PAYMENT,
+        createdAt: { gte: expirationDate },
+      }
+    ],
+  };
 
   // For maxPets > 1, we need to check per-day capacity, not just total count.
-  // Find all overlapping bookings and count how many cover each date.
+  // Find all overlapping HOSPEDAJE bookings and count how many cover each date.
   const overlappingBookings = await tx.booking.findMany({
     where: {
       caregiverId,
       serviceType: 'HOSPEDAJE',
-      OR: [
-        {
-          status: { in: [BookingStatus.PAYMENT_PENDING_APPROVAL, BookingStatus.WAITING_CAREGIVER_APPROVAL, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS, BookingStatus.PENDING_MG] },
-        },
-        {
-          status: BookingStatus.PENDING_PAYMENT,
-          createdAt: { gte: expirationDate },
-        }
-      ],
+      ...activeStatusFilter,
       startDate: { lte: end },
       endDate: { gt: start },
     },
     select: { startDate: true, endDate: true, petCount: true },
+  });
+
+  // GUARDERIA consume del MISMO pool — cualquier reserva de guardería ese
+  // día cuenta contra el cupo combinado, aunque hospedaje ocupe el día
+  // entero y guardería solo algunas horas (ver ejemplo del producto: 2
+  // hospedajes que se solapan + 1 guardería ese mismo día = 3, ya al tope).
+  const overlappingGuarderia = await tx.booking.findMany({
+    where: {
+      caregiverId,
+      serviceType: 'GUARDERIA',
+      ...activeStatusFilter,
+      walkDate: { gte: start, lt: end },
+    },
+    select: { walkDate: true, petCount: true },
   });
 
   // Count total pets (not bookings) per day — block when pets + newPetCount > maxPets
@@ -860,13 +878,18 @@ async function assertHospedajeAvailability(
       d.setDate(d.getDate() + 1);
     }
   }
+  for (const b of overlappingGuarderia) {
+    if (!b.walkDate) continue;
+    const ds = b.walkDate.toISOString().slice(0, 10);
+    datePetCounts.set(ds, (datePetCounts.get(ds) ?? 0) + (b.petCount ?? 1));
+  }
   let cur = new Date(start);
   while (cur < end) {
     const ds = cur.toISOString().slice(0, 10);
     const occupiedPets = datePetCounts.get(ds) ?? 0;
     if (occupiedPets + newPetCount > maxPets) {
       throw new AvailabilityConflictError(
-        `El cuidador ya tiene ${occupiedPets} mascota${occupiedPets !== 1 ? 's' : ''} hospedada${occupiedPets !== 1 ? 's' : ''} el ${ds} (máx. ${maxPets}). Elige otras fechas.`,
+        `El cuidador ya tiene ${occupiedPets} mascota${occupiedPets !== 1 ? 's' : ''} entre hospedaje y guardería el ${ds} (máx. ${maxPets} combinado). Elige otras fechas.`,
         'startDate'
       );
     }
@@ -900,17 +923,16 @@ async function assertPaseoAvailability(
 
   const profile = await tx.caregiverProfile.findUnique({
     where: { id: caregiverId },
-    select: { defaultAvailabilitySchedule: true, maxPets: true, maxPetsPaseo: true, maxPetsGuarderia: true },
+    select: { defaultAvailabilitySchedule: true, maxPets: true, maxPetsPaseo: true, maxPetsHospedaje: true, maxPetsGuarderia: true },
   });
   const defaultSchedule = (profile?.defaultAvailabilitySchedule as Record<string, unknown>) ?? {};
   const defaultBlocks = defaultSchedule['paseoTimeBlocks'] as Record<string, boolean> | undefined;
-  // Capacidad por tipo de servicio — esta función atiende tanto PASEO como
-  // GUARDERIA, cada una con su propio límite configurable. Fallback al
-  // maxPets legacy para perfiles que todavía no configuraron los campos
-  // específicos.
-  const maxPets = (serviceType === 'GUARDERIA' ? profile?.maxPetsGuarderia : profile?.maxPetsPaseo)
-    ?? profile?.maxPets
-    ?? 1;
+  // PASEO tiene su propio cupo, totalmente independiente. GUARDERIA
+  // comparte el pool combinado con HOSPEDAJE (ver combinedHospedajeGuarderiaMax) —
+  // no es "su propio límite" como decía el comentario viejo.
+  const maxPets = serviceType === 'GUARDERIA'
+    ? combinedHospedajeGuarderiaMax(profile ?? {})
+    : (profile?.maxPetsPaseo ?? profile?.maxPets ?? 1);
 
   const avail = await tx.availability.findUnique({
     where: {
@@ -950,11 +972,15 @@ async function assertPaseoAvailability(
 
   const expirationDate = new Date(Date.now() - 15 * 60 * 1000);
 
-  // Fetch ALL active bookings for this date and caregiver
+  // Fetch active bookings for this date and caregiver — SOLO del mismo
+  // servicio (antes esta query no filtraba por serviceType, así que un
+  // PASEO y una GUARDERIA en el mismo horario competían por el mismo cupo
+  // cuando en realidad son pools independientes).
   const existingBookings = await tx.booking.findMany({
     where: {
       caregiverId,
       walkDate: date,
+      serviceType,
       OR: [
         {
           status: { in: [BookingStatus.PAYMENT_PENDING_APPROVAL, BookingStatus.WAITING_CAREGIVER_APPROVAL, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS, BookingStatus.PENDING_MG] },
@@ -968,6 +994,32 @@ async function assertPaseoAvailability(
     select: { startTime: true, duration: true, timeSlot: true, petCount: true },
   });
 
+  // GUARDERIA comparte pool con HOSPEDAJE — cualquier hospedaje que cubra
+  // este día ocupa cupo todo el día (no tiene horas específicas), así que
+  // se suma como una constante a cada chequeo por hora de abajo.
+  let hospedajePetsThatDay = 0;
+  if (serviceType === 'GUARDERIA') {
+    const overlappingHospedaje = await tx.booking.findMany({
+      where: {
+        caregiverId,
+        serviceType: 'HOSPEDAJE',
+        startDate: { lte: date },
+        endDate: { gt: date },
+        OR: [
+          {
+            status: { in: [BookingStatus.PAYMENT_PENDING_APPROVAL, BookingStatus.WAITING_CAREGIVER_APPROVAL, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS, BookingStatus.PENDING_MG] },
+          },
+          {
+            status: BookingStatus.PENDING_PAYMENT,
+            createdAt: { gte: expirationDate },
+          }
+        ],
+      },
+      select: { petCount: true },
+    });
+    hospedajePetsThatDay = overlappingHospedaje.reduce((s, b) => s + (b.petCount ?? 1), 0);
+  }
+
   // Un bloque 'legacy' es aquel que no tiene hora de inicio (bloquea todo el slot)
   const legacyBookings = existingBookings.filter(b => (!b.startTime || b.startTime === '') && b.timeSlot === timeSlot);
   const timedBookings = existingBookings.filter(b => !!b.startTime && b.startTime !== '');
@@ -976,10 +1028,10 @@ async function assertPaseoAvailability(
   const sumPets = (bArr: typeof existingBookings) => bArr.reduce((s, b) => s + (b.petCount ?? 1), 0);
 
   const isSpecific = !!startTime && startTime !== '';
-  logger.info('Check-Paseo-Avail', { walkDate, timeSlot, startTime, isSpecific, foundCount: existingBookings.length, newPetCount });
+  logger.info('Check-Paseo-Avail', { walkDate, timeSlot, startTime, isSpecific, foundCount: existingBookings.length, newPetCount, hospedajePetsThatDay });
 
   // 1. Si las reservas legacy en este bloque ya llenaron la capacidad (por mascotas), bloquear.
-  const legacyPets = sumPets(legacyBookings);
+  const legacyPets = sumPets(legacyBookings) + hospedajePetsThatDay;
   if (legacyPets + newPetCount > maxPets) {
     throw new AvailabilityConflictError(
       `El bloque ${timeSlot} ya tiene ${legacyPets} mascota${legacyPets !== 1 ? 's' : ''} que ocupa${legacyPets !== 1 ? 'n' : ''} todo el horario (máx. ${maxPets}).`,
@@ -988,7 +1040,7 @@ async function assertPaseoAvailability(
   }
 
   // 2. Si la NUEVA reserva no tiene hora y ya se llenó la capacidad del bloque, bloqueamos
-  const slotPets = sumPets(existingBookings.filter(b => b.timeSlot === timeSlot));
+  const slotPets = sumPets(existingBookings.filter(b => b.timeSlot === timeSlot)) + hospedajePetsThatDay;
   if (!isSpecific && slotPets + newPetCount > maxPets) {
     throw new AvailabilityConflictError(
       `El bloque ${timeSlot} ya tiene ${slotPets} mascota${slotPets !== 1 ? 's' : ''} (máx. ${maxPets}). Por favor, selecciona una hora específica para buscar disponibilidad.`,
@@ -1050,8 +1102,9 @@ async function assertPaseoAvailability(
         }
       }
     }
+    overlapPets += hospedajePetsThatDay;
     if (overlapPets + newPetCount > maxPets) {
-      logger.warn('Overlap capacity exceeded in PASEO booking', { requestedStart, overlapPets, newPetCount, maxPets });
+      logger.warn('Overlap capacity exceeded in booking', { requestedStart, overlapPets, newPetCount, maxPets, serviceType });
       throw new AvailabilityConflictError(
         `Conflicto: El horario solicitado (${startTime}) se solapa con ${overlapPets} mascota${overlapPets !== 1 ? 's' : ''} existente${overlapPets !== 1 ? 's' : ''} (máx. ${maxPets} simultánea${maxPets > 1 ? 's' : ''}).`,
         'startTime'
@@ -1717,7 +1770,8 @@ export async function initPayment(
 export async function requestCancellationByCaregiver(
   bookingId: string,
   caregiverUserId: string,
-  reason: string
+  reason: string,
+  reasonCode: string
 ): Promise<BookingCreateResult> {
   const result = await prisma.$transaction(async (tx) => {
     const profile = await tx.caregiverProfile.findFirst({
@@ -1756,6 +1810,10 @@ export async function requestCancellationByCaregiver(
         status: BookingStatus.CANCELLED,
         cancelledAt: now,
         cancellationReason: reason,
+        cancellationReasonCode: reasonCode,
+        // Distingue en el panel admin quién canceló — antes quedaba null y
+        // era indistinguible de una cancelación del cliente sin motivo.
+        cancellationSource: 'CAREGIVER_REQUEST',
         refundAmount: booking.totalAmount,   // full refund
         refundStatus: RefundStatus.APPROVED,
       },
@@ -1765,7 +1823,7 @@ export async function requestCancellationByCaregiver(
       // reembolso ni la notificación.
       throw new BookingValidationError('Esta reserva ya fue cancelada.');
     }
-    const updated = { ...booking, status: BookingStatus.CANCELLED, cancelledAt: now, cancellationReason: reason, refundAmount: booking.totalAmount, refundStatus: RefundStatus.APPROVED };
+    const updated = { ...booking, status: BookingStatus.CANCELLED, cancelledAt: now, cancellationReason: reason, cancellationReasonCode: reasonCode, cancellationSource: 'CAREGIVER_REQUEST', refundAmount: booking.totalAmount, refundStatus: RefundStatus.APPROVED };
 
     // ── Auto-refund completo a la billetera, sin importar el método de pago ──
     const refundAmount = Number(booking.totalAmount);
@@ -1842,6 +1900,7 @@ export async function requestCancellationByCaregiver(
     serviceType: result.serviceType,
     totalAmount: Number(result.totalAmount),
     reason,
+    reasonCode,
   });
 
   return result;
@@ -1945,7 +2004,8 @@ export async function cancelBooking(
   bookingId: string,
   clientId: string,
   cancellationReason?: string,
-  cancellationSource?: 'CLIENT_REQUEST' | 'QR_ABANDONED' | 'PAYMENT_TIMEOUT'
+  cancellationSource?: 'CLIENT_REQUEST' | 'QR_ABANDONED' | 'PAYMENT_TIMEOUT',
+  cancellationReasonCode?: string
 ): Promise<BookingCreateResult> {
   const result = await prisma.$transaction(async (tx) => {
     const booking = await tx.booking.findFirst({
@@ -1971,6 +2031,12 @@ export async function cancelBooking(
       // No payment was made yet — nothing to refund
       refundAmount = 0;
       refundStatus = RefundStatus.REJECTED;
+    } else if (cancellationReasonCode === 'CLIMA') {
+      // Mal clima siempre reembolsa el 100%, sin importar cuánto faltaba
+      // para el servicio — a diferencia de cualquier otro motivo, que sigue
+      // la política escalonada por horas de abajo.
+      refundAmount = Number(booking.totalAmount);
+      refundStatus = RefundStatus.APPROVED;
     } else {
       // Apply tiered cancellation policy (hospedaje: 100%/>48h, 50%/24-48h, 0%/<24h;
       // paseo: 100%/>12h, 50%/6-12h, 0%/<6h) — configured via admin settings.
@@ -2000,6 +2066,7 @@ export async function cancelBooking(
         cancelledAt: now,
         cancellationReason: cancellationReason ?? null,
         cancellationSource: cancellationSource ?? null,
+        cancellationReasonCode: cancellationReasonCode ?? null,
         refundAmount: new Prisma.Decimal(refundAmount),
         refundStatus,
       },
@@ -2015,6 +2082,7 @@ export async function cancelBooking(
       cancelledAt: now,
       cancellationReason: cancellationReason ?? null,
       cancellationSource: cancellationSource ?? null,
+      cancellationReasonCode: cancellationReasonCode ?? null,
       refundAmount: new Prisma.Decimal(refundAmount),
       refundStatus,
     };
@@ -2120,7 +2188,7 @@ export async function cancelBooking(
     action: 'BOOKING_CANCELLED',
     entity: 'Booking',
     entityId: bookingId,
-    details: { reason: cancellationReason ?? null, refundAmount: result.refundAmount, refundStatus: result.refundStatus },
+    details: { reason: cancellationReason ?? null, reasonCode: cancellationReasonCode ?? null, refundAmount: result.refundAmount, refundStatus: result.refundStatus },
   });
 
   track(clientId, 'booking_cancelled', {
@@ -2132,6 +2200,7 @@ export async function cancelBooking(
     refundAmount: result.refundAmount,
     refundStatus: result.refundStatus,
     reason: cancellationReason ?? null,
+    reasonCode: cancellationReasonCode ?? null,
   });
 
   // Registro en Blockchain (asíncrono) — guarda txHash si la tx tiene éxito
@@ -3383,6 +3452,18 @@ export async function addServiceEvent(
   if (type === 'INCIDENT_RESOLVED' && !booking.pausedAt) {
     throw new BadRequestError('No hay ninguna emergencia activa que resolver en esta reserva');
   }
+  // Si el dueño reportó un SOS, el cuidador NO puede autorresolverlo — tiene
+  // sentido que sea así justo porque el cuidador podría ser la parte
+  // cuestionada. Solo un admin puede cerrarlo (ver resolveIncidentAdmin).
+  if (type === 'INCIDENT_RESOLVED') {
+    const existingEvents = (booking.serviceEvents as any[]) || [];
+    const lastRelevant = [...existingEvents].reverse().find(
+      (e) => e.type === 'CLIENT_SOS' || e.type === 'INCIDENT' || e.type === 'ACCIDENT'
+    );
+    if (lastRelevant?.type === 'CLIENT_SOS') {
+      throw new ForbiddenError('Esta alerta fue reportada por el dueño — solo un administrador puede resolverla.');
+    }
+  }
 
   const events = (booking.serviceEvents as any[]) || [];
   events.push({
@@ -3483,6 +3564,69 @@ export async function addServiceEvent(
   return bookingToResponse(updated);
 }
 
+/**
+ * SOS del dueño durante un servicio activo — hermana de addServiceEvent()
+ * pero del lado del cliente. A diferencia de un incidente reportado por el
+ * cuidador (que sí notifica al dueño con tono calmo), acá el CUIDADOR NUNCA
+ * es notificado: este botón existe justamente para el caso en que el
+ * cuidador sea la parte cuestionada (posible robo/retención indebida de la
+ * mascota) — avisarle sería contraproducente. Solo un admin puede resolver
+ * esta alerta (ver el guard en addServiceEvent y resolveIncidentAdmin en
+ * admin.service.ts).
+ */
+export async function reportClientSos(
+  bookingId: string,
+  clientUserId: string,
+  description: string,
+  incidentType?: string
+): Promise<BookingCreateResult> {
+  if (!description || description.trim().length === 0) {
+    throw new BadRequestError('La descripción es obligatoria');
+  }
+  if (description.length > 1000) {
+    throw new BadRequestError('La descripción no puede superar 1000 caracteres');
+  }
+
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, clientId: clientUserId },
+  });
+  if (!booking) throw new BookingNotFoundError(bookingId);
+  if (booking.status !== BookingStatus.IN_PROGRESS) {
+    throw new BadRequestError('Solo se puede reportar durante un servicio en curso');
+  }
+
+  const events = (booking.serviceEvents as any[]) || [];
+  events.push({
+    type: 'CLIENT_SOS',
+    description,
+    incidentType: incidentType ?? null,
+    photoUrl: null,
+    videoUrl: null,
+    timestamp: new Date().toISOString(),
+  });
+
+  const pauseData: { pausedAt?: Date } = {};
+  if (!booking.pausedAt) pauseData.pausedAt = new Date();
+
+  const updated = await prisma.booking.update({
+    where: { id: bookingId },
+    data: { serviceEvents: events, ...pauseData },
+  });
+
+  await prisma.adminNotification.create({
+    data: { type: 'CLIENT_SOS_URGENT', caregiverId: booking.caregiverId, bookingId: booking.id },
+  }).catch(() => {});
+  sendPushToAdmins(
+    '🆘 URGENTE: el dueño reportó un problema',
+    `Reserva ${bookingId.slice(0, 8).toUpperCase()} — ${incidentType ? `[${incidentType}] ` : ''}${description}`.slice(0, 180),
+    { type: 'CLIENT_SOS_URGENT', bookingId }
+  ).catch(() => {});
+
+  logger.info('Client SOS reported — admin notified urgently, caregiver NOT notified, service timer paused', { bookingId, clientUserId });
+
+  return bookingToResponse(updated);
+}
+
 function calcGpsDistance(points: { lat: number; lng: number }[]): number {
   let total = 0;
   for (let i = 1; i < points.length; i++) {
@@ -3549,6 +3693,53 @@ export async function trackServiceLocation(
   if (io) {
     io.to(`booking:${bookingId}`).emit('gps_update', punto);
   }
+}
+
+/**
+ * Registra un punto de ubicación puntual del cuidador durante un servicio de
+ * Hospedaje/Guardería activo — llamado por la app en respuesta al push
+ * silencioso horario (hospedaje-location-ping.job.ts) o al concluir el
+ * servicio. A diferencia de trackServiceLocation() (exclusivo de Paseo,
+ * tracking continuo + mapa en vivo), esto es solo trazabilidad de auditoría:
+ * no emite por Socket.io y no calcula distancia recorrida.
+ */
+export async function recordHospedajeLocationPing(
+  bookingId: string,
+  caregiverUserId: string,
+  lat: number,
+  lng: number,
+  accuracy?: number
+): Promise<void> {
+  if (typeof lat !== 'number' || isNaN(lat) || lat < -90 || lat > 90) {
+    throw new BadRequestError('lat inválido: debe ser un número entre -90 y 90', 'INVALID_COORDS');
+  }
+  if (typeof lng !== 'number' || isNaN(lng) || lng < -180 || lng > 180) {
+    throw new BadRequestError('lng inválido: debe ser un número entre -180 y 180', 'INVALID_COORDS');
+  }
+
+  const profile = await prisma.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
+  if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
+
+  const booking = await prisma.booking.findFirst({ where: { id: bookingId, caregiverId: profile.id } });
+  if (!booking) throw new BookingNotFoundError(bookingId);
+  if (booking.serviceType !== ServiceType.HOSPEDAJE && booking.serviceType !== ServiceType.GUARDERIA) {
+    throw new BadRequestError('Este endpoint es solo para Hospedaje/Guardería');
+  }
+  if (booking.status !== BookingStatus.IN_PROGRESS) {
+    throw new BadRequestError('Solo se puede enviar ubicación cuando el servicio está en curso');
+  }
+
+  const punto = { lat, lng, timestamp: new Date().toISOString(), accuracy: accuracy ?? 0, type: 'HOURLY_PING' };
+  let tracking: any[] = (booking.serviceTrackingData as any[]) || [];
+  if (tracking.length >= GPS_MAX_POINTS) {
+    tracking = tracking.slice(-1000);
+  }
+  tracking.push(punto);
+
+  await prisma.booking.update({
+    where: { id: bookingId },
+    data: { serviceTrackingData: tracking },
+  });
 }
 
 export async function getGpsTrack(bookingId: string, userId: string): Promise<any[]> {

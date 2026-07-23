@@ -321,21 +321,34 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     }
   }
 
+  static const Map<String, String> _cancellationReasonLabels = {
+    'CLIMA': 'Mal clima',
+    'EMERGENCIA_PERSONAL': 'Emergencia personal',
+    'CAMBIO_DE_PLANES': 'Cambio de planes',
+    'PROBLEMA_CON_MASCOTA_O_CUIDADOR': 'Problema con la mascota o el cuidador',
+    'OTRO': 'Otro',
+  };
+
   Future<void> _cancelBooking(String bookingId) async {
     if (_cancellingIds.contains(bookingId)) return; // ya hay una cancelación en curso
-    final confirmed = await showModalBottomSheet<bool>(
+    final result = await showModalBottomSheet<Map<String, String>>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) => _buildCancelSheet(ctx),
     );
-    if (confirmed != true) return;
+    if (result == null) return;
     if (_cancellingIds.contains(bookingId)) return; // re-chequeo tras cerrar el sheet
     setState(() => _cancellingIds.add(bookingId));
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/bookings/$bookingId/cancel'),
         headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'reasonCode': result['reasonCode'],
+          if (result['reasonDetail'] != null && result['reasonDetail']!.isNotEmpty)
+            'reason': result['reasonDetail'],
+        }),
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
@@ -358,76 +371,117 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    String? selectedReasonCode;
+    final detailController = TextEditingController();
 
-    return Container(
-      padding: EdgeInsets.only(
-        left: 24, right: 24, top: 24,
-        bottom: MediaQuery.of(ctx).viewInsets.bottom + 40,
-      ),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40, height: 4,
-            decoration: BoxDecoration(color: GardenColors.textHint, borderRadius: BorderRadius.circular(2)),
-          ),
-          const SizedBox(height: 28),
-          Container(
-            width: 72, height: 72,
-            decoration: BoxDecoration(
-              color: GardenColors.error.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-              border: Border.all(color: GardenColors.error.withValues(alpha: 0.3), width: 2),
+    return StatefulBuilder(
+      builder: (ctx, setSheetState) => Container(
+        padding: EdgeInsets.only(
+          left: 24, right: 24, top: 24,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 40,
+        ),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(color: GardenColors.textHint, borderRadius: BorderRadius.circular(2)),
             ),
-            child: const Icon(Icons.cancel_outlined, color: GardenColors.error, size: 40),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Cancelar reserva',
-            style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '¿Estás seguro de que quieres cancelar esta reserva? Esta acción no se puede deshacer.',
-            style: TextStyle(color: subtextColor, fontSize: 15, height: 1.5),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 32),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: GardenColors.error,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 0,
+            const SizedBox(height: 28),
+            Container(
+              width: 72, height: 72,
+              decoration: BoxDecoration(
+                color: GardenColors.error.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+                border: Border.all(color: GardenColors.error.withValues(alpha: 0.3), width: 2),
               ),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Sí, cancelar reserva', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              child: const Icon(Icons.cancel_outlined, color: GardenColors.error, size: 40),
             ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                side: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            const SizedBox(height: 20),
+            Text(
+              'Cancelar reserva',
+              style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '¿Cuál es el motivo? Esta acción no se puede deshacer.',
+              style: TextStyle(color: subtextColor, fontSize: 15, height: 1.5),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: _cancellationReasonLabels.entries.map((entry) {
+                final isSelected = selectedReasonCode == entry.key;
+                return ChoiceChip(
+                  label: Text(entry.value),
+                  selected: isSelected,
+                  selectedColor: GardenColors.primary,
+                  backgroundColor: isDark ? GardenColors.darkBackground : GardenColors.lightBackground,
+                  labelStyle: TextStyle(color: isSelected ? Colors.white : textColor, fontSize: 13),
+                  onSelected: (_) => setSheetState(() => selectedReasonCode = entry.key),
+                );
+              }).toList(),
+            ),
+            if (selectedReasonCode == 'OTRO') ...[
+              const SizedBox(height: 16),
+              TextField(
+                controller: detailController,
+                maxLength: 500,
+                minLines: 2,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  hintText: 'Contanos brevemente qué pasó',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onChanged: (_) => setSheetState(() {}),
               ),
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(
-                'No, mantener reserva',
-                style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 16),
+            ],
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: GardenColors.error,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+                onPressed: (selectedReasonCode == null ||
+                        (selectedReasonCode == 'OTRO' && detailController.text.trim().isEmpty))
+                    ? null
+                    : () => Navigator.pop(ctx, {
+                          'reasonCode': selectedReasonCode!,
+                          'reasonDetail': detailController.text.trim(),
+                        }),
+                child: const Text('Sí, cancelar reserva', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  side: BorderSide(color: isDark ? GardenColors.darkBorder : GardenColors.lightBorder),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(
+                  'No, mantener reserva',
+                  style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 16),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -56,8 +58,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   int _completionPercentage = 0;
 
   // GlobalKeys for scroll-to-field on validation error
-  final _keyBio = GlobalKey();
-  final _keyBioDetail = GlobalKey();
   final _keyAddress = GlobalKey();
   final _keyServicesPrices = GlobalKey();
   final _keySpaceType = GlobalKey();
@@ -73,7 +73,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
   // Controllers
   final _bioController = TextEditingController();
-  final _bioDetailController = TextEditingController();
   final _addressController = TextEditingController();
   final _pricePerDayController = TextEditingController();
   final _pricePerWalk30Controller = TextEditingController();
@@ -90,6 +89,57 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   final _whatDiffersController = TextEditingController();
   final _handleAnxiousController = TextEditingController();
   final _emergencyResponseController = TextEditingController();
+
+  // ── Chequeo de coherencia con IA ──────────────────────────────────────────
+  // El texto de estos campos se muestra tal cual en el perfil comercial que
+  // ve el cliente — con debounce mientras el cuidador escribe, se le avisa
+  // si lo que puso no parece tener sentido (relleno de teclado, irrelevante,
+  // etc.), sin bloquear el guardado (es un aviso, no un error duro).
+  final Map<String, String?> _coherenceWarnings = {};
+  final Map<String, Timer> _coherenceTimers = {};
+
+  void _scheduleCoherenceCheck(String fieldKey, String label, String text) {
+    _coherenceTimers[fieldKey]?.cancel();
+    if (text.trim().length < 10) {
+      if (_coherenceWarnings[fieldKey] != null) setState(() => _coherenceWarnings[fieldKey] = null);
+      return;
+    }
+    _coherenceTimers[fieldKey] = Timer(const Duration(milliseconds: 900), () async {
+      try {
+        final res = await http.post(
+          Uri.parse('$_baseUrl/caregiver/profile/check-text'),
+          headers: {'Authorization': 'Bearer $_caregiverToken', 'Content-Type': 'application/json'},
+          body: jsonEncode({'field': label, 'text': text}),
+        );
+        if (!mounted) return;
+        final body = jsonDecode(res.body);
+        if (body is Map && body['success'] == true) {
+          final data = body['data'];
+          final coherente = data?['coherente'] == true;
+          setState(() => _coherenceWarnings[fieldKey] = coherente ? null : (data?['razon'] as String? ?? 'Este texto no parece coherente.'));
+        }
+      } catch (_) {
+        // Silencioso — es un aviso opcional, nunca debe romper el formulario.
+      }
+    });
+  }
+
+  Widget _coherenceWarningText(String fieldKey) {
+    final warning = _coherenceWarnings[fieldKey];
+    if (warning == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded, size: 14, color: GardenColors.warning),
+          const SizedBox(width: 6),
+          Expanded(child: Text(warning, style: const TextStyle(color: GardenColors.warning, fontSize: 11.5))),
+        ],
+      ),
+    );
+  }
+
   bool _acceptAggressive = false;
   bool _acceptPuppies = false;
   bool _acceptSeniors = false;
@@ -143,6 +193,13 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   bool _uploadingCaregiverPhoto = false;
   bool _uploadingPlacePhoto = false;
 
+  // Sección Documentos — identidad/CI ya se verifican al registrarse;
+  // antecedentes penales es un filtro opcional, no bloquea el marketplace.
+  String _identityVerificationStatus = 'PENDING';
+  bool get _identityVerified => _identityVerificationStatus == 'VERIFIED';
+  String _antecedentesStatus = 'PENDING'; // PENDING | EN_REVISION | LIMPIO | FLAGGED
+  bool _uploadingAntecedentes = false;
+
   // Services from API (used when widget.servicesOffered is empty)
   List<String> _apiServicesOffered = [];
 
@@ -195,7 +252,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   // cuidador) hay que confiar en el valor real ya cargado desde el backend.
   bool _apiIsCompany = false;
   bool get _ic => widget.isCompany || _apiIsCompany;
-  String get _lAboutTitle     => _ic ? 'Sobre la empresa'               : 'Sobre ti como cuidador';
   String get _lExpTitle       => _ic ? 'Historia de la empresa'         : 'Tu experiencia profesional';
   String get _lYearsLabel     => _ic ? 'Años de operación'              : 'Años cuidando mascotas';
   String get _lExpDesc        => _ic ? 'Describe los servicios de tu empresa' : 'Describe tu experiencia';
@@ -208,7 +264,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   String get _lSituTitle      => _ic ? 'Protocolos y situaciones especiales' : 'Situaciones especiales';
   String get _lAnxious        => _ic ? '¿Cómo manejan mascotas con necesidades especiales?' : '¿Cómo manejas mascotas ansiosas?';
   String get _lEmergency      => _ic ? '¿Cuáles son sus protocolos de emergencia?'          : '¿Cómo respondes ante emergencias?';
-  String get _lBioHint        => _ic ? 'Descripción detallada: historia de la empresa, enfoque, servicios, etc.' : 'Biografía detallada: experiencia, método de cuidado, etc.';
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
@@ -256,7 +311,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     final paseoBlocks = defaultSchedule['paseoTimeBlocks'] ?? {};
 
     _bioController.text = profile['bio'] ?? '';
-    _bioDetailController.text = profile['bioDetail'] ?? '';
     _addressController.text = profile['address'] ?? '';
     _pricePerDayController.text = (profile['pricePerDay'] ?? 0).toString();
     _pricePerWalk30Controller.text = (profile['pricePerWalk30'] ?? 0).toString();
@@ -278,8 +332,16 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     // este cambio, para no resetear a 1 lo que el cuidador ya había puesto.
     final legacyMaxPets = (profile['maxPets'] as num?)?.toInt() ?? (details['maxPets'] as num?)?.toInt() ?? 1;
     _maxPetsPaseo = (profile['maxPetsPaseo'] as num?)?.toInt() ?? legacyMaxPets;
-    _maxPetsHospedaje = (profile['maxPetsHospedaje'] as num?)?.toInt() ?? legacyMaxPets;
-    _maxPetsGuarderia = (profile['maxPetsGuarderia'] as num?)?.toInt() ?? legacyMaxPets;
+    // Hospedaje y Guardería comparten UN solo cupo combinado (no uno cada
+    // uno) — se toma el mayor de los dos valores guardados como punto de
+    // partida, para no achicar por accidente una capacidad que el cuidador
+    // ya había configurado antes de este cambio.
+    final combinedHospedajeGuarderia = [
+      (profile['maxPetsHospedaje'] as num?)?.toInt() ?? legacyMaxPets,
+      (profile['maxPetsGuarderia'] as num?)?.toInt() ?? legacyMaxPets,
+    ].reduce((a, b) => a > b ? a : b);
+    _maxPetsHospedaje = combinedHospedajeGuarderia;
+    _maxPetsGuarderia = combinedHospedajeGuarderia;
     // Prioridad: campo animalTypes del DB (fuente de verdad para el marketplace)
     // Fallback: serviceDetails.acceptedPetTypes (legacy)
     final dbAnimalTypes = List<String>.from(profile['animalTypes'] ?? []);
@@ -299,6 +361,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       ..addAll(List.filled(_photos.length, null));
 
     _apiServicesOffered = List<String>.from(profile['servicesOffered'] ?? []);
+    _identityVerificationStatus = profile['identityVerificationStatus'] as String? ?? 'PENDING';
+    _antecedentesStatus = profile['antecedentesStatus'] as String? ?? 'PENDING';
     _caregiverPhotoUrls = List<String>.from(profile['caregiverPhotos'] ?? []);
     final rawPlace = profile['placePhotos'];
     if (rawPlace is Map) {
@@ -404,7 +468,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     final expYears = int.tryParse(_experienceYearsController.text.replaceAll('+', '')) ?? -1;
 
     return [
-      _bioDetailController.text.trim().length >= 3,
       services.isNotEmpty,
       hasPaseoPrice,
       hasHospedajePrice,
@@ -421,6 +484,80 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       true, // acceptPuppies
       true, // acceptSeniors
     ];
+  }
+
+  /// Misma lógica que _completionFields(), pero con una etiqueta legible
+  /// por cada chequeo — para mostrarle al cuidador EXACTAMENTE qué falta,
+  /// en vez de un solo número de porcentaje sin detalle. Las opciones que
+  /// aparecen cambian según qué servicio(s) ofrece (un chequeo que no
+  /// aplica al servicio actual directamente no se incluye en la lista).
+  List<(String, bool)> _completionChecklist() {
+    final services = _effectiveServices;
+    final offersPaseo     = services.contains('PASEO');
+    final offersHospedaje = services.contains('HOSPEDAJE');
+    final offersGuarderia = services.contains('GUARDERIA');
+    final needsSpace      = offersHospedaje || offersGuarderia;
+
+    final hasPaseoPrice     = (double.tryParse(_pricePerWalk30Controller.text) ?? 0) > 0 || (double.tryParse(_pricePerWalk60Controller.text) ?? 0) > 0;
+    final hasHospedajePrice = (double.tryParse(_pricePerDayController.text) ?? 0) > 0;
+    final hasGuarderiaPrice = (double.tryParse(_pricePerGuarderiaController.text) ?? 0) > 0;
+    final hasPlacePhotos = ['sala', 'descanso', 'alimentacion'].every((s) => (_placePhotoUrls[s]?.isNotEmpty ?? false));
+    final minPhotos = services.length == 1 && offersPaseo ? 2 : 4;
+    final hasPhotos = _caregiverPhotoUrls.length >= minPhotos;
+    final expYears = int.tryParse(_experienceYearsController.text.replaceAll('+', '')) ?? -1;
+
+    return [
+      ('Al menos un servicio activo', services.isNotEmpty),
+      if (offersPaseo) ('Precio de paseo', hasPaseoPrice),
+      if (offersHospedaje) ('Precio de hospedaje', hasHospedajePrice),
+      if (offersGuarderia) ('Precio de guardería', hasGuarderiaPrice),
+      ('Fotos tuyas ($minPhotos mín.)', hasPhotos),
+      if (needsSpace) ('Fotos del lugar (sala, descanso, alimentación)', hasPlacePhotos),
+      ('Años de experiencia', expYears >= 0),
+      if (!_isAmateur) ('Descripción de tu experiencia', _experienceDescController.text.trim().length >= 15),
+      ('¿Por qué eres cuidador?', _whyCaregiverController.text.trim().length >= 3),
+      ('¿Qué te diferencia?', _whatDiffersController.text.trim().length >= 3),
+      ('Tipos de mascota que aceptas', _acceptedPetTypes.isNotEmpty),
+      ('Tamaños que aceptas', _acceptedSizes.isNotEmpty),
+    ];
+  }
+
+  void _showCompletionChecklist() {
+    final isDark = themeNotifier.isDark;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final items = _completionChecklist();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Qué falta para completar tu perfil', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text('Las opciones cambian según los servicios que ofreces.', style: TextStyle(color: subtextColor, fontSize: 12)),
+            const SizedBox(height: 16),
+            ...items.map((item) {
+              final (label, done) = item;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(children: [
+                  Icon(done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                      size: 18, color: done ? GardenColors.success : subtextColor.withValues(alpha: 0.5)),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(label, style: TextStyle(color: done ? textColor : subtextColor, fontSize: 13.5))),
+                ]),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
   }
 
   void _computeCompletion() {
@@ -469,9 +606,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
   Future<void> _saveAllData() async {
     // ── Validación ───────────────────────────────────────────────────────────
-    if (_bioDetailController.text.trim().length < 10) {
-      return _showValidationError('La descripción detallada debe tener al menos 10 caracteres', scrollTo: _keyBioDetail);
-    }
     if (_acceptedPetTypes.isEmpty) {
       return _showValidationError('Selecciona al menos un tipo de mascota que aceptas', scrollTo: _keyPetTypes);
     }
@@ -583,7 +717,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
       final body = <String, dynamic>{
         'bio': _bioController.text.trim(),
-        'bioDetail': _bioDetailController.text.trim(),
         'homeType': hType,
         'spaceType': _selectedHomeTypes,
         'hasYard': _hasYard,
@@ -807,6 +940,247 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     } catch (_) {}
   }
 
+  // ── Documentos — antecedentes penales (FELCC/REJAP) ─────────────────────
+  // Filtro opcional, no bloquea el marketplace. Un agente de IA revisa que
+  // el documento sea legítimo y si muestra antecedentes explícitos — si los
+  // hay, no se suspende solo: queda en revisión para que decida un admin.
+  Future<void> _pickAndUploadAntecedentes() async {
+    final source = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _buildAntecedentesPickerSheet(ctx),
+    );
+    if (source == null) return;
+
+    try {
+      Uint8List? bytes;
+      String filename;
+      String mimeType;
+
+      if (source == 'camera' || source == 'gallery') {
+        final picked = await ImagePicker().pickImage(
+          source: source == 'camera' ? ImageSource.camera : ImageSource.gallery,
+          imageQuality: kIsWeb ? null : 85,
+        );
+        if (picked == null) return;
+        bytes = Uint8List.fromList(await picked.readAsBytes());
+        filename = picked.name.isEmpty ? 'antecedentes_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
+        mimeType = 'image/jpeg';
+      } else {
+        final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf'], withData: true);
+        if (result == null || result.files.isEmpty || result.files.single.bytes == null) return;
+        bytes = result.files.single.bytes;
+        filename = result.files.single.name;
+        mimeType = 'application/pdf';
+      }
+
+      if (!mounted) return;
+      setState(() => _uploadingAntecedentes = true);
+      final mediaParts = mimeType.split('/');
+      final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/caregiver/profile/antecedentes'));
+      request.headers['Authorization'] = 'Bearer $_caregiverToken';
+      request.files.add(http.MultipartFile.fromBytes(
+        'document', bytes!,
+        filename: filename,
+        contentType: MediaType(mediaParts[0], mediaParts[1]),
+      ));
+      final streamed = await request.send().timeout(const Duration(minutes: 2));
+      final data = jsonDecode(await streamed.stream.bytesToString());
+      if (!mounted) return;
+      if (data['success'] == true) {
+        setState(() => _antecedentesStatus = data['data']?['antecedentesStatus'] as String? ?? 'EN_REVISION');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Documento enviado. Lo estamos revisando.'), backgroundColor: GardenColors.success),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['error']?['message'] ?? 'Error al subir el documento'), backgroundColor: GardenColors.error),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: GardenColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingAntecedentes = false);
+    }
+  }
+
+  Widget _buildAntecedentesPickerSheet(BuildContext ctx) {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+      decoration: BoxDecoration(color: surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Subir documento', style: TextStyle(color: textColor, fontSize: 17, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 12),
+          ListTile(
+            leading: const Icon(Icons.camera_alt_outlined, color: GardenColors.primary),
+            title: const Text('Tomar foto'),
+            onTap: () => Navigator.pop(ctx, 'camera'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined, color: GardenColors.primary),
+            title: const Text('Elegir de galería'),
+            onTap: () => Navigator.pop(ctx, 'gallery'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.picture_as_pdf_outlined, color: GardenColors.primary),
+            title: const Text('Subir PDF'),
+            onTap: () => Navigator.pop(ctx, 'pdf'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAntecedentesInfoDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Cómo obtengo mi FELCC o REJAP?'),
+        content: const SingleChildScrollView(
+          child: Text(
+            'Solo necesitas UNO de los dos documentos:\n\n'
+            '• FELCC (Fuerza Especial de Lucha Contra el Crimen): solicítalo presencialmente en cualquier oficina de la FELCC con tu Cédula de Identidad.\n\n'
+            '• REJAP (Registro Judicial de Antecedentes Penales): solicítalo en línea en rejap.organojudicial.gob.bo con tu CI, o presencialmente en las oficinas del Órgano Judicial.\n\n'
+            'Ambos certifican si tienes o no antecedentes penales. Sube una foto clara o el PDF que te entreguen — no es obligatorio para aparecer en el marketplace, es un filtro adicional de confianza.',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Entendido')),
+        ],
+      ),
+    );
+  }
+
+  Widget _documentStatusRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool verified,
+    required Color textColor,
+    required Color subtextColor,
+    required Color borderColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor)),
+      child: Row(
+        children: [
+          Icon(icon, color: subtextColor, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
+                Text(subtitle, style: TextStyle(color: subtextColor, fontSize: 12)),
+              ],
+            ),
+          ),
+          Icon(
+            verified ? Icons.check_circle_rounded : Icons.hourglass_empty_rounded,
+            color: verified ? GardenColors.success : subtextColor,
+            size: 20,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _antecedentesRow(Color textColor, Color subtextColor, Color borderColor) {
+    final (statusIcon, statusColor, statusLabel) = switch (_antecedentesStatus) {
+      'LIMPIO' => (Icons.check_circle_rounded, GardenColors.success, 'Verificado'),
+      'EN_REVISION' => (Icons.hourglass_top_rounded, GardenColors.warning, 'En revisión'),
+      'FLAGGED' => (Icons.flag_rounded, GardenColors.error, 'En revisión por un admin'),
+      _ => (Icons.upload_file_outlined, subtextColor, 'Pendiente'),
+    };
+    final canUpload = _antecedentesStatus == 'PENDING';
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.gavel_outlined, color: subtextColor, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Antecedentes penales', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
+                    Text('Filtro opcional — no es requisito para mostrarte en el marketplace', style: TextStyle(color: subtextColor, fontSize: 11.5)),
+                  ],
+                ),
+              ),
+              Icon(statusIcon, color: statusColor, size: 20),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: _showAntecedentesInfoDialog,
+                icon: const Icon(Icons.info_outline_rounded, size: 16),
+                label: const Text('¿Cómo lo obtengo?', style: TextStyle(fontSize: 12.5)),
+              ),
+              const Spacer(),
+              if (canUpload)
+                ElevatedButton(
+                  onPressed: _uploadingAntecedentes ? null : _pickAndUploadAntecedentes,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: GardenColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: _uploadingAntecedentes
+                      ? const GardenLoadingIndicator(size: 16, color: Colors.white)
+                      : const Text('Subir documento', style: TextStyle(fontSize: 12.5)),
+                )
+              else
+                Text(statusLabel, style: TextStyle(color: statusColor, fontSize: 12.5, fontWeight: FontWeight.w700)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDocumentsSectionContent(Color textColor, Color subtextColor, Color borderColor) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _documentStatusRow(
+          icon: Icons.badge_outlined,
+          title: 'Identidad',
+          subtitle: 'Verificada al registrarte',
+          verified: _identityVerified,
+          textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
+        ),
+        const SizedBox(height: 10),
+        _documentStatusRow(
+          icon: Icons.credit_card_outlined,
+          title: 'Cédula de Identidad',
+          subtitle: 'Verificada al registrarte',
+          verified: _identityVerified,
+          textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
+        ),
+        const SizedBox(height: 10),
+        _antecedentesRow(textColor, subtextColor, borderColor),
+      ],
+    );
+  }
+
   Future<void> _addPlacePhoto(String section) async {
     // Evita disparar subidas concurrentes (doble-tap o tocar otra sección
     // mientras una subida sigue en vuelo). El backend ya es atómico, pero
@@ -939,17 +1313,20 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                 const Spacer(),
                 // Badge de completitud (oculto al llegar a 100%)
                 if (_completionPercentage < 100) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: (_completionPercentage >= 80 ? GardenColors.success : GardenColors.warning).withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '$_completionPercentage%',
-                      style: TextStyle(
-                        color: _completionPercentage >= 80 ? GardenColors.success : GardenColors.warning,
-                        fontSize: 11, fontWeight: FontWeight.w700,
+                  GestureDetector(
+                    onTap: _showCompletionChecklist,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: (_completionPercentage >= 80 ? GardenColors.success : GardenColors.warning).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '$_completionPercentage%',
+                        style: TextStyle(
+                          color: _completionPercentage >= 80 ? GardenColors.success : GardenColors.warning,
+                          fontSize: 11, fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
@@ -1040,22 +1417,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                               ),
                               const SizedBox(height: 14),
                             ],
-
-                            _webSection(surface, borderColor, textColor,
-                              title: 'Sobre ti como cuidador',
-                              icon: Icons.edit_note_rounded,
-                              child: Column(
-                                children: [
-                                  SizedBox(key: _keyBioDetail, height: 0),
-                                  _viewOrInput(_bioDetailController,
-                                    'Descripción detallada: experiencia, método de cuidado, etc.',
-                                    maxLines: 5, maxLength: 300,
-                                    textColor: textColor, subtextColor: subtextColor,
-                                    surface: surface, borderColor: borderColor),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 14),
 
                             if (_needsSpaceSection) ...[
                               _webSection(surface, borderColor, textColor,
@@ -1243,13 +1604,13 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                         ]),
                                       ),
                                     ] else ...[
-                                      IgnorePointer(ignoring: !_isEditing, child: _sectionField(_lExpDesc, _experienceDescController, _lExpDescHint, maxLines: 3)),
+                                      IgnorePointer(ignoring: !_isEditing, child: _sectionField(_lExpDesc, _experienceDescController, _lExpDescHint, maxLines: 3, coherenceKey: 'experienceDesc')),
                                       const SizedBox(height: 10),
                                     ],
                                     // whyCaregiver y whatDiffers — siempre visibles
-                                    IgnorePointer(ignoring: !_isEditing, child: _sectionField(_lWhyLabel, _whyCaregiverController, _lWhyHint, maxLines: 2)),
+                                    IgnorePointer(ignoring: !_isEditing, child: _sectionField(_lWhyLabel, _whyCaregiverController, _lWhyHint, maxLines: 2, coherenceKey: 'whyCaregiver')),
                                     const SizedBox(height: 10),
-                                    IgnorePointer(ignoring: !_isEditing, child: _sectionField(_lDiffersLabel, _whatDiffersController, _lDiffersHint, maxLines: 2)),
+                                    IgnorePointer(ignoring: !_isEditing, child: _sectionField(_lDiffersLabel, _whatDiffersController, _lDiffersHint, maxLines: 2, coherenceKey: 'whatDiffers')),
                                   ],
                                 ],
                               ),
@@ -1284,6 +1645,13 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                   ],
                                 ],
                               ),
+                            ),
+                            const SizedBox(height: 14),
+
+                            _webSection(surface, borderColor, textColor,
+                              title: 'Documentos',
+                              icon: Icons.folder_shared_outlined,
+                              child: _buildDocumentsSectionContent(textColor, subtextColor, borderColor),
                             ),
                             const SizedBox(height: 32),
                           ],
@@ -1465,9 +1833,16 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     int maxLines = 1, int? maxLength,
     required Color textColor, required Color subtextColor,
     required Color surface, required Color borderColor,
+    String? coherenceKey,
   }) {
     if (_isEditing) {
-      return GardenInput(controller: ctrl, hint: hint, maxLines: maxLines, maxLength: maxLength, onChanged: (_) => setState(() {}));
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        GardenInput(controller: ctrl, hint: hint, maxLines: maxLines, maxLength: maxLength, onChanged: (v) {
+          setState(() {});
+          if (coherenceKey != null) _scheduleCoherenceCheck(coherenceKey, hint, v);
+        }),
+        if (coherenceKey != null) _coherenceWarningText(coherenceKey),
+      ]);
     }
     final text = ctrl.text.trim();
     return Container(
@@ -1548,26 +1923,6 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
               const Divider(height: 48),
             ],
 
-            // Sección 2 — Sobre ti
-            SizedBox(key: _keyBio, height: 0),
-            _sectionTitle(_lAboutTitle, textColor),
-            SizedBox(key: _keyBioDetail, height: 0),
-            // Solo se bloquea en modo standalone (fuera del wizard de
-            // onboarding, donde _isEditing nunca se activa) — en
-            // embeddedMode el campo debe seguir siempre editable.
-            IgnorePointer(
-              ignoring: !widget.embeddedMode && !_isEditing,
-              child: GardenInput(
-                hint: _lBioHint,
-                controller: _bioDetailController,
-                enabled: widget.embeddedMode || _isEditing,
-                maxLines: 6,
-                maxLength: 300,
-                onChanged: (_) => setState(() {}),
-              ),
-            ),
-            const Divider(height: 48),
-
             SizedBox(key: _keyAddress, height: 0),
             const Divider(height: 48),
 
@@ -1583,24 +1938,34 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
               const Divider(height: 48),
             ],
 
-            // Máximo de reservas simultáneas — por tipo de servicio, no un
-            // solo número para los tres. Sin tope fijo: una empresa puede
-            // atender muchas más mascotas a la vez que un cuidador
-            // individual, así que esto es un campo numérico libre en vez
-            // de opciones fijas [1,2,3].
+            // Máximo de reservas simultáneas. Tope de 3 para cuidadores
+            // individuales (una empresa puede poner más — no tiene tope).
+            // Hospedaje y Guardería NO son cupos independientes — comparten
+            // un solo pool combinado, porque atenderlos a la vez ocupa a la
+            // misma persona/espacio (ver combinedHospedajeGuarderiaMax en el
+            // backend). Paseo es totalmente aparte, con su propio cupo.
             Text('Máximo de reservas simultáneas', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
             Text(
-              'Cuántas mascotas puedes atender al mismo tiempo, para cada servicio que ofreces. Si eres empresa, puedes poner un número más alto.',
+              _ic
+                  ? 'Cuántas mascotas puedes atender al mismo tiempo. Hospedaje y Guardería comparten un mismo cupo (atenderlas juntas ocupa el mismo espacio); Paseo tiene el suyo aparte.'
+                  : 'Cuántas mascotas puedes atender al mismo tiempo (máx. 3). Hospedaje y Guardería comparten un mismo cupo (atenderlas juntas ocupa el mismo espacio); Paseo tiene el suyo aparte.',
               style: TextStyle(color: subtextColor, fontSize: 12.5, height: 1.4),
             ),
             const SizedBox(height: 14),
             if (_effectiveServices.contains('PASEO'))
-              _maxPetsStepper('Paseo', _maxPetsPaseo, (v) => setState(() => _maxPetsPaseo = v), textColor, subtextColor, surface, borderColor),
-            if (_effectiveServices.contains('HOSPEDAJE'))
-              _maxPetsStepper('Hospedaje', _maxPetsHospedaje, (v) => setState(() => _maxPetsHospedaje = v), textColor, subtextColor, surface, borderColor),
-            if (_effectiveServices.contains('GUARDERIA'))
-              _maxPetsStepper('Guardería', _maxPetsGuarderia, (v) => setState(() => _maxPetsGuarderia = v), textColor, subtextColor, surface, borderColor),
+              _maxPetsStepper('Paseo', _maxPetsPaseo, (v) => setState(() => _maxPetsPaseo = v), textColor, subtextColor, surface, borderColor, maxCap: _ic ? null : 3),
+            if (_effectiveServices.contains('HOSPEDAJE') || _effectiveServices.contains('GUARDERIA'))
+              _maxPetsStepper(
+                'Hospedaje + Guardería',
+                _maxPetsHospedaje,
+                (v) => setState(() {
+                  _maxPetsHospedaje = v;
+                  _maxPetsGuarderia = v;
+                }),
+                textColor, subtextColor, surface, borderColor,
+                maxCap: _ic ? null : 3,
+              ),
             const Divider(height: 48),
 
             // Sección 5 — Tipos de mascotas
@@ -1741,11 +2106,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             // Follow-up: solo cuando experienceYears >= 1
             if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
               const SizedBox(height: 16),
-              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _sectionField(_lExpDesc, _experienceDescController, _lExpDescHint, maxLines: 4)),
+              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _sectionField(_lExpDesc, _experienceDescController, _lExpDescHint, maxLines: 4, coherenceKey: 'experienceDesc')),
               const SizedBox(height: 16),
-              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _sectionField(_lWhyLabel, _whyCaregiverController, _lWhyHint, maxLines: 3)),
+              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _sectionField(_lWhyLabel, _whyCaregiverController, _lWhyHint, maxLines: 3, coherenceKey: 'whyCaregiver')),
               const SizedBox(height: 16),
-              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _sectionField(_lDiffersLabel, _whatDiffersController, _lDiffersHint, maxLines: 3)),
+              IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _sectionField(_lDiffersLabel, _whatDiffersController, _lDiffersHint, maxLines: 3, coherenceKey: 'whatDiffers')),
             ],
 
             if (_isAmateur && _experienceYearsController.text == '0') ...[
@@ -1802,6 +2167,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
 
             const Divider(height: 48),
 
+            if (!widget.embeddedMode) ...[
+              _sectionTitle('Documentos', textColor),
+              _buildDocumentsSectionContent(textColor, subtextColor, borderColor),
+              const Divider(height: 48),
+            ],
+
             if (widget.embeddedMode) ...[
               SizedBox(
                 width: double.infinity,
@@ -1836,7 +2207,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     );
   }
 
-  Widget _sectionField(String label, TextEditingController controller, String hint, {int maxLines = 1}) {
+  Widget _sectionField(String label, TextEditingController controller, String hint, {int maxLines = 1, String? coherenceKey}) {
     final isDark = themeNotifier.isDark;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
@@ -1852,7 +2223,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
           controller: controller,
           maxLines: maxLines,
           style: TextStyle(color: textColor),
-          onChanged: (_) => _computeCompletion(),
+          onChanged: (v) {
+            _computeCompletion();
+            if (coherenceKey != null) _scheduleCoherenceCheck(coherenceKey, label, v);
+          },
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: TextStyle(color: subtextColor, fontSize: 13),
@@ -1864,6 +2238,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             contentPadding: const EdgeInsets.all(14),
           ),
         ),
+        if (coherenceKey != null) _coherenceWarningText(coherenceKey),
       ],
     );
   }
@@ -1957,6 +2332,20 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
               minHeight: 6,
             ),
           ),
+          if (_completionPercentage < 100) ...[
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: _showCompletionChecklist,
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Ver qué falta', style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w700, decoration: TextDecoration.underline)),
+                  SizedBox(width: 4),
+                  Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 14),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1992,8 +2381,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   }
 
   /// Stepper numérico +/- para el máximo de reservas simultáneas de un
-  /// servicio — sin tope fijo (mínimo 1), a diferencia del selector viejo
-  /// de 3 opciones fijas.
+  /// servicio (o pool combinado de servicios) — mínimo 1, tope opcional
+  /// (maxCap null = sin tope, para empresas).
   Widget _maxPetsStepper(
     String label,
     int value,
@@ -2001,9 +2390,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     Color textColor,
     Color subtextColor,
     Color surface,
-    Color borderColor,
-  ) {
+    Color borderColor, {
+    int? maxCap,
+  }) {
     final enabled = widget.embeddedMode || _isEditing;
+    final atCap = maxCap != null && value >= maxCap;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Container(
@@ -2030,8 +2421,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             ),
             IconButton(
               icon: const Icon(Icons.add_circle_outline_rounded),
-              color: enabled ? GardenColors.primary : subtextColor.withValues(alpha: 0.3),
-              onPressed: enabled ? () => onChanged(value + 1) : null,
+              color: enabled && !atCap ? GardenColors.primary : subtextColor.withValues(alpha: 0.3),
+              onPressed: enabled && !atCap ? () => onChanged(value + 1) : null,
             ),
           ],
         ),

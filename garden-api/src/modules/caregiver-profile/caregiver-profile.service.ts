@@ -319,10 +319,18 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.workFromHome !== undefined) updateData.workFromHome = body.workFromHome;
   if (body.maxPets !== undefined) updateData.maxPets = body.maxPets;
   // Capacidad por tipo de servicio — mínimo 1 (nunca 0 o negativo, dejaría al
-  // cuidador/empresa sin poder recibir ninguna reserva de ese tipo).
-  if (body.maxPetsPaseo !== undefined) updateData.maxPetsPaseo = Math.max(1, Math.floor(body.maxPetsPaseo));
-  if (body.maxPetsHospedaje !== undefined) updateData.maxPetsHospedaje = Math.max(1, Math.floor(body.maxPetsHospedaje));
-  if (body.maxPetsGuarderia !== undefined) updateData.maxPetsGuarderia = Math.max(1, Math.floor(body.maxPetsGuarderia));
+  // cuidador/empresa sin poder recibir ninguna reserva de ese tipo). Tope de
+  // 3 para cuidadores individuales (nunca confiar solo en la validación del
+  // cliente); las empresas (isCompany) no tienen tope — pueden atender más
+  // mascotas que un cuidador individual.
+  const isCompanyProfile = profile.isCompany === true;
+  const clampMaxPets = (n: number) => {
+    const floored = Math.max(1, Math.floor(n));
+    return isCompanyProfile ? floored : Math.min(floored, 3);
+  };
+  if (body.maxPetsPaseo !== undefined) updateData.maxPetsPaseo = clampMaxPets(body.maxPetsPaseo);
+  if (body.maxPetsHospedaje !== undefined) updateData.maxPetsHospedaje = clampMaxPets(body.maxPetsHospedaje);
+  if (body.maxPetsGuarderia !== undefined) updateData.maxPetsGuarderia = clampMaxPets(body.maxPetsGuarderia);
   if (body.oftenOut !== undefined) updateData.oftenOut = body.oftenOut;
   if (body.typicalDay !== undefined) updateData.typicalDay = body.typicalDay;
   if (body.ciAnversoUrl !== undefined) updateData.ciAnversoUrl = ensureAbsoluteUrl(body.ciAnversoUrl) ?? null;
@@ -809,4 +817,66 @@ export async function markNotificationRead(userId: string, notificationId: strin
     data: { read: true, readAt: new Date() },
   });
   return { success: true };
+}
+
+/**
+ * Sube el documento de antecedentes penales (FELCC/REJAP) — filtro
+ * OPCIONAL, no bloquea que el perfil se muestre en el marketplace. El
+ * documento ya viene subido a storage (uploadRawFile/uploadImage, según el
+ * mimeType) — esta función solo corre el agente de IA y decide el nuevo
+ * status.
+ *
+ * Nunca suspende la cuenta por sí sola: si el agente marca antecedentes
+ * explícitos o un documento dudoso, queda en EN_REVISION con una
+ * AdminNotification para que un admin humano decida (ver admin.service.ts
+ * suspendCaregiver). Si el agente falla técnicamente, también queda en
+ * EN_REVISION — nunca pasa a LIMPIO por un error nuestro.
+ */
+export async function submitAntecedentesDocument(
+  userId: string,
+  documentUrl: string,
+  documentBuffer: Buffer,
+  mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' | 'application/pdf'
+): Promise<{ antecedentesStatus: string }> {
+  const profile = await prisma.caregiverProfile.findUnique({ where: { userId }, select: { id: true } });
+  if (!profile) throw new BadRequestError('Perfil de cuidador no encontrado');
+
+  await prisma.caregiverProfile.update({
+    where: { userId },
+    data: {
+      antecedentesUrl: documentUrl,
+      antecedentesStatus: 'EN_REVISION',
+      antecedentesSubmittedAt: new Date(),
+    } as any,
+  });
+
+  const { verificarAntecedentes } = await import('../../agents/documento-antecedentes.agent.js');
+  const resultado = await verificarAntecedentes({ documentBuffer, mediaType, userId });
+
+  let finalStatus = 'EN_REVISION';
+  if (resultado && resultado.documentoLicito && !resultado.antecedentesDetectados) {
+    // Documento lícito y sin antecedentes de violencia/maltrato — se puede
+    // otorgar el badge automáticamente, no requiere aprobación de admin (a
+    // diferencia de una suspensión, esto no es una acción punitiva).
+    finalStatus = 'LIMPIO';
+  } else if (resultado) {
+    // Documento dudoso o con antecedentes marcados — nunca se suspende
+    // solo, queda para que un admin lo revise.
+    await prisma.adminNotification.create({
+      data: {
+        type: 'ANTECEDENTES_FLAGGED',
+        caregiverId: profile.id,
+      },
+    });
+  }
+  // Si resultado es null (fallo técnico del agente), finalStatus se queda
+  // en 'EN_REVISION' — no se crea AdminNotification porque no hay nada
+  // concreto que revisar todavía, pero tampoco se limpia solo.
+
+  await prisma.caregiverProfile.update({
+    where: { userId },
+    data: { antecedentesStatus: finalStatus } as any,
+  });
+
+  return { antecedentesStatus: finalStatus };
 }

@@ -4,11 +4,11 @@ import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js
 import * as caregiverProfileController from './caregiver-profile.controller.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import { checkAndAutoSubmitProfile } from './caregiver-profile-completion.helper.js';
-import { addPlacePhotoAtomic, removePlacePhotoAtomic } from './caregiver-profile.service.js';
+import { addPlacePhotoAtomic, removePlacePhotoAtomic, submitAntecedentesDocument } from './caregiver-profile.service.js';
 import { prisma } from '../../config/database.js';
 import multer from 'multer';
-import { uploadImage } from '../../services/storage.service.js';
-import { assertImageBuffer } from '../../shared/mime-validation.js';
+import { uploadImage, uploadRawFile } from '../../services/storage.service.js';
+import { assertImageBuffer, assertImageOrPdfBuffer } from '../../shared/mime-validation.js';
 import { validarFoto } from '../../agents/foto-validacion.agent.js';
 import logger from '../../shared/logger.js';
 import { validateBankInfo, persistBankInfo, BANK_ACCOUNT_TYPES } from '../wallet/bank-info.util.js';
@@ -30,6 +30,18 @@ router.use(requireRole('CAREGIVER'));
 
 router.get('/my-profile', caregiverProfileController.getMyProfile);
 router.patch('/profile', caregiverProfileController.patchProfile);
+router.post('/profile/check-text', asyncHandler(async (req, res) => {
+  const { field, text } = req.body as { field?: string; text?: string };
+  if (typeof text !== 'string' || typeof field !== 'string') {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_BODY', message: 'field y text son requeridos' } });
+  }
+  // Tope generoso pero real — evita mandar un párrafo gigante a Claude
+  // solo porque el cuidador pegó algo enorme sin querer.
+  const capped = text.slice(0, 2000);
+  const { verificarCoherenciaTexto } = await import('../../agents/texto-coherencia.agent.js');
+  const resultado = await verificarCoherenciaTexto(field, capped);
+  res.json({ success: true, data: resultado });
+}));
 router.patch('/user-info', caregiverProfileController.patchUserInfo);
 router.post('/submit', caregiverProfileController.submit);
 router.post('/send-verify-email', caregiverProfileController.sendVerifyEmail);
@@ -113,6 +125,27 @@ router.delete('/profile/caregiver-photo',
       data: { caregiverPhotos: { set: profile.caregiverPhotos.filter(p => p !== photoUrl) } },
     });
     res.json({ success: true });
+  })
+);
+
+// ── Documentos — antecedentes penales (FELCC/REJAP), filtro opcional ─────────────────────────
+
+/** POST /profile/antecedentes — sube foto o PDF del documento de antecedentes penales. */
+router.post('/profile/antecedentes', upload.single('document'),
+  asyncHandler(async (req, res) => {
+    const userId = (req as any).user.userId;
+    const file = req.file;
+    if (!file) return res.status(400).json({ success: false, error: { message: 'No se proporcionó documento' } });
+
+    const mediaType = await assertImageOrPdfBuffer(file.buffer) as
+      'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' | 'application/pdf';
+
+    const documentUrl = mediaType === 'application/pdf'
+      ? await uploadRawFile(file.buffer, { folder: 'antecedentes', name: `antecedentes_${userId}_${Date.now()}` }, mediaType)
+      : await uploadImage(file.buffer, { folder: 'antecedentes', name: `antecedentes_${userId}_${Date.now()}` });
+
+    const result = await submitAntecedentesDocument(userId, documentUrl, file.buffer, mediaType);
+    res.json({ success: true, data: result });
   })
 );
 

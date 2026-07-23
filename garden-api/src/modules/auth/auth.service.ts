@@ -1281,3 +1281,80 @@ export async function abandonCaregiverProfile(userId: string): Promise<SwitchRol
 
   return { accessToken, refreshToken: newRefreshToken, expiresIn, activeRole: UserRole.CLIENT };
 }
+
+/**
+ * Un cuidador no puede eliminar su cuenta directamente — solo puede
+ * solicitarlo. La cuenta sigue activa y visible en el marketplace hasta que
+ * un admin la procese desde el panel (ver admin.service.ts
+ * approveCaregiverAccountDeletion). Captura el último punto de ubicación
+ * conocido del cuidador (best-effort, el cliente Flutter lo manda si tiene
+ * permiso) — medida de seguridad ante un posible robo o retención indebida
+ * de la mascota: si el cuidador "desaparece", queda un rastro de dónde
+ * estaba al momento de pedir la baja.
+ */
+export async function requestCaregiverAccountDeletion(
+  userId: string,
+  lat?: number,
+  lng?: number
+): Promise<void> {
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      accountDeletionRequestedAt: new Date(),
+      deletionRequestLat: lat ?? null,
+      deletionRequestLng: lng ?? null,
+    },
+  });
+  logger.info('auth.service: caregiver requested account deletion', { userId, hasLocation: lat != null && lng != null });
+}
+
+/**
+ * Anonimización real de la cuenta — extraída de auth.controller.ts
+ * deleteAccount() para que tanto la auto-eliminación inmediata de
+ * Cliente/Admin como la eliminación de un Cuidador aprobada por un admin
+ * (ver admin.service.ts approveCaregiverAccountDeletion) compartan
+ * exactamente la misma lógica de transferencia de saldo + anonimización.
+ */
+export async function finalizeAccountDeletion(userId: string): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new BadRequestError('Usuario no encontrado');
+
+  const userWithBalance = await prisma.user.findUnique({ where: { id: userId }, select: { balance: true } });
+  const unifiedBalance = Number(userWithBalance?.balance ?? 0);
+
+  if (unifiedBalance > 0) {
+    await prisma.walletTransaction.create({
+      data: {
+        userId,
+        type: 'WITHDRAWAL',
+        amount: unifiedBalance,
+        balance: 0,
+        description: 'Saldo transferido a GARDEN al eliminar cuenta',
+        status: 'COMPLETED',
+      },
+    });
+    await prisma.user.update({ where: { id: userId }, data: { balance: 0 } });
+  }
+
+  const deletedTag = `deleted_${Date.now()}`;
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      email: `${deletedTag}@garden.deleted`,
+      passwordHash: '',
+      phone: `${deletedTag}`,
+      isDeleted: true,
+      deletedAt: new Date(),
+    },
+  });
+
+  const caregiverProfile = await prisma.caregiverProfile.findUnique({ where: { userId } });
+  if (caregiverProfile) {
+    await prisma.caregiverProfile.update({
+      where: { userId },
+      data: { status: 'DRAFT', suspended: true, ciNumber: null } as any,
+    });
+  }
+
+  logger.info('Account deleted (soft)', { userId, role: user.role });
+}

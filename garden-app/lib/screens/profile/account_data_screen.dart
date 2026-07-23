@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -114,10 +115,12 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                   child: const Icon(Icons.delete_forever_rounded, color: GardenColors.error, size: 32),
                 ),
                 const SizedBox(height: 16),
-                Text('Eliminar cuenta', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
+                Text(_role == 'CAREGIVER' ? 'Solicitar eliminación de cuenta' : 'Eliminar cuenta', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 10),
                 Text(
-                  'Esta accion es permanente. Tu perfil sera eliminado del marketplace y ya no podras iniciar sesion.\n\nTus reservas e historial se conservaran como datos historicos.\n\nSi tienes saldo en tu billetera, pasara a ser propiedad de GARDEN.',
+                  _role == 'CAREGIVER'
+                      ? 'Por seguridad, los cuidadores no pueden eliminar su cuenta directamente. Tu solicitud será enviada a un administrador, que la revisará antes de procesarla — tu cuenta sigue activa mientras tanto.\n\nSi tienes saldo en tu billetera, pasará a ser propiedad de GARDEN cuando se apruebe la eliminación.'
+                      : 'Esta accion es permanente. Tu perfil sera eliminado del marketplace y ya no podras iniciar sesion.\n\nTus reservas e historial se conservaran como datos historicos.\n\nSi tienes saldo en tu billetera, pasara a ser propiedad de GARDEN.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: subtextColor, fontSize: 13, height: 1.5),
                 ),
@@ -163,14 +166,37 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                         final scaffoldMsg = ScaffoldMessenger.of(context);
                         final router = GoRouter.of(context);
                         try {
+                          // Para cuidadores: captura la ubicación actual (best-effort,
+                          // nunca bloquea el envío) — queda como último punto conocido
+                          // si un admin tiene que investigar la solicitud.
+                          Map<String, dynamic> body = {'password': pw};
+                          if (_role == 'CAREGIVER') {
+                            try {
+                              final permission = await Geolocator.checkPermission();
+                              if (permission != LocationPermission.denied && permission != LocationPermission.deniedForever) {
+                                final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium)
+                                    .timeout(const Duration(seconds: 8));
+                                body = {...body, 'lat': pos.latitude, 'lng': pos.longitude};
+                              }
+                            } catch (_) {}
+                          }
                           final res = await http.delete(
                             Uri.parse('$_baseUrl/auth/account'),
                             headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
-                            body: jsonEncode({'password': pw}),
+                            body: jsonEncode(body),
                           );
                           final data = jsonDecode(res.body);
                           if (data['success'] == true) {
                             nav.pop();
+                            if (_role == 'CAREGIVER') {
+                              // La cuenta sigue activa — solo se envió la solicitud,
+                              // no hay que cerrar sesión ni limpiar nada.
+                              if (!mounted) return;
+                              scaffoldMsg.showSnackBar(
+                                const SnackBar(content: Text('Solicitud enviada. Un administrador la revisará.'), backgroundColor: GardenColors.warning),
+                              );
+                              return;
+                            }
                             final prefs = await SharedPreferences.getInstance();
                             await prefs.clear();
                             if (!mounted) return;
@@ -188,7 +214,7 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                       },
                       child: loading
                         ? const GardenLoadingIndicator(size: 20, color: Colors.white)
-                        : const Text('Eliminar', style: TextStyle(fontWeight: FontWeight.w700)),
+                        : Text(_role == 'CAREGIVER' ? 'Enviar solicitud' : 'Eliminar', style: const TextStyle(fontWeight: FontWeight.w700)),
                     ),
                   ),
                 ]),

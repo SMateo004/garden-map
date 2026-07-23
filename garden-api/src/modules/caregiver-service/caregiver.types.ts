@@ -23,6 +23,9 @@ export interface CaregiverListItem {
   pricePerGuarderia: number | null;
   guarderiaIncludeWalk: boolean;
   verified: boolean;
+  /** true si el cuidador subió su FELCC/REJAP y el agente de IA (más admin,
+   * si quedó marcado) lo dio por limpio — filtro opcional, no requisito. */
+  antecedentesVerified: boolean;
   spaceType: string[]; // Array de tipos de espacio seleccionados
   experienceYears: any;
   experienceDescription: string | null;
@@ -61,6 +64,9 @@ export interface CaregiverDetail extends CaregiverListItem {
   hoursAlone?: number | null;
   workFromHome?: boolean | null;
   maxPets?: number | null;
+  maxPetsPaseo?: number | null;
+  maxPetsHospedaje?: number | null;
+  maxPetsGuarderia?: number | null;
   oftenOut?: boolean | null;
   typicalDay?: string | null;
   spaceDescription?: string | null;

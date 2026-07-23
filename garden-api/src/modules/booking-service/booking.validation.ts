@@ -170,11 +170,34 @@ export function parseCreateBookingBody(data: unknown): CreateBookingBody {
   return result.data;
 }
 
-/** POST /api/bookings/:id/cancel — motivo opcional. */
-export const cancelBookingBodySchema = z.object({
-  reason: z.string().max(2000).optional(),
-  source: z.enum(['CLIENT_REQUEST', 'QR_ABANDONED', 'PAYMENT_TIMEOUT']).optional(),
-});
+/**
+ * Motivos estructurados de cancelación — compartidos entre cliente y
+ * cuidador. Solo CLIMA garantiza reembolso completo sin importar el tiempo
+ * restante (ver cancelBooking/requestCancellationByCaregiver en
+ * booking.service.ts); el resto sigue la política escalonada por horas.
+ */
+export const CANCELLATION_REASON_CODES = [
+  'CLIMA',
+  'EMERGENCIA_PERSONAL',
+  'CAMBIO_DE_PLANES',
+  'PROBLEMA_CON_MASCOTA_O_CUIDADOR',
+  'OTRO',
+] as const;
+export type CancellationReasonCode = (typeof CANCELLATION_REASON_CODES)[number];
+
+/** POST /api/bookings/:id/cancel — motivo estructurado obligatorio. */
+export const cancelBookingBodySchema = z
+  .object({
+    reasonCode: z.enum(CANCELLATION_REASON_CODES, {
+      required_error: 'Debes indicar el motivo de la cancelación',
+    }),
+    reason: z.string().max(2000).optional(),
+    source: z.enum(['CLIENT_REQUEST', 'QR_ABANDONED', 'PAYMENT_TIMEOUT']).optional(),
+  })
+  .refine((data) => data.reasonCode !== 'OTRO' || !!data.reason?.trim(), {
+    message: 'Debes describir el motivo cuando seleccionas "Otro"',
+    path: ['reason'],
+  });
 
 /** POST /api/bookings/:id/extend — nueva fecha de salida (hospedaje). */
 export const extendBookingBodySchema = z.object({
@@ -223,6 +246,9 @@ export type ReportBookingBody = z.infer<typeof reportBookingBodySchema>;
 
 /** POST /api/bookings/:id/cancellation-request — cuidador solicita cancelación. */
 export const cancellationRequestBodySchema = z.object({
+  reasonCode: z.enum(CANCELLATION_REASON_CODES, {
+    required_error: 'Debes indicar el motivo de la cancelación',
+  }),
   reason: z.string().min(1, 'El motivo es obligatorio').max(2000, 'Máximo 2000 caracteres'),
 });
 
@@ -348,3 +374,13 @@ export const addEventBodySchema = z.object({
   incidentType: z.string().max(100).optional(),
 });
 export type AddEventBody = z.infer<typeof addEventBodySchema>;
+
+/** POST /api/bookings/:id/sos — el dueño reporta un SOS durante el servicio. */
+export const reportSosBodySchema = z.object({
+  description: z
+    .string()
+    .min(1, 'La descripción es obligatoria')
+    .max(1000, 'La descripción no puede superar 1000 caracteres'),
+  incidentType: z.string().max(100).optional(),
+});
+export type ReportSosBody = z.infer<typeof reportSosBodySchema>;

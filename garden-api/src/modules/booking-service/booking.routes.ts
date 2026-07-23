@@ -186,11 +186,27 @@ router.post(
   serviceExecutionController.addEvent
 );
 
+/** POST /api/bookings/:id/sos — el dueño reporta un SOS durante el servicio (el cuidador no se entera). */
+router.post(
+  '/:id/sos',
+  authMiddleware,
+  requireRole('CLIENT'),
+  serviceExecutionController.reportSos
+);
+
 router.post(
   '/:id/track',
   authMiddleware,
   requireRole('CAREGIVER'),
   serviceExecutionController.track
+);
+
+/** POST /api/bookings/:id/location-ping — ping horario de Hospedaje/Guardería. */
+router.post(
+  '/:id/location-ping',
+  authMiddleware,
+  requireRole('CAREGIVER'),
+  serviceExecutionController.locationPing
 );
 
 router.post(

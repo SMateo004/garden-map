@@ -362,7 +362,8 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     final rating = (_caregiver!['rating'] as num? ?? 0).toStringAsFixed(1);
     final reviewCount = _caregiver!['reviewCount'] as int? ?? 0;
     final zone = _caregiver!['zone'] as String? ?? '';
-    final bio = _caregiver!['bio'] as String? ?? '';
+    // bio ("Editar mi perfil") es opcional y solo lo ve el admin — el
+    // cliente solo ve bioDetail ("Perfil profesional").
     final bioDetail = _caregiver!['bioDetail'] as String? ?? '';
     final verified = _caregiver!['verified'] == true;
     final pricePerWalk60Raw = _caregiver!['pricePerWalk60'];
@@ -384,7 +385,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
           context: context, isDark: isDark, bg: bg, surface: surface,
           textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
           photos: displayPhotos, placePhotoSections: placePhotoSections, services: services, name: name, rating: rating,
-          reviewCount: reviewCount, zone: zone, bio: bio, bioDetail: bioDetail,
+          reviewCount: reviewCount, zone: zone, bioDetail: bioDetail,
           verified: verified, pricePerWalk60: pricePerWalk60, pricePerWalk30: pricePerWalk30, pricePerDay: pricePerDay,
           offersHospedaje: offersHospedaje, offersPaseo: offersPaseo, priceDisplay: priceDisplay,
         );
@@ -393,7 +394,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
         context: context, isDark: isDark, bg: bg, surface: surface,
         textColor: textColor, subtextColor: subtextColor, borderColor: borderColor,
         photos: displayPhotos, placePhotoSections: placePhotoSections, services: services, name: name, rating: rating,
-        reviewCount: reviewCount, zone: zone, bio: bio, bioDetail: bioDetail,
+        reviewCount: reviewCount, zone: zone, bioDetail: bioDetail,
         verified: verified, pricePerWalk60: pricePerWalk60, pricePerWalk30: pricePerWalk30, pricePerDay: pricePerDay,
         offersHospedaje: offersHospedaje, offersPaseo: offersPaseo, priceDisplay: priceDisplay,
       );
@@ -410,7 +411,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     required List<(String, String, List<String>)> placePhotoSections,
     required List<String> services, required String name,
     required String rating, required int reviewCount, required String zone,
-    required String bio, required String bioDetail, required bool verified,
+    required String bioDetail, required bool verified,
     required dynamic pricePerWalk60, required dynamic pricePerWalk30, required dynamic pricePerDay,
     required bool offersHospedaje, required bool offersPaseo, required String priceDisplay,
   }) {
@@ -516,22 +517,20 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        _buildTrustBadges(subtextColor),
+                        _buildTrustBadges(subtextColor, offersHospedaje: offersHospedaje, offersGuarderia: services.contains('GUARDERIA')),
                         const SizedBox(height: 32),
 
-                        Divider(color: borderColor),
-                        const SizedBox(height: 28),
-
-                        // Bio
-                        Text('Sobre ${_caregiver!['firstName']}', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
-                        const SizedBox(height: 12),
-                        if (bio.isNotEmpty)
-                          _ExpandableText(text: bio, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.7), maxLines: 3),
+                        // Bio — solo bioDetail ("Perfil profesional"). bio
+                        // ("Editar mi perfil") es un campo opcional que solo
+                        // ve el admin, nunca el cliente — un solo párrafo.
                         if (bioDetail.isNotEmpty) ...[
+                          Divider(color: borderColor),
+                          const SizedBox(height: 28),
+                          Text('Sobre ${_caregiver!['firstName']}', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
                           const SizedBox(height: 12),
                           _ExpandableText(text: bioDetail, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.7), maxLines: 3),
+                          const SizedBox(height: 32),
                         ],
-                        const SizedBox(height: 32),
 
                         // Experiencia
                         if (_caregiver!['experienceYears'] != null) ...[
@@ -607,35 +606,16 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                             _policyChip('Mascotas agresivas', _caregiver!['acceptAggressive'] == true),
                           ],
                         ),
-                        // Capacidad simultánea
-                        Builder(builder: (_) {
-                          final maxP = (_caregiver!['maxPets'] as num?)?.toInt() ?? 1;
-                          final label = maxP == 1
-                              ? 'Solo 1 mascota a la vez'
-                              : 'Hasta $maxP mascotas a la vez';
-                          final icon = maxP == 1 ? Icons.pets_outlined : Icons.groups_outlined;
-                          final color = maxP == 1 ? GardenColors.primary : GardenColors.success;
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 14),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: color.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: color.withValues(alpha: 0.25)),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(icon, color: color, size: 16),
-                                  const SizedBox(width: 8),
-                                  Text(label,
-                                      style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600)),
-                                ],
-                              ),
-                            ),
-                          );
-                        }),
+                        if (_acceptedSpecies().isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          Text('Recibe', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 8),
+                          _speciesChips(subtextColor),
+                        ],
+                        const SizedBox(height: 14),
+                        Text('Mascotas por servicio', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 8),
+                        _capacityChips(services, subtextColor),
                         if ((_caregiver!['handleAnxious'] as String? ?? '').isNotEmpty) ...[
                           const SizedBox(height: 14),
                           _infoCard('Mascotas con ansiedad', _caregiver!['handleAnxious'] as String, Icons.psychology_outlined, GardenColors.warning, surface, textColor, subtextColor, borderColor),
@@ -652,10 +632,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           const SizedBox(height: 28),
                           Text('Mi espacio', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
                           const SizedBox(height: 12),
-                          Wrap(spacing: 8, runSpacing: 8, children: [
-                            if (_caregiver!['homeType'] != null) _spaceChip(_homeTypeLabel(_caregiver!['homeType'] as String), Icons.home_outlined),
-                            if (_caregiver!['hasYard'] == true) _spaceChip('Tiene jardín/patio', Icons.grass_outlined),
-                          ]),
+                          _spaceLine(_caregiver!['homeType'] as String?, _caregiver!['hasYard'] == true),
                         ],
 
                         // Fotos (con label condicional)
@@ -669,7 +646,9 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           _buildPhotoGrid(photos, borderColor),
                         ],
 
-                        // Fotos del lugar (sala, descanso, alimentación, etc. — hospedaje/guardería)
+                        // Fotos del lugar — preview compacto (no una pared de
+                        // grids); "Ver todas" abre el recorrido sección por
+                        // sección, estilo Airbnb, para no alargar el perfil.
                         if (placePhotoSections.isNotEmpty) ...[
                           const SizedBox(height: 32),
                           Divider(color: borderColor),
@@ -677,14 +656,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           Text('Fotos del lugar',
                             style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.w800)),
                           const SizedBox(height: 14),
-                          for (final (_, label, sectionPhotos) in placePhotoSections) ...[
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Text(label, style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                            ),
-                            _buildPhotoGrid(sectionPhotos, borderColor),
-                            const SizedBox(height: 18),
-                          ],
+                          _buildPlacePhotosPreview(placePhotoSections, textColor, subtextColor, borderColor),
                         ],
 
                         // Reseñas
@@ -745,6 +717,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                                 }
                                 final includesWalk = isGuarderia &&
                                     (_caregiver?['guarderiaIncludeWalk'] == true);
+                                final sMaxPets = _maxPetsForService(s);
                                 return Container(
                                   margin: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                                   padding: const EdgeInsets.all(14),
@@ -766,6 +739,13 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                                             Text(unit, style: TextStyle(color: subtextColor, fontSize: 11)),
                                           ]),
                                         ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        (sMaxPets == 1 ? '1 mascota a la vez' : 'Hasta $sMaxPets mascotas a la vez') +
+                                            (isGuarderia && services.contains('HOSPEDAJE') ? ' (compartido con Hospedaje)' : '') +
+                                            (s == 'HOSPEDAJE' && services.contains('GUARDERIA') ? ' (compartido con Guardería)' : ''),
+                                        style: TextStyle(color: subtextColor, fontSize: 11.5),
                                       ),
                                       if (includesWalk) ...[
                                         const SizedBox(height: 8),
@@ -798,21 +778,23 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                               const SizedBox(height: 4),
                               Padding(
                                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                                child: SizedBox(
-                                  width: double.infinity,
-                                  height: 50,
-                                  child: ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: GardenColors.primary,
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                      elevation: 0,
+                                child: _PulsingCTA(
+                                  child: SizedBox(
+                                    width: double.infinity,
+                                    height: 50,
+                                    child: ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: GardenColors.primary,
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                        elevation: 0,
+                                      ),
+                                      icon: _petsLoading
+                                          ? const GardenLoadingIndicator(size: 18, color: Colors.white)
+                                          : const Icon(Icons.calendar_today_outlined, size: 18),
+                                      label: const Text('Reservar ahora', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                                      onPressed: _petsLoading ? null : _onReserve,
                                     ),
-                                    icon: _petsLoading
-                                        ? const GardenLoadingIndicator(size: 18, color: Colors.white)
-                                        : const Icon(Icons.calendar_today_outlined, size: 18),
-                                    label: const Text('Reservar ahora', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                                    onPressed: _petsLoading ? null : _onReserve,
                                   ),
                                 ),
                               ),
@@ -874,7 +856,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     required List<(String, String, List<String>)> placePhotoSections,
     required List<String> services, required String name,
     required String rating, required int reviewCount, required String zone,
-    required String bio, required String bioDetail, required bool verified,
+    required String bioDetail, required bool verified,
     required dynamic pricePerWalk60, required dynamic pricePerWalk30, required dynamic pricePerDay,
     required bool offersHospedaje, required bool offersPaseo, required String priceDisplay,
   }) {
@@ -949,7 +931,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                           TemporadaAltaBadge(zona: 'Equipetrol', porcentajeAjuste: 15, motivo: 'Semana Santa', fechaVueltaNormal: '24 de marzo', agentesService: AgentesService(authToken: '')),
                       ]),
                       const SizedBox(height: 16),
-                      _buildTrustBadges(subtextColor),
+                      _buildTrustBadges(subtextColor, offersHospedaje: offersHospedaje, offersGuarderia: services.contains('GUARDERIA')),
                       const SizedBox(height: 24),
                       Divider(color: borderColor),
                       const SizedBox(height: 20),
@@ -970,6 +952,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         } else {
                           sPrice = 'Bs ${pricePerDay ?? '—'} / noche';
                         }
+                        final sMaxPets = _maxPetsForService(s);
                         return Container(
                           width: 140,
                           padding: const EdgeInsets.all(16),
@@ -980,22 +963,28 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                             Text(sLabel, style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
                             const SizedBox(height: 4),
                             Text(sPrice, style: const TextStyle(color: GardenColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 6),
+                            Text(
+                              sMaxPets == 1 ? '1 mascota a la vez' : 'Hasta $sMaxPets mascotas',
+                              style: TextStyle(color: subtextColor, fontSize: 11),
+                            ),
+                            if ((s == 'HOSPEDAJE' || isGuarderia) && offersHospedaje && services.contains('GUARDERIA'))
+                              Text('cupo compartido', style: TextStyle(color: subtextColor, fontSize: 10, fontStyle: FontStyle.italic)),
                           ]),
                         );
                       }).toList()),
                       const SizedBox(height: 24),
-                      Divider(color: borderColor),
-                      const SizedBox(height: 20),
-                      // Bio
-                      Text('Sobre ${_caregiver!['firstName']}', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 12),
-                      if (bio.isNotEmpty)
-                        _ExpandableText(text: bio, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6), maxLines: 3),
+                      // Bio — solo bioDetail ("Perfil profesional"). bio
+                      // ("Editar mi perfil") es un campo opcional que solo
+                      // ve el admin, nunca el cliente — un solo párrafo.
                       if (bioDetail.isNotEmpty) ...[
-                        const SizedBox(height: 10),
+                        Divider(color: borderColor),
+                        const SizedBox(height: 20),
+                        Text('Sobre ${_caregiver!['firstName']}', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 12),
                         _ExpandableText(text: bioDetail, style: TextStyle(color: subtextColor, fontSize: 15, height: 1.6), maxLines: 3),
+                        const SizedBox(height: 24),
                       ],
-                      const SizedBox(height: 24),
                       // Experiencia
                       if (_caregiver!['experienceYears'] != null) ...[
                         Divider(color: borderColor), const SizedBox(height: 20),
@@ -1047,6 +1036,16 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         _policyChip('Mascotas seniors', _caregiver!['acceptSeniors'] == true),
                         _policyChip('Mascotas agresivas', _caregiver!['acceptAggressive'] == true),
                       ]),
+                      if (_acceptedSpecies().isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        Text('Recibe', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 8),
+                        _speciesChips(subtextColor),
+                      ],
+                      const SizedBox(height: 14),
+                      Text('Mascotas por servicio', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      _capacityChips(services, subtextColor),
                       if ((_caregiver!['handleAnxious'] as String? ?? '').isNotEmpty) ...[
                         const SizedBox(height: 16),
                         _infoCard('Mascotas con ansiedad', _caregiver!['handleAnxious'] as String, Icons.psychology_outlined, GardenColors.warning, surface, textColor, subtextColor, borderColor),
@@ -1059,10 +1058,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         Divider(color: borderColor), const SizedBox(height: 20),
                         Text('Mi espacio', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 12),
-                        Wrap(spacing: 8, runSpacing: 8, children: [
-                          if (_caregiver!['homeType'] != null) _spaceChip(_homeTypeLabel(_caregiver!['homeType'] as String), Icons.home_outlined),
-                          if (_caregiver!['hasYard'] == true) _spaceChip('Tiene jardín/patio', Icons.grass_outlined),
-                        ]),
+                        _spaceLine(_caregiver!['homeType'] as String?, _caregiver!['hasYard'] == true),
                       ],
                       const SizedBox(height: 24),
                       // Nota: las fotos propias del cuidador (`photos`) ya se muestran arriba
@@ -1073,33 +1069,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         Text('Fotos del lugar',
                           style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 12),
-                        for (final (_, label, sectionPhotos) in placePhotoSections) ...[
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Text(label, style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                          ),
-                          SizedBox(
-                            height: 110,
-                            child: ListView.builder(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: sectionPhotos.length,
-                              itemBuilder: (_, index) => GestureDetector(
-                                onTap: () => _openPhotoViewer(sectionPhotos, index),
-                                child: Container(
-                                  margin: const EdgeInsets.only(right: 10),
-                                  width: 130,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: borderColor),
-                                  ),
-                                  child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(fixImageUrl(sectionPhotos[index]), fit: BoxFit.cover)),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                        ],
-                        Divider(color: borderColor),
+                        _buildPlacePhotosPreview(placePhotoSections, textColor, subtextColor, borderColor),
                         const SizedBox(height: 20),
                       ],
                       Divider(color: borderColor), const SizedBox(height: 20),
@@ -1130,7 +1100,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                   ]),
                   const SizedBox(width: 20),
                 ],
-                Expanded(child: GardenButton(label: 'Reservar ahora', icon: Icons.calendar_today_outlined, loading: _petsLoading, onPressed: _petsLoading ? null : _onReserve)),
+                Expanded(child: _PulsingCTA(child: GardenButton(label: 'Reservar ahora', icon: Icons.calendar_today_outlined, loading: _petsLoading, onPressed: _petsLoading ? null : _onReserve))),
               ]),
             ),
           ),
@@ -1173,6 +1143,78 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
             ]),
           ),
         )),
+      ),
+    );
+  }
+
+  /// Preview compacto de "Fotos del lugar" — una sola tarjeta con la
+  /// portada + cuántas fotos/ambientes hay, en vez de mostrar cada sección
+  /// entera en la pantalla del perfil (eso alargaba mucho el scroll). Al
+  /// tocarla se abre el recorrido completo, sección por sección, estilo
+  /// Airbnb — el detalle vive ahí, no acá.
+  Widget _buildPlacePhotosPreview(
+    List<(String, String, List<String>)> sections,
+    Color textColor,
+    Color subtextColor,
+    Color borderColor,
+  ) {
+    final totalPhotos = sections.fold<int>(0, (sum, s) => sum + s.$3.length);
+    final cover = sections.first.$3.first;
+    return GardenPressable(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => _PlacePhotoTour(sections: sections)),
+      ),
+      child: Container(
+        height: 170,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(15),
+          child: Stack(fit: StackFit.expand, children: [
+            Image.network(fixImageUrl(cover), fit: BoxFit.cover),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.65)],
+                  stops: const [0.4, 1.0],
+                ),
+              ),
+            ),
+            Positioned(
+              left: 16, right: 16, bottom: 14,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('🏠 Fotos del lugar', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800)),
+                        Text('$totalPhotos foto${totalPhotos == 1 ? '' : 's'} · ${sections.length} ambiente${sections.length == 1 ? '' : 's'}',
+                          style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text('Ver todas', style: TextStyle(color: Colors.black87, fontSize: 12.5, fontWeight: FontWeight.w700)),
+                      SizedBox(width: 4),
+                      Icon(Icons.arrow_forward_rounded, size: 14, color: Colors.black87),
+                    ]),
+                  ),
+                ],
+              ),
+            ),
+          ]),
+        ),
       ),
     );
   }
@@ -1226,11 +1268,10 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     ]),
   );
 
-  Widget _buildTrustBadges(Color subtextColor) {
+  Widget _buildTrustBadges(Color subtextColor, {bool offersHospedaje = false, bool offersGuarderia = false}) {
     if (_caregiver == null) return const SizedBox.shrink();
     final ratingNum = (_caregiver!['rating'] as num? ?? 0).toDouble();
     final reviewCount = _caregiver!['reviewCount'] as int? ?? 0;
-    final verified = _caregiver!['verified'] == true;
     final experienceYears = _caregiver!['experienceYears'] as int? ?? 0;
     final sizesAccepted = (_caregiver!['sizesAccepted'] as List? ?? []);
     final hasYard = _caregiver!['hasYard'] == true;
@@ -1238,12 +1279,28 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     final acceptSeniors = _caregiver!['acceptSeniors'] == true;
 
     final badges = <Map<String, dynamic>>[];
-    if (reviewCount >= 10) badges.add({'icon': '🏆', 'label': '${reviewCount}+ reseñas', 'color': GardenColors.star});
-    if (ratingNum >= 4.8) badges.add({'icon': '⭐', 'label': 'Top rated', 'color': GardenColors.star});
-    if (verified) badges.add({'icon': '✓', 'label': 'Verificado IA', 'color': GardenColors.success});
+    // "Favorito de la zona" en vez de "Top rated" cuando además tiene
+    // suficientes reseñas de respaldo — más cálido que un tecnicismo en
+    // inglés, mismo espíritu que el "Guest favorite" de Airbnb, pero solo
+    // se muestra si el dato real lo respalda (nunca un badge inventado).
+    if (ratingNum >= 4.8 && reviewCount >= 10) {
+      badges.add({'icon': '❤️', 'label': 'Favorito de la zona', 'color': GardenColors.star});
+    } else {
+      if (reviewCount >= 10) badges.add({'icon': '🏆', 'label': '${reviewCount}+ reseñas', 'color': GardenColors.star});
+      if (ratingNum >= 4.8) badges.add({'icon': '⭐', 'label': 'Top rated', 'color': GardenColors.star});
+    }
+    // "Verificado IA" ya se muestra arriba con _verifiedBadge() — no repetirlo acá.
+    if (_caregiver!['antecedentesVerified'] == true) {
+      badges.add({'icon': '🛡️', 'label': 'Antecedentes verificados', 'color': GardenColors.success});
+    }
     if (experienceYears >= 3) badges.add({'icon': '🎖️', 'label': '$experienceYears años exp.', 'color': GardenColors.secondary});
     if (sizesAccepted.length >= 4) badges.add({'icon': '🐘', 'label': 'Todos los tamaños', 'color': GardenColors.primary});
-    if (hasYard) badges.add({'icon': '🌿', 'label': 'Tiene jardín', 'color': GardenColors.success});
+    // Jardín solo es relevante si el cuidador ofrece hospedaje o guardería —
+    // para un cuidador que solo pasea, es información irrelevante (y confunde,
+    // da a entender que también aloja mascotas cuando no es el caso).
+    if (hasYard && (offersHospedaje || offersGuarderia)) {
+      badges.add({'icon': '🌿', 'label': 'Tiene jardín', 'color': GardenColors.success});
+    }
     if (acceptPuppies && acceptSeniors) badges.add({'icon': '🐾', 'label': 'Cachorros y seniors', 'color': GardenColors.primary});
     if (badges.isEmpty) return const SizedBox.shrink();
 
@@ -1515,19 +1572,98 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     );
   }
 
-  Widget _spaceChip(String label, IconData icon) {
+  /// Tipo de casa + jardín como UNA sola línea (antes eran 2 chips separados
+  /// en un Wrap, que en pantallas angostas se veían en 2 filas sin aportar
+  /// más información — un cuidador tiene un solo espacio, no dos datos
+  /// independientes).
+  Widget _spaceLine(String? homeType, bool hasYard) {
     final isDark = themeNotifier.isDark;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final parts = <String>[
+      if (homeType != null) _homeTypeLabel(homeType),
+      if (hasYard) '🌿 Con jardín/patio',
+    ];
+    if (parts.isEmpty) return const SizedBox.shrink();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: borderColor)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 13, color: subtextColor),
-        const SizedBox(width: 5),
-        Text(label, style: TextStyle(color: subtextColor, fontSize: 12)),
-      ]),
+      child: Text(parts.join(' · '), style: TextStyle(color: subtextColor, fontSize: 12.5, fontWeight: FontWeight.w500)),
+    );
+  }
+
+  /// Capacidad simultánea configurada para un servicio puntual — mismo
+  /// fallback que usa el backend al validar una reserva (maxPetsX ?? maxPets
+  /// legado ?? 1), para no mostrarle al cliente un número que después el
+  /// backend contradice al reservar.
+  int _maxPetsForService(String service) {
+    final byService = switch (service) {
+      'HOSPEDAJE' => _caregiver!['maxPetsHospedaje'],
+      'GUARDERIA' => _caregiver!['maxPetsGuarderia'],
+      _ => _caregiver!['maxPetsPaseo'],
+    } as num?;
+    return byService?.toInt() ?? (_caregiver!['maxPets'] as num?)?.toInt() ?? 1;
+  }
+
+  /// Capacidad por servicio ofrecido — reemplaza el viejo bloque único de
+  /// "capacidad simultánea" (que mostraba un solo número sin decir para cuál
+  /// servicio), ya que un cuidador puede aceptar, por ejemplo, 1 mascota por
+  /// paseo pero 3 en hospedaje al mismo tiempo. Hospedaje y Guardería
+  /// comparten un solo cupo combinado (no uno cada uno) — si el cuidador
+  /// ofrece ambos, se muestra UN chip conjunto en vez de dos números que se
+  /// podrían malinterpretar como sumables.
+  Widget _capacityChips(List<String> services, Color subtextColor) {
+    final chip = (String label) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: GardenColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.25)),
+      ),
+      child: Text(label, style: const TextStyle(color: GardenColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+    );
+    final chips = <Widget>[];
+    if (services.contains('PASEO')) {
+      final maxP = _maxPetsForService('PASEO');
+      chips.add(chip('🦮 Paseo: ${maxP == 1 ? '1 mascota' : 'hasta $maxP mascotas'}'));
+    }
+    final offersHospedaje = services.contains('HOSPEDAJE');
+    final offersGuarderia = services.contains('GUARDERIA');
+    if (offersHospedaje && offersGuarderia) {
+      final maxP = _maxPetsForService('HOSPEDAJE'); // mismo valor combinado en ambos campos
+      chips.add(chip('🏠🏡 Hospedaje + Guardería (compartido): ${maxP == 1 ? '1 mascota' : 'hasta $maxP mascotas'}'));
+    } else if (offersHospedaje) {
+      final maxP = _maxPetsForService('HOSPEDAJE');
+      chips.add(chip('🏠 Hospedaje: ${maxP == 1 ? '1 mascota' : 'hasta $maxP mascotas'}'));
+    } else if (offersGuarderia) {
+      final maxP = _maxPetsForService('GUARDERIA');
+      chips.add(chip('🏡 Guardería: ${maxP == 1 ? '1 mascota' : 'hasta $maxP mascotas'}'));
+    }
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Wrap(spacing: 8, runSpacing: 8, children: chips);
+  }
+
+  /// Especies que acepta (perro/gato) — filtra el enum animalTypes a solo los
+  /// dos valores de especie real (el resto de valores del enum se solapan
+  /// con sizesAccepted/acceptPuppies/acceptSeniors, que ya se muestran
+  /// aparte). Vacío si el perfil no lo configuró — no se inventa un default.
+  List<String> _acceptedSpecies() {
+    final raw = (_caregiver!['animalTypes'] as List? ?? []).cast<String>();
+    return raw.where((t) => t == 'DOGS' || t == 'CATS').toList();
+  }
+
+  Widget _speciesChips(Color subtextColor) {
+    final species = _acceptedSpecies();
+    if (species.isEmpty) return const SizedBox.shrink();
+    const labels = {'DOGS': '🐕 Perros', 'CATS': '🐱 Gatos'};
+    return Wrap(
+      spacing: 8, runSpacing: 8,
+      children: species.map((s) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(color: GardenColors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: GardenColors.success.withValues(alpha: 0.3))),
+        child: Text(labels[s] ?? s, style: const TextStyle(color: GardenColors.success, fontSize: 12, fontWeight: FontWeight.w500)),
+      )).toList(),
     );
   }
 
@@ -1696,6 +1832,108 @@ class _PhotoCarouselState extends State<_PhotoCarousel> {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Respiración muy sutil en el botón principal de reserva — nada de
+/// countdowns ni contadores de "gente viendo esto ahora" (eso sería
+/// inventar urgencia falsa); solo un movimiento mínimo para que el ojo lo
+/// encuentre primero, manteniendo la línea minimalista de la marca.
+class _PulsingCTA extends StatefulWidget {
+  final Widget child;
+  const _PulsingCTA({required this.child});
+
+  @override
+  State<_PulsingCTA> createState() => _PulsingCTAState();
+}
+
+class _PulsingCTAState extends State<_PulsingCTA> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat(reverse: true);
+    _scale = Tween<double>(begin: 1.0, end: 1.015).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(scale: _scale, child: widget.child);
+  }
+}
+
+/// Recorrido de "Fotos del lugar" sección por sección, estilo Airbnb — se
+/// abre desde el preview compacto del perfil (_buildPlacePhotosPreview) en
+/// vez de mostrar cada sección expandida en la pantalla principal.
+class _PlacePhotoTour extends StatelessWidget {
+  final List<(String, String, List<String>)> sections;
+  const _PlacePhotoTour({required this.sections});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(
+        backgroundColor: bg,
+        elevation: 0,
+        leading: IconButton(icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 18), onPressed: () => Navigator.of(context).pop()),
+        title: Text('Fotos del lugar', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+      ),
+      body: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+        itemCount: sections.length,
+        separatorBuilder: (_, __) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Divider(color: borderColor),
+        ),
+        itemBuilder: (_, sIndex) {
+          final (_, label, photos) = sections[sIndex];
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: TextStyle(color: textColor, fontSize: 17, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text('${photos.length} foto${photos.length == 1 ? '' : 's'}', style: TextStyle(color: subtextColor, fontSize: 12.5)),
+              const SizedBox(height: 12),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10),
+                itemCount: photos.length,
+                itemBuilder: (_, index) => GestureDetector(
+                  onTap: () => showDialog(
+                    context: context,
+                    barrierColor: Colors.black87,
+                    builder: (_) => _PhotoLightbox(photos: photos, initialIndex: index),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: AspectRatio(
+                      aspectRatio: 1,
+                      child: Image.network(fixImageUrl(photos[index]), fit: BoxFit.cover),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

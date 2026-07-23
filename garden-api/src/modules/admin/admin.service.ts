@@ -21,6 +21,7 @@ import type {
 import type { ReviewCaregiverBody, ListCaregiversQuery } from './admin.validation.js';
 import * as notificationService from '../../services/notification.service.js';
 import { sendPushToUser } from '../../services/firebase.service.js';
+import * as authService from '../auth/auth.service.js';
 
 function toIso(date: Date | null): string | null {
   return date ? date.toISOString() : null;
@@ -1492,9 +1493,20 @@ export async function resolveIncidentAdmin(
   const totalPausedMinutes = booking.totalPausedMinutes + pausedMinutes;
 
   const events = (booking.serviceEvents as any[]) || [];
+
+  // Si la pausa activa la originó un SOS del dueño (no un incidente reportado
+  // por el cuidador), el cuidador nunca se entera — ni al reportarse, ni acá
+  // al resolverse. Es la misma razón por la que addServiceEvent le bloquea
+  // la autorresolución: podría ser la parte cuestionada.
+  const wasClientSos = [...events].reverse().find(
+    (e) => e.type === 'CLIENT_SOS' || e.type === 'INCIDENT' || e.type === 'ACCIDENT'
+  )?.type === 'CLIENT_SOS';
+
   events.push({
     type: 'INCIDENT_RESOLVED',
-    description: 'Emergencia marcada como resuelta por un administrador',
+    description: wasClientSos
+      ? 'Alerta del dueño marcada como resuelta por un administrador'
+      : 'Emergencia marcada como resuelta por un administrador',
     photoUrl: null,
     videoUrl: null,
     incidentType: null,
@@ -1517,11 +1529,11 @@ export async function resolveIncidentAdmin(
   });
 
   sendPushToUser(booking.clientId, '✅ Todo en orden', 'La novedad reportada durante el servicio ya fue resuelta. El servicio continúa con normalidad.').catch(() => {});
-  if (booking.caregiver?.userId) {
+  if (!wasClientSos && booking.caregiver?.userId) {
     sendPushToUser(booking.caregiver.userId, '✅ Emergencia resuelta', 'Garden marcó la emergencia como resuelta. Puedes continuar o concluir el servicio.').catch(() => {});
   }
 
-  logger.info('Admin: incidente resuelto', { bookingId, adminId, pausedMinutes });
+  logger.info('Admin: incidente resuelto', { bookingId, adminId, pausedMinutes, wasClientSos });
   return { id: bookingId, totalPausedMinutes };
 }
 
@@ -1906,6 +1918,8 @@ export async function getReservationDetail(bookingId: string) {
     refundStatus: booking.refundStatus,
     cancelledAt: booking.cancelledAt?.toISOString() ?? null,
     cancellationReason: booking.cancellationReason,
+    cancellationSource: (booking as any).cancellationSource ?? null,
+    cancellationReasonCode: (booking as any).cancellationReasonCode ?? null,
     // Client
     clientId: booking.clientId,
     clientEmail: c.email,
@@ -2199,6 +2213,71 @@ export async function rejectIdentityVerification(sessionId: string, adminId: str
 }
 
 /** Suspender cuidador (fuera del aire temporalmente) */
+/**
+ * Cancela con reembolso completo cualquier reserva CONFIRMED/IN_PROGRESS de
+ * un cuidador que acaba de ser suspendido — antes suspendCaregiver() no
+ * tocaba las reservas activas, contradiciendo la política de "retención
+ * indebida" (Sección 16 de Términos y Condiciones): un cuidador suspendido
+ * no debería poder seguir un servicio en curso, y el cliente no tiene
+ * culpa de la suspensión. A diferencia de
+ * bookingService.requestCancellationByCaregiver() (que exige CONFIRMED),
+ * esto también cubre IN_PROGRESS — justo el caso más urgente (mascota ya
+ * con el cuidador).
+ */
+async function cancelActiveBookingsForSuspendedCaregiver(profileId: string, reason: string): Promise<number> {
+  const activeBookings = await prisma.booking.findMany({
+    where: { caregiverId: profileId, status: { in: [BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS] } },
+  });
+
+  for (const booking of activeBookings) {
+    await prisma.$transaction(async (tx) => {
+      const refundAmount = Number(booking.totalAmount);
+      const updateResult = await tx.booking.updateMany({
+        where: { id: booking.id, status: { in: [BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS] } },
+        data: {
+          status: BookingStatus.CANCELLED,
+          cancelledAt: new Date(),
+          cancellationReason: `Cuenta del cuidador suspendida: ${reason}`,
+          cancellationSource: 'ADMIN_CAREGIVER_SUSPENDED',
+          refundAmount: new Prisma.Decimal(refundAmount),
+          refundStatus: 'APPROVED',
+        },
+      });
+      if (updateResult.count === 0) return; // ya cambió de estado por otra vía concurrente
+
+      if (refundAmount > 0) {
+        const updatedClient = await tx.user.update({
+          where: { id: booking.clientId },
+          data: { balance: { increment: refundAmount } },
+          select: { balance: true },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            userId: booking.clientId,
+            type: 'REFUND',
+            amount: refundAmount,
+            balance: Number(updatedClient.balance),
+            description: `Reembolso — la cuenta del cuidador fue suspendida (reserva ${booking.id.slice(0, 8)})`,
+            bookingId: booking.id,
+            status: 'COMPLETED',
+          },
+        });
+      }
+
+      await tx.notification.create({
+        data: {
+          userId: booking.clientId,
+          title: 'Tu reserva fue cancelada',
+          message: `La cuenta del cuidador fue suspendida por motivos de seguridad. Tu reserva fue cancelada${refundAmount > 0 ? ` y se te reembolsaron Bs ${refundAmount.toFixed(2)} a tu billetera Garden` : ''}.`,
+          type: 'BOOKING_CANCELLED',
+        },
+      });
+    });
+  }
+
+  return activeBookings.length;
+}
+
 export async function suspendCaregiver(
   profileId: string,
   adminId: string,
@@ -2220,6 +2299,8 @@ export async function suspendCaregiver(
     },
   });
 
+  const cancelledCount = await cancelActiveBookingsForSuspendedCaregiver(profileId, reason);
+
   await prisma.notification.create({
     data: {
       userId: profile.userId,
@@ -2234,14 +2315,16 @@ export async function suspendCaregiver(
       adminId,
       actionType: 'CAREGIVER_SUSPEND',
       targetId: profileId,
-      notes: reason,
+      notes: `${reason}${cancelledCount > 0 ? ` — ${cancelledCount} reserva(s) activa(s) cancelada(s) con reembolso` : ''}`,
     },
   });
 
   await getCache().del(`caregivers:detail:${profileId}`);
   await delByPrefix('caregivers:list:');
 
-  return { success: true, suspended: true };
+  logger.info('Caregiver suspended, active bookings cancelled with refund', { profileId, adminId, cancelledCount });
+
+  return { success: true, suspended: true, cancelledBookings: cancelledCount };
 }
 
 /**
@@ -3488,4 +3571,157 @@ export async function generateEmailOtpMessage(userId: string) {
   const message = `GARDEN: tu código de verificación es ${code}. Vence en 10 minutos. No lo compartas con nadie.`;
 
   return { email: user.email, message, code, expiresAt: expiresAt.toISOString(), reused: false };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ANTECEDENTES PENALES FLAGGEADOS — el agente de IA (documento-antecedentes.
+// agent.ts) solo marca, nunca suspende solo. Un admin revisa el documento y
+// decide acá si suspende la cuenta o descarta la alerta.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** GET /api/admin/antecedentes-flagged — cuidadores con documento en revisión. */
+export async function listFlaggedAntecedentes() {
+  const profiles = await prisma.caregiverProfile.findMany({
+    where: { antecedentesStatus: 'EN_REVISION' } as any,
+    include: { user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } } },
+    orderBy: { antecedentesSubmittedAt: 'desc' } as any,
+  });
+
+  return Promise.all(
+    profiles.map(async (p) => {
+      const latestLog = await prisma.agentLog.findFirst({
+        where: { agentType: 'DOCUMENTO_ANTECEDENTES', userId: p.userId },
+        orderBy: { createdAt: 'desc' },
+      });
+      return {
+        profileId: p.id,
+        userId: p.userId,
+        name: `${p.user.firstName} ${p.user.lastName}`.trim(),
+        email: p.user.email,
+        phone: p.user.phone,
+        antecedentesUrl: (p as any).antecedentesUrl,
+        submittedAt: (p as any).antecedentesSubmittedAt?.toISOString() ?? null,
+        agentVerdict: latestLog?.output ?? null,
+      };
+    })
+  );
+}
+
+/**
+ * POST /api/admin/antecedentes-flagged/:profileId/suspend — el admin revisó
+ * el documento y confirma que los antecedentes son reales y explícitos de
+ * maltrato animal/violencia — suspende la cuenta (reusa suspendCaregiver,
+ * que ya cancela y reembolsa reservas activas) y marca el documento como
+ * FLAGGED para dejar constancia de qué lo motivó.
+ */
+export async function suspendForAntecedentes(profileId: string, adminId: string): Promise<void> {
+  await suspendCaregiver(profileId, adminId, 'Antecedentes penales confirmados por un administrador tras revisar el documento subido');
+  await prisma.caregiverProfile.update({
+    where: { id: profileId },
+    data: {
+      antecedentesStatus: 'FLAGGED',
+      antecedentesReviewedAt: new Date(),
+      antecedentesReviewedById: adminId,
+    } as any,
+  });
+}
+
+/**
+ * POST /api/admin/antecedentes-flagged/:profileId/dismiss — el admin revisó
+ * el documento y decide que NO amerita suspensión (falso positivo del
+ * agente, o antecedentes que no son de maltrato animal/violencia).
+ */
+export async function dismissAntecedentesFlag(profileId: string, adminId: string): Promise<void> {
+  await prisma.caregiverProfile.update({
+    where: { id: profileId },
+    data: {
+      antecedentesStatus: 'LIMPIO',
+      antecedentesReviewedAt: new Date(),
+      antecedentesReviewedById: adminId,
+    } as any,
+  });
+  await prisma.adminAction.create({
+    data: { adminId, actionType: 'DISMISS_ANTECEDENTES_FLAG', targetId: profileId },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ELIMINACIÓN DE CUENTA DE CUIDADOR — un cuidador solo puede solicitarlo
+// (ver auth.controller.ts deleteAccount), la eliminación real la ejecuta un
+// admin acá. Medida de seguridad ante posible robo/retención indebida de la
+// mascota (Sección 16 de Términos y Condiciones).
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** GET /api/admin/caregiver-deletion-requests — cuidadores con solicitud pendiente. */
+export async function listPendingCaregiverDeletionRequests() {
+  const users = await prisma.user.findMany({
+    where: { role: 'CAREGIVER', accountDeletionRequestedAt: { not: null }, isDeleted: false },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+      accountDeletionRequestedAt: true,
+      deletionRequestLat: true,
+      deletionRequestLng: true,
+    },
+    orderBy: { accountDeletionRequestedAt: 'asc' },
+  });
+
+  return users.map((u) => ({
+    userId: u.id,
+    name: `${u.firstName} ${u.lastName}`.trim(),
+    email: u.email,
+    phone: u.phone,
+    requestedAt: u.accountDeletionRequestedAt?.toISOString() ?? null,
+    lastKnownLat: u.deletionRequestLat,
+    lastKnownLng: u.deletionRequestLng,
+  }));
+}
+
+/**
+ * POST /api/admin/caregiver-deletion-requests/:userId/approve — ejecuta la
+ * eliminación real (anonimización + transferencia de saldo a Garden),
+ * reusando exactamente la misma lógica que la auto-eliminación de
+ * Cliente/Admin (ver auth.service.ts finalizeAccountDeletion).
+ */
+export async function approveCaregiverAccountDeletion(userId: string, adminId: string): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user || user.role !== 'CAREGIVER') {
+    throw new BadRequestError('Usuario no encontrado o no es cuidador');
+  }
+  if (!(user as any).accountDeletionRequestedAt) {
+    throw new BadRequestError('Este cuidador no solicitó eliminar su cuenta');
+  }
+
+  await authService.finalizeAccountDeletion(userId);
+
+  await prisma.adminAction.create({
+    data: { adminId, actionType: 'APPROVE_CAREGIVER_ACCOUNT_DELETION', targetId: userId },
+  });
+
+  logger.info('Admin approved caregiver account deletion', { userId, adminId });
+}
+
+/**
+ * POST /api/admin/caregiver-deletion-requests/:userId/dismiss — el admin
+ * decide NO eliminar la cuenta (ej. contactó al cuidador y se resolvió lo
+ * que motivó el pedido) — limpia la solicitud sin tocar la cuenta.
+ */
+export async function dismissCaregiverAccountDeletionRequest(userId: string, adminId: string): Promise<void> {
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      accountDeletionRequestedAt: null,
+      deletionRequestLat: null,
+      deletionRequestLng: null,
+    } as any,
+  });
+
+  await prisma.adminAction.create({
+    data: { adminId, actionType: 'DISMISS_CAREGIVER_ACCOUNT_DELETION', targetId: userId },
+  });
+
+  logger.info('Admin dismissed caregiver account deletion request', { userId, adminId });
 }

@@ -63,14 +63,37 @@ export async function callClaude(
     }
 }
 
-/** Igual que callClaude pero adjunta una imagen (visión) junto al texto del mensaje. */
+/**
+ * Igual que callClaude pero adjunta un archivo (visión) junto al texto del
+ * mensaje — imagen o PDF. Los PDF se mandan como bloque `document` (soporte
+ * nativo de Claude para leer texto e imágenes dentro del PDF), las imágenes
+ * como bloque `image`, igual que antes.
+ */
 export async function callClaudeVision(
     systemPrompt: string,
     userMessage: string,
     imageBuffer: Buffer,
-    mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+    mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' | 'application/pdf',
     maxTokens: number = 512
 ): Promise<any> {
+    const fileBlock = mediaType === 'application/pdf'
+        ? {
+            type: 'document',
+            source: {
+                type: 'base64',
+                media_type: mediaType,
+                data: imageBuffer.toString('base64'),
+            },
+        }
+        : {
+            type: 'image',
+            source: {
+                type: 'base64',
+                media_type: mediaType,
+                data: imageBuffer.toString('base64'),
+            },
+        };
+
     const response = await getClient().messages.create({
         model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
         max_tokens: maxTokens,
@@ -85,14 +108,7 @@ export async function callClaudeVision(
             {
                 role: 'user',
                 content: [
-                    {
-                        type: 'image',
-                        source: {
-                            type: 'base64',
-                            media_type: mediaType,
-                            data: imageBuffer.toString('base64'),
-                        },
-                    },
+                    fileBlock,
                     { type: 'text', text: userMessage },
                 ],
             },

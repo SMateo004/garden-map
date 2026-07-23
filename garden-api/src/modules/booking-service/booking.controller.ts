@@ -162,7 +162,8 @@ export const cancel = asyncHandler(async (req: Request, res: Response) => {
     bookingId,
     clientId,
     body.reason,
-    body.source
+    body.source,
+    body.reasonCode
   );
   res.json({ success: true, data: booking });
 });
@@ -264,7 +265,8 @@ export const requestCancellationByCaregiver = asyncHandler(async (req: Request, 
   const booking = await bookingService.requestCancellationByCaregiver(
     bookingId,
     caregiverUserId,
-    body.reason
+    body.reason,
+    body.reasonCode
   );
   res.json({ success: true, data: booking });
 });

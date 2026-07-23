@@ -18,6 +18,15 @@ model User {
   phone                        String                        @unique
   isDeleted                    Boolean                       @default(false)
   deletedAt                    DateTime?
+  /// Un cuidador no puede eliminar su cuenta directamente — solo puede
+  /// solicitarlo (queda pendiente hasta que un admin la procese desde el
+  /// panel, ver auth.service.ts requestCaregiverAccountDeletion /
+  /// admin.service.ts finalizeCaregiverAccountDeletion). Medida de
+  /// seguridad ante posible robo/retención indebida de la mascota — no
+  /// aplica a Cliente/Admin, que siguen con auto-eliminación inmediata.
+  accountDeletionRequestedAt   DateTime?
+  deletionRequestLat           Float?
+  deletionRequestLng           Float?
   fcmToken                     String?
   profilePicture               String?
   country                      String?
@@ -219,6 +228,15 @@ model CaregiverProfile {
   identityVerificationToken       String?                     @unique @db.VarChar(64)
   identityVerificationScore       Float?
   identityVerificationSubmittedAt DateTime?
+  /// Antecedentes penales (FELCC/REJAP) — filtro OPCIONAL, no bloquea el
+  /// marketplace. Un agente de IA (documento-antecedentes.agent.ts) marca el
+  /// documento, pero solo un admin decide suspender (ver admin.service.ts).
+  /// Status: PENDING | EN_REVISION | LIMPIO | FLAGGED
+  antecedentesUrl                 String?
+  antecedentesStatus              String                      @default("PENDING") @db.VarChar(20)
+  antecedentesSubmittedAt         DateTime?
+  antecedentesReviewedAt          DateTime?
+  antecedentesReviewedById        String?
   emailVerified                   Boolean                     @default(false)
   phoneVerified                   Boolean                     @default(false)
   /// Lifecycle del onboarding visto desde el cuidador: INCOMPLETE | SUBMITTED | UNDER_REVIEW | APPROVED.
@@ -357,6 +375,12 @@ model Booking {
   cancelledAt                DateTime?
   cancellationReason         String?
   cancellationSource         String?          @db.VarChar(30)
+  /// Motivo estructurado elegido por el usuario al cancelar (CLIMA,
+  /// EMERGENCIA_PERSONAL, CAMBIO_DE_PLANES, PROBLEMA_CON_MASCOTA_O_CUIDADOR,
+  /// OTRO) — separado de cancellationReason (texto libre) para que la
+  /// lógica de reembolso pueda depender de un código estable en vez de un
+  /// string traducible. Solo visible para admin.
+  cancellationReasonCode     String?          @db.VarChar(40)
   refundAmount               Decimal?         @db.Decimal(10, 2)
   refundStatus               RefundStatus?
   createdAt                  DateTime         @default(now())

@@ -14,6 +14,8 @@ import 'admin_technical_screen.dart';
 import 'admin_notifications_screen.dart';
 import 'admin_chat_reports_screen.dart';
 import 'admin_phone_otp_screen.dart';
+import 'admin_caregiver_deletion_requests_screen.dart';
+import 'admin_antecedentes_flagged_screen.dart';
 import 'admin_email_otp_screen.dart';
 import 'admin_donations_screen.dart';
 import 'admin_vets_screen.dart';
@@ -1045,6 +1047,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ('Donaciones', Icons.volunteer_activism_outlined),
     ('Ciudades', Icons.map_rounded),
     ('Capacitaciones', Icons.school_rounded),
+    ('Bajas de cuidador', Icons.person_remove_outlined),
+    ('Antecedentes', Icons.gavel_rounded),
     // Solo para pruebas — visible en el sidebar de web (_webNavGroups) pero
     // excluido a propósito del tab bar de mobile (ver _buildTabBar, que
     // asume que el ÚLTIMO tab de esta lista es el de solo-pruebas).
@@ -1056,9 +1060,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   // "Finanzas" — no es ingreso de Garden, es dinero de terceros en tránsito
   // hacia refugios, y el admin no puede editar montos ahí.
   static const List<(String, IconData, List<int>)> _webNavGroups = [
-    ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5, 21, 23]),
+    ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5, 21, 25]),
     ('Finanzas', Icons.attach_money_rounded, [3, 6, 7, 15]),
-    ('Personas', Icons.groups_outlined, [8, 9, 20, 22]),
+    ('Personas', Icons.groups_outlined, [8, 9, 20, 22, 23, 24]),
     ('Comunicación', Icons.forum_outlined, [12, 13, 17, 18, 19]),
     ('Sistema', Icons.settings_outlined, [10, 11, 14, 16]),
   ];
@@ -1090,6 +1094,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         AdminDonationsScreen(adminToken: _adminToken),
         AdminCitiesScreen(adminToken: _adminToken),
         AdminTrainingsScreen(adminToken: _adminToken),
+        AdminCaregiverDeletionRequestsScreen(adminToken: _adminToken),
+        AdminAntecedentesFlaggedScreen(adminToken: _adminToken),
         AdminTestBookingScreen(adminToken: _adminToken),
       ],
     );

@@ -518,7 +518,7 @@ export const deleteAccount = asyncHandler(async (req: Request, res: Response) =>
   const userId = req.user?.userId ?? (req.user as { id?: string })?.id;
   if (!userId) return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'No autenticado' } });
 
-  const { password } = req.body;
+  const { password, lat, lng } = req.body;
   if (!password) return res.status(400).json({ success: false, error: { code: 'MISSING_PASSWORD', message: 'Contraseña requerida' } });
 
   // 1. Load user
@@ -529,6 +529,25 @@ export const deleteAccount = asyncHandler(async (req: Request, res: Response) =>
   const bcrypt = await import('bcrypt');
   const valid = await bcrypt.default.compare(password, user.passwordHash);
   if (!valid) return res.status(400).json({ success: false, error: { code: 'WRONG_PASSWORD', message: 'Contraseña incorrecta' } });
+
+  // Un cuidador no puede autoeliminarse — solo puede solicitarlo. La cuenta
+  // sigue activa hasta que un admin la procese (ver
+  // admin.service.ts approveCaregiverAccountDeletion). Medida de seguridad
+  // ante un posible robo/retención indebida de la mascota: no queremos que
+  // un cuidador borre su rastro de inmediato. Se captura su última ubicación
+  // conocida (best-effort) para dejar constancia.
+  if (user.role === 'CAREGIVER') {
+    await authService.requestCaregiverAccountDeletion(
+      userId,
+      typeof lat === 'number' ? lat : undefined,
+      typeof lng === 'number' ? lng : undefined
+    );
+    logger.info('Caregiver account deletion requested (pending admin approval)', { userId });
+    return res.json({
+      success: true,
+      data: { message: 'Tu solicitud fue enviada. Un administrador la revisará antes de eliminar tu cuenta.' },
+    });
+  }
 
   // 3. Check for pending obligations
   const pendingBookings = await prisma.booking.count({
@@ -551,11 +570,6 @@ export const deleteAccount = asyncHandler(async (req: Request, res: Response) =>
     });
   }
 
-  // Leer balance desde User (fuente unificada) — NO desde las tablas deprecadas
-  const clientProfile = await prisma.clientProfile.findUnique({ where: { userId } });
-  const userWithBalance = await prisma.user.findUnique({ where: { id: userId }, select: { balance: true } });
-  const unifiedBalance = Number(userWithBalance?.balance ?? 0);
-
   const pendingDisputes = await (prisma as any).dispute?.count?.({
     where: { status: { in: ['OPEN', 'IN_REVIEW'] }, booking: { OR: [{ clientId: userId }, ...(caregiverProfile ? [{ caregiverId: caregiverProfile.id }] : [])] } },
   }).catch(() => 0) ?? 0;
@@ -573,47 +587,10 @@ export const deleteAccount = asyncHandler(async (req: Request, res: Response) =>
     });
   }
 
-  // 4. Transfer wallet balance to Garden (create an outgoing transaction)
-  // Usa User.balance (fuente unificada), no las tablas deprecadas CaregiverProfile/ClientProfile
-  if (unifiedBalance > 0) {
-    await prisma.walletTransaction.create({
-      data: {
-        userId,
-        type: 'WITHDRAWAL',
-        amount: unifiedBalance,
-        balance: 0,
-        description: 'Saldo transferido a GARDEN al eliminar cuenta',
-        status: 'COMPLETED',
-      },
-    });
-    await prisma.user.update({ where: { id: userId }, data: { balance: 0 } });
-  }
-
-  // 5. Soft-delete: anonymize user data so they can re-register with same email
-  const deletedTag = `deleted_${Date.now()}`;
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      email: `${deletedTag}@garden.deleted`,
-      passwordHash: '',
-      phone: `${deletedTag}`,
-      isDeleted: true,
-      deletedAt: new Date(),
-    },
-  });
-
-  // 6. Remove from marketplace if caregiver. ciNumber se libera (null) porque
-  // es único en la base — si no, el mismo documento real queda bloqueado para
-  // siempre y esta misma persona no podría volver a registrarse, aunque todo
-  // el punto de este soft-delete es justamente permitir eso.
-  if (caregiverProfile) {
-    await prisma.caregiverProfile.update({
-      where: { userId },
-      data: { status: 'DRAFT', suspended: true, ciNumber: null } as any,
-    });
-  }
-
-  logger.info('Account deleted (soft)', { userId, role: user.role });
+  // 4-6. Transferencia de saldo + anonimización + liberar del marketplace —
+  // lógica compartida con la aprobación admin de eliminación de cuidador
+  // (ver admin.service.ts approveCaregiverAccountDeletion).
+  await authService.finalizeAccountDeletion(userId);
 
   res.json({ success: true, data: { message: 'Cuenta eliminada correctamente' } });
 });

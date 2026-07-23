@@ -56,6 +56,7 @@ import { iniciarJobSlotConflictExpiry } from './jobs/slot-conflict-expiry.job.js
 import { iniciarJobChatRetention } from './jobs/chat-retention.job.js';
 import { iniciarJobCaregiverAcceptExpiry } from './jobs/caregiver-accept-expiry.job.js';
 import { iniciarJobNoShowExpiry } from './jobs/no-show-expiry.job.js';
+import { iniciarJobHospedajeLocationPing } from './jobs/hospedaje-location-ping.job.js';
 import { iniciarJobRecordatorioCapacitaciones } from './jobs/training-reminder.job.js';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
@@ -251,6 +252,7 @@ async function start() {
     iniciarJobCaregiverAcceptExpiry();
     iniciarJobNoShowExpiry();
     iniciarJobRecordatorioCapacitaciones();
+    iniciarJobHospedajeLocationPing();
   }, 10000);
 
   // Auto-release payment after service ends if owner hasn't reviewed

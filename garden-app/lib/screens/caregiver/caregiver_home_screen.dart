@@ -675,7 +675,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     }
   }
 
-  Future<void> _requestCancellation(String bookingId, String reason) async {
+  Future<void> _requestCancellation(String bookingId, String reason, String reasonCode) async {
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/bookings/$bookingId/cancellation-request'),
@@ -683,7 +683,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
           'Authorization': 'Bearer $_caregiverToken',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({'reason': reason}),
+        body: jsonEncode({'reason': reason, 'reasonCode': reasonCode}),
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
@@ -691,7 +691,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Solicitud enviada. El admin revisará tu cancelación.'),
+              content: Text('Reserva cancelada. El cliente ya recibió el reembolso completo en su billetera.'),
               backgroundColor: GardenColors.warning,
               duration: Duration(seconds: 4),
             ),
@@ -3770,7 +3770,7 @@ class _ExpandableBookingCard extends StatefulWidget {
   final Color surface, textColor, subtextColor, borderColor;
   final bool isDark;
   final Function(String, String) onRespond;
-  final Function(String, String) onRequestCancellation;
+  final Function(String, String, String) onRequestCancellation;
   final VoidCallback? onRefresh;
   final String token;
 
@@ -3846,54 +3846,79 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
     }
   }
 
+  static const Map<String, String> _cancellationReasonLabels = {
+    'CLIMA': 'Mal clima',
+    'EMERGENCIA_PERSONAL': 'Emergencia personal',
+    'CAMBIO_DE_PLANES': 'Cambio de planes',
+    'PROBLEMA_CON_MASCOTA_O_CUIDADOR': 'Problema con la mascota o el cuidador',
+    'OTRO': 'Otro',
+  };
+
   Future<void> _showCancellationDialog(String bookingId) async {
     if (_isCancelling) return;
     final reasonController = TextEditingController();
+    String? selectedReasonCode;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => GardenGlassDialog(
-        title: const Text('Solicitar cancelación'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Esta solicitud será revisada por el administrador. La cancelación no es inmediata.',
-              style: TextStyle(fontSize: 13, color: GardenColors.textSecondary),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: reasonController,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                hintText: 'Escribe el motivo de cancelación...',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      builder: (_) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) => GardenGlassDialog(
+          title: const Text('Cancelar reserva'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'La reserva se cancelará de inmediato y el cliente recibe el reembolso completo al instante. El admin solo recibe una notificación de auditoría.',
+                style: TextStyle(fontSize: 13, color: GardenColors.textSecondary),
               ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _cancellationReasonLabels.entries.map((entry) {
+                  final isSelected = selectedReasonCode == entry.key;
+                  return ChoiceChip(
+                    label: Text(entry.value, style: const TextStyle(fontSize: 12)),
+                    selected: isSelected,
+                    selectedColor: GardenColors.primary,
+                    labelStyle: TextStyle(color: isSelected ? Colors.white : GardenColors.textSecondary),
+                    onSelected: (_) => setDialogState(() => selectedReasonCode = entry.key),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: reasonController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  hintText: 'Escribe el motivo de cancelación...',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                ),
+                onChanged: (_) => setDialogState(() {}),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error),
+              onPressed: (selectedReasonCode != null && reasonController.text.trim().isNotEmpty)
+                  ? () => Navigator.pop(context, true)
+                  : null,
+              child: const Text('Confirmar cancelación'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error),
-            onPressed: () {
-              if (reasonController.text.trim().isNotEmpty) {
-                Navigator.pop(context, true);
-              }
-            },
-            child: const Text('Enviar solicitud'),
-          ),
-        ],
       ),
     );
-    if (confirmed == true && !_isCancelling) {
+    if (confirmed == true && !_isCancelling && selectedReasonCode != null) {
       setState(() => _isCancelling = true);
       try {
-        await Future.sync(() => widget.onRequestCancellation(bookingId, reasonController.text.trim()));
+        await Future.sync(() => widget.onRequestCancellation(bookingId, reasonController.text.trim(), selectedReasonCode!));
       } finally {
         if (mounted) setState(() => _isCancelling = false);
       }

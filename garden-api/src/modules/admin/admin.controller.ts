@@ -1184,6 +1184,54 @@ export const generatePhoneOtpMessage = asyncHandler(async (req: Request, res: Re
   res.json({ success: true, data });
 });
 
+// ── Antecedentes penales flaggeados por el agente de IA (admin decide) ─────
+
+/** GET /api/admin/antecedentes-flagged — documentos en revisión. */
+export const getFlaggedAntecedentes = asyncHandler(async (req: Request, res: Response) => {
+  const data = await adminService.listFlaggedAntecedentes();
+  res.json({ success: true, data });
+});
+
+/** POST /api/admin/antecedentes-flagged/:profileId/suspend — confirma y suspende la cuenta. */
+export const suspendForAntecedentes = asyncHandler(async (req: Request, res: Response) => {
+  const { profileId } = req.params;
+  await adminService.suspendForAntecedentes(profileId!, req.user!.userId);
+  auditLog({ userId: req.user!.userId, action: 'SUSPEND_FOR_ANTECEDENTES', entity: 'CaregiverProfile', entityId: profileId, ip: req.ip });
+  res.json({ success: true });
+});
+
+/** POST /api/admin/antecedentes-flagged/:profileId/dismiss — descarta la alerta, no suspende. */
+export const dismissAntecedentesFlag = asyncHandler(async (req: Request, res: Response) => {
+  const { profileId } = req.params;
+  await adminService.dismissAntecedentesFlag(profileId!, req.user!.userId);
+  auditLog({ userId: req.user!.userId, action: 'DISMISS_ANTECEDENTES_FLAG', entity: 'CaregiverProfile', entityId: profileId, ip: req.ip });
+  res.json({ success: true });
+});
+
+// ── Eliminación de cuenta de cuidador (solo admin puede confirmarla) ───────
+
+/** GET /api/admin/caregiver-deletion-requests — cuidadores con solicitud pendiente. */
+export const getPendingCaregiverDeletionRequests = asyncHandler(async (req: Request, res: Response) => {
+  const data = await adminService.listPendingCaregiverDeletionRequests();
+  res.json({ success: true, data });
+});
+
+/** POST /api/admin/caregiver-deletion-requests/:userId/approve — ejecuta la eliminación real. */
+export const approveCaregiverAccountDeletion = asyncHandler(async (req: Request, res: Response) => {
+  const { userId } = req.params;
+  await adminService.approveCaregiverAccountDeletion(userId!, req.user!.userId);
+  auditLog({ userId: req.user!.userId, action: 'APPROVE_CAREGIVER_ACCOUNT_DELETION', entity: 'User', entityId: userId, ip: req.ip });
+  res.json({ success: true });
+});
+
+/** POST /api/admin/caregiver-deletion-requests/:userId/dismiss — descarta la solicitud, la cuenta sigue activa. */
+export const dismissCaregiverAccountDeletionRequest = asyncHandler(async (req: Request, res: Response) => {
+  const { userId } = req.params;
+  await adminService.dismissCaregiverAccountDeletionRequest(userId!, req.user!.userId);
+  auditLog({ userId: req.user!.userId, action: 'DISMISS_CAREGIVER_ACCOUNT_DELETION', entity: 'User', entityId: userId, ip: req.ip });
+  res.json({ success: true });
+});
+
 // ── Verificación de correo manual (fallback — solo si Resend falla) ─────────
 
 /** GET /api/admin/email-otp-requests — usuarios a los que Resend no pudo enviarles el código. */

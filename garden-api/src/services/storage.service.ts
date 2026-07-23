@@ -195,8 +195,15 @@ export async function uploadImage(buffer: Buffer, opts: UploadOptions): Promise<
  */
 export async function uploadRawFile(buffer: Buffer, opts: UploadOptions, mimeType: string): Promise<string> {
   const name = opts.name ?? randomUUID();
-  const ext = mimeType.includes('quicktime') ? '.mov' : mimeType.includes('webm') ? '.webm' : '.mp4';
+  const isPdf = mimeType === 'application/pdf';
+  const ext = isPdf ? '.pdf'
+    : mimeType.includes('quicktime') ? '.mov'
+    : mimeType.includes('webm') ? '.webm'
+    : '.mp4';
   const filename = `${name}${ext}`;
+  // Cloudinary clasifica PDFs como 'raw' (no 'video') — video/raw determinan
+  // qué transformaciones/servido soporta, usar el que no corresponde falla.
+  const cloudinaryResourceType = isPdf ? 'raw' : 'video';
 
   if (isS3Configured()) {
     try {
@@ -210,19 +217,19 @@ export async function uploadRawFile(buffer: Buffer, opts: UploadOptions, mimeTyp
       }));
       const region = env.AWS_REGION ?? 'us-east-1';
       const url = `https://${env.AWS_S3_BUCKET}.s3.${region}.amazonaws.com/${key}`;
-      logger.info('storage.service: video subido a S3', { url, folder: opts.folder });
+      logger.info('storage.service: archivo subido a S3', { url, folder: opts.folder });
       return url;
     } catch (err: any) {
-      logger.error('storage.service: fallo S3 video, intentando Cloudinary', { error: err?.message ?? err });
+      logger.error('storage.service: fallo S3, intentando Cloudinary', { error: err?.message ?? err });
     }
   }
 
   if (isCloudinaryConfigured()) {
     return new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { folder: `garden/${opts.folder}`, public_id: name, resource_type: 'video' as any },
+        { folder: `garden/${opts.folder}`, public_id: name, resource_type: cloudinaryResourceType as any },
         (err: any, result: any) => {
-          if (err || !result) reject(err ?? new Error('Cloudinary video upload failed'));
+          if (err || !result) reject(err ?? new Error('Cloudinary file upload failed'));
           else resolve(result.secure_url);
         }
       );

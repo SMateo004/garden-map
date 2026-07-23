@@ -177,6 +177,24 @@ router.get('/phone-otp-requests', adminController.getPendingPhoneOtpRequests);
 /** POST /api/admin/phone-otp-requests/:userId/message — (re)genera el código y el mensaje listo para copiar/enviar. */
 router.post('/phone-otp-requests/:userId/message', adminController.generatePhoneOtpMessage);
 
+/** GET /api/admin/antecedentes-flagged — documentos de antecedentes en revisión. */
+router.get('/antecedentes-flagged', adminController.getFlaggedAntecedentes);
+
+/** POST /api/admin/antecedentes-flagged/:profileId/suspend — confirma y suspende. */
+router.post('/antecedentes-flagged/:profileId/suspend', adminController.suspendForAntecedentes);
+
+/** POST /api/admin/antecedentes-flagged/:profileId/dismiss — descarta la alerta. */
+router.post('/antecedentes-flagged/:profileId/dismiss', adminController.dismissAntecedentesFlag);
+
+/** GET /api/admin/caregiver-deletion-requests — cuidadores con solicitud de eliminación pendiente. */
+router.get('/caregiver-deletion-requests', adminController.getPendingCaregiverDeletionRequests);
+
+/** POST /api/admin/caregiver-deletion-requests/:userId/approve — ejecuta la eliminación real. */
+router.post('/caregiver-deletion-requests/:userId/approve', adminController.approveCaregiverAccountDeletion);
+
+/** POST /api/admin/caregiver-deletion-requests/:userId/dismiss — descarta la solicitud. */
+router.post('/caregiver-deletion-requests/:userId/dismiss', adminController.dismissCaregiverAccountDeletionRequest);
+
 /** GET /api/admin/email-otp-requests — usuarios a los que Resend no pudo enviarles el código de email. */
 router.get('/email-otp-requests', adminController.getPendingEmailOtpRequests);
 

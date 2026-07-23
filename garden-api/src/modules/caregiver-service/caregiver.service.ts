@@ -1,6 +1,7 @@
 import { CaregiverStatus, ServiceType, Zone, Prisma, type TimeSlot } from '@prisma/client';
 import prisma from '../../config/database.js';
 import { getCache, CAREGIVER_LIST_CACHE_TTL, CAREGIVER_DETAIL_CACHE_TTL } from '../../shared/cache.js';
+import { combinedHospedajeGuarderiaMax } from '../../utils/caregiver-capacity.js';
 import {
   CaregiverNotFoundError,
   CaregiverProfileValidationError,
@@ -281,6 +282,7 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       pricePerGuarderia: applyMarkup(c.pricePerGuarderia, markupRate),
       guarderiaIncludeWalk: (c as any).guarderiaIncludeWalk ?? false,
       verified: c.verified,
+      antecedentesVerified: (c as any).antecedentesStatus === 'LIMPIO',
       spaceType: Array.isArray(c.spaceType) ? c.spaceType : (c.spaceType ? [c.spaceType] : []),
       experienceYears: c.experienceYears,
       experienceDescription: c.experienceDescription,
@@ -296,6 +298,14 @@ export async function listCaregivers(filters: CaregiverFilters): Promise<Paginat
       isCompany: (c as any).isCompany ?? false,
       companyName: (c as any).companyName ?? null,
       maxPets: c.maxPets ?? 1,
+      maxPetsPaseo: (c as any).maxPetsPaseo ?? c.maxPets ?? 1,
+      // Hospedaje y Guardería comparten un pool combinado — se resuelve con
+      // el mismo helper que usa el backend al validar reservas, para que
+      // perfiles viejos (guardados antes de este cambio, con los dos campos
+      // todavía distintos entre sí) muestren el mismo número consistente
+      // que realmente se va a aplicar al reservar.
+      maxPetsHospedaje: combinedHospedajeGuarderiaMax(c as any),
+      maxPetsGuarderia: combinedHospedajeGuarderiaMax(c as any),
       // Store raw coords in cache; jitter is applied AFTER retrieval so each response
       // gets fresh noise and cached data doesn't leak a static jittered position.
       _addressLat: c.addressLat ?? null,
@@ -498,6 +508,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     pricePerGuarderia: applyMarkup(profile.pricePerGuarderia, markupRate),
     guarderiaIncludeWalk: (profile as any).guarderiaIncludeWalk ?? false,
     verified: profile.verified,
+    antecedentesVerified: (profile as any).antecedentesStatus === 'LIMPIO',
     spaceType: Array.isArray(profile.spaceType) ? profile.spaceType : (profile.spaceType ? [profile.spaceType] : []),
     bio: profile.bio,
     photos: Array.isArray(profile.photos) ? profile.photos : [],
@@ -545,6 +556,11 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     hoursAlone: profile.hoursAlone,
     workFromHome: profile.workFromHome,
     maxPets: profile.maxPets,
+    maxPetsPaseo: (profile as any).maxPetsPaseo ?? profile.maxPets ?? 1,
+    // Hospedaje y Guardería comparten un pool combinado — mismo helper que
+    // usa el backend al validar reservas (ver combinedHospedajeGuarderiaMax).
+    maxPetsHospedaje: combinedHospedajeGuarderiaMax(profile as any),
+    maxPetsGuarderia: combinedHospedajeGuarderiaMax(profile as any),
     oftenOut: profile.oftenOut,
     spaceDescription: profile.spaceDescription,
     isProfessional: (profile as any).isProfessional ?? false,
@@ -584,8 +600,19 @@ export interface CaregiverAvailabilityResponse {
   hospedaje: string[]; // fechas YYYY-MM-DD disponibles para hospedaje
   paseos: Record<string, PaseoSlot[]>; // fecha -> [{slot, enabled, start?, end?}] disponibles
   blockedDates: string[]; // fechas YYYY-MM-DD explícitamente bloqueadas por el cuidador
-  bookedPaseos?: { date: string; startTime: string; duration: number; status: string; petCount?: number }[];
+  bookedPaseos?: { date: string; startTime: string; duration: number; status: string; petCount?: number; serviceType?: string }[];
+  /** Capacidad de HOSPEDAJE (nombre legado — se mantiene por compatibilidad, no es un global). */
   maxPets?: number;
+  /** Capacidad de PASEO y GUARDERIA — separadas porque pueden ser números distintos entre sí y
+   * distintos de maxPets (hospedaje). Antes se usaba un solo `maxPets` para las tres, lo que
+   * hacía que el calendario difuminara fechas/horarios mal si el cuidador configuraba capacidades
+   * distintas por servicio. */
+  maxPetsPaseo?: number;
+  maxPetsGuarderia?: number;
+  /** Mascotas de HOSPEDAJE ocupadas por día (YYYY-MM-DD -> cantidad) — para que el
+   * frontend sume esta ocupación al chequear disponibilidad de GUARDERIA por hora,
+   * ya que ambos servicios comparten el mismo cupo combinado. */
+  hospedajePetsByDate?: Record<string, number>;
 }
 
 /**
@@ -623,7 +650,14 @@ export async function getCaregiverAvailability(
           status: CaregiverStatus.APPROVED,
           suspended: false
         },
-        select: { id: true, defaultAvailabilitySchedule: true, maxPets: true },
+        select: {
+          id: true,
+          defaultAvailabilitySchedule: true,
+          maxPets: true,
+          maxPetsPaseo: true,
+          maxPetsHospedaje: true,
+          maxPetsGuarderia: true,
+        },
       });
 
     } catch (dbError) {
@@ -961,30 +995,42 @@ export async function getCaregiverAvailability(
       }
     });
 
-    // 6. Filter hospedajeDates (remove dates where active booking count >= maxPets)
-    // maxPets=1 → block after 1 booking (original behaviour)
-    // maxPets=2 → allow up to 2 simultaneous hospedaje bookings per day, etc.
-    const caregiverMaxPets = (profile as any)?.maxPets ?? 1;
-    // Count occupied pet slots per date (sum petCount, not booking count)
-    const hospedajeDatePetCount = new Map<string, number>();
+    // 6. Filter hospedajeDates — Hospedaje y Guardería comparten UN pool
+    // combinado (ver combinedHospedajeGuarderiaMax), así que una fecha con
+    // hospedaje al tope O con hospedaje+guardería sumados al tope se difumina
+    // igual. maxPetsPaseo queda totalmente aparte (su propio pool).
+    const paseoMaxPets = (profile as any)?.maxPetsPaseo ?? (profile as any)?.maxPets ?? 1;
+    const combinedMaxPets = combinedHospedajeGuarderiaMax((profile as any) ?? {});
+    // hospedajeOnlyPetCount: solo lo que ocupa hospedaje por día — se expone
+    // aparte (hospedajePetsByDate) para que el frontend pueda sumarlo al
+    // chequear disponibilidad de GUARDERIA por hora (que sí varía por hora,
+    // a diferencia de hospedaje que ocupa el día entero).
+    const hospedajeOnlyPetCount = new Map<string, number>();
+    const guarderiaOnlyPetCount = new Map<string, number>();
     activeBookings.forEach(b => {
+      const bPetCount = (b as any).petCount ?? 1;
       if (b.serviceType === 'HOSPEDAJE' && b.startDate && b.endDate) {
-        const bPetCount = (b as any).petCount ?? 1;
         let d = new Date(b.startDate);
         while (d < b.endDate) {
           const ds = d.toISOString().slice(0, 10);
-          hospedajeDatePetCount.set(ds, (hospedajeDatePetCount.get(ds) ?? 0) + bPetCount);
+          hospedajeOnlyPetCount.set(ds, (hospedajeOnlyPetCount.get(ds) ?? 0) + bPetCount);
           d.setDate(d.getDate() + 1);
         }
+      } else if (b.serviceType === 'GUARDERIA' && b.walkDate) {
+        const ds = b.walkDate.toISOString().slice(0, 10);
+        guarderiaOnlyPetCount.set(ds, (guarderiaOnlyPetCount.get(ds) ?? 0) + bPetCount);
       }
     });
+    const combinedPetCount = (ds: string) => (hospedajeOnlyPetCount.get(ds) ?? 0) + (guarderiaOnlyPetCount.get(ds) ?? 0);
 
     // A date is available if at least 1 pet slot is free (remaining = maxPets - occupied > 0)
-    const finalHospedajeDates = hospedajeDates.filter(
-      d => (hospedajeDatePetCount.get(d) ?? 0) < caregiverMaxPets
-    );
+    const finalHospedajeDates = hospedajeDates.filter(d => combinedPetCount(d) < combinedMaxPets);
 
     // 7. Prepare bookedPaseos for frontend validation/UI
+    // serviceType incluido a propósito: PASEO y GUARDERIA tienen capacidades
+    // independientes (maxPetsPaseo/maxPetsGuarderia) — sin este campo, el
+    // frontend no puede distinguir de qué servicio es cada reserva existente
+    // y termina sumando ambas contra una sola capacidad, difuminando mal.
     const bookedPaseos = activeBookings
       .filter(b => (b.serviceType === 'PASEO' || b.serviceType === 'GUARDERIA') && b.walkDate)
       .map(b => ({
@@ -993,6 +1039,7 @@ export async function getCaregiverAvailability(
         duration: b.duration || 0,
         status: b.status,
         petCount: (b as any).petCount ?? 1,
+        serviceType: b.serviceType,
       }));
 
     logger.info('Availability processed with active bookings', {
@@ -1010,7 +1057,15 @@ export async function getCaregiverAvailability(
       paseos: paseosByDate,
       blockedDates,
       bookedPaseos,
-      maxPets: caregiverMaxPets,
+      // maxPets/maxPetsGuarderia: mismo valor — Hospedaje y Guardería
+      // comparten un solo pool combinado (ver combinedHospedajeGuarderiaMax).
+      maxPets: combinedMaxPets,
+      maxPetsPaseo: paseoMaxPets,
+      maxPetsGuarderia: combinedMaxPets,
+      // Ocupación de HOSPEDAJE por día (independiente de la hora, ocupa el
+      // día entero) — el frontend la suma al chequear disponibilidad de
+      // GUARDERIA por horario, ya que ambos comparten el mismo cupo.
+      hospedajePetsByDate: Object.fromEntries(hospedajeOnlyPetCount),
     };
   } catch (err) {
     logger.error('ERROR en getCaregiverAvailability - CATCH BLOCK', {
@@ -1182,6 +1237,7 @@ function mapProfileToListItem(profile: any, markupRate: number): CaregiverListIt
     pricePerGuarderia: applyMarkup(profile.pricePerGuarderia, markupRate),
     guarderiaIncludeWalk: (profile as any).guarderiaIncludeWalk ?? false,
     verified: profile.verified,
+    antecedentesVerified: (profile as any).antecedentesStatus === 'LIMPIO',
     spaceType: Array.isArray(profile.spaceType) ? profile.spaceType : (profile.spaceType ? [profile.spaceType] : []),
     experienceYears: profile.experienceYears,
     experienceDescription: profile.experienceDescription,

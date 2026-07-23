@@ -32,6 +32,7 @@ export interface BookingCreateResult {
   cancelledAt?: string | null;
   cancellationReason?: string | null;
   cancellationSource?: string | null;
+  cancellationReasonCode?: string | null;
   refundAmount?: string | null;
   refundStatus?: string | null;
   paidAt?: string | null;
@@ -150,6 +151,7 @@ export function bookingToResponse(b: any): BookingCreateResult {
     cancelledAt: b.cancelledAt?.toISOString() ?? null,
     cancellationReason: b.cancellationReason ?? null,
     cancellationSource: b.cancellationSource ?? null,
+    cancellationReasonCode: b.cancellationReasonCode ?? null,
     refundAmount: b.refundAmount != null ? String(b.refundAmount) : null,
     refundStatus: b.refundStatus ?? null,
     paidAt: b.paidAt?.toISOString() ?? null,

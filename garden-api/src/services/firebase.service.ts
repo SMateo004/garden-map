@@ -67,6 +67,42 @@ export async function sendPush(
 }
 
 /**
+ * Envía un push silencioso (data-only, SIN `notification`) — no muestra
+ * ningún banner ni entra al tray de notificaciones, solo despierta el
+ * background message handler de la app. Usado para el ping de ubicación
+ * horario de Hospedaje/Guardería (ver hospedaje-location-ping.job.ts):
+ * el cuidador nunca debe ver que se le pidió su ubicación, a diferencia
+ * de sendPush() que siempre es visible.
+ *
+ * apns `content-available: 1` es lo que permite a iOS despertar la app en
+ * segundo plano sin mostrar alerta — Apple entrega esto "best effort", no
+ * garantiza el momento exacto (puede demorarse o descartarse con batería
+ * baja). Android entrega mensajes data-only de forma más confiable.
+ */
+export async function sendSilentDataPush(
+  fcmToken: string,
+  data: Record<string, string>
+): Promise<void> {
+  if (!fcmToken) return;
+  const messaging = await getMessaging();
+  if (!messaging) return;
+
+  try {
+    await messaging.send({
+      token: fcmToken,
+      data,
+      android: { priority: 'high' },
+      apns: {
+        payload: { aps: { 'content-available': 1 } },
+        headers: { 'apns-priority': '5' },
+      },
+    });
+  } catch (err: any) {
+    logger.warn('[FCM] Silent push delivery failed', { error: err.message });
+  }
+}
+
+/**
  * Looks up the user's FCM token and sends a push notification.
  * Silently skips if user has no token registered.
  *

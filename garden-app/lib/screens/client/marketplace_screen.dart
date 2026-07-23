@@ -177,11 +177,21 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       list = list.where((c) => c['verified'] == true).toList();
     }
 
-    // Simultaneous pets filter (client-side)
+    // Simultaneous pets filter (client-side) — usa la capacidad del servicio
+    // que el cliente tiene seleccionado, no el campo maxPets legado (que
+    // muchos perfiles ya migrados dejan en null, excluyéndolos aunque su
+    // capacidad real para ese servicio sí cumpla el filtro).
     if (_filterMinSimultaneous != null) {
       list = list.where((c) {
-        final mp = (c['maxPets'] as num?)?.toInt() ?? 1;
-        return mp >= _filterMinSimultaneous!;
+        final legacy = (c['maxPets'] as num?)?.toInt() ?? 1;
+        int forService(String key) => (c[key] as num?)?.toInt() ?? legacy;
+        if (_selectedService == 'paseo') return forService('maxPetsPaseo') >= _filterMinSimultaneous!;
+        if (_selectedService == 'hospedaje') return forService('maxPetsHospedaje') >= _filterMinSimultaneous!;
+        if (_selectedService == 'guarderia') return forService('maxPetsGuarderia') >= _filterMinSimultaneous!;
+        // 'todos' — cumple si CUALQUIER servicio que ofrece alcanza el mínimo.
+        return forService('maxPetsPaseo') >= _filterMinSimultaneous! ||
+            forService('maxPetsHospedaje') >= _filterMinSimultaneous! ||
+            forService('maxPetsGuarderia') >= _filterMinSimultaneous!;
       }).toList();
     }
 
@@ -2395,7 +2405,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               children: [
                 const Icon(Icons.map_rounded, size: 16, color: GardenColors.primary),
                 const SizedBox(width: 8),
-                Text('Mapa · $_cityName', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+                Flexible(
+                  child: Text(
+                    'Mapa · $_cityName',
+                    style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
                 const Spacer(),
                 // Zoom out button
                 if (_selectedZone != null)

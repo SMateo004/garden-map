@@ -2851,6 +2851,14 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               color: Colors.white,
               bg: GardenColors.forest,
             ),
+            const SizedBox(width: 8),
+            _BottomActionBtn(
+              icon: Icons.sos_rounded,
+              label: 'SOS',
+              onTap: _showSosDialog,
+              color: Colors.white,
+              bg: GardenColors.error,
+            ),
           ],
         ),
       ),
@@ -4273,6 +4281,123 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     }
   }
 
+  // ── SOS del dueño ──────────────────────────────────────────────────────
+  // El cuidador NUNCA se entera de este reporte — pensado para el caso en
+  // que el cuidador sea la parte cuestionada (posible robo/retención
+  // indebida de la mascota). Solo el equipo de Garden lo recibe.
+  static const _sosTypes = [
+    {'icon': '📵', 'label': 'No puedo contactar al cuidador'},
+    {'icon': '🐾', 'label': 'Sospecho que algo le pasó a mi mascota'},
+    {'icon': '🏠', 'label': 'El cuidador no está donde dijo que estaría'},
+    {'icon': '⚠️', 'label': 'Otra emergencia'},
+  ];
+
+  Future<void> _reportSos(String label) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/sos'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({'description': label, 'incidentType': label}),
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('🆘 Alerta enviada al equipo de Garden'),
+          backgroundColor: GardenColors.error,
+          duration: Duration(seconds: 4),
+        ));
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(data['error']?['message'] ?? 'Error al enviar la alerta'),
+          backgroundColor: GardenColors.error,
+        ));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Error de conexión'),
+          backgroundColor: GardenColors.error,
+        ));
+      }
+    }
+  }
+
+  void _showSosDialog() {
+    final isDark = themeNotifier.isDark;
+    final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.of(ctx).padding.bottom + 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(child: Container(
+              width: 40, height: 4, margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: subtextColor.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            )),
+            Row(children: [
+              Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(color: GardenColors.error.withValues(alpha: 0.12), shape: BoxShape.circle),
+                child: const Icon(Icons.sos_rounded, color: GardenColors.error, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('🆘 Reportar un problema', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w900)),
+                  Text('Esto alerta de inmediato al equipo de Garden.\nEl cuidador no se entera de este reporte.',
+                      style: TextStyle(color: subtextColor, fontSize: 12, height: 1.3)),
+                ],
+              )),
+            ]),
+            const SizedBox(height: 20),
+            Text('¿Qué está pasando?', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+            const SizedBox(height: 12),
+            ..._sosTypes.map((item) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _reportSos(item['label'] as String);
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: GardenColors.error.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: GardenColors.error.withValues(alpha: 0.25)),
+                  ),
+                  child: Row(children: [
+                    Text(item['icon'] as String, style: const TextStyle(fontSize: 18)),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(item['label'] as String, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600))),
+                  ]),
+                ),
+              ),
+            )),
+            Center(child: TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancelar', style: TextStyle(color: subtextColor)),
+            )),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _confirmMarkServiceEnded() async {
     final isDark = themeNotifier.isDark;
     final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
@@ -4500,10 +4625,22 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   Future<void> _concludeService() async {
     setState(() => _isProcessing = true);
     try {
+      // Punto de ubicación final — best-effort, nunca bloquea el cierre del
+      // servicio si el permiso fue denegado o falla el GPS. Para Hospedaje/
+      // Guardería es el único punto "de cierre" que queda registrado, dado
+      // que esos servicios no tienen tracking continuo como Paseo.
+      Map<String, dynamic> conclusionBody = {};
+      try {
+        final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high)
+            .timeout(const Duration(seconds: 8));
+        conclusionBody = {'lat': pos.latitude, 'lng': pos.longitude};
+      } catch (_) {
+        // Sin ubicación disponible — se concluye igual, sin punto final.
+      }
       final response = await http.post(
         Uri.parse('$_baseUrl/bookings/${widget.bookingId}/conclude'),
         headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
-        body: jsonEncode({}),
+        body: jsonEncode(conclusionBody),
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {

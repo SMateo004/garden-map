@@ -3,15 +3,49 @@ import 'dart:io' show Platform;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode, debugPrint;
+import 'package:flutter/widgets.dart' show WidgetsFlutterBinding;
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'local_notification_service.dart';
 import 'secure_storage_service.dart';
 import 'auth_state.dart';
 
+/// Responde al push silencioso horario de Hospedaje/Guardería
+/// (hospedaje-location-ping.job.ts en el backend) mandando un punto de
+/// ubicación puntual — sin notificación, sin sonido, sin ningún indicio
+/// visible para el cuidador. Falla en silencio ante cualquier error (sin
+/// permiso, sin red, GPS lento): es best-effort, nunca debe generar ruido.
+@pragma('vm:entry-point')
+Future<void> _handleSilentLocationPing(String bookingId) async {
+  try {
+    final permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      return;
+    }
+    final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium)
+        .timeout(const Duration(seconds: 15));
+    final authToken = await SecureStorageService.getAccessToken() ?? '';
+    if (authToken.isEmpty) return;
+    await http.post(
+      Uri.parse('${FcmService._baseUrl}/bookings/$bookingId/location-ping'),
+      headers: {'Authorization': 'Bearer $authToken', 'Content-Type': 'application/json'},
+      body: jsonEncode({'lat': pos.latitude, 'lng': pos.longitude, 'accuracy': pos.accuracy}),
+    ).timeout(const Duration(seconds: 10));
+  } catch (_) {
+    // Silencioso — best-effort.
+  }
+}
+
 /// Background message handler — must be top-level function (FCM requirement).
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  if (message.data['type'] == 'LOCATION_PING_REQUEST') {
+    WidgetsFlutterBinding.ensureInitialized();
+    final bookingId = message.data['bookingId'];
+    if (bookingId != null) await _handleSilentLocationPing(bookingId);
+    return;
+  }
   // FCM muestra la notificación del sistema automáticamente en background/terminated.
   if (kDebugMode) debugPrint('[FCM] Background message: ${message.messageId}');
 }
@@ -45,6 +79,11 @@ class FcmService {
 
     // Notificación local cuando la app está en primer plano
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (message.data['type'] == 'LOCATION_PING_REQUEST') {
+        final bookingId = message.data['bookingId'];
+        if (bookingId != null) _handleSilentLocationPing(bookingId);
+        return; // completamente silencioso, sin notificación local
+      }
       final notification = message.notification;
       if (notification != null) {
         LocalNotificationService.show(
