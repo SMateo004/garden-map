@@ -1358,3 +1358,96 @@ export async function finalizeAccountDeletion(userId: string): Promise<void> {
 
   logger.info('Account deleted (soft)', { userId, role: user.role });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PIN de seguridad — gatea pantallas sensibles: billetera (cliente y
+// cuidador) y "gestionar reserva" del cuidador (ubicación exacta del
+// cliente, iniciar servicio). Vive en User (no en CaregiverProfile ni
+// ClientProfile) porque es UN SOLO PIN por persona, no por rol — protege
+// contra filtración de datos si el teléfono queda desbloqueado y cae en
+// manos de alguien más, sin importar qué pantalla esté abriendo. Se pide
+// SIEMPRE al entrar (sin ventana de gracia); la biometría del lado de
+// Flutter es solo un atajo local para no tipear el PIN cada vez, pero el
+// hash acá sigue siendo la única fuente de verdad real.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const PIN_SALT_ROUNDS = 12;
+const PIN_MAX_ATTEMPTS = 5;
+const PIN_LOCKOUT_MS = 15 * 60 * 1000;
+
+function assertValidPinFormat(pin: string): void {
+  if (!/^\d{4}$/.test(pin)) {
+    throw new BadRequestError('El PIN debe ser exactamente 4 dígitos numéricos');
+  }
+}
+
+/**
+ * Crea o cambia el PIN. Si ya existe un hash, exige el PIN actual (mismo
+ * criterio que un cambio de contraseña) — evita que alguien con la sesión
+ * abierta pero sin el PIN pueda cambiarlo por su cuenta.
+ */
+export async function setSecurityPin(userId: string, newPin: string, currentPin?: string): Promise<void> {
+  assertValidPinFormat(newPin);
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { securityPinHash: true } });
+  if (!user) throw new BadRequestError('Usuario no encontrado');
+
+  if (user.securityPinHash) {
+    if (!currentPin) throw new BadRequestError('Debés ingresar tu PIN actual para cambiarlo');
+    const matches = await bcrypt.compare(currentPin, user.securityPinHash);
+    if (!matches) throw new BadRequestError('El PIN actual no coincide');
+  }
+
+  const newHash = await bcrypt.hash(newPin, PIN_SALT_ROUNDS);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { securityPinHash: newHash, pinAttempts: 0, pinLockUntil: null },
+  });
+}
+
+/**
+ * Verifica el PIN para desbloquear una pantalla sensible. Bloquea 15 min
+ * tras 5 intentos fallidos — mismo espíritu que verificationAttempts/
+ * verificationLockUntil ya usado para la verificación de identidad, pero
+ * con una ventana mucho más corta porque esto se usa a diario, no una vez.
+ */
+export async function verifySecurityPin(userId: string, pin: string): Promise<{ valid: boolean; locked: boolean; hasPin: boolean }> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { securityPinHash: true, pinAttempts: true, pinLockUntil: true },
+  });
+  if (!user) throw new BadRequestError('Usuario no encontrado');
+
+  if (!user.securityPinHash) return { valid: false, locked: false, hasPin: false };
+
+  if (user.pinLockUntil && user.pinLockUntil > new Date()) {
+    return { valid: false, locked: true, hasPin: true };
+  }
+
+  const matches = await bcrypt.compare(pin, user.securityPinHash);
+  if (!matches) {
+    const attempts = user.pinAttempts + 1;
+    const data: { pinAttempts: number; pinLockUntil?: Date } = { pinAttempts: attempts };
+    if (attempts >= PIN_MAX_ATTEMPTS) {
+      data.pinLockUntil = new Date(Date.now() + PIN_LOCKOUT_MS);
+    }
+    await prisma.user.update({ where: { id: userId }, data });
+    return { valid: false, locked: attempts >= PIN_MAX_ATTEMPTS, hasPin: true };
+  }
+
+  await prisma.user.update({ where: { id: userId }, data: { pinAttempts: 0, pinLockUntil: null } });
+  return { valid: true, locked: false, hasPin: true };
+}
+
+/**
+ * Resetea el PIN olvidado — solo accesible por un admin (ver
+ * admin.service.ts resetUserPin). El admin nunca ve ni asigna el valor
+ * real, solo lo resetea a null; el usuario crea uno nuevo la próxima vez
+ * que entra a una pantalla sensible.
+ */
+export async function resetSecurityPin(userId: string): Promise<void> {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { securityPinHash: null, pinAttempts: 0, pinLockUntil: null },
+  });
+}

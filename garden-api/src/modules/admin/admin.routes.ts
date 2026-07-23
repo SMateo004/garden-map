@@ -29,6 +29,12 @@ router.patch('/caregivers/:id/suspend', adminController.suspendCaregiver);
 /** PATCH /api/admin/caregivers/:id/activate — restore profile. */
 router.patch('/caregivers/:id/activate', adminController.activateCaregiver);
 
+/** PATCH /api/admin/caregivers/:id/reset-pin — resetea el PIN de seguridad olvidado. */
+router.patch('/caregivers/:id/reset-pin', adminController.resetCaregiverPin);
+
+/** PATCH /api/admin/users/:userId/reset-pin — resetea el PIN de seguridad de cualquier usuario por User.id. */
+router.patch('/users/:userId/reset-pin', adminController.resetUserPin);
+
 /** GET /api/admin/caregivers/:id/audit-log — historial visible de suspensiones/reactivaciones. */
 router.get('/caregivers/:id/audit-log', adminController.getCaregiverAuditLog);
 
@@ -185,6 +191,9 @@ router.post('/antecedentes-flagged/:profileId/suspend', adminController.suspendF
 
 /** POST /api/admin/antecedentes-flagged/:profileId/dismiss — descarta la alerta. */
 router.post('/antecedentes-flagged/:profileId/dismiss', adminController.dismissAntecedentesFlag);
+
+/** POST /api/admin/antecedentes-flagged/:profileId/reject — rechaza el documento, no suspende. */
+router.post('/antecedentes-flagged/:profileId/reject', adminController.rejectAntecedentesDocument);
 
 /** GET /api/admin/caregiver-deletion-requests — cuidadores con solicitud de eliminación pendiente. */
 router.get('/caregiver-deletion-requests', adminController.getPendingCaregiverDeletionRequests);

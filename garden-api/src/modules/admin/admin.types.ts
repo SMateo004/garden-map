@@ -59,6 +59,9 @@ export interface PendingCaregiverItem {
   createdAt: Date;
   updatedAt: Date;
   rejectionReason: string | null;
+  isProfessional: boolean;
+  antecedentesNeedsReview: boolean;
+  lowRatingAutoSuspended: boolean;
 }
 
 export interface PendingCaregiversResult {

@@ -4157,7 +4157,7 @@ export async function confirmReceiptByClient(
     throw new BadRequestError('El comentario no puede superar 1000 caracteres');
   }
 
-  return prisma.$transaction(async (tx) => {
+  const txResult = await prisma.$transaction(async (tx) => {
     const booking = await tx.booking.findFirst({
       where: { id: bookingId, clientId },
       include: { caregiver: true }
@@ -4300,6 +4300,55 @@ export async function confirmReceiptByClient(
 
     return bookingToResponse(updated!);
   });
+
+  // Fuera de la transacción a propósito: suspendCaregiver() abre su propia
+  // transacción para cancelar/reembolsar reservas activas del cuidador, y
+  // anidar $transaction dentro de $transaction usa una conexión separada
+  // (mismo motivo por el que climaOverrideAvailable() consulta con el
+  // cliente prisma "de afuera" en vez del tx interno) — más simple y seguro
+  // dejar que corra como una operación de nivel superior una vez que la
+  // calificación ya quedó confirmada.
+  await maybeAutoSuspendForLowRating(txResult.caregiverId).catch((err) => {
+    logger.error('Error en chequeo de auto-suspensión por rating bajo', { caregiverId: txResult.caregiverId, err });
+  });
+
+  return txResult;
+}
+
+/**
+ * Máximo de reviews de 1-2 estrellas (histórico completo) antes de
+ * suspender automáticamente al cuidador — mismo umbral que definió el
+ * usuario para este mecanismo. Se evalúa cada vez que se crea una review
+ * con puntuación real (no las de sistema por auto-release, que no reflejan
+ * la calidad del servicio).
+ */
+const BAD_REVIEW_MAX_RATING = 2;
+const BAD_REVIEW_SUSPEND_THRESHOLD = 5;
+
+export async function maybeAutoSuspendForLowRating(caregiverId: string): Promise<void> {
+  const profile = await prisma.caregiverProfile.findUnique({
+    where: { id: caregiverId },
+    select: { suspended: true },
+  });
+  if (!profile || profile.suspended) return; // ya suspendido — no repetir la acción
+
+  // OJO: se cuenta sobre Booking.ownerRating, NO sobre la tabla Review — una
+  // calificación <3 estrellas nunca crea una Review directamente (ver rama
+  // `if (rating < 3)` de confirmReceiptByClient: pone la reserva en
+  // payoutStatus ON_HOLD para revisión/disputa, y la Review recién se crea
+  // si esa disputa termina resolviéndose — ver applyResolution en
+  // dispute.routes.ts). Contar sobre Review dejaba esto prácticamente
+  // inalcanzable, porque la mayoría de las calificaciones bajas ni siquiera
+  // llegan a disputarse. ownerRating, en cambio, queda seteado en el momento
+  // mismo en que el cliente califica, sin importar qué pase después.
+  const badReviewCount = await prisma.booking.count({
+    where: { caregiverId, ownerRating: { lte: BAD_REVIEW_MAX_RATING } },
+  });
+  if (badReviewCount < BAD_REVIEW_SUSPEND_THRESHOLD) return;
+
+  const { suspendCaregiver, LOW_RATING_SUSPENSION_REASON } = await import('../admin/admin.service.js');
+  await suspendCaregiver(caregiverId, 'SYSTEM_AUTO_SUSPEND', LOW_RATING_SUSPENSION_REASON);
+  logger.warn('Cuidador auto-suspendido por rating bajo', { caregiverId, badReviewCount });
 }
 
 /**

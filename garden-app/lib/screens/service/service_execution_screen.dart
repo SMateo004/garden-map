@@ -20,6 +20,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_state.dart';
 import '../../services/garden_live_activity.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../widgets/pin_gate.dart';
 
 class ServiceExecutionScreen extends StatefulWidget {
   final String bookingId;
@@ -120,8 +121,28 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     )..repeat(reverse: true);
     // Rebuild when comment text changes so the submit button enables/disables correctly
     _surveyCommentController.addListener(() { if (mounted) setState(() {}); });
-    _loadInitialData();
+    if (widget.role == 'CAREGIVER') {
+      // Gate a nivel de pantalla, no por botón: esta pantalla se puede abrir
+      // desde varios lugares (tarjetas del panel, notificación push de
+      // servicio activo) además de los botones que ya gateamos — el gate
+      // acá cubre todas las rutas por igual. Solo aplica al cuidador: acá
+      // es donde se ve la ubicación exacta del cliente; del lado del
+      // cliente esta pantalla no muestra datos sensibles propios.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _gateThenLoad());
+    } else {
+      _loadInitialData();
+    }
     _loadCardPaymentSetting();
+  }
+
+  Future<void> _gateThenLoad() async {
+    final ok = await requireSecurityPin(context);
+    if (!mounted) return;
+    if (!ok) {
+      Navigator.of(context).maybePop();
+      return;
+    }
+    _loadInitialData();
   }
 
   Future<void> _loadCardPaymentSetting() async {

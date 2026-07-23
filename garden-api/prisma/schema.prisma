@@ -42,6 +42,14 @@ model User {
   dateOfBirth                  DateTime?                     @db.Date
   emailVerified                Boolean                       @default(false)
   identityVerified             Boolean                       @default(false)
+  /// PIN de 4 dígitos (bcrypt hash) que gatea pantallas sensibles — billetera
+  /// (cliente y cuidador) y "gestionar reserva" del cuidador (ubicación
+  /// exacta del cliente, iniciar servicio). Uno solo por persona, no por rol
+  /// — si el teléfono cae en otras manos, protege ambos accesos por igual.
+  /// null = todavía no lo creó.
+  securityPinHash               String?
+  pinAttempts                   Int                           @default(0)
+  pinLockUntil                  DateTime?
   clientBookings               Booking[]                     @relation("ClientBookings")
   caregiverProfile             CaregiverProfile?
   clientProfile                ClientProfile?

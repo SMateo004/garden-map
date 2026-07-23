@@ -132,6 +132,12 @@ router.patch('/me', authMiddleware, authController.patchMe);
 router.patch('/change-password', authMiddleware, changePasswordLimiter, authController.changePassword);
 router.get('/check-email', checkEmailLimiter, authController.checkEmail);
 
+/** POST /api/auth/security-pin — crea o cambia el PIN de 4 dígitos. Body: { newPin, currentPin? } */
+router.post('/security-pin', authMiddleware, authController.setSecurityPin);
+
+/** POST /api/auth/security-pin/verify — verifica el PIN para desbloquear una pantalla sensible. */
+router.post('/security-pin/verify', authMiddleware, authController.verifySecurityPin);
+
 router.post('/caregiver/register', registerLimiter, authController.registerCaregiver);
 router.post('/client/register',    registerLimiter, authController.registerClient);
 router.post('/login',              loginLimiter,    authController.login);

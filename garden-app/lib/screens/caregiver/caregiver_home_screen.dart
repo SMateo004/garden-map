@@ -19,6 +19,7 @@ import '../../services/auth_service.dart';
 import '../../services/auth_state.dart';
 import '../../services/secure_storage_service.dart';
 import 'trainings_screen.dart';
+import 'caregiver_profile_data_screen.dart';
 import '../../widgets/garden_loading_indicator.dart';
 
 
@@ -128,6 +129,21 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _maybeShowTrainingReminder();
+      });
+    }
+
+    // Insiste con subir los antecedentes penales cada vez que entra a la
+    // app, hasta que estén aprobados (LIMPIO) — a diferencia de la
+    // capacitación, esto nunca bloquea nada (son opcionales, solo dan un
+    // badge de confianza), así que el tono es motivacional, no de alerta.
+    final antecedentesStatus = _caregiver?['antecedentesStatus'] as String?;
+    if (!_setupPending &&
+        (antecedentesStatus == null ||
+            antecedentesStatus == 'PENDING' ||
+            antecedentesStatus == 'RECHAZADO') &&
+        mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _maybeShowAntecedentesReminder(antecedentesStatus == 'RECHAZADO');
       });
     }
 
@@ -276,6 +292,39 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const TrainingsScreen()));
             },
             child: const Text('Completar ahora',
+                style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _maybeShowAntecedentesReminder(bool wasRejected) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => GardenGlassDialog(
+        title: Text(wasRejected ? 'Tu documento fue rechazado' : '¡Conseguí el badge Premium! 🌟'),
+        content: Text(
+          wasRejected
+              ? 'El documento de antecedentes que subiste no pudo aprobarse. Revisá el motivo en tus notificaciones y subí uno nuevo cuando puedas.'
+              : 'Subí tus antecedentes penales (FELCC/REJAP) y conseguí el badge de cuidador verificado — los dueños confían más y reservan más seguido con cuidadores Premium. Es opcional, pero te conviene.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Ahora no',
+                style: TextStyle(
+                    color: themeNotifier.isDark
+                        ? GardenColors.darkTextSecondary
+                        : GardenColors.lightTextSecondary)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const CaregiverProfileDataScreen()));
+            },
+            child: const Text('Subir ahora',
                 style: TextStyle(color: GardenColors.primary, fontWeight: FontWeight.w700)),
           ),
         ],

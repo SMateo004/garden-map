@@ -817,6 +817,26 @@ export const changePassword = asyncHandler(async (req: Request, res: Response) =
   res.json({ success: true, message: 'Contraseña actualizada correctamente. Tus otras sesiones han sido cerradas.' });
 });
 
+// ── PIN de seguridad ──────────────────────────────────────────────────────────
+
+/** POST /api/auth/security-pin — crea o cambia el PIN de 4 dígitos. Body: { newPin, currentPin? } */
+export const setSecurityPin = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const { newPin, currentPin } = req.body as { newPin?: string; currentPin?: string };
+  if (!newPin) return res.status(400).json({ success: false, error: { message: 'newPin requerido' } });
+  await authService.setSecurityPin(userId, newPin, currentPin);
+  res.json({ success: true });
+});
+
+/** POST /api/auth/security-pin/verify — verifica el PIN para desbloquear una pantalla sensible. */
+export const verifySecurityPin = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const { pin } = req.body as { pin?: string };
+  if (!pin) return res.status(400).json({ success: false, error: { message: 'pin requerido' } });
+  const result = await authService.verifySecurityPin(userId, pin);
+  res.json({ success: true, data: result });
+});
+
 // ── Password Reset ────────────────────────────────────────────────────────────
 import * as passwordResetService from './password-reset.service.js';
 

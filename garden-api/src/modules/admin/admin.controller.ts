@@ -95,6 +95,38 @@ export const activateCaregiver = asyncHandler(async (req: Request, res: Response
   res.json({ success: true, data: result });
 });
 
+/** PATCH /api/admin/caregivers/:id/reset-pin — resetea el PIN de seguridad del cuidador (olvidado).
+ *  :id es el CaregiverProfile.id — se resuelve a userId antes de resetear, ya que el PIN vive en User. */
+export const resetCaregiverPin = asyncHandler(async (req: Request, res: Response) => {
+  const profileId = req.params.id!;
+  const { adminPassword } = req.body as { adminPassword?: string };
+  if (!adminPassword) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_PASSWORD', message: 'Se requiere la contraseña de admin' } });
+  }
+  const adminId = req.user!.userId;
+  await adminService.assertAdminPassword(adminId, adminPassword);
+  const profile = await prisma.caregiverProfile.findUnique({ where: { id: profileId }, select: { userId: true } });
+  if (!profile) return res.status(404).json({ success: false, error: { message: 'Cuidador no encontrado' } });
+  await adminService.resetUserPin(profile.userId, adminId);
+  auditLog({ userId: adminId, action: 'RESET_USER_PIN', entity: 'CaregiverProfile', entityId: profileId, ip: req.ip });
+  res.json({ success: true });
+});
+
+/** PATCH /api/admin/users/:userId/reset-pin — resetea el PIN de seguridad de cualquier usuario
+ *  (cliente o cuidador) por su User.id directamente — usado desde la ficha del dueño en el panel admin. */
+export const resetUserPin = asyncHandler(async (req: Request, res: Response) => {
+  const targetUserId = req.params.userId!;
+  const { adminPassword } = req.body as { adminPassword?: string };
+  if (!adminPassword) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_PASSWORD', message: 'Se requiere la contraseña de admin' } });
+  }
+  const adminId = req.user!.userId;
+  await adminService.assertAdminPassword(adminId, adminPassword);
+  await adminService.resetUserPin(targetUserId, adminId);
+  auditLog({ userId: adminId, action: 'RESET_USER_PIN', entity: 'User', entityId: targetUserId, ip: req.ip });
+  res.json({ success: true });
+});
+
 /** GET /api/admin/caregivers/:id/audit-log — historial visible de acciones admin sobre este cuidador
  *  (suspensiones, reactivaciones, etc.) — antes solo vivía en logs, ahora se puede ver en su detalle. */
 export const getCaregiverAuditLog = asyncHandler(async (req: Request, res: Response) => {
@@ -1197,6 +1229,18 @@ export const suspendForAntecedentes = asyncHandler(async (req: Request, res: Res
   const { profileId } = req.params;
   await adminService.suspendForAntecedentes(profileId!, req.user!.userId);
   auditLog({ userId: req.user!.userId, action: 'SUSPEND_FOR_ANTECEDENTES', entity: 'CaregiverProfile', entityId: profileId, ip: req.ip });
+  res.json({ success: true });
+});
+
+/** POST /api/admin/antecedentes-flagged/:profileId/reject — rechaza el documento, no suspende. */
+export const rejectAntecedentesDocument = asyncHandler(async (req: Request, res: Response) => {
+  const { profileId } = req.params;
+  const { reason } = req.body as { reason?: string };
+  if (!reason || !reason.trim()) {
+    return res.status(400).json({ success: false, error: { message: 'reason es requerido' } });
+  }
+  await adminService.rejectAntecedentesDocument(profileId!, req.user!.userId, reason.trim());
+  auditLog({ userId: req.user!.userId, action: 'REJECT_ANTECEDENTES_DOCUMENT', entity: 'CaregiverProfile', entityId: profileId, ip: req.ip });
   res.json({ success: true });
 });
 

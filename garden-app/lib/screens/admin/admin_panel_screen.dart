@@ -1416,6 +1416,17 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     final isApproved = status == 'APPROVED';
     final isSuspended = status == 'SUSPENDED';
     final isProfessional = caregiver['isProfessional'] == true;
+    // "Iluminado" para el admin — dos señales independientes de que este
+    // perfil necesita atención, cada una con su propio color para no
+    // confundirlas: antecedentes en revisión (ámbar, todavía activo) vs.
+    // auto-suspendido por rating bajo (info/azul, ya fuera del aire).
+    final antecedentesNeedsReview = caregiver['antecedentesNeedsReview'] == true;
+    final lowRatingAutoSuspended = caregiver['lowRatingAutoSuspended'] == true;
+    final highlightColor = lowRatingAutoSuspended
+        ? GardenColors.info
+        : antecedentesNeedsReview
+            ? GardenColors.warning
+            : null;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -1423,7 +1434,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       decoration: BoxDecoration(
         color: surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isProfessional ? GardenColors.primary.withValues(alpha: 0.4) : borderColor),
+        border: Border.all(
+          color: highlightColor?.withValues(alpha: 0.6) ??
+              (isProfessional ? GardenColors.primary.withValues(alpha: 0.4) : borderColor),
+          width: highlightColor != null ? 1.5 : 1,
+        ),
       ),
       child: Column(
         children: [
@@ -1441,6 +1456,37 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   children: [
                     Row(children: [
                       Flexible(child: Text(caregiver['fullName'] ?? '—', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 15))),
+                      if (antecedentesNeedsReview) ...[
+                        const SizedBox(width: 6),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(6),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => AdminAntecedentesFlaggedScreen(adminToken: _adminToken)),
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: GardenColors.warning.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: GardenColors.warning.withValues(alpha: 0.5)),
+                            ),
+                            child: const Text('⚠️ Antecedentes por revisar', style: TextStyle(color: GardenColors.warning, fontSize: 10, fontWeight: FontWeight.w700)),
+                          ),
+                        ),
+                      ],
+                      if (lowRatingAutoSuspended) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: GardenColors.info.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: GardenColors.info.withValues(alpha: 0.5)),
+                          ),
+                          child: const Text('🔻 Auto-suspendido por rating', style: TextStyle(color: GardenColors.info, fontSize: 10, fontWeight: FontWeight.w700)),
+                        ),
+                      ],
                       if (isProfessional) ...[
                         const SizedBox(width: 6),
                         Container(

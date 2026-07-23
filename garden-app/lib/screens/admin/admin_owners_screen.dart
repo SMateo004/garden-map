@@ -395,6 +395,7 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
     with SingleTickerProviderStateMixin {
   Map<String, dynamic>? _data;
   bool _isLoading = true;
+  bool _resettingPin = false;
   late TabController _tabCtrl;
 
   @override
@@ -408,6 +409,99 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
   void dispose() {
     _tabCtrl.dispose();
     super.dispose();
+  }
+
+  /// Diálogo reutilizable de contraseña de admin — mismo patrón que
+  /// admin_panel_screen.dart _askAdminPassword.
+  Future<String?> _askAdminPassword({required String title, required String message, Color dangerColor = GardenColors.error}) async {
+    final passwordController = TextEditingController();
+    bool obscure = true;
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          backgroundColor: surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 17)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message, style: TextStyle(color: dangerColor, fontSize: 13, height: 1.4)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                obscureText: obscure,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Tu contraseña de admin',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  suffixIcon: IconButton(
+                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () => setS(() => obscure = !obscure),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: dangerColor, foregroundColor: Colors.white),
+              onPressed: () {
+                if (passwordController.text.isEmpty) return;
+                Navigator.pop(ctx, passwordController.text);
+              },
+              child: const Text('Confirmar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmResetPin() async {
+    final password = await _askAdminPassword(
+      title: '¿Resetear PIN de billetera?',
+      message: 'Esto borra el PIN actual del dueño — la próxima vez que entre a su billetera va a tener que crear uno nuevo. Usalo solo si te confirmó que lo olvidó.',
+      dangerColor: GardenColors.warning,
+    );
+    if (password == null || password.isEmpty) return;
+    await _resetPin(password);
+  }
+
+  Future<void> _resetPin(String adminPassword) async {
+    setState(() => _resettingPin = true);
+    try {
+      final res = await http.patch(
+        Uri.parse('${widget.baseUrl}/admin/users/${widget.ownerId}/reset-pin'),
+        headers: {'Authorization': 'Bearer ${widget.adminToken}', 'Content-Type': 'application/json'},
+        body: jsonEncode({'adminPassword': adminPassword}),
+      );
+      final data = jsonDecode(res.body);
+      if (!mounted) return;
+      if (data['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('PIN reseteado — el dueño va a crear uno nuevo la próxima vez'), backgroundColor: GardenColors.success),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['error']?['message'] ?? 'Error'), backgroundColor: GardenColors.error),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error de conexión'), backgroundColor: GardenColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _resettingPin = false);
+    }
   }
 
   Future<void> _loadDetail() async {
@@ -477,6 +571,24 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: _buildHeader(textColor, subtextColor, borderColor),
+                  ),
+                  const SizedBox(height: 10),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        onPressed: _resettingPin ? null : _confirmResetPin,
+                        icon: _resettingPin
+                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.pin_outlined, size: 16),
+                        label: const Text('Resetear PIN de billetera', style: TextStyle(fontSize: 12.5)),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: borderColor),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   // Tabs

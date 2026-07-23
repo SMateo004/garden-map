@@ -58,6 +58,7 @@ import { iniciarJobCaregiverAcceptExpiry } from './jobs/caregiver-accept-expiry.
 import { iniciarJobNoShowExpiry } from './jobs/no-show-expiry.job.js';
 import { iniciarJobHospedajeLocationPing } from './jobs/hospedaje-location-ping.job.js';
 import { iniciarJobRecordatorioCapacitaciones } from './jobs/training-reminder.job.js';
+import { iniciarJobSosRetry } from './jobs/sos-retry.job.js';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
@@ -253,6 +254,7 @@ async function start() {
     iniciarJobNoShowExpiry();
     iniciarJobRecordatorioCapacitaciones();
     iniciarJobHospedajeLocationPing();
+    iniciarJobSosRetry();
   }, 10000);
 
   // Auto-release payment after service ends if owner hasn't reviewed

@@ -358,6 +358,9 @@ export async function listCaregivers(
         createdAt: true,
         updatedAt: true,
         rejectionReason: true,
+        antecedentesStatus: true,
+        suspended: true,
+        suspensionReason: true,
         user: {
           select: { email: true, phone: true, firstName: true, lastName: true },
         },
@@ -378,6 +381,11 @@ export async function listCaregivers(
     updatedAt: c.updatedAt,
     rejectionReason: c.rejectionReason,
     isProfessional: (c as any).isProfessional ?? false,
+    // "Iluminado" en el panel admin — dos señales independientes para no
+    // pasar por alto casos que necesitan atención humana:
+    antecedentesNeedsReview: (c as any).antecedentesStatus === 'EN_REVISION',
+    lowRatingAutoSuspended:
+      (c as any).suspended === true && (c as any).suspensionReason === LOW_RATING_SUSPENSION_REASON,
   }));
   return { caregivers: items, total, page, limit };
 }
@@ -399,6 +407,9 @@ export async function listPendingCaregivers(
         createdAt: true,
         updatedAt: true,
         rejectionReason: true,
+        antecedentesStatus: true,
+        suspended: true,
+        suspensionReason: true,
         user: {
           select: { email: true, phone: true, firstName: true, lastName: true },
         },
@@ -424,6 +435,9 @@ export async function listPendingCaregivers(
     updatedAt: c.updatedAt,
     rejectionReason: c.rejectionReason,
     isProfessional: (c as any).isProfessional ?? false,
+    antecedentesNeedsReview: (c as any).antecedentesStatus === 'EN_REVISION',
+    lowRatingAutoSuspended:
+      (c as any).suspended === true && (c as any).suspensionReason === LOW_RATING_SUSPENSION_REASON,
   }));
 
   return { caregivers: items, total, page, limit };
@@ -2212,6 +2226,12 @@ export async function rejectIdentityVerification(sessionId: string, adminId: str
   return { success: true };
 }
 
+/** Motivo fijo usado por la auto-suspensión por rating bajo (ver reviewCreated
+ * en review.service.ts) — se compara contra este string exacto para saber si
+ * una suspensión fue automática por reviews malas, sin necesitar una columna
+ * nueva en la base. */
+export const LOW_RATING_SUSPENSION_REASON = 'Suspensión automática: 5+ calificaciones de 1-2 estrellas';
+
 /** Suspender cuidador (fuera del aire temporalmente) */
 /**
  * Cancela con reembolso completo cualquier reserva CONFIRMED/IN_PROGRESS de
@@ -2293,6 +2313,24 @@ async function cancelActiveBookingsForSuspendedCaregiver(profileId: string, reas
   }
 
   return activeBookings.length;
+}
+
+/**
+ * PATCH /api/admin/users/:userId/reset-pin — el usuario (cliente o
+ * cuidador) olvidó su PIN de seguridad de 4 dígitos. A diferencia del
+ * password de login, acá el admin NUNCA ve ni asigna el valor real — solo
+ * lo resetea a null, y la persona crea uno nuevo la próxima vez que entra a
+ * una pantalla sensible (mismo criterio de soporte manual ya usado para la
+ * verificación de teléfono cuando WhatsApp/SMS no están disponibles). El
+ * PIN vive en User (no en CaregiverProfile/ClientProfile) — uno solo por
+ * persona, no por rol — así que este reset sirve para ambos.
+ */
+export async function resetUserPin(userId: string, adminId: string): Promise<void> {
+  const { resetSecurityPin } = await import('../auth/auth.service.js');
+  await resetSecurityPin(userId);
+  await prisma.adminAction.create({
+    data: { adminId, actionType: 'RESET_USER_PIN', targetId: userId },
+  });
 }
 
 export async function suspendCaregiver(
@@ -3659,6 +3697,45 @@ export async function dismissAntecedentesFlag(profileId: string, adminId: string
   });
   await prisma.adminAction.create({
     data: { adminId, actionType: 'DISMISS_ANTECEDENTES_FLAG', targetId: profileId },
+  });
+}
+
+/**
+ * POST /api/admin/antecedentes-flagged/:profileId/reject — el admin revisó
+ * el documento y no es válido (borroso, vencido, no corresponde), pero NO
+ * amerita suspender la cuenta — a diferencia de suspendForAntecedentes, esto
+ * no es una acción punitiva: los antecedentes son opcionales y solo dan un
+ * badge de confianza, así que rechazar el documento solo le pide al cuidador
+ * que vuelva a subir uno válido (el popup en la app se lo va a recordar
+ * mientras el estado sea RECHAZADO), sin afectar su capacidad de operar.
+ */
+export async function rejectAntecedentesDocument(profileId: string, adminId: string, reason: string): Promise<void> {
+  const profile = await prisma.caregiverProfile.findUnique({
+    where: { id: profileId },
+    select: { userId: true },
+  });
+  if (!profile) throw new CaregiverNotFoundError(profileId);
+
+  await prisma.caregiverProfile.update({
+    where: { id: profileId },
+    data: {
+      antecedentesStatus: 'RECHAZADO',
+      antecedentesReviewedAt: new Date(),
+      antecedentesReviewedById: adminId,
+    } as any,
+  });
+
+  await prisma.notification.create({
+    data: {
+      userId: profile.userId,
+      title: 'Tu documento de antecedentes fue rechazado',
+      message: `Un administrador revisó tu documento y no pudo aprobarlo: ${reason}. Podés subir uno nuevo desde tu perfil cuando quieras.`,
+      type: 'ANTECEDENTES_REJECTED',
+    },
+  });
+
+  await prisma.adminAction.create({
+    data: { adminId, actionType: 'REJECT_ANTECEDENTES_DOCUMENT', targetId: profileId, notes: reason },
   });
 }
 

@@ -137,6 +137,8 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>GARDEN necesita acceso a tu cámara para tomar fotos de tus mascotas.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>GARDEN usa Face ID para confirmar tu identidad antes de mostrarte la ubicación de un cliente o tu billetera, en vez de pedirte el PIN cada vez.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Se usa para detectar dispositivos en la red local durante el desarrollo.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

@@ -82,6 +82,73 @@ class _AdminAntecedentesFlaggedScreenState extends State<AdminAntecedentesFlagge
     }
   }
 
+  Future<void> _reject(String profileId, String reason) async {
+    setState(() => _processingId = profileId);
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/admin/antecedentes-flagged/$profileId/reject'),
+        headers: {..._headers, 'Content-Type': 'application/json'},
+        body: jsonEncode({'reason': reason}),
+      );
+      final data = jsonDecode(res.body);
+      if (!mounted) return;
+      if (data['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Documento rechazado — se le pidió al cuidador que resuba uno nuevo'), backgroundColor: GardenColors.warning),
+        );
+        await _load();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['error']?['message'] ?? 'Error'), backgroundColor: GardenColors.error),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error de conexión'), backgroundColor: GardenColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _processingId = null);
+    }
+  }
+
+  Future<void> _confirmReject(Map<String, dynamic> item) async {
+    final reasonController = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rechazar documento'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('El documento sigue siendo dudoso, pero no amerita suspender a ${item['name']} — solo se le pide que resuba uno válido. Contale por qué:'),
+            const SizedBox(height: 10),
+            TextField(
+              controller: reasonController,
+              autofocus: true,
+              maxLines: 2,
+              decoration: const InputDecoration(hintText: 'Ej: la foto está borrosa / no corresponde al documento'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: GardenColors.warning, foregroundColor: Colors.white),
+            onPressed: () {
+              if (reasonController.text.trim().isEmpty) return;
+              Navigator.pop(ctx, reasonController.text.trim());
+            },
+            child: const Text('Rechazar'),
+          ),
+        ],
+      ),
+    );
+    if (reason != null && reason.isNotEmpty) await _reject(item['profileId'] as String, reason);
+  }
+
   Future<void> _suspend(String profileId) async {
     setState(() => _processingId = profileId);
     try {
@@ -259,24 +326,37 @@ class _AdminAntecedentesFlaggedScreenState extends State<AdminAntecedentesFlagge
                                             side: BorderSide(color: borderColor),
                                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                           ),
-                                          child: const Text('Descartar alerta'),
+                                          child: const Text('Descartar'),
                                         ),
                                       ),
-                                      const SizedBox(width: 10),
+                                      const SizedBox(width: 8),
                                       Expanded(
-                                        child: ElevatedButton(
-                                          onPressed: isProcessing ? null : () => _confirmSuspend(item),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: GardenColors.error,
-                                            foregroundColor: Colors.white,
+                                        child: OutlinedButton(
+                                          onPressed: isProcessing ? null : () => _confirmReject(item),
+                                          style: OutlinedButton.styleFrom(
+                                            side: const BorderSide(color: GardenColors.warning),
+                                            foregroundColor: GardenColors.warning,
                                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                           ),
-                                          child: isProcessing
-                                              ? const GardenLoadingIndicator(size: 18, color: Colors.white)
-                                              : const Text('Suspender cuenta'),
+                                          child: const Text('Rechazar'),
                                         ),
                                       ),
                                     ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton(
+                                      onPressed: isProcessing ? null : () => _confirmSuspend(item),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: GardenColors.error,
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      ),
+                                      child: isProcessing
+                                          ? const GardenLoadingIndicator(size: 18, color: Colors.white)
+                                          : const Text('Suspender cuenta'),
+                                    ),
                                   ),
                                 ],
                               ),

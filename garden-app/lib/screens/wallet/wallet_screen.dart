@@ -13,6 +13,7 @@ import '../../theme/garden_theme.dart';
 import '../../utils/garden_banks.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import '../../widgets/pin_gate.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -80,6 +81,23 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Gate a nivel de pantalla, no por botón: WalletScreen se puede abrir
+    // desde varios lugares además del tile de "Mi billetera" (banner del
+    // marketplace, botón en la pantalla de disputas, notificación push de
+    // tipo WALLET) — gatear cada botón por separado dejaba esas otras rutas
+    // sin proteger. Mientras el PIN no se confirme, _isLoading sigue en
+    // true (default) y no se llama a _initWallet(), así que no hay ningún
+    // dato de la billetera visible en pantalla todavía.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _gateThenInit());
+  }
+
+  Future<void> _gateThenInit() async {
+    final ok = await requireSecurityPin(context);
+    if (!mounted) return;
+    if (!ok) {
+      Navigator.of(context).maybePop();
+      return;
+    }
     _initWallet();
   }
 

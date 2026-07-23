@@ -8,6 +8,7 @@ import { track } from '../../shared/analytics.js';
 
 // Use the shared Prisma singleton — avoids a separate connection pool per module
 import prisma from '../../config/database.js';
+import { maybeAutoSuspendForLowRating } from '../booking-service/booking.service.js';
 
 const router = Router();
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -990,6 +991,17 @@ export async function applyResolution(bookingId: string, resolution: any, bookin
       });
     }
   });
+
+  // Misma razón que en confirmReceiptByClient (booking.service.ts): esta es
+  // otra vía por la que puede nacer una review con rating real (1-2
+  // estrellas disputadas) — sin este chequeo acá, un cuidador podía
+  // acumular reviews malas vía disputas resueltas sin nunca disparar la
+  // auto-suspensión.
+  if (typeof booking.ownerRating === 'number') {
+    await maybeAutoSuspendForLowRating(booking.caregiverId).catch((err) => {
+      logger.error('Error en chequeo de auto-suspensión por rating bajo (disputa)', { caregiverId: booking.caregiverId, err });
+    });
+  }
 
   // ── Registrar en blockchain con retry (3 intentos, back-off exponencial) ──
   // Fire-and-forget but with retry so ledger inconsistencies are minimized.
