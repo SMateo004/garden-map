@@ -1995,6 +1995,44 @@ export async function calculateRefund(
   return { refundAmount: 0, refundStatus: RefundStatus.REJECTED, refundPercent: 0 };
 }
 
+/** Máximo de cancelaciones con motivo Clima que garantizan reembolso 100%
+ * por cliente cada 90 días — mismo espíritu que el tope de 3 cancelaciones
+ * tardías en 90 días que ya existe para el cuidador (Sección 7 de
+ * Términos). A partir de la 3ra, Clima cae a la política normal escalonada
+ * por horas — sin este tope, el motivo era un vector de abuso ilimitado. */
+const CLIMA_MAX_USES_PER_90_DAYS = 2;
+
+/**
+ * Decide si esta cancelación con motivo Clima puede recibir el reembolso
+ * 100% garantizado. Solo aplica a PASEO — es el único servicio donde el
+ * clima impide físicamente cumplir el servicio en el momento acordado; en
+ * Hospedaje/Guardería el mal clima no impide recibir/cuidar a la mascota,
+ * así que dejarlo abierto a cualquier servicio permitía evitar la política
+ * normal (0% en Hospedaje con <24h) con solo marcar "Clima" sin evidencia.
+ */
+async function climaOverrideAvailable(
+  booking: Pick<Booking, 'serviceType'>,
+  clientId: string,
+  now: Date
+): Promise<boolean> {
+  if (booking.serviceType !== ServiceType.PASEO) return false;
+
+  const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+  const priorClimaCount = await prisma.booking.count({
+    where: {
+      clientId,
+      cancellationReasonCode: 'CLIMA',
+      cancelledAt: { gte: ninetyDaysAgo },
+    },
+  });
+
+  if (priorClimaCount >= CLIMA_MAX_USES_PER_90_DAYS) {
+    logger.info('Clima override no disponible: tope de 90 días alcanzado', { clientId, priorClimaCount });
+    return false;
+  }
+  return true;
+}
+
 /**
  * Cancela una reserva y aplica política de reembolso.
  * Solo PENDING_PAYMENT o CONFIRMED; solo el cliente titular.
@@ -2031,10 +2069,14 @@ export async function cancelBooking(
       // No payment was made yet — nothing to refund
       refundAmount = 0;
       refundStatus = RefundStatus.REJECTED;
-    } else if (cancellationReasonCode === 'CLIMA') {
+    } else if (cancellationReasonCode === 'CLIMA' && await climaOverrideAvailable(booking, clientId, now)) {
       // Mal clima siempre reembolsa el 100%, sin importar cuánto faltaba
-      // para el servicio — a diferencia de cualquier otro motivo, que sigue
-      // la política escalonada por horas de abajo.
+      // para el servicio — pero SOLO para Paseo (donde el clima realmente
+      // impide salir a la calle) y hasta 2 veces por cliente cada 90 días.
+      // Sin este límite, cualquier cliente podía evitar la política
+      // escalonada normal (incluso en Hospedaje de varios días) con solo
+      // marcar "Clima" como motivo, sin evidencia ni tope de uso — ver
+      // climaOverrideAvailable().
       refundAmount = Number(booking.totalAmount);
       refundStatus = RefundStatus.APPROVED;
     } else {

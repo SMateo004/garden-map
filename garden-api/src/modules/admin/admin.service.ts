@@ -2264,14 +2264,31 @@ async function cancelActiveBookingsForSuspendedCaregiver(profileId: string, reas
         });
       }
 
+      // Si el servicio ya estaba IN_PROGRESS, la mascota está físicamente en
+      // poder del cuidador suspendido — es el escenario de "retención
+      // indebida" de la Sección 16 de Términos. Cancelar la reserva y
+      // reembolsar no resuelve eso solo: el dueño necesita indicaciones
+      // urgentes de qué hacer, no el mismo texto que una cancelación de
+      // rutina antes de que el servicio arranque.
+      const wasInProgress = booking.status === BookingStatus.IN_PROGRESS;
+      const refundNote = refundAmount > 0 ? ` Ya se te reembolsaron Bs ${refundAmount.toFixed(2)} a tu billetera Garden.` : '';
+      const title = wasInProgress ? '🚨 Suspendimos a tu cuidador — necesitamos que actúes' : 'Tu reserva fue cancelada';
+      const message = wasInProgress
+        ? `Suspendimos la cuenta de tu cuidador por motivos de seguridad MIENTRAS ${booking.petName ?? 'tu mascota'} estaba con él/ella. Ya activamos el protocolo de la Sección 16 de Términos (registros de chat, GPS y ubicación quedan a disposición de la autoridad si hace falta denunciar). Contactanos AHORA por el chat de soporte o al +591 75933133 para coordinar la recuperación inmediata de tu mascota.${refundNote}`
+        : `La cuenta del cuidador fue suspendida por motivos de seguridad. Tu reserva fue cancelada.${refundNote}`;
+
       await tx.notification.create({
         data: {
           userId: booking.clientId,
-          title: 'Tu reserva fue cancelada',
-          message: `La cuenta del cuidador fue suspendida por motivos de seguridad. Tu reserva fue cancelada${refundAmount > 0 ? ` y se te reembolsaron Bs ${refundAmount.toFixed(2)} a tu billetera Garden` : ''}.`,
+          title,
+          message,
           type: 'BOOKING_CANCELLED',
         },
       });
+
+      if (wasInProgress) {
+        sendPushToUser(booking.clientId, title, message, { type: 'BOOKING_CANCELLED', bookingId: booking.id }).catch(() => {});
+      }
     });
   }
 

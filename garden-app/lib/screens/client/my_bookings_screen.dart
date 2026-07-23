@@ -329,13 +329,13 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     'OTRO': 'Otro',
   };
 
-  Future<void> _cancelBooking(String bookingId) async {
+  Future<void> _cancelBooking(String bookingId, {String? serviceType}) async {
     if (_cancellingIds.contains(bookingId)) return; // ya hay una cancelación en curso
     final result = await showModalBottomSheet<Map<String, String>>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => _buildCancelSheet(ctx),
+      builder: (ctx) => _buildCancelSheet(ctx, serviceType: serviceType),
     );
     if (result == null) return;
     if (_cancellingIds.contains(bookingId)) return; // re-chequeo tras cerrar el sheet
@@ -366,13 +366,19 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     }
   }
 
-  Widget _buildCancelSheet(BuildContext ctx) {
+  Widget _buildCancelSheet(BuildContext ctx, {String? serviceType}) {
     final isDark = themeNotifier.isDark;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     String? selectedReasonCode;
     final detailController = TextEditingController();
+    // "Mal clima" solo garantiza reembolso 100% en Paseo (el backend ya lo
+    // restringe así) — se oculta para Hospedaje/Guardería para no confundir
+    // con una opción que ahí ya no da el reembolso garantizado.
+    final visibleReasons = serviceType == 'PASEO'
+        ? _cancellationReasonLabels
+        : (Map<String, String>.from(_cancellationReasonLabels)..remove('CLIMA'));
 
     return StatefulBuilder(
       builder: (ctx, setSheetState) => Container(
@@ -417,7 +423,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
               alignment: WrapAlignment.center,
               spacing: 8,
               runSpacing: 8,
-              children: _cancellationReasonLabels.entries.map((entry) {
+              children: visibleReasons.entries.map((entry) {
                 final isSelected = selectedReasonCode == entry.key;
                 return ChoiceChip(
                   label: Text(entry.value),
@@ -1061,7 +1067,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                           child: Builder(builder: (_) {
                             final isCancelling = _cancellingIds.contains(booking['id'] as String);
                             return OutlinedButton(
-                              onPressed: isCancelling ? null : () => _cancelBooking(booking['id']),
+                              onPressed: isCancelling ? null : () => _cancelBooking(booking['id'], serviceType: booking['serviceType'] as String?),
                               style: OutlinedButton.styleFrom(
                                 side: const BorderSide(color: GardenColors.error),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
