@@ -428,6 +428,13 @@ model Booking {
   totalPausedMinutes         Int              @default(0)
   ownerRated                 Boolean          @default(false)
   ownerRating                Int?
+  /// Se setea UNA sola vez, en confirmReceiptByClient, y nunca más se toca —
+  /// a diferencia de updatedAt (@updatedAt, se mueve con cualquier escritura
+  /// posterior a la fila, ej. resolución de disputa semanas después). Es la
+  /// fecha real de la calificación, usada por maybeAutoSuspendForLowRating
+  /// para saber si una calificación mala es anterior o posterior a la
+  /// última reactivación manual del cuidador.
+  ownerRatedAt               DateTime?
   ownerComment               String?          @db.Text
   /// Chips de cualidades del cuidador (Amable, Puntual, Responsable, Respetuoso,
   /// Buena comunicación) que el dueño puede marcar al calificar — alimenta la

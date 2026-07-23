@@ -4185,6 +4185,7 @@ export async function confirmReceiptByClient(
           payoutStatus: 'ON_HOLD',
           ownerRated: true,
           ownerRating: rating,
+          ownerRatedAt: new Date(),
           ownerComment: comment,
           caregiverSkillTags: skillTags ?? [],
         },
@@ -4243,6 +4244,7 @@ export async function confirmReceiptByClient(
         payoutStatus: 'PAID',
         ownerRated: true,
         ownerRating: rating,
+        ownerRatedAt: new Date(),
         ownerComment: comment,
         caregiverSkillTags: skillTags ?? [],
       },
@@ -4347,15 +4349,18 @@ export async function maybeAutoSuspendForLowRating(caregiverId: string): Promise
   // filtro, reactivar a un cuidador auto-suspendido por rating era un no-op:
   // el conteo histórico seguía en 5+ y la siguiente reserva calificada lo
   // volvía a auto-suspender al instante, sin importar qué tan bien le hubiera
-  // ido desde entonces. updatedAt se usa como proxy de "cuándo se calificó"
-  // (confirmReceiptByClient escribe ownerRating con un updateMany, que
-  // bumpea updatedAt en ese momento) — no hay un campo dedicado "ratedAt".
+  // ido desde entonces. Se filtra por ownerRatedAt (seteado UNA vez, en el
+  // momento real de la calificación), NUNCA por updatedAt — updatedAt es
+  // @updatedAt y se mueve con cualquier escritura posterior a la fila (ej.
+  // resolución de una disputa semanas después de la calificación original),
+  // lo que haría pasar una calificación mala vieja como si fuera nueva y
+  // reprodujera el mismo bug de forma más rara e intermitente.
   const badReviewCount = await prisma.booking.count({
     where: {
       caregiverId,
       ownerRating: { lte: BAD_REVIEW_MAX_RATING },
       ...(profile.lowRatingSuspensionClearedAt
-        ? { updatedAt: { gt: profile.lowRatingSuspensionClearedAt } }
+        ? { ownerRatedAt: { gt: profile.lowRatingSuspensionClearedAt } }
         : {}),
     },
   });
