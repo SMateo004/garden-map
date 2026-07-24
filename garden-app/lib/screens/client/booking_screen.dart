@@ -89,7 +89,24 @@ class _BookingScreenState extends State<BookingScreen> {
   List<Map<String, dynamic>> _bookedPaseos = []; // reservas activas del cuidador
   bool _loadingSlots = false;
   String? _selectedStartTime; // hora específica dentro del slot, ej: "09:00"
-  int _caregiverMaxPets = 1; // máximo de mascotas simultáneas del cuidador
+  // Capacidad simultánea del cuidador — SEPARADA por servicio (antes era un
+  // solo número compartido por Paseo y Guardería, que son capacidades
+  // independientes; usar un valor mezclado difuminaba mal el calendario —
+  // ej. un cuidador con maxPetsPaseo=1 pero maxPetsGuarderia=4 mostraba a
+  // ambos servicios como llenos o disponibles al mismo tiempo, cuando no
+  // correspondía).
+  int _caregiverMaxPetsPaseo = 1;
+  // Guardería en realidad comparte pool con Hospedaje (no es "su propio"
+  // cupo) — el backend ya devuelve el mismo valor combinado en
+  // maxPetsGuarderia, así que esta variable YA es ese número combinado.
+  int _caregiverMaxPetsGuarderia = 1;
+  int get _caregiverMaxPets =>
+      _selectedService == 'GUARDERIA' ? _caregiverMaxPetsGuarderia : _caregiverMaxPetsPaseo;
+  // Mascotas de HOSPEDAJE ocupadas por día (día -> cantidad) — Hospedaje
+  // ocupa el día entero (sin hora específica), así que para chequear
+  // disponibilidad de GUARDERIA hay que sumar esta ocupación fija del día a
+  // lo que ya se cuenta por hora en _bookedPaseos/_multiDayRangeBookings.
+  Map<String, int> _hospedajePetsByDate = {};
 
   // Servicios extra opcionales (ej. "Comida incluida")
   Set<String> _selectedExtraIds = {};
@@ -323,16 +340,22 @@ class _BookingScreenState extends State<BookingScreen> {
       final enabledSlots = slots.where((s) => s['enabled'] == true).toList();
 
       List<Map<String, dynamic>> booked = [];
+      Map<String, int> hospedajePets = {};
       if (body is Map && body['success'] == true) {
         final d = body['data'];
         if (d is Map && d['bookedPaseos'] is List) {
           booked = (d['bookedPaseos'] as List).cast<Map<String, dynamic>>();
+        }
+        if (d is Map && d['hospedajePetsByDate'] is Map) {
+          hospedajePets = (d['hospedajePetsByDate'] as Map)
+              .map((k, v) => MapEntry(k as String, (v as num).toInt()));
         }
       }
 
       setState(() {
         _availableSlots = enabledSlots;
         _bookedPaseos = booked;
+        _hospedajePetsByDate = hospedajePets;
       });
       
     } catch (e) {
@@ -1977,15 +2000,20 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   bool _isTimeConflicting(String time, String dateStr, {int? durationOverride}) {
-    if (_bookedPaseos.isEmpty) return false;
+    // OJO: no cortar temprano si _bookedPaseos está vacío — puede haber
+    // ocupación de HOSPEDAJE ese día (que comparte pool con Guardería) sin
+    // ninguna reserva de Paseo/Guardería todavía.
     final parts = time.split(':');
     final newStart = int.parse(parts[0]) * 60 + int.parse(parts[1]);
     final dur = durationOverride ?? _selectedDuration;
     final newEnd = newStart + dur + 30; // +30 min buffer entre servicios
-    // Sum total pets across overlapping bookings (not booking count)
+    // Sum total pets across overlapping bookings (not booking count) — solo
+    // del MISMO servicio que se está reservando ahora. Paseo tiene su propio
+    // cupo independiente; Guardería comparte pool con Hospedaje (ver abajo).
     int occupiedPets = 0;
     for (final b in _bookedPaseos) {
       if (b['date'] != dateStr) continue;
+      if (b['serviceType'] != null && b['serviceType'] != _selectedService) continue;
       final sp = (b['startTime'] as String?)?.split(':') ?? [];
       if (sp.length < 2) continue;
       final bStart = int.parse(sp[0]) * 60 + int.parse(sp[1]);
@@ -1993,6 +2021,11 @@ class _BookingScreenState extends State<BookingScreen> {
       if (newStart < bEnd && newEnd > bStart) {
         occupiedPets += (b['petCount'] as int? ?? 1);
       }
+    }
+    // Hospedaje ocupa el día entero (sin hora) — cuenta contra el cupo
+    // combinado de Guardería en cualquier hora que se consulte ese día.
+    if (_selectedService == 'GUARDERIA') {
+      occupiedPets += _hospedajePetsByDate[dateStr] ?? 0;
     }
     // Conflict when adding selected pets would exceed caregiver's max simultaneous capacity
     final pendingPets = _selectedPetIds.isNotEmpty ? _selectedPetIds.length : 1;
@@ -2282,7 +2315,15 @@ class _BookingScreenState extends State<BookingScreen> {
             _multiDayRangeBookings = bookingsRaw is List
                 ? bookingsRaw.cast<Map<String, dynamic>>()
                 : [];
-            _caregiverMaxPets = (data['maxPets'] as num?)?.toInt() ?? 1;
+            // maxPets (legado) queda como fallback general si el backend no
+            // manda el campo específico del servicio (perfiles viejos).
+            final legacyMax = (data['maxPets'] as num?)?.toInt() ?? 1;
+            _caregiverMaxPetsPaseo = (data['maxPetsPaseo'] as num?)?.toInt() ?? legacyMax;
+            _caregiverMaxPetsGuarderia = (data['maxPetsGuarderia'] as num?)?.toInt() ?? legacyMax;
+            final hospedajeRaw = data['hospedajePetsByDate'];
+            _hospedajePetsByDate = hospedajeRaw is Map
+                ? hospedajeRaw.map((k, v) => MapEntry(k as String, (v as num).toInt()))
+                : {};
           });
         }
       }
@@ -2330,13 +2371,16 @@ class _BookingScreenState extends State<BookingScreen> {
         int occupiedPets = 0;
         for (final b in _multiDayRangeBookings) {
           if (b['date'] != dateStr || b['startTime'] == null) continue;
+          if (b['serviceType'] != null && b['serviceType'] != 'GUARDERIA') continue;
           final bs = (b['startTime'] as String).split(':');
           final bStart = int.parse(bs[0]) * 60 + int.parse(bs[1]);
           final bEnd = bStart + (b['duration'] as int? ?? 30) + 30;
           if (t < bEnd && newEnd > bStart) occupiedPets += (b['petCount'] as int? ?? 1);
         }
+        // Hospedaje ocupa el día entero y comparte pool con Guardería.
+        occupiedPets += _hospedajePetsByDate[dateStr] ?? 0;
         final pendingPets = _selectedPetIds.isNotEmpty ? _selectedPetIds.length : 1;
-        if (occupiedPets + pendingPets <= _caregiverMaxPets) return false; // Al menos una hora válida
+        if (occupiedPets + pendingPets <= _caregiverMaxPetsGuarderia) return false; // Al menos una hora válida
       }
     }
     return true; // Ninguna hora válida → deshabilitar día
@@ -2406,6 +2450,9 @@ class _BookingScreenState extends State<BookingScreen> {
     final newStart = int.parse(parts[0]) * 60 + int.parse(parts[1]);
     final newEnd   = newStart + _selectedDuration + 30; // +30 min descanso
     for (final b in _multiDayRangeBookings) {
+      // Multi-día es solo PASEO — una reserva de GUARDERIA en el mismo
+      // horario no debe bloquear un slot de paseo (capacidades independientes).
+      if (b['serviceType'] != null && b['serviceType'] != 'PASEO') continue;
       final bDate = b['date'] as String? ?? b['walkDate'] as String? ?? '';
       // Si modo por día: solo chequear la fecha específica
       // Si modo misma hora: chequear en las fechas seleccionadas únicamente
