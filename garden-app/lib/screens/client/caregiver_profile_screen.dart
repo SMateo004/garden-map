@@ -65,11 +65,63 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     if (mounted) setState(() => _isLoading = false);
     if (token.isNotEmpty) _fetchFavoriteStatus(token);
     _fetchAvailabilityCalendar();
+    _fetchWaitlistStatus();
   }
 
   // ── Calendario de disponibilidad (próximos 14 días, solo PASEO) ──────────
   List<dynamic>? _availabilityCalendar;
   bool _loadingCalendar = true;
+
+  // ── Lista de espera ───────────────────────────────────────────────────
+  bool? _onWaitlist; // null = todavía no se sabe (o no logueado)
+  bool _togglingWaitlist = false;
+
+  Future<void> _fetchWaitlistStatus() async {
+    final token = AuthState.token;
+    if (token.isEmpty) return;
+    try {
+      final res = await http.get(Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}/waitlist'),
+          headers: {'Authorization': 'Bearer $token'});
+      final data = jsonDecode(res.body);
+      if (mounted && data['success'] == true) {
+        setState(() => _onWaitlist = data['data']?['onWaitlist'] == true);
+      }
+    } catch (_) {
+      // Silencioso — el botón simplemente no aparece si no se pudo saber el estado.
+    }
+  }
+
+  Future<void> _toggleWaitlist() async {
+    final token = AuthState.token;
+    if (token.isEmpty || _onWaitlist == null) return;
+    HapticFeedback.selectionClick();
+    setState(() => _togglingWaitlist = true);
+    try {
+      final joining = !_onWaitlist!;
+      final res = joining
+          ? await http.post(Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}/waitlist'),
+              headers: {'Authorization': 'Bearer $token'})
+          : await http.delete(Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}/waitlist'),
+              headers: {'Authorization': 'Bearer $token'});
+      final data = jsonDecode(res.body);
+      if (mounted && data['success'] == true) {
+        setState(() => _onWaitlist = joining);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(joining
+              ? '🔔 Te vamos a avisar apenas tenga cupo'
+              : 'Saliste de la lista de espera'),
+          backgroundColor: GardenColors.success,
+        ));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Error de conexión'), backgroundColor: GardenColors.error));
+      }
+    } finally {
+      if (mounted) setState(() => _togglingWaitlist = false);
+    }
+  }
 
   Future<void> _fetchAvailabilityCalendar() async {
     try {
@@ -1088,6 +1140,32 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         Divider(color: borderColor),
                         const SizedBox(height: 20),
                         _buildAvailabilityCalendar(textColor, subtextColor, surface, borderColor),
+                        // Lista de espera — solo aparece si el calendario ya
+                        // cargó y de verdad no hay NINGÚN día libre en los
+                        // próximos 14 (evita ofrecerla cuando ya se puede
+                        // reservar directo).
+                        if (!_loadingCalendar &&
+                            _onWaitlist != null &&
+                            (_availabilityCalendar?.isNotEmpty ?? false) &&
+                            !(_availabilityCalendar!.any((d) => (d as Map)['available'] == true))) ...[
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: _togglingWaitlist ? null : _toggleWaitlist,
+                            icon: Icon(_onWaitlist! ? Icons.notifications_active_rounded : Icons.notifications_none_rounded, size: 16),
+                            label: Text(
+                              _togglingWaitlist
+                                  ? '...'
+                                  : (_onWaitlist! ? 'Ya estás en la lista de espera — salir' : 'Avisame cuando tenga cupo'),
+                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: GardenColors.primary,
+                              side: const BorderSide(color: GardenColors.primary),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              minimumSize: const Size(double.infinity, 40),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 24),
                       ],
                       // Bio — solo bioDetail ("Perfil profesional"). bio

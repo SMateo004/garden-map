@@ -13,6 +13,7 @@ import { asyncHandler } from '../../shared/async-handler.js';
 import logger from '../../shared/logger.js';
 import prisma from '../../config/database.js';
 import { getAvailabilityCalendar as getAvailabilityCalendarService } from '../booking-service/booking.service.js';
+import * as waitlistService from './waitlist.service.js';
 
 /**
  * GET /api/caregivers
@@ -244,6 +245,30 @@ export const getAvailabilityCalendar = asyncHandler(async (req: Request, res: Re
   const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.min(daysRaw, 30) : 30;
   const calendar = await getAvailabilityCalendarService(id, days);
   res.json({ success: true, data: calendar });
+});
+
+/** POST /api/caregivers/:id/waitlist — anotarse en la lista de espera. */
+export const joinWaitlist = asyncHandler(async (req: Request, res: Response) => {
+  const caregiverId = req.params.id!;
+  const clientId = req.user!.userId;
+  const data = await waitlistService.joinWaitlist(clientId, caregiverId);
+  res.json({ success: true, data });
+});
+
+/** DELETE /api/caregivers/:id/waitlist — salir de la lista de espera. */
+export const leaveWaitlist = asyncHandler(async (req: Request, res: Response) => {
+  const caregiverId = req.params.id!;
+  const clientId = req.user!.userId;
+  const data = await waitlistService.leaveWaitlist(clientId, caregiverId);
+  res.json({ success: true, data });
+});
+
+/** GET /api/caregivers/:id/waitlist — ¿estoy anotado? */
+export const getWaitlistStatus = asyncHandler(async (req: Request, res: Response) => {
+  const caregiverId = req.params.id!;
+  const clientId = req.user!.userId;
+  const data = await waitlistService.getWaitlistStatus(clientId, caregiverId);
+  res.json({ success: true, data });
 });
 
 /** GET /api/caregivers/:id — detalle público (solo APPROVED, sin auth). 404 si no existe o no está disponible. */

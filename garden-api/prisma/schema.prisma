@@ -52,6 +52,7 @@ model User {
   pinLockUntil                  DateTime?
   clientBookings               Booking[]                     @relation("ClientBookings")
   recurringBookingSeries       RecurringBookingSeries[]
+  caregiverWaitlistEntries     CaregiverWaitlist[]
   /// Código propio para invitar — se genera perezosamente (lazy) en el
   /// primer GET /api/referral, nunca en el registro (evita tocar los 4
   /// flujos de registro existentes, todos sensibles).
@@ -328,6 +329,7 @@ model CaregiverProfile {
   availability                    Availability[]
   bookings                        Booking[]                   @relation("CaregiverBookings")
   recurringBookingSeries          RecurringBookingSeries[]
+  waitlistEntries                 CaregiverWaitlist[]
   user                            User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
   reviews                         Review[]
   sugerencias                     SugerenciaPrecio[]
@@ -1014,6 +1016,28 @@ model PromoCode {
   createdAt        DateTime          @default(now())
 
   @@map("promo_codes")
+}
+
+/// Lista de espera de un cliente para un cuidador sin cupo — se avisa por
+/// push cuando el job (caregiver-waitlist.job.ts) detecta que el cuidador
+/// tiene al menos un bloque libre en los próximos días, reusando
+/// getAvailabilityCalendar() (mismo chequeo real de disponibilidad que el
+/// calendario visible en el perfil, ver gap "calendario de disponibilidad").
+model CaregiverWaitlist {
+  id             String           @id @default(uuid())
+  clientId       String
+  caregiverId    String
+  client         User             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  caregiver      CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+  createdAt      DateTime         @default(now())
+  /// null = todavía no se avisó nunca. Se resetea a null si el cliente sale
+  /// y vuelve a entrar a la lista — nunca se reenvía antes de 3 días
+  /// (waitlistRenotifyCooldownDays) para no spamear mientras sigue sin
+  /// reservar pese a los avisos.
+  lastNotifiedAt DateTime?
+
+  @@unique([clientId, caregiverId])
+  @@map("caregiver_waitlist")
 }
 
 /// Log of AI agent calls for the admin monitor.

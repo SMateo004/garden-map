@@ -10,6 +10,9 @@ router.get('/', caregiverController.list);
 router.get('/price-stats', caregiverController.getPriceStats);
 router.get('/:id/availability', caregiverController.getAvailability);
 router.get('/:id/availability-calendar', caregiverController.getAvailabilityCalendar);
+router.post('/:id/waitlist', authMiddleware, requireRole('CLIENT'), caregiverController.joinWaitlist);
+router.delete('/:id/waitlist', authMiddleware, requireRole('CLIENT'), caregiverController.leaveWaitlist);
+router.get('/:id/waitlist', authMiddleware, requireRole('CLIENT'), caregiverController.getWaitlistStatus);
 router.get('/:id', caregiverController.getById);
 
 // POST: crear o actualizar perfil (upsert). multipart/form-data + 4–6 fotos (jpg/png, <5MB).
