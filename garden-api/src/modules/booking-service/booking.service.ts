@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
   BookingStatus,
   CaregiverStatus,
@@ -3824,6 +3825,99 @@ export async function getGpsTrack(bookingId: string, userId: string): Promise<an
   });
   if (!booking) throw new BookingNotFoundError(bookingId);
   return (booking.serviceTrackingData as any[]) || [];
+}
+
+// ── Compartir viaje en vivo (link público de solo lectura) ─────────────────
+// Token derivado por HMAC del bookingId + JWT_SECRET — no requiere columna
+// nueva: el mismo booking siempre deriva el mismo token, y solo quien
+// conoce el secreto del servidor puede generarlo (no es adivinable a partir
+// del bookingId). "Expira" en el sentido de que deja de servir datos útiles
+// en cuanto el servicio ya no está IN_PROGRESS (ver getPublicTrack) — no
+// hace falta invalidarlo aparte ni limpiar nada después.
+const SHARE_TOKEN_NAMESPACE = 'share-track:';
+
+export function deriveShareToken(bookingId: string): string {
+  return createHmac('sha256', env.JWT_SECRET)
+    .update(SHARE_TOKEN_NAMESPACE + bookingId)
+    .digest('hex')
+    .slice(0, 24);
+}
+
+function isValidShareToken(bookingId: string, token: string): boolean {
+  if (!token || typeof token !== 'string') return false;
+  const expected = deriveShareToken(bookingId);
+  const a = Buffer.from(expected, 'utf8');
+  const b = Buffer.from(token, 'utf8');
+  // Buffer.from de strings de largo distinto ya evita el compare, pero
+  // timingSafeEqual tira si los largos no calzan — el chequeo previo de
+  // longitud es obligatorio, no solo optimización.
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+/** Genera el token para compartir el seguimiento en vivo de esta reserva —
+ * solo el cliente titular puede pedirlo. El frontend arma la URL pública
+ * completa (ver /track/:bookingId/:token en la app). */
+export async function getShareLink(bookingId: string, clientId: string): Promise<{ token: string }> {
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, clientId },
+    select: { id: true },
+  });
+  if (!booking) throw new BookingNotFoundError(bookingId);
+  return { token: deriveShareToken(bookingId) };
+}
+
+/** GET público (sin auth) para el link compartido — datos mínimos para que
+ * un contacto de confianza vea que el paseo está en curso y por dónde va.
+ * Nunca expone teléfono/email de ninguna de las partes ni el apellido del
+ * cuidador. Deja de devolver datos de ubicación en cuanto el servicio no
+ * está IN_PROGRESS (terminado, cancelado, ni siquiera empezado todavía). */
+export async function getPublicTrack(
+  bookingId: string,
+  token: string
+): Promise<{
+  active: boolean;
+  status?: string;
+  petName?: string;
+  serviceType?: string;
+  caregiverFirstName?: string;
+  serviceStartedAt?: string | null;
+  track?: Array<{ lat: number; lng: number }>;
+}> {
+  if (!isValidShareToken(bookingId, token)) {
+    throw new NotFoundError('Link inválido o vencido');
+  }
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: {
+      status: true,
+      petName: true,
+      serviceType: true,
+      serviceStartedAt: true,
+      serviceTrackingData: true,
+      caregiver: { select: { user: { select: { firstName: true } } } },
+    },
+  });
+  if (!booking) throw new NotFoundError('Link inválido o vencido');
+
+  if (booking.status !== BookingStatus.IN_PROGRESS) {
+    return { active: false, status: booking.status };
+  }
+
+  const rawTrack = (booking.serviceTrackingData as any[]) || [];
+  // Solo el tramo reciente — un contacto externo no necesita el historial completo.
+  const recentTrack = rawTrack.slice(-50).map((p) => ({ lat: p.lat, lng: p.lng }));
+
+  return {
+    active: true,
+    status: booking.status,
+    petName: booking.petName,
+    serviceType: booking.serviceType,
+    caregiverFirstName: booking.caregiver.user.firstName,
+    serviceStartedAt: booking.serviceStartedAt?.toISOString() ?? null,
+    track: recentTrack,
+  };
 }
 
 // ── Helper: calcular overtime al finalizar un servicio ──────────────────────

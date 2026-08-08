@@ -171,6 +171,24 @@ export const getTrack = asyncHandler(async (req: Request, res: Response) => {
     res.json({ success: true, data: track });
 });
 
+/** GET /api/bookings/:id/share-link — token para compartir el seguimiento en
+ * vivo con un contacto de confianza. Solo el cliente titular. */
+export const getShareLink = asyncHandler(async (req: Request, res: Response) => {
+    const bookingId = req.params.id!;
+    const clientId = req.user!.userId;
+    const result = await bookingService.getShareLink(bookingId, clientId);
+    res.json({ success: true, data: result });
+});
+
+/** GET /api/bookings/track/:bookingId/:token — vista pública de solo lectura
+ * para quien recibe el link compartido. Sin autenticación a propósito: quien
+ * lo recibe no tiene cuenta en Garden. */
+export const getPublicTrack = asyncHandler(async (req: Request, res: Response) => {
+    const { bookingId, token } = req.params as { bookingId: string; token: string };
+    const result = await bookingService.getPublicTrack(bookingId, token);
+    res.json({ success: true, data: result });
+});
+
 export const conclude = asyncHandler(async (req: Request, res: Response) => {
     const bookingId = req.params.id!;
     const caregiverUserId = req.user!.userId;

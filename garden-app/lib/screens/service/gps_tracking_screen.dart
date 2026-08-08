@@ -3,12 +3,13 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter/services.dart' show HapticFeedback, Clipboard, ClipboardData;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/gps_tracking_session.dart';
 import '../../theme/garden_theme.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -396,6 +397,20 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
               ),
             ),
           ],
+          // Solo el dueño puede compartir el viaje en vivo con un contacto de
+          // confianza — el cuidador no necesita esto (ya está en el lugar).
+          if (!_isCaregiver) ...[
+            GardenPressable(
+              pressedScale: 0.85,
+              onTap: _shareTrip,
+              child: Container(
+                width: 36, height: 36,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
+                child: const Icon(Icons.ios_share_rounded, color: Colors.white, size: 18),
+              ),
+            ),
+          ],
           // Badge activo
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -417,6 +432,94 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── Compartir viaje en vivo con un contacto de confianza ───────────────────
+  Future<void> _shareTrip() async {
+    HapticFeedback.selectionClick();
+    String url;
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/share-link'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] != true) throw Exception('share-link failed');
+      final shareToken = data['data']['token'] as String;
+      url = 'https://gardenbo.com/track/${widget.bookingId}/$shareToken';
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No se pudo generar el link para compartir. Intenta de nuevo.'),
+          backgroundColor: GardenColors.error,
+        ));
+      }
+      return;
+    }
+    if (!mounted) return;
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SafeArea(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(GardenRadius.xxl)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 4),
+                child: Row(children: [
+                  Expanded(
+                    child: Text('Compartir viaje en vivo',
+                        style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 15)),
+                  ),
+                ]),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Text(
+                  'Quien reciba este link puede ver por dónde va ${widget.petName} mientras dure el servicio — sin necesidad de cuenta en Garden.',
+                  style: TextStyle(color: subtextColor, fontSize: 12.5),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.link_rounded, color: GardenColors.primary),
+                title: Text('Copiar link', style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
+                onTap: () async {
+                  await Clipboard.setData(ClipboardData(text: url));
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('✓ Link copiado'),
+                      backgroundColor: GardenColors.success,
+                      duration: Duration(seconds: 2),
+                    ));
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.chat_rounded, color: GardenColors.success),
+                title: Text('Compartir por WhatsApp', style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final text = Uri.encodeComponent(
+                      'Estoy siguiendo el paseo de ${widget.petName} en vivo con Garden 🐾: $url');
+                  await launchUrl(Uri.parse('https://wa.me/?text=$text'), mode: LaunchMode.externalApplication);
+                },
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

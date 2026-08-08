@@ -36,6 +36,7 @@ import 'screens/wallet/wallet_screen.dart';
 import 'screens/service/service_execution_screen.dart';
 import 'screens/service/meet_and_greet_screen.dart';
 import 'screens/service/gps_tracking_screen.dart';
+import 'screens/service/public_track_screen.dart';
 import 'screens/dispute/dispute_screen.dart';
 import 'screens/client/favorites_screen.dart';
 import 'screens/client/client_shell_screen.dart';
@@ -132,6 +133,7 @@ const _publicPaths = {
   '/caregiver/onboarding-profesional',
   '/client-welcome',
   '/service-selector', // accesible sin login (modo guest)
+  '/track', // link público de "compartir viaje en vivo" — sin cuenta, sin login
   '/marketplace',      // accesible sin login (modo guest)
   '/mobile-verify',    // verificación de identidad vía QR — no requiere sesión
   '/verify',           // alias legacy de /mobile-verify
@@ -601,6 +603,15 @@ final GoRouter _router = GoRouter(
           token: extra['token'] as String? ?? '',
           petPhoto: extra['petPhoto'] as String?,
         );
+      },
+    ),
+    GoRoute(
+      path: '/track/:bookingId/:token',
+      name: 'publicTrack',
+      builder: (context, state) {
+        final bookingId = state.pathParameters['bookingId']!;
+        final token = state.pathParameters['token']!;
+        return PublicTrackScreen(bookingId: bookingId, token: token);
       },
     ),
     GoRoute(

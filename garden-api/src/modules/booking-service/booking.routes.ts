@@ -171,6 +171,24 @@ router.get(
   serviceExecutionController.getTrack
 );
 
+/** GET /api/bookings/:id/share-link — token para compartir el seguimiento en
+ * vivo con un contacto de confianza. Solo el cliente titular. */
+router.get(
+  '/:id/share-link',
+  authMiddleware,
+  requireRole('CLIENT'),
+  serviceExecutionController.getShareLink
+);
+
+/** GET /api/bookings/track/:bookingId/:token — vista pública (sin auth) para
+ * quien recibe el link compartido. "track" como primer segmento no choca con
+ * /:id porque este tiene dos segmentos más — Express nunca lo confunde con
+ * un bookingId de un solo segmento. */
+router.get(
+  '/track/:bookingId/:token',
+  serviceExecutionController.getPublicTrack
+);
+
 router.post(
   '/:id/start',
   authMiddleware,
