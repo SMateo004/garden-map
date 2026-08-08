@@ -52,6 +52,19 @@ model User {
   pinLockUntil                  DateTime?
   clientBookings               Booking[]                     @relation("ClientBookings")
   recurringBookingSeries       RecurringBookingSeries[]
+  /// Código propio para invitar — se genera perezosamente (lazy) en el
+  /// primer GET /api/referral, nunca en el registro (evita tocar los 4
+  /// flujos de registro existentes, todos sensibles).
+  referralCode                 String?                       @unique @db.VarChar(12)
+  /// Se aplica UNA vez, después de registrarse (POST /api/referral/apply),
+  /// solo si el usuario todavía no completó ningún servicio — evita abuso
+  /// retroactivo. Null = nadie lo invitó (o no cargó el código).
+  referredByUserId             String?
+  referredBy                   User?                         @relation("Referrals", fields: [referredByUserId], references: [id])
+  referrals                    User[]                        @relation("Referrals")
+  /// true una vez que se acreditó el bono por su primer servicio
+  /// completado — evita pagar el bono más de una vez.
+  referralRewardGiven          Boolean                       @default(false)
   caregiverProfile             CaregiverProfile?
   clientProfile                ClientProfile?
   identityVerificationSessions IdentityVerificationSession[]

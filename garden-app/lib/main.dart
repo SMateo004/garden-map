@@ -38,6 +38,7 @@ import 'screens/service/meet_and_greet_screen.dart';
 import 'screens/service/gps_tracking_screen.dart';
 import 'screens/service/public_track_screen.dart';
 import 'screens/client/recurring_bookings_screen.dart';
+import 'screens/wallet/referral_screen.dart';
 import 'screens/dispute/dispute_screen.dart';
 import 'screens/client/favorites_screen.dart';
 import 'screens/client/client_shell_screen.dart';
@@ -623,6 +624,11 @@ final GoRouter _router = GoRouter(
       path: '/recurring-bookings',
       name: 'recurringBookingsList',
       builder: (context, state) => const RecurringBookingScreen(),
+    ),
+    GoRoute(
+      path: '/referral',
+      name: 'referral',
+      builder: (context, state) => const ReferralScreen(),
     ),
     GoRoute(
       path: '/track/:bookingId/:token',

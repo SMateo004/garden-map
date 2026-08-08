@@ -15,6 +15,7 @@ import userRoutes from './modules/user-service/user.routes.js';
 import adminRoutes from './modules/admin/admin.routes.js';
 import bookingRoutes from './modules/booking-service/booking.routes.js';
 import recurringBookingRoutes from './modules/recurring-booking/recurring-booking.routes.js';
+import referralRoutes from './modules/referral/referral.routes.js';
 import paymentRoutes, { webhookRouter as stripeWebhookRouter } from './modules/payment-service/payment.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import caregiverProfileRoutes from './modules/caregiver-profile/caregiver-profile.routes.js';
@@ -280,6 +281,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/recurring-bookings', recurringBookingRoutes);
+app.use('/api/referral', referralRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/notifications', notificationRoutes);
 if (env.NODE_ENV !== 'production') {

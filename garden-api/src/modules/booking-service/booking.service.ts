@@ -38,6 +38,7 @@ import type { BookingCreateResult } from './booking.types.js';
 import { bookingToResponse } from './booking.types.js';
 import { parseTimeBlocks, BOLIVIA_HOLIDAYS } from '../../shared/availability-utils.js';
 import { combinedHospedajeGuarderiaMax } from '../../utils/caregiver-capacity.js';
+import { grantReferralRewardIfEligible } from '../referral/referral.service.js';
 
 /** Helper: HH:mm strings to minutes since midnight. */
 function timeToMins(t: string | null | undefined): number {
@@ -4143,7 +4144,7 @@ export async function concludeService(
 ): Promise<BookingCreateResult> {
   const concludedAt = new Date();
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const profile = await tx.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
     if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
 
@@ -4313,8 +4314,18 @@ export async function concludeService(
       details: { serviceType: booking.serviceType, gpsDistance, overtimeMins, overtimeFeeGross },
     });
 
-    return bookingToResponse(updated);
+    return { response: bookingToResponse(updated), clientId: booking.clientId };
   });
+
+  // Fuera de la transacción a propósito — abre su propia transacción
+  // separada (ver referral.service.ts) y tocar el balance del mismo
+  // cliente DENTRO de esta misma transacción (ej. si hubo cargo de
+  // overtime arriba) podría auto-bloquearse esperando un lock que la
+  // transacción externa todavía no liberó. Nunca debe tumbar la
+  // conclusión real del servicio, que ya quedó confirmada arriba.
+  grantReferralRewardIfEligible(result.clientId).catch(() => {});
+
+  return result.response;
 }
 
 /** Propina opcional post-servicio — 100% al cuidador, sin comisión de

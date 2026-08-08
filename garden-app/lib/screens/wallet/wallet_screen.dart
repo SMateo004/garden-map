@@ -314,6 +314,13 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
               icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 20),
               onPressed: () => context.pop(),
             ),
+            actions: [
+              IconButton(
+                tooltip: 'Invitá y ganá',
+                icon: Icon(Icons.card_giftcard_rounded, color: textColor, size: 20),
+                onPressed: () => context.push('/referral'),
+              ),
+            ],
           ),
           body: Column(
             children: [
@@ -327,6 +334,12 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                       IconButton(icon: Icon(Icons.arrow_back_rounded, color: textColor, size: 18), onPressed: () => context.pop()),
                       const SizedBox(width: 6),
                       Text('Mi billetera', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
+                      const Spacer(),
+                      IconButton(
+                        tooltip: 'Invitá y ganá',
+                        icon: Icon(Icons.card_giftcard_rounded, color: textColor, size: 18),
+                        onPressed: () => context.push('/referral'),
+                      ),
                     ],
                   ),
                 ),
