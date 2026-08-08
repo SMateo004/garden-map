@@ -1093,6 +1093,27 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         ),
                     ],
                   ),
+                  // Report card del servicio — ya existe la vista completa
+                  // (fotos, distancia recorrida, resumen) en
+                  // service_execution_screen.dart, solo faltaba el link
+                  // para llegar a ella una vez COMPLETED.
+                  if (status == 'COMPLETED') ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => context.push(
+                        '/service/${booking['id']}',
+                        extra: {'role': 'CLIENT', 'token': _clientToken},
+                      ),
+                      icon: const Icon(Icons.receipt_long_outlined, size: 16),
+                      label: const Text('Ver resumen del servicio', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: GardenColors.primary,
+                        side: const BorderSide(color: GardenColors.primary),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        minimumSize: const Size(double.infinity, 40),
+                      ),
+                    ),
+                  ],
                   // "Reservar de nuevo" — quick win: precarga el mismo
                   // cuidador/servicio, sin repetir fecha/mascotas (esas se
                   // eligen frescas, booking_screen.dart las auto-carga con

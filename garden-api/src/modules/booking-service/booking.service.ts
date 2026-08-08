@@ -4280,8 +4280,15 @@ export async function concludeService(
       },
     });
 
-    // Notificación de servicio completado + pedido de calificación
-    const ratingMsg = `El cuidador finalizó el servicio de ${booking.petName}. ¡Califica para que reciba su pago!`;
+    // Notificación de servicio completado + pedido de calificación — con el
+    // dato real del "report card" (distancia recorrida) cuando aplica, en
+    // vez de un texto genérico. La tarjeta completa (fotos, distancia,
+    // resumen) ya vive en service_execution_screen.dart → 'Ver resumen del
+    // servicio' en Mis Reservas.
+    const distanceNote = booking.serviceType === ServiceType.PASEO && gpsDistance
+      ? ` Recorrieron ${gpsDistance >= 1000 ? `${(gpsDistance / 1000).toFixed(2)} km` : `${Math.round(gpsDistance)} m`} juntos.`
+      : '';
+    const ratingMsg = `El cuidador finalizó el servicio de ${booking.petName}.${distanceNote} ¡Califica para que reciba su pago!`;
     await tx.notification.create({
       data: {
         userId: booking.clientId,
@@ -4293,7 +4300,7 @@ export async function concludeService(
     sendPushToUser(
       booking.clientId,
       `${booking.petName} ya volvió a casa ✅`,
-      '⭐ Califica el servicio para liberar el pago a tu cuidador.',
+      `⭐ Mirá el resumen de su servicio${distanceNote} Calificá para liberar el pago a tu cuidador.`,
       { type: 'SERVICE_COMPLETED', bookingId }
     ).catch(() => {});
     notificationService.onServiceCompleted(bookingId).catch(() => {});
