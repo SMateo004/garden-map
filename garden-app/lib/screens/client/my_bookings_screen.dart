@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1764,6 +1765,7 @@ class _RatingSheetState extends State<_RatingSheet> {
           );
         } else {
           GardenSnackBar.success(context, '¡Gracias por tu calificación!');
+          _offerTip();
         }
       } else if (mounted) {
         // BUG (auditoría): antes, si el servidor rechazaba la calificación
@@ -1781,6 +1783,21 @@ class _RatingSheetState extends State<_RatingSheet> {
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
+  }
+
+  // Propina opcional, justo después de calificar bien (≥3) — mismo momento
+  // en que Uber/Rover la ofrecen. this.context sigue válido acá igual que
+  // el context.push('/dispute/...') de la rama de abajo (mismo patrón ya
+  // establecido: widget.onSubmitted() ya hizo Navigator.pop del contexto
+  // EXTERNO, no de este sheet).
+  Future<void> _offerTip() async {
+    if (!mounted) return;
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _TipSheet(bookingId: widget.bookingId, baseUrl: widget.baseUrl, token: widget.token),
+    );
   }
 
   @override
@@ -1857,6 +1874,166 @@ class _RatingSheetState extends State<_RatingSheet> {
                 onPressed: _rating > 0 ? _submitRating : null,
               ),
               const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Propina post-servicio ─────────────────────────────────────────────────
+// 100% va al cuidador, sin comisión de Garden — se descuenta directo de la
+// billetera del cliente (sin QR/tarjeta, mismo criterio que la donación en
+// payment_screen.dart: monto chico y discrecional, no amerita el flujo de
+// pago completo).
+class _TipSheet extends StatefulWidget {
+  final String bookingId;
+  final String baseUrl;
+  final String token;
+
+  const _TipSheet({required this.bookingId, required this.baseUrl, required this.token});
+
+  @override
+  State<_TipSheet> createState() => _TipSheetState();
+}
+
+class _TipSheetState extends State<_TipSheet> {
+  double? _selected;
+  final TextEditingController _customController = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _customController.dispose();
+    super.dispose();
+  }
+
+  double get _amount => _selected ?? double.tryParse(_customController.text) ?? 0;
+
+  Future<void> _submit() async {
+    if (_amount <= 0) return;
+    HapticFeedback.mediumImpact();
+    setState(() => _submitting = true);
+    try {
+      final res = await http.post(
+        Uri.parse('${widget.baseUrl}/bookings/${widget.bookingId}/tip'),
+        headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+        body: jsonEncode({'amount': _amount}),
+      );
+      final data = jsonDecode(res.body);
+      if (!mounted) return;
+      if (data['success'] == true) {
+        Navigator.pop(context);
+        GardenSnackBar.success(context, '✓ Propina de Bs ${_amount.toStringAsFixed(0)} enviada — ¡gracias!');
+      } else {
+        GardenSnackBar.error(context, data['error']?['message'] ?? 'No se pudo enviar la propina');
+      }
+    } catch (e) {
+      if (mounted) GardenSnackBar.error(context, 'Error de conexión: $e');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
+    final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+    const presets = [5.0, 10.0, 20.0];
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(GardenRadius.xxl)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(color: GardenColors.textHint, borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text('¿Le dejás una propina? 💚', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              Text('100% va directo al cuidador — Garden no cobra comisión sobre propinas.',
+                  style: TextStyle(color: subtextColor, fontSize: 12.5)),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  ...presets.map((p) {
+                    final sel = _selected == p;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: GestureDetector(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          setState(() {
+                            _selected = sel ? null : p;
+                            if (!sel) _customController.clear();
+                          });
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: sel ? GardenColors.primary : surface,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: sel ? GardenColors.primary : borderColor),
+                          ),
+                          child: Text('Bs ${p.toStringAsFixed(0)}',
+                              style: TextStyle(
+                                  color: sel ? Colors.white : textColor,
+                                  fontWeight: FontWeight.w700, fontSize: 13)),
+                        ),
+                      ),
+                    );
+                  }),
+                  Expanded(
+                    child: TextField(
+                      controller: _customController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: TextStyle(color: textColor, fontSize: 13),
+                      onChanged: (_) => setState(() => _selected = null),
+                      decoration: InputDecoration(
+                        hintText: 'Otro monto',
+                        hintStyle: TextStyle(color: subtextColor, fontSize: 12),
+                        prefixText: 'Bs ',
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: borderColor)),
+                        filled: true,
+                        fillColor: surface,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              GardenButton(
+                label: _submitting ? 'Enviando...' : 'Enviar propina de Bs ${_amount.toStringAsFixed(0)}',
+                loading: _submitting,
+                icon: Icons.favorite_rounded,
+                onPressed: (_amount > 0 && !_submitting) ? _submit : null,
+              ),
+              const SizedBox(height: 8),
+              Center(
+                child: TextButton(
+                  onPressed: _submitting ? null : () => Navigator.pop(context),
+                  child: Text('Ahora no', style: TextStyle(color: subtextColor, fontWeight: FontWeight.w600)),
+                ),
+              ),
             ],
           ),
         ),

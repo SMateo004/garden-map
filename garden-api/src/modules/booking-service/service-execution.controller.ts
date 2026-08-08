@@ -11,6 +11,7 @@ import {
   trackLocationBodySchema,
   concludeServiceBodySchema,
   confirmReceiptBodySchema,
+  tipBookingBodySchema,
   rateOwnerBodySchema,
   addEventBodySchema,
   confirmEndBodySchema,
@@ -225,6 +226,20 @@ export const confirmReceipt = asyncHandler(async (req: Request, res: Response) =
         parsed.data.skillTags
     );
     res.json({ success: true, data: booking });
+});
+
+/** POST /api/bookings/:id/tip — propina post-servicio, 100% al cuidador. */
+export const addTip = asyncHandler(async (req: Request, res: Response) => {
+    const bookingId = req.params.id!;
+    const clientId = req.user!.userId;
+
+    const parsed = tipBookingBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+        throw new BadRequestError(parsed.error.errors[0]?.message ?? 'Monto inválido', 'VALIDATION_ERROR');
+    }
+
+    const result = await bookingService.addTip(bookingId, clientId, parsed.data.amount);
+    res.json({ success: true, data: result });
 });
 
 export const markEndedByClient = asyncHandler(async (req: Request, res: Response) => {

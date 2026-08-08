@@ -392,6 +392,10 @@ model Booking {
   nit                        String?          @db.VarChar(20)
   /// Razón social ingresada junto con el NIT de arriba para esta reserva.
   nitRazonSocial             String?          @db.VarChar(200)
+  /// Propina opcional post-servicio — 100% va al cuidador, sin comisión de
+  /// Garden. Null = no se dio propina; una vez seteado no se puede repetir
+  /// en la misma reserva (ver addTip en booking.service.ts).
+  tipAmount                  Decimal?         @db.Decimal(10, 2)
   totalAmount                Decimal          @db.Decimal(10, 2)
   pricePerUnit               Decimal          @db.Decimal(10, 2)
   commissionAmount           Decimal          @db.Decimal(10, 2)

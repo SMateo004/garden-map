@@ -242,6 +242,12 @@ export const initPaymentBodySchema = z.object({
 export type InitPaymentBody = z.infer<typeof initPaymentBodySchema>;
 
 /** POST /api/bookings/:id/report — dueño reporta incumplimiento del cuidador. */
+/** POST /api/bookings/:id/tip — propina post-servicio, 100% al cuidador. */
+export const tipBookingBodySchema = z.object({
+  amount: z.coerce.number().min(1, 'La propina mínima es Bs 1').max(500, 'La propina máxima es Bs 500'),
+});
+export type TipBookingBody = z.infer<typeof tipBookingBodySchema>;
+
 export const reportBookingBodySchema = z.object({
   reasons: z
     .array(z.string().min(1).max(200))

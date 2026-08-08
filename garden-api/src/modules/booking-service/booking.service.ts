@@ -4310,6 +4310,111 @@ export async function concludeService(
   });
 }
 
+/** Propina opcional post-servicio — 100% al cuidador, sin comisión de
+ * Garden (a diferencia del pago del servicio, que sí la lleva). Débito
+ * inmediato de la billetera del cliente, sin QR/tarjeta — mismo criterio
+ * que las donaciones (ver _recordDonation en initPayment): es un monto
+ * chico y discrecional, no vale la pena el flujo de pago completo. */
+export async function addTip(
+  bookingId: string,
+  clientId: string,
+  amount: number
+): Promise<{ tipAmount: number; balance: number }> {
+  if (!(amount > 0) || amount > 500) {
+    throw new BadRequestError('Monto de propina inválido', 'INVALID_TIP_AMOUNT');
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, clientId },
+      include: { caregiver: { select: { userId: true } } },
+    });
+    if (!booking) throw new BookingNotFoundError(bookingId);
+    if (booking.status !== BookingStatus.COMPLETED) {
+      throw new BadRequestError('Solo se puede dar propina en servicios completados', 'BOOKING_NOT_COMPLETED');
+    }
+    if (booking.tipAmount != null) {
+      throw new BadRequestError('Ya diste propina en esta reserva', 'TIP_ALREADY_GIVEN');
+    }
+
+    // Bloquea la fila del cliente para el resto de la transacción — mismo
+    // patrón que initPayment/wallet.routes.ts (retiros): sin esto, dos
+    // propinas casi simultáneas podrían leer el mismo saldo bajo Read
+    // Committed y ambas descontar, dejando el saldo negativo sin que
+    // ninguna se rechace.
+    await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${clientId} FOR UPDATE`;
+
+    const clientUser = await tx.user.findUnique({ where: { id: clientId }, select: { balance: true } });
+    const clientBalance = Number(clientUser?.balance ?? 0);
+    const pendingAgg = await tx.walletTransaction.aggregate({
+      where: { userId: clientId, type: 'WITHDRAWAL', status: { in: ['PENDING', 'PROCESSING'] } },
+      _sum: { amount: true },
+    });
+    const availableBalance = Math.max(0, clientBalance - Number(pendingAgg._sum.amount ?? 0));
+    if (availableBalance < amount) {
+      throw new BadRequestError(
+        `Saldo disponible insuficiente. Disponible: Bs ${availableBalance.toFixed(2)}, propina: Bs ${amount.toFixed(2)}.`,
+        'INSUFFICIENT_BALANCE'
+      );
+    }
+
+    // Atomic claim — evita doble-propina por una carrera con otro request
+    // simultáneo (ej. doble tap), igual que el resto de las transiciones
+    // de estado de Booking en este archivo.
+    const claimed = await tx.booking.updateMany({
+      where: { id: bookingId, clientId, tipAmount: null },
+      data: { tipAmount: amount },
+    });
+    if (claimed.count === 0) {
+      throw new BadRequestError('Ya diste propina en esta reserva', 'TIP_ALREADY_GIVEN');
+    }
+
+    const updatedClient = await tx.user.update({
+      where: { id: clientId },
+      data: { balance: { decrement: amount } },
+      select: { balance: true },
+    });
+    await tx.walletTransaction.create({
+      data: {
+        userId: clientId,
+        type: 'TIP',
+        amount,
+        balance: Number(updatedClient.balance),
+        description: `Propina — reserva ${bookingId.slice(0, 8)}`,
+        bookingId,
+        status: 'COMPLETED',
+      },
+    });
+
+    const updatedCaregiver = await tx.user.update({
+      where: { id: booking.caregiver.userId },
+      data: { balance: { increment: amount } },
+      select: { balance: true },
+    });
+    await tx.walletTransaction.create({
+      data: {
+        userId: booking.caregiver.userId,
+        type: 'TIP',
+        amount,
+        balance: Number(updatedCaregiver.balance),
+        description: `Propina recibida — reserva ${bookingId.slice(0, 8)}`,
+        bookingId,
+        status: 'COMPLETED',
+      },
+    });
+
+    sendPushToUser(
+      booking.caregiver.userId,
+      '💚 Recibiste una propina',
+      `Un cliente te dejó Bs ${amount.toFixed(2)} de propina — 100% para vos, sin comisión.`,
+      { type: 'TIP_RECEIVED', bookingId }
+    ).catch(() => {});
+
+    logger.info('Propina registrada', { bookingId, clientId, amount });
+    return { tipAmount: amount, balance: Number(updatedClient.balance) };
+  });
+}
+
 export async function confirmReceiptByClient(
   bookingId: string,
   clientId: string,

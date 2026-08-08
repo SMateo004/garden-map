@@ -244,6 +244,14 @@ router.post(
   serviceExecutionController.confirmReceipt
 );
 
+/** POST /api/bookings/:id/tip — propina post-servicio, 100% al cuidador. */
+router.post(
+  '/:id/tip',
+  authMiddleware,
+  requireRole('CLIENT'),
+  serviceExecutionController.addTip
+);
+
 /** POST /api/bookings/:id/mark-ended — el dueño marca que el servicio ya terminó (congela el overtime). */
 router.post(
   '/:id/mark-ended',
