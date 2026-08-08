@@ -90,6 +90,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
   // Payment-method carousel state ("QR bancario" vs "Tarjeta")
   String _selectedMethod = 'qr'; // 'qr' | 'card'
   bool _cardPaymentEnabled = false; // fail-closed default — never fail open on a payment feature
+
+  // Política de cancelación — cargada de /settings (público), ver
+  // _loadCardPaymentInfo. Defaults iguales a los del backend
+  // (booking.service.ts calculateRefund) para que nunca se muestre un
+  // número distinto al que realmente se aplicaría.
+  int _hospedajeRefund100h = 48;
+  int _hospedajeRefund50h = 24;
+  int _paseoRefund100h = 12;
+  int _paseoRefund50h = 6;
+  double _hospedajeRefundFee = 10;
   SavedCard? _savedCard;
 
   // NIT para la factura — se pide siempre (QR o Tarjeta) sin bloquear el
@@ -129,18 +139,27 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
-  /// Carga el setting admin `cardPaymentEnabled` (público, sin auth) y la
-  /// tarjeta guardada localmente, si existe. Ninguno de los dos bloquea la
-  /// carga principal de la reserva — corren en paralelo/independientes.
+  /// Carga el setting admin `cardPaymentEnabled` + la política de
+  /// cancelación (público, sin auth) y la tarjeta guardada localmente, si
+  /// existe. Ninguno bloquea la carga principal de la reserva — corren en
+  /// paralelo/independientes.
   Future<void> _loadCardPaymentInfo() async {
     try {
       final res = await http.get(Uri.parse('$_baseUrl/settings'));
       final data = jsonDecode(res.body);
       if (mounted && data['success'] == true) {
-        setState(() => _cardPaymentEnabled = data['data']?['cardPaymentEnabled'] == true);
+        final d = data['data'] as Map<String, dynamic>?;
+        setState(() {
+          _cardPaymentEnabled = d?['cardPaymentEnabled'] == true;
+          _hospedajeRefund100h = (d?['hospedajeRefund100Horas'] as num?)?.toInt() ?? 48;
+          _hospedajeRefund50h = (d?['hospedajeRefund50Horas'] as num?)?.toInt() ?? 24;
+          _paseoRefund100h = (d?['paseoRefund100Horas'] as num?)?.toInt() ?? 12;
+          _paseoRefund50h = (d?['paseoRefund50Horas'] as num?)?.toInt() ?? 6;
+          _hospedajeRefundFee = (d?['hospedajeRefundAdminFeeBS'] as num?)?.toDouble() ?? 10;
+        });
       }
     } catch (_) {
-      // Fallo de red → se queda en false (fail-closed), como pide el spec.
+      // Fallo de red → se queda en false/defaults (fail-closed), como pide el spec.
     }
     final saved = await SavedCardStore.load();
     if (mounted) setState(() => _savedCard = saved);
@@ -1140,6 +1159,54 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
+  // ── Política de cancelación ─────────────────────────────────────────────
+  // Se muestra la política real que YA aplica calculateRefund() en el
+  // backend (booking.service.ts) para el tipo de servicio de ESTA reserva —
+  // no es una promesa de marketing aparte, es literalmente lo que pasa si
+  // cancelás. No hay niveles elegibles por el cuidador (eso requeriría
+  // tocar el motor de reembolso); esto es la política única de Garden,
+  // simplemente hecha visible antes de pagar en vez de solo al cancelar.
+  Widget _buildCancellationPolicy(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    final isHospedaje = _booking?['serviceType'] == 'HOSPEDAJE';
+    final h100 = isHospedaje ? _hospedajeRefund100h : _paseoRefund100h;
+    final h50 = isHospedaje ? _hospedajeRefund50h : _paseoRefund50h;
+    final feeNote = isHospedaje ? ' (menos Bs ${_hospedajeRefundFee.toStringAsFixed(0)} de cargo administrativo)' : '';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.event_busy_outlined, color: GardenColors.primary, size: 18),
+            const SizedBox(width: 8),
+            Text('Política de cancelación', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13.5)),
+          ]),
+          const SizedBox(height: 10),
+          _cancelTierRow('Más de $h100 h antes', 'Reembolso 100%$feeNote', GardenColors.success, textColor, subtextColor),
+          const SizedBox(height: 6),
+          _cancelTierRow('Entre $h50 y $h100 h antes', 'Reembolso 50%', GardenColors.warning, textColor, subtextColor),
+          const SizedBox(height: 6),
+          _cancelTierRow('Menos de $h50 h antes', 'Sin reembolso', GardenColors.error, textColor, subtextColor),
+        ],
+      ),
+    );
+  }
+
+  Widget _cancelTierRow(String when, String result, Color dotColor, Color textColor, Color subtextColor) => Row(
+        children: [
+          Container(width: 7, height: 7, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(when, style: TextStyle(color: subtextColor, fontSize: 12))),
+          Text(result, style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w600)),
+        ],
+      );
+
   Widget _buildDonationSection(Color textColor, Color subtextColor, Color surface, Color borderColor) {
     final presets = [5.0, 10.0, 20.0];
     // Antes usaba una paleta crema/amarillo/marrón totalmente ajena a la
@@ -1942,6 +2009,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
           ),
           const SizedBox(height: 20),
+
+          // ── Política de cancelación — visible ANTES de pagar, no solo
+          // cuando se intenta cancelar. Valores reales cargados de
+          // /settings (nunca hardcodeados), mismos que aplica de verdad
+          // calculateRefund() en el backend.
+          if (_booking != null) ...[
+            _buildCancellationPolicy(textColor, subtextColor, surface, borderColor),
+            const SizedBox(height: 20),
+          ],
 
           // ── Donación voluntaria ─────────────────────────────────────────────
           _buildDonationSection(textColor, subtextColor, surface, borderColor),

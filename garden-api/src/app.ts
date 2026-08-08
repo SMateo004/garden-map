@@ -319,6 +319,14 @@ const PUBLIC_SETTING_KEYS = new Set([
   'hospedajeMinAdvanceHoras',
   'guarderiaMinAdvanceHoras',
   'cardPaymentEnabled',
+  // Política de cancelación — pública a propósito: el cliente debe poder
+  // verla ANTES de reservar (ver gap "políticas de cancelación por
+  // niveles"), igual que Airbnb publica sus ventanas de reembolso.
+  'hospedajeRefundAdminFeeBS',
+  'hospedajeRefund100Horas',
+  'hospedajeRefund50Horas',
+  'paseoRefund100Horas',
+  'paseoRefund50Horas',
 ]);
 
 /** GET /api/settings — public endpoint, no auth required. Only exposes feature-flag keys. */
@@ -355,6 +363,11 @@ app.get('/api/settings', async (_req, res) => {
       hospedajeMinAdvanceHoras: 24,
       guarderiaMinAdvanceHoras: 24,
       cardPaymentEnabled: false,
+      hospedajeRefundAdminFeeBS: 10,
+      hospedajeRefund100Horas: 48,
+      hospedajeRefund50Horas: 24,
+      paseoRefund100Horas: 12,
+      paseoRefund50Horas: 6,
     };
     res.json({ success: true, data: { ...defaults, ...map } });
   } catch {
