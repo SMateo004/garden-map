@@ -144,6 +144,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   bool _acceptPuppies = false;
   bool _acceptSeniors = false;
   bool _requireMeetAndGreet = false;
+  bool _instantBookingEnabled = false;
 
   // Selecciones
   List<String> _selectedHomeTypes = [];
@@ -382,6 +383,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     _acceptPuppies = profile['acceptPuppies'] as bool? ?? false;
     _acceptSeniors = profile['acceptSeniors'] as bool? ?? false;
     _requireMeetAndGreet = profile['requireMeetAndGreet'] as bool? ?? false;
+    _instantBookingEnabled = profile['instantBookingEnabled'] as bool? ?? false;
 
     // Mapear texto guardado a chips predefinidas
     final anxiousText = profile['handleAnxious'] as String? ?? '';
@@ -727,6 +729,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         'acceptPuppies': _acceptPuppies,
         'acceptSeniors': _acceptSeniors,
         'requireMeetAndGreet': _requireMeetAndGreet,
+        'instantBookingEnabled': _instantBookingEnabled,
         'sizesAccepted': _acceptedSizes,
         'animalTypes': _acceptedPetTypes,
         // Top-level, no dentro de serviceDetails — así el backend los guarda
@@ -1631,6 +1634,13 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                   IgnorePointer(ignoring: !_isEditing, child: _acceptSwitch('¿Aceptas mascotas mayores?', _acceptSeniors, (v) => setState(() => _acceptSeniors = v), textColor, subtextColor, surface, borderColor)),
                                   const SizedBox(height: 8),
                                   IgnorePointer(ignoring: !_isEditing, child: _acceptSwitch('¿Exiges Meet & Greet antes del primer servicio?', _requireMeetAndGreet, (v) => setState(() => _requireMeetAndGreet = v), textColor, subtextColor, surface, borderColor)),
+                                  const SizedBox(height: 8),
+                                  IgnorePointer(ignoring: !_isEditing, child: _acceptSwitch('Reserva instantánea (sin esperar tu aprobación)', _instantBookingEnabled, (v) => setState(() => _instantBookingEnabled = v), textColor, subtextColor, surface, borderColor)),
+                                  if (_instantBookingEnabled) Padding(
+                                    padding: const EdgeInsets.only(top: 6, left: 4),
+                                    child: Text('Las reservas pagadas se confirman solas, sin que tengas que aceptarlas a mano.',
+                                        style: TextStyle(color: subtextColor, fontSize: 11.5)),
+                                  ),
                                   if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
                                     const SizedBox(height: 16),
                                     SizedBox(key: _keyHandleAnxious, height: 0),

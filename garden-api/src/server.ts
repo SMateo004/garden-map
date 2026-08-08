@@ -60,6 +60,7 @@ import { iniciarJobHospedajeLocationPing } from './jobs/hospedaje-location-ping.
 import { iniciarJobRecordatorioCapacitaciones } from './jobs/training-reminder.job.js';
 import { iniciarJobSosRetry } from './jobs/sos-retry.job.js';
 import { iniciarJobRecurringBookingGeneration } from './jobs/recurring-booking-generation.job.js';
+import { iniciarJobInstantBookingAutoAccept } from './jobs/instant-booking-auto-accept.job.js';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
@@ -257,6 +258,7 @@ async function start() {
     iniciarJobHospedajeLocationPing();
     iniciarJobSosRetry();
     iniciarJobRecurringBookingGeneration();
+    iniciarJobInstantBookingAutoAccept();
   }, 10000);
 
   // Auto-release payment after service ends if owner hasn't reviewed

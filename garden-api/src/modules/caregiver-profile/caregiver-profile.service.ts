@@ -301,6 +301,7 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.acceptPuppies !== undefined) updateData.acceptPuppies = body.acceptPuppies;
   if (body.acceptSeniors !== undefined) updateData.acceptSeniors = body.acceptSeniors;
   if (body.requireMeetAndGreet !== undefined) updateData.requireMeetAndGreet = body.requireMeetAndGreet;
+  if ((body as any).instantBookingEnabled !== undefined) updateData.instantBookingEnabled = (body as any).instantBookingEnabled;
   if (body.sizesAccepted !== undefined) {
     updateData.sizesAccepted = { set: body.sizesAccepted as string[] };
     logger.info('patchProfile: saving sizesAccepted', { userId, sizesAccepted: body.sizesAccepted });

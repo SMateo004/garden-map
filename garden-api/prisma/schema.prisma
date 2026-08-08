@@ -198,6 +198,13 @@ model CaregiverProfile {
   /// Si es true, el cuidador exige completar un Meet & Greet antes de
   /// confirmar cualquier reserva nueva con un cliente.
   requireMeetAndGreet             Boolean                     @default(false)
+  /// Si es true, las reservas pagadas de este cuidador se auto-aceptan (ver
+  /// jobs/instant-booking-auto-accept.job.ts) en vez de esperar que él la
+  /// apruebe a mano — ≈ "Instant Book" de Airbnb. Incompatible en la
+  /// práctica con requireMeetAndGreet (ese flujo ya pausa antes del pago),
+  /// pero no se valida como mutuamente excluyente para no bloquear al
+  /// cuidador — la app se lo advierte al activarlo.
+  instantBookingEnabled           Boolean                     @default(false)
   sizesAccepted                   String[]
   noAcceptBreeds                  Boolean?
   breedsWhy                       String?                     @db.VarChar(500)
