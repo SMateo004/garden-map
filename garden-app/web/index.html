@@ -15,7 +15,7 @@
   }
   // Fallback: si alguien llega directo a /login, /marketplace, etc. redirigir a Flutter
   var p = window.location.pathname;
-  var flutterRoutes = ['/login', '/register', '/marketplace', '/become-caregiver', '/booking', '/profile', '/admin'];
+  var flutterRoutes = ['/login', '/register', '/marketplace', '/become-caregiver', '/booking', '/profile', '/admin', '/track'];
   if (flutterRoutes.some(function(r){ return p === r || p.startsWith(r + '/'); })) {
     window.location.replace('/app.html#' + p + window.location.search);
   }
