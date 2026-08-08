@@ -1884,6 +1884,33 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 _securityRow(Icons.verified_user_outlined,
                     'Garden custodia el dinero hasta confirmar que todo salió bien.',
                     textColor, subtextColor),
+                const SizedBox(height: 8),
+                // Fondo de Garantía Garden — ya existe como cláusula real en
+                // los Términos (legal_screen.dart, sección 12), acá solo se
+                // hace visible en el momento en que más importa (antes de
+                // pagar). Cifra y condiciones textuales tal como están en el
+                // contrato — no es una promesa nueva ni inflada.
+                _securityRow(Icons.health_and_safety_outlined,
+                    'Fondo de Garantía Garden: hasta Bs 2.000 en gastos veterinarios de emergencia por incidente, cuando no sea negligencia del cuidador.',
+                    textColor, subtextColor),
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.only(left: 22),
+                      minimumSize: const Size(0, 28),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: () {
+                      HapticFeedback.selectionClick();
+                      context.push('/terms');
+                    },
+                    child: const Text('Ver condiciones completas',
+                        style: TextStyle(
+                            color: GardenColors.success, fontSize: 11.5, fontWeight: FontWeight.w700)),
+                  ),
+                ),
               ],
             ),
           ),
