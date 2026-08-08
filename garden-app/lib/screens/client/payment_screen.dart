@@ -418,6 +418,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   double get _totalAmount => _serviceAmount + _donationAmount;
 
+  // ── Desglose de tarifa (solo para el resumen final, ver _buildPaymentBody) ──
+  // Valores reales del booking ya calculados server-side (booking.service.ts,
+  // COMMISION_RATE configurable) — nunca se hardcodea un %.
+  double get _serviceCommission {
+    final raw = _booking?['commissionAmount'];
+    return double.tryParse(raw?.toString() ?? '0') ?? 0.0;
+  }
+
+  double get _serviceSubtotal => (_serviceAmount - _serviceCommission).clamp(0, double.infinity);
+
   bool get _walletCoversAll => _useWallet && _totalAmount > 0 && _walletBalance >= _totalAmount;
   double get _walletCoverage => _useWallet ? _walletBalance.clamp(0, _totalAmount) : 0.0;
   double get _remainingAfterWallet => (_totalAmount - _walletCoverage).clamp(0, double.infinity);
@@ -1555,20 +1565,37 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 borderRadius: BorderRadius.circular(GardenRadius.lg),
                 border: Border.all(color: GardenColors.primary.withValues(alpha: 0.18)),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.end,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Total a pagar',
-                      style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
-                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    Text('Bs ${_totalAmount.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                            color: GardenColors.primary, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
-                    if (_donationAmount > 0)
-                      Text('servicio Bs ${_serviceAmount.toStringAsFixed(2)} + donación Bs ${_donationAmount.toStringAsFixed(2)}',
-                          style: TextStyle(color: subtextColor, fontSize: 11)),
-                  ]),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('Total a pagar',
+                          style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w700)),
+                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        Text('Bs ${_totalAmount.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                                color: GardenColors.primary, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                        if (_donationAmount > 0)
+                          Text('servicio Bs ${_serviceAmount.toStringAsFixed(2)} + donación Bs ${_donationAmount.toStringAsFixed(2)}',
+                              style: TextStyle(color: subtextColor, fontSize: 11)),
+                      ]),
+                    ],
+                  ),
+                  // ── Desglose de tarifa — solo acá, en el resumen final
+                  // antes de pagar. Valores reales del booking (nunca un %
+                  // hardcodeado), como pediste: precio del servicio y
+                  // comisión de Garden, sin IVA (eso queda interno).
+                  if (_booking != null) ...[
+                    const SizedBox(height: 12),
+                    Divider(height: 1, color: GardenColors.primary.withValues(alpha: 0.15)),
+                    const SizedBox(height: 10),
+                    _feeBreakdownLine('Precio del servicio', _serviceSubtotal, subtextColor),
+                    const SizedBox(height: 4),
+                    _feeBreakdownLine('Comisión Garden', _serviceCommission, subtextColor),
+                  ],
                 ],
               ),
             ),
@@ -2462,6 +2489,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   // ── Small widgets ────────────────────────────────────────────────────────────
+
+  Widget _feeBreakdownLine(String label, double amount, Color subtextColor) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: subtextColor, fontSize: 12)),
+          Text('Bs ${amount.toStringAsFixed(2)}',
+              style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+        ],
+      );
 
   Widget _securityRow(IconData icon, String text, Color textColor, Color subtextColor) =>
       Row(
