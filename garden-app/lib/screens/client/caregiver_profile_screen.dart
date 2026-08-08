@@ -10,6 +10,7 @@ import '../../services/agentes_service.dart';
 import '../../widgets/garden_logo_loader.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 class CaregiverProfileScreen extends StatefulWidget {
   final String caregiverId;
@@ -1070,6 +1071,16 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         );
                       }).toList()),
                       const SizedBox(height: 24),
+                      // Video de presentación (YouTube, opcional) — sube la
+                      // confianza más que las fotos estáticas.
+                      if ((_caregiver!['videoUrl'] as String? ?? '').isNotEmpty) ...[
+                        Divider(color: borderColor),
+                        const SizedBox(height: 20),
+                        Text('Video de presentación', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 12),
+                        _CaregiverIntroVideo(url: _caregiver!['videoUrl'] as String),
+                        const SizedBox(height: 24),
+                      ],
                       // Calendario de disponibilidad (próximos 14 días, PASEO) —
                       // se muestra ANTES de que el cliente intente reservar, no
                       // solo cuando el intento falla.
@@ -1775,6 +1786,54 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   String _homeTypeLabel(String type) {
     const labels = {'CASA': '🏠 Casa', 'APARTAMENTO': '🏢 Apartamento', 'APARTMENT': '🏢 Apartamento', 'HOUSE': '🏠 Casa', 'FINCA': '🌾 Finca', 'LOCAL': '🏪 Local'};
     return labels[type] ?? type;
+  }
+}
+
+// ── Video de presentación del cuidador (YouTube) ──────────────────────────────
+
+class _CaregiverIntroVideo extends StatefulWidget {
+  final String url;
+  const _CaregiverIntroVideo({required this.url});
+
+  @override
+  State<_CaregiverIntroVideo> createState() => _CaregiverIntroVideoState();
+}
+
+class _CaregiverIntroVideoState extends State<_CaregiverIntroVideo> {
+  YoutubePlayerController? _controller;
+  bool _invalidUrl = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final videoId = YoutubePlayerController.convertUrlToId(widget.url);
+    if (videoId == null) {
+      _invalidUrl = true;
+      return;
+    }
+    _controller = YoutubePlayerController.fromVideoId(
+      videoId: videoId,
+      autoPlay: false,
+      params: const YoutubePlayerParams(showControls: true, showFullscreenButton: true),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller?.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_invalidUrl || _controller == null) return const SizedBox.shrink();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: YoutubePlayer(controller: _controller!),
+      ),
+    );
   }
 }
 

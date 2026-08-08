@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/extra_services_editor.dart';
@@ -145,6 +146,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   bool _acceptSeniors = false;
   bool _requireMeetAndGreet = false;
   bool _instantBookingEnabled = false;
+  final TextEditingController _videoUrlController = TextEditingController();
 
   // Selecciones
   List<String> _selectedHomeTypes = [];
@@ -384,6 +386,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     _acceptSeniors = profile['acceptSeniors'] as bool? ?? false;
     _requireMeetAndGreet = profile['requireMeetAndGreet'] as bool? ?? false;
     _instantBookingEnabled = profile['instantBookingEnabled'] as bool? ?? false;
+    _videoUrlController.text = profile['videoUrl'] as String? ?? '';
 
     // Mapear texto guardado a chips predefinidas
     final anxiousText = profile['handleAnxious'] as String? ?? '';
@@ -614,6 +617,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     if (_acceptedSizes.isEmpty) {
       return _showValidationError('Selecciona al menos un tamaño de mascota aceptado', scrollTo: _keySizes);
     }
+    final videoText = _videoUrlController.text.trim();
+    if (videoText.isNotEmpty && YoutubePlayerController.convertUrlToId(videoText) == null) {
+      return _showValidationError('El link del video de presentación no parece de YouTube');
+    }
 
     // Servicios y precios — si un servicio está activo, su precio y demás
     // secciones que aparecen para él NO pueden guardarse vacías.
@@ -730,6 +737,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         'acceptSeniors': _acceptSeniors,
         'requireMeetAndGreet': _requireMeetAndGreet,
         'instantBookingEnabled': _instantBookingEnabled,
+        'videoUrl': _videoUrlController.text.trim(),
         'sizesAccepted': _acceptedSizes,
         'animalTypes': _acceptedPetTypes,
         // Top-level, no dentro de serviceDetails — así el backend los guarda
@@ -1641,6 +1649,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                     child: Text('Las reservas pagadas se confirman solas, sin que tengas que aceptarlas a mano.',
                                         style: TextStyle(color: subtextColor, fontSize: 11.5)),
                                   ),
+                                  const SizedBox(height: 16),
+                                  _videoUrlField(textColor, subtextColor, surface, borderColor),
                                   if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
                                     const SizedBox(height: 16),
                                     SizedBox(key: _keyHandleAnxious, height: 0),
@@ -2159,6 +2169,15 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _acceptSwitch('¿Aceptas mascotas mayores?', _acceptSeniors, (val) => setState(() => _acceptSeniors = val), textColor, subtextColor, surface, borderColor)),
             const SizedBox(height: 8),
             IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _acceptSwitch('¿Exiges Meet & Greet antes del primer servicio?', _requireMeetAndGreet, (val) => setState(() => _requireMeetAndGreet = val), textColor, subtextColor, surface, borderColor)),
+            const SizedBox(height: 8),
+            IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _acceptSwitch('Reserva instantánea (sin esperar tu aprobación)', _instantBookingEnabled, (val) => setState(() => _instantBookingEnabled = val), textColor, subtextColor, surface, borderColor)),
+            if (_instantBookingEnabled) Padding(
+              padding: const EdgeInsets.only(top: 6, left: 4),
+              child: Text('Las reservas pagadas se confirman solas, sin que tengas que aceptarlas a mano.',
+                  style: TextStyle(color: subtextColor, fontSize: 11.5)),
+            ),
+            const SizedBox(height: 16),
+            _videoUrlField(textColor, subtextColor, surface, borderColor),
 
             // Situaciones especiales — solo para no-amateurs
             if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
@@ -2249,6 +2268,43 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
           ),
         ),
         if (coherenceKey != null) _coherenceWarningText(coherenceKey),
+      ],
+    );
+  }
+
+  // Video de presentación (link de YouTube) — mismo patrón que las
+  // capacitaciones (Training.videoUrl), evita construir upload de video
+  // propio. Opcional; se valida solo que el link sea de YouTube antes de
+  // guardar, con YoutubePlayerController.convertUrlToId (mismo parser que
+  // usa trainings_screen.dart para reproducirlo después).
+  Widget _videoUrlField(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    final text = _videoUrlController.text.trim();
+    final looksValid = text.isEmpty || YoutubePlayerController.convertUrlToId(text) != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Video de presentación (opcional)', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 4),
+        Text('Pegá un link de YouTube — sube la confianza más que cualquier foto.',
+            style: TextStyle(color: subtextColor, fontSize: 11.5)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _videoUrlController,
+          enabled: _isEditing || widget.embeddedMode,
+          onChanged: (_) => setState(() {}),
+          style: TextStyle(color: textColor, fontSize: 14),
+          decoration: InputDecoration(
+            hintText: 'https://youtube.com/watch?v=...',
+            hintStyle: TextStyle(color: subtextColor, fontSize: 12.5),
+            filled: true,
+            fillColor: surface,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderColor)),
+            errorText: looksValid ? null : 'Ese link no parece de YouTube',
+            errorStyle: const TextStyle(color: GardenColors.error, fontSize: 11),
+          ),
+        ),
       ],
     );
   }
