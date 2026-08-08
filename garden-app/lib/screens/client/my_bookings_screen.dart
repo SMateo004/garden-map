@@ -1352,6 +1352,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
             actions: [
               NotificationBell(token: _clientToken, baseUrl: _baseUrl),
               IconButton(
+                tooltip: 'Paseos recurrentes',
+                icon: Icon(Icons.repeat_rounded, color: subtextColor, size: 20),
+                onPressed: () => context.push('/recurring-bookings'),
+              ),
+              IconButton(
                 icon: Icon(Icons.refresh_rounded, color: subtextColor, size: 20),
                 onPressed: _loadBookings,
               ),

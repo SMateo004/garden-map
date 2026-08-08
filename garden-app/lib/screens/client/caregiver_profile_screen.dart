@@ -277,6 +277,8 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
               if (offersPaseo) ...[
                 _ServiceOption(icon: Icons.directions_walk, label: 'Paseo', sublabel: 'Bs $walkDisplayPrice/$walkDisplayUnit', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: {...bookingExtra, 'serviceType': 'PASEO'}); }),
                 const SizedBox(height: 12),
+                _ServiceOption(icon: Icons.repeat_rounded, label: 'Paseo recurrente', sublabel: 'Se repite solo cada semana', onTap: () { Navigator.pop(sheetCtx); context.push('/recurring-booking/${widget.caregiverId}', extra: {'caregiver': _caregiver, 'pets': _clientPets}); }),
+                const SizedBox(height: 12),
               ],
               if (offersGuarderia)
                 _ServiceOption(icon: Icons.home_work_outlined, label: 'Guardería', sublabel: 'Bs $pricePerGuarderia/hora', onTap: () { Navigator.pop(sheetCtx); context.push('/booking/${widget.caregiverId}', extra: {...bookingExtra, 'serviceType': 'GUARDERIA'}); }),

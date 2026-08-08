@@ -51,6 +51,7 @@ model User {
   pinAttempts                   Int                           @default(0)
   pinLockUntil                  DateTime?
   clientBookings               Booking[]                     @relation("ClientBookings")
+  recurringBookingSeries       RecurringBookingSeries[]
   caregiverProfile             CaregiverProfile?
   clientProfile                ClientProfile?
   identityVerificationSessions IdentityVerificationSession[]
@@ -303,6 +304,7 @@ model CaregiverProfile {
   emergencyContacts               Json?
   availability                    Availability[]
   bookings                        Booking[]                   @relation("CaregiverBookings")
+  recurringBookingSeries          RecurringBookingSeries[]
   user                            User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
   reviews                         Review[]
   sugerencias                     SugerenciaPrecio[]
@@ -370,6 +372,10 @@ model Booking {
   petAge                     Int?
   petSize                    PetSize?
   specialNeeds               String?
+  /// Si esta reserva fue generada automáticamente por una serie de paseos
+  /// recurrentes, referencia a esa serie — null en reservas normales.
+  recurringSeriesId          String?
+  recurringSeries            RecurringBookingSeries? @relation(fields: [recurringSeriesId], references: [id], onDelete: SetNull)
   /// NIT ingresado por el cliente al momento de pagar ESTA reserva (snapshot,
   /// no sigue cambios posteriores a ClientProfile.nit). "0" cuando el
   /// cliente no cargó ninguno — igual se emite factura con ese valor.
@@ -489,7 +495,52 @@ model Booking {
   @@index([status, startDate])
   @@index([paidAt])
   @@index([petId])
+  @@index([recurringSeriesId])
   @@map("bookings")
+}
+
+enum RecurringSeriesStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+/// Serie de paseos recurrentes (ej. "todos los mar/jue 15:00") — genera
+/// automáticamente la próxima reserva real (Booking) con antelación
+/// (generateDaysAheadDays) vía el job recurring-booking-generation.job.ts,
+/// reusando createBooking() para heredar TODA la validación existente
+/// (disponibilidad, mascotas, precios) sin duplicarla.
+model RecurringBookingSeries {
+  id                   String                 @id @default(uuid())
+  clientId             String
+  caregiverId          String
+  /// v1: solo PASEO — hospedaje/guardería recurrente queda para más adelante.
+  serviceType          ServiceType            @default(PASEO)
+  /// 1=lunes … 7=domingo (ISO 8601), sin duplicados.
+  daysOfWeek           Int[]
+  timeSlot             TimeSlot?
+  startTime            String?                @db.VarChar(5)
+  duration             Int
+  petIds               String[]
+  status               RecurringSeriesStatus  @default(ACTIVE)
+  /// Próxima fecha calendario (uno de daysOfWeek) para la que generar la
+  /// siguiente ocurrencia — se recalcula cada vez que el job genera o
+  /// salta una fecha (cuidador sin cupo).
+  nextRunDate          DateTime               @db.Date
+  generateDaysAheadDays Int                   @default(2)
+  /// Último intento del job para esta serie, éxito o no — para diagnóstico,
+  /// no bloquea reintentos.
+  lastRunAt            DateTime?
+  lastRunError         String?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  client                User                  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  caregiver             CaregiverProfile      @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+  occurrences           Booking[]
+
+  @@index([clientId])
+  @@index([status, nextRunDate])
+  @@map("recurring_booking_series")
 }
 
 /// Una fila por mascota en una reserva multi-mascota.

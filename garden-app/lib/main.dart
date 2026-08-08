@@ -37,6 +37,7 @@ import 'screens/service/service_execution_screen.dart';
 import 'screens/service/meet_and_greet_screen.dart';
 import 'screens/service/gps_tracking_screen.dart';
 import 'screens/service/public_track_screen.dart';
+import 'screens/client/recurring_bookings_screen.dart';
 import 'screens/dispute/dispute_screen.dart';
 import 'screens/client/favorites_screen.dart';
 import 'screens/client/client_shell_screen.dart';
@@ -604,6 +605,24 @@ final GoRouter _router = GoRouter(
           petPhoto: extra['petPhoto'] as String?,
         );
       },
+    ),
+    GoRoute(
+      path: '/recurring-booking/:caregiverId',
+      name: 'recurringBookingCreate',
+      builder: (context, state) {
+        final caregiverId = state.pathParameters['caregiverId']!;
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        return RecurringBookingScreen(
+          caregiverId: caregiverId,
+          caregiver: extra['caregiver'] as Map<String, dynamic>?,
+          pets: extra['pets'] as List<dynamic>?,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/recurring-bookings',
+      name: 'recurringBookingsList',
+      builder: (context, state) => const RecurringBookingScreen(),
     ),
     GoRoute(
       path: '/track/:bookingId/:token',
