@@ -4,7 +4,7 @@ import 'dart:ui' as ui;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter/services.dart' show HapticFeedback, FilteringTextInputFormatter;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
@@ -92,11 +92,41 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _cardPaymentEnabled = false; // fail-closed default — never fail open on a payment feature
   SavedCard? _savedCard;
 
+  // NIT para la factura — se pide siempre (QR o Tarjeta) sin bloquear el
+  // pago si se deja vacío (ver comentario en booking.service.ts: cae a "0").
+  // Se pre-carga con el último guardado en el perfil del cliente y queda
+  // editable antes de cada servicio.
+  final TextEditingController _nitCtrl = TextEditingController();
+  final TextEditingController _razonSocialCtrl = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     _loadData();
     _loadCardPaymentInfo();
+    _loadBillingInfo();
+  }
+
+  /// Precarga el NIT/razón social guardados del perfil del cliente, si los
+  /// hay — no bloquea el resto de la pantalla si falla (queda vacío y el
+  /// cliente puede cargarlo de cero).
+  Future<void> _loadBillingInfo() async {
+    final token = AuthState.token;
+    if (token.isEmpty) return;
+    try {
+      final res = await http.get(Uri.parse('$_baseUrl/client/my-profile'),
+          headers: {'Authorization': 'Bearer $token'});
+      final data = jsonDecode(res.body);
+      if (mounted && data['success'] == true) {
+        final profile = data['data'] as Map<String, dynamic>?;
+        setState(() {
+          _nitCtrl.text = profile?['nit'] as String? ?? '';
+          _razonSocialCtrl.text = profile?['nitRazonSocial'] as String? ?? '';
+        });
+      }
+    } catch (_) {
+      // Sin red — el cliente puede cargar su NIT igual, se guardará al pagar.
+    }
   }
 
   /// Carga el setting admin `cardPaymentEnabled` (público, sin auth) y la
@@ -193,6 +223,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
   void dispose() {
     _stopPolling();
     _donationController.dispose();
+    _nitCtrl.dispose();
+    _razonSocialCtrl.dispose();
     super.dispose();
   }
 
@@ -438,6 +470,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
         if (mounted) setState(() => _booking = bk);
       }
 
+      final nit = _nitCtrl.text.trim();
+      final razonSocial = _razonSocialCtrl.text.trim();
+
       Map<String, dynamic> body;
       if (_walletCoversAll) {
         body = {'method': 'wallet', if (_donationAmount > 0) 'donationAmount': _donationAmount};
@@ -446,6 +481,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
       } else {
         body = {'method': 'qr', if (_donationAmount > 0) 'donationAmount': _donationAmount};
       }
+      // Se manda siempre que haya algo cargado — si se deja vacío, el
+      // backend guarda "0" en el snapshot de la reserva sin bloquear el pago.
+      if (nit.isNotEmpty) body['nit'] = nit;
+      if (razonSocial.isNotEmpty) body['nitRazonSocial'] = razonSocial;
 
       final response = await http.post(
         Uri.parse('$_baseUrl/bookings/$_bookingId/payment'),
@@ -1012,6 +1051,85 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
+  // ── Datos de facturación (NIT) ──────────────────────────────────────────
+  // Se pide siempre (QR o Tarjeta), pero nunca bloquea el pago: si se deja
+  // vacío, el backend guarda "0" en el snapshot de la reserva y la factura
+  // se emite igual. Lo que sí se ingrese acá se guarda como default en el
+  // perfil del cliente y se pre-carga en su próximo servicio (editable cada
+  // vez, ver _loadBillingInfo).
+  Widget _buildBillingSection(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.receipt_long_outlined, color: GardenColors.primary, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('Datos de facturación',
+                    style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13.5)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text('Se usará para tu factura de este servicio. Si lo dejas vacío, se emitirá con NIT 0.',
+              style: TextStyle(color: subtextColor, fontSize: 11)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _nitCtrl,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            style: TextStyle(color: textColor, fontSize: 13),
+            decoration: InputDecoration(
+              labelText: 'NIT',
+              hintText: '0 (opcional)',
+              hintStyle: TextStyle(color: subtextColor, fontSize: 12),
+              labelStyle: TextStyle(color: subtextColor, fontSize: 12.5),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: borderColor),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: GardenColors.primary, width: 1.5),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _razonSocialCtrl,
+            style: TextStyle(color: textColor, fontSize: 13),
+            decoration: InputDecoration(
+              labelText: 'Razón social (opcional)',
+              hintText: 'Nombre para la factura',
+              hintStyle: TextStyle(color: subtextColor, fontSize: 12),
+              labelStyle: TextStyle(color: subtextColor, fontSize: 12.5),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: borderColor),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: GardenColors.primary, width: 1.5),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDonationSection(Color textColor, Color subtextColor, Color surface, Color borderColor) {
     final presets = [5.0, 10.0, 20.0];
     // Antes usaba una paleta crema/amarillo/marrón totalmente ajena a la
@@ -1564,6 +1682,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
           const SizedBox(height: 8),
           Divider(height: 1, color: borderColor),
+          const SizedBox(height: 20),
+
+          // ── Datos de facturación (NIT) — se pide siempre, para QR o Tarjeta.
+          // No bloquea el pago si se deja vacío (cae a NIT "0" en el backend).
+          _buildBillingSection(textColor, subtextColor, surface, borderColor),
           const SizedBox(height: 20),
 
           // ── Billetera Garden — sección separada, lógica intacta ──────────

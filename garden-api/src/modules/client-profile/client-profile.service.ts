@@ -54,6 +54,9 @@ export async function patchProfile(userId: string, body: PatchClientProfileBody)
   const data: Prisma.ClientProfileUpdateInput = {
     ...(body.address !== undefined && { address: body.address }),
     ...(body.phone !== undefined && { phone: body.phone }),
+    // String vacío se guarda como null — permite borrar un NIT/razón social cargado antes.
+    ...(body.nit !== undefined && { nit: body.nit.trim() || null }),
+    ...(body.nitRazonSocial !== undefined && { nitRazonSocial: body.nitRazonSocial.trim() || null }),
   };
 
   const updated = await prisma.clientProfile.update({

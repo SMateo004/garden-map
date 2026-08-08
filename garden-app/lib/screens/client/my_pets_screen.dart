@@ -914,7 +914,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
               controller: _specialCtrl,
               style: TextStyle(color: textColor),
               maxLines: 2,
-              decoration: fieldDeco('Necesidades especiales', icon: Icons.medical_services_outlined),
+              decoration: fieldDeco('Necesidades especiales (opcional)', icon: Icons.medical_services_outlined),
             ),
 
             // ── Fotos adicionales ──────────────────────────────────────

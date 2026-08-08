@@ -1418,7 +1418,9 @@ export async function initPayment(
   clientId: string,
   method: InitPaymentBody['method'],
   walletContribution: number = 0,
-  donationAmount: number = 0
+  donationAmount: number = 0,
+  nit?: string,
+  nitRazonSocial?: string
 ): Promise<{
   qrId?: string; qrImageUrl?: string; qrImageType?: string; qrExpiresAt?: string; status: string;
   walletDeducted?: number; remainingAmount?: number; paidWithWallet?: boolean;
@@ -1441,6 +1443,32 @@ export async function initPayment(
       throw new BookingValidationError(
         'Solo se puede iniciar pago en reservas pendientes de pago'
       );
+    }
+
+    // ── NIT para la factura de esta reserva ───────────────────────────────
+    // Snapshot en la propia reserva (no sigue cambios futuros al default del
+    // perfil) — vacío/ausente cae a "0", igual se emite factura con ese
+    // valor (la lógica de emisión se resuelve más adelante, pero el dato
+    // debe quedar guardado desde ya). Si el cliente sí cargó algo, además
+    // actualiza su default guardado en ClientProfile para pre-cargarlo en su
+    // próximo servicio — un envío vacío NO borra ese default ya guardado.
+    const trimmedNit = nit?.trim();
+    const trimmedRazonSocial = nitRazonSocial?.trim();
+    await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        nit: trimmedNit || '0',
+        nitRazonSocial: trimmedRazonSocial || null,
+      },
+    });
+    if (trimmedNit || trimmedRazonSocial) {
+      await tx.clientProfile.updateMany({
+        where: { userId: clientId },
+        data: {
+          ...(trimmedNit && { nit: trimmedNit }),
+          ...(trimmedRazonSocial && { nitRazonSocial: trimmedRazonSocial }),
+        },
+      });
     }
 
     const totalAmount = Number(booking.totalAmount);

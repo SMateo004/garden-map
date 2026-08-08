@@ -250,7 +250,7 @@ export const initPayment = asyncHandler(async (req: Request, res: Response) => {
   const bookingId = req.params.id!;
   const clientId = req.user!.userId;
   const body = initPaymentBodySchema.parse(req.body);
-  const result = await bookingService.initPayment(bookingId, clientId, body.method, body.walletContribution ?? 0, body.donationAmount ?? 0);
+  const result = await bookingService.initPayment(bookingId, clientId, body.method, body.walletContribution ?? 0, body.donationAmount ?? 0, body.nit, body.nitRazonSocial);
   res.json({ success: true, data: result });
 });
 

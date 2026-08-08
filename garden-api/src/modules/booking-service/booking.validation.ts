@@ -229,6 +229,14 @@ export const initPaymentBodySchema = z.object({
   walletContribution: z.coerce.number().min(0).optional().default(0),
   /// Donación voluntaria al hogar de perros (Bs). Se suma al total del QR; 100% va al hogar.
   donationAmount: z.coerce.number().min(0).max(10000).optional().default(0),
+  /// NIT para la factura de ESTA reserva — solo dígitos. Vacío/ausente → se
+  /// guarda "0" en el snapshot de la reserva (igual se emite factura).
+  nit: z
+    .string()
+    .max(20)
+    .regex(/^\d*$/, 'El NIT solo puede contener números')
+    .optional(),
+  nitRazonSocial: z.string().max(200).optional(),
 });
 
 export type InitPaymentBody = z.infer<typeof initPaymentBodySchema>;

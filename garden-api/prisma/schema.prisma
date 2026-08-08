@@ -370,6 +370,12 @@ model Booking {
   petAge                     Int?
   petSize                    PetSize?
   specialNeeds               String?
+  /// NIT ingresado por el cliente al momento de pagar ESTA reserva (snapshot,
+  /// no sigue cambios posteriores a ClientProfile.nit). "0" cuando el
+  /// cliente no cargó ninguno — igual se emite factura con ese valor.
+  nit                        String?          @db.VarChar(20)
+  /// Razón social ingresada junto con el NIT de arriba para esta reserva.
+  nitRazonSocial             String?          @db.VarChar(200)
   totalAmount                Decimal          @db.Decimal(10, 2)
   pricePerUnit               Decimal          @db.Decimal(10, 2)
   commissionAmount           Decimal          @db.Decimal(10, 2)
@@ -641,6 +647,14 @@ model ClientProfile {
   cityZone             CityZone? @relation(fields: [zoneId], references: [id])
   phone                String?   @db.VarChar(20)
   bio                  String?
+  /// NIT guardado del cliente para facturación — se pre-carga en cada pago y
+  /// es editable antes de cada servicio (ver Booking.nit para el snapshot
+  /// real usado en cada reserva). Null hasta que el cliente lo carga la
+  /// primera vez; si en un pago lo deja vacío, el snapshot de esa reserva
+  /// cae a "0" pero esto (el default guardado) no se pisa con vacío.
+  nit                  String?   @db.VarChar(20)
+  /// Razón social asociada al NIT de arriba, mismo criterio de guardado.
+  nitRazonSocial       String?   @db.VarChar(200)
   /// URL absoluta Cloudinary de la foto principal de mascota (p. ej. primera mascota).
   petPhoto             String?
   /// true = tiene al menos una mascota completa (name, size, photoUrl); permite reservas.
