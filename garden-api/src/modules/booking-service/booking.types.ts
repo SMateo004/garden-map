@@ -26,6 +26,11 @@ export interface BookingCreateResult {
   petBreed?: string | null;
   petAge?: number | null;
   specialNeeds?: string | null;
+  /** NIT/razón social ingresados por el cliente al pagar ESTA reserva
+   * (snapshot — ver comentario en el schema de Booking). "0" cuando no
+   * cargó ninguno; igual se emite factura con ese valor. */
+  nit?: string | null;
+  nitRazonSocial?: string | null;
   caregiverId: string;
   clientId: string;
   createdAt: Date;
@@ -145,6 +150,8 @@ export function bookingToResponse(b: any): BookingCreateResult {
     petBreed: b.petBreed ?? null,
     petAge: b.petAge ?? null,
     specialNeeds: b.specialNeeds ?? null,
+    nit: b.nit ?? null,
+    nitRazonSocial: b.nitRazonSocial ?? null,
     caregiverId: b.caregiverId,
     clientId: b.clientId,
     createdAt: b.createdAt,
