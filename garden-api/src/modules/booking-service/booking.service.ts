@@ -1115,6 +1115,53 @@ async function assertPaseoAvailability(
 }
 
 // ---------------------------------------------------------------------------
+// Calendario de disponibilidad (lectura, para mostrar ANTES de reservar)
+// ---------------------------------------------------------------------------
+
+/**
+ * Devuelve, para cada uno de los próximos `days` días (mismo límite de 30
+ * días que ya aplica al reservar), si el cuidador tiene al menos un bloque
+ * horario (MANANA/TARDE/NOCHE) libre para PASEO — reusando
+ * assertPaseoAvailability() en modo solo-lectura (mismo chequeo real que
+ * corre al momento de reservar), así el calendario nunca puede mostrar
+ * "libre" un día que después falla al intentar reservar de verdad, ni al
+ * revés. No es gratis en queries (hasta 3 chequeos por día), pero es una
+ * vista de perfil, no un endpoint de alto tráfico.
+ */
+export async function getAvailabilityCalendar(
+  caregiverId: string,
+  days: number = 30
+): Promise<Array<{ date: string; available: boolean; slots: Record<string, boolean> }>> {
+  const caregiver = await prisma.caregiverProfile.findFirst({
+    where: { id: caregiverId, status: CaregiverStatus.APPROVED, suspended: false },
+    select: { id: true },
+  });
+  if (!caregiver) throw new NotFoundError('Cuidador no encontrado o no disponible');
+
+  const slots: TimeSlot[] = ['MANANA', 'TARDE', 'NOCHE'] as TimeSlot[];
+  const result: Array<{ date: string; available: boolean; slots: Record<string, boolean> }> = [];
+
+  for (let i = 0; i < days; i++) {
+    const d = new Date();
+    d.setUTCHours(0, 0, 0, 0);
+    d.setUTCDate(d.getUTCDate() + i);
+    const dateStr = d.toISOString().slice(0, 10);
+
+    const slotResults: Record<string, boolean> = {};
+    for (const slot of slots) {
+      try {
+        await assertPaseoAvailability(prisma, caregiverId, dateStr, slot, undefined, undefined, 1, 'PASEO');
+        slotResults[slot] = true;
+      } catch (_) {
+        slotResults[slot] = false;
+      }
+    }
+    result.push({ date: dateStr, available: Object.values(slotResults).some(Boolean), slots: slotResults });
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Walk extension availability check
 // ---------------------------------------------------------------------------
 

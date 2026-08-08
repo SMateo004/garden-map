@@ -9,6 +9,7 @@ router.get('/', caregiverController.list);
 /** GET /api/caregivers/price-stats?zone=X&service=Y — price statistics for wizard */
 router.get('/price-stats', caregiverController.getPriceStats);
 router.get('/:id/availability', caregiverController.getAvailability);
+router.get('/:id/availability-calendar', caregiverController.getAvailabilityCalendar);
 router.get('/:id', caregiverController.getById);
 
 // POST: crear o actualizar perfil (upsert). multipart/form-data + 4–6 fotos (jpg/png, <5MB).

@@ -12,6 +12,7 @@ import { CaregiverNotFoundError, CaregiverProfileValidationError, NotFoundError 
 import { asyncHandler } from '../../shared/async-handler.js';
 import logger from '../../shared/logger.js';
 import prisma from '../../config/database.js';
+import { getAvailabilityCalendar as getAvailabilityCalendarService } from '../booking-service/booking.service.js';
 
 /**
  * GET /api/caregivers
@@ -232,6 +233,17 @@ export const getAvailability = asyncHandler(async (req: Request, res: Response) 
     // El errorHandler global convertirá esto en una respuesta JSON apropiada
     throw err;
   }
+});
+
+/** GET /api/caregivers/:id/availability-calendar — próximos N días (máx 30),
+ * qué días tienen al menos un bloque libre para PASEO. Público, sin auth —
+ * se muestra en el perfil del cuidador ANTES de intentar reservar. */
+export const getAvailabilityCalendar = asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params.id!;
+  const daysRaw = Number(req.query.days);
+  const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.min(daysRaw, 30) : 30;
+  const calendar = await getAvailabilityCalendarService(id, days);
+  res.json({ success: true, data: calendar });
 });
 
 /** GET /api/caregivers/:id — detalle público (solo APPROVED, sin auth). 404 si no existe o no está disponible. */

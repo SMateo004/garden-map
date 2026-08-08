@@ -63,6 +63,100 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
     ]);
     if (mounted) setState(() => _isLoading = false);
     if (token.isNotEmpty) _fetchFavoriteStatus(token);
+    _fetchAvailabilityCalendar();
+  }
+
+  // ── Calendario de disponibilidad (próximos 14 días, solo PASEO) ──────────
+  List<dynamic>? _availabilityCalendar;
+  bool _loadingCalendar = true;
+
+  Future<void> _fetchAvailabilityCalendar() async {
+    try {
+      final res = await http
+          .get(Uri.parse('$_baseUrl/caregivers/${widget.caregiverId}/availability-calendar?days=14'))
+          .timeout(const Duration(seconds: 10));
+      final data = jsonDecode(res.body);
+      if (data['success'] == true && mounted) {
+        setState(() => _availabilityCalendar = data['data'] as List?);
+      }
+    } catch (_) {
+      // Falla silenciosa — es informativo, no bloquea "Reservar ahora".
+    } finally {
+      if (mounted) setState(() => _loadingCalendar = false);
+    }
+  }
+
+  bool _offersPaseoForCalendar() {
+    final services = (_caregiver?['services'] as List?)?.cast<String>() ?? [];
+    return services.contains('PASEO');
+  }
+
+  static const _calDayLabels = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
+
+  Widget _buildAvailabilityCalendar(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    if (_loadingCalendar) {
+      return const SizedBox(
+        height: 70,
+        child: Center(child: GardenLoadingIndicator(size: 20, color: GardenColors.primary)),
+      );
+    }
+    final cal = _availabilityCalendar;
+    if (cal == null || cal.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Disponibilidad para paseo', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 4),
+        Text('Próximos 14 días — libre en al menos un horario',
+            style: TextStyle(color: subtextColor, fontSize: 12)),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 72,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: cal.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, i) {
+              final day = cal[i] as Map<String, dynamic>;
+              final dateStr = day['date'] as String; // YYYY-MM-DD
+              final available = day['available'] == true;
+              final date = DateTime.tryParse(dateStr);
+              final dayNum = date?.day.toString() ?? '?';
+              final dayLabel = date != null ? _calDayLabels[date.weekday - 1] : '';
+              return Container(
+                width: 48,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: available ? GardenColors.success.withValues(alpha: 0.10) : surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: available ? GardenColors.success.withValues(alpha: 0.4) : borderColor,
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(dayLabel, style: TextStyle(color: subtextColor, fontSize: 10.5, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text(dayNum,
+                        style: TextStyle(
+                            color: available ? GardenColors.success : subtextColor,
+                            fontSize: 15, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 4),
+                    Icon(
+                      available ? Icons.check_circle_rounded : Icons.remove_circle_outline_rounded,
+                      size: 12,
+                      color: available ? GardenColors.success : subtextColor,
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _fetchClientZoneStatus(String token) async {
@@ -976,6 +1070,15 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         );
                       }).toList()),
                       const SizedBox(height: 24),
+                      // Calendario de disponibilidad (próximos 14 días, PASEO) —
+                      // se muestra ANTES de que el cliente intente reservar, no
+                      // solo cuando el intento falla.
+                      if (_offersPaseoForCalendar()) ...[
+                        Divider(color: borderColor),
+                        const SizedBox(height: 20),
+                        _buildAvailabilityCalendar(textColor, subtextColor, surface, borderColor),
+                        const SizedBox(height: 24),
+                      ],
                       // Bio — solo bioDetail ("Perfil profesional"). bio
                       // ("Editar mi perfil") es un campo opcional que solo
                       // ve el admin, nunca el cliente — un solo párrafo.
