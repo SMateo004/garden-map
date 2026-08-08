@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
 import * as adminController from './admin.controller.js';
 import * as trainingController from '../training/training.controller.js';
+import * as promoCodeController from '../promo-code/promo-code.controller.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import { exportMonthAsTxt } from '../../services/audit.service.js';
 import prisma from '../../config/database.js';
@@ -10,6 +11,11 @@ const router = Router();
 
 router.use(authMiddleware);
 router.use(requireRole('ADMIN'));
+
+/** Códigos promocionales — sin UI propia todavía (ver comentario en el
+ * schema de Prisma), administrable vía estas rutas + curl/Postman. */
+router.get('/promo-codes', promoCodeController.list);
+router.post('/promo-codes', promoCodeController.create);
 
 /** GET /api/admin/caregivers — todos los cuidadores, paginado, ?status=pendientes|APPROVED|... */
 router.get('/caregivers', adminController.getCaregiversList);

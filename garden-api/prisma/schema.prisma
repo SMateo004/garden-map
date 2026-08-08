@@ -409,6 +409,10 @@ model Booking {
   /// Garden. Null = no se dio propina; una vez seteado no se puede repetir
   /// en la misma reserva (ver addTip en booking.service.ts).
   tipAmount                  Decimal?         @db.Decimal(10, 2)
+  /// Código promocional aplicado a ESTA reserva (snapshot) y cuánto
+  /// descontó — totalAmount de arriba YA viene con el descuento aplicado.
+  promoCode                  String?          @db.VarChar(20)
+  promoDiscountAmount        Decimal?         @db.Decimal(10, 2)
   totalAmount                Decimal          @db.Decimal(10, 2)
   pricePerUnit               Decimal          @db.Decimal(10, 2)
   commissionAmount           Decimal          @db.Decimal(10, 2)
@@ -982,6 +986,34 @@ model AppSettings {
   updatedBy String? // Admin user ID who last changed it
 
   @@map("app_settings")
+}
+
+enum PromoDiscountType {
+  PERCENT
+  FIXED
+}
+
+/// Código promocional (≈ promo codes de Uber) — admin-gestionado
+/// (sin UI propia todavía, ver referral.routes.ts para el patrón de
+/// endpoints; se crean vía script/curl por ahora). Descuento se aplica en
+/// el checkout ANTES de generar el QR/cobrar por billetera (ver
+/// promo-code.service.ts: reduce Booking.totalAmount directamente) — así
+/// initPayment() y el resto del flujo de pago no se tocan para nada.
+model PromoCode {
+  id               String            @id @default(uuid())
+  code             String            @unique @db.VarChar(20)
+  discountType     PromoDiscountType
+  discountValue    Decimal           @db.Decimal(10, 2) // % (0-100) o Bs fijos, según discountType
+  maxUses          Int? // null = sin límite
+  usedCount        Int               @default(0)
+  /// true = solo aplicable si el cliente todavía no completó ningún
+  /// servicio (mismo criterio anti-abuso que el programa de referidos).
+  firstBookingOnly Boolean           @default(true)
+  active           Boolean           @default(true)
+  expiresAt        DateTime?
+  createdAt        DateTime          @default(now())
+
+  @@map("promo_codes")
 }
 
 /// Log of AI agent calls for the admin monitor.

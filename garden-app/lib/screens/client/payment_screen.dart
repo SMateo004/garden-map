@@ -102,6 +102,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
   double _hospedajeRefundFee = 10;
   SavedCard? _savedCard;
 
+  // Código promocional — reduce Booking.totalAmount ANTES de generar el
+  // QR/pagar con billetera (ver promo-code.service.ts), así que una vez
+  // aplicado alcanza con refrescar _booking['totalAmount'] localmente.
+  final TextEditingController _promoController = TextEditingController();
+  bool _applyingPromo = false;
+  String? _promoError;
+  double? _promoDiscountApplied;
+
   // NIT para la factura — se pide siempre (QR o Tarjeta) sin bloquear el
   // pago si se deja vacío (ver comentario en booking.service.ts: cae a "0").
   // Se pre-carga con el último guardado en el perfil del cliente y queda
@@ -244,7 +252,41 @@ class _PaymentScreenState extends State<PaymentScreen> {
     _donationController.dispose();
     _nitCtrl.dispose();
     _razonSocialCtrl.dispose();
+    _promoController.dispose();
     super.dispose();
+  }
+
+  // ── Código promocional ─────────────────────────────────────────────────
+  Future<void> _applyPromoCode() async {
+    final code = _promoController.text.trim();
+    if (code.isEmpty || _bookingId == null) return;
+    HapticFeedback.selectionClick();
+    setState(() { _applyingPromo = true; _promoError = null; });
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/bookings/$_bookingId/promo-code'),
+        headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'code': code}),
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] == true && mounted) {
+        final d = data['data'] as Map<String, dynamic>;
+        setState(() {
+          _booking = {...?_booking, 'totalAmount': d['totalAmount'], 'promoCode': code};
+          _promoDiscountApplied = (d['discountAmount'] as num?)?.toDouble();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('✓ Código aplicado — Bs ${_promoDiscountApplied?.toStringAsFixed(2) ?? '0'} de descuento'),
+          backgroundColor: GardenColors.success,
+        ));
+      } else if (mounted) {
+        setState(() => _promoError = data['error']?['message'] ?? 'Código inválido');
+      }
+    } catch (e) {
+      if (mounted) setState(() => _promoError = 'Error de conexión');
+    } finally {
+      if (mounted) setState(() => _applyingPromo = false);
+    }
   }
 
   // ── Data loading ────────────────────────────────────────────────────────────
@@ -1207,6 +1249,60 @@ class _PaymentScreenState extends State<PaymentScreen> {
         ],
       );
 
+  // ── Código promocional ───────────────────────────────────────────────────
+  Widget _buildPromoCodeSection(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.local_offer_outlined, color: GardenColors.primary, size: 18),
+            const SizedBox(width: 8),
+            Text('Código promocional', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13.5)),
+          ]),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _promoController,
+                  textCapitalization: TextCapitalization.characters,
+                  style: TextStyle(color: textColor, fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'Ej. BIENVENIDO',
+                    hintStyle: TextStyle(color: subtextColor, fontSize: 12),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderColor)),
+                    errorText: _promoError,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _applyingPromo ? null : _applyPromoCode,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: GardenColors.primary,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+                ),
+                child: _applyingPromo
+                    ? const SizedBox(width: 14, height: 14, child: GardenLoadingIndicator(size: 14, color: Colors.white))
+                    : const Text('Aplicar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12.5)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDonationSection(Color textColor, Color subtextColor, Color surface, Color borderColor) {
     final presets = [5.0, 10.0, 20.0];
     // Antes usaba una paleta crema/amarillo/marrón totalmente ajena a la
@@ -2016,6 +2112,29 @@ class _PaymentScreenState extends State<PaymentScreen> {
           // calculateRefund() en el backend.
           if (_booking != null) ...[
             _buildCancellationPolicy(textColor, subtextColor, surface, borderColor),
+            const SizedBox(height: 20),
+          ],
+
+          // ── Código promocional ────────────────────────────────────────────
+          if (_booking != null && _booking!['promoCode'] == null) ...[
+            _buildPromoCodeSection(textColor, subtextColor, surface, borderColor),
+            const SizedBox(height: 20),
+          ],
+          if (_booking?['promoCode'] != null) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: GardenColors.success.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: GardenColors.success.withValues(alpha: 0.3)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.local_offer_rounded, color: GardenColors.success, size: 16),
+                const SizedBox(width: 8),
+                Text('Código "${_booking!['promoCode']}" aplicado',
+                    style: const TextStyle(color: GardenColors.success, fontSize: 12.5, fontWeight: FontWeight.w700)),
+              ]),
+            ),
             const SizedBox(height: 20),
           ],
 

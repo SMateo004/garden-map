@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js';
 import * as bookingController from './booking.controller.js';
 import * as serviceExecutionController from './service-execution.controller.js';
+import * as promoCodeController from '../promo-code/promo-code.controller.js';
 import multer from 'multer';
 
 // Este middleware se usa en /:id/event y /:id/conclude, que reciben tanto fotos
@@ -250,6 +251,14 @@ router.post(
   authMiddleware,
   requireRole('CLIENT'),
   serviceExecutionController.addTip
+);
+
+/** POST /api/bookings/:id/promo-code — aplicar código promocional antes de pagar. */
+router.post(
+  '/:id/promo-code',
+  authMiddleware,
+  requireRole('CLIENT'),
+  promoCodeController.apply
 );
 
 /** POST /api/bookings/:id/mark-ended — el dueño marca que el servicio ya terminó (congela el overtime). */
