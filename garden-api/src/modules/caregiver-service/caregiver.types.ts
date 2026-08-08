@@ -44,6 +44,10 @@ export interface CaregiverListItem {
 export interface CaregiverDetail extends CaregiverListItem {
   bio: string | null;
   bioDetail?: string | null;
+  /** Video de presentación (link de YouTube), opcional. */
+  videoUrl?: string | null;
+  /** Si es true, sus reservas pagadas se auto-aceptan sin esperar aprobación manual. */
+  instantBookingEnabled?: boolean;
   photos: string[];
   availability: {
     hospedaje: string[];
