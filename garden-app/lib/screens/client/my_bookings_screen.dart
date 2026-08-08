@@ -1092,6 +1092,27 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         ),
                     ],
                   ),
+                  // "Reservar de nuevo" — quick win: precarga el mismo
+                  // cuidador/servicio, sin repetir fecha/mascotas (esas se
+                  // eligen frescas, booking_screen.dart las auto-carga con
+                  // solo caregiverId+serviceType).
+                  if (status == 'COMPLETED' && booking['caregiverId'] != null) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => context.push(
+                        '/booking/${booking['caregiverId']}',
+                        extra: {'serviceType': booking['serviceType']},
+                      ),
+                      icon: const Icon(Icons.replay_rounded, size: 16),
+                      label: const Text('Reservar de nuevo', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: GardenColors.primary,
+                        side: const BorderSide(color: GardenColors.primary),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        minimumSize: const Size(double.infinity, 40),
+                      ),
+                    ),
+                  ],
                   // Chat button — visible for all active statuses
                   if (status == 'WAITING_CAREGIVER_APPROVAL' || status == 'CONFIRMED' || status == 'IN_PROGRESS') ...[
                     const SizedBox(height: 8),
