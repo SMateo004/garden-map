@@ -1018,9 +1018,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13),
                 ),
               ),
-              GestureDetector(
-                onTap: () => setState(() => _appBannerDismissed = true),
-                child: Icon(Icons.close_rounded, size: 18, color: subtextColor),
+              // Área de toque real de 44x44 aunque el ícono se vea chico —
+              // un GestureDetector pegado al ícono de 18px era casi imposible
+              // de acertar con el dedo en mobile-web.
+              IconButton(
+                onPressed: () => setState(() => _appBannerDismissed = true),
+                icon: Icon(Icons.close_rounded, size: 18, color: subtextColor),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                splashRadius: 20,
               ),
             ],
           ),

@@ -3057,9 +3057,12 @@ class _BookingScreenState extends State<BookingScreen> {
                           ),
                         ),
                         if (_mgDate != null)
-                          GestureDetector(
-                            onTap: () => setState(() => _mgDate = null),
-                            child: Icon(Icons.close, size: 16, color: subtextColor),
+                          IconButton(
+                            onPressed: () => setState(() => _mgDate = null),
+                            icon: Icon(Icons.close, size: 16, color: subtextColor),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                            splashRadius: 20,
                           ),
                       ],
                     ),

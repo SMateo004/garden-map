@@ -271,9 +271,14 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildFormPanel(Color surface, Color textColor, Color subtextColor, Color borderColor, bool isDark) {
+    // 40px de cada lado estaba pensado para el panel de escritorio (con la
+    // columna centrada a maxWidth 460) — en un celular de 375px eso se comía
+    // ~21% del ancho solo en padding, dejando los campos y botones más
+    // apretados de lo necesario. Con pantallas angostas usamos 20px.
+    final hPad = MediaQuery.of(context).size.width < 480 ? 20.0 : 40.0;
     return Center(
       child: SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 48),
+      padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 48),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 460),
         child: Column(

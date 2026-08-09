@@ -518,9 +518,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Widget _buildFormPanel(Color bg, Color surface, Color surfaceEl, Color textColor, Color subtextColor, Color borderColor, bool isDark) {
+    // Mismo ajuste que login_screen.dart: 40px de padding lateral estaba
+    // pensado para el panel de escritorio, no para un celular de 375px.
+    final hPad = MediaQuery.of(context).size.width < 480 ? 20.0 : 40.0;
     return Center(
       child: SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 48),
+      padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 48),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 460),
         child: Column(
