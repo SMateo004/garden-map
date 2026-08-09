@@ -351,10 +351,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
   void _showSnack(String msg, {required bool isError}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: isError ? GardenColors.error : GardenColors.success,
-    ));
+    GardenErrorDialog.show(context, msg);
   }
 
   // ── BUILD INTRO ──────────────────────────────────────────────────────────
@@ -838,10 +835,7 @@ class _LivenessCheckPage extends StatelessWidget {
           sessionId: sessionId,
           onComplete: () => Navigator.of(context).pop(true),
           onError: (code) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('Error de verificación de vida ($code). Inténtalo de nuevo.'),
-              backgroundColor: GardenColors.error,
-            ));
+            GardenErrorDialog.show(context, 'Error de verificación de vida ($code). Inténtalo de nuevo.');
             Navigator.of(context).pop(false);
           },
         ),

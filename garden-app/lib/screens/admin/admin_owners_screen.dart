@@ -489,15 +489,11 @@ class _OwnerDetailSheetState extends State<_OwnerDetailSheet>
           const SnackBar(content: Text('PIN reseteado — el dueño va a crear uno nuevo la próxima vez'), backgroundColor: GardenColors.success),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['error']?['message'] ?? 'Error'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error');
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error de conexión'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, 'Error de conexión');
       }
     } finally {
       if (mounted) setState(() => _resettingPin = false);

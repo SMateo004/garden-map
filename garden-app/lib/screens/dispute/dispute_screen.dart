@@ -190,9 +190,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
   Future<void> _submitAppeal() async {
     final reason = _appealReasonCtrl.text.trim();
     if (reason.length < 10) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Explica tu apelación con al menos algunas frases.'), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, 'Explica tu apelación con al menos algunas frases.');
       return;
     }
     setState(() => _submittingAppeal = true);
@@ -215,9 +213,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _submittingAppeal = false);
     }
@@ -241,9 +237,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
     } catch (e) {
       setState(() { _step = 0; });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, e.toString());
     }
   }
 
@@ -271,9 +265,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
     } catch (e) {
       setState(() { _step = 0; });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, e.toString());
     }
   }
 
@@ -300,9 +292,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
     } catch (e) {
       setState(() { _step = 0; });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
     }
   }
 
@@ -331,9 +321,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
     } catch (e) {
       setState(() { _step = 0; });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
     }
   }
 

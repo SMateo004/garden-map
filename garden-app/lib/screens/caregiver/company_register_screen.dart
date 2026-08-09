@@ -25,7 +25,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart' as image_picker_pkg;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../theme/garden_theme.dart' show GardenColors, GardenButton, GardenInput, themeNotifier;
+import '../../theme/garden_theme.dart' show GardenColors, GardenButton, GardenInput, GardenErrorDialog, GardenSnackBar, themeNotifier;
 import '../../services/auth_state.dart';
 import '../../widgets/address_section.dart';
 import '../../services/cities_service.dart';
@@ -346,11 +346,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: GardenColors.error,
-      duration: const Duration(seconds: 5),
-    ));
+    GardenErrorDialog.show(context, msg);
   }
 
   bool get _needsPlacePhotos =>

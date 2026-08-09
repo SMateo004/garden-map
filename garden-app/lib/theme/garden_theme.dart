@@ -1620,7 +1620,7 @@ ThemeData gardenTheme({bool dark = false}) {
 //   GardenSnackBar.warning(context, 'Debes agregar al menos una mascota');
 //   GardenSnackBar.info(context, 'Tu reserva está pendiente de pago');
 
-enum _GSnackType { success, error, warning, info }
+enum _GSnackType { success, warning, info }
 
 class GardenSnackBar {
   GardenSnackBar._();
@@ -1628,8 +1628,15 @@ class GardenSnackBar {
   static void success(BuildContext context, String message, {Duration? duration}) =>
       _show(context, message, _GSnackType.success, duration: duration);
 
-  static void error(BuildContext context, String message, {Duration? duration}) =>
-      _show(context, message, _GSnackType.error, duration: duration);
+  // Los errores YA NO se muestran como banda roja abajo (SnackBar) — se
+  // reemplazó por un diálogo modal (ver GardenErrorDialog más abajo) porque
+  // un error real necesita que el usuario lo vea y lo confirme, no algo que
+  // puede pasar desapercibido en 3s o quedar tapado por el teclado/otro
+  // widget. El resto de los tipos (success/warning/info) siguen como
+  // SnackBar — son avisos informativos, no fallos.
+  static void error(BuildContext context, String message, {String? title, Duration? duration}) {
+    GardenErrorDialog.show(context, message, title: title);
+  }
 
   static void warning(BuildContext context, String message, {Duration? duration}) =>
       _show(context, message, _GSnackType.warning, duration: duration);
@@ -1649,10 +1656,6 @@ class GardenSnackBar {
       case _GSnackType.success:
         bg   = const Color(0xFF2D6A35); // rich green
         icon = Icons.check_circle_rounded;
-        break;
-      case _GSnackType.error:
-        bg   = const Color(0xFFC0392B); // strong red
-        icon = Icons.error_rounded;
         break;
       case _GSnackType.warning:
         bg   = const Color(0xFFB45309); // amber-brown
@@ -1692,5 +1695,85 @@ class GardenSnackBar {
           duration: duration ?? const Duration(seconds: 3),
         ),
       );
+  }
+}
+
+// ── GARDEN ERROR DIALOG ──────────────────────────────────────────────────────
+// Reemplaza la banda roja (SnackBar) que se mostraba antes para errores.
+// Diálogo modal con el mismo look & feel que el resto de la app (usa el
+// AlertDialog ya themeado en gardenTheme() — mismo patrón que _OfflineDialog
+// en main.dart), así el usuario tiene que reconocer el error explícitamente
+// en vez de que se le pase por al lado o quede tapado por el teclado.
+//
+// Uso directo: GardenErrorDialog.show(context, 'No se pudo conectar');
+// (normalmente no hace falta llamarlo directo — GardenSnackBar.error ya lo usa).
+class GardenErrorDialog {
+  GardenErrorDialog._();
+
+  // Evita apilar diálogos si dos errores se disparan casi al mismo tiempo
+  // (ej. dos requests que fallan juntas) — el segundo se ignora en vez de
+  // encimarse arriba del primero.
+  static bool _isShowing = false;
+
+  // actionLabel/onAction: para los pocos casos que antes usaban SnackBarAction
+  // (ej. "Reintentar", "Configuración", "Ir al campo") — mismo botón, ahora
+  // como segunda acción del diálogo en vez de perderse en la conversión.
+  static void show(
+    BuildContext context,
+    String message, {
+    String? title,
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    if (!context.mounted || _isShowing) return;
+    _isShowing = true;
+    showDialog<void>(
+      context: context,
+      builder: (_) => _GardenErrorDialogContent(
+        message: message,
+        title: title,
+        actionLabel: actionLabel,
+        onAction: onAction,
+      ),
+    ).then((_) => _isShowing = false);
+  }
+}
+
+class _GardenErrorDialogContent extends StatelessWidget {
+  final String message;
+  final String? title;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  const _GardenErrorDialogContent({required this.message, this.title, this.actionLabel, this.onAction});
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      icon: Container(
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          color: const Color(0xFFC0392B).withValues(alpha: 0.12),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.error_rounded, color: Color(0xFFC0392B), size: 26),
+      ),
+      title: Text(title ?? 'Algo salió mal'),
+      content: Text(message),
+      actions: [
+        if (actionLabel != null && onAction != null)
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              onAction!();
+            },
+            child: Text(actionLabel!),
+          ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Entendido'),
+        ),
+      ],
+    );
   }
 }

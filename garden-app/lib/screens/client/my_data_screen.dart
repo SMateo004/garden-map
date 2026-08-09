@@ -162,9 +162,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(e.toString().replaceFirst('Exception: ', '')),
-            backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
       if (mounted) setState(() => _uploadingPhoto = false);
@@ -291,9 +289,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _saving = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
       }
     }
   }

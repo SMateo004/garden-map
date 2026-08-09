@@ -269,11 +269,11 @@ class _CityFormSheetState extends State<_CityFormSheet> {
           Navigator.pop(context);
           widget.onSaved();
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error']?['message'] ?? 'Error al guardar'), backgroundColor: GardenColors.error));
+          GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al guardar');
         }
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error de conexión'), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, 'Error de conexión');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -451,8 +451,7 @@ class _ZoneFormSheetState extends State<_ZoneFormSheet> {
     try {
       points = _collectPoints();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text((e as FormatException).message), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, (e as FormatException).message);
       return;
     }
     setState(() => _saving = true);
@@ -479,11 +478,11 @@ class _ZoneFormSheetState extends State<_ZoneFormSheet> {
           Navigator.pop(context);
           widget.onSaved();
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error']?['message'] ?? 'Error al guardar'), backgroundColor: GardenColors.error));
+          GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al guardar');
         }
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error de conexión'), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, 'Error de conexión');
     } finally {
       if (mounted) setState(() => _saving = false);
     }

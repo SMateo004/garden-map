@@ -207,9 +207,7 @@ class _CameraOverlayScreenState extends State<CameraOverlayScreen>
       Navigator.of(context).pop(bytes);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al capturar: $e'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, 'Error al capturar: $e');
         setState(() => _isCapturing = false);
       }
     }

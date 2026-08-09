@@ -53,8 +53,7 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
       if (mounted && data['success'] == true) setState(() => _ledger = data['data'] as Map<String, dynamic>);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('No se pudo cargar el libro contable'), backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, 'No se pudo cargar el libro contable');
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -79,13 +78,11 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
         final b64 = base64Encode(res.bodyBytes);
         await launchUrl(Uri.parse('data:application/pdf;base64,$b64'), mode: LaunchMode.externalApplication);
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('No se pudo generar el PDF'), backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, 'No se pudo generar el PDF');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: $e'), backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, 'Error: $e');
       }
     }
   }

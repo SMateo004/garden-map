@@ -105,10 +105,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
     } catch (e) {
       debugPrint('[VerifyWeb] ERROR generando token: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(e.toString()),
-          backgroundColor: Colors.red.shade700,
-        ));
+        GardenErrorDialog.show(context, e.toString());
       }
     } finally {
       if (mounted) setState(() => _generatingToken = false);

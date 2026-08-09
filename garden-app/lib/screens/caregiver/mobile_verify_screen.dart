@@ -149,10 +149,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
     } catch (e) {
       debugPrint('[MobileVerify] Error de cámara: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('No se pudo acceder a la cámara. Verifica los permisos.'),
-          backgroundColor: GardenColors.error,
-        ));
+        GardenErrorDialog.show(context, 'No se pudo acceder a la cámara. Verifica los permisos.');
       }
     }
   }
@@ -197,10 +194,7 @@ class _MobileVerifyScreenState extends State<MobileVerifyScreen> {
       debugPrint('[MobileVerify] submit error: $e');
       if (mounted) {
         setState(() => _step = 3);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(e.toString()),
-          backgroundColor: GardenColors.error,
-        ));
+        GardenErrorDialog.show(context, e.toString());
       }
     }
   }

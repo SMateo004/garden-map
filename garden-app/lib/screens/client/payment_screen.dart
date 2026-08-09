@@ -334,11 +334,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         if (mounted) setState(() => _booking = bk);
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(e.toString().replaceFirst('Exception: ', '')),
-            backgroundColor: GardenColors.error,
-            duration: const Duration(seconds: 6),
-          ));
+          GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
         }
         if (mounted) setState(() => _isLoading = false);
         return;
@@ -458,12 +454,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
       // la pantalla), el usuario quedaba viendo una pantalla de pago vacía
       // sin saldo de wallet ni forma de saber qué pasó, sin poder reintentar.
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('No se pudo cargar tu información de pago. Revisa tu conexión.'),
-          backgroundColor: GardenColors.error,
-          duration: const Duration(seconds: 6),
-          action: SnackBarAction(label: 'Reintentar', textColor: Colors.white, onPressed: _loadData),
-        ));
+        GardenErrorDialog.show(
+          context,
+          'No se pudo cargar tu información de pago. Revisa tu conexión.',
+          actionLabel: 'Reintentar',
+          onAction: _loadData,
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -600,9 +596,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, e.toString());
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -628,15 +622,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
         _pollTimer?.cancel();
         _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _checkPaymentStatus());
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['error']?['message'] ?? 'No se pudo enviar la solicitud'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'No se pudo enviar la solicitud');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error de conexión: $e'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, 'Error de conexión: $e');
       }
     } finally {
       if (mounted) setState(() => _requestingManual = false);
@@ -915,12 +905,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al guardar el QR: $e'),
-            backgroundColor: GardenColors.error,
-          ),
-        );
+        GardenErrorDialog.show(context, 'Error al guardar el QR: $e');
       }
     } finally {
       if (mounted) setState(() => _isSavingQr = false);

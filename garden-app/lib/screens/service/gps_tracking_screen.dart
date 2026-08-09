@@ -451,10 +451,7 @@ class _GpsTrackingScreenState extends State<GpsTrackingScreen> {
       url = 'https://gardenbo.com/track/${widget.bookingId}/$shareToken';
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('No se pudo generar el link para compartir. Intenta de nuevo.'),
-          backgroundColor: GardenColors.error,
-        ));
+        GardenErrorDialog.show(context, 'No se pudo generar el link para compartir. Intenta de nuevo.');
       }
       return;
     }

@@ -177,10 +177,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       // disputas — riesgo de creer que ya no hay nada pendiente por resolver.
       debugPrint('Error loading disputes: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('No se pudieron cargar las disputas. Desliza para reintentar.'),
-          backgroundColor: GardenColors.error,
-        ));
+        GardenErrorDialog.show(context, 'No se pudieron cargar las disputas. Desliza para reintentar.');
       }
     } finally {
       setState(() => _isLoadingDisputes = false);
@@ -224,7 +221,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         throw Exception(data['error']?['message'] ?? 'Error');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, e.toString());
     }
   }
 
@@ -404,7 +401,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         await _loadWithdrawals();
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Retiro completado exitosamente'), backgroundColor: GardenColors.success));
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error']?['message'] ?? 'Error'), backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error');
       }
     } catch (e) { debugPrint(e.toString()); }
   }
@@ -447,9 +444,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         await _loadWithdrawals();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Retiro rechazado'), backgroundColor: GardenColors.error));
+        GardenSnackBar.warning(context, 'Retiro rechazado');
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error']?['message'] ?? 'Error'), backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error');
       }
     } catch (e) { debugPrint(e.toString()); }
   }
@@ -471,12 +468,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(action == 'approve' ? 'Cuidador aprobado' : 'Cuidador rechazado'),
-            backgroundColor: action == 'approve' ? Colors.green : Colors.red.shade700,
-          ),
-        );
+        // Ambos son confirmaciones de que la acción del admin se aplicó bien
+        // — "rechazado" no es un error del sistema, por eso ninguno usa
+        // GardenErrorDialog.
+        if (action == 'approve') {
+          GardenSnackBar.success(context, 'Cuidador aprobado');
+        } else {
+          GardenSnackBar.warning(context, 'Cuidador rechazado');
+        }
         await _loadCaregivers();
       } else if (data['error']?['code'] == 'PROFILE_INCOMPLETE' && !force) {
         // Preguntar si quiere forzar la aprobación
@@ -505,9 +504,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
-      );
+      GardenErrorDialog.show(context, e.toString());
     }
   }
 
@@ -520,7 +517,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Identidad aprobada'), backgroundColor: GardenColors.success));
       } else { throw Exception(data['error']?['message'] ?? 'Error'); }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, e.toString());
     }
   }
 
@@ -530,10 +527,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         await _loadIdentityReviews();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ Identidad rechazada'), backgroundColor: GardenColors.error));
+        GardenSnackBar.warning(context, '❌ Identidad rechazada');
       } else { throw Exception(data['error']?['message'] ?? 'Error'); }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, e.toString());
     }
   }
 
@@ -610,18 +607,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         await _loadCaregivers();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Perfil de $nombre eliminado permanentemente'), backgroundColor: GardenColors.error),
-        );
+        // La eliminación se completó tal cual la pidió el admin — no es un error.
+        GardenSnackBar.warning(context, 'Perfil de $nombre eliminado permanentemente');
       } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['error']?['message'] ?? 'Error al eliminar'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al eliminar');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, 'Error: $e');
     }
   }
 
@@ -652,13 +644,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         await _loadCaregivers();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Aprobación revocada — cuidador fuera del marketplace'), backgroundColor: GardenColors.error),
-        );
+        GardenSnackBar.warning(context, 'Aprobación revocada — cuidador fuera del marketplace');
       } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['error']?['message'] ?? 'Error al revocar'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al revocar');
       }
     } catch (e) { debugPrint(e.toString()); }
   }
@@ -690,19 +678,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           await _loadCaregivers();
           if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cuidador suspendido'), backgroundColor: GardenColors.warning));
         } else if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(data['error']?['message'] ?? 'Error al suspender cuidador'),
-            backgroundColor: GardenColors.error,
-          ));
+          GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al suspender cuidador');
         }
       } catch (e) {
         // Antes era solo debugPrint: el admin creía haber suspendido al
         // cuidador sin ninguna confirmación de que la acción realmente falló.
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Error de conexión al suspender: $e'),
-            backgroundColor: GardenColors.error,
-          ));
+          GardenErrorDialog.show(context, 'Error de conexión al suspender: $e');
         }
       }
     }
@@ -726,10 +708,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         await _loadCaregivers();
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cuidador reactivado'), backgroundColor: GardenColors.success));
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error']?['message'] ?? 'Error al reactivar'), backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al reactivar');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error de conexión: $e'), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, 'Error de conexión: $e');
     }
   }
 
@@ -850,19 +832,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           await _loadCaregivers();
           if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Perfil puesto bajo revisión'), backgroundColor: Color(0xFFE65100)));
         } else if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(data['error']?['message'] ?? 'Error al marcar para revisión'),
-            backgroundColor: GardenColors.error,
-          ));
+          GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al marcar para revisión');
         }
       } catch (e) {
         // Antes era solo debugPrint: el admin creía haber marcado el perfil
         // para revisión sin confirmación de que la acción realmente falló.
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Error de conexión al marcar para revisión: $e'),
-            backgroundColor: GardenColors.error,
-          ));
+          GardenErrorDialog.show(context, 'Error de conexión al marcar para revisión: $e');
         }
       }
     }
@@ -2083,7 +2059,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         throw Exception(data['error']?['message'] ?? 'Error al resolver');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
     }
   }
 
@@ -2171,7 +2147,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         throw Exception(data['error']?['message'] ?? 'Error al resolver la apelación');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
     }
   }
 
@@ -3281,14 +3257,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           const SnackBar(content: Text('Extensión aprobada'), backgroundColor: GardenColors.success),
         );
       } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['error']?['message'] ?? 'Error'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, e.toString());
     }
   }
 
@@ -3302,18 +3274,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         await _loadPayments();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Extensión rechazada'), backgroundColor: GardenColors.error),
-        );
+        GardenSnackBar.warning(context, 'Extensión rechazada');
       } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['error']?['message'] ?? 'Error'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, e.toString());
     }
   }
 
@@ -3391,9 +3357,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, e.toString());
     }
   }
 
@@ -3462,26 +3426,17 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       if (data['success'] == true) {
         await _loadPayments();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Pago rechazado. El dueño fue notificado y puede reintentar.'),
-              backgroundColor: GardenColors.error,
-            ),
-          );
+          GardenSnackBar.warning(context, 'Pago rechazado. El dueño fue notificado y puede reintentar.');
         }
       } else {
         final msg = data['error']?['message'] ?? 'Error al rechazar el pago';
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(msg), backgroundColor: GardenColors.error),
-          );
+          GardenErrorDialog.show(context, msg);
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, e.toString());
       }
     }
   }

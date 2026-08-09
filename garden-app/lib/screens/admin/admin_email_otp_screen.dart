@@ -199,15 +199,11 @@ class _EmailOtpDetailSheetState extends State<_EmailOtpDetailSheet> {
           _reused = data['data']['reused'] as bool? ?? false;
         });
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['error']?['message'] ?? 'No se pudo generar el código'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'No se pudo generar el código');
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error de conexión'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, 'Error de conexión');
       }
     } finally {
       if (mounted) setState(() => _generating = false);
@@ -237,9 +233,7 @@ class _EmailOtpDetailSheetState extends State<_EmailOtpDetailSheet> {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo abrir el cliente de correo'), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, 'No se pudo abrir el cliente de correo');
     }
   }
 
@@ -249,9 +243,7 @@ class _EmailOtpDetailSheetState extends State<_EmailOtpDetailSheet> {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo abrir WhatsApp'), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, 'No se pudo abrir WhatsApp');
     }
   }
 

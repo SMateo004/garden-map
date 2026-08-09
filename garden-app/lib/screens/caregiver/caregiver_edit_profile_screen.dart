@@ -117,15 +117,11 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
       if (data['success'] == true && mounted) {
         setState(() => _withdrawalMethod = method);
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['error']?['message'] ?? 'No se pudo cambiar la modalidad de cobro'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'No se pudo cambiar la modalidad de cobro');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error de conexión. Intenta de nuevo.'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, 'Error de conexión. Intenta de nuevo.');
       }
     } finally {
       if (mounted) setState(() => _switchingMethod = false);
@@ -163,15 +159,11 @@ class _CaregiverEditProfileScreenState extends State<CaregiverEditProfileScreen>
           const SnackBar(content: Text('QR de cobro actualizado'), backgroundColor: GardenColors.success),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['error']?['message'] ?? 'Error al subir el QR'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al subir el QR');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error de conexión. Intenta de nuevo.'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, 'Error de conexión. Intenta de nuevo.');
       }
     } finally {
       if (mounted) setState(() => _uploadingQr = false);
@@ -268,16 +260,16 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
     final isVerifiedCheck = _profile?['identityVerificationStatus'] == 'VERIFIED';
     if (!isVerifiedCheck) {
       if (_firstNameController.text.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('El nombre es obligatorio'), backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, 'El nombre es obligatorio');
         return;
       }
       if (_lastNameController.text.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('El apellido es obligatorio'), backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, 'El apellido es obligatorio');
         return;
       }
     }
     if (_phoneController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('El teléfono es obligatorio'), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, 'El teléfono es obligatorio');
       return;
     }
 
@@ -338,9 +330,7 @@ _bankHolderController.text = profile['bankHolder'] as String? ?? '';
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, e.toString());
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

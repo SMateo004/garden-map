@@ -79,9 +79,7 @@ class _PaymentQrAdminScreenState extends State<PaymentQrAdminScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(e.toString().replaceFirst('Exception: ', '')),
-            backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
       if (mounted) setState(() => _uploadingServiceType = null);

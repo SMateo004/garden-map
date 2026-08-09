@@ -873,13 +873,13 @@ class _GardenAppState extends State<GardenApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _router.go('/login');
-      _scaffoldMessengerKey.currentState?.showSnackBar(
-        const SnackBar(
-          content: Text('Tu sesión ha expirado. Inicia sesión de nuevo.'),
-          backgroundColor: Color(0xFFD32F2F),
-          duration: Duration(seconds: 4),
-        ),
-      );
+      // context acá es el del widget raíz (por encima de MaterialApp.router),
+      // sin Navigator ancestro — showDialog necesita el contexto de DENTRO
+      // del router, igual que _showOfflineDialog más abajo.
+      final dialogContext = _router.routerDelegate.navigatorKey.currentContext;
+      if (dialogContext != null) {
+        GardenErrorDialog.show(dialogContext, 'Tu sesión ha expirado. Inicia sesión de nuevo.');
+      }
     });
   }
 

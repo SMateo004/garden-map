@@ -142,7 +142,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
         throw Exception(data['error']?['message'] ?? 'Error al aprobar');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
     }
   }
 
@@ -210,7 +210,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
         throw Exception(data['error']?['message'] ?? 'Error al reembolsar');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
     }
   }
 
@@ -253,7 +253,7 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
         throw Exception(data['error']?['message'] ?? 'Error al resolver la emergencia');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
     }
   }
 

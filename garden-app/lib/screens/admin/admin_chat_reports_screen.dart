@@ -269,16 +269,12 @@ class _ChatReportDetailSheetState extends State<_ChatReportDetailSheet> {
             SnackBar(content: Text(status == 'ACTION_TAKEN' ? '✅ Reporte marcado con acción tomada' : '✅ Reporte descartado'), backgroundColor: GardenColors.success),
           );
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(data['error']?['message'] ?? 'Error al resolver'), backgroundColor: GardenColors.error),
-          );
+          GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al resolver');
         }
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error de conexión'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, 'Error de conexión');
       }
     } finally {
       if (mounted) setState(() => _submitting = false);

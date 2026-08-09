@@ -472,18 +472,12 @@ class _VetFormSheetState extends State<_VetFormSheet> {
           Navigator.pop(context);
           widget.onSaved();
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(data['message'] ?? 'Error al guardar'),
-            backgroundColor: GardenColors.error,
-          ));
+          GardenErrorDialog.show(context, data['message'] ?? 'Error al guardar');
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Error de conexión'),
-          backgroundColor: GardenColors.error,
-        ));
+        GardenErrorDialog.show(context, 'Error de conexión');
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -819,18 +813,12 @@ class _RedemptionFormSheetState extends State<_RedemptionFormSheet> {
             backgroundColor: GardenColors.success,
           ));
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(data['error']?['message'] as String? ?? 'Error al registrar'),
-            backgroundColor: GardenColors.error,
-          ));
+          GardenErrorDialog.show(context, data['error']?['message'] as String? ?? 'Error al registrar');
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Error de conexión'),
-          backgroundColor: GardenColors.error,
-        ));
+        GardenErrorDialog.show(context, 'Error de conexión');
       }
     } finally {
       if (mounted) setState(() => _saving = false);

@@ -228,15 +228,11 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
           _walletData = {...?_walletData, 'withdrawalMethod': method};
         });
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['error']?['message'] ?? 'No se pudo cambiar la modalidad de retiro'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'No se pudo cambiar la modalidad de retiro');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error de conexión. Intenta de nuevo.'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, 'Error de conexión. Intenta de nuevo.');
       }
     } finally {
       if (mounted) setState(() => _switchingMethod = false);
@@ -277,15 +273,11 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
           const SnackBar(content: Text('QR de cobro actualizado'), backgroundColor: GardenColors.success),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['error']?['message'] ?? 'Error al subir el QR'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al subir el QR');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error de conexión. Intenta de nuevo.'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, 'Error de conexión. Intenta de nuevo.');
       }
     } finally {
       if (mounted) setState(() => _uploadingQr = false);
@@ -1137,7 +1129,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                       // cuando ya había un retiro pendiente (el backend lo bloqueaba
                       // igual, pero con un mensaje genérico en vez de este).
                       if (amount > (_walletData?['availableBalance'] ?? _walletData?['balance'] ?? 0)) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fondos insuficientes'), backgroundColor: GardenColors.error));
+                        GardenErrorDialog.show(context, 'Fondos insuficientes');
                         return;
                       }
 
@@ -1216,15 +1208,11 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                           );
                         } else {
                           setSheet(() => isSubmitting = false);
-                          scaffoldMsg.showSnackBar(
-                            SnackBar(content: Text(data['error']?['message'] ?? 'Error al procesar el retiro'), backgroundColor: GardenColors.error),
-                          );
+                          GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al procesar el retiro');
                         }
                       } catch (e) {
                         setSheet(() => isSubmitting = false);
-                        scaffoldMsg.showSnackBar(
-                          const SnackBar(content: Text('Error de conexión. Intenta de nuevo.'), backgroundColor: GardenColors.error),
-                        );
+                        GardenErrorDialog.show(context, 'Error de conexión. Intenta de nuevo.');
                       }
                     },
                   ),
@@ -1380,21 +1368,15 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                     loading: isSaving,
                     onPressed: () async {
                       if (selectedBankName.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Selecciona un banco o billetera'), backgroundColor: GardenColors.error),
-                        );
+                        GardenErrorDialog.show(context, 'Selecciona un banco o billetera');
                         return;
                       }
                       if (bankAccountController.text.trim().isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(isWallet ? 'Ingresa tu número de teléfono' : 'Ingresa tu número de cuenta'), backgroundColor: GardenColors.error),
-                        );
+                        GardenErrorDialog.show(context, isWallet ? 'Ingresa tu número de teléfono' : 'Ingresa tu número de cuenta');
                         return;
                       }
                       if (bankHolderController.text.trim().isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Ingresa el nombre del titular de la cuenta'), backgroundColor: GardenColors.error),
-                        );
+                        GardenErrorDialog.show(context, 'Ingresa el nombre del titular de la cuenta');
                         return;
                       }
                       setSheet(() => isSaving = true);
@@ -1431,17 +1413,13 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                         } else {
                           setSheet(() => isSaving = false);
                           if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(data['error']?['message'] ?? 'No se pudieron guardar tus datos. Intenta de nuevo.'), backgroundColor: GardenColors.error),
-                            );
+                            GardenErrorDialog.show(context, data['error']?['message'] ?? 'No se pudieron guardar tus datos. Intenta de nuevo.');
                           }
                         }
                       } catch (e) {
                         setSheet(() => isSaving = false);
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Error de conexión. Intenta de nuevo.'), backgroundColor: GardenColors.error),
-                          );
+                          GardenErrorDialog.show(context, 'Error de conexión. Intenta de nuevo.');
                         }
                       }
                     },
@@ -1832,13 +1810,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                         );
                       } else {
                         setDialog(() => isRedeeming = false);
-                        scaffoldMsg.showSnackBar(
-                          SnackBar(
-                            content: Text(data['error']?['message'] ?? 'Código inválido'),
-                            backgroundColor: GardenColors.error,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
+                        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Código inválido');
                       }
                     } catch (e) {
                       setDialog(() => isRedeeming = false);

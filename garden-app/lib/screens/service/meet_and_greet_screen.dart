@@ -221,10 +221,7 @@ class _MeetAndGreetScreenState extends State<MeetAndGreetScreen> {
 
   void _snack(String msg, {bool isError = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: isError ? GardenColors.error : GardenColors.success,
-    ));
+    GardenErrorDialog.show(context, msg);
   }
 
   String _formatDate(String? iso) {

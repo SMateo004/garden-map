@@ -22,7 +22,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart' as image_picker_pkg;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../theme/garden_theme.dart' show fixImageUrl, GardenColors, GardenButton, themeNotifier;
+import '../../theme/garden_theme.dart' show fixImageUrl, GardenColors, GardenButton, GardenErrorDialog, GardenSnackBar, themeNotifier;
 import '../../services/auth_service.dart';
 import '../../services/auth_state.dart';
 import '../../services/cities_service.dart';
@@ -165,11 +165,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
         alignment: 0.1,
       );
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: Colors.red.shade700,
-      duration: const Duration(seconds: 5),
-    ));
+    GardenErrorDialog.show(context, msg);
   }
 
   bool _validateCurrentStep() {
@@ -376,10 +372,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: ${e.toString().replaceFirst('Exception: ', '')}'),
-          backgroundColor: Colors.red.shade700,
-        ));
+        GardenErrorDialog.show(context, 'Error: ${e.toString().replaceFirst('Exception: ', '')}');
       }
       rethrow;
     } finally {
@@ -566,9 +559,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
         } catch (e) {
           setState(() => _isLoading = false);
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error foto perfil: $e'), backgroundColor: Colors.red.shade700),
-            );
+            GardenErrorDialog.show(context, 'Error foto perfil: $e');
           }
           return;
         }
@@ -615,8 +606,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
       setState(() { _localPhotos.add((bytes: bytes, name: name, mimeType: mimeType)); });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error leyendo imagen: $e'), backgroundColor: Colors.red.shade700));
+        GardenErrorDialog.show(context, 'Error leyendo imagen: $e');
       }
     }
   }
@@ -634,8 +624,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
       setState(() { _profilePhotoUrl = null; _localProfilePhoto = (bytes: bytes, name: name, mimeType: mimeType); });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error leyendo imagen: $e'), backgroundColor: Colors.red.shade700));
+        GardenErrorDialog.show(context, 'Error leyendo imagen: $e');
       }
     }
   }

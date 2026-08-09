@@ -586,26 +586,22 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         alignment: 0.1,
       );
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: GardenColors.error,
-      duration: const Duration(seconds: 5),
-      action: scrollTo?.currentContext != null
-          ? SnackBarAction(
-              label: 'Ir al campo',
-              textColor: Colors.white,
-              onPressed: () {
-                if (scrollTo?.currentContext != null) {
-                  Scrollable.ensureVisible(
-                    scrollTo!.currentContext!,
-                    duration: const Duration(milliseconds: 400),
-                    curve: Curves.easeInOut,
-                  );
-                }
-              },
-            )
+    GardenErrorDialog.show(
+      context,
+      msg,
+      actionLabel: scrollTo?.currentContext != null ? 'Ir al campo' : null,
+      onAction: scrollTo?.currentContext != null
+          ? () {
+              if (scrollTo?.currentContext != null) {
+                Scrollable.ensureVisible(
+                  scrollTo!.currentContext!,
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.easeInOut,
+                );
+              }
+            }
           : null,
-    ));
+    );
     setState(() => _isSaving = false);
   }
 
@@ -837,9 +833,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo guardar: ${e.toString()}'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, 'No se pudo guardar: ${e.toString()}');
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -886,17 +880,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         });
         _computeCompletion();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(data['error']?['message'] ?? data['message'] ?? 'Error al subir foto'),
-          backgroundColor: GardenColors.error,
-        ));
+        GardenErrorDialog.show(context, data['error']?['message'] ?? data['message'] ?? 'Error al subir foto');
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Error al subir: $e'),
-        backgroundColor: GardenColors.error,
-      ));
+      GardenErrorDialog.show(context, 'Error al subir: $e');
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -930,10 +918,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       if (data['success'] == true) {
         setState(() => _caregiverPhotoUrls.add(data['data']['photoUrl'] as String));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error']?['message'] ?? 'Error al subir foto'), backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al subir foto');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, 'Error: $e');
     } finally {
       if (mounted) setState(() => _uploadingCaregiverPhoto = false);
     }
@@ -1004,15 +992,11 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
           const SnackBar(content: Text('Documento enviado. Lo estamos revisando.'), backgroundColor: GardenColors.success),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['error']?['message'] ?? 'Error al subir el documento'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al subir el documento');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, 'Error: $e');
       }
     } finally {
       if (mounted) setState(() => _uploadingAntecedentes = false);
@@ -1220,10 +1204,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
           _placePhotoUrls[section] = List<String>.from(_placePhotoUrls[section] ?? [])..add(data['data']['photoUrl'] as String);
         });
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error']?['message'] ?? 'Error al subir foto'), backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al subir foto');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, 'Error: $e');
     } finally {
       if (mounted) setState(() => _uploadingPlacePhoto = false);
     }

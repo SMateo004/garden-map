@@ -70,7 +70,7 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
         throw Exception(data['error']?['message'] ?? 'Error');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, e.toString());
     }
   }
 
@@ -85,14 +85,16 @@ class _AdminIdentityReviewScreenState extends State<AdminIdentityReviewScreen> {
       final data = jsonDecode(res.body);
       if (data['success'] == true) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ Identidad rechazada'), backgroundColor: GardenColors.error));
+          // Confirmación de que la acción del admin se aplicó bien — no es
+          // un error del sistema, por eso NO usa GardenErrorDialog.
+          GardenSnackBar.warning(context, '❌ Identidad rechazada');
           await _loadSession();
         }
       } else {
         throw Exception(data['error']?['message'] ?? 'Error');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, e.toString());
     }
   }
 

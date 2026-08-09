@@ -42,9 +42,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo abrir WhatsApp'), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, 'No se pudo abrir WhatsApp');
     }
   }
 

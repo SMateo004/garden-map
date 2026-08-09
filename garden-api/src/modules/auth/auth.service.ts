@@ -1323,17 +1323,24 @@ export async function finalizeAccountDeletion(userId: string): Promise<void> {
   const unifiedBalance = Number(userWithBalance?.balance ?? 0);
 
   if (unifiedBalance > 0) {
-    await prisma.walletTransaction.create({
-      data: {
-        userId,
-        type: 'WITHDRAWAL',
-        amount: unifiedBalance,
-        balance: 0,
-        description: 'Saldo transferido a GARDEN al eliminar cuenta',
-        status: 'COMPLETED',
-      },
-    });
-    await prisma.user.update({ where: { id: userId }, data: { balance: 0 } });
+    // decrement (no "set balance: 0") + $transaction: si un payout se
+    // acredita justo en esta ventana (ej. autoReleasePayment corriendo en
+    // paralelo a esta eliminación de cuenta), un "set a 0" ciego lo hubiera
+    // borrado sin dejar rastro — decrement solo resta lo que realmente
+    // leímos acá, así que ese crédito concurrente sobrevive intacto.
+    await prisma.$transaction([
+      prisma.walletTransaction.create({
+        data: {
+          userId,
+          type: 'WITHDRAWAL',
+          amount: unifiedBalance,
+          balance: 0,
+          description: 'Saldo transferido a GARDEN al eliminar cuenta',
+          status: 'COMPLETED',
+        },
+      }),
+      prisma.user.update({ where: { id: userId }, data: { balance: { decrement: unifiedBalance } } }),
+    ]);
   }
 
   const deletedTag = `deleted_${Date.now()}`;

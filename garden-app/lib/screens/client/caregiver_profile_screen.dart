@@ -115,8 +115,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Error de conexión'), backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, 'Error de conexión');
       }
     } finally {
       if (mounted) setState(() => _togglingWaitlist = false);

@@ -453,15 +453,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       );
       final data = jsonDecode(response.body);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(data['success'] == true
+        GardenErrorDialog.show(context, data['success'] == true
                 ? 'Servicio cancelado por desactivación de GPS.'
-                : 'Error al cancelar. Contacta a soporte.'),
-            backgroundColor: GardenColors.error,
-            duration: const Duration(seconds: 5),
-          ),
-        );
+                : 'Error al cancelar. Contacta a soporte.');
         if (data['success'] == true) {
           await _loadBooking();
         }
@@ -1468,9 +1462,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: Colors.red.shade700),
-        );
+        GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
       if (mounted) setState(() => _loadingExtension = false);
@@ -1667,9 +1659,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: Colors.red.shade700),
-        );
+        GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
       if (mounted) setState(() => _loadingExtension = false);
@@ -4093,16 +4083,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       }
       if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Necesitas permitir el acceso a la ubicación para iniciar un paseo'),
-              backgroundColor: GardenColors.error,
-              action: SnackBarAction(
-                label: 'Configuración',
-                textColor: Colors.white,
-                onPressed: Geolocator.openAppSettings,
-              ),
-            ),
+          GardenErrorDialog.show(
+            context,
+            'Necesitas permitir el acceso a la ubicación para iniciar un paseo',
+            actionLabel: 'Configuración',
+            onAction: Geolocator.openAppSettings,
           );
         }
         return;
@@ -4189,7 +4174,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, e.toString());
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
@@ -4261,20 +4246,13 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       } else {
         if (mounted) {
           final msg = data['error']?['message'] as String? ?? 'Error al enviar la foto';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(msg), backgroundColor: GardenColors.error),
-          );
+          GardenErrorDialog.show(context, msg);
         }
       }
     } catch (e) {
       debugPrint('Error sending photo: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No se pudo enviar la foto. Intenta de nuevo.'),
-            backgroundColor: GardenColors.error,
-          ),
-        );
+        GardenErrorDialog.show(context, 'No se pudo enviar la foto. Intenta de nuevo.');
       }
     } finally {
       if (mounted) setState(() => _isSendingPhoto = false);
@@ -4322,23 +4300,16 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       );
       final data = jsonDecode(res.body);
       if (data['success'] == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('🆘 Alerta enviada al equipo de Garden'),
-          backgroundColor: GardenColors.error,
-          duration: Duration(seconds: 4),
-        ));
+        // Confirmación (la alerta SÍ salió bien) — no es un error, por eso
+        // NO usa GardenErrorDialog. El rojo original era solo para darle
+        // urgencia visual de SOS, no para indicar que algo falló.
+        GardenSnackBar.warning(context, '🆘 Alerta enviada al equipo de Garden');
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(data['error']?['message'] ?? 'Error al enviar la alerta'),
-          backgroundColor: GardenColors.error,
-        ));
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al enviar la alerta');
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Error de conexión'),
-          backgroundColor: GardenColors.error,
-        ));
+        GardenErrorDialog.show(context, 'Error de conexión');
       }
     }
   }
@@ -4485,15 +4456,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           const SnackBar(content: Text('✅ Avisamos al cuidador que el servicio terminó'), backgroundColor: GardenColors.success),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? 'No se pudo marcar el servicio'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, data['message'] ?? 'No se pudo marcar el servicio');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error de conexión'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, 'Error de conexión');
       }
     } finally {
       if (mounted) setState(() => _markingEnd = false);
@@ -4677,7 +4644,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, e.toString());
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
@@ -4732,9 +4699,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         final msg = e.toString().contains('errno 103') || e.toString().toLowerCase().contains('connection abort')
             ? 'Se cortó la conexión al enviar el video. Revisa tu conexión a internet e intenta de nuevo con un video más corto.'
             : 'No se pudo enviar el video: $e';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, msg);
       }
     } finally {
       if (mounted) setState(() => _isSendingVideo = false);
@@ -4872,11 +4837,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       );
       final data = jsonDecode(res.body);
       if (data['success'] == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('🚨 Emergencia reportada. El dueño fue notificado.'),
-          backgroundColor: GardenColors.error,
-          duration: const Duration(seconds: 4),
-        ));
+        // Confirmación, no error — mismo caso que la alerta SOS de arriba.
+        GardenSnackBar.warning(context, '🚨 Emergencia reportada. El dueño fue notificado.');
       }
     } catch (_) {}
   }
@@ -5616,9 +5578,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       final reason = _surveyRating == 0
                           ? 'Selecciona una calificación de estrellas'
                           : 'El comentario es obligatorio para calificar al cuidador';
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(reason), backgroundColor: GardenColors.error),
-                      );
+                      GardenErrorDialog.show(context, reason);
                     },
               child: AbsorbPointer(
                 absorbing: !canSubmit,
@@ -5677,7 +5637,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         throw Exception(data['error']?['message'] ?? 'Error');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, e.toString());
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
@@ -5887,9 +5847,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   : () {
                       if (_isSubmittingCaregiverRating) return;
                       setState(() => _caregiverSurveyShowValidationError = true);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Selecciona una calificación de estrellas para enviar'), backgroundColor: GardenColors.error),
-                      );
+                      GardenErrorDialog.show(context, 'Selecciona una calificación de estrellas para enviar');
                     },
               child: AbsorbPointer(
                 absorbing: !(_caregiverSurveyRating > 0 && !_isSubmittingCaregiverRating),
@@ -5945,18 +5903,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           if (_booking != null) _booking!['caregiverRated'] = true;
         });
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(data['error']?['message'] ?? 'Error al enviar calificación'),
-            backgroundColor: GardenColors.error,
-          ),
-        );
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al enviar calificación');
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error de conexión'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, 'Error de conexión');
       }
     } finally {
       if (mounted) setState(() => _isSubmittingCaregiverRating = false);

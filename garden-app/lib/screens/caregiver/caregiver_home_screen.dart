@@ -574,9 +574,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, e.toString());
     }
   }
 
@@ -599,18 +597,17 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         await _loadAvailability();
         _computeDayStatuses();
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(block ? 'Día bloqueado' : 'Día desbloqueado'),
-            backgroundColor: block ? GardenColors.error : GardenColors.success,
-          ),
-        );
+        // Ambos son confirmaciones de que el toggle se aplicó bien — no hay
+        // error en ninguno de los dos casos.
+        if (block) {
+          GardenSnackBar.warning(context, 'Día bloqueado');
+        } else {
+          GardenSnackBar.success(context, 'Día desbloqueado');
+        }
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, e.toString());
     }
   }
 
@@ -687,9 +684,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, e.toString());
     }
   }
 
@@ -707,20 +702,19 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         await _loadBookings();
         _computeDayStatuses();
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(action == 'accept' ? 'Reserva aceptada' : 'Reserva rechazada'),
-            backgroundColor: action == 'accept' ? GardenColors.success : GardenColors.error,
-          ),
-        );
+        // Ambos son confirmaciones de que la acción se aplicó bien — no es
+        // un error del sistema, por eso ninguno usa GardenErrorDialog.
+        if (action == 'accept') {
+          GardenSnackBar.success(context, 'Reserva aceptada');
+        } else {
+          GardenSnackBar.warning(context, 'Reserva rechazada');
+        }
       } else {
         throw Exception(data['error']?['message'] ?? 'Error');
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, e.toString());
     }
   }
 
@@ -751,9 +745,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, e.toString());
       }
     }
   }
@@ -2508,9 +2500,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, e.toString());
       }
     }
   }
@@ -2803,9 +2793,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         throw Exception(data['error']?['message'] ?? 'Error');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, e.toString());
     }
   }
 
@@ -3622,18 +3610,11 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         final msg = (data['error'] as Map<String, dynamic>?)?['message']
             ?? 'No se pudo abandonar el registro. Intenta de nuevo.';
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, msg);
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Error de conexión. Verifica tu internet.'),
-          backgroundColor: GardenColors.error,
-        ),
-      );
+      GardenErrorDialog.show(context, 'Error de conexión. Verifica tu internet.');
     } finally {
       if (mounted) setState(() => _isAbandoningConversion = false);
     }
@@ -3886,9 +3867,7 @@ class _ExpandableBookingCardState extends State<_ExpandableBookingCard> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
       if (mounted) setState(() => _isCancelling = false);

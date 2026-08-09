@@ -196,9 +196,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, e.toString());
     }
   }
 
@@ -303,12 +301,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                           _loadProfile();
                         } else {
                           setDialogState(() => isVerifying = false);
-                          scaffoldMsg.showSnackBar(
-                            SnackBar(
-                              content: Text(data['error']?['message'] ?? 'Código incorrecto'),
-                              backgroundColor: GardenColors.error,
-                            ),
-                          );
+                          GardenErrorDialog.show(context, data['error']?['message'] ?? 'Código incorrecto');
                         }
                       } catch (e) {
                         setDialogState(() => isVerifying = false);
@@ -443,14 +436,10 @@ class _ProfileScreenState extends State<ProfileScreen>
         await prefs.clear();
         if (mounted) context.go('/login');
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['error']?['message'] ?? 'Error al eliminar la cuenta'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al eliminar la cuenta');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error de conexión: $e'), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, 'Error de conexión: $e');
     } finally {
       if (mounted) setState(() => _isDeletingAccount = false);
     }
@@ -1613,12 +1602,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: GardenColors.error,
-        ),
-      );
+      GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _isSwitchingRole = false);
     }
@@ -1788,18 +1772,11 @@ class _ProfileScreenState extends State<ProfileScreen>
         final msg = (data['error'] as Map<String, dynamic>?)?['message']
             ?? 'No se pudo abandonar el proceso.';
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, msg);
       }
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Error de conexión. Intenta de nuevo.'),
-          backgroundColor: GardenColors.error,
-        ),
-      );
+      GardenErrorDialog.show(context, 'Error de conexión. Intenta de nuevo.');
     } finally {
       if (mounted) setState(() => _isAbandoningConversion = false);
     }

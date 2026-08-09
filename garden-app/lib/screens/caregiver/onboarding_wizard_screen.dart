@@ -8,7 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
-import '../../theme/garden_theme.dart' show fixImageUrl, GardenColors, GardenButton, themeNotifier;
+import '../../theme/garden_theme.dart' show fixImageUrl, GardenColors, GardenButton, GardenErrorDialog, GardenSnackBar, themeNotifier;
 import '../../services/auth_service.dart';
 
 import 'caregiver_profile_data_screen.dart';
@@ -521,26 +521,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         setState(() => _isLoading = false);
         final errorMsg = body['error']?['message'] ?? body['message'] ?? 'No se pudo completar el registro';
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMsg),
-            backgroundColor: GardenColors.error,
-            duration: const Duration(seconds: 8),
-          ),
-        );
+        GardenErrorDialog.show(context, errorMsg);
         // Do NOT auto-redirect — user stays on current step and sees the error.
         // They can manually go back to the indicated step.
       }
     } catch (e) {
       setState(() => _isLoading = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Sin conexión al servidor. Verifica tu internet e intenta de nuevo.'),
-          backgroundColor: GardenColors.error,
-          duration: const Duration(seconds: 5),
-        ),
-      );
+      GardenErrorDialog.show(context, 'Sin conexión al servidor. Verifica tu internet e intenta de nuevo.');
     }
   }
 
@@ -596,26 +584,22 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         alignment: 0.1,
       );
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: GardenColors.error,
-      duration: const Duration(seconds: 5),
-      action: scrollTo?.currentContext != null
-          ? SnackBarAction(
-              label: 'Ver campo',
-              textColor: Colors.white,
-              onPressed: () {
-                if (scrollTo?.currentContext != null) {
-                  Scrollable.ensureVisible(
-                    scrollTo!.currentContext!,
-                    duration: const Duration(milliseconds: 400),
-                    curve: Curves.easeInOut,
-                  );
-                }
-              },
-            )
+    GardenErrorDialog.show(
+      context,
+      msg,
+      actionLabel: scrollTo?.currentContext != null ? 'Ver campo' : null,
+      onAction: scrollTo?.currentContext != null
+          ? () {
+              if (scrollTo?.currentContext != null) {
+                Scrollable.ensureVisible(
+                  scrollTo!.currentContext!,
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.easeInOut,
+                );
+              }
+            }
           : null,
-    ));
+    );
   }
 
   bool _validateCurrentStep() {
@@ -876,9 +860,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         } catch (e) {
           setState(() => _isLoading = false);
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error foto perfil: $e'), backgroundColor: GardenColors.error),
-            );
+            GardenErrorDialog.show(context, 'Error foto perfil: $e');
           }
           return;
         }
@@ -1126,11 +1108,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       final bioDetail = (profile['bioDetail'] as String? ?? '').trim();
       if (bio.length < 10 && bioDetail.length < 10) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Falta completar: descripción de tu perfil (mínimo 10 caracteres)'),
-            backgroundColor: GardenColors.error,
-            duration: Duration(seconds: 5),
-          ));
+          GardenErrorDialog.show(context, 'Falta completar: descripción de tu perfil (mínimo 10 caracteres)');
         }
         return; // Stay on step 6 (paso 7)
       }
@@ -1187,11 +1165,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         }
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: const Text('Debes completar y aprobar la verificación de identidad para continuar.'),
-            backgroundColor: GardenColors.error,
-            duration: const Duration(seconds: 5),
-          ));
+          GardenErrorDialog.show(context, 'Debes completar y aprobar la verificación de identidad para continuar.');
         }
       }
     } catch (_) {
@@ -1240,7 +1214,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       final name = picked.name.isEmpty ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
       setState(() => _localCaregiverPhotos.add((bytes: bytes, name: name, mimeType: picked.mimeType ?? 'image/jpeg')));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, 'Error: $e');
     }
   }
 
@@ -1266,7 +1240,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       }
       if (mounted) setState(() { _caregiverPhotoUrls.addAll(newUrls); _localCaregiverPhotos.clear(); });
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error subiendo foto: $e'), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, 'Error subiendo foto: $e');
       rethrow;
     } finally {
       if (mounted) setState(() => _uploadingCaregiverPhotos = false);
@@ -1287,7 +1261,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         _localPlacePhotos[section] = [...(_localPlacePhotos[section] ?? []), (bytes: bytes, name: name, mimeType: picked.mimeType ?? 'image/jpeg')];
       });
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, 'Error: $e');
     }
   }
 
@@ -1321,7 +1295,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         });
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error subiendo foto: $e'), backgroundColor: GardenColors.error));
+      GardenErrorDialog.show(context, 'Error subiendo foto: $e');
       rethrow;
     } finally {
       if (mounted) setState(() => _uploadingPlacePhotos = false);
@@ -2513,8 +2487,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error leyendo imagen: $e'), backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, 'Error leyendo imagen: $e');
       }
     }
   }

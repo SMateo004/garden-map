@@ -1064,10 +1064,7 @@ class _SocialRegisterButtonsState extends State<_SocialRegisterButtons> {
       }
       if (data == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('No se pudo obtener los datos del proveedor. Intenta de nuevo.'),
-            backgroundColor: Colors.red,
-          ));
+          GardenErrorDialog.show(context, 'No se pudo obtener los datos del proveedor. Intenta de nuevo.');
         }
         return;
       }
@@ -1075,10 +1072,7 @@ class _SocialRegisterButtonsState extends State<_SocialRegisterButtons> {
       if (mounted) widget.onResult(result);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: GardenColors.error,
-        ));
+        GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
       if (mounted) setState(() => _loading = null);

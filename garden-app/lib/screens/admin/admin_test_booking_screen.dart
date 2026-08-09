@@ -264,14 +264,11 @@ class _AdminTestBookingScreenState extends State<AdminTestBookingScreen> {
               content: Text('Reserva de prueba borrada'), backgroundColor: GardenColors.success));
         }
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text((data['error']?['message'] as String?) ?? 'Error al borrar'),
-            backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, (data['error']?['message'] as String?) ?? 'Error al borrar');
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Error de conexión'), backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, 'Error de conexión');
       }
     } finally {
       if (mounted) setState(() => _deleting.remove(bookingId));

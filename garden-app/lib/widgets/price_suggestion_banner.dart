@@ -72,9 +72,7 @@ class _PriceSuggestionBannerState extends State<PriceSuggestionBanner> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al actualizar precio'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, 'Error al actualizar precio');
       }
     } finally {
       if (mounted) setState(() => _processing = false);

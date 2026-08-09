@@ -83,15 +83,11 @@ class _RecurringBookingScreenState extends State<RecurringBookingScreen> {
       if (data['success'] == true) {
         await _loadSeries();
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(data['error']?['message'] ?? 'No se pudo completar la acción'),
-          backgroundColor: GardenColors.error,
-        ));
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'No se pudo completar la acción');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error de conexión: $e'), backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, 'Error de conexión: $e');
       }
     } finally {
       if (mounted) setState(() => _actingOn.remove(seriesId));
@@ -136,15 +132,11 @@ class _RecurringBookingScreenState extends State<RecurringBookingScreen> {
         }
       } else if (mounted) {
         final errors = (data['errors'] as List?)?.map((e) => e['message'] as String).join(', ');
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(errors ?? data['error']?['message'] ?? 'No se pudo crear la serie'),
-          backgroundColor: GardenColors.error,
-        ));
+        GardenErrorDialog.show(context, errors ?? data['error']?['message'] ?? 'No se pudo crear la serie');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error de conexión: $e'), backgroundColor: GardenColors.error));
+        GardenErrorDialog.show(context, 'Error de conexión: $e');
       }
     } finally {
       if (mounted) setState(() => _submitting = false);

@@ -175,9 +175,7 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
       }
 
       if (meResponse.statusCode != 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error de conexión. Verifica tu internet.'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, 'Error de conexión. Verifica tu internet.');
         return;
       }
 
@@ -232,18 +230,11 @@ class _BecomeCaregiverScreenState extends State<BecomeCaregiverScreen> {
         final msg = (data['error'] as Map<String, dynamic>?)?['message']
             ?? 'No se pudo iniciar el proceso. Intenta de nuevo.';
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, msg);
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Error de conexión. Verifica tu internet.'),
-          backgroundColor: GardenColors.error,
-        ),
-      );
+      GardenErrorDialog.show(context, 'Error de conexión. Verifica tu internet.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

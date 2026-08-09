@@ -1422,11 +1422,7 @@ class _ZonesTabState extends State<_ZonesTab> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(e.toString()),
-              backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, e.toString());
       }
     } finally {
       if (mounted) setState(() => _toggling.remove(zone));
@@ -1988,18 +1984,11 @@ class _IconScheduleTabState extends State<_IconScheduleTab> {
         });
         await _load();
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(d['error']?['message'] ?? 'Error al crear la regla'),
-            backgroundColor: GardenColors.error,
-          ),
-        );
+        GardenErrorDialog.show(context, d['error']?['message'] ?? 'Error al crear la regla');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, e.toString());
       }
     } finally {
       if (mounted) setState(() => _submitting = false);

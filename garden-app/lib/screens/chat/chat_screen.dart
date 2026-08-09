@@ -172,16 +172,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           await _loadMG();
           await _chatService!.loadHistory(widget.bookingId);
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(data['message'] ?? 'Error'), backgroundColor: GardenColors.error),
-          );
+          GardenErrorDialog.show(context, data['message'] ?? 'Error');
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
       if (mounted) setState(() => _mgLoading = false);
@@ -405,16 +401,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                               await _loadMG();
                               await _chatService!.loadHistory(widget.bookingId);
                             } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(d['message'] ?? 'Error'), backgroundColor: GardenColors.error),
-                              );
+                              GardenErrorDialog.show(context, d['message'] ?? 'Error');
                             }
                           }
                         } catch (e) {
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: GardenColors.error),
-                            );
+                            GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
                           }
                         } finally {
                           if (mounted) setState(() => _mgLoading = false);

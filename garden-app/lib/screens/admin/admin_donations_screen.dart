@@ -329,9 +329,7 @@ class _DisburseSheetState extends State<_DisburseSheet> {
   Future<String?> _createBeneficiaryIfNeeded() async {
     if (!_creatingNew) return _selectedBeneficiaryId;
     if (_newNameCtrl.text.trim().length < 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Escribe el nombre del beneficiario.'), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, 'Escribe el nombre del beneficiario.');
       return null;
     }
     final res = await http.post(
@@ -342,9 +340,7 @@ class _DisburseSheetState extends State<_DisburseSheet> {
     final data = jsonDecode(res.body);
     if (data['success'] == true) return data['data']['id'] as String;
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(data['error']?['message'] ?? 'No se pudo crear el beneficiario'), backgroundColor: GardenColors.error),
-      );
+      GardenErrorDialog.show(context, data['error']?['message'] ?? 'No se pudo crear el beneficiario');
     }
     return null;
   }
@@ -374,16 +370,12 @@ class _DisburseSheetState extends State<_DisburseSheet> {
             const SnackBar(content: Text('✅ Donación(es) marcadas como transferidas'), backgroundColor: GardenColors.success),
           );
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(data['error']?['message'] ?? 'Error al confirmar'), backgroundColor: GardenColors.error),
-          );
+          GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al confirmar');
         }
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error de conexión'), backgroundColor: GardenColors.error),
-        );
+        GardenErrorDialog.show(context, 'Error de conexión');
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
