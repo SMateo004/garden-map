@@ -261,7 +261,7 @@ const RATING_REMINDER_WAVES: Array<{
 ];
 const RATING_REMINDER_WINDOW_HOURS = 2;
 
-async function procesarRecordatoriosCalificacion() {
+export async function procesarRecordatoriosCalificacion() {
   const now = new Date();
 
   for (let waveIndex = 0; waveIndex < RATING_REMINDER_WAVES.length; waveIndex++) {
