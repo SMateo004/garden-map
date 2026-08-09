@@ -35,11 +35,27 @@ export async function applyPromoCode(bookingId: string, clientId: string, code: 
     }
 
     const totalAmount = Number(booking.totalAmount);
+    const commissionAmount = Number(booking.commissionAmount);
     const rawDiscount = promo.discountType === 'PERCENT'
       ? totalAmount * (Number(promo.discountValue) / 100)
       : Number(promo.discountValue);
     const discount = Math.min(Math.round(rawDiscount * 100) / 100, totalAmount);
     const newTotal = Math.max(0, Math.round((totalAmount - discount) * 100) / 100);
+
+    // El descuento sale del margen de Garden, NUNCA del cuidador — se
+    // resta lo mismo de commissionAmount (piso 0), así que lo que cobra el
+    // cuidador (totalAmount - commissionAmount) queda igual que antes del
+    // promo. Solo si el descuento supera la comisión completa de esta
+    // reserva el excedente sí le toca al cuidador (caso límite: un promo
+    // configurado más grande que el margen entero de Garden ahí) — se
+    // loguea como warning para que un admin lo note. (Bug real encontrado
+    // y corregido a pedido del usuario — antes SIEMPRE salía del cuidador.)
+    const newCommission = Math.max(0, Math.round((commissionAmount - discount) * 100) / 100);
+    if (discount > commissionAmount) {
+      logger.warn('Promo supera la comisión completa de la reserva — el cuidador cobra menos', {
+        bookingId, code, discount, commissionAmount,
+      });
+    }
 
     // Atomic claim del cupo — evita que dos requests casi simultáneos
     // (doble tap) dejen usedCount por debajo de lo real o pasen el límite.
@@ -53,7 +69,7 @@ export async function applyPromoCode(bookingId: string, clientId: string, code: 
 
     const updated = await tx.booking.update({
       where: { id: bookingId },
-      data: { promoCode: code, promoDiscountAmount: discount, totalAmount: newTotal },
+      data: { promoCode: code, promoDiscountAmount: discount, totalAmount: newTotal, commissionAmount: newCommission },
       select: { totalAmount: true, promoDiscountAmount: true },
     });
 
