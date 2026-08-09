@@ -28,6 +28,7 @@ import testRoutes from './modules/auth/test.routes.js';
 import notificationRoutes from './modules/notification-service/notification.routes.js';
 import agentesRoutes from './modules/agentes/agentes.routes.js';
 import chatRoutes from './modules/chat/chat.routes.js';
+import supportChatRoutes from './modules/support-chat/support-chat.routes.js';
 import walletRoutes from './modules/wallet/wallet.routes.js';
 import disputeRoutes from './modules/dispute/dispute.routes.js';
 import meetAndGreetRoutes from './modules/meet-and-greet/meet-and-greet.routes.js';
@@ -289,6 +290,7 @@ if (env.NODE_ENV !== 'production') {
 }
 app.use('/api/agentes', agentesRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/support/chat', supportChatRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/disputes', disputeRoutes);
 app.use('/api/meet-and-greet', meetAndGreetRoutes);

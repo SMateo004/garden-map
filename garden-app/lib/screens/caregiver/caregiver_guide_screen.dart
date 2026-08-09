@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../services/auth_state.dart';
 import '../../theme/garden_theme.dart';
 
 /// Guía completa para nuevos cuidadores GARDEN.
@@ -7,7 +9,6 @@ import '../../theme/garden_theme.dart';
 class CaregiverGuideScreen extends StatelessWidget {
   const CaregiverGuideScreen({super.key});
 
-  static const _whatsApp = 'https://wa.me/59175933133?text=Hola%2C%20soy%20cuidador%20nuevo%20en%20GARDEN%20y%20necesito%20ayuda%20%F0%9F%8C%BF';
   static const _email = 'mailto:contactogardenbo@gmail.com?subject=Consulta%20cuidador%20GARDEN';
 
   Future<void> _launch(String url) async {
@@ -15,6 +16,33 @@ class CaregiverGuideScreen extends StatelessWidget {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
+  }
+
+  // Todo el contacto directo con soporte pasa por el chat in-app — ya no hay
+  // enlace a WhatsApp (mismo cambio que en help_center_screen.dart).
+  void _openSupportChat(BuildContext context) {
+    if (!AuthState.hasSession) {
+      showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          icon: const Icon(Icons.support_agent_rounded, color: GardenColors.primary, size: 40),
+          title: const Text('Iniciá sesión para chatear'),
+          content: const Text('Para hablar con nuestro equipo de soporte primero necesitás iniciar sesión.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                context.push('/login');
+              },
+              child: const Text('Iniciar sesión'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    context.push('/support-chat');
   }
 
   @override
@@ -321,10 +349,10 @@ class CaregiverGuideScreen extends StatelessWidget {
                                 const SizedBox(height: 20),
                                 _contactButton(
                                   icon: Icons.chat_rounded,
-                                  label: 'WhatsApp Soporte',
-                                  subtitle: '+591 75933133 · Lunes a Sábado 9:00–20:00',
-                                  color: const Color(0xFF25D366),
-                                  onTap: () => _launch(_whatsApp),
+                                  label: 'Chatear con soporte',
+                                  subtitle: 'Te respondemos lo antes posible',
+                                  color: GardenColors.primary,
+                                  onTap: () => _openSupportChat(context),
                                 ),
                                 const SizedBox(height: 12),
                                 _contactButton(
@@ -349,7 +377,7 @@ class CaregiverGuideScreen extends StatelessWidget {
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Text(
-                                          'Tiempo de respuesta habitual: menos de 2 horas en horario laboral. Para emergencias con una mascota bajo tu cuidado, usa WhatsApp.',
+                                          'Tiempo de respuesta habitual: menos de 2 horas en horario laboral. Para emergencias con una mascota bajo tu cuidado durante un servicio activo, usa el botón de SOS dentro de la pantalla del servicio.',
                                           style: TextStyle(color: subtextColor, fontSize: 13, height: 1.4),
                                         ),
                                       ),

@@ -51,6 +51,7 @@ import 'screens/onboarding/update_required_screen.dart';
 import 'screens/caregiver/mobile_verify_screen.dart';
 import 'screens/legal/legal_screen.dart';
 import 'screens/support/help_center_screen.dart';
+import 'screens/support/support_chat_screen.dart';
 import 'screens/support/help_category_screen.dart';
 import 'screens/support/help_article_screen.dart';
 import 'data/help_center_content.dart';
@@ -643,6 +644,11 @@ final GoRouter _router = GoRouter(
       path: '/help-center',
       name: 'helpCenter',
       builder: (context, state) => const HelpCenterScreen(),
+    ),
+    GoRoute(
+      path: '/support-chat',
+      name: 'supportChat',
+      builder: (context, state) => const SupportChatScreen(),
     ),
     GoRoute(
       path: '/help-center/category',

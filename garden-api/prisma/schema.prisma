@@ -74,6 +74,7 @@ model User {
   emailVerifications           EmailVerification[]
   notifications                Notification[]
   sentMessages                 ChatMessage[]
+  supportThread                 SupportThread?
   walletTransactions           WalletTransaction[]
   donations                    Donation[]
   donorCodeRedemptions         DonorCodeRedemption[]
@@ -1309,6 +1310,45 @@ model ChatMessage {
   @@index([bookingId])
   @@index([senderId])
   @@map("chat_messages")
+}
+
+/// Chat de soporte cliente↔admin — reemplaza el enlace directo a WhatsApp del
+/// Centro de Ayuda. Un solo hilo persistente por cliente (userId @unique):
+/// para el admin funciona como un inbox tipo WhatsApp con el historial
+/// COMPLETO de ese cliente, sin importar cuántas veces haya abierto/cerrado
+/// la app. Del lado del cliente, la app filtra qué mensajes mostrar según
+/// el momento en que abrió la conversación en la sesión actual (ver
+/// GET /support/chat?since=... en support-chat.routes.ts) — al cerrar la
+/// app y volver a entrar arranca "de cero" visualmente, pero en la base
+/// nunca se pierde nada: el admin sigue viendo todo.
+model SupportThread {
+  id                 String           @id @default(uuid())
+  userId             String           @unique
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages           SupportMessage[]
+  lastMessageAt      DateTime         @default(now())
+  lastMessagePreview String?          @db.VarChar(200)
+  /// Hay mensaje(s) del cliente que ningún admin marcó como leído todavía.
+  unreadByAdmin      Boolean          @default(false)
+  createdAt          DateTime         @default(now())
+
+  @@index([lastMessageAt])
+  @@map("support_threads")
+}
+
+model SupportMessage {
+  id           String        @id @default(uuid())
+  threadId     String
+  thread       SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  senderRole   String // 'CLIENT' | 'ADMIN'
+  /// Qué admin respondió — null en los mensajes del cliente.
+  senderUserId String?
+  message      String        @db.Text
+  createdAt    DateTime      @default(now())
+
+  @@index([threadId])
+  @@index([createdAt])
+  @@map("support_messages")
 }
 
 /// Bloqueo de usuario en el chat — bloquea todo intercambio de mensajes en ambas direcciones.

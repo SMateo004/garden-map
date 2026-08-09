@@ -4,6 +4,7 @@ import * as adminController from './admin.controller.js';
 import * as trainingController from '../training/training.controller.js';
 import * as promoCodeController from '../promo-code/promo-code.controller.js';
 import * as ledgerController from '../ledger/ledger.controller.js';
+import * as supportChatController from '../support-chat/support-chat.controller.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import { exportMonthAsTxt } from '../../services/audit.service.js';
 import prisma from '../../config/database.js';
@@ -17,6 +18,13 @@ router.use(requireRole('ADMIN'));
  * schema de Prisma), administrable vía estas rutas + curl/Postman. */
 router.get('/promo-codes', promoCodeController.list);
 router.post('/promo-codes', promoCodeController.create);
+
+/** Chat de soporte — inbox tipo WhatsApp con el historial completo de cada
+ * cliente (ver comentario en el schema de Prisma sobre SupportThread). */
+router.get('/support/threads', supportChatController.listThreads);
+router.get('/support/threads/:threadId/messages', supportChatController.getThreadMessages);
+router.post('/support/threads/:threadId/reply', supportChatController.reply);
+router.post('/support/threads/:threadId/read', supportChatController.markRead);
 
 /** Libro contable / finanzas — reporte gerencial mensual para socios. */
 router.get('/ledger/accounts', ledgerController.getAccounts);

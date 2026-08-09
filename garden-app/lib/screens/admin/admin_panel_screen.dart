@@ -23,6 +23,7 @@ import 'admin_cities_screen.dart';
 import 'admin_trainings_screen.dart';
 import 'admin_test_booking_screen.dart';
 import 'admin_finance_screen.dart';
+import 'admin_support_screen.dart';
 import 'payment_qr_admin_screen.dart';
 import 'audit_screen.dart';
 import '../../services/auth_service.dart';
@@ -1027,6 +1028,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ('Bajas de cuidador', Icons.person_remove_outlined),
     ('Antecedentes', Icons.gavel_rounded),
     ('Finanzas', Icons.attach_money_rounded),
+    ('Soporte', Icons.support_agent_rounded),
     // Solo para pruebas — visible en el sidebar de web (_webNavGroups) pero
     // excluido a propósito del tab bar de mobile (ver _buildTabBar, que
     // asume que el ÚLTIMO tab de esta lista es el de solo-pruebas).
@@ -1038,10 +1040,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   // "Finanzas" — no es ingreso de Garden, es dinero de terceros en tránsito
   // hacia refugios, y el admin no puede editar montos ahí.
   static const List<(String, IconData, List<int>)> _webNavGroups = [
-    ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5, 21, 26]),
+    ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5, 21, 27]),
     ('Finanzas', Icons.attach_money_rounded, [3, 6, 7, 15, 25]),
     ('Personas', Icons.groups_outlined, [8, 9, 20, 22, 23, 24]),
-    ('Comunicación', Icons.forum_outlined, [12, 13, 17, 18, 19]),
+    ('Comunicación', Icons.forum_outlined, [12, 13, 17, 18, 19, 26]),
     ('Sistema', Icons.settings_outlined, [10, 11, 14, 16]),
   ];
 
@@ -1075,6 +1077,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         AdminCaregiverDeletionRequestsScreen(adminToken: _adminToken),
         AdminAntecedentesFlaggedScreen(adminToken: _adminToken),
         AdminFinanceScreen(adminToken: _adminToken),
+        AdminSupportScreen(adminToken: _adminToken),
         AdminTestBookingScreen(adminToken: _adminToken),
       ],
     );

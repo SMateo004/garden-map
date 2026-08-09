@@ -145,6 +145,13 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
         // seguro (nadie más puede recibir los eventos de OTRO userId).
         socket.join(`user:${connUserId}`);
 
+        // Todos los admins conectados entran acá automáticamente — así el
+        // inbox de soporte (admin_support_screen.dart) recibe mensajes
+        // nuevos en vivo sin pollear, igual que la sala personal de arriba.
+        if (socket.data.role === 'ADMIN') {
+          socket.join('admin:support');
+        }
+
         // Presencia: registrar este socket como conectado para el usuario y
         // cancelar cualquier timer de "offline" pendiente (reconexión rápida).
         if (!onlineSockets.has(connUserId)) onlineSockets.set(connUserId, new Set());

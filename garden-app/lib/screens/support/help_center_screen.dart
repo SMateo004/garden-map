@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../theme/garden_theme.dart';
 import '../../data/help_center_content.dart';
+import '../../services/auth_state.dart';
 
 /// Centro de Ayuda — pantalla principal (estilo Airbnb).
-/// Buscador arriba, categorías con artículos largos y explicados, y el
-/// contacto directo por WhatsApp como ÚLTIMA medida al final de la página.
+/// Buscador arriba, categorías con artículos largos y explicados, y el chat
+/// directo con soporte como ÚLTIMA medida al final de la página — YA NO hay
+/// enlace a WhatsApp: todo el contacto directo pasa por el chat in-app (ver
+/// SupportChatScreen) para que el admin tenga todo centralizado.
 class HelpCenterScreen extends StatefulWidget {
   const HelpCenterScreen({super.key});
 
@@ -35,15 +37,32 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
     }).toList();
   }
 
-  Future<void> _openSupportWhatsApp() async {
-    const phone = '59175933133';
-    const message = 'Hola, necesito ayuda con mi cuenta de GARDEN 🌿';
-    final uri = Uri.parse('https://wa.me/$phone?text=${Uri.encodeComponent(message)}');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else if (mounted) {
-      GardenErrorDialog.show(context, 'No se pudo abrir WhatsApp');
+  void _openSupportChat() {
+    if (!AuthState.hasSession) {
+      // El chat de soporte requiere sesión (el hilo se guarda por usuario) —
+      // el router redirige solo a /login para rutas no públicas, pero acá
+      // avisamos primero de forma clara en vez de mandarlo sin explicación.
+      showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          icon: const Icon(Icons.support_agent_rounded, color: GardenColors.primary, size: 40),
+          title: const Text('Iniciá sesión para chatear'),
+          content: const Text('Para hablar con nuestro equipo de soporte primero necesitás iniciar sesión o crear una cuenta.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                context.push('/login');
+              },
+              child: const Text('Iniciar sesión'),
+            ),
+          ],
+        ),
+      );
+      return;
     }
+    context.push('/support-chat');
   }
 
   @override
@@ -236,14 +255,14 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                 const SizedBox(height: 8),
                 Text(
                   'Si tu problema es urgente o no se resolvió con estos artículos, '
-                  'escríbele directo a nuestro equipo de soporte por WhatsApp.',
+                  'escríbenos directo a nuestro equipo de soporte por chat.',
                   style: TextStyle(color: subtext, fontSize: 12.5, height: 1.5),
                 ),
                 const SizedBox(height: 14),
                 GardenButton(
-                  label: 'Contactar soporte por WhatsApp',
+                  label: 'Chatear con soporte',
                   icon: Icons.chat_rounded,
-                  onPressed: _openSupportWhatsApp,
+                  onPressed: _openSupportChat,
                 ),
               ],
             ),

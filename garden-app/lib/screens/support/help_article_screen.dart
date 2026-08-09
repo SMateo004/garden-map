@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:go_router/go_router.dart';
 import '../../theme/garden_theme.dart';
 import '../../data/help_center_content.dart';
+import '../../services/auth_state.dart';
 
 /// Página de artículo completo del Centro de Ayuda — estilo Airbnb.
 /// Muestra todas las secciones del artículo y, al final, un feedback rápido
@@ -23,16 +24,29 @@ class HelpArticleScreen extends StatefulWidget {
 class _HelpArticleScreenState extends State<HelpArticleScreen> {
   bool? _wasHelpful;
 
-  Future<void> _openSupportWhatsApp() async {
-    const phone = '59175933133';
-    final message =
-        'Hola, tengo una duda sobre "${widget.article.title}" en GARDEN 🌿';
-    final uri = Uri.parse('https://wa.me/$phone?text=${Uri.encodeComponent(message)}');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else if (mounted) {
-      GardenErrorDialog.show(context, 'No se pudo abrir WhatsApp');
+  void _openSupportChat() {
+    if (!AuthState.hasSession) {
+      showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          icon: const Icon(Icons.support_agent_rounded, color: GardenColors.primary, size: 40),
+          title: const Text('Iniciá sesión para chatear'),
+          content: const Text('Para hablar con nuestro equipo de soporte primero necesitás iniciar sesión o crear una cuenta.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                context.push('/login');
+              },
+              child: const Text('Iniciar sesión'),
+            ),
+          ],
+        ),
+      );
+      return;
     }
+    context.push('/support-chat');
   }
 
   @override
@@ -144,14 +158,14 @@ class _HelpArticleScreenState extends State<HelpArticleScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Si nada de esto resolvió tu problema, escríbele directo a soporte por WhatsApp.',
+                    'Si nada de esto resolvió tu problema, escríbenos directo a soporte por chat.',
                     style: TextStyle(color: subtext, fontSize: 12.5, height: 1.5),
                   ),
                   const SizedBox(height: 12),
                   GardenButton(
-                    label: 'Contactar soporte por WhatsApp',
+                    label: 'Chatear con soporte',
                     icon: Icons.support_agent_rounded,
-                    onPressed: _openSupportWhatsApp,
+                    onPressed: _openSupportChat,
                   ),
                 ],
               ),
