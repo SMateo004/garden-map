@@ -43,7 +43,7 @@ async function verifyFirebaseToken(idToken: string): Promise<{
 /**
  * POST /api/auth/social/login
  *
- * Body: { provider: 'google' | 'apple' | 'facebook', idToken: string }
+ * Body: { provider: 'google' | 'apple', idToken: string }
  *
  * - Si el email existe → login (funciona para CLIENT y CAREGIVER)
  * - Si no existe → 404 con email + nombre para que el cliente pre-llene el register
@@ -55,7 +55,7 @@ export async function socialLogin(req: Request, res: Response, next: NextFunctio
     if (!provider || !idToken) {
       throw new BadRequestError('provider e idToken son requeridos');
     }
-    if (!['google', 'apple', 'facebook'].includes(provider)) {
+    if (!['google', 'apple'].includes(provider)) {
       throw new BadRequestError('provider no válido');
     }
 

@@ -56,7 +56,6 @@ dependencies:
   firebase_auth: ^5.5.2
   google_sign_in: ^6.2.1
   sign_in_with_apple: ^6.1.4
-  flutter_facebook_auth: ^7.1.1
   sentry_flutter: ^8.14.2
   google_fonts: ^6.2.1
   flutter_animate: ^4.5.2

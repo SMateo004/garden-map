@@ -3,13 +3,12 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
-import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_state.dart';
 import 'secure_storage_service.dart';
 
-enum SocialProvider { google, apple, facebook }
+enum SocialProvider { google, apple }
 
 class SocialUserData {
   final String? idToken;
@@ -204,60 +203,6 @@ class SocialAuthService {
     }
   }
 
-  // ── Facebook ─────────────────────────────────────────────────────────────
-
-  static Future<SocialUserData?> signInWithFacebook() async {
-    try {
-      if (kIsWeb) {
-        final provider = FacebookAuthProvider()
-          ..addScope('email')
-          ..addScope('public_profile');
-        final result = await FirebaseAuth.instance.signInWithPopup(provider);
-        final user = result.user;
-        if (user == null) return null;
-        final idToken = await user.getIdToken();
-        final parts = (user.displayName ?? '').split(' ');
-        return SocialUserData(
-          idToken: idToken,
-          email: user.email ?? '',
-          firstName: parts.isNotEmpty ? parts.first : '',
-          lastName: parts.length > 1 ? parts.sublist(1).join(' ') : '',
-          photoUrl: user.photoURL,
-          provider: SocialProvider.facebook,
-        );
-      }
-
-      // Mobile
-      final loginResult = await FacebookAuth.instance.login(
-        permissions: ['email', 'public_profile'],
-      );
-      if (loginResult.status != LoginStatus.success) return null;
-
-      final credential =
-          FacebookAuthProvider.credential(loginResult.accessToken!.tokenString);
-      final result = await FirebaseAuth.instance.signInWithCredential(credential);
-      final user = result.user;
-      if (user == null) return null;
-      final idToken = await user.getIdToken();
-
-      final fbData = await FacebookAuth.instance.getUserData(
-        fields: 'name,email,first_name,last_name',
-      );
-      final parts = (user.displayName ?? '').split(' ');
-      return SocialUserData(
-        idToken: idToken,
-        email: user.email ?? '',
-        firstName: fbData['first_name'] as String? ?? (parts.isNotEmpty ? parts.first : ''),
-        lastName: fbData['last_name'] as String? ?? (parts.length > 1 ? parts.sublist(1).join(' ') : ''),
-        photoUrl: user.photoURL,
-        provider: SocialProvider.facebook,
-      );
-    } catch (e) {
-      debugPrint('[SocialAuth] Facebook error: $e');
-      return null;
-    }
-  }
-
   // ── Backend login ─────────────────────────────────────────────────────────
 
   /// Verifica el token contra el backend.
@@ -278,7 +223,7 @@ class SocialAuthService {
     }
 
     try {
-      final providerName = data.provider.name; // 'google' | 'apple' | 'facebook'
+      final providerName = data.provider.name; // 'google' | 'apple'
       final res = await http.post(
         Uri.parse('$_baseUrl/auth/social/login'),
         headers: {'Content-Type': 'application/json'},

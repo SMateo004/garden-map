@@ -1054,17 +1054,12 @@ class _SocialRegisterButtons extends StatefulWidget {
 }
 
 class _SocialRegisterButtonsState extends State<_SocialRegisterButtons> {
-  SocialProvider? _loading;
+  bool _loading = false;
 
-  Future<void> _handle(SocialProvider provider) async {
-    setState(() => _loading = provider);
+  Future<void> _handle() async {
+    setState(() => _loading = true);
     try {
-      SocialUserData? data;
-      if (provider == SocialProvider.google) {
-        data = await SocialAuthService.signInWithGoogle();
-      } else {
-        data = await SocialAuthService.signInWithFacebook();
-      }
+      final data = await SocialAuthService.signInWithGoogle();
       if (data == null) {
         if (mounted) {
           GardenErrorDialog.show(context, 'No se pudo obtener los datos del proveedor. Intenta de nuevo.');
@@ -1078,55 +1073,24 @@ class _SocialRegisterButtonsState extends State<_SocialRegisterButtons> {
         GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
-      if (mounted) setState(() => _loading = null);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    Widget btn(SocialProvider p) => _RegisterSocialBtn(
-          provider: p,
-          loading: _loading == p,
-          onTap: () => _handle(p),
-        );
-
-    return Column(children: [
-      btn(SocialProvider.google),
-      const SizedBox(height: 10),
-      btn(SocialProvider.facebook),
-    ]);
+    return _RegisterSocialBtn(loading: _loading, onTap: _handle);
   }
 }
 
 class _RegisterSocialBtn extends StatelessWidget {
-  final SocialProvider provider;
   final bool loading;
   final VoidCallback onTap;
 
-  const _RegisterSocialBtn({
-    required this.provider,
-    required this.loading,
-    required this.onTap,
-  });
-
-  bool get _isFacebook => provider == SocialProvider.facebook;
+  const _RegisterSocialBtn({required this.loading, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    // Registro siempre en modo claro — se ve mejor la marca, independiente
-    // del tema del dispositivo/app.
-    final isDark = false;
-    final label = _isFacebook ? 'Continuar con Facebook' : 'Continuar con Google';
-
-    final bgColor = _isFacebook
-        ? const Color(0xFF1877F2)
-        : (isDark ? const Color(0xFF2C2C2E) : Colors.white);
-    final borderColor = _isFacebook
-        ? const Color(0xFF1877F2)
-        : (isDark ? const Color(0xFF3A3A3C) : const Color(0xFFDADCE0));
-    final textColor = _isFacebook ? Colors.white : (isDark ? Colors.white : const Color(0xFF3C4043));
-    final progressColor = _isFacebook ? Colors.white : GardenColors.primary;
-
     return SizedBox(
       width: double.infinity,
       height: 48,
@@ -1136,31 +1100,26 @@ class _RegisterSocialBtn extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
-            color: bgColor,
+            color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: borderColor),
-            boxShadow: _isFacebook
-                ? [BoxShadow(color: const Color(0xFF1877F2).withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))]
-                : [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 1))],
+            border: Border.all(color: const Color(0xFFDADCE0)),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 1))],
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: loading
-              ? Center(
-                  child: GardenLoadingIndicator(size: 18, color: progressColor),
+              ? const Center(
+                  child: GardenLoadingIndicator(size: 18, color: GardenColors.primary),
                 )
               : Row(
                   children: [
-                    if (_isFacebook)
-                      const _FbLogo()
-                    else
-                      const _GLogo(),
+                    const _GLogo(),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        label,
+                        'Continuar con Google',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: textColor,
+                          color: const Color(0xFF3C4043),
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           letterSpacing: 0.1,
@@ -1182,22 +1141,6 @@ class _GLogo extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox(
         width: 20, height: 20,
         child: CustomPaint(painter: _GoogleGPainter()),
-      );
-}
-
-class _FbLogo extends StatelessWidget {
-  const _FbLogo();
-  @override
-  Widget build(BuildContext context) => const SizedBox(
-        width: 20, height: 20,
-        child: Center(
-          child: Text('f',
-            style: TextStyle(
-              color: Colors.white, fontSize: 18,
-              fontWeight: FontWeight.w800, height: 1,
-            ),
-          ),
-        ),
       );
 }
 

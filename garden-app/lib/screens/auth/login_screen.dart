@@ -430,17 +430,12 @@ class _SocialLoginButtons extends StatefulWidget {
 }
 
 class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
-  SocialProvider? _loading;
+  bool _loading = false;
 
-  Future<void> _handleProvider(SocialProvider provider) async {
-    setState(() => _loading = provider);
+  Future<void> _handleGoogle() async {
+    setState(() => _loading = true);
     try {
-      SocialUserData? data;
-      if (provider == SocialProvider.google) {
-        data = await SocialAuthService.signInWithGoogle();
-      } else {
-        data = await SocialAuthService.signInWithFacebook();
-      }
+      final data = await SocialAuthService.signInWithGoogle();
 
       if (data == null) {
         if (mounted) {
@@ -464,67 +459,24 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
         ));
       }
     } finally {
-      if (mounted) setState(() => _loading = null);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _SocialBtn(
-          provider: SocialProvider.google,
-          loading: _loading == SocialProvider.google,
-          onTap: () => _handleProvider(SocialProvider.google),
-        ),
-        const SizedBox(height: 10),
-        _SocialBtn(
-          provider: SocialProvider.facebook,
-          loading: _loading == SocialProvider.facebook,
-          onTap: () => _handleProvider(SocialProvider.facebook),
-        ),
-      ],
-    );
+    return _SocialBtn(loading: _loading, onTap: _handleGoogle);
   }
 }
 
 class _SocialBtn extends StatelessWidget {
-  final SocialProvider provider;
   final bool loading;
   final VoidCallback onTap;
 
-  const _SocialBtn({
-    required this.provider,
-    required this.loading,
-    required this.onTap,
-  });
-
-  static const _fbBlue = Color(0xFF1877F2);
-  static const _googleRed = Color(0xFFEA4335);
-  static const _googleBlue = Color(0xFF4285F4);
-  static const _googleYellow = Color(0xFFFBBC05);
-  static const _googleGreen = Color(0xFF34A853);
-
-  bool get _isFacebook => provider == SocialProvider.facebook;
+  const _SocialBtn({required this.loading, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    // Login siempre en modo claro — se ve mejor la marca, independiente del
-    // tema del dispositivo/app.
-    final isDark = false;
-    final label = _isFacebook ? 'Continuar con Facebook' : 'Continuar con Google';
-
-    final bgColor = _isFacebook
-        ? _fbBlue
-        : (isDark ? const Color(0xFF2C2C2E) : Colors.white);
-    final borderColor = _isFacebook
-        ? _fbBlue
-        : (isDark ? const Color(0xFF3A3A3C) : const Color(0xFFDADCE0));
-    final textColor = _isFacebook
-        ? Colors.white
-        : (isDark ? Colors.white : const Color(0xFF3C4043));
-    final progressColor = _isFacebook ? Colors.white : GardenColors.primary;
-
     return SizedBox(
       width: double.infinity,
       height: 48,
@@ -534,31 +486,26 @@ class _SocialBtn extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
-            color: bgColor,
+            color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: borderColor),
-            boxShadow: _isFacebook
-                ? [BoxShadow(color: _fbBlue.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))]
-                : [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 1))],
+            border: Border.all(color: const Color(0xFFDADCE0)),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 1))],
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: loading
-              ? Center(
-                  child: GardenLoadingIndicator(size: 18, color: progressColor),
+              ? const Center(
+                  child: GardenLoadingIndicator(size: 18, color: GardenColors.primary),
                 )
               : Row(
                   children: [
-                    if (_isFacebook)
-                      const _FacebookLogo()
-                    else
-                      const _GoogleLogo(),
+                    const _GoogleLogo(),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        label,
+                        'Continuar con Google',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: textColor,
+                          color: const Color(0xFF3C4043),
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           letterSpacing: 0.1,
@@ -627,36 +574,3 @@ class _GoogleGPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-class _FacebookLogo extends StatelessWidget {
-  const _FacebookLogo();
-  @override
-  Widget build(BuildContext context) {
-    // Intentar usar asset PNG; si no existe, fallback al logo vectorial
-    return SizedBox(
-      width: 20, height: 20,
-      child: Image.asset(
-        'assets/images/facebook-logo.png',
-        width: 20, height: 20,
-        errorBuilder: (_, __, ___) => const _FacebookLogoFallback(),
-      ),
-    );
-  }
-}
-
-class _FacebookLogoFallback extends StatelessWidget {
-  const _FacebookLogoFallback();
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        'f',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          fontWeight: FontWeight.w900,
-          height: 1,
-        ),
-      ),
-    );
-  }
-}

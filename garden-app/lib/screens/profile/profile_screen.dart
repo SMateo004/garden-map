@@ -48,7 +48,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   /// True when the CLIENT's core data is missing at least one required field.
   /// Phone must be a real Bolivian number — social-login pre-registration
-  /// (Google/Facebook) leaves a `social_pending_...` placeholder that never
+  /// (Google) leaves a `social_pending_...` placeholder that never
   /// matches this format, so accounts created that way are correctly flagged
   /// incomplete until the user fills in the real value.
   bool get _isClientDataIncomplete {
