@@ -852,11 +852,13 @@ class _GardenAppState extends State<GardenApp> with WidgetsBindingObserver {
     networkErrorNotifier.addListener(_onNetworkError);
     // Recheck automático cada 3s mientras estemos offline — ver global_http_client.dart.
     ConnectivityMonitor.instance.start();
-    // Countdown de próxima reserva (idea #3) — primer chequeo al arrancar;
-    // ver didChangeAppLifecycleState para el refresco al volver a primer
-    // plano. No hace falta más frecuencia que eso: es un countdown de algo a
-    // horas/días de distancia, no algo que necesite tiempo real.
+    // Countdown de próxima reserva (idea #3) + estadística mensual de
+    // respaldo (idea #5) — primer chequeo al arrancar; ver
+    // didChangeAppLifecycleState para el refresco al volver a primer plano.
+    // No hace falta más frecuencia que eso: ninguno de los dos es algo que
+    // necesite tiempo real.
     _refreshNextBookingWidget();
+    _refreshMonthlyStatsWidget();
   }
 
   @override
@@ -878,6 +880,7 @@ class _GardenAppState extends State<GardenApp> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       PresenceService.instance.connect();
       _refreshNextBookingWidget();
+      _refreshMonthlyStatsWidget();
     } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
       PresenceService.instance.disconnect();
     }
@@ -910,6 +913,31 @@ class _GardenAppState extends State<GardenApp> with WidgetsBindingObserver {
       );
     } catch (e) {
       debugPrint('_refreshNextBookingWidget error: $e');
+    }
+  }
+
+  /// Estadística mensual de respaldo (idea #5) para el mismo widget idle —
+  /// se pide y se empuja aparte de _refreshNextBookingWidget porque son dos
+  /// endpoints/estados independientes; el widget nativo decide cuál mostrar
+  /// según cuál esté presente (ver GardenQuickSearchWidget.kt/.swift).
+  Future<void> _refreshMonthlyStatsWidget() async {
+    if (!AuthState.hasSession) return;
+    try {
+      final res = await http.get(
+        Uri.parse('$_kApiUrl/bookings/monthly-stats'),
+        headers: {'Authorization': 'Bearer ${AuthState.token}'},
+      );
+      if (res.statusCode != 200) return;
+      final data = jsonDecode(res.body);
+      if (data['success'] != true) return;
+      final completed = (data['data']?['completedThisMonth'] as num?)?.toInt() ?? 0;
+      if (completed > 0) {
+        await GardenLiveActivity.instance.updateMonthlyStats(completed);
+      } else {
+        await GardenLiveActivity.instance.clearMonthlyStats();
+      }
+    } catch (e) {
+      debugPrint('_refreshMonthlyStatsWidget error: $e');
     }
   }
 

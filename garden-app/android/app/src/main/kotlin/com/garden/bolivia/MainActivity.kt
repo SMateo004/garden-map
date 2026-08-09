@@ -166,6 +166,21 @@ class MainActivity : FlutterFragmentActivity() {
                         widgetScope.launch { GardenQuickSearchWidget().updateAll(applicationContext) }
                         result.success(null)
                     }
+                    "updateMonthlyStats" -> {
+                        val completed = (call.argument<Number>("completedThisMonth"))?.toInt()
+                        if (completed == null) {
+                            result.error("ARGS", "Falta completedThisMonth", null)
+                            return@setMethodCallHandler
+                        }
+                        GardenWidgetData.saveMonthlyStats(applicationContext, completed)
+                        widgetScope.launch { GardenQuickSearchWidget().updateAll(applicationContext) }
+                        result.success(null)
+                    }
+                    "clearMonthlyStats" -> {
+                        GardenWidgetData.clearMonthlyStats(applicationContext)
+                        widgetScope.launch { GardenQuickSearchWidget().updateAll(applicationContext) }
+                        result.success(null)
+                    }
                     else -> result.notImplemented()
                 }
             }

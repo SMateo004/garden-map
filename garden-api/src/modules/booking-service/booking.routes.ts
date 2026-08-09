@@ -39,6 +39,14 @@ router.get(
   bookingController.getNextUpcoming
 );
 
+/** GET /api/bookings/monthly-stats — reservas COMPLETED de este mes (cliente
+ * o cuidador). Respaldo del widget idle cuando no hay reserva próxima. */
+router.get(
+  '/monthly-stats',
+  authMiddleware,
+  bookingController.getMonthlyStats
+);
+
 /** GET /api/bookings/:id/confirm — datos para página de confirmación. Solo cliente titular. */
 router.get(
   '/:id/confirm',

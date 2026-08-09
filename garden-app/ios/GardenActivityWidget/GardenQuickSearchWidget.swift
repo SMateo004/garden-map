@@ -55,28 +55,44 @@ private struct NextBookingInfo {
     }
 }
 
+/// Respaldo (idea #5) cuando no hay reserva próxima — ver
+/// NextBookingInfo.load() arriba, mismo App Group.
+private struct MonthlyStatsInfo {
+    let completedThisMonth: Int
+
+    /// nil si no hay dato, si es 0 (nada que celebrar), o si el App Group
+    /// todavía no está habilitado.
+    static func load() -> MonthlyStatsInfo? {
+        guard let defaults = UserDefaults(suiteName: appGroupSuite),
+              defaults.bool(forKey: "monthlyStatsActive") else { return nil }
+        let count = defaults.integer(forKey: "monthlyStatsCompletedCount")
+        guard count > 0 else { return nil }
+        return MonthlyStatsInfo(completedThisMonth: count)
+    }
+}
+
 private struct QuickSearchEntry: TimelineEntry {
     let date: Date
     let nextBooking: NextBookingInfo?
+    let monthlyStats: MonthlyStatsInfo?
 }
 
 private struct QuickSearchProvider: TimelineProvider {
     func placeholder(in context: Context) -> QuickSearchEntry {
-        QuickSearchEntry(date: Date(), nextBooking: nil)
+        QuickSearchEntry(date: Date(), nextBooking: nil, monthlyStats: nil)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (QuickSearchEntry) -> Void) {
-        completion(QuickSearchEntry(date: Date(), nextBooking: NextBookingInfo.load()))
+        completion(QuickSearchEntry(date: Date(), nextBooking: NextBookingInfo.load(), monthlyStats: MonthlyStatsInfo.load()))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<QuickSearchEntry>) -> Void) {
-        let entry = QuickSearchEntry(date: Date(), nextBooking: NextBookingInfo.load())
+        let entry = QuickSearchEntry(date: Date(), nextBooking: NextBookingInfo.load(), monthlyStats: MonthlyStatsInfo.load())
         // Con countdown: refrescar cuando la reserva arranque (el countdown
         // deja de tener sentido) — WidgetKit igual la puede refrescar antes
         // por su cuenta (budget del sistema) o cuando reloadTimelines() se
-        // llama desde la app al llegar un dato nuevo. Sin countdown (o si
-        // el App Group no está habilitado todavía), .never — no hay nada
-        // que cambie solo.
+        // llama desde la app al llegar un dato nuevo. Sin countdown (incluida
+        // la estadística mensual, que no vence sola), .never.
         let policy: TimelineReloadPolicy = entry.nextBooking != nil
             ? .after(entry.nextBooking!.startsAt)
             : .never
@@ -87,9 +103,14 @@ private struct QuickSearchProvider: TimelineProvider {
 private struct QuickSearchView: View {
     let entry: QuickSearchEntry
 
+    // Precedencia: reserva próxima > estadística del mes > prompt genérico —
+    // mismo orden que la versión Android (ver Content() en
+    // GardenQuickSearchWidget.kt).
     var body: some View {
         if let next = entry.nextBooking {
             nextBookingBody(next)
+        } else if let stats = entry.monthlyStats {
+            monthlyStatsBody(stats)
         } else {
             searchPromptBody
         }
@@ -160,6 +181,35 @@ private struct QuickSearchView: View {
         .background(Color(red: 30/255, green: 45/255, blue: 15/255)) // forest, tono marca
         // /my-bookings-tab, no una ruta de detalle por-reserva — mismo criterio
         // que la versión Android (ver GardenQuickSearchWidget.kt).
+        .widgetURL(URL(string: "garden://my-bookings-tab"))
+    }
+
+    private func monthlyStatsBody(_ stats: MonthlyStatsInfo) -> some View {
+        let label = stats.completedThisMonth == 1 ? "servicio completado este mes" : "servicios completados este mes"
+        return HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color(red: 185/255, green: 210/255, blue: 138/255).opacity(0.2))
+                    .frame(width: 44, height: 44)
+                Text("✨")
+                    .font(.system(size: 20))
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(stats.completedThisMonth) \(label)")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                Text("¡Seguí así! 🐾")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(red: 185/255, green: 210/255, blue: 138/255))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 4)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity)
+        .background(Color(red: 30/255, green: 45/255, blue: 15/255))
         .widgetURL(URL(string: "garden://my-bookings-tab"))
     }
 }

@@ -3103,6 +3103,32 @@ export async function getNextUpcomingBooking(
 }
 
 /**
+ * Cuántas reservas COMPLETED tiene [userId] (cliente o cuidador según [role])
+ * en lo que va del mes calendario — usada por el widget idle "buscá un
+ * cuidador" (idea #5) como respaldo cuando no hay ninguna reserva próxima
+ * (ver getNextUpcomingBooking arriba): en vez de quedar en blanco, muestra
+ * "8 servicios completados este mes". Se cuenta por serviceEndedAt (cuándo
+ * se completó de verdad), no por createdAt (cuándo se reservó) — una
+ * reserva hecha en abril pero completada en mayo cuenta para mayo.
+ */
+export async function getMonthlyCompletedCount(
+  userId: string,
+  role: 'CLIENT' | 'CAREGIVER'
+): Promise<number> {
+  const now = new Date();
+  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const where = role === 'CAREGIVER' ? { caregiver: { userId } } : { clientId: userId };
+
+  return prisma.booking.count({
+    where: {
+      ...where,
+      status: 'COMPLETED',
+      serviceEndedAt: { gte: startOfMonth },
+    },
+  });
+}
+
+/**
  * Obtiene una reserva por ID. El cliente titular o el cuidador asignado pueden acceder.
  */
 export async function getBookingById(

@@ -75,13 +75,14 @@ class AuthService {
     await prefs.remove('user_id');
     await prefs.remove('user_name');
     await prefs.remove('user_photo');
-    // Countdown de próxima reserva (idea #3) — no dejar el dato de la cuenta
-    // anterior visible en el widget idle si el dispositivo se comparte o se
-    // cambia de cuenta. El widget de servicio activo no se toca acá porque
-    // service_execution_screen.dart ya lo cierra explícitamente cuando el
-    // servicio termina, y no debería quedar uno activo al momento de un
-    // logout normal.
+    // Countdown de próxima reserva (idea #3) + estadística mensual (idea #5)
+    // — no dejar datos de la cuenta anterior visibles en el widget idle si
+    // el dispositivo se comparte o se cambia de cuenta. El widget de
+    // servicio activo no se toca acá porque service_execution_screen.dart
+    // ya lo cierra explícitamente cuando el servicio termina, y no debería
+    // quedar uno activo al momento de un logout normal.
     await GardenLiveActivity.instance.clearNextBooking();
+    await GardenLiveActivity.instance.clearMonthlyStats();
   }
 
   // ── User data storage ───────────────────────────────────────────────────────

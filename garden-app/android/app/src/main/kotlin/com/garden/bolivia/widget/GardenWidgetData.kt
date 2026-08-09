@@ -137,6 +137,34 @@ object GardenWidgetData {
         )
     }
 
+    // ── Estadística mensual (idea #5) ────────────────────────────────────
+    // Respaldo del widget idle cuando no hay reserva próxima (ver
+    // loadNextBooking arriba) — GardenQuickSearchWidget decide la
+    // precedencia entre los dos estados independientes, no esta clase.
+    private const val KEY_STATS_ACTIVE = "monthlyStatsActive"
+    private const val KEY_STATS_COMPLETED = "monthlyStatsCompletedCount"
+
+    fun saveMonthlyStats(context: Context, completedThisMonth: Int) {
+        prefs(context).edit()
+            .putBoolean(KEY_STATS_ACTIVE, true)
+            .putInt(KEY_STATS_COMPLETED, completedThisMonth)
+            .apply()
+    }
+
+    fun clearMonthlyStats(context: Context) {
+        prefs(context).edit().putBoolean(KEY_STATS_ACTIVE, false).apply()
+    }
+
+    /** null si no hay dato guardado o si el completedThisMonth es 0 — cero
+     * servicios no es una estadística que valga la pena mostrar, es lo mismo
+     * que no tener nada que decir. */
+    fun loadMonthlyStats(context: Context): Int? {
+        val p = prefs(context)
+        if (!p.getBoolean(KEY_STATS_ACTIVE, false)) return null
+        val count = p.getInt(KEY_STATS_COMPLETED, 0)
+        return if (count > 0) count else null
+    }
+
     fun load(context: Context): ActiveService? {
         val p = prefs(context)
         if (!p.getBoolean(KEY_ACTIVE, false)) return null

@@ -225,6 +225,18 @@ export const getNextUpcoming = asyncHandler(async (req: Request, res: Response) 
 });
 
 /**
+ * GET /api/bookings/monthly-stats — reservas COMPLETED de este mes (cliente
+ * o cuidador). Respaldo del widget idle cuando no hay reserva próxima (idea
+ * #5) — ver garden_live_activity.dart.
+ */
+export const getMonthlyStats = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const role = req.user!.role === 'CAREGIVER' ? 'CAREGIVER' : 'CLIENT';
+  const completedThisMonth = await bookingService.getMonthlyCompletedCount(userId, role);
+  res.json({ success: true, data: { completedThisMonth } });
+});
+
+/**
  * GET /api/bookings/:id
  * Obtiene una reserva por ID. Solo el cliente titular puede acceder.
  */

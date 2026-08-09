@@ -291,6 +291,37 @@ class GardenLiveActivity {
     }
   }
 
+  // ── Estadística mensual (idea #5) — respaldo del mismo widget idle cuando
+  // no hay reserva próxima (ver updateNextBooking arriba). Independiente:
+  // ambos estados se guardan por separado, el widget nativo decide la
+  // precedencia (ver Content() en GardenQuickSearchWidget.kt/.swift).
+
+  Future<void> updateMonthlyStats(int completedThisMonth) async {
+    if (kIsWeb) return;
+    try {
+      if (Platform.isIOS) {
+        await _iosQuickSearchChannel.invokeMethod('updateMonthlyStats', {'completedThisMonth': completedThisMonth});
+      } else if (Platform.isAndroid) {
+        await _androidWidgetChannel.invokeMethod('updateMonthlyStats', {'completedThisMonth': completedThisMonth});
+      }
+    } catch (e) {
+      debugPrint('[LiveActivity] updateMonthlyStats error: $e');
+    }
+  }
+
+  Future<void> clearMonthlyStats() async {
+    if (kIsWeb) return;
+    try {
+      if (Platform.isIOS) {
+        await _iosQuickSearchChannel.invokeMethod('clearMonthlyStats');
+      } else if (Platform.isAndroid) {
+        await _androidWidgetChannel.invokeMethod('clearMonthlyStats');
+      }
+    } catch (e) {
+      debugPrint('[LiveActivity] clearMonthlyStats error: $e');
+    }
+  }
+
   Future<void> _initAndroid() async {
     if (_androidReady) return;
     const init = InitializationSettings(

@@ -52,11 +52,15 @@ class GardenQuickSearchWidget : GlanceAppWidget() {
 
     @Composable
     private fun Content(context: Context) {
+        // Precedencia: reserva próxima > estadística del mes > prompt
+        // genérico. Los tres estados viven independientes en
+        // GardenWidgetData — esta es la única función que decide cuál mostrar.
         val nextBooking = GardenWidgetData.loadNextBooking(context)
-        if (nextBooking != null) {
-            NextBookingCard(nextBooking)
-        } else {
-            SearchPromptCard()
+        val monthlyCompleted = GardenWidgetData.loadMonthlyStats(context)
+        when {
+            nextBooking != null -> NextBookingCard(nextBooking)
+            monthlyCompleted != null -> MonthlyStatsCard(monthlyCompleted)
+            else -> SearchPromptCard()
         }
     }
 
@@ -150,6 +154,49 @@ class GardenQuickSearchWidget : GlanceAppWidget() {
                 )
                 Text(
                     formatCountdown(data.startsAtMs) + (data.counterpartName.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""),
+                    maxLines = 1,
+                    style = TextStyle(color = ColorProvider(QuickSearchAccent), fontSize = 11.sp),
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun MonthlyStatsCard(completedThisMonth: Int) {
+        val ctx = LocalContext.current
+        val launchIntent = Intent(ctx, MainActivity::class.java).apply {
+            putExtra("deepLinkRoute", "/my-bookings-tab")
+        }
+        val label = if (completedThisMonth == 1) "servicio completado este mes" else "servicios completados este mes"
+
+        Row(
+            verticalAlignment = Alignment.Vertical.CenterVertically,
+            modifier = GlanceModifier
+                .fillMaxWidth()
+                .background(QuickSearchSurface)
+                .cornerRadius(20.dp)
+                .padding(16.dp)
+                .clickable(actionStartActivity(launchIntent)),
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = GlanceModifier
+                    .width(44.dp)
+                    .height(44.dp)
+                    .background(Color(0x33B9D28A))
+                    .cornerRadius(22.dp),
+            ) {
+                Text("✨", style = TextStyle(fontSize = 20.sp))
+            }
+            Spacer(modifier = GlanceModifier.width(12.dp))
+            Column(modifier = GlanceModifier.defaultWeight()) {
+                Text(
+                    "$completedThisMonth $label",
+                    maxLines = 2,
+                    style = TextStyle(color = ColorProvider(Color.White), fontWeight = FontWeight.Bold, fontSize = 15.sp),
+                )
+                Text(
+                    "¡Seguí así! 🐾",
                     maxLines = 1,
                     style = TextStyle(color = ColorProvider(QuickSearchAccent), fontSize = 11.sp),
                 )

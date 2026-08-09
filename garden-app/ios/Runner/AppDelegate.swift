@@ -144,6 +144,24 @@ import WidgetKit
                     WidgetCenter.shared.reloadTimelines(ofKind: "GardenQuickSearchWidget")
                 }
                 result(nil)
+            case "updateMonthlyStats":
+                guard let args = call.arguments as? [String: Any],
+                      let completed = (args["completedThisMonth"] as? NSNumber)?.intValue else {
+                    result(FlutterError(code: "ARGS", message: "Invalid arguments", details: nil))
+                    return
+                }
+                defaults?.set(true, forKey: "monthlyStatsActive")
+                defaults?.set(completed, forKey: "monthlyStatsCompletedCount")
+                if #available(iOS 14.0, *) {
+                    WidgetCenter.shared.reloadTimelines(ofKind: "GardenQuickSearchWidget")
+                }
+                result(nil)
+            case "clearMonthlyStats":
+                defaults?.set(false, forKey: "monthlyStatsActive")
+                if #available(iOS 14.0, *) {
+                    WidgetCenter.shared.reloadTimelines(ofKind: "GardenQuickSearchWidget")
+                }
+                result(nil)
             default:
                 result(FlutterMethodNotImplemented)
             }
