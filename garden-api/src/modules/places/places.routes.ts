@@ -95,19 +95,23 @@ router.get('/map-snapshot', async (req: Request, res: Response) => {
   try {
     const googleRes = await fetch(url.toString());
     if (!googleRes.ok) {
-      // TODO(temporal): el body de error de Google en /staticmap es texto
-      // plano, no JSON — lo devolvemos tal cual para diagnosticar el 502 en
-      // vivo. Sacar este detalle una vez resuelto (ver conversación).
+      // Diagnosticado en vivo (ago 2026): Google devuelve 403 "This API key
+      // is not authorized to use this service or API" hasta que se habilite
+      // "Maps Static API" para el proyecto de GOOGLE_MAPS_KEY en Google Cloud
+      // Console (Places Autocomplete/Details, que sí funcionan hoy, son una
+      // API distinta — hay que habilitar Static Maps aparte). Logueamos el
+      // detalle para no tener que repetir el diagnóstico si vuelve a fallar.
       const detail = await googleRes.text();
       logger.warn('map-snapshot: Google rechazó la request', { status: googleRes.status, detail });
-      return res.status(502).json({ error: 'map_snapshot_failed', googleStatus: googleRes.status, detail });
+      return res.status(502).json({ error: 'map_snapshot_failed' });
     }
     const buffer = Buffer.from(await googleRes.arrayBuffer());
     res.set('Content-Type', googleRes.headers.get('content-type') ?? 'image/png');
     res.set('Cache-Control', 'private, max-age=15'); // el punto se mueve — no cachear de más
     return res.send(buffer);
   } catch (e) {
-    return res.status(502).json({ error: 'map_snapshot_failed', detail: e instanceof Error ? e.message : String(e) });
+    logger.warn('map-snapshot: error de red hacia Google', { error: e instanceof Error ? e.message : String(e) });
+    return res.status(502).json({ error: 'map_snapshot_failed' });
   }
 });
 
