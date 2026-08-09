@@ -149,6 +149,24 @@ export const uploadPublicSinglePhotoHandler = [
   }),
 ];
 
+/** POST /api/upload/banner-image — multipart 'image'. Requires auth ADMIN.
+ * Imagen de fondo para los banners promocionales del marketplace (ver
+ * admin_panel_screen.dart AdminBannersTab / marketplace_screen.dart
+ * _buildBannerCard). No pasa por assertFotoValida (identidad/mascota) —
+ * es contenido de marketing, no evidencia de servicio. */
+export const uploadBannerImageHandler = [
+  upload.single('image'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const file = req.file;
+    if (!file) throw new CaregiverProfileValidationError('Se requiere una imagen (JPG/PNG/WEBP, máx. 20MB)');
+    await assertImageBuffer(file.buffer);
+
+    const url = await uploadImage(file.buffer, { folder: 'banners', name: `banner-${randomUUID()}` });
+    logger.info('Imagen de banner subida', { url, adminId: req.user!.userId });
+    res.json({ success: true, data: { url } });
+  }),
+];
+
 /** POST /api/upload/user-photo — multipart 'photo'. Updates User.profilePicture. Requires any auth. */
 export const uploadUserPhotoHandler = [
   upload.single('photo'),

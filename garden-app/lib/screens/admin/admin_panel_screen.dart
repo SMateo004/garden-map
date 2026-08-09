@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../widgets/garden_empty_state.dart';
 import '../../theme/garden_theme.dart';
 import '../../utils/garden_banks.dart';
@@ -5288,70 +5290,15 @@ class _AdminBannersViewState extends State<_AdminBannersView> {
   }
 
   void _showForm([Map<String, dynamic>? existing]) {
-    final titleCtrl = TextEditingController(text: existing?['title'] ?? '');
-    final subtitleCtrl = TextEditingController(text: existing?['subtitle'] ?? '');
-    final imageCtrl = TextEditingController(text: existing?['imageUrl'] ?? '');
-    final btnCtrl = TextEditingController(text: existing?['buttonText'] ?? '');
-    final actionCtrl = TextEditingController(text: existing?['actionValue'] ?? '');
-    final posCtrl = TextEditingController(text: '${existing?['position'] ?? 0}');
-    String actionType = existing?['actionType'] ?? 'none';
-    bool active = existing?['active'] == true;
-
-    showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, ss) => AlertDialog(
-      title: Text(existing == null ? 'Nuevo Banner' : 'Editar Banner'),
-      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Título *')),
-        TextField(controller: subtitleCtrl, decoration: const InputDecoration(labelText: 'Subtítulo')),
-        TextField(controller: imageCtrl, decoration: const InputDecoration(labelText: 'URL imagen de fondo')),
-        TextField(controller: btnCtrl, decoration: const InputDecoration(labelText: 'Texto del botón')),
-        TextField(controller: posCtrl, decoration: const InputDecoration(labelText: 'Posición (0 = inicio)'), keyboardType: TextInputType.number),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: actionType,
-          decoration: const InputDecoration(labelText: 'Acción al tocar'),
-          items: const [
-            DropdownMenuItem(value: 'none', child: Text('Sin acción')),
-            DropdownMenuItem(value: 'url', child: Text('Abrir URL externa')),
-            DropdownMenuItem(value: 'screen', child: Text('Navegar a pantalla')),
-          ],
-          onChanged: (v) => ss(() => actionType = v ?? 'none'),
-        ),
-        if (actionType != 'none')
-          TextField(controller: actionCtrl, decoration: InputDecoration(
-            labelText: actionType == 'url' ? 'URL (https://...)' : 'Ruta de pantalla (/marketplace, etc.)',
-          )),
-        const SizedBox(height: 8),
-        Row(children: [
-          const Text('Activo'), const Spacer(),
-          Switch(value: active, onChanged: (v) => ss(() => active = v), activeColor: GardenColors.primary),
-        ]),
-      ])),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-        ElevatedButton(
-          onPressed: () async {
-            final body = jsonEncode({
-              'title': titleCtrl.text.trim(),
-              'subtitle': subtitleCtrl.text.trim().isEmpty ? null : subtitleCtrl.text.trim(),
-              'imageUrl': imageCtrl.text.trim().isEmpty ? null : imageCtrl.text.trim(),
-              'buttonText': btnCtrl.text.trim().isEmpty ? null : btnCtrl.text.trim(),
-              'actionType': actionType,
-              'actionValue': actionCtrl.text.trim().isEmpty ? null : actionCtrl.text.trim(),
-              'position': int.tryParse(posCtrl.text) ?? 0,
-              'active': active,
-            });
-            if (existing == null) {
-              await http.post(Uri.parse('$_base/admin/banners'), headers: _h, body: body);
-            } else {
-              await http.patch(Uri.parse('$_base/admin/banners/${existing['id']}'), headers: _h, body: body);
-            }
-            if (ctx.mounted) Navigator.pop(ctx);
-            _load();
-          },
-          child: const Text('Guardar'),
-        ),
-      ],
-    )));
+    showDialog(
+      context: context,
+      builder: (ctx) => _BannerFormDialog(
+        adminToken: widget.adminToken,
+        baseUrl: _base,
+        existing: existing,
+        onSaved: _load,
+      ),
+    );
   }
 
   @override Widget build(BuildContext context) {
@@ -5406,6 +5353,302 @@ class _AdminBannersViewState extends State<_AdminBannersView> {
             ]),
     );
     }); // AnimatedBuilder
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// FORMULARIO DE BANNER — con subida real de imagen + preview idéntico al que
+// ve el cliente en el marketplace (ver _buildBannerCard en
+// marketplace_screen.dart: tarjeta de 180px de alto, ancho completo de la
+// lista, BoxFit.cover). El recorte de "cover" es el motivo de la guía de
+// tamaño de abajo: el mismo banner se ve en celulares angostos (~340dp de
+// ancho visible) y en la lista del panel web de escritorio (bastante más
+// ancha) con el mismo alto fijo — una imagen panorámica con el contenido
+// importante centrado sobrevive el recorte en ambos extremos.
+// ────────────────────────────────────────────────────────────────────────────
+
+class _BannerFormDialog extends StatefulWidget {
+  final String adminToken;
+  final String baseUrl;
+  final Map<String, dynamic>? existing;
+  final VoidCallback onSaved;
+
+  const _BannerFormDialog({
+    required this.adminToken,
+    required this.baseUrl,
+    required this.existing,
+    required this.onSaved,
+  });
+
+  @override
+  State<_BannerFormDialog> createState() => _BannerFormDialogState();
+}
+
+class _BannerFormDialogState extends State<_BannerFormDialog> {
+  late final _titleCtrl = TextEditingController(text: widget.existing?['title'] ?? '');
+  late final _subtitleCtrl = TextEditingController(text: widget.existing?['subtitle'] ?? '');
+  late final _btnCtrl = TextEditingController(text: widget.existing?['buttonText'] ?? '');
+  late final _actionCtrl = TextEditingController(text: widget.existing?['actionValue'] ?? '');
+  late final _posCtrl = TextEditingController(text: '${widget.existing?['position'] ?? 0}');
+  late String _actionType = widget.existing?['actionType'] ?? 'none';
+  late bool _active = widget.existing?['active'] == true;
+  late String? _imageUrl = widget.existing?['imageUrl'] as String?;
+
+  bool _uploading = false;
+  bool _saving = false;
+
+  Map<String, String> get _headers => {'Authorization': 'Bearer ${widget.adminToken}'};
+
+  Future<void> _pickAndUpload() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 92);
+    if (picked == null) return;
+
+    setState(() => _uploading = true);
+    try {
+      final bytes = await picked.readAsBytes();
+      final ext = picked.name.split('.').last.toLowerCase();
+      final mimeSubtype = {'jpg': 'jpeg', 'jpeg': 'jpeg', 'png': 'png', 'webp': 'webp'}[ext] ?? 'jpeg';
+      final uri = Uri.parse('${widget.baseUrl}/upload/banner-image');
+      final request = http.MultipartRequest('POST', uri)
+        ..headers['Authorization'] = 'Bearer ${widget.adminToken}'
+        ..files.add(http.MultipartFile.fromBytes(
+          'image', bytes,
+          filename: picked.name.isEmpty ? 'banner.$mimeSubtype' : picked.name,
+          contentType: MediaType('image', mimeSubtype),
+        ));
+      final response = await http.Response.fromStream(await request.send());
+      final data = jsonDecode(response.body);
+      if (!mounted) return;
+      if (response.statusCode == 200 && data['success'] == true) {
+        setState(() => _imageUrl = data['data']['url'] as String?);
+      } else {
+        throw Exception(data['error']?['message'] ?? 'No se pudo subir la imagen');
+      }
+    } catch (e) {
+      if (mounted) GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Future<void> _save() async {
+    if (_titleCtrl.text.trim().isEmpty) {
+      GardenErrorDialog.show(context, 'El título es obligatorio');
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      final body = jsonEncode({
+        'title': _titleCtrl.text.trim(),
+        'subtitle': _subtitleCtrl.text.trim().isEmpty ? null : _subtitleCtrl.text.trim(),
+        'imageUrl': _imageUrl,
+        'buttonText': _btnCtrl.text.trim().isEmpty ? null : _btnCtrl.text.trim(),
+        'actionType': _actionType,
+        'actionValue': _actionCtrl.text.trim().isEmpty ? null : _actionCtrl.text.trim(),
+        'position': int.tryParse(_posCtrl.text) ?? 0,
+        'active': _active,
+      });
+      final headers = {..._headers, 'Content-Type': 'application/json'};
+      final res = widget.existing == null
+          ? await http.post(Uri.parse('${widget.baseUrl}/admin/banners'), headers: headers, body: body)
+          : await http.patch(Uri.parse('${widget.baseUrl}/admin/banners/${widget.existing!['id']}'), headers: headers, body: body);
+      final data = jsonDecode(res.body);
+      if (data['success'] != true) throw Exception(data['error']?['message'] ?? 'No se pudo guardar el banner');
+      if (mounted) Navigator.pop(context);
+      widget.onSaved();
+    } catch (e) {
+      if (mounted) GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _subtitleCtrl.dispose();
+    _btnCtrl.dispose();
+    _actionCtrl.dispose();
+    _posCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final subtextColor = themeNotifier.isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+
+    return AlertDialog(
+      title: Text(widget.existing == null ? 'Nuevo Banner' : 'Editar Banner'),
+      content: SizedBox(
+        width: 480,
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // ── Preview real (mismo widget que ve el cliente) ──────────────
+            Text('Así se ve en el marketplace', style: TextStyle(color: subtextColor, fontSize: 11.5, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            AnimatedBuilder(
+              animation: Listenable.merge([_titleCtrl, _subtitleCtrl, _btnCtrl]),
+              builder: (_, __) => _BannerPreview(
+                imageUrl: _imageUrl,
+                title: _titleCtrl.text,
+                subtitle: _subtitleCtrl.text,
+                buttonText: _btnCtrl.text,
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // ── Imagen: subir desde el dispositivo + guía de tamaño ────────
+            Row(children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _uploading ? null : _pickAndUpload,
+                  icon: _uploading
+                      ? const SizedBox(width: 16, height: 16, child: GardenLoadingIndicator(size: 16))
+                      : const Icon(Icons.upload_rounded, size: 18),
+                  label: Text(_imageUrl == null ? 'Subir imagen de fondo' : 'Cambiar imagen'),
+                ),
+              ),
+              if (_imageUrl != null) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 18, color: GardenColors.error),
+                  tooltip: 'Quitar imagen',
+                  onPressed: () => setState(() => _imageUrl = null),
+                ),
+              ],
+            ]),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: GardenColors.primary.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: GardenColors.primary.withValues(alpha: 0.18)),
+              ),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.info_outline_rounded, size: 16, color: GardenColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Tamaño recomendado: 1600×600px (panorámica, ~2.7:1), JPG/PNG/WEBP, máx. 5MB. '
+                    'La tarjeta se recorta a un alto fijo tanto en celular como en escritorio — '
+                    'mantené el texto o logo importante centrado en la imagen para que no quede cortado.',
+                    style: TextStyle(color: subtextColor, fontSize: 11.5, height: 1.4),
+                  ),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 14),
+
+            TextField(controller: _titleCtrl, decoration: const InputDecoration(labelText: 'Título *')),
+            const SizedBox(height: 10),
+            TextField(controller: _subtitleCtrl, decoration: const InputDecoration(labelText: 'Subtítulo')),
+            const SizedBox(height: 10),
+            TextField(controller: _btnCtrl, decoration: const InputDecoration(labelText: 'Texto del botón')),
+            const SizedBox(height: 10),
+            TextField(controller: _posCtrl, decoration: const InputDecoration(labelText: 'Posición (0 = inicio)'), keyboardType: TextInputType.number),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: _actionType,
+              decoration: const InputDecoration(labelText: 'Acción al tocar'),
+              items: const [
+                DropdownMenuItem(value: 'none', child: Text('Sin acción')),
+                DropdownMenuItem(value: 'url', child: Text('Abrir URL externa')),
+                DropdownMenuItem(value: 'screen', child: Text('Navegar a pantalla')),
+              ],
+              onChanged: (v) => setState(() => _actionType = v ?? 'none'),
+            ),
+            if (_actionType != 'none') ...[
+              const SizedBox(height: 10),
+              TextField(controller: _actionCtrl, decoration: InputDecoration(
+                labelText: _actionType == 'url' ? 'URL (https://...)' : 'Ruta de pantalla (/marketplace, etc.)',
+              )),
+            ],
+            const SizedBox(height: 10),
+            Row(children: [
+              const Text('Activo'), const Spacer(),
+              Switch(value: _active, onChanged: (v) => setState(() => _active = v), activeThumbColor: GardenColors.primary),
+            ]),
+          ]),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: _saving ? null : () => Navigator.pop(context), child: const Text('Cancelar')),
+        ElevatedButton(
+          onPressed: _saving ? null : _save,
+          child: _saving
+              ? const SizedBox(width: 18, height: 18, child: GardenLoadingIndicator(size: 18, color: Colors.white))
+              : const Text('Guardar'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Réplica EXACTA de `_buildBannerCard` (marketplace_screen.dart) — mismo
+/// alto (180px), mismo overlay degradado, misma tipografía. A propósito una
+/// copia y no un widget compartido: si el diseño del banner real cambia algún
+/// día, esto se nota enseguida (el preview del admin deja de coincidir) en
+/// vez de arrastrar un import cruzado entre la pantalla de admin y la de cliente.
+class _BannerPreview extends StatelessWidget {
+  final String? imageUrl;
+  final String title;
+  final String subtitle;
+  final String buttonText;
+
+  const _BannerPreview({
+    required this.imageUrl,
+    required this.title,
+    required this.subtitle,
+    required this.buttonText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 180,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: GardenColors.darkSurface,
+        image: imageUrl != null && imageUrl!.isNotEmpty
+            ? DecorationImage(image: NetworkImage(imageUrl!), fit: BoxFit.cover)
+            : null,
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.black.withValues(alpha: 0.15), Colors.black.withValues(alpha: 0.65)],
+          ),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Text(
+              title.isEmpty ? 'Título del banner' : title,
+              style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+            ),
+            if (subtitle.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.88), fontSize: 13, height: 1.4)),
+            ],
+            if (buttonText.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(color: GardenColors.primary, borderRadius: BorderRadius.circular(GardenRadius.full)),
+                child: Text(buttonText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 

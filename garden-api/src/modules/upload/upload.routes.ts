@@ -38,4 +38,7 @@ router.post('/user-photo', authMiddleware, ...uploadController.uploadUserPhotoHa
 // Ruta publica para 1 sola foto de perfil / temporal durante onboarding
 router.post('/public-single-photo', publicUploadLimiter, ...uploadController.uploadPublicSinglePhotoHandler);
 
+// Imagen de fondo para banners promocionales del marketplace — solo admin
+router.post('/banner-image', authMiddleware, requireRole('ADMIN'), ...uploadController.uploadBannerImageHandler);
+
 export default router;
