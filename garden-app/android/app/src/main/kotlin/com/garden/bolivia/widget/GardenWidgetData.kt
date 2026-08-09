@@ -91,6 +91,52 @@ object GardenWidgetData {
         File(context.filesDir, MAP_SNAPSHOT_FILENAME).delete()
     }
 
+    // ── Countdown de próxima reserva (idea #3) ───────────────────────────
+    // Estado independiente del servicio activo de arriba — vive en el mismo
+    // archivo de SharedPreferences pero con sus propias keys porque ambos
+    // widgets (servicio activo / búsqueda rápida) pueden tener datos a la
+    // vez sin relación entre sí (ej.: un PASEO en curso Y una reserva de
+    // HOSPEDAJE confirmada para la semana que viene).
+    private const val KEY_NEXT_BOOKING_ACTIVE = "nextBookingActive"
+    private const val KEY_NEXT_PET_NAME = "nextBookingPetName"
+    private const val KEY_NEXT_SERVICE_TYPE = "nextBookingServiceType"
+    private const val KEY_NEXT_STARTS_AT_MS = "nextBookingStartsAtMs"
+    private const val KEY_NEXT_COUNTERPART_NAME = "nextBookingCounterpartName"
+
+    data class NextBooking(
+        val petName: String,
+        val serviceType: String,
+        val startsAtMs: Long,
+        val counterpartName: String,
+    )
+
+    fun saveNextBooking(context: Context, data: NextBooking) {
+        prefs(context).edit()
+            .putBoolean(KEY_NEXT_BOOKING_ACTIVE, true)
+            .putString(KEY_NEXT_PET_NAME, data.petName)
+            .putString(KEY_NEXT_SERVICE_TYPE, data.serviceType)
+            .putLong(KEY_NEXT_STARTS_AT_MS, data.startsAtMs)
+            .putString(KEY_NEXT_COUNTERPART_NAME, data.counterpartName)
+            .apply()
+    }
+
+    fun clearNextBooking(context: Context) {
+        prefs(context).edit().putBoolean(KEY_NEXT_BOOKING_ACTIVE, false).apply()
+    }
+
+    fun loadNextBooking(context: Context): NextBooking? {
+        val p = prefs(context)
+        if (!p.getBoolean(KEY_NEXT_BOOKING_ACTIVE, false)) return null
+        val startsAtMs = p.getLong(KEY_NEXT_STARTS_AT_MS, 0L)
+        if (startsAtMs <= System.currentTimeMillis()) return null // ya pasó — no mostrar countdown vencido
+        return NextBooking(
+            petName = p.getString(KEY_NEXT_PET_NAME, "") ?: "",
+            serviceType = p.getString(KEY_NEXT_SERVICE_TYPE, "PASEO") ?: "PASEO",
+            startsAtMs = startsAtMs,
+            counterpartName = p.getString(KEY_NEXT_COUNTERPART_NAME, "") ?: "",
+        )
+    }
+
     fun load(context: Context): ActiveService? {
         val p = prefs(context)
         if (!p.getBoolean(KEY_ACTIVE, false)) return null

@@ -25,7 +25,7 @@ import * as notificationService from '../../services/notification.service.js';
 import { blockchainService } from '../../services/blockchain.service.js';
 import { sendPushToUser, sendPushToAdmins } from '../../services/firebase.service.js';
 import { getIO, emitWalletUpdated } from '../../services/socket.service.js';
-import { boliviaDateTimeToMs } from '../../utils/bolivia-time.js';
+import { boliviaDateTimeToMs, boliviaDateAndTimeToMs } from '../../utils/bolivia-time.js';
 import * as sipService from '../../services/sip.service.js';
 import * as paymentQrService from '../../services/payment-qr.service.js';
 import { env } from '../../config/env.js';
@@ -3033,6 +3033,72 @@ export async function getMyBookings(
   return {
     bookings: bookings.map(bookingToResponse),
     pagination: { page, limit, total, pages: Math.ceil(total / limit) || 1 },
+  };
+}
+
+/**
+ * Reserva CONFIRMED más próxima en el futuro para [userId] (cliente o
+ * cuidador según [role]) — usada por el countdown del widget idle "buscá un
+ * cuidador" (ver garden_live_activity.dart / GardenQuickSearchWidget). Trae
+ * solo lo mínimo (nombre de mascota, tipo de servicio, fecha/hora, contra-
+ * parte) porque se pide desde un refresco de widget, no de una pantalla.
+ *
+ * walkDate/startDate son columnas @db.Date (sin hora) — la hora real de
+ * PASEO/GUARDERIA vive aparte en startTime ("HH:mm"). Se combinan con
+ * boliviaDateAndTimeToMs (mismo helper que ya usa booking.service.ts para
+ * calcular ventanas de recordatorio) para no reinventar la conversión de
+ * huso horario. HOSPEDAJE no tiene startTime — solo startDate (check-in).
+ */
+export async function getNextUpcomingBooking(
+  userId: string,
+  role: 'CLIENT' | 'CAREGIVER'
+): Promise<{
+  id: string;
+  serviceType: string;
+  petName: string;
+  startsAtMs: number;
+  counterpartName: string;
+} | null> {
+  const now = Date.now();
+  const where = role === 'CAREGIVER' ? { caregiver: { userId } } : { clientId: userId };
+
+  const candidates = await prisma.booking.findMany({
+    where: {
+      ...where,
+      status: 'CONFIRMED',
+    },
+    select: {
+      id: true,
+      serviceType: true,
+      petName: true,
+      walkDate: true,
+      startDate: true,
+      startTime: true,
+      caregiver: { select: { user: { select: { firstName: true } } } },
+      client: { select: { firstName: true } },
+    },
+    take: 100, // acotar candidatos razonables — el filtro real de fecha es en memoria (ver abajo)
+  });
+
+  let best: { startsAtMs: number; candidate: (typeof candidates)[number] } | null = null;
+  for (const c of candidates) {
+    const dateField = c.serviceType === 'HOSPEDAJE' ? c.startDate : c.walkDate;
+    if (!dateField) continue;
+    const startsAtMs = boliviaDateAndTimeToMs(dateField, c.startTime ?? undefined);
+    if (startsAtMs < now) continue; // ya pasó — no es "próxima"
+    if (!best || startsAtMs < best.startsAtMs) best = { startsAtMs, candidate: c };
+  }
+
+  if (!best) return null;
+  const { candidate, startsAtMs } = best;
+  return {
+    id: candidate.id,
+    serviceType: candidate.serviceType,
+    petName: candidate.petName,
+    startsAtMs,
+    counterpartName: role === 'CAREGIVER'
+      ? (candidate.client?.firstName ?? 'Cliente')
+      : (candidate.caregiver?.user?.firstName ?? 'Cuidador'),
   };
 }
 

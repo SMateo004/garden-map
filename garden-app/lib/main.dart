@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -67,6 +68,7 @@ import 'theme/garden_theme.dart';
 import 'services/local_notification_service.dart';
 import 'services/fcm_service.dart';
 import 'services/deep_link_service.dart';
+import 'services/garden_live_activity.dart';
 import 'services/auth_state.dart'; // sessionExpiredNotifier + AuthState
 import 'services/web_notification_service.dart';
 import 'services/global_http_client.dart'; // maintenanceNotifier + networkErrorNotifier
@@ -78,6 +80,7 @@ import './widgets/garden_loading_indicator.dart';
 
 // ── Build-time env (set via --dart-define) ─────────────────
 const _kSentryDsn    = String.fromEnvironment('SENTRY_DSN');
+const _kApiUrl = String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
 // ── Compatibilidad con sistema anterior (Legacy Constants) ──
 const kBackgroundColor = GardenColors.background;
@@ -849,6 +852,11 @@ class _GardenAppState extends State<GardenApp> with WidgetsBindingObserver {
     networkErrorNotifier.addListener(_onNetworkError);
     // Recheck automático cada 3s mientras estemos offline — ver global_http_client.dart.
     ConnectivityMonitor.instance.start();
+    // Countdown de próxima reserva (idea #3) — primer chequeo al arrancar;
+    // ver didChangeAppLifecycleState para el refresco al volver a primer
+    // plano. No hace falta más frecuencia que eso: es un countdown de algo a
+    // horas/días de distancia, no algo que necesite tiempo real.
+    _refreshNextBookingWidget();
   }
 
   @override
@@ -869,8 +877,39 @@ class _GardenAppState extends State<GardenApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       PresenceService.instance.connect();
+      _refreshNextBookingWidget();
     } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
       PresenceService.instance.disconnect();
+    }
+  }
+
+  /// Countdown de próxima reserva (idea #3) — le pide al backend la reserva
+  /// CONFIRMED más próxima y empuja el resultado al widget idle nativo
+  /// (Android Glance / iOS WidgetKit). No bloquea nada si falla: es un
+  /// "nice to have" del home screen, no una función crítica.
+  Future<void> _refreshNextBookingWidget() async {
+    if (!AuthState.hasSession) return;
+    try {
+      final res = await http.get(
+        Uri.parse('$_kApiUrl/bookings/next-upcoming'),
+        headers: {'Authorization': 'Bearer ${AuthState.token}'},
+      );
+      if (res.statusCode != 200) return;
+      final data = jsonDecode(res.body);
+      if (data['success'] != true) return;
+      final next = data['data'] as Map<String, dynamic>?;
+      if (next == null) {
+        await GardenLiveActivity.instance.clearNextBooking();
+        return;
+      }
+      await GardenLiveActivity.instance.updateNextBooking(
+        petName: next['petName'] as String? ?? '',
+        serviceType: next['serviceType'] as String? ?? 'PASEO',
+        startsAtMs: (next['startsAtMs'] as num).toInt(),
+        counterpartName: next['counterpartName'] as String? ?? '',
+      );
+    } catch (e) {
+      debugPrint('_refreshNextBookingWidget error: $e');
     }
   }
 

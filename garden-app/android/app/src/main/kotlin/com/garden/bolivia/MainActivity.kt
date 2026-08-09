@@ -10,6 +10,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import androidx.glance.appwidget.updateAll
 import com.garden.bolivia.widget.GardenActiveServiceWidget
+import com.garden.bolivia.widget.GardenQuickSearchWidget
 import com.garden.bolivia.widget.GardenWidgetData
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -140,6 +141,30 @@ class MainActivity : FlutterFragmentActivity() {
                                 result.error("MAP_SNAPSHOT", "No se pudo guardar el snapshot", e.message)
                             }
                         }
+                    }
+                    "updateNextBooking" -> {
+                        val args = call.arguments as? Map<*, *>
+                        val startsAtMs = (args?.get("startsAtMs") as? Number)?.toLong()
+                        if (args == null || startsAtMs == null) {
+                            result.error("ARGS", "Argumentos inválidos", null)
+                            return@setMethodCallHandler
+                        }
+                        GardenWidgetData.saveNextBooking(
+                            applicationContext,
+                            GardenWidgetData.NextBooking(
+                                petName = args["petName"] as? String ?: "",
+                                serviceType = args["serviceType"] as? String ?: "PASEO",
+                                startsAtMs = startsAtMs,
+                                counterpartName = args["counterpartName"] as? String ?: "",
+                            ),
+                        )
+                        widgetScope.launch { GardenQuickSearchWidget().updateAll(applicationContext) }
+                        result.success(null)
+                    }
+                    "clearNextBooking" -> {
+                        GardenWidgetData.clearNextBooking(applicationContext)
+                        widgetScope.launch { GardenQuickSearchWidget().updateAll(applicationContext) }
+                        result.success(null)
                     }
                     else -> result.notImplemented()
                 }

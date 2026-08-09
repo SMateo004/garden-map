@@ -30,6 +30,15 @@ router.get(
   bookingController.getPendingRating
 );
 
+/** GET /api/bookings/next-upcoming — reserva CONFIRMED más próxima (cliente o
+ * cuidador). Usada por el countdown del widget idle — ver
+ * garden_live_activity.dart. Sin requireRole: sirve para ambos. */
+router.get(
+  '/next-upcoming',
+  authMiddleware,
+  bookingController.getNextUpcoming
+);
+
 /** GET /api/bookings/:id/confirm — datos para página de confirmación. Solo cliente titular. */
 router.get(
   '/:id/confirm',

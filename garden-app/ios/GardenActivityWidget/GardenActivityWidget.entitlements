@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Mismo App Group que ios/Runner/Runner.entitlements — ver el comentario
+	     ahí para el paso manual de Xcode todavía pendiente
+	     (Signing & Capabilities → + App Groups, en AMBOS targets). Sin ese
+	     paso este archivo por sí solo no habilita nada; Xcode necesita
+	     registrar el capability en el proyecto además de tener este XML. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.garden.bolivia</string>
+	</array>
+</dict>
+</plist>

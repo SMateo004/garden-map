@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Metadata del AppWidgetProvider — ver GardenQuickSearchWidgetReceiver.kt.
-     Contenido estático (sin datos dinámicos), así que updatePeriodMillis en
-     0 es correcto — nunca necesita refrescarse solo. -->
+     updatePeriodMillis en 30 min (mínimo real que Android honra — cualquier
+     valor menor lo redondea para arriba) — desde idea #3 (countdown de
+     próxima reserva) el contenido SÍ es dinámico: cada tick recalcula el
+     texto de cuenta regresiva desde el timestamp guardado en
+     GardenWidgetData, sin necesitar más red que la que ya empuja la app. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="250dp"
     android:minHeight="80dp"
     android:targetCellWidth="4"
     android:targetCellHeight="1"
-    android:updatePeriodMillis="0"
+    android:updatePeriodMillis="1800000"
     android:resizeMode="horizontal"
     android:widgetCategory="home_screen"
     android:description="@string/garden_widget_quick_search_description" />

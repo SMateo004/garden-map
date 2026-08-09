@@ -10,5 +10,21 @@
 	<array>
 		<string>Default</string>
 	</array>
+	<!-- Idea #3 (countdown de próxima reserva en el widget idle): contenedor
+	     compartido entre Runner y la extensión GardenActivityWidget — el
+	     único mecanismo real de iOS para pasarle datos a un widget que corre
+	     en su propio proceso (a diferencia de un Live Activity, donde
+	     ActivityKit mismo hace de canal). Este archivo XML es seguro de
+	     versionar tal cual, PERO todavía falta un paso manual en Xcode que no
+	     se puede hacer por código: abrir el proyecto → target Runner →
+	     Signing & Capabilities → "+ Capability" → App Groups → tildar/crear
+	     "group.com.garden.bolivia" — y repetir para el target
+	     GardenActivityWidgetExtension. Xcode registra el capability en el
+	     proyecto de forma segura al hacerlo desde la UI; hasta que eso no se
+	     haga a mano, GardenQuickSearchWidgetChannel.swift no tiene efecto. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.garden.bolivia</string>
+	</array>
 </dict>
 </plist>

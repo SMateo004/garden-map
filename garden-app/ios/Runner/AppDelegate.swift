@@ -2,6 +2,7 @@ import Amplify
 import AWSCognitoAuthPlugin
 import Flutter
 import UIKit
+import WidgetKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -24,6 +25,7 @@ import UIKit
         _registerLiveActivityChannel()
         _registerIconSwitcherChannel()
         _registerDeepLinkChannel()
+        _registerQuickSearchWidgetChannel()
         // Cold start: la app se abrió directo desde el toque en el widget.
         if let url = launchOptions?[.url] as? URL {
             _pendingDeepLinkRoute = _routeFromDeepLinkURL(url)
@@ -102,6 +104,49 @@ import UIKit
         )
         channel.setMethodCallHandler { [weak handler] call, result in
             handler?.handle(call, result: result)
+        }
+    }
+
+    // ── Idea #3: countdown de próxima reserva en el widget idle ────────────
+    // Escribe al App Group compartido (ver Runner.entitlements — incluye el
+    // paso manual de Xcode todavía pendiente) y le pide a WidgetKit que
+    // recalcule GardenQuickSearchWidget con el dato nuevo. Sin el App Group
+    // habilitado, UserDefaults(suiteName:) devuelve nil silenciosamente — no
+    // truena, solo no persiste nada (el widget se queda mostrando el
+    // contenido genérico de siempre).
+    private func _registerQuickSearchWidgetChannel() {
+        guard let controller = window?.rootViewController as? FlutterViewController else { return }
+        let channel = FlutterMethodChannel(
+            name: "com.gardenbo.app/quick_search_widget",
+            binaryMessenger: controller.binaryMessenger
+        )
+        channel.setMethodCallHandler { call, result in
+            let defaults = UserDefaults(suiteName: "group.com.garden.bolivia")
+            switch call.method {
+            case "updateNextBooking":
+                guard let args = call.arguments as? [String: Any],
+                      let startsAtMs = (args["startsAtMs"] as? NSNumber)?.doubleValue else {
+                    result(FlutterError(code: "ARGS", message: "Invalid arguments", details: nil))
+                    return
+                }
+                defaults?.set(true, forKey: "nextBookingActive")
+                defaults?.set(args["petName"] as? String ?? "", forKey: "nextBookingPetName")
+                defaults?.set(args["serviceType"] as? String ?? "PASEO", forKey: "nextBookingServiceType")
+                defaults?.set(startsAtMs, forKey: "nextBookingStartsAtMs")
+                defaults?.set(args["counterpartName"] as? String ?? "", forKey: "nextBookingCounterpartName")
+                if #available(iOS 14.0, *) {
+                    WidgetCenter.shared.reloadTimelines(ofKind: "GardenQuickSearchWidget")
+                }
+                result(nil)
+            case "clearNextBooking":
+                defaults?.set(false, forKey: "nextBookingActive")
+                if #available(iOS 14.0, *) {
+                    WidgetCenter.shared.reloadTimelines(ofKind: "GardenQuickSearchWidget")
+                }
+                result(nil)
+            default:
+                result(FlutterMethodNotImplemented)
+            }
         }
     }
 

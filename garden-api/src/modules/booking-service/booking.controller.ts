@@ -213,6 +213,18 @@ export const getMyBookings = asyncHandler(async (req: Request, res: Response) =>
 });
 
 /**
+ * GET /api/bookings/next-upcoming — reserva CONFIRMED más próxima (cliente o
+ * cuidador, según el rol activo). data: null si no hay ninguna. Usada por el
+ * countdown del widget idle (ver garden_live_activity.dart).
+ */
+export const getNextUpcoming = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const role = req.user!.role === 'CAREGIVER' ? 'CAREGIVER' : 'CLIENT';
+  const result = await bookingService.getNextUpcomingBooking(userId, role);
+  res.json({ success: true, data: result });
+});
+
+/**
  * GET /api/bookings/:id
  * Obtiene una reserva por ID. Solo el cliente titular puede acceder.
  */

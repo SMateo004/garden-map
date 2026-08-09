@@ -17,6 +17,12 @@ class GardenLiveActivity {
 
   static const _iosChannel = MethodChannel('com.gardenbo.app/live_activity');
   static const _androidWidgetChannel = MethodChannel('com.gardenbo.app/android_widget');
+  // Idea #3 (countdown de próxima reserva) — widget idle, NO Live Activity,
+  // así que en iOS necesita su propio canal (ver
+  // _registerQuickSearchWidgetChannel en AppDelegate.swift). En Android
+  // reutiliza _androidWidgetChannel de arriba porque ahí no hay esa
+  // distinción de proceso — mismo canal para ambos widgets Glance.
+  static const _iosQuickSearchChannel = MethodChannel('com.gardenbo.app/quick_search_widget');
   static const _androidNotifId = 888;
   static const _androidChannelId = 'garden_service_active';
 
@@ -239,6 +245,49 @@ class GardenLiveActivity {
       });
     } catch (e) {
       debugPrint('[LiveActivity] Android widget update error: $e');
+    }
+  }
+
+  // ── Countdown de próxima reserva (idea #3) ─────────────────────────────
+  // A diferencia del resto de esta clase, esto NO depende de que haya un
+  // servicio activo — se llama desde main.dart cada vez que la app arranca
+  // o vuelve a primer plano (ver _refreshNextBookingWidget), independiente
+  // de startActivity/endActivity de arriba.
+
+  Future<void> updateNextBooking({
+    required String petName,
+    required String serviceType,
+    required int startsAtMs,
+    required String counterpartName,
+  }) async {
+    if (kIsWeb) return;
+    final args = {
+      'petName': petName,
+      'serviceType': serviceType,
+      'startsAtMs': startsAtMs,
+      'counterpartName': counterpartName,
+    };
+    try {
+      if (Platform.isIOS) {
+        await _iosQuickSearchChannel.invokeMethod('updateNextBooking', args);
+      } else if (Platform.isAndroid) {
+        await _androidWidgetChannel.invokeMethod('updateNextBooking', args);
+      }
+    } catch (e) {
+      debugPrint('[LiveActivity] updateNextBooking error: $e');
+    }
+  }
+
+  Future<void> clearNextBooking() async {
+    if (kIsWeb) return;
+    try {
+      if (Platform.isIOS) {
+        await _iosQuickSearchChannel.invokeMethod('clearNextBooking');
+      } else if (Platform.isAndroid) {
+        await _androidWidgetChannel.invokeMethod('clearNextBooking');
+      }
+    } catch (e) {
+      debugPrint('[LiveActivity] clearNextBooking error: $e');
     }
   }
 

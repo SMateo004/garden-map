@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'secure_storage_service.dart';
 import 'auth_state.dart'; // sessionExpiredNotifier + AuthState cache
+import 'garden_live_activity.dart';
 
 // sessionExpiredNotifier is defined in auth_state.dart and re-exported for
 // backward compatibility with any code that imports it from here.
@@ -74,6 +75,13 @@ class AuthService {
     await prefs.remove('user_id');
     await prefs.remove('user_name');
     await prefs.remove('user_photo');
+    // Countdown de próxima reserva (idea #3) — no dejar el dato de la cuenta
+    // anterior visible en el widget idle si el dispositivo se comparte o se
+    // cambia de cuenta. El widget de servicio activo no se toca acá porque
+    // service_execution_screen.dart ya lo cierra explícitamente cuando el
+    // servicio termina, y no debería quedar uno activo al momento de un
+    // logout normal.
+    await GardenLiveActivity.instance.clearNextBooking();
   }
 
   // ── User data storage ───────────────────────────────────────────────────────
