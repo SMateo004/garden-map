@@ -1,5 +1,6 @@
 import ActivityKit
 import SwiftUI
+import UIKit
 import WidgetKit
 
 // ── Brand colors ──────────────────────────────────────────────────────────────
@@ -59,6 +60,18 @@ private extension GardenServiceAttributes {
 
     func displaySubtitle() -> String {
         role == "CLIENT" ? "Con \(caregiverName)" : "Dueño: \(ownerName)"
+    }
+}
+
+@available(iOS 16.2, *)
+private extension GardenServiceAttributes {
+    /// garden://service/<bookingId> — mismo formato de ruta que el widget de
+    /// Android (ver deep_link_service.dart / MainActivity.kt), manejado por
+    /// AppDelegate.swift (_routeFromDeepLinkURL). Tocar el Live Activity abre
+    /// Garden directo en la pantalla de ese servicio en vez de solo traer la
+    /// app al frente en lo que sea que estuviera mostrando antes.
+    var deepLinkURL: URL? {
+        URL(string: "garden://service/\(bookingId)")
     }
 }
 
@@ -189,11 +202,29 @@ struct GardenLockScreenView: View {
                 WalkingProgressBar(context: context, markerSize: 24, trackHeight: 6, pawSize: 18)
                     .padding(.top, 2)
             }
+
+            // Mini-mapa (idea #1) — solo PASEO (los otros servicios no se
+            // mueven). Se omite en silencio mientras no llegó ningún snapshot
+            // todavía (primeros ~30s del servicio) — el resto de la tarjeta ya
+            // es útil sin él.
+            if context.state.status != "COMPLETED",
+               context.attributes.serviceType == "PASEO",
+               let mapData = context.state.mapSnapshotData,
+               let mapImage = UIImage(data: mapData) {
+                Image(uiImage: mapImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(height: 70)
+                    .frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(.top, 2)
+            }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
         .activityBackgroundTint(Color.gardenSurface)
         .activitySystemActionForegroundColor(.white)
+        .widgetURL(context.attributes.deepLinkURL)
     }
 }
 
@@ -269,13 +300,22 @@ struct GardenServiceLiveActivityWidget: Widget {
                             .font(.system(size: 12))
                             .foregroundColor(Color(white: 0.65))
                         Spacer()
-                        HStack(spacing: 3) {
-                            Text("Abrir Garden")
-                                .font(.system(size: 12, weight: .semibold))
-                            Image(systemName: "arrow.right.circle.fill")
-                                .font(.system(size: 12))
+                        // Link (no solo texto): en la región expandida del Dynamic
+                        // Island, a diferencia del lock screen, .widgetURL no cubre
+                        // sub-regiones individuales — este botón necesita su propio
+                        // destino tocable para abrir directo el seguimiento del
+                        // servicio en vez de solo abrir la app.
+                        if let url = context.attributes.deepLinkURL {
+                            Link(destination: url) {
+                                HStack(spacing: 3) {
+                                    Text("Abrir Garden")
+                                        .font(.system(size: 12, weight: .semibold))
+                                    Image(systemName: "arrow.right.circle.fill")
+                                        .font(.system(size: 12))
+                                }
+                                .foregroundColor(.gardenGreen)
+                            }
                         }
-                        .foregroundColor(.gardenGreen)
                     }
                     .padding(.horizontal, 12)
                     .padding(.bottom, 6)
@@ -314,5 +354,6 @@ struct GardenServiceLiveActivityWidget: Widget {
 struct GardenActivityWidgetBundle: WidgetBundle {
     var body: some Widget {
         GardenServiceLiveActivityWidget()
+        GardenQuickSearchWidget()
     }
 }

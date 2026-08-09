@@ -90,6 +90,32 @@
             android:foregroundServiceType="location"
             android:stopWithTask="false"
             android:exported="false" />
+
+        <!-- Widgets del home screen — equivalente Android del Live Activity de
+             iOS (ver ios/GardenActivityWidget/). Contenido real en
+             android/app/src/main/kotlin/com/garden/bolivia/widget/. -->
+        <receiver
+            android:name=".widget.GardenActiveServiceWidgetReceiver"
+            android:exported="false"
+            android:label="Garden — Servicio activo">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/garden_active_service_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.GardenQuickSearchWidgetReceiver"
+            android:exported="false"
+            android:label="Garden — Buscar cuidador">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/garden_quick_search_widget_info" />
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

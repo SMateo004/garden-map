@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Metadata del AppWidgetProvider — ver GardenActiveServiceWidgetReceiver.kt.
+  updatePeriodMillis queda en el mínimo permitido por Android (30 min) solo
+  como red de seguridad; el refresco real y frecuente (~10s) lo dispara Dart
+  a mano vía el MethodChannel mientras hay un servicio activo (ver
+  garden_live_activity.dart) — Android no permite pedir updates más seguido
+  que cada ~30min por este mecanismo pasivo.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="90dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="1800000"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:description="@string/garden_widget_active_service_description" />

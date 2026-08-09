@@ -9,6 +9,12 @@ import UIKit
     // Strong ref — ARC would release a local without this.
     private var _liveActivityHandler: AnyObject?
 
+    private var _deepLinkChannel: FlutterMethodChannel?
+    // Ruta capturada de un toque en el Live Activity (garden://service/<id>)
+    // antes de que Dart esté listo para pedirla — mismo patrón que
+    // MainActivity.kt del lado Android (pendingDeepLinkRoute).
+    private var _pendingDeepLinkRoute: String?
+
     override func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -17,7 +23,57 @@ import UIKit
         GeneratedPluginRegistrant.register(with: self)
         _registerLiveActivityChannel()
         _registerIconSwitcherChannel()
+        _registerDeepLinkChannel()
+        // Cold start: la app se abrió directo desde el toque en el widget.
+        if let url = launchOptions?[.url] as? URL {
+            _pendingDeepLinkRoute = _routeFromDeepLinkURL(url)
+        }
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    }
+
+    // App ya corriendo (warm start) — este es el callback que iOS invoca
+    // cuando se toca un garden:// mientras Garden ya está en memoria.
+    override func application(
+        _ app: UIApplication,
+        open url: URL,
+        options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+    ) -> Bool {
+        if let route = _routeFromDeepLinkURL(url) {
+            _deepLinkChannel?.invokeMethod("onDeepLink", arguments: ["route": route, "role": NSNull()])
+            return true
+        }
+        return false
+    }
+
+    /// garden://service/<bookingId> → "/service/<bookingId>" (mismo formato
+    /// de ruta que usa deep_link_service.dart del lado Dart, compartido con
+    /// el widget de Android). Devuelve nil para cualquier otro host/esquema.
+    private func _routeFromDeepLinkURL(_ url: URL) -> String? {
+        guard url.scheme == "garden" else { return nil }
+        let path = "/\(url.host ?? "")\(url.path)"
+        return path == "/" ? nil : path
+    }
+
+    private func _registerDeepLinkChannel() {
+        guard let controller = window?.rootViewController as? FlutterViewController else { return }
+        let channel = FlutterMethodChannel(
+            name: "com.gardenbo.app/deep_link",
+            binaryMessenger: controller.binaryMessenger
+        )
+        _deepLinkChannel = channel
+        channel.setMethodCallHandler { [weak self] call, result in
+            switch call.method {
+            case "getInitialRoute":
+                guard let route = self?._pendingDeepLinkRoute else {
+                    result(nil)
+                    return
+                }
+                self?._pendingDeepLinkRoute = nil
+                result(["route": route, "role": NSNull()])
+            default:
+                result(FlutterMethodNotImplemented)
+            }
+        }
     }
 
     // Required by amplify-ui-swift-liveness (FaceLivenessDetectorView) to obtain

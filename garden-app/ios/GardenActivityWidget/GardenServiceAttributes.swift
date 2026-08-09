@@ -19,15 +19,23 @@ struct GardenServiceAttributes: ActivityAttributes {
         var totalPaidSeconds: Int
         /// "IN_PROGRESS" | "COMPLETED"
         var status: String
+        /// Snapshot PNG del mini-mapa (idea #1) — solo se llena durante PASEO,
+        /// re-enviado cada ~30s desde _updateMapSnapshot en
+        /// service_execution_screen.dart. nil mientras no llegó el primero
+        /// todavía (arranque del servicio) o para GUARDERIA/HOSPEDAJE (no se
+        /// mueven, no hay nada que mostrar). Data es Codable nativo — se
+        /// serializa como base64 sin código extra.
+        var mapSnapshotData: Data?
 
         private enum CodingKeys: String, CodingKey {
-            case startedAt, totalPaidSeconds, status
+            case startedAt, totalPaidSeconds, status, mapSnapshotData
         }
 
-        init(startedAt: Date, totalPaidSeconds: Int, status: String) {
+        init(startedAt: Date, totalPaidSeconds: Int, status: String, mapSnapshotData: Data? = nil) {
             self.startedAt = startedAt
             self.totalPaidSeconds = totalPaidSeconds
             self.status = status
+            self.mapSnapshotData = mapSnapshotData
         }
 
         // Defensive decode: if a previously-running Activity (started before an
@@ -38,6 +46,7 @@ struct GardenServiceAttributes: ActivityAttributes {
             self.startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt) ?? Date()
             self.totalPaidSeconds = try c.decodeIfPresent(Int.self, forKey: .totalPaidSeconds) ?? 3600
             self.status = try c.decodeIfPresent(String.self, forKey: .status) ?? "IN_PROGRESS"
+            self.mapSnapshotData = try c.decodeIfPresent(Data.self, forKey: .mapSnapshotData)
         }
     }
 

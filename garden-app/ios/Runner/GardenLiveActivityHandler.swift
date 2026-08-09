@@ -15,6 +15,7 @@ final class GardenLiveActivityHandler {
         case "startActivity":         startActivity(call: call, result: result)
         case "updateActivity":        updateActivity(call: call, result: result)
         case "updateTotalPaidSeconds": updateTotalPaidSeconds(call: call, result: result)
+        case "updateMapSnapshot":     updateMapSnapshot(call: call, result: result)
         case "endActivity":           endActivity(call: call, result: result)
         default:                      result(FlutterMethodNotImplemented)
         }
@@ -85,7 +86,8 @@ final class GardenLiveActivityHandler {
         let newState = GardenServiceAttributes.ContentState(
             startedAt: current.startedAt,
             totalPaidSeconds: current.totalPaidSeconds,
-            status: args["status"] as? String ?? current.status
+            status: args["status"] as? String ?? current.status,
+            mapSnapshotData: current.mapSnapshotData
         )
         Task {
             await activity.update(using: newState)
@@ -108,7 +110,33 @@ final class GardenLiveActivityHandler {
         let newState = GardenServiceAttributes.ContentState(
             startedAt: current.startedAt,
             totalPaidSeconds: totalPaidSeconds,
-            status: current.status
+            status: current.status,
+            mapSnapshotData: current.mapSnapshotData
+        )
+        Task {
+            await activity.update(using: newState)
+        }
+        result(nil)
+    }
+
+    // MARK: – Update map snapshot (idea #1 — llamado cada ~30s durante un
+    // PASEO en curso, ver _updateMapSnapshot en service_execution_screen.dart)
+
+    private func updateMapSnapshot(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let id = args["id"] as? String,
+              let activity = activities[id],
+              let b64 = args["mapSnapshotBase64"] as? String,
+              let imageData = Data(base64Encoded: b64) else {
+            result(nil)
+            return
+        }
+        let current = activity.contentState
+        let newState = GardenServiceAttributes.ContentState(
+            startedAt: current.startedAt,
+            totalPaidSeconds: current.totalPaidSeconds,
+            status: current.status,
+            mapSnapshotData: imageData
         )
         Task {
             await activity.update(using: newState)
@@ -129,7 +157,8 @@ final class GardenLiveActivityHandler {
         let finalState = GardenServiceAttributes.ContentState(
             startedAt: current.startedAt,
             totalPaidSeconds: current.totalPaidSeconds,
-            status: "COMPLETED"
+            status: "COMPLETED",
+            mapSnapshotData: current.mapSnapshotData
         )
         Task {
             await activity.end(

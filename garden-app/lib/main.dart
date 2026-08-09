@@ -66,6 +66,7 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 import 'theme/garden_theme.dart';
 import 'services/local_notification_service.dart';
 import 'services/fcm_service.dart';
+import 'services/deep_link_service.dart';
 import 'services/auth_state.dart'; // sessionExpiredNotifier + AuthState
 import 'services/web_notification_service.dart';
 import 'services/global_http_client.dart'; // maintenanceNotifier + networkErrorNotifier
@@ -837,6 +838,9 @@ class _GardenAppState extends State<GardenApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     // Inyectar router en FcmService para navegación desde notificaciones
     FcmService.setRouter(_router);
+    // Deep links desde los widgets nativos (Android home screen / Live
+    // Activity de iOS) — ver deep_link_service.dart.
+    DeepLinkService.init(_router);
     // Escuchar sesión expirada globalmente: redirige al login desde cualquier pantalla.
     sessionExpiredNotifier.addListener(_onSessionExpired);
     // Escuchar mantenimiento activado mid-sesión (no solo al abrir la app).

@@ -1,10 +1,20 @@
 package com.garden.bolivia
 
 import android.content.ComponentName
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Bundle
+import android.util.Base64
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import androidx.glance.appwidget.updateAll
+import com.garden.bolivia.widget.GardenActiveServiceWidget
+import com.garden.bolivia.widget.GardenWidgetData
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // face_liveness_detector (AWS Amplify Face Liveness) requiere que la Activity
 // host sea FlutterFragmentActivity, no FlutterActivity — el flujo de cámara
@@ -15,6 +25,20 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterFragmentActivity() {
 
     private val ICON_SWITCHER_CHANNEL = "com.gardenbo.app/icon_switcher"
+    private val WIDGET_CHANNEL = "com.gardenbo.app/android_widget"
+    private val DEEP_LINK_CHANNEL = "com.gardenbo.app/deep_link"
+
+    // Corutinas para actualizar el estado del widget (Glance es suspend) sin
+    // bloquear el hilo del MethodChannel.
+    private val widgetScope = CoroutineScope(Dispatchers.Main)
+
+    // Ruta pendiente capturada de un Intent (toque en el widget) antes de que
+    // Dart esté listo para recibirla — se manda apenas Dart la pide
+    // (getInitialRoute) o, si la app ya estaba corriendo, se empuja directo
+    // (onNewIntent → onDeepLink).
+    private var pendingDeepLinkRoute: String? = null
+    private var pendingDeepLinkRole: String? = null
+    private var deepLinkChannel: MethodChannel? = null
 
     // Debe coincidir 1:1 con los activity-alias declarados en AndroidManifest.xml.
     // "variantB" ahora mismo es un PLACEHOLDER (mismo arte que el ícono default,
@@ -28,8 +52,34 @@ class MainActivity : FlutterFragmentActivity() {
         "variantB" to ".IconVariantB",
     )
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        captureDeepLink(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        captureDeepLink(intent)
+        // App ya corriendo (launchMode singleTop) — empujar directo a Dart en
+        // vez de esperar a que alguien llame getInitialRoute.
+        val route = pendingDeepLinkRoute
+        if (route != null) {
+            pendingDeepLinkRoute = null
+            val args = mapOf("route" to route, "role" to pendingDeepLinkRole)
+            pendingDeepLinkRole = null
+            deepLinkChannel?.invokeMethod("onDeepLink", args)
+        }
+    }
+
+    private fun captureDeepLink(intent: Intent) {
+        val route = intent.getStringExtra("deepLinkRoute") ?: return
+        pendingDeepLinkRoute = route
+        pendingDeepLinkRole = intent.getStringExtra("deepLinkRole")
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ICON_SWITCHER_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -43,6 +93,76 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WIDGET_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "updateActiveService" -> {
+                        val args = call.arguments as? Map<*, *>
+                        if (args == null) {
+                            result.error("ARGS", "Argumentos inválidos", null)
+                            return@setMethodCallHandler
+                        }
+                        GardenWidgetData.save(
+                            applicationContext,
+                            GardenWidgetData.ActiveService(
+                                petName = args["petName"] as? String ?: "",
+                                subtitle = args["subtitle"] as? String ?: "",
+                                serviceType = args["serviceType"] as? String ?: "PASEO",
+                                status = args["status"] as? String ?: "IN_PROGRESS",
+                                startedAtMs = (args["startedAtMs"] as? Number)?.toLong() ?: 0L,
+                                totalPaidSeconds = (args["totalPaidSeconds"] as? Number)?.toInt() ?: 3600,
+                                bookingId = args["bookingId"] as? String ?: "",
+                                role = args["role"] as? String ?: "CLIENT",
+                            ),
+                        )
+                        widgetScope.launch { GardenActiveServiceWidget().updateAll(applicationContext) }
+                        result.success(null)
+                    }
+                    "endActiveService" -> {
+                        GardenWidgetData.clear(applicationContext)
+                        widgetScope.launch { GardenActiveServiceWidget().updateAll(applicationContext) }
+                        result.success(null)
+                    }
+                    "updateMapSnapshot" -> {
+                        val b64 = call.argument<String>("mapSnapshotBase64")
+                        if (b64 == null) {
+                            result.error("ARGS", "Falta mapSnapshotBase64", null)
+                            return@setMethodCallHandler
+                        }
+                        widgetScope.launch {
+                            try {
+                                val bytes = withContext(Dispatchers.IO) { Base64.decode(b64, Base64.DEFAULT) }
+                                withContext(Dispatchers.IO) { GardenWidgetData.saveMapSnapshot(applicationContext, bytes) }
+                                GardenActiveServiceWidget().updateAll(applicationContext)
+                                result.success(null)
+                            } catch (e: Exception) {
+                                result.error("MAP_SNAPSHOT", "No se pudo guardar el snapshot", e.message)
+                            }
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        val dlChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEEP_LINK_CHANNEL)
+        deepLinkChannel = dlChannel
+        dlChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getInitialRoute" -> {
+                    val route = pendingDeepLinkRoute
+                    val role = pendingDeepLinkRole
+                    pendingDeepLinkRoute = null
+                    pendingDeepLinkRole = null
+                    if (route != null) {
+                        result.success(mapOf("route" to route, "role" to role))
+                    } else {
+                        result.success(null)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 
     /**

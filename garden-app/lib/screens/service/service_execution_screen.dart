@@ -526,8 +526,60 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         if (_elapsed.inSeconds % 30 == 0 && widget.role == 'CAREGIVER' && !_isServicePaused) {
           _checkPhotoReminders();
         }
+        // Mini-mapa del widget de servicio activo — solo PASEO (los otros
+        // servicios no se mueven, no hay nada que mostrar en un mapa) y cada
+        // 30s (no cada 10s como el cronómetro: el pin apenas se movería y
+        // cada llamada le pega al Static Maps API de Google, que es pago).
+        if (_elapsed.inSeconds % 30 == 0 && _booking?['serviceType'] == 'PASEO') {
+          _updateMapSnapshot();
+        }
       }
     });
+  }
+
+  /// Baja un snapshot estático del mapa centrado en la posición actual y lo
+  /// empuja al widget nativo (Android Glance / iOS Live Activity). Cuidador:
+  /// usa su propia posición en vivo (GpsTrackingSession, sin red). Dueño: no
+  /// tiene GPS propio del paseo — pide el último punto reportado por el
+  /// cuidador al mismo endpoint que ya usa GpsTrackingScreen como fallback
+  /// de polling (GET /bookings/:id/track).
+  Future<void> _updateMapSnapshot() async {
+    double lat, lng;
+    if (widget.role == 'CAREGIVER') {
+      final pos = GpsTrackingSession.instance.currentPos;
+      if (pos == null) return; // todavía sin primer fix GPS
+      lat = pos.latitude;
+      lng = pos.longitude;
+    } else {
+      try {
+        final res = await http.get(
+          Uri.parse('$_baseUrl/bookings/${widget.bookingId}/track'),
+          headers: {'Authorization': 'Bearer $_token'},
+        );
+        final data = jsonDecode(res.body);
+        if (data['success'] != true) return;
+        final raw = data['data'] as List? ?? [];
+        if (raw.isEmpty) return; // el cuidador todavía no mandó ningún punto
+        final last = raw.last as Map<String, dynamic>;
+        lat = (last['lat'] as num).toDouble();
+        lng = (last['lng'] as num).toDouble();
+      } catch (e) {
+        debugPrint('_updateMapSnapshot: error obteniendo posición: $e');
+        return;
+      }
+    }
+
+    try {
+      final snap = await http.get(
+        Uri.parse('$_baseUrl/places/map-snapshot?lat=$lat&lng=$lng'),
+        headers: {'Authorization': 'Bearer $_token'},
+      );
+      if (snap.statusCode == 200 && mounted) {
+        await GardenLiveActivity.instance.updateMapSnapshot(snap.bodyBytes);
+      }
+    } catch (e) {
+      debugPrint('_updateMapSnapshot: error bajando snapshot: $e');
+    }
   }
 
   void _startLiveActivity(DateTime startTime) {

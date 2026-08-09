@@ -80,6 +80,17 @@
 				<string>com.googleusercontent.apps.1067635397531-kf2csers9d0veh5s4ioeiitemlg5rigf</string>
 			</array>
 		</dict>
+		<dict>
+			<!-- Deep link desde el Live Activity (widgetURL/Link) — ver
+			     GardenActivityWidget.swift y AppDelegate.swift. Mismo formato de
+			     ruta que el widget de Android: garden://service/<bookingId> -->
+			<key>CFBundleURLName</key>
+			<string>com.garden.bolivia.deeplink</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>garden</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>

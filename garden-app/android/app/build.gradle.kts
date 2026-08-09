@@ -7,6 +7,8 @@ plugins {
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
+    // Compose compiler — lo necesita el widget nativo (Jetpack Glance usa Compose).
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 val keystorePropertiesFile = rootProject.file("key.properties")
@@ -17,8 +19,8 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.garden.bolivia"
-    // flutter_facebook_auth y androidx.browser (dependencia de amplify liveness) exigen
-    // compileSdk 36 — flutter.compileSdkVersion todavía resuelve a 35 en este canal.
+    // androidx.browser (dependencia de amplify liveness) exige compileSdk 36 —
+    // flutter.compileSdkVersion todavía resuelve a 35 en este canal.
     compileSdk = 36
     ndkVersion = "30.0.14904198"
 
@@ -30,6 +32,12 @@ android {
 
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_11.toString()
+    }
+
+    // Widget nativo del home screen (Jetpack Glance, ver android/app/src/main/kotlin/
+    // com/garden/bolivia/widget/) — usa Compose por debajo.
+    buildFeatures {
+        compose = true
     }
 
     defaultConfig {
@@ -83,4 +91,11 @@ flutter {
 dependencies {
     // face_liveness_detector y amplify liveness exigen 2.1.5+
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+
+    // Widget nativo del home screen — equivalente Android del Live Activity de
+    // iOS (ver ios/GardenActivityWidget/). Glance es la API moderna de Google
+    // para widgets (Compose por debajo) — reemplaza RemoteViews/AppWidgetProvider
+    // clásico, que requeriría mucho más código a mano para el mismo resultado.
+    implementation("androidx.glance:glance-appwidget:1.1.1")
+    implementation("androidx.glance:glance-material3:1.1.1")
 }
