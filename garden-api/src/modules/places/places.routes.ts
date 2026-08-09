@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
 import { env } from '../../config/env.js';
+import logger from '../../shared/logger.js';
 
 const router = Router();
 
@@ -93,13 +94,20 @@ router.get('/map-snapshot', async (req: Request, res: Response) => {
 
   try {
     const googleRes = await fetch(url.toString());
-    if (!googleRes.ok) return res.status(502).json({ error: 'map_snapshot_failed' });
+    if (!googleRes.ok) {
+      // TODO(temporal): el body de error de Google en /staticmap es texto
+      // plano, no JSON — lo devolvemos tal cual para diagnosticar el 502 en
+      // vivo. Sacar este detalle una vez resuelto (ver conversación).
+      const detail = await googleRes.text();
+      logger.warn('map-snapshot: Google rechazó la request', { status: googleRes.status, detail });
+      return res.status(502).json({ error: 'map_snapshot_failed', googleStatus: googleRes.status, detail });
+    }
     const buffer = Buffer.from(await googleRes.arrayBuffer());
     res.set('Content-Type', googleRes.headers.get('content-type') ?? 'image/png');
     res.set('Cache-Control', 'private, max-age=15'); // el punto se mueve — no cachear de más
     return res.send(buffer);
-  } catch {
-    return res.status(502).json({ error: 'map_snapshot_failed' });
+  } catch (e) {
+    return res.status(502).json({ error: 'map_snapshot_failed', detail: e instanceof Error ? e.message : String(e) });
   }
 });
 
