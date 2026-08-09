@@ -69,7 +69,16 @@ export async function applyPromoCode(bookingId: string, clientId: string, code: 
 
     const updated = await tx.booking.update({
       where: { id: bookingId },
-      data: { promoCode: code, promoDiscountAmount: discount, totalAmount: newTotal, commissionAmount: newCommission },
+      data: {
+        promoCode: code,
+        promoDiscountAmount: discount,
+        totalAmount: newTotal,
+        commissionAmount: newCommission,
+        // Snapshot de la comisión "de lista" antes del descuento — el libro
+        // contable reconoce el ingreso completo y registra la diferencia
+        // como gasto de marketing explícito, en vez de netearla en silencio.
+        commissionAmountBeforePromo: commissionAmount,
+      },
       select: { totalAmount: true, promoDiscountAmount: true },
     });
 

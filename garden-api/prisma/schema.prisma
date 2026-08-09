@@ -415,6 +415,12 @@ model Booking {
   /// descontó — totalAmount de arriba YA viene con el descuento aplicado.
   promoCode                  String?          @db.VarChar(20)
   promoDiscountAmount        Decimal?         @db.Decimal(10, 2)
+  /// Comisión ANTES de aplicar el promo — null si nunca se aplicó uno.
+  /// Necesario para el libro contable: el ingreso por comisión se
+  /// reconoce por el monto "de lista" completo, y la diferencia contra
+  /// commissionAmount (ya descontado) se registra como gasto de marketing
+  /// explícito — no se netea silenciosamente contra el ingreso.
+  commissionAmountBeforePromo Decimal?        @db.Decimal(10, 2)
   totalAmount                Decimal          @db.Decimal(10, 2)
   pricePerUnit               Decimal          @db.Decimal(10, 2)
   commissionAmount           Decimal          @db.Decimal(10, 2)
@@ -1043,6 +1049,79 @@ model CaregiverWaitlist {
 
   @@unique([clientId, caregiverId])
   @@map("caregiver_waitlist")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LIBRO CONTABLE (partida doble) — reporte gerencial para socios, no
+// reemplaza el libro oficial que ya lleva el contador externo de la
+// empresa. Los asientos automáticos se DERIVAN de Booking/WalletTransaction
+// ya existentes (nunca se escriben desde el flujo de pago en vivo — se
+// generan/regeneran bajo demanda al pedir el libro de un mes, ver
+// ledger.service.ts) — así nunca pueden desincronizarse ni duplicarse.
+// Propinas y donaciones quedan afuera a propósito (Garden no se queda con
+// nada de esa plata, no son ingreso ni gasto de la empresa).
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum LedgerAccountType {
+  ACTIVO
+  PASIVO
+  PATRIMONIO
+  INGRESO
+  GASTO
+}
+
+/// Plan de cuentas — sembrado una vez (ver ledger.service.ts seedAccounts),
+/// no editable desde la app por ahora.
+model LedgerAccount {
+  id    String            @id @default(uuid())
+  code  String            @unique @db.VarChar(10) // "1100", "4100", etc.
+  name  String            @db.VarChar(100)
+  type  LedgerAccountType
+  lines LedgerLine[]
+
+  @@map("ledger_accounts")
+}
+
+enum LedgerEntrySource {
+  AUTO_PAYMENT
+  AUTO_WITHDRAWAL
+  AUTO_REFERRAL
+  AUTO_REFUND
+  MANUAL
+}
+
+/// Un asiento contable — siempre Debe=Haber entre sus líneas.
+model LedgerEntry {
+  id          String            @id @default(uuid())
+  date        DateTime          @db.Date
+  description String            @db.VarChar(300)
+  source      LedgerEntrySource
+  /// Referencia al Booking/WalletTransaction que originó el asiento
+  /// automático — null en asientos manuales. Único junto con `source`:
+  /// evita duplicar el mismo asiento si se regenera el libro de un mes.
+  sourceRefId String?
+  createdAt   DateTime          @default(now())
+  /// Solo en asientos MANUAL — quién lo cargó.
+  createdBy   String?
+  lines       LedgerLine[]
+
+  @@unique([source, sourceRefId])
+  @@index([date])
+  @@map("ledger_entries")
+}
+
+model LedgerLine {
+  id        String        @id @default(uuid())
+  entryId   String
+  entry     LedgerEntry   @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId String
+  account   LedgerAccount @relation(fields: [accountId], references: [id])
+  debit     Decimal       @default(0) @db.Decimal(12, 2)
+  credit    Decimal       @default(0) @db.Decimal(12, 2)
+
+  @@index([entryId])
+  @@index([accountId])
+  @@map("ledger_lines")
 }
 
 /// Log of AI agent calls for the admin monitor.

@@ -3,6 +3,7 @@ import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js
 import * as adminController from './admin.controller.js';
 import * as trainingController from '../training/training.controller.js';
 import * as promoCodeController from '../promo-code/promo-code.controller.js';
+import * as ledgerController from '../ledger/ledger.controller.js';
 import { asyncHandler } from '../../shared/async-handler.js';
 import { exportMonthAsTxt } from '../../services/audit.service.js';
 import prisma from '../../config/database.js';
@@ -16,6 +17,12 @@ router.use(requireRole('ADMIN'));
  * schema de Prisma), administrable vía estas rutas + curl/Postman. */
 router.get('/promo-codes', promoCodeController.list);
 router.post('/promo-codes', promoCodeController.create);
+
+/** Libro contable / finanzas — reporte gerencial mensual para socios. */
+router.get('/ledger/accounts', ledgerController.getAccounts);
+router.get('/ledger/:year/:month', ledgerController.getMonthly);
+router.get('/ledger/:year/:month/pdf', ledgerController.getMonthlyPdf);
+router.post('/ledger/manual-entry', ledgerController.createManualEntry);
 
 /** GET /api/admin/caregivers — todos los cuidadores, paginado, ?status=pendientes|APPROVED|... */
 router.get('/caregivers', adminController.getCaregiversList);
