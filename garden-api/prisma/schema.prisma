@@ -490,9 +490,14 @@ model Booking {
   caregiverComment           String?          @db.Text
   /// Última vez que se envió el recordatorio in-app+push de "calificación
   /// pendiente" al dueño (ver procesarRecordatoriosCalificacion en
-  /// service-reminders.job.ts) — evita reenviarlo varias veces dentro de la
-  /// misma ventana horaria de detección.
+  /// service-reminders.job.ts) — momento del ÚLTIMO recordatorio enviado
+  /// (ya no es "se mandó sí/no" — ahora hay hasta 3 oleadas, ver
+  /// ratingReminderCount y RATING_REMINDER_WAVES).
   ratingReminderSentAt       DateTime?
+  /// Cuántas oleadas de recordatorio de calificación ya se mandaron (0-3).
+  /// Escalona urgencia: 12h (suave), 24h (la que ya existía), 40h (última
+  /// antes de que a las 48h se libere el pago solo, sin calificación).
+  ratingReminderCount        Int              @default(0)
   blockchainTxHash           String?
   blockchainFinalizedTxHash  String?
   blockchainCancelledTxHash  String?

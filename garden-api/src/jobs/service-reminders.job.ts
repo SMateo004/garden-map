@@ -226,57 +226,97 @@ async function procesarAvisosFinHospedaje() {
 }
 
 // ── Recordatorio de calificación post-servicio ───────────────────────────────
-// Corre cada 15 min. Si el servicio lleva ~22-26h completado sin calificación,
-// envía un segundo push + email recordando que la calificación libera el pago.
+// Corre cada 15 min. 3 oleadas escalando en urgencia entre las 12h y las 40h
+// post-servicio, antes de que a las 48h se libere el pago automáticamente sin
+// calificación (ver autoPayoutExpiredReviews) — a pedido explícito del
+// usuario ("debes ser insistente, solo así se le paga al cuidador"). Cada
+// oleada tiene su propia ventana (±2h) y solo se manda si ratingReminderCount
+// todavía no llegó a esa oleada — así nunca se duplica ni se salta ninguna.
+const RATING_REMINDER_WAVES: Array<{
+  hoursAfter: number;
+  title: string;
+  pushBody: (svcLabel: string, petName: string, caregiverName: string) => string;
+  notifBody: (svcLabel: string, petName: string, caregiverName: string) => string;
+}> = [
+  {
+    hoursAfter: 12,
+    title: '⭐ ¿Cómo estuvo el servicio?',
+    pushBody: (svc, pet, cg) => `${cg} cuidó a ${pet} en su ${svc}. Calificalo cuando puedas — libera su pago.`,
+    notifBody: (svc, pet, cg) => `¿Cómo estuvo el ${svc} de ${pet} con ${cg}? Tu calificación libera el pago al cuidador.`,
+  },
+  {
+    hoursAfter: 24,
+    title: '⭐ ¡No olvides calificar!',
+    pushBody: (svc, pet, cg) => `${cg} cuidó a ${pet} en su ${svc}. Calificalo para liberar su pago.`,
+    notifBody: (svc, pet, cg) => `Aún no has calificado el ${svc} de ${pet} con ${cg}. Tu calificación libera el pago al cuidador.`,
+  },
+  {
+    hoursAfter: 40,
+    title: '⏰ Últimas horas para calificar',
+    pushBody: (svc, pet, cg) =>
+      `Si no calificás el ${svc} de ${pet} con ${cg} antes de las 48h, el pago se libera solo, sin tu calificación.`,
+    notifBody: (svc, pet, cg) =>
+      `Últimas horas: si no calificás el ${svc} de ${pet} con ${cg} antes de las 48h de completado, el pago se libera automáticamente sin tu calificación.`,
+  },
+];
+const RATING_REMINDER_WINDOW_HOURS = 2;
 
 async function procesarRecordatoriosCalificacion() {
   const now = new Date();
-  const windowStart = new Date(now.getTime() - 26 * 60 * 60 * 1000);
-  const windowEnd   = new Date(now.getTime() - 22 * 60 * 60 * 1000);
 
-  const pendientes = await prisma.booking.findMany({
-    where: {
-      status: 'COMPLETED',
-      ownerRated: false,
-      payoutStatus: 'PENDING',
-      serviceEndedAt: { gte: windowStart, lte: windowEnd },
-      // Sin esto, cada corrida horaria dentro de la ventana de 4h reenviaba el
-      // mismo recordatorio (hasta 4 veces) al mismo dueño para el mismo booking.
-      ratingReminderSentAt: null,
-    },
-    select: {
-      id: true,
-      clientId: true,
-      petName: true,
-      serviceType: true,
-      caregiver: { select: { user: { select: { firstName: true, lastName: true } } } },
-    },
-  });
+  for (let waveIndex = 0; waveIndex < RATING_REMINDER_WAVES.length; waveIndex++) {
+    const wave = RATING_REMINDER_WAVES[waveIndex]!;
+    const windowStart = new Date(now.getTime() - (wave.hoursAfter + RATING_REMINDER_WINDOW_HOURS) * 60 * 60 * 1000);
+    const windowEnd = new Date(now.getTime() - (wave.hoursAfter - RATING_REMINDER_WINDOW_HOURS) * 60 * 60 * 1000);
 
-  for (const b of pendientes) {
-    try {
-      const caregiverName = [b.caregiver?.user?.firstName, b.caregiver?.user?.lastName].filter(Boolean).join(' ') || 'tu cuidador';
-      const svcLabel = b.serviceType === 'PASEO' ? 'paseo' : b.serviceType === 'GUARDERIA' ? 'guardería' : 'hospedaje';
+    const pendientes = await prisma.booking.findMany({
+      where: {
+        status: 'COMPLETED',
+        ownerRated: false,
+        payoutStatus: 'PENDING',
+        serviceEndedAt: { gte: windowStart, lte: windowEnd },
+        // Solo agarra reservas que ya recibieron exactamente las oleadas
+        // anteriores (nunca esta ni una posterior) — así cada una se manda
+        // una sola vez, en orden, sin duplicarse entre corridas de 15 min.
+        ratingReminderCount: waveIndex,
+      },
+      select: {
+        id: true,
+        clientId: true,
+        petName: true,
+        serviceType: true,
+        caregiver: { select: { user: { select: { firstName: true, lastName: true } } } },
+      },
+    });
 
-      await prisma.notification.create({
-        data: {
-          userId: b.clientId,
-          title: '⭐ ¡No olvides calificar!',
-          message: `Aún no has calificado el ${svcLabel} de ${b.petName ?? 'tu mascota'} con ${caregiverName}. Tu calificación libera el pago al cuidador.`,
-          type: 'SERVICE_COMPLETED',
-        },
-      });
-      sendPushToUser(
-        b.clientId,
-        '⭐ ¡Califica el servicio!',
-        `${caregiverName} cuidó a ${b.petName ?? 'tu mascota'} en su ${svcLabel}. Calificalo para liberar su pago.`
-      ).catch(() => {});
+    for (const b of pendientes) {
+      try {
+        const caregiverName = [b.caregiver?.user?.firstName, b.caregiver?.user?.lastName].filter(Boolean).join(' ') || 'tu cuidador';
+        const svcLabel = b.serviceType === 'PASEO' ? 'paseo' : b.serviceType === 'GUARDERIA' ? 'guardería' : 'hospedaje';
 
-      await prisma.booking.update({ where: { id: b.id }, data: { ratingReminderSentAt: new Date() } });
+        await prisma.notification.create({
+          data: {
+            userId: b.clientId,
+            title: wave.title,
+            message: wave.notifBody(svcLabel, b.petName ?? 'tu mascota', caregiverName),
+            type: 'SERVICE_COMPLETED',
+          },
+        });
+        sendPushToUser(
+          b.clientId,
+          wave.title,
+          wave.pushBody(svcLabel, b.petName ?? 'tu mascota', caregiverName)
+        ).catch(() => {});
 
-      logger.info('[RATING-REMINDER] Recordatorio 24h enviado', { bookingId: b.id });
-    } catch (err: any) {
-      logger.error('[RATING-REMINDER] Error', { bookingId: b.id, err: err?.message });
+        await prisma.booking.update({
+          where: { id: b.id },
+          data: { ratingReminderSentAt: new Date(), ratingReminderCount: waveIndex + 1 },
+        });
+
+        logger.info('[RATING-REMINDER] Oleada enviada', { bookingId: b.id, wave: waveIndex + 1, hoursAfter: wave.hoursAfter });
+      } catch (err: any) {
+        logger.error('[RATING-REMINDER] Error', { bookingId: b.id, wave: waveIndex + 1, err: err?.message });
+      }
     }
   }
 }
