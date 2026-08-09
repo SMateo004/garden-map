@@ -1924,6 +1924,34 @@ class _TipSheetState extends State<_TipSheet> {
   final TextEditingController _customController = TextEditingController();
   bool _submitting = false;
 
+  // Saldo disponible — sin esto, el cliente podía tocar "Bs 20" sin tener
+  // ni Bs 5, y el intento fallaba recién al enviar. Ahora se deshabilitan
+  // de entrada los montos que no alcanza a pagar (a pedido del usuario).
+  double? _availableBalance;
+  bool _loadingBalance = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBalance();
+  }
+
+  Future<void> _loadBalance() async {
+    try {
+      final res = await http.get(Uri.parse('${widget.baseUrl}/wallet'), headers: {'Authorization': 'Bearer ${widget.token}'});
+      final data = jsonDecode(res.body);
+      if (mounted && data['success'] == true) {
+        setState(() => _availableBalance = double.tryParse(
+            data['data']?['availableBalance']?.toString() ?? data['data']?['balance']?.toString() ?? '0') ?? 0);
+      }
+    } catch (_) {
+      // Sin red — se deja _availableBalance en null (no se bloquea nada,
+      // el backend igual valida de verdad al enviar).
+    } finally {
+      if (mounted) setState(() => _loadingBalance = false);
+    }
+  }
+
   @override
   void dispose() {
     _customController.dispose();
@@ -1931,9 +1959,10 @@ class _TipSheetState extends State<_TipSheet> {
   }
 
   double get _amount => _selected ?? double.tryParse(_customController.text) ?? 0;
+  bool get _exceedsBalance => _availableBalance != null && _amount > _availableBalance!;
 
   Future<void> _submit() async {
-    if (_amount <= 0) return;
+    if (_amount <= 0 || _exceedsBalance) return;
     HapticFeedback.mediumImpact();
     setState(() => _submitting = true);
     try {
@@ -1990,63 +2019,118 @@ class _TipSheetState extends State<_TipSheet> {
               const SizedBox(height: 6),
               Text('100% va directo al cuidador — Garden no cobra comisión sobre propinas.',
                   style: TextStyle(color: subtextColor, fontSize: 12.5)),
+              if (!_loadingBalance && _availableBalance != null) ...[
+                const SizedBox(height: 6),
+                Text('Saldo disponible: Bs ${_availableBalance!.toStringAsFixed(2)}',
+                    style: TextStyle(color: subtextColor, fontSize: 11.5, fontWeight: FontWeight.w600)),
+              ],
               const SizedBox(height: 18),
-              Row(
-                children: [
-                  ...presets.map((p) {
-                    final sel = _selected == p;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: GestureDetector(
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          setState(() {
-                            _selected = sel ? null : p;
-                            if (!sel) _customController.clear();
-                          });
+              if (!_loadingBalance && _availableBalance != null && _availableBalance! < presets.first) ...[
+                // Ni el monto más chico alcanza — no tiene sentido mostrar
+                // presets todos deshabilitados, se ofrece cargar saldo directo.
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: GardenColors.warning.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: GardenColors.warning.withValues(alpha: 0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('No te alcanza el saldo de tu billetera para dejar propina todavía.',
+                          style: TextStyle(color: textColor, fontSize: 12.5)),
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          context.push('/wallet');
                         },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 150),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: sel ? GardenColors.primary : surface,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: sel ? GardenColors.primary : borderColor),
-                          ),
-                          child: Text('Bs ${p.toStringAsFixed(0)}',
-                              style: TextStyle(
-                                  color: sel ? Colors.white : textColor,
-                                  fontWeight: FontWeight.w700, fontSize: 13)),
+                        icon: const Icon(Icons.account_balance_wallet_outlined, size: 16),
+                        label: const Text('Cargar saldo', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: GardenColors.primary,
+                          side: const BorderSide(color: GardenColors.primary),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                       ),
-                    );
-                  }),
-                  Expanded(
-                    child: TextField(
-                      controller: _customController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      style: TextStyle(color: textColor, fontSize: 13),
-                      onChanged: (_) => setState(() => _selected = null),
-                      decoration: InputDecoration(
-                        hintText: 'Otro monto',
-                        hintStyle: TextStyle(color: subtextColor, fontSize: 12),
-                        prefixText: 'Bs ',
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: borderColor)),
-                        filled: true,
-                        fillColor: surface,
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ] else ...[
+                Row(
+                  children: [
+                    ...presets.map((p) {
+                      final sel = _selected == p;
+                      final disabled = _availableBalance != null && p > _availableBalance!;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Opacity(
+                          opacity: disabled ? 0.4 : 1.0,
+                          child: GestureDetector(
+                            onTap: disabled ? null : () {
+                              HapticFeedback.selectionClick();
+                              setState(() {
+                                _selected = sel ? null : p;
+                                if (!sel) _customController.clear();
+                              });
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: sel ? GardenColors.primary : surface,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: sel ? GardenColors.primary : borderColor),
+                              ),
+                              child: Text('Bs ${p.toStringAsFixed(0)}',
+                                  style: TextStyle(
+                                      color: sel ? Colors.white : textColor,
+                                      fontWeight: FontWeight.w700, fontSize: 13)),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                    Expanded(
+                      child: TextField(
+                        controller: _customController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: TextStyle(color: textColor, fontSize: 13),
+                        onChanged: (v) {
+                          // Tope al saldo disponible — evita que el cliente
+                          // escriba un monto que sabemos de antemano que va a fallar.
+                          final parsed = double.tryParse(v) ?? 0;
+                          if (_availableBalance != null && parsed > _availableBalance!) {
+                            final capped = _availableBalance!.toStringAsFixed(2);
+                            _customController.value = TextEditingValue(
+                              text: capped, selection: TextSelection.collapsed(offset: capped.length),
+                            );
+                          }
+                          setState(() => _selected = null);
+                        },
+                        decoration: InputDecoration(
+                          hintText: 'Otro monto',
+                          hintStyle: TextStyle(color: subtextColor, fontSize: 12),
+                          prefixText: 'Bs ',
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: borderColor)),
+                          filled: true,
+                          fillColor: surface,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 20),
               GardenButton(
                 label: _submitting ? 'Enviando...' : 'Enviar propina de Bs ${_amount.toStringAsFixed(0)}',
                 loading: _submitting,
                 icon: Icons.favorite_rounded,
-                onPressed: (_amount > 0 && !_submitting) ? _submit : null,
+                onPressed: (_amount > 0 && !_submitting && !_exceedsBalance) ? _submit : null,
               ),
               const SizedBox(height: 8),
               Center(
