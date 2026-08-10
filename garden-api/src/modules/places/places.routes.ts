@@ -103,7 +103,9 @@ router.get('/map-snapshot', async (req: Request, res: Response) => {
       // detalle para no tener que repetir el diagnóstico si vuelve a fallar.
       const detail = await googleRes.text();
       logger.warn('map-snapshot: Google rechazó la request', { status: googleRes.status, detail });
-      return res.status(502).json({ error: 'map_snapshot_failed' });
+      // TODO(temporal): reexponiendo el detalle para re-diagnosticar en vivo
+      // tras habilitar Maps Static API — sacarlo de nuevo una vez resuelto.
+      return res.status(502).json({ error: 'map_snapshot_failed', googleStatus: googleRes.status, detail });
     }
     const buffer = Buffer.from(await googleRes.arrayBuffer());
     res.set('Content-Type', googleRes.headers.get('content-type') ?? 'image/png');
