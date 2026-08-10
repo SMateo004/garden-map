@@ -95,17 +95,15 @@ router.get('/map-snapshot', async (req: Request, res: Response) => {
   try {
     const googleRes = await fetch(url.toString());
     if (!googleRes.ok) {
-      // Diagnosticado en vivo (ago 2026): Google devuelve 403 "This API key
-      // is not authorized to use this service or API" hasta que se habilite
-      // "Maps Static API" para el proyecto de GOOGLE_MAPS_KEY en Google Cloud
-      // Console (Places Autocomplete/Details, que sí funcionan hoy, son una
-      // API distinta — hay que habilitar Static Maps aparte). Logueamos el
-      // detalle para no tener que repetir el diagnóstico si vuelve a fallar.
+      // Causa real ya resuelta (ago 2026): la API "Maps Static API" estaba
+      // habilitada a nivel del proyecto pero faltaba agregarla a la lista de
+      // "API restrictions" propia de GOOGLE_MAPS_KEY en Google Cloud Console
+      // (Credentials → la key → API restrictions) — son dos configuraciones
+      // separadas, y Google devuelve el mismo 403 genérico para ambas. Si
+      // esto vuelve a fallar, revisar ese mismo lugar antes que nada.
       const detail = await googleRes.text();
       logger.warn('map-snapshot: Google rechazó la request', { status: googleRes.status, detail });
-      // TODO(temporal): reexponiendo el detalle para re-diagnosticar en vivo
-      // tras habilitar Maps Static API — sacarlo de nuevo una vez resuelto.
-      return res.status(502).json({ error: 'map_snapshot_failed', googleStatus: googleRes.status, detail });
+      return res.status(502).json({ error: 'map_snapshot_failed' });
     }
     const buffer = Buffer.from(await googleRes.arrayBuffer());
     res.set('Content-Type', googleRes.headers.get('content-type') ?? 'image/png');
