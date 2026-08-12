@@ -53,15 +53,22 @@ const envSchema = z.object({
   // AI Agent (Anthropic — required when BLOCKCHAIN_ENABLED or dispute resolution is active)
   ANTHROPIC_API_KEY: z.string().optional(),
   // OTP de teléfono — WhatsApp Business Cloud API (canal principal) con
-  // AWS SNS como SMS de respaldo (reutiliza AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY
-  // ya configurados arriba para Rekognition). Ver src/services/otp-delivery.service.ts.
+  // Infobip como SMS de respaldo. Ver src/services/otp-delivery.service.ts.
+  // Reemplazó a AWS End User Messaging SMS (número Toll-Free rechazado dos
+  // veces por AWS por "Business Verification Failed" — ver historial de
+  // conversación de julio 2026, no hace falta reintentarlo).
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
   WHATSAPP_AUTH_TEMPLATE_NAME: z.string().default('otp_verification'),
-  // Número de origen (Toll-Free) de AWS End User Messaging SMS, en formato
-  // E.164 (ej. +18773183672). Sin esto, el SMS de respaldo no tiene desde
-  // dónde enviar y se omite.
-  AWS_SMS_ORIGINATION_NUMBER: z.string().optional(),
+  // SMS de respaldo — Infobip primero, AWS SNS Publish como red de
+  // contención (ambos comparten SMS_SENDER_ID). INFOBIP_BASE_URL es el
+  // dominio personalizado de la cuenta (ej. xxxxx.api.infobip.com), visible
+  // en el panel de Infobip al crear el API key — NO es api.infobip.com
+  // genérico. AWS SNS reutiliza AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY ya
+  // definidos arriba para Rekognition.
+  INFOBIP_API_KEY: z.string().optional(),
+  INFOBIP_BASE_URL: z.string().optional(),
+  SMS_SENDER_ID: z.string().default('GARDEN'),
   // SIP — Integración QR bancario Bolivia (MC4 / Banco)
   // Poner SIP_ENABLED=true y completar las demás vars cuando lleguen las credenciales del banco.
   SIP_ENABLED: z.string().transform(v => v === 'true').default('false'),

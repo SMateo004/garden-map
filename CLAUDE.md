@@ -99,16 +99,35 @@ Puntos que ya causaron incidentes reales, tenerlos presentes:
 
 ## Verificación de teléfono
 
-WhatsApp Business Cloud API (`WHATSAPP_PHONE_NUMBER_ID`/`WHATSAPP_ACCESS_TOKEN`) — sin
-configurar todavía (pendiente verificación de negocio de Meta). Fallback: AWS End User Messaging
-SMS con número Toll-Free — registro ante operadoras enviado, revisá el estado real con:
+Cadena de 3 canales en `src/services/otp-delivery.service.ts`, cada uno se salta solo si el
+anterior falla o no está configurado:
 
-```bash
-node -e "require('dotenv').config(); const {PinpointSMSVoiceV2Client,DescribeRegistrationsCommand}=require('@aws-sdk/client-pinpoint-sms-voice-v2'); new PinpointSMSVoiceV2Client({region:process.env.AWS_REGION,credentials:{accessKeyId:process.env.AWS_ACCESS_KEY_ID,secretAccessKey:process.env.AWS_SECRET_ACCESS_KEY}}).send(new DescribeRegistrationsCommand({RegistrationIds:['registration-b4dadc4573ea4654817489ca61965fac']})).then(r=>console.log(r.Registrations[0]))"
-```
+1. **WhatsApp Business Cloud API** (`WHATSAPP_PHONE_NUMBER_ID`/`WHATSAPP_ACCESS_TOKEN`) — sin
+   configurar todavía (pendiente verificación de negocio de Meta, estancada pidiendo más info —
+   ver Business Manager > Autorizaciones y verificaciones). Si en el futuro se resuelve vía un
+   BSP como Infobip en vez de ir directo por Meta, revisar esto primero.
+2. **Infobip SMS** (`INFOBIP_API_KEY`/`INFOBIP_BASE_URL`/`SMS_SENDER_ID`) — cuenta en trámite de
+   alta (agosto 2026), pendiente de que ventas la habilite (el signup self-serve mandó a un
+   flujo de contacto comercial en vez de dar API key directo).
+3. **AWS SNS Publish** (`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_REGION`, ya
+   configurados para Rekognition, + `SMS_SENDER_ID`) — API clásica de SNS, **distinta** de AWS
+   End User Messaging SMS/Pinpoint (la que se abandonó, ver abajo). No requiere número dedicado
+   ni Business Verification: sin origen especificado, AWS elige uno del pool compartido. Es la
+   red de contención que sí funciona hoy sin ningún trámite pendiente, mientras Infobip/WhatsApp
+   se activan.
 
-Mientras ninguno de los dos esté activo, el código guarda el OTP en la base y notifica a los
-admins para dar soporte manual — esto ya funciona, no es un error.
+Se descartó AWS End User Messaging SMS (Pinpoint, con número Toll-Free) porque quedó rechazado
+dos veces ("Business Verification Failed", cuenta personal sin entidad legal en EEUU) y no había
+forma de reintentarlo — **no confundir con AWS SNS Publish (punto 3), que es una API distinta y
+sí está en uso**. También se descartó Twilio: su propia documentación admite que en Bolivia
+sobrescribe el Sender ID de forma inconsistente fuera de la red Viva, lo que puede hacer que
+mensajes figuren como "delivered" sin llegar nunca — coincide con problemas reales ya vividos con
+Twilio en este proyecto. Importante para Bolivia sin importar el proveedor: **Tigo exige registro
+de Sender ID** (si no se hace, filtra en silencio); Entel reemplaza el Sender ID por un shortcode
+fijo igual (no es un bug); Viva no tiene restricciones.
+
+Mientras ninguno de los tres canales esté activo, el código guarda el OTP en la base y notifica a
+los admins para dar soporte manual — esto ya funciona, no es un error.
 
 ## Convenciones de git
 
