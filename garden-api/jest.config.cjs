@@ -5,6 +5,11 @@ module.exports = {
   roots: ['<rootDir>/tests'],
   testMatch: ['**/*.test.ts'],
   setupFiles: ['<rootDir>/tests/setup.ts'],
+  // Default (5000ms) es muy justo para integration tests que levantan app.ts
+  // completo: corriendo una sola suite pasan en <100ms, pero con varias
+  // suites pesadas compilando/corriendo en paralelo (como en CI) algunas
+  // pasan de 5s por contención de CPU, no por lentitud real del código.
+  testTimeout: 20000,
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
     '^@/(.*)$': '<rootDir>/src/$1',

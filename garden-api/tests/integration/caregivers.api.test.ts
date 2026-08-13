@@ -15,9 +15,16 @@ jest.mock('../../src/config/database', () => {
     update: jest.fn(),
   };
   const user = { findUnique: jest.fn() };
+  // El controller resuelve ciudad (default Santa Cruz) + zona real vía
+  // CityZone antes del filtro — sin esto, prisma.city es undefined y GET
+  // /api/caregivers explota con TypeError antes de llegar a findMany.
+  const city = { findUnique: jest.fn().mockResolvedValue({ id: 'city-santa-cruz' }) };
+  const cityZone = { findFirst: jest.fn().mockResolvedValue(null) };
   const db = {
     caregiverProfile,
     user,
+    city,
+    cityZone,
     booking: { findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     adminAction: { create: jest.fn() },
     $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) => {

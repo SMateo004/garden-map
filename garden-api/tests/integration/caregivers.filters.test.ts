@@ -15,10 +15,20 @@ jest.mock('../../src/config/database', () => {
   };
   const user = { findUnique: jest.fn() };
   const availability = { findMany: jest.fn() };
+  // El controller resuelve la ciudad (default Santa Cruz) y la zona real vía
+  // CityZone antes de armar el filtro — sin esto, `prisma.city` es undefined
+  // y explota con TypeError apenas entra a GET /api/caregivers.
+  const city = { findUnique: jest.fn().mockResolvedValue({ id: 'city-santa-cruz' }) };
+  // null → no matchea ninguna CityZone real, así el controller cae al
+  // fallback legado (ZONE_QUERY_TO_ENUM + where.zone), que es lo que estos
+  // tests ya esperaban antes de que existiera la resolución dinámica.
+  const cityZone = { findFirst: jest.fn().mockResolvedValue(null) };
   const db = {
     caregiverProfile,
     user,
     availability,
+    city,
+    cityZone,
     $queryRaw: jest.fn().mockResolvedValue([]),
   };
   return { __esModule: true, default: db };

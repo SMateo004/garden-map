@@ -14,6 +14,10 @@ jest.mock('../../src/config/database', () => {
     findMany: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    // Guard atómico de cancelBooking (ver comentario en booking.service.ts:
+    // updateMany + chequeo de count evita doble-cancelación/doble-reembolso
+    // en una carrera) — sin este mock, tx.booking.updateMany no es función.
+    updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     count: jest.fn(),
   };
   const caregiverData = {
@@ -43,11 +47,19 @@ jest.mock('../../src/config/database', () => {
   const clientProfile = {
     findUnique: jest.fn().mockResolvedValue({
       id: 'cp-1', userId: 'user-client-1', isComplete: true,
+      addressStreet: 'Av. Test 123', zoneId: 'zone-1',
       pets: [{ id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901' }],
+      // createBooking exige teléfono real + fecha de nacimiento antes de
+      // reservar (cuentas de login social solo traen nombre/email al inicio).
+      user: { phone: '71234567', dateOfBirth: new Date('1990-01-01') },
     }),
   };
   const appSettings = { findUnique: jest.fn().mockResolvedValue(null) };
-  const txModels = { booking, caregiverProfile, availability, user, notification, walletTransaction, pet, clientProfile, appSettings };
+  // booking.service.ts llama auditLog() en create/cancel, que importa
+  // `{ prisma }` con nombre (no default) de config/database.js — sin exponer
+  // también `prisma` acá, ese import resuelve undefined y auditLog explota.
+  const auditLog = { create: jest.fn().mockResolvedValue({}) };
+  const txModels = { booking, caregiverProfile, availability, user, notification, walletTransaction, pet, clientProfile, appSettings, auditLog };
   const db = {
     booking,
     caregiverProfile,
@@ -58,11 +70,12 @@ jest.mock('../../src/config/database', () => {
     pet,
     clientProfile,
     appSettings,
+    auditLog,
     $queryRaw: jest.fn().mockResolvedValue([]),
     $executeRaw: jest.fn().mockResolvedValue(0),
     $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) => fn(txModels)),
   };
-  return { __esModule: true, default: db };
+  return { __esModule: true, default: db, prisma: db };
 });
 
 // Bypass maintenance mode + service-enabled checks in tests (no real DB)
@@ -160,7 +173,7 @@ describe('POST /api/bookings', () => {
       .send({
         serviceType: 'HOSPEDAJE',
         caregiverId,
-        petId: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
+        petIds: ['b2c3d4e5-f6a7-8901-bcde-f12345678901'],
         startDate: startDate.toISOString().slice(0, 10),
         endDate: endDate.toISOString().slice(0, 10),
         totalDays: 3,
@@ -220,6 +233,7 @@ describe('POST /api/bookings/:id/cancel', () => {
     });
 
     const response = await request(app).post(`/api/bookings/${bookingId}/cancel`).send({
+      reasonCode: 'CAMBIO_DE_PLANES',
       reason: 'Cambio de planes',
     });
 

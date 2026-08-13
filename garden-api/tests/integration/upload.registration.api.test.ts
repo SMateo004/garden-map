@@ -18,11 +18,17 @@ jest.mock('../../src/services/storage.service', () => ({
   uploadImage: jest.fn().mockResolvedValue('https://res.cloudinary.com/single.jpg'),
 }));
 
+// Minimal valid JPEG magic bytes (FF D8 FF) — uploadRegistrationPhotosHandler
+// calls assertImageBuffer() for real (mocking upload.middleware only bypasses
+// multer, not the handler's own magic-byte check), so the fake buffer needs to
+// actually sniff as an image or it 400s with INVALID_FILE_TYPE.
+const FAKE_JPEG_BUFFER = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+
 // Inject 4 fake photo buffers via the upload.middleware mock
 jest.mock('../../src/modules/caregiver-service/upload.middleware', () => ({
   uploadCaregiverPhotos: (req: { files?: unknown[] }, _res: unknown, next: () => void) => {
     req.files = Array(4).fill(null).map((_, i) => ({
-      buffer: Buffer.from('fake-image-data'),
+      buffer: FAKE_JPEG_BUFFER,
       fieldname: 'photos',
       originalname: `photo${i + 1}.jpg`,
       mimetype: 'image/jpeg',
@@ -31,6 +37,12 @@ jest.mock('../../src/modules/caregiver-service/upload.middleware', () => ({
     next();
   },
   processAndUploadToCloudinary: jest.fn().mockResolvedValue(FAKE_URLS),
+}));
+
+// image/jpeg sí dispara validarFoto (CLAUDE_VISION_MIMES) — mockear para no
+// pegarle a la API real de Claude en el test.
+jest.mock('../../src/agents/foto-validacion.agent', () => ({
+  validarFoto: jest.fn().mockResolvedValue({ valida: true, razon: '' }),
 }));
 
 // Bypass maintenance mode

@@ -25,18 +25,23 @@ jest.mock('../../src/config/database', () => {
     deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
   };
   const appSettings = { findUnique: jest.fn().mockResolvedValue(null) };
+  // audit.service.ts hace `import { prisma } from 'config/database.js'`
+  // (named export, no default) para el auditLog fire-and-forget que dispara
+  // el registro de cuidador — sin exponer también `prisma` acá, ese import
+  // resuelve undefined y explota con "Cannot read properties of undefined
+  // (reading 'auditLog')" antes de que el .catch() del service llegue a nada.
+  const auditLog = { create: jest.fn().mockResolvedValue({}) };
   const tx = { user, caregiverProfile, refreshToken, appSettings };
-  return {
-    __esModule: true,
-    default: {
-      user,
-      caregiverProfile,
-      refreshToken,
-      appSettings,
-      $queryRaw: jest.fn().mockResolvedValue([]),
-      $transaction: jest.fn((fn: (t: typeof tx) => Promise<unknown>) => fn(tx)),
-    },
+  const db = {
+    user,
+    caregiverProfile,
+    refreshToken,
+    appSettings,
+    auditLog,
+    $queryRaw: jest.fn().mockResolvedValue([]),
+    $transaction: jest.fn((fn: (t: typeof tx) => Promise<unknown>) => fn(tx)),
   };
+  return { __esModule: true, default: db, prisma: db };
 });
 
 jest.mock('bcrypt', () => ({
@@ -66,7 +71,7 @@ const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 const validRegisterBody = {
   user: {
     email: 'cuidador@test.com',
-    password: 'password123',
+    password: 'Password123!',
     firstName: 'Juan',
     lastName: 'Pérez',
     phone: '+59171234567',
@@ -218,6 +223,8 @@ describe('Auth caregiver API (integration)', () => {
 
   describe('POST /api/auth/login', () => {
     it('returns 200 and tokens when valid credentials', async () => {
+      const bcrypt = require('bcrypt');
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
       (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
         id: 'user-1',
         email: 'cuidador@test.com',
