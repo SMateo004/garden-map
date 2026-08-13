@@ -23,6 +23,7 @@ import {
 } from './rekognition.service.js';
 import { performLivenessCheck, LIVENESS_CONFIDENCE_THRESHOLD } from './liveness.service.js';
 import { crossValidate, calculateDetailedTrustScore } from './identity-validation.service.js';
+import { parseExtractedDOB, calculateAgeFromDOB } from './ocr.service.js';
 import { uploadVerificationImage } from './verification-upload.js';
 import { generateFingerprint, getGeolocation, logVerificationAudit, calculateBehavioralRisk, DeviceInfo } from './fraud.service.js';
 
@@ -184,6 +185,7 @@ export async function submitVerification(
     let geo: any = {};
     let croppedSelfie: Buffer = selfieBuffer;
     let croppedDoc: Buffer = ciFrontBuffer;
+    let isUnderageByDocument = false;
 
     try {
 
@@ -302,6 +304,23 @@ export async function submitVerification(
       crossValResult = await crossValidate(ciFrontBuffer, user.firstName, user.lastName, user.dateOfBirth, user.id, ciBackBuffer);
       finalFraudFlags = [...crossValResult.fraudFlags];
 
+      // Re-validar la edad con la fecha de nacimiento REAL leída del CI —
+      // isOver18 en el registro es autoreportado por el usuario, sin cruce
+      // contra el documento. dob_mismatch (arriba) ya compara el string
+      // completo, pero quedaba diluido en el conteo de fraudFlags sin
+      // bloquear nada por sí solo; esto es un bloqueo duro específico para
+      // el caso que de verdad importa: que la persona sea menor de edad.
+      const ocrDob = parseExtractedDOB(crossValResult.ocrData?.dateOfBirth ?? null);
+      const realAgeFromDocument = ocrDob ? calculateAgeFromDOB(ocrDob) : null;
+      isUnderageByDocument = realAgeFromDocument !== null && realAgeFromDocument < 18;
+      if (isUnderageByDocument) {
+        finalFraudFlags.push('underage_by_document');
+        logger.warn('[Verification] Edad real (CI) menor a 18 — bloqueo duro', {
+          sessionId,
+          realAgeFromDocument,
+        });
+      }
+
       if (!docValidation.ok) finalFraudFlags.push('non_standard_document');
       if (faceSimilarityValue >= 95 && livenessScore < 90) finalFraudFlags.push('suspect_liveness_quality');
 
@@ -377,8 +396,8 @@ export async function submitVerification(
     const isMaliciousBehavior = behaviorScoreValue <= 0 && hasIdentityReuse; // Only block if it's identity reuse
     const isCompromisedDevice = finalFraudFlags.includes('multiple_accounts_on_device') && finalFraudFlags.includes('identity_inconsistency');
 
-    if (hasIdentityReuse || isMaliciousBehavior || isCompromisedDevice) {
-      logger.warn('Hard block triggered during verification', { sessionId, hasIdentityReuse, isMaliciousBehavior, isCompromisedDevice });
+    if (hasIdentityReuse || isMaliciousBehavior || isCompromisedDevice || isUnderageByDocument) {
+      logger.warn('Hard block triggered during verification', { sessionId, hasIdentityReuse, isMaliciousBehavior, isCompromisedDevice, isUnderageByDocument });
       finalStatus = 'REJECTED';
     }
 
@@ -546,6 +565,8 @@ export async function submitVerification(
     let message = 'Verificación completada.';
     if (finalStatus === 'VERIFIED') {
       message = '¡Identidad verificada correctamente!';
+    } else if (isUnderageByDocument) {
+      message = 'No podemos verificarte: la fecha de nacimiento de tu documento indica que sos menor de 18 años. GARDEN requiere que los cuidadores sean mayores de edad.';
     } else {
       message = 'Verificación rechazada. Los datos no coinciden o la calidad es insuficiente. Por favor, asegúrate de que el documento sea legible y tu rostro esté claro.';
     }

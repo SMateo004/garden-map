@@ -1,5 +1,5 @@
-import { toggleVerify, listPendingCaregivers } from '../../src/modules/admin/admin.service';
-import { CaregiverNotFoundError } from '../../src/shared/errors';
+import { toggleVerify, listPendingCaregivers, reviewCaregiver } from '../../src/modules/admin/admin.service';
+import { CaregiverNotFoundError, BadRequestError } from '../../src/shared/errors';
 import prisma from '../../src/config/database';
 
 jest.mock('../../src/config/database', () => ({
@@ -14,7 +14,9 @@ jest.mock('../../src/config/database', () => ({
     availability: {
       count: jest.fn().mockResolvedValue(1),
     },
-    adminAction: { create: jest.fn() },
+    adminAction: { create: jest.fn().mockResolvedValue({}) },
+    notification: { create: jest.fn().mockResolvedValue({}) },
+    verificationAudit: { create: jest.fn().mockResolvedValue({}) },
   },
 }));
 
@@ -29,6 +31,15 @@ jest.mock('../../src/shared/cache', () => ({
 jest.mock('../../src/shared/analytics', () => ({
   track: jest.fn(),
   identify: jest.fn(),
+}));
+
+jest.mock('../../src/services/notification.service', () => ({
+  onCaregiverApproved: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('../../src/services/firebase.service', () => ({
+  sendPushToUser: jest.fn().mockResolvedValue(undefined),
+  sendPushToAdmins: jest.fn().mockResolvedValue(undefined),
 }));
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
@@ -171,6 +182,95 @@ describe('AdminService', () => {
           take: 20,
         })
       );
+    });
+  });
+
+  describe('reviewCaregiver — approve gate', () => {
+    const baseOuterProfile = {
+      id: 'cp-1',
+      status: 'PENDING_REVIEW',
+      userId: 'user-1',
+      defaultAvailabilitySchedule: { lunes: true },
+      user: { email: 'a@b.com', firstName: 'Ana', lastName: 'G' },
+    };
+
+    const baseFullProfile = {
+      bio: 'Bio de más de cincuenta caracteres para pasar la validación del servicio',
+      zone: 'EQUIPETROL',
+      servicesOffered: ['HOSPEDAJE'],
+      profilePhoto: 'https://x.co/photo.jpg',
+      identityVerificationStatus: 'VERIFIED',
+      emailVerified: true,
+      phoneVerified: true,
+      isAmateur: false,
+      trainingComplete: false, // irrelevant salvo isAmateur=true
+    };
+
+    function mockProfiles(fullProfileOverrides: Partial<typeof baseFullProfile>) {
+      // mockReset (no clearAllMocks) porque queremos vaciar también la cola
+      // de mockResolvedValueOnce de tests anteriores — sin esto, valores no
+      // consumidos de un test se filtran al siguiente.
+      (mockPrisma.caregiverProfile.findUnique as jest.Mock).mockReset();
+      (mockPrisma.caregiverProfile.findUnique as jest.Mock)
+        .mockResolvedValueOnce(baseOuterProfile as never) // lookup inicial (include: user)
+        .mockResolvedValueOnce({ ...baseFullProfile, ...fullProfileOverrides } as never); // fullProfile (select)
+      (mockPrisma.caregiverProfile.update as jest.Mock).mockResolvedValue({
+        ...baseOuterProfile,
+        status: 'APPROVED',
+      } as never);
+    }
+
+    it('rejects approval when phoneVerified is false', async () => {
+      mockProfiles({ phoneVerified: false });
+
+      const err = await reviewCaregiver('cp-1', 'admin-1', { action: 'approve' } as never).catch((e) => e);
+      expect(err).toBeInstanceOf(BadRequestError);
+      expect((err as BadRequestError).code).toBe('PROFILE_INCOMPLETE');
+      expect((err as BadRequestError).message).toContain('verificación de teléfono');
+      expect(mockPrisma.caregiverProfile.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects approval when an amateur caregiver has not completed mandatory training', async () => {
+      mockProfiles({ isAmateur: true, trainingComplete: false });
+
+      const err = await reviewCaregiver('cp-1', 'admin-1', { action: 'approve' } as never).catch((e) => e);
+      expect(err).toBeInstanceOf(BadRequestError);
+      expect((err as BadRequestError).message).toContain('capacitación obligatoria (amateur)');
+    });
+
+    it('approves normally when everything (incl. phone + training) is complete', async () => {
+      mockProfiles({ isAmateur: true, trainingComplete: true });
+
+      const result = await reviewCaregiver('cp-1', 'admin-1', { action: 'approve' } as never);
+
+      expect(result.status).toBe('APPROVED');
+      expect(mockPrisma.adminAction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            actionType: 'REVIEW_APPROVE',
+            notes: 'Solicitud aprobada; perfil visible en listado público.',
+          }),
+        })
+      );
+    });
+
+    it('force:true approves despite missing requirements and records exactly what was skipped', async () => {
+      mockProfiles({ phoneVerified: false, isAmateur: true, trainingComplete: false });
+
+      const result = await reviewCaregiver('cp-1', 'admin-1', { action: 'approve', force: true } as never);
+
+      expect(result.status).toBe('APPROVED');
+      expect(mockPrisma.adminAction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            actionType: 'REVIEW_APPROVE',
+            notes: expect.stringContaining('force:true'),
+          }),
+        })
+      );
+      const notes = (mockPrisma.adminAction.create as jest.Mock).mock.calls[0][0].data.notes as string;
+      expect(notes).toContain('verificación de teléfono');
+      expect(notes).toContain('capacitación obligatoria (amateur)');
     });
   });
 });

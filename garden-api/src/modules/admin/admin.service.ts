@@ -490,6 +490,9 @@ export async function reviewCaregiver(
         profilePhoto: true,
         identityVerificationStatus: true,
         emailVerified: true,
+        phoneVerified: true,
+        isAmateur: true,
+        trainingComplete: true,
       } as any,
     });
     const hasPersonalInfo = fullProfile?.profilePhoto && fullProfile.bio && fullProfile.zone;
@@ -499,24 +502,42 @@ export async function reviewCaregiver(
       Array.isArray(fullProfile.servicesOffered) && fullProfile.servicesOffered.length > 0;
     const identityVerified = (fullProfile as any)?.identityVerificationStatus === 'VERIFIED';
     const emailVerified = (fullProfile as any)?.emailVerified === true;
+    // Igual peso que emailVerified — hay toda una cadena de OTP (WhatsApp/
+    // Infobip/AWS SNS) para esto, no tiene sentido dejarla aprobar sin usarse.
+    const phoneVerified = (fullProfile as any)?.phoneVerified === true;
+    // Solo aplica a cuidadores amateur (0 años de experiencia declarados) —
+    // los demás nunca tienen capacitación obligatoria (ver training.service.ts).
+    const trainingOk = (fullProfile as any)?.isAmateur !== true || (fullProfile as any)?.trainingComplete === true;
     const availabilityCount = await prisma.availability.count({ where: { caregiverId: profileId } });
     const hasAvailability =
       availabilityCount > 0 || profile.defaultAvailabilitySchedule != null;
 
-    const isComplete = hasPersonalInfo && hasQuestionnaire && hasAvailability && identityVerified && emailVerified;
+    const isComplete = hasPersonalInfo && hasQuestionnaire && hasAvailability && identityVerified && emailVerified && phoneVerified && trainingOk;
+
+    const missing: string[] = [];
+    if (!hasPersonalInfo) missing.push('información personal');
+    if (!hasQuestionnaire) missing.push('cuestionario');
+    if (!hasAvailability) missing.push('disponibilidad');
+    if (!identityVerified) missing.push('verificación de identidad (QR)');
+    if (!emailVerified) missing.push('verificación de correo');
+    if (!phoneVerified) missing.push('verificación de teléfono');
+    if (!trainingOk) missing.push('capacitación obligatoria (amateur)');
 
     if (!isComplete && !body.force) {
-      const missing: string[] = [];
-      if (!hasPersonalInfo) missing.push('información personal');
-      if (!hasQuestionnaire) missing.push('cuestionario');
-      if (!hasAvailability) missing.push('disponibilidad');
-      if (!identityVerified) missing.push('verificación de identidad (QR)');
-      if (!emailVerified) missing.push('verificación de correo');
       throw new BadRequestError(
         `No se puede aprobar: faltan ${missing.join(', ')}. isComplete debe ser true. (Usa force: true para saltar esta validación)`,
         'PROFILE_INCOMPLETE'
       );
     }
+
+    // Si se aprobó saltando requisitos con force:true, dejar constancia
+    // explícita de cuáles — antes la nota era un string fijo idéntico para
+    // toda aprobación, así que no había forma de distinguir después una
+    // aprobación normal de una forzada, ni de saber qué le faltaba.
+    const wasForced = !isComplete && body.force === true;
+    const approveNotes = wasForced
+      ? `Solicitud aprobada con force:true — requisitos saltados: ${missing.join(', ')}.`
+      : 'Solicitud aprobada; perfil visible en listado público.';
 
     const updated = await prisma.caregiverProfile.update({
       where: { id: profileId },
@@ -539,7 +560,7 @@ export async function reviewCaregiver(
         adminId,
         actionType: 'REVIEW_APPROVE',
         targetId: profileId,
-        notes: 'Solicitud aprobada; perfil visible en listado público.',
+        notes: approveNotes,
       },
     });
 

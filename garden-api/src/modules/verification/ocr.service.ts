@@ -126,6 +126,47 @@ export function namesMatch(ocrName: string | null, userFullName: string): boolea
   return similarity >= 90;
 }
 
+/**
+ * Convierte la fecha de nacimiento extraída del CI (string, formato DD/MM/YYYY
+ * o YYYY-MM-DD según qué patrón matcheó en extractDOB) a un Date real, para
+ * poder recalcular la edad — no confiar solo en el isOver18 autoreportado en
+ * el registro. Devuelve null si el string no matchea ningún formato conocido.
+ */
+export function parseExtractedDOB(raw: string | null): Date | null {
+  if (!raw) return null;
+  const s = raw.trim();
+
+  // YYYY-MM-DD o YYYY/MM/DD
+  let m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (m) {
+    const [, y, mo, d] = m as unknown as [string, string, string, string];
+    const date = new Date(Number(y), Number(mo) - 1, Number(d));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  // DD/MM/YYYY o DD-MM-YYYY (formato boliviano estándar)
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (m) {
+    const [, d, mo, yRaw] = m as unknown as [string, string, string, string];
+    // Año de 2 dígitos: un CI de adulto nunca corresponde a un nacimiento
+    // reciente (20xx), así que 19xx es la interpretación correcta.
+    const y = yRaw.length === 2 ? Number(`19${yRaw}`) : Number(yRaw);
+    const date = new Date(y, Number(mo) - 1, Number(d));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  return null;
+}
+
+/** Edad en años cumplidos a partir de una fecha de nacimiento real. */
+export function calculateAgeFromDOB(dob: Date): number {
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+  return age;
+}
+
 /** Extract date of birth (DD/MM/YYYY or YYYY-MM-DD). */
 function extractDOB(text: string): string | null {
   const spanishDate = parseSpanishDate(text);
