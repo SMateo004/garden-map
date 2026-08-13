@@ -22,6 +22,11 @@ class _AdminSupportScreenState extends State<AdminSupportScreen> {
   bool _loadingThreads = true;
   String? _selectedThreadId;
   IO.Socket? _socket;
+  // Empuja el mensaje entrante a la conversación abierta (ver _ThreadDetail) —
+  // sin esto, support_new_message solo refrescaba la lista de la izquierda y
+  // el admin tenía que cerrar/reabrir el hilo (o recargar la página entera)
+  // para ver el mensaje nuevo mientras lo estaba mirando.
+  final ValueNotifier<Map<String, dynamic>?> _incomingMessage = ValueNotifier(null);
 
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
 
@@ -44,7 +49,11 @@ class _AdminSupportScreenState extends State<AdminSupportScreen> {
       });
       // Un cliente nuevo escribió — refrescar la lista para que aparezca
       // arriba con su preview, sin que el admin tenga que recargar la página.
-      _socket!.on('support_new_message', (_) => _loadThreads(silent: true));
+      _socket!.on('support_new_message', (data) {
+        _loadThreads(silent: true);
+        final raw = (data is List && data.isNotEmpty) ? data.first : data;
+        if (raw is Map) _incomingMessage.value = Map<String, dynamic>.from(raw);
+      });
       _socket!.on('support_thread_updated', (_) => _loadThreads(silent: true));
       _socket!.connect();
     } catch (e) {
@@ -84,6 +93,7 @@ class _AdminSupportScreenState extends State<AdminSupportScreen> {
   void dispose() {
     _socket?.disconnect();
     _socket?.dispose();
+    _incomingMessage.dispose();
     super.dispose();
   }
 
@@ -196,6 +206,7 @@ class _AdminSupportScreenState extends State<AdminSupportScreen> {
                   adminToken: widget.adminToken,
                   baseUrl: _baseUrl,
                   onSent: () => _loadThreads(silent: true),
+                  incomingMessage: _incomingMessage,
                 ),
         ),
       ],
@@ -210,6 +221,7 @@ class _ThreadDetail extends StatefulWidget {
   final String adminToken;
   final String baseUrl;
   final VoidCallback onSent;
+  final ValueNotifier<Map<String, dynamic>?> incomingMessage;
 
   const _ThreadDetail({
     super.key,
@@ -219,6 +231,7 @@ class _ThreadDetail extends StatefulWidget {
     required this.adminToken,
     required this.baseUrl,
     required this.onSent,
+    required this.incomingMessage,
   });
 
   @override
@@ -236,6 +249,25 @@ class _ThreadDetailState extends State<_ThreadDetail> {
   void initState() {
     super.initState();
     _load();
+    widget.incomingMessage.addListener(_onIncomingMessage);
+  }
+
+  void _onIncomingMessage() {
+    final data = widget.incomingMessage.value;
+    if (data == null || data['threadId'] != widget.threadId) return;
+    setState(() => _messages.add({
+          'id': 'live_${DateTime.now().microsecondsSinceEpoch}',
+          'senderRole': 'CLIENT',
+          'message': data['message'],
+          'createdAt': data['createdAt'],
+        }));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    // El admin ya está mirando este hilo — marcarlo leído sin esperar a que
+    // vuelva a abrirlo.
+    http.post(
+      Uri.parse('${widget.baseUrl}/admin/support/threads/${widget.threadId}/read'),
+      headers: {'Authorization': 'Bearer ${widget.adminToken}'},
+    ).catchError((_) => http.Response('', 500));
   }
 
   Future<void> _load() async {
@@ -304,6 +336,7 @@ class _ThreadDetailState extends State<_ThreadDetail> {
 
   @override
   void dispose() {
+    widget.incomingMessage.removeListener(_onIncomingMessage);
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
