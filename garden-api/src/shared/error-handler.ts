@@ -94,12 +94,14 @@ export function errorHandler(
     },
   });
 
-  // En desarrollo, incluir más detalles del error
+  // En desarrollo, incluir más detalles del error (nunca en prod — no filtrar
+  // mensajes/stack internos a clientes reales).
+  const isDev = process.env.NODE_ENV === 'development';
   return res.status(500).json({
     success: false,
     error: {
       code: 'INTERNAL_ERROR',
-      message: 'Error interno del servidor',
+      message: isDev ? err.message : 'Error interno del servidor',
     },
   });
 }

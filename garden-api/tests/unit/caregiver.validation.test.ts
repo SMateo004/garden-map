@@ -97,8 +97,8 @@ describe('Caregiver validation (Zod)', () => {
       expect(listCaregiversQuerySchema.parse({ priceRange: 'economico' }).priceRange).toBe('economico');
     });
 
-    it('rejects invalid zone', () => {
-      expect(() => listCaregiversQuerySchema.parse({ zone: 'invalid_zone' })).toThrow();
+    it('accepts any zone string (se resuelve contra CityZone real, no contra un enum fijo)', () => {
+      expect(listCaregiversQuerySchema.parse({ zone: 'invalid_zone' }).zone).toBe('invalid_zone');
     });
 
     it('coerces page and limit from string', () => {

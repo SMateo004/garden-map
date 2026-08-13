@@ -95,7 +95,7 @@ describe('calculateRefund', () => {
 
       expect(result.refundStatus).toBe(RefundStatus.APPROVED);
       expect(result.refundPercent).toBe(50);
-      expect(result.refundAmount).toBe(150);
+      expect(result.refundAmount).toBe(145); // (300 - 10 admin fee) * 0.5 — fee aplica también acá
     });
 
     it('retorna 0% si se cancela <24h antes', async () => {

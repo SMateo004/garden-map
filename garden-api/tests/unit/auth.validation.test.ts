@@ -49,7 +49,7 @@ describe('Auth validation (Zod)', () => {
   describe('registerCaregiverSchema', () => {
     const validUser = {
       email: 'c@test.com',
-      password: 'password123',
+      password: 'Password123!',
       firstName: 'A',
       lastName: 'B',
       phone: '+59171234567',
