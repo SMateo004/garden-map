@@ -396,6 +396,13 @@ router.post('/redeem', authMiddleware, asyncHandler(async (req: Request, res: Re
 
   try {
     await prisma.$transaction(async (tx) => {
+      // Lock de fila — sin esto, dos requests concurrentes con el mismo código
+      // (doble tap, dos pestañas) leen el mismo `usedBy` bajo Read Committed y
+      // ambas pasan la validación antes de que cualquiera confirme, acreditando
+      // el código dos veces (o superando maxUses). Mismo patrón que retiros de
+      // billetera y pagos con wallet en booking.service.ts/admin.service.ts.
+      await tx.$queryRaw`SELECT id FROM "gift_codes" WHERE code = ${normalizedCode} FOR UPDATE`;
+
       const fresh = await tx.giftCode.findUnique({ where: { code: normalizedCode } });
       if (!fresh || !fresh.active) throw Object.assign(new Error('INVALID'), { code: 'INVALID' });
       if (fresh.expiresAt && fresh.expiresAt < new Date()) throw Object.assign(new Error('EXPIRED'), { code: 'EXPIRED' });

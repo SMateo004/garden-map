@@ -4270,18 +4270,17 @@ export async function concludeService(
     const overtimeClockEnd = booking.clientMarkedEndAt && booking.clientMarkedEndAt < concludedAt
       ? booking.clientMarkedEndAt
       : concludedAt;
-    // Si sigue pausado por una emergencia sin resolver al momento de concluir,
-    // ese tramo (desde que se pausó hasta ahora) tampoco cuenta como overtime.
-    const activePauseMinutes = booking.pausedAt
-      ? Math.max(0, Math.round((overtimeClockEnd.getTime() - booking.pausedAt.getTime()) / 60_000))
-      : 0;
+    // No hace falta sumar un tramo de "pausa activa" acá: no se puede llegar a
+    // este punto con una emergencia sin resolver (la guardia de arriba ya
+    // lanzó si booking.pausedAt seguía seteado), así que todo el tiempo
+    // pausado ya está capturado en booking.totalPausedMinutes.
     const overtimeMins = calcOvertimeMinutes(
       booking.serviceType,
       booking.serviceStartedAt,
       booking.duration,
       booking.endDate,
       overtimeClockEnd,
-      booking.totalPausedMinutes + activePauseMinutes
+      booking.totalPausedMinutes
     );
 
     let overtimeFeeGross = 0;
