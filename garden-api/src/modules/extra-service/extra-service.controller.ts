@@ -26,7 +26,7 @@ export const createExtraService = asyncHandler(async (req: Request, res: Respons
 
 export const patchExtraService = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { id } = req.params;
+  const id = req.params.id!;
   const body = patchExtraServiceSchema.parse(req.body);
   const data = await extraServiceService.patchExtraService(userId, id, body);
   res.json({ success: true, data });
@@ -34,7 +34,7 @@ export const patchExtraService = asyncHandler(async (req: Request, res: Response
 
 export const deleteExtraService = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { id } = req.params;
+  const id = req.params.id!;
   const data = await extraServiceService.deleteExtraService(userId, id);
   res.json({ success: true, data });
 });
