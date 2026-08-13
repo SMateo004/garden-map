@@ -136,9 +136,14 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     // app, hasta que estén aprobados (LIMPIO) — a diferencia de la
     // capacitación, esto nunca bloquea nada (son opcionales, solo dan un
     // badge de confianza), así que el tono es motivacional, no de alerta.
+    // A diferencia del tutorial/recordatorio de capacitación, este SÍ se
+    // muestra aunque el perfil todavía esté _setupPending (recién
+    // registrado, sin aprobar) — es justo la ventana de reclutamiento donde
+    // más conviene pedirlo, mientras el cuidador está completando todo lo
+    // demás. Antes quedaba mudo hasta la aprobación del admin, así que un
+    // cuidador podía operar meses sin que se lo pidieran ni una vez.
     final antecedentesStatus = _caregiver?['antecedentesStatus'] as String?;
-    if (!_setupPending &&
-        (antecedentesStatus == null ||
+    if ((antecedentesStatus == null ||
             antecedentesStatus == 'PENDING' ||
             antecedentesStatus == 'RECHAZADO') &&
         mounted) {
