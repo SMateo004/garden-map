@@ -13,10 +13,19 @@
 ///   - On every successful secure-storage read, we attempt to migrate a legacy
 ///     token from SharedPreferences and then delete it there.
 ///
+/// Web: flutter_secure_storage's web backend wraps IndexedDB with a key that
+/// isn't reliably reloadable after a full page refresh — it doesn't throw, it
+/// silently comes back empty, so the try/catch fallback above never kicks in
+/// and every reload looked like a fresh login. Web has no OS keychain to
+/// protect anyway (this only ever added obscurity, not real security there),
+/// so on web we skip it entirely and read/write straight from
+/// SharedPreferences (window.localStorage), which persists correctly across
+/// reloads — same tradeoff every other web app makes for its auth token.
+///
 /// Non-sensitive user data (name, role, photo URL) stays in SharedPreferences.
 library;
 
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -37,6 +46,11 @@ class SecureStorageService {
   // ── Access token ───────────────────────────────────────────────────────────
 
   static Future<void> saveAccessToken(String token) async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kAccessToken, token);
+      return;
+    }
     try {
       await _storage.write(key: _kAccessToken, value: token);
       // Remove legacy plaintext copy if present
@@ -50,6 +64,10 @@ class SecureStorageService {
   }
 
   static Future<String?> getAccessToken() async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_kAccessToken);
+    }
     try {
       final token = await _storage.read(key: _kAccessToken);
       if (token != null) return token;
@@ -62,9 +80,11 @@ class SecureStorageService {
   }
 
   static Future<void> deleteAccessToken() async {
-    try {
-      await _storage.delete(key: _kAccessToken);
-    } catch (_) {}
+    if (!kIsWeb) {
+      try {
+        await _storage.delete(key: _kAccessToken);
+      } catch (_) {}
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kAccessToken);
   }
@@ -72,6 +92,11 @@ class SecureStorageService {
   // ── Refresh token ──────────────────────────────────────────────────────────
 
   static Future<void> saveRefreshToken(String token) async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kRefreshToken, token);
+      return;
+    }
     try {
       await _storage.write(key: _kRefreshToken, value: token);
       final prefs = await SharedPreferences.getInstance();
@@ -84,6 +109,10 @@ class SecureStorageService {
   }
 
   static Future<String?> getRefreshToken() async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_kRefreshToken);
+    }
     try {
       final token = await _storage.read(key: _kRefreshToken);
       if (token != null) return token;
@@ -95,9 +124,11 @@ class SecureStorageService {
   }
 
   static Future<void> deleteRefreshToken() async {
-    try {
-      await _storage.delete(key: _kRefreshToken);
-    } catch (_) {}
+    if (!kIsWeb) {
+      try {
+        await _storage.delete(key: _kRefreshToken);
+      } catch (_) {}
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kRefreshToken);
   }
@@ -105,9 +136,11 @@ class SecureStorageService {
   // ── Clear all ──────────────────────────────────────────────────────────────
 
   static Future<void> clearAll() async {
-    try {
-      await _storage.deleteAll();
-    } catch (_) {}
+    if (!kIsWeb) {
+      try {
+        await _storage.deleteAll();
+      } catch (_) {}
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kAccessToken);
     await prefs.remove(_kRefreshToken);
