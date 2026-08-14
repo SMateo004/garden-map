@@ -1403,6 +1403,13 @@ export async function resolveDisputeAppeal(
 
     // ── Ajuste al cuidador (si cambia lo que le corresponde) ────────────────
     if (caregiverDelta !== 0) {
+      // Lock de fila antes de leer — sin esto, una apelación resuelta casi en
+      // simultáneo con otra operación que toque este mismo balance (propina,
+      // otro ajuste) podía leer un balanceBefore desactualizado bajo Read
+      // Committed. El incremento en sí ya era atómico, pero el snapshot que
+      // queda en WalletTransaction no lo era. Mismo patrón que el resto del
+      // archivo (ver refundBooking/rejectPayment).
+      await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${caregiverUserId} FOR UPDATE`;
       // Balance unificado vive en User (CaregiverProfile.balance está @deprecated)
       const before = await tx.user.findUnique({ where: { id: caregiverUserId }, select: { balance: true } });
       const balanceBefore = Number(before?.balance ?? 0);
@@ -1421,6 +1428,10 @@ export async function resolveDisputeAppeal(
 
     // ── Ajuste al dueño (si cambia el reembolso en efectivo) ────────────────
     if (clientCashDelta !== 0) {
+      // Lock de fila antes de leer — mismo motivo que el ajuste al cuidador
+      // arriba: evita un balanceBefore desactualizado en el snapshot de
+      // WalletTransaction si hay otra operación tocando este balance a la vez.
+      await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${clientId} FOR UPDATE`;
       // Balance unificado vive en User (ClientProfile.balance está @deprecated)
       const before = await tx.user.findUnique({ where: { id: clientId }, select: { balance: true } });
       const balanceBefore = Number(before?.balance ?? 0);
