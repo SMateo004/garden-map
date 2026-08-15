@@ -8,6 +8,7 @@ import logger from '../../shared/logger.js';
 import { track } from '../../shared/analytics.js';
 import * as notificationService from '../../services/notification.service.js';
 import { blockchainService } from '../../services/blockchain.service.js';
+import { dispatchOnChainWithRetry } from '../../services/blockchain-retry.helper.js';
 import { sendPushToUser } from '../../services/firebase.service.js';
 import { confirmExtensionQrBySip } from '../booking-service/booking.service.js';
 
@@ -174,22 +175,23 @@ export async function handleCheckoutCompleted(
   });
 
   // Registro en Blockchain — guardar txHash para verificación
-  blockchainService.createBookingOnChain(
+  dispatchOnChainWithRetry({
     bookingId,
-    booking.clientId,
-    booking.caregiverId,
-    Number(booking.totalAmount),
-    booking.startDate ?? booking.walkDate ?? new Date(),
-    resolveBookingEndDate(booking),      // ← multi-day walk: last walkDay date
-    booking.petName,
-    booking.serviceType
-  ).then(async (txHash) => {
-    if (txHash) {
+    label: 'createBooking:stripe',
+    action: () => blockchainService.createBookingOnChain(
+      bookingId,
+      booking.clientId,
+      booking.caregiverId,
+      Number(booking.totalAmount),
+      booking.startDate ?? booking.walkDate ?? new Date(),
+      resolveBookingEndDate(booking),      // ← multi-day walk: last walkDay date
+      booking.petName,
+      booking.serviceType
+    ),
+    onSuccess: async (txHash) => {
       await prisma.booking.update({ where: { id: bookingId }, data: { blockchainTxHash: txHash } });
       logger.info('[Blockchain] txHash saved to booking', { bookingId, txHash });
-    }
-  }).catch(err => {
-    logger.error('Blockchain registration failed (Stripe)', { bookingId, err });
+    },
   });
 }
 
@@ -350,22 +352,23 @@ export async function verifyPaymentByQr(qrId: string, clientId: string): Promise
   }
 
   // Registro en Blockchain — guardar txHash
-  blockchainService.createBookingOnChain(
-    booking.id,
-    booking.clientId,
-    booking.caregiverId,
-    Number(booking.totalAmount),
-    booking.startDate ?? booking.walkDate ?? new Date(),
-    resolveBookingEndDate(booking),
-    booking.petName,
-    booking.serviceType
-  ).then(async (txHash) => {
-    if (txHash) {
+  dispatchOnChainWithRetry({
+    bookingId: booking.id,
+    label: 'createBooking:qr',
+    action: () => blockchainService.createBookingOnChain(
+      booking.id,
+      booking.clientId,
+      booking.caregiverId,
+      Number(booking.totalAmount),
+      booking.startDate ?? booking.walkDate ?? new Date(),
+      resolveBookingEndDate(booking),
+      booking.petName,
+      booking.serviceType
+    ),
+    onSuccess: async (txHash) => {
       await prisma.booking.update({ where: { id: booking.id }, data: { blockchainTxHash: txHash } });
       logger.info('[Blockchain] txHash saved to booking', { bookingId: booking.id, txHash });
-    }
-  }).catch(err => {
-    logger.error('Blockchain registration failed (QR)', { bookingId: booking.id, err });
+    },
   });
 
   return {
@@ -428,22 +431,23 @@ export async function verifyPaymentManual(
   });
 
   // Registro en Blockchain — guardar txHash
-  blockchainService.createBookingOnChain(
+  dispatchOnChainWithRetry({
     bookingId,
-    booking.clientId,
-    booking.caregiverId,
-    Number(booking.totalAmount),
-    booking.startDate ?? booking.walkDate ?? new Date(),
-    resolveBookingEndDate(booking),      // ← multi-day walk: last walkDay date
-    booking.petName,
-    booking.serviceType
-  ).then(async (txHash) => {
-    if (txHash) {
+    label: 'createBooking:manual',
+    action: () => blockchainService.createBookingOnChain(
+      bookingId,
+      booking.clientId,
+      booking.caregiverId,
+      Number(booking.totalAmount),
+      booking.startDate ?? booking.walkDate ?? new Date(),
+      resolveBookingEndDate(booking),      // ← multi-day walk: last walkDay date
+      booking.petName,
+      booking.serviceType
+    ),
+    onSuccess: async (txHash) => {
       await prisma.booking.update({ where: { id: bookingId }, data: { blockchainTxHash: txHash } });
       logger.info('[Blockchain] txHash saved to booking', { bookingId, txHash });
-    }
-  }).catch(err => {
-    logger.error('Blockchain registration failed (Manual)', { bookingId, err });
+    },
   });
 
   return { bookingId, status: BookingStatus.WAITING_CAREGIVER_APPROVAL };
@@ -562,21 +566,22 @@ export async function verifyPaymentBySipCallback(
     }
   }
 
-  blockchainService.createBookingOnChain(
-    booking.id,
-    booking.clientId,
-    booking.caregiverId,
-    Number(booking.totalAmount),
-    booking.startDate ?? booking.walkDate ?? new Date(),
-    resolveBookingEndDate(booking),
-    booking.petName,
-    booking.serviceType
-  ).then(async (txHash) => {
-    if (txHash) {
+  dispatchOnChainWithRetry({
+    bookingId: booking.id,
+    label: 'createBooking:sipCallback',
+    action: () => blockchainService.createBookingOnChain(
+      booking.id,
+      booking.clientId,
+      booking.caregiverId,
+      Number(booking.totalAmount),
+      booking.startDate ?? booking.walkDate ?? new Date(),
+      resolveBookingEndDate(booking),
+      booking.petName,
+      booking.serviceType
+    ),
+    onSuccess: async (txHash) => {
       await prisma.booking.update({ where: { id: booking.id }, data: { blockchainTxHash: txHash } });
-    }
-  }).catch(err => {
-    logger.error('[SIP callback] Blockchain registration failed', { bookingId: booking.id, err });
+    },
   });
 
   return { bookingId: booking.id, status: BookingStatus.WAITING_CAREGIVER_APPROVAL };

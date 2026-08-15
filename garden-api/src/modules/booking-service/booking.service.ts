@@ -23,6 +23,7 @@ import { track } from '../../shared/analytics.js';
 import { auditLog } from '../../services/audit.service.js';
 import * as notificationService from '../../services/notification.service.js';
 import { blockchainService } from '../../services/blockchain.service.js';
+import { dispatchOnChainWithRetry } from '../../services/blockchain-retry.helper.js';
 import { sendPushToUser, sendPushToAdmins } from '../../services/firebase.service.js';
 import { getIO, emitWalletUpdated } from '../../services/socket.service.js';
 import { boliviaDateTimeToMs, boliviaDateAndTimeToMs } from '../../utils/bolivia-time.js';
@@ -2322,15 +2323,16 @@ export async function cancelBooking(
     reasonCode: cancellationReasonCode ?? null,
   });
 
-  // Registro en Blockchain (asíncrono) — guarda txHash si la tx tiene éxito
-  blockchainService.cancelBookingOnChain(bookingId, cancellationReason || 'Cancelado por usuario').then(async (txHash) => {
-    if (txHash) {
+  // Registro en Blockchain (asíncrono, con retry + alerta al admin si se agotan los intentos)
+  dispatchOnChainWithRetry({
+    bookingId,
+    label: 'cancelBooking',
+    action: () => blockchainService.cancelBookingOnChain(bookingId, cancellationReason || 'Cancelado por usuario'),
+    onSuccess: async (txHash) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (prisma.booking as any).update({ where: { id: bookingId }, data: { blockchainCancelledTxHash: txHash } });
       logger.info('[Blockchain] cancel txHash saved', { bookingId, txHash });
-    }
-  }).catch(err => {
-    logger.error('Blockchain cancellation failed', { bookingId, err });
+    },
   });
 
   return bookingToResponse(result.booking);
@@ -2738,7 +2740,11 @@ export async function confirmWalkExtensionQr(
       .catch(() => {});
   }
 
-  blockchainService.recordWalkExtensionOnChain(bookingId, additionalMinutes, newTotal).catch(() => {});
+  dispatchOnChainWithRetry({
+    bookingId,
+    label: 'extendWalk',
+    action: () => blockchainService.recordWalkExtensionOnChain(bookingId, additionalMinutes, newTotal),
+  });
 
   return result;
 }
@@ -2973,9 +2979,11 @@ export async function confirmHospedajeExtensionQr(
     sendPushToUser(caregiverUserId, '🏠 Se alargó el hospedaje', `${extPetName ?? 'Tu huésped'} se queda ${additionalDays} noche${additionalDays > 1 ? 's' : ''} más · Bs ${extraAmount} extra ya son tuyos`, { type: 'SERVICE_EXTENSION', bookingId }).catch(() => {});
   }
 
-  // Registro en blockchain (asíncrono — mock si no está configurado)
-  blockchainService.recordHospedajeExtensionOnChain(bookingId, additionalDays, newTotal).catch((err) => {
-    logger.error('Blockchain hospedaje extension failed', { bookingId, err });
+  // Registro en blockchain (asíncrono, con retry + alerta al admin si se agotan los intentos)
+  dispatchOnChainWithRetry({
+    bookingId,
+    label: 'extendHospedaje',
+    action: () => blockchainService.recordHospedajeExtensionOnChain(bookingId, additionalDays, newTotal),
   });
 
   return result;
@@ -4673,14 +4681,15 @@ export async function confirmReceiptByClient(
       }
     });
 
-    // Registro en Blockchain (asíncrono) - Liberar calificación
-    blockchainService.finalizeBookingOnChain(bookingId, rating).then(async (txHash) => {
-      if (txHash) {
+    // Registro en Blockchain (asíncrono, con retry + alerta al admin) - Liberar calificación
+    dispatchOnChainWithRetry({
+      bookingId,
+      label: 'finalizeBooking',
+      action: () => blockchainService.finalizeBookingOnChain(bookingId, rating),
+      onSuccess: async (txHash) => {
         await prisma.booking.update({ where: { id: bookingId }, data: { blockchainFinalizedTxHash: txHash } });
         logger.info('[Blockchain] finalize txHash saved', { bookingId, txHash });
-      }
-    }).catch(err => {
-      logger.error('Blockchain completion failed', { bookingId, err });
+      },
     });
 
     return bookingToResponse(updated!);
@@ -4842,13 +4851,14 @@ export async function autoReleasePayment(
     select: { blockchainFinalizedTxHash: true },
   });
   if (!bookingForChain?.blockchainFinalizedTxHash) {
-    blockchainService.finalizeBookingOnChain(bookingId, 5).then(async (txHash) => {
-      if (txHash) {
+    dispatchOnChainWithRetry({
+      bookingId,
+      label: 'finalizeBooking:autoRelease',
+      action: () => blockchainService.finalizeBookingOnChain(bookingId, 5),
+      onSuccess: async (txHash) => {
         await prisma.booking.update({ where: { id: bookingId }, data: { blockchainFinalizedTxHash: txHash } });
         logger.info('[Blockchain] auto-release finalize txHash saved', { bookingId, txHash });
-      }
-    }).catch(err => {
-      logger.error('[AutoRelease] Blockchain finalize failed', { bookingId, err });
+      },
     });
   } else {
     logger.info('[Blockchain] auto-release skipped — already finalized', { bookingId });

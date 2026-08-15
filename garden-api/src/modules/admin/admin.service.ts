@@ -22,6 +22,7 @@ import type { ReviewCaregiverBody, ListCaregiversQuery } from './admin.validatio
 import * as notificationService from '../../services/notification.service.js';
 import { sendPushToUser } from '../../services/firebase.service.js';
 import * as authService from '../auth/auth.service.js';
+import { blockchainService } from '../../services/blockchain.service.js';
 
 function toIso(date: Date | null): string | null {
   return date ? date.toISOString() : null;
@@ -3858,4 +3859,72 @@ export async function dismissCaregiverAccountDeletionRequest(userId: string, adm
   });
 
   logger.info('Admin dismissed caregiver account deletion request', { userId, adminId });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ESTADO DE BLOCKCHAIN — hasta ahora las fallas de sincronización on-chain
+// (AdminNotification tipo BLOCKCHAIN_FAILURE, creadas en dispute.routes.ts
+// cuando se agotan los 3 reintentos) se escribían en la base pero nada las
+// leía — quedaban enterradas. Este endpoint las expone junto con la tasa
+// real de sincronización de reservas, para que el admin pueda ver de un
+// vistazo si el registro on-chain está funcionando.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** GET /api/admin/blockchain/status */
+export async function getBlockchainStatus() {
+  const chainStatus = await blockchainService.getStatus();
+
+  const [
+    bookingsConfirmedOrLater,
+    bookingsWithTxHash,
+    bookingsCompleted,
+    bookingsFinalizedOnChain,
+    bookingsCancelled,
+    bookingsCancelledOnChain,
+    unresolvedFailures,
+    recentFailures,
+  ] = await Promise.all([
+    prisma.booking.count({ where: { status: { in: ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] } } }),
+    prisma.booking.count({ where: { blockchainTxHash: { not: null } } }),
+    prisma.booking.count({ where: { status: 'COMPLETED' } }),
+    prisma.booking.count({ where: { blockchainFinalizedTxHash: { not: null } } }),
+    prisma.booking.count({ where: { status: 'CANCELLED' } }),
+    prisma.booking.count({ where: { blockchainCancelledTxHash: { not: null } } }),
+    prisma.adminNotification.count({ where: { type: 'BLOCKCHAIN_FAILURE', readAt: null } }),
+    prisma.adminNotification.findMany({
+      where: { type: 'BLOCKCHAIN_FAILURE' },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: { id: true, bookingId: true, createdAt: true, readAt: true },
+    }),
+  ]);
+
+  return {
+    ...chainStatus,
+    sync: {
+      bookingsConfirmedOrLater,
+      bookingsWithTxHash,
+      bookingsCompleted,
+      bookingsFinalizedOnChain,
+      bookingsCancelled,
+      bookingsCancelledOnChain,
+    },
+    failures: {
+      unresolved: unresolvedFailures,
+      recent: recentFailures,
+    },
+  };
+}
+
+/** POST /api/admin/blockchain/failures/:id/resolve — el admin ya reprocesó
+ * manualmente la reserva (ej. reintentó la tx a mano) y la marca como leída. */
+export async function resolveBlockchainFailure(notificationId: string) {
+  const updated = await prisma.adminNotification.updateMany({
+    where: { id: notificationId, type: 'BLOCKCHAIN_FAILURE' },
+    data: { readAt: new Date() },
+  });
+  if (updated.count === 0) {
+    throw new NotFoundError('Notificación de falla blockchain no encontrada');
+  }
+  return { success: true };
 }

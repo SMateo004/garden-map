@@ -1216,6 +1216,22 @@ export const generatePhoneOtpMessage = asyncHandler(async (req: Request, res: Re
   res.json({ success: true, data });
 });
 
+// ── Blockchain: estado de sincronización on-chain y fallas pendientes ──────
+
+/** GET /api/admin/blockchain/status */
+export const getBlockchainStatus = asyncHandler(async (req: Request, res: Response) => {
+  const data = await adminService.getBlockchainStatus();
+  res.json({ success: true, data });
+});
+
+/** POST /api/admin/blockchain/failures/:id/resolve */
+export const resolveBlockchainFailure = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const data = await adminService.resolveBlockchainFailure(id!);
+  auditLog({ userId: req.user!.userId, action: 'BLOCKCHAIN_FAILURE_RESOLVED', entity: 'AdminNotification', entityId: id, ip: req.ip });
+  res.json({ success: true, data });
+});
+
 // ── Antecedentes penales flaggeados por el agente de IA (admin decide) ─────
 
 /** GET /api/admin/antecedentes-flagged — documentos en revisión. */

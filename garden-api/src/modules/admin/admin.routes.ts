@@ -204,6 +204,12 @@ router.get('/phone-otp-requests', adminController.getPendingPhoneOtpRequests);
 /** POST /api/admin/phone-otp-requests/:userId/message — (re)genera el código y el mensaje listo para copiar/enviar. */
 router.post('/phone-otp-requests/:userId/message', adminController.generatePhoneOtpMessage);
 
+/** GET /api/admin/blockchain/status — enabled, wallet/balance, tasa de sync, fallas pendientes. */
+router.get('/blockchain/status', adminController.getBlockchainStatus);
+
+/** POST /api/admin/blockchain/failures/:id/resolve — marca una falla BLOCKCHAIN_FAILURE como resuelta. */
+router.post('/blockchain/failures/:id/resolve', adminController.resolveBlockchainFailure);
+
 /** GET /api/admin/antecedentes-flagged — documentos de antecedentes en revisión. */
 router.get('/antecedentes-flagged', adminController.getFlaggedAntecedentes);
 

@@ -34,6 +34,14 @@ const GARDEN_PROFILES_ABI = [
     "function getOwnerPetsCount(string _ownerId) external view returns (uint256)"
 ];
 
+// Contrato de retorno de los métodos de escritura (create/finalize/cancel/extend/
+// resolveDispute*): devuelven `string | null`, pero null SOLO significa un
+// no-op legítimo — modo mock (BLOCKCHAIN_ENABLED=false) o, en createBookingOnChain,
+// un duplicado ya existente on-chain. Cualquier error real de la tx se relanza
+// (throw) en vez de tragarse, para que blockchain-retry.helper.ts pueda
+// reintentar y, si se agotan los intentos, avisar al admin — antes de este
+// cambio los catch() de los llamadores nunca se disparaban porque el método
+// nunca fallaba "hacia afuera", así que las fallas quedaban invisibles.
 class BlockchainService {
     private provider: ethers.Provider | null = null;
     private wallet: ethers.Wallet | null = null;
@@ -130,7 +138,7 @@ class BlockchainService {
                 error: err?.reason || err?.message || err,
                 code: err?.code,
             });
-            return null;
+            throw err;
         }
     }
 
@@ -144,7 +152,7 @@ class BlockchainService {
             return receipt.hash;
         } catch (err: any) {
             logger.error('[Blockchain] Error finalizing booking', { bookingId, error: err?.reason || err?.message });
-            return null;
+            throw err;
         }
     }
 
@@ -158,7 +166,7 @@ class BlockchainService {
             return receipt.hash;
         } catch (err: any) {
             logger.error('[Blockchain] Error cancelling booking', { bookingId, error: err?.reason || err?.message });
-            return null;
+            throw err;
         }
     }
 
@@ -194,7 +202,7 @@ class BlockchainService {
                 additionalMinutes,
                 error: err?.reason || err?.message,
             });
-            return null;
+            throw err;
         }
     }
 
@@ -228,7 +236,7 @@ class BlockchainService {
                 additionalDays,
                 error: err?.reason || err?.message,
             });
-            return null;
+            throw err;
         }
     }
 
@@ -300,7 +308,7 @@ class BlockchainService {
             return receipt.hash;
         } catch (err: any) {
             logger.error('[Blockchain] Error resolving dispute (caregiver wins)', { bookingId, error: err?.reason || err?.message });
-            return null;
+            throw err;
         }
     }
 
@@ -318,7 +326,7 @@ class BlockchainService {
             return receipt.hash;
         } catch (err: any) {
             logger.error('[Blockchain] Error resolving dispute (client wins)', { bookingId, error: err?.reason || err?.message });
-            return null;
+            throw err;
         }
     }
 
@@ -342,8 +350,50 @@ class BlockchainService {
             return receipt.hash;
         } catch (err: any) {
             logger.error('[Blockchain] Error resolving partial dispute', { bookingId, error: err?.reason || err?.message });
-            return null;
+            throw err;
         }
+    }
+
+    // ─── ESTADO (para el panel admin) ─────────────────────────────────────────
+
+    /**
+     * Estado de la conexión blockchain para GET /api/admin/blockchain/status.
+     * Reutiliza el provider/wallet ya inicializados — no abre una conexión nueva.
+     */
+    async getStatus(): Promise<{
+        enabled: boolean;
+        walletAddress: string | null;
+        balancePol: number | null;
+        hasEscrowContract: boolean;
+        hasProfileContract: boolean;
+    }> {
+        this.ensureInitialized();
+
+        if (!this.wallet || !this.provider) {
+            return {
+                enabled: false,
+                walletAddress: null,
+                balancePol: null,
+                hasEscrowContract: false,
+                hasProfileContract: false,
+            };
+        }
+
+        let balancePol: number | null = null;
+        try {
+            const balance = await this.provider.getBalance(this.wallet.address);
+            balancePol = parseFloat(ethers.formatEther(balance));
+        } catch (err) {
+            logger.error('[Blockchain] Error reading wallet balance for status check', { err });
+        }
+
+        return {
+            enabled: true,
+            walletAddress: this.wallet.address,
+            balancePol,
+            hasEscrowContract: !!this.escrowContract,
+            hasProfileContract: !!this.profileContract,
+        };
     }
 
     // ─── REPUTACIÓN ───────────────────────────────────────────────────────────

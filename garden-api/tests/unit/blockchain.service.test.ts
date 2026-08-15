@@ -118,13 +118,12 @@ describe('BlockchainService', () => {
       expect(hash).toBeNull();
     });
 
-    it('returns null on network error (does not throw)', async () => {
+    it('rethrows on genuine network/contract errors (so retry helpers can catch them)', async () => {
       mockEscrowContract.createBooking.mockRejectedValue(new Error('network timeout'));
-      const hash = await blockchainService.createBookingOnChain(
+      await expect(blockchainService.createBookingOnChain(
         'booking-2', 'client-1', 'caregiver-1', 100,
         new Date(), new Date(), 'Bolt', 'PASEO'
-      );
-      expect(hash).toBeNull();
+      )).rejects.toThrow('network timeout');
     });
   });
 
@@ -137,10 +136,9 @@ describe('BlockchainService', () => {
       expect(mockEscrowContract.finalizeBooking).toHaveBeenCalledWith('booking-1', 5);
     });
 
-    it('returns null on error', async () => {
+    it('rethrows on error', async () => {
       mockEscrowContract.finalizeBooking.mockRejectedValue(new Error('execution reverted'));
-      const hash = await blockchainService.finalizeBookingOnChain('booking-bad', 4);
-      expect(hash).toBeNull();
+      await expect(blockchainService.finalizeBookingOnChain('booking-bad', 4)).rejects.toThrow('execution reverted');
     });
   });
 
@@ -158,10 +156,9 @@ describe('BlockchainService', () => {
       expect(mockEscrowContract.cancelBooking).toHaveBeenCalledWith('booking-1', 'No especificado');
     });
 
-    it('returns null on error', async () => {
+    it('rethrows on error', async () => {
       mockEscrowContract.cancelBooking.mockRejectedValue(new Error('reverted'));
-      const hash = await blockchainService.cancelBookingOnChain('booking-bad', 'reason');
-      expect(hash).toBeNull();
+      await expect(blockchainService.cancelBookingOnChain('booking-bad', 'reason')).rejects.toThrow('reverted');
     });
   });
 
@@ -179,10 +176,9 @@ describe('BlockchainService', () => {
       expect(mockEscrowContract.extendWalk).toHaveBeenCalledWith('booking-walk-2', 15, 120);
     });
 
-    it('returns null on contract error without throwing', async () => {
+    it('rethrows on contract error', async () => {
       mockEscrowContract.extendWalk.mockRejectedValue(new Error('Reserva no activa'));
-      const hash = await blockchainService.recordWalkExtensionOnChain('booking-bad', 30, 100);
-      expect(hash).toBeNull();
+      await expect(blockchainService.recordWalkExtensionOnChain('booking-bad', 30, 100)).rejects.toThrow('Reserva no activa');
     });
   });
 
@@ -227,9 +223,9 @@ describe('BlockchainService', () => {
       expect(mockEscrowContract.resolveDisputeCaregiverWins).toHaveBeenCalledWith('booking-d1', 250);
     });
 
-    it('returns null on error', async () => {
+    it('rethrows on error', async () => {
       mockEscrowContract.resolveDisputeCaregiverWins.mockRejectedValue(new Error('reverted'));
-      expect(await blockchainService.resolveDisputeCaregiverWinsOnChain('bad', 100)).toBeNull();
+      await expect(blockchainService.resolveDisputeCaregiverWinsOnChain('bad', 100)).rejects.toThrow('reverted');
     });
   });
 
@@ -242,9 +238,9 @@ describe('BlockchainService', () => {
       expect(mockEscrowContract.resolveDisputeClientWins).toHaveBeenCalledWith('booking-d2', 300);
     });
 
-    it('returns null on error', async () => {
+    it('rethrows on error', async () => {
       mockEscrowContract.resolveDisputeClientWins.mockRejectedValue(new Error('reverted'));
-      expect(await blockchainService.resolveDisputeClientWinsOnChain('bad', 100)).toBeNull();
+      await expect(blockchainService.resolveDisputeClientWinsOnChain('bad', 100)).rejects.toThrow('reverted');
     });
   });
 
@@ -262,9 +258,9 @@ describe('BlockchainService', () => {
       expect(mockEscrowContract.resolvePartial).toHaveBeenCalledWith('booking-d3', 149, 99);
     });
 
-    it('returns null on error', async () => {
+    it('rethrows on error', async () => {
       mockEscrowContract.resolvePartial.mockRejectedValue(new Error('reverted'));
-      expect(await blockchainService.resolvePartialOnChain('bad', 100, 50)).toBeNull();
+      await expect(blockchainService.resolvePartialOnChain('bad', 100, 50)).rejects.toThrow('reverted');
     });
   });
 

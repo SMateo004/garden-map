@@ -3,6 +3,7 @@ import { authMiddleware, requireRole } from '../../middleware/auth.middleware.js
 import { asyncHandler } from '../../shared/async-handler.js';
 import Anthropic from '@anthropic-ai/sdk';
 import { blockchainService } from '../../services/blockchain.service.js';
+import { dispatchOnChainWithRetry } from '../../services/blockchain-retry.helper.js';
 import logger from '../../shared/logger.js';
 import { track } from '../../shared/analytics.js';
 
@@ -1009,42 +1010,25 @@ export async function applyResolution(bookingId: string, resolution: any, bookin
   _dispatchBlockchainWithRetry(bookingId, resolution.verdict, netAmount, totalAmount);
 }
 
-async function _dispatchBlockchainWithRetry(
+function _dispatchBlockchainWithRetry(
   bookingId: string,
   verdict: string,
   netAmount: number,
   totalAmount: number,
-  maxAttempts = 3,
 ) {
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      if (verdict === 'CAREGIVER_WINS') {
-        await blockchainService.resolveDisputeCaregiverWinsOnChain(bookingId, netAmount);
-      } else if (verdict === 'CLIENT_WINS') {
-        await blockchainService.resolveDisputeClientWinsOnChain(bookingId, totalAmount);
-      } else if (verdict === 'PARTIAL') {
-        const caregiverPayout = parseFloat((netAmount * 0.80).toFixed(2));
-        const clientDiscountAmount = parseFloat((netAmount * 0.20).toFixed(2));
-        await blockchainService.resolvePartialOnChain(bookingId, caregiverPayout, clientDiscountAmount);
-      }
-      logger.info('Blockchain dispute record saved', { bookingId, verdict, attempt });
-      return; // success
-    } catch (err: any) {
-      logger.warn(`Blockchain dispatch attempt ${attempt}/${maxAttempts} failed`, { bookingId, error: err.message });
-      if (attempt < maxAttempts) {
-        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1))); // 1s, 2s
-      }
-    }
+  let action: (() => Promise<string | null>) | null = null;
+  if (verdict === 'CAREGIVER_WINS') {
+    action = () => blockchainService.resolveDisputeCaregiverWinsOnChain(bookingId, netAmount);
+  } else if (verdict === 'CLIENT_WINS') {
+    action = () => blockchainService.resolveDisputeClientWinsOnChain(bookingId, totalAmount);
+  } else if (verdict === 'PARTIAL') {
+    const caregiverPayout = parseFloat((netAmount * 0.80).toFixed(2));
+    const clientDiscountAmount = parseFloat((netAmount * 0.20).toFixed(2));
+    action = () => blockchainService.resolvePartialOnChain(bookingId, caregiverPayout, clientDiscountAmount);
   }
-  // All retries exhausted — flag for admin to manually re-submit
-  logger.error('Blockchain dispatch failed after all retries — admin notification created', { bookingId, verdict });
-  await prisma.adminNotification.create({
-    data: {
-      type: 'BLOCKCHAIN_FAILURE',
-      bookingId,
-      caregiverId: '', // unknown at this point — admin can look up by bookingId
-    },
-  }).catch(() => {});
+  if (!action) return;
+
+  dispatchOnChainWithRetry({ bookingId, label: `resolveDispute:${verdict}`, action });
 }
 
 export default router;

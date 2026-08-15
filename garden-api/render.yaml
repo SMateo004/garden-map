@@ -55,7 +55,7 @@ services:
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
       - key: BLOCKCHAIN_ENABLED
-        value: 'false'
+        value: 'true'
       - key: BLOCKCHAIN_RPC_URL
         sync: false
       - key: BLOCKCHAIN_PRIVATE_KEY
