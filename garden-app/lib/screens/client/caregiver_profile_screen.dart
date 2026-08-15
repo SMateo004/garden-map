@@ -666,6 +666,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         ),
                         const SizedBox(height: 16),
                         _buildTrustBadges(subtextColor, offersHospedaje: offersHospedaje, offersGuarderia: services.contains('GUARDERIA')),
+                        _buildTrustStats(subtextColor),
                         const SizedBox(height: 32),
 
                         // Bio — solo bioDetail ("Perfil profesional"). bio
@@ -1080,6 +1081,7 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                       ]),
                       const SizedBox(height: 16),
                       _buildTrustBadges(subtextColor, offersHospedaje: offersHospedaje, offersGuarderia: services.contains('GUARDERIA')),
+                      _buildTrustStats(subtextColor),
                       const SizedBox(height: 24),
                       Divider(color: borderColor),
                       const SizedBox(height: 20),
@@ -1516,6 +1518,48 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
             ]),
           );
         },
+      ),
+    );
+  }
+
+  /// Señales de confianza calculadas del historial real (no autoreportadas):
+  /// antigüedad real en la plataforma, servicios completados, tasa de
+  /// respuesta y de aceptación — lo que Airbnb/Uber muestran siempre y acá
+  /// faltaba (antes solo se veía reviewCount). Cada dato se omite si no hay
+  /// suficiente historial (responseRate/acceptanceRate llegan null del
+  /// backend cuando el cuidador nunca tuvo una solicitud que responder).
+  Widget _buildTrustStats(Color subtextColor) {
+    if (_caregiver == null) return const SizedBox.shrink();
+    final memberSinceStr = _caregiver!['memberSince'] as String?;
+    final completedCount = _caregiver!['completedServicesCount'] as int? ?? 0;
+    final responseRate = _caregiver!['responseRate'] as int?;
+    final acceptanceRate = _caregiver!['acceptanceRate'] as int?;
+
+    final items = <String>[];
+    final memberSince = memberSinceStr != null ? DateTime.tryParse(memberSinceStr) : null;
+    if (memberSince != null) {
+      const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+      items.add('Cuidador desde ${months[memberSince.month - 1]} ${memberSince.year}');
+    }
+    if (completedCount > 0) {
+      items.add('$completedCount ${completedCount == 1 ? "servicio completado" : "servicios completados"}');
+    }
+    if (responseRate != null) items.add('$responseRate% tasa de respuesta');
+    if (acceptanceRate != null) items.add('$acceptanceRate% tasa de aceptación');
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          for (int i = 0; i < items.length; i++) ...[
+            if (i > 0) Text('·', style: TextStyle(color: subtextColor, fontSize: 12)),
+            Text(items[i], style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+          ],
+        ],
       ),
     );
   }

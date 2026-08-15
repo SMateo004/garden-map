@@ -11,6 +11,7 @@ import '../client/my_data_screen.dart';
 import '../client/my_ratings_screen.dart';
 import '../client/nearby_vets_screen.dart';
 import 'blocked_users_screen.dart';
+import 'notification_settings_screen.dart';
 import '../../services/auth_state.dart';
 import '../../services/secure_storage_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -1035,8 +1036,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     Text('Sesión', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
                     const SizedBox(height: 8),
                     _profileTile(icon: Icons.notifications_outlined, title: 'Notificaciones',
-                        trailing: Text('Próximamente', style: TextStyle(color: subtextColor, fontSize: 11)),
-                        onTap: null),
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationSettingsScreen()))),
                     const SizedBox(height: 8),
                     // Logout button as a tile
                     Padding(
