@@ -6,7 +6,7 @@
  */
 import cron from 'node-cron';
 import prisma from '../config/database.js';
-import { onServiceReminder } from '../services/notification.service.js';
+import { onServiceReminder, getNotificationPrefs } from '../services/notification.service.js';
 import { sendPushToUser } from '../services/firebase.service.js';
 import logger from '../shared/logger.js';
 import { autoPayoutExpiredReviews, calcOvertimeMinutes } from '../modules/booking-service/booking.service.js';
@@ -302,11 +302,16 @@ export async function procesarRecordatoriosCalificacion() {
             type: 'SERVICE_COMPLETED',
           },
         });
-        sendPushToUser(
-          b.clientId,
-          wave.title,
-          wave.pushBody(svcLabel, b.petName ?? 'tu mascota', caregiverName)
-        ).catch(() => {});
+        // Recordatorio, no transaccional — respeta la preferencia del
+        // cliente. El registro in-app de arriba siempre queda.
+        const { notifyReminders } = await getNotificationPrefs(b.clientId);
+        if (notifyReminders) {
+          sendPushToUser(
+            b.clientId,
+            wave.title,
+            wave.pushBody(svcLabel, b.petName ?? 'tu mascota', caregiverName)
+          ).catch(() => {});
+        }
 
         await prisma.booking.update({
           where: { id: b.id },

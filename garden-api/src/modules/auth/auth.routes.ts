@@ -138,6 +138,12 @@ router.post('/security-pin', authMiddleware, authController.setSecurityPin);
 /** POST /api/auth/security-pin/verify — verifica el PIN para desbloquear una pantalla sensible. */
 router.post('/security-pin/verify', authMiddleware, authController.verifySecurityPin);
 
+/** GET /api/auth/notification-preferences — devuelve { notifyReminders, notifyPromotions }. */
+router.get('/notification-preferences', authMiddleware, authController.getNotificationPreferences);
+
+/** PATCH /api/auth/notification-preferences — body: { notifyReminders?, notifyPromotions? }. */
+router.patch('/notification-preferences', authMiddleware, authController.updateNotificationPreferences);
+
 router.post('/caregiver/register', registerLimiter, authController.registerCaregiver);
 router.post('/client/register',    registerLimiter, authController.registerClient);
 router.post('/login',              loginLimiter,    authController.login);

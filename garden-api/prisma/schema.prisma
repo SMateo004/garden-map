@@ -42,6 +42,12 @@ model User {
   dateOfBirth                  DateTime?                     @db.Date
   emailVerified                Boolean                       @default(false)
   identityVerified             Boolean                       @default(false)
+  /// Preferencias de notificación push/email — no afectan el historial
+  /// in-app (Notification), solo si se interrumpe al usuario. Lo
+  /// transaccional (pago, reserva aceptada/rechazada, reembolso) nunca se
+  /// apaga acá; solo gatea recordatorios y contenido promocional.
+  notifyReminders              Boolean                       @default(true)
+  notifyPromotions             Boolean                       @default(true)
   /// PIN de 4 dígitos (bcrypt hash) que gatea pantallas sensibles — billetera
   /// (cliente y cuidador) y "gestionar reserva" del cuidador (ubicación
   /// exacta del cliente, iniciar servicio). Uno solo por persona, no por rol

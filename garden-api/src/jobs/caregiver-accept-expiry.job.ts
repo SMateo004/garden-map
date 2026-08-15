@@ -77,6 +77,10 @@ async function _expirarAceptacion(booking: {
         status: BookingStatus.REJECTED_BY_CAREGIVER,
         cancelledAt: new Date(),
         cancellationReason: 'El cuidador no respondió a la solicitud a tiempo — cancelado automáticamente',
+        // Marca estructurada (distinta del texto libre de arriba) para poder
+        // distinguir "nunca respondió" de "rechazó activamente" al calcular
+        // la tasa de respuesta del perfil (ver getCaregiverTrustStats).
+        cancellationSource: 'AUTO_EXPIRY_NO_RESPONSE',
         refundStatus: 'PROCESSED' as any,
         refundAmount: booking.totalAmount,
       },

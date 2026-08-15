@@ -761,7 +761,7 @@ async function _sendMassNotification(
     while (true) {
       const users = await prisma.user.findMany({
         where,
-        select: { id: true },
+        select: { id: true, notifyPromotions: true },
         take: MASS_NOTIF_BATCH,
         ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
         orderBy: { id: 'asc' },
@@ -771,14 +771,19 @@ async function _sendMassNotification(
       cursor = users[users.length - 1]!.id;
 
       try {
-        // createMany es ~10× más rápido que create en bucle
+        // createMany es ~10× más rápido que create en bucle — el registro
+        // in-app queda para todos los segmentados, la preferencia solo
+        // gatea el push (ver abajo).
         await prisma.notification.createMany({
           data: users.map(u => ({ userId: u.id, title, message, type: 'SYSTEM' })),
           skipDuplicates: true,
         });
         sentCount += users.length;
-        // Push en paralelo por lote (fire-and-forget)
-        users.forEach(u => sendPushToUser(u.id, title, message).catch(() => {}));
+        // Push en paralelo por lote (fire-and-forget) — solo a quien no
+        // apagó las notificaciones de promociones/anuncios.
+        users
+          .filter(u => u.notifyPromotions !== false)
+          .forEach(u => sendPushToUser(u.id, title, message).catch(() => {}));
       } catch {
         failCount += users.length;
       }

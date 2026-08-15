@@ -1,4 +1,4 @@
-import { CaregiverStatus, ServiceType, Zone, Prisma, type TimeSlot } from '@prisma/client';
+import { CaregiverStatus, BookingStatus, ServiceType, Zone, Prisma, type TimeSlot } from '@prisma/client';
 import prisma from '../../config/database.js';
 import { getCache, CAREGIVER_LIST_CACHE_TTL, CAREGIVER_DETAIL_CACHE_TTL } from '../../shared/cache.js';
 import { combinedHospedajeGuarderiaMax } from '../../utils/caregiver-capacity.js';
@@ -344,6 +344,51 @@ function applyCoordJitter(result: PaginatedCaregivers): PaginatedCaregivers {
 }
 
 /**
+ * Señales de confianza calculadas del historial real de reservas — no
+ * autoreportadas. "Decididas" = reservas que llegaron a un punto donde el
+ * cuidador tenía que responder (aceptar/rechazar) y ya salieron de ese
+ * estado, sin importar qué pasó después (incluye CANCELLED posteriores,
+ * porque esas sí pasaron por una aceptación real).
+ *
+ * responseRate excluye del numerador las que el sistema canceló solo por
+ * falta de respuesta (cancellationSource = AUTO_EXPIRY_NO_RESPONSE, ver
+ * caregiver-accept-expiry.job.ts) — así se distingue "nunca contestó" de
+ * "contestó que no".
+ */
+async function getCaregiverTrustStats(caregiverId: string): Promise<{
+  completedServicesCount: number;
+  responseRate: number | null;
+  acceptanceRate: number | null;
+}> {
+  const decidedStatuses: BookingStatus[] = [
+    BookingStatus.CONFIRMED,
+    BookingStatus.IN_PROGRESS,
+    BookingStatus.COMPLETED,
+    BookingStatus.CANCELLED,
+    BookingStatus.REJECTED_BY_CAREGIVER,
+  ];
+
+  const [completedServicesCount, decided, noResponse, rejected] = await Promise.all([
+    prisma.booking.count({ where: { caregiverId, status: BookingStatus.COMPLETED } }),
+    prisma.booking.count({ where: { caregiverId, status: { in: decidedStatuses } } }),
+    prisma.booking.count({
+      where: { caregiverId, status: BookingStatus.REJECTED_BY_CAREGIVER, cancellationSource: 'AUTO_EXPIRY_NO_RESPONSE' },
+    }),
+    prisma.booking.count({ where: { caregiverId, status: BookingStatus.REJECTED_BY_CAREGIVER } }),
+  ]);
+
+  if (decided === 0) {
+    return { completedServicesCount, responseRate: null, acceptanceRate: null };
+  }
+
+  return {
+    completedServicesCount,
+    responseRate: Math.round(((decided - noResponse) / decided) * 100),
+    acceptanceRate: Math.round(((decided - rejected) / decided) * 100),
+  };
+}
+
+/**
  * Detalle público de cuidador para clientes (GET /api/caregivers/:id).
  * Solo devuelve perfiles APPROVED y verified; si no → null (404).
  * No expone CI, adminNotes, rejectionReason ni datos privados.
@@ -446,6 +491,8 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
   }
 
   if (!profile) return null;
+
+  const trustStats = await getCaregiverTrustStats(id);
 
   const availabilityList = Array.isArray(profile.availability) ? profile.availability : [];
   const hospedajeDates: string[] = [];
@@ -574,6 +621,10 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
       pricePerDay: applyMarkup(e.pricePerDay, markupRate),
       appliesTo: e.appliesTo,
     })),
+    memberSince: profile.createdAt.toISOString(),
+    completedServicesCount: trustStats.completedServicesCount,
+    responseRate: trustStats.responseRate,
+    acceptanceRate: trustStats.acceptanceRate,
   };
 
   // Enriquecer con reputación de blockchain

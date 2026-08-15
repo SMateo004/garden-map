@@ -837,6 +837,37 @@ export const verifySecurityPin = asyncHandler(async (req: Request, res: Response
   res.json({ success: true, data: result });
 });
 
+/** GET /api/auth/notification-preferences */
+export const getNotificationPreferences = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { notifyReminders: true, notifyPromotions: true },
+  });
+  res.json({
+    success: true,
+    data: {
+      notifyReminders: user?.notifyReminders ?? true,
+      notifyPromotions: user?.notifyPromotions ?? true,
+    },
+  });
+});
+
+/** PATCH /api/auth/notification-preferences — body: { notifyReminders?, notifyPromotions? }.
+ *  No gatea lo transaccional (pago, reserva, reembolso) — eso se manda siempre. */
+export const updateNotificationPreferences = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const { notifyReminders, notifyPromotions } = req.body as { notifyReminders?: boolean; notifyPromotions?: boolean };
+  const data: Record<string, boolean> = {};
+  if (typeof notifyReminders === 'boolean') data.notifyReminders = notifyReminders;
+  if (typeof notifyPromotions === 'boolean') data.notifyPromotions = notifyPromotions;
+  if (Object.keys(data).length === 0) {
+    return res.status(400).json({ success: false, error: { message: 'Nada para actualizar' } });
+  }
+  const updated = await prisma.user.update({ where: { id: userId }, data, select: { notifyReminders: true, notifyPromotions: true } });
+  res.json({ success: true, data: updated });
+});
+
 // ── Password Reset ────────────────────────────────────────────────────────────
 import * as passwordResetService from './password-reset.service.js';
 

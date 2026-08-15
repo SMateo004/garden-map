@@ -84,6 +84,17 @@ export interface CaregiverDetail extends CaregiverListItem {
   } | null;
   /** Servicios extra activos ofrecidos por el cuidador (solo empresas por ahora). Precio ya incluye el markup de plataforma. */
   extraServices: Array<{ id: string; name: string; pricePerDay: number | null; appliesTo: string[] }>;
+  /** Fecha ISO en que se creó el perfil de cuidador — "miembro desde". */
+  memberSince: string;
+  /** Reservas con status COMPLETED para este cuidador. */
+  completedServicesCount: number;
+  /** % de solicitudes donde el cuidador respondió (aceptó o rechazó) en vez
+   * de que el sistema la cancelara sola por falta de respuesta. Null si
+   * todavía no tuvo ninguna solicitud que requiriera decisión. */
+  responseRate: number | null;
+  /** % de solicitudes respondidas que terminaron aceptadas. Null si
+   * todavía no tuvo ninguna solicitud que requiriera decisión. */
+  acceptanceRate: number | null;
 }
 
 export interface ReviewPublic {

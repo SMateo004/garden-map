@@ -106,6 +106,27 @@ function fireEmail(to: string, subject: string, html: string, event: string, boo
 }
 
 // ---------------------------------------------------------------------------
+// Preferencias de notificación
+// ---------------------------------------------------------------------------
+
+/**
+ * Lee las preferencias de push/email del usuario. Solo gatea recordatorios y
+ * contenido promocional — lo transaccional (pago, reserva, reembolso) se
+ * manda siempre y no consulta esto. Default true (opt-out, no opt-in) si el
+ * usuario no existe o los campos no están seteados.
+ */
+export async function getNotificationPrefs(userId: string): Promise<{ notifyReminders: boolean; notifyPromotions: boolean }> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { notifyReminders: true, notifyPromotions: true },
+  });
+  return {
+    notifyReminders: user?.notifyReminders ?? true,
+    notifyPromotions: user?.notifyPromotions ?? true,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Booking events
 // ---------------------------------------------------------------------------
 
@@ -674,7 +695,10 @@ export async function onZoneNowAvailable(userId: string): Promise<void> {
       ? `${user.firstName}, ya tenemos cobertura en tu zona — puedes reservar servicios en GARDEN cuando quieras.`
       : 'Ya tenemos cobertura en tu zona — puedes reservar servicios en GARDEN cuando quieras.';
     await prisma.notification.create({ data: { userId, title, message, type: 'ZONE_NOW_AVAILABLE' } });
-    sendPushToUser(userId, title, message).catch(() => {});
+    // Buena noticia pero no urgente — respeta la preferencia de promociones.
+    // El registro in-app de arriba siempre queda, esto solo gatea el push.
+    const { notifyPromotions } = await getNotificationPrefs(userId);
+    if (notifyPromotions) sendPushToUser(userId, title, message).catch(() => {});
   } catch (err: any) {
     logger.error('[NOTIFICATION] onZoneNowAvailable error', { userId, error: err.message });
   }
@@ -710,11 +734,16 @@ export async function onTrainingReminder(userId: string, pendingTitles: string[]
   await prisma.notification.create({
     data: { userId, title, message, type: 'TRAINING_REMINDER' },
   });
-  sendPushToUser(userId, title, message).catch((err) =>
-    logger.error('[NOTIFICATION] onTrainingReminder push failed', { userId, err })
-  );
+  // Recordatorio, no transaccional — respeta la preferencia del usuario. El
+  // registro in-app de arriba siempre queda, esto solo gatea push/email.
+  const { notifyReminders } = await getNotificationPrefs(userId);
+  if (notifyReminders) {
+    sendPushToUser(userId, title, message).catch((err) =>
+      logger.error('[NOTIFICATION] onTrainingReminder push failed', { userId, err })
+    );
+  }
 
-  if (sendEmail) {
+  if (sendEmail && notifyReminders) {
     const html = gardenEmail(
       `${caregiverName}, tu perfil está invisible hasta completar esto 📋`,
       `<p style="color:#555;font-size:14px;margin:0 0 16px;">
