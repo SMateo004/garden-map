@@ -32,7 +32,9 @@ import '../../services/cities_service.dart';
 import '../../widgets/extra_services_editor.dart';
 import 'caregiver_profile_data_screen.dart';
 import 'caregiver_contract_step.dart';
-import '../../widgets/animated_step_progress_bar.dart';
+import '../../widgets/animated_step_progress_bar.dart' show stepTransitionBuilder;
+import '../../widgets/registration_phases.dart';
+import '../../widgets/estimated_earnings_banner.dart';
 import 'phone_verification_screen.dart';
 import 'email_verification_screen.dart';
 
@@ -52,6 +54,15 @@ class CompanyRegisterScreen extends StatefulWidget {
 class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
   int _currentStep = 0;
   bool _isLoading = false;
+  late bool _showIntro;
+
+  static const List<RegistrationPhase> _phases = [
+    RegistrationPhase(name: 'Acceso', icon: Icons.vpn_key_outlined, startStep: 0, endStep: 0),
+    RegistrationPhase(name: 'Tu empresa', icon: Icons.storefront_outlined, startStep: 1, endStep: 3),
+    RegistrationPhase(name: 'Tu servicio', icon: Icons.pets_rounded, startStep: 4, endStep: 7),
+    RegistrationPhase(name: 'Verificación', icon: Icons.verified_user_outlined, startStep: 8, endStep: 9),
+    RegistrationPhase(name: 'Perfil y contrato', icon: Icons.description_outlined, startStep: 10, endStep: 11),
+  ];
   // Cubre TODO _next() (registro, patch, subida de fotos/logo) para que el
   // botón se deshabilite/muestre loading durante cualquier paso, no solo los
   // que ya tenían su propio flag (_isLoading solo cubría _registerCompany y
@@ -149,6 +160,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
   @override
   void initState() {
     super.initState();
+    _showIntro = !widget.resumeMode;
     _companyNameCtrl.addListener(_onFormFieldChanged);
     _emailCtrl.addListener(_onFormFieldChanged);
     _passwordCtrl.addListener(_onFormFieldChanged);
@@ -761,6 +773,14 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
   // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    if (_showIntro) {
+      return RegistrationPhaseIntro(
+        title: 'Vamos a registrar tu empresa',
+        subtitle: 'Son 5 fases cortas — podés guardar tu progreso y volver cuando quieras.',
+        phases: _phases,
+        onStart: () => setState(() => _showIntro = false),
+      );
+    }
     final isDark = themeNotifier.isDark;
     final bg = isDark ? GardenColors.darkBackground : GardenColors.lightBackground;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
@@ -812,11 +832,25 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         ),
         centerTitle: true,
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(4),
-          child: AnimatedStepProgressBar(
-            value: (_currentStep + 1) / 12,
-            backgroundColor: borderColor,
-            height: 3,
+          preferredSize: const Size.fromHeight(28),
+          child: Column(
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: Text(
+                  phaseLabel(_phases, _currentStep),
+                  key: ValueKey(phaseIndexForStep(_phases, _currentStep)),
+                  style: TextStyle(color: subtextColor, fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 0.3),
+                ),
+              ),
+              const SizedBox(height: 8),
+              PhaseProgressBar(
+                phases: _phases,
+                currentStep: _currentStep,
+                backgroundColor: borderColor,
+                height: 3,
+              ),
+            ],
           ),
         ),
       ),
@@ -1058,6 +1092,13 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
               ),
             ),
           ),
+        const SizedBox(height: 4),
+        EstimatedEarningsBanner(
+          services: _services,
+          paseoMax: _paseoMax,
+          hospedajeMax: _hospMax,
+          guarderiaMax: _guarMax,
+        ),
       ],
     );
   }

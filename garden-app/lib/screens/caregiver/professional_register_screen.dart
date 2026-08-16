@@ -29,7 +29,9 @@ import '../../services/cities_service.dart';
 import '../../utils/input_formatters.dart';
 import 'caregiver_profile_data_screen.dart';
 import 'caregiver_contract_step.dart';
-import '../../widgets/animated_step_progress_bar.dart';
+import '../../widgets/animated_step_progress_bar.dart' show stepTransitionBuilder;
+import '../../widgets/registration_phases.dart';
+import '../../widgets/estimated_earnings_banner.dart';
 
 class ProfessionalRegisterScreen extends StatefulWidget {
   const ProfessionalRegisterScreen({super.key});
@@ -42,6 +44,14 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
   int _currentStep = 0;
   bool _isLoading = false;
   String _authToken = '';
+  bool _showIntro = true;
+
+  static const List<RegistrationPhase> _phases = [
+    RegistrationPhase(name: 'Acceso', icon: Icons.vpn_key_outlined, startStep: 0, endStep: 0),
+    RegistrationPhase(name: 'Tu perfil', icon: Icons.person_outline_rounded, startStep: 1, endStep: 1),
+    RegistrationPhase(name: 'Tu servicio', icon: Icons.pets_rounded, startStep: 2, endStep: 6),
+    RegistrationPhase(name: 'Perfil y contrato', icon: Icons.description_outlined, startStep: 7, endStep: 8),
+  ];
 
   // Paso 0: Código de admin
   final _codeController = TextEditingController();
@@ -844,7 +854,14 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           const SizedBox(width: 12),
           Expanded(child: serviceCard('GUARDERIA', '🏡', 'Guardería')),
         ]),
-        const SizedBox(height: 28),
+        const SizedBox(height: 16),
+        EstimatedEarningsBanner(
+          services: _servicesOffered,
+          paseoMax: 290,
+          hospedajeMax: 290,
+          guarderiaMax: 290,
+        ),
+        const SizedBox(height: 12),
 
         Text('Ciudad', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w700)),
         const SizedBox(height: 12),
@@ -1264,6 +1281,14 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (_showIntro) {
+      return RegistrationPhaseIntro(
+        title: 'Vamos a armar tu perfil',
+        subtitle: 'Son 4 fases cortas — podés guardar tu progreso y volver cuando quieras.',
+        phases: _phases,
+        onStart: () => setState(() => _showIntro = false),
+      );
+    }
     return AnimatedBuilder(
       animation: themeNotifier,
       builder: (context, _) {
@@ -1326,7 +1351,6 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           default: stepContent = const SizedBox.shrink();
         }
 
-        final totalSteps = 9;
         final isRegistrationStep = _currentStep == 0;
         final buttonLabel = _currentStep == 0 ? 'Verificar código' :
             _currentStep == 6 ? 'Continuar →' : 'Siguiente →';
@@ -1367,10 +1391,14 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
               automaticallyImplyLeading: _currentStep > 0,
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(4),
-                child: AnimatedStepProgressBar(
-                  value: (_currentStep + 1) / totalSteps,
-                  backgroundColor: borderColor,
-                  height: 4,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: PhaseProgressBar(
+                    phases: _phases,
+                    currentStep: _currentStep,
+                    backgroundColor: borderColor,
+                    height: 4,
+                  ),
                 ),
               ),
             ),
@@ -1401,7 +1429,14 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
                               const SizedBox(width: 8),
                               Text('Registro Profesional', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
                               const Spacer(),
-                              Text('Paso ${_currentStep + 1} de $totalSteps', style: TextStyle(color: subtextColor, fontSize: 11)),
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 220),
+                                child: Text(
+                                  phaseLabel(_phases, _currentStep),
+                                  key: ValueKey(phaseIndexForStep(_phases, _currentStep)),
+                                  style: TextStyle(color: subtextColor, fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 0.3),
+                                ),
+                              ),
                               const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1410,13 +1445,11 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
                               ),
                             ]),
                             const SizedBox(height: 10),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(2),
-                              child: AnimatedStepProgressBar(
-                                value: (_currentStep + 1) / totalSteps,
-                                backgroundColor: borderColor,
-                                height: 3,
-                              ),
+                            PhaseProgressBar(
+                              phases: _phases,
+                              currentStep: _currentStep,
+                              backgroundColor: borderColor,
+                              height: 3,
                             ),
                           ]),
                         ),
@@ -1432,8 +1465,14 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Paso ${_currentStep + 1} de $totalSteps',
-                            style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w500)),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          child: Text(
+                            phaseLabel(_phases, _currentStep),
+                            key: ValueKey(phaseIndexForStep(_phases, _currentStep)),
+                            style: TextStyle(color: subtextColor, fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 0.3),
+                          ),
+                        ),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                           decoration: BoxDecoration(

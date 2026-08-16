@@ -13,7 +13,9 @@ import '../../services/auth_service.dart';
 
 import 'caregiver_profile_data_screen.dart';
 import 'caregiver_contract_content.dart';
-import '../../widgets/animated_step_progress_bar.dart';
+import '../../widgets/animated_step_progress_bar.dart' show stepTransitionBuilder;
+import '../../widgets/registration_phases.dart';
+import '../../widgets/estimated_earnings_banner.dart';
 import 'verification_screen.dart';
 import 'combined_verification_step.dart';
 import '../../services/auth_state.dart';
@@ -49,6 +51,17 @@ class OnboardingWizardScreen extends StatefulWidget {
 class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   int _currentStep = 0;
   bool _isLoading = false;
+
+  // Pantalla de bienvenida con el mapa de fases — se salta en modo resume
+  // (ya viene con progreso) o conversión desde cliente (ya tiene cuenta).
+  late bool _showIntro;
+
+  static const List<RegistrationPhase> _phases = [
+    RegistrationPhase(name: 'Tu perfil', icon: Icons.person_outline_rounded, startStep: 0, endStep: 1),
+    RegistrationPhase(name: 'Tu servicio', icon: Icons.pets_rounded, startStep: 2, endStep: 6),
+    RegistrationPhase(name: 'Verificación', icon: Icons.verified_user_outlined, startStep: 7, endStep: 9),
+    RegistrationPhase(name: 'Contrato', icon: Icons.description_outlined, startStep: 10, endStep: 10),
+  ];
 
   // Paso 1: Datos personales
   final _firstNameController = TextEditingController();
@@ -152,6 +165,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   @override
   void initState() {
     super.initState();
+    _showIntro = !widget.resumeMode && !widget.clientConversionMode;
     _emailController.text = widget.initialEmail;
     _passwordController.text = widget.initialPassword;
     for (final c in [
@@ -2096,7 +2110,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
             const SizedBox(width: 12),
             Expanded(child: serviceCard('GUARDERIA', '🏡', 'Guardería')),
           ]),
-          const SizedBox(height: 28),
+          const SizedBox(height: 16),
+          EstimatedEarningsBanner(
+            services: _servicesOffered,
+            paseoMax: _paseoMax,
+            hospedajeMax: _hospMax,
+            guarderiaMax: _guarMax,
+          ),
+          const SizedBox(height: 12),
 
           if (_servicesOffered.contains('HOSPEDAJE')) ...[
             const SizedBox(height: 4),
@@ -2697,6 +2718,15 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_showIntro) {
+      return RegistrationPhaseIntro(
+        title: 'Vamos a armar tu perfil',
+        subtitle: 'Son 4 fases cortas — podés guardar tu progreso y volver cuando quieras.',
+        phases: _phases,
+        onStart: () => setState(() => _showIntro = false),
+      );
+    }
+
     // ─── Steps 6-8 are post-registration embedded screens ───────────────────
     // They manage their own navigation via callbacks; wizard provides only
     // the progress header above them. Step 9 (contactos de emergencia) is a
@@ -2833,10 +2863,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               automaticallyImplyLeading: _currentStep < 5,
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(4),
-                child: AnimatedStepProgressBar(
-                  value: (_currentStep + 1) / 11,
-                  backgroundColor: borderColor,
-                  height: 4,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: PhaseProgressBar(
+                    phases: _phases,
+                    currentStep: _currentStep,
+                    backgroundColor: borderColor,
+                    height: 4,
+                  ),
                 ),
               ),
             ),
@@ -2872,9 +2906,13 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                                   style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700),
                                 ),
                                 const Spacer(),
-                                Text(
-                                  'Paso ${_currentStep + 1} de 11',
-                                  style: TextStyle(color: subtextColor, fontSize: 12),
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 220),
+                                  child: Text(
+                                    phaseLabel(_phases, _currentStep),
+                                    key: ValueKey(phaseIndexForStep(_phases, _currentStep)),
+                                    style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.3),
+                                  ),
                                 ),
                                 const SizedBox(width: 10),
                                 AnimatedSwitcher(
@@ -2896,13 +2934,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                               ],
                             ),
                             const SizedBox(height: 10),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(2),
-                              child: AnimatedStepProgressBar(
-                                value: (_currentStep + 1) / 11,
-                                backgroundColor: borderColor,
-                                height: 3,
-                              ),
+                            PhaseProgressBar(
+                              phases: _phases,
+                              currentStep: _currentStep,
+                              backgroundColor: borderColor,
+                              height: 3,
                             ),
                             const SizedBox(height: 14),
                           ],
@@ -2935,18 +2971,24 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 1),
-                                Text(
-                                  'Paso ${_currentStep + 1} de 11',
-                                  style: TextStyle(color: subtextColor, fontSize: 11),
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 220),
+                                  child: Text(
+                                    phaseLabel(_phases, _currentStep),
+                                    key: ValueKey(phaseIndexForStep(_phases, _currentStep)),
+                                    style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.3),
+                                  ),
                                 ),
                               ],
                             ),
-                            // Dots: 9 pasos, llenos los completados
+                            // Puntos por FASE (no por paso) — 4 fases, coherente
+                            // con la barra segmentada de abajo.
                             Row(
                               mainAxisSize: MainAxisSize.min,
-                              children: List.generate(11, (i) {
-                                final done   = i < _currentStep;
-                                final active = i == _currentStep;
+                              children: List.generate(_phases.length, (i) {
+                                final currentPhase = phaseIndexForStep(_phases, _currentStep);
+                                final done   = i < currentPhase;
+                                final active = i == currentPhase;
                                 return AnimatedContainer(
                                   duration: const Duration(milliseconds: 260),
                                   curve: Curves.easeOutCubic,
@@ -2968,13 +3010,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                           ],
                         ),
                         const SizedBox(height: 10),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(2),
-                          child: AnimatedStepProgressBar(
-                            value: (_currentStep + 1) / 11,
-                            backgroundColor: borderColor,
-                            height: 3,
-                          ),
+                        PhaseProgressBar(
+                          phases: _phases,
+                          currentStep: _currentStep,
+                          backgroundColor: borderColor,
+                          height: 3,
                         ),
                         const SizedBox(height: 1),
                       ],
