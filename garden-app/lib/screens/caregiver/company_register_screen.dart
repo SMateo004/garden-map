@@ -32,6 +32,7 @@ import '../../services/cities_service.dart';
 import '../../widgets/extra_services_editor.dart';
 import 'caregiver_profile_data_screen.dart';
 import 'caregiver_contract_step.dart';
+import '../../widgets/animated_step_progress_bar.dart';
 import 'phone_verification_screen.dart';
 import 'email_verification_screen.dart';
 
@@ -812,11 +813,10 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         centerTitle: true,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(4),
-          child: LinearProgressIndicator(
+          child: AnimatedStepProgressBar(
             value: (_currentStep + 1) / 12,
             backgroundColor: borderColor,
-            valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
-            minHeight: 3,
+            height: 3,
           ),
         ),
       ),
@@ -824,9 +824,20 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         child: Column(
           children: [
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: _buildCurrentStep(surface, textColor, subtextColor, borderColor, isDark),
+              // key: ValueKey(_currentStep) en el scroll view (no solo en el
+              // contenido) — sin esto, el mismo SingleChildScrollView se
+              // reutiliza entre pasos y un paso nuevo puede abrir ya
+              // scrolleado a la mitad si el anterior había quedado así.
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 280),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: stepTransitionBuilder,
+                child: SingleChildScrollView(
+                  key: ValueKey(_currentStep),
+                  padding: const EdgeInsets.all(24),
+                  child: _buildCurrentStep(surface, textColor, subtextColor, borderColor, isDark),
+                ),
               ),
             ),
             _buildBottomBar(textColor, borderColor),

@@ -13,6 +13,7 @@ import '../../services/auth_service.dart';
 
 import 'caregiver_profile_data_screen.dart';
 import 'caregiver_contract_content.dart';
+import '../../widgets/animated_step_progress_bar.dart';
 import 'verification_screen.dart';
 import 'combined_verification_step.dart';
 import '../../services/auth_state.dart';
@@ -1610,90 +1611,82 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   // _canProceed case 10) solo se habilita después de que _onContractScroll
   // detecta que el usuario llegó al final de ESTE SingleChildScrollView —
   // por eso, a diferencia de los demás pasos, pasamos un controller propio
-  // en vez de dejar que Flutter use uno implícito.
+  // en vez de dejar que Flutter use uno implícito. Misma estructura de
+  // SingleChildScrollView simple que el resto de los pasos (0-9) — nada de
+  // Column+Expanded acá, que sin un Scaffold propio puede reventar con un
+  // RenderFlex de altura no acotada según cómo el padre lo constrinja.
   Widget _buildStep10() {
     final isDark = themeNotifier.isDark;
     final textColor    = isDark ? GardenColors.darkTextPrimary    : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary  : GardenColors.lightTextSecondary;
-    final borderColor  = isDark ? GardenColors.darkBorder         : GardenColors.lightBorder;
-    final surface      = isDark ? GardenColors.darkSurface        : GardenColors.lightSurface;
 
-    return Column(
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            controller: _contractScrollController,
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Contrato de Cuidador',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
-                const SizedBox(height: 6),
-                Text(
-                  'Último paso — leé el contrato completo hasta el final para poder aceptarlo.',
-                  style: TextStyle(fontSize: 14, color: subtextColor, height: 1.5),
-                ),
-                const SizedBox(height: 8),
-                Text('Actualizado: $contractLastUpdated',
-                    style: TextStyle(fontSize: 11.5, color: subtextColor.withValues(alpha: 0.8))),
-                const SizedBox(height: 24),
-                for (final section in caregiverContractSections) ...[
-                  Text(section.title,
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textColor)),
-                  const SizedBox(height: 8),
-                  Text(section.body,
-                      style: TextStyle(fontSize: 13.5, color: textColor.withValues(alpha: 0.85), height: 1.55)),
-                  const SizedBox(height: 24),
-                ],
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: (_contractScrolledToEnd ? GardenColors.success : GardenColors.primary).withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: (_contractScrolledToEnd ? GardenColors.success : GardenColors.primary).withValues(alpha: 0.3)),
-                  ),
-                  child: Row(children: [
-                    Icon(
-                      _contractScrolledToEnd ? Icons.check_circle_rounded : Icons.info_outline_rounded,
-                      color: _contractScrolledToEnd ? GardenColors.success : GardenColors.primary,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _contractScrolledToEnd
-                            ? 'Llegaste al final. Ya podés aceptar el contrato.'
-                            : 'Este es el final del contrato — desliza hacia arriba si te falta releer algo.',
-                        style: TextStyle(fontSize: 12.5, color: textColor, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ]),
-                ),
-              ],
-            ),
+    return SingleChildScrollView(
+      controller: _contractScrollController,
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Contrato de Cuidador',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
+          const SizedBox(height: 6),
+          Text(
+            'Último paso — leé el contrato completo hasta el final para poder aceptarlo.',
+            style: TextStyle(fontSize: 14, color: subtextColor, height: 1.5),
           ),
-        ),
-        // Aviso persistente mientras no llegó al final — el botón "Acepto y
-        // finalizo el registro" del nav genérico está deshabilitado, y sin
-        // este texto no queda claro por qué.
-        if (!_contractScrolledToEnd)
-          Container(
-            width: double.infinity,
-            color: surface,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-            decoration: BoxDecoration(border: Border(top: BorderSide(color: borderColor))),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.keyboard_double_arrow_down_rounded, color: subtextColor, size: 16),
+          const SizedBox(height: 8),
+          Text('Actualizado: $contractLastUpdated',
+              style: TextStyle(fontSize: 11.5, color: subtextColor.withValues(alpha: 0.8))),
+          if (!_contractScrolledToEnd) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: GardenColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.keyboard_double_arrow_down_rounded, color: GardenColors.primary, size: 15),
                 const SizedBox(width: 6),
-                Text('Desliza para leer todo el contrato',
-                    style: TextStyle(fontSize: 12, color: subtextColor, fontWeight: FontWeight.w600)),
-              ],
+                Text('Desliza hasta el final para poder aceptar',
+                    style: TextStyle(fontSize: 11.5, color: GardenColors.primary, fontWeight: FontWeight.w700)),
+              ]),
             ),
+          ],
+          const SizedBox(height: 24),
+          for (final section in caregiverContractSections) ...[
+            Text(section.title,
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textColor)),
+            const SizedBox(height: 8),
+            Text(section.body,
+                style: TextStyle(fontSize: 13.5, color: textColor.withValues(alpha: 0.85), height: 1.55)),
+            const SizedBox(height: 24),
+          ],
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: (_contractScrolledToEnd ? GardenColors.success : GardenColors.primary).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: (_contractScrolledToEnd ? GardenColors.success : GardenColors.primary).withValues(alpha: 0.3)),
+            ),
+            child: Row(children: [
+              Icon(
+                _contractScrolledToEnd ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+                color: _contractScrolledToEnd ? GardenColors.success : GardenColors.primary,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _contractScrolledToEnd
+                      ? 'Llegaste al final. Ya podés aceptar el contrato.'
+                      : 'Este es el final del contrato — desliza hacia arriba si te falta releer algo.',
+                  style: TextStyle(fontSize: 12.5, color: textColor, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ]),
           ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -2702,13 +2695,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     );
   }
 
-  /// Transición entre pasos del wizard: fade + leve deslizamiento vertical,
-  /// en vez del fade plano por defecto de AnimatedSwitcher.
-  Widget _stepTransitionBuilder(Widget child, Animation<double> animation) {
-    final slide = Tween<Offset>(begin: const Offset(0, 0.03), end: Offset.zero).animate(animation);
-    return FadeTransition(opacity: animation, child: SlideTransition(position: slide, child: child));
-  }
-
   @override
   Widget build(BuildContext context) {
     // ─── Steps 6-8 are post-registration embedded screens ───────────────────
@@ -2847,7 +2833,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               automaticallyImplyLeading: _currentStep < 5,
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(4),
-                child: _AnimatedStepProgressBar(
+                child: AnimatedStepProgressBar(
                   value: (_currentStep + 1) / 11,
                   backgroundColor: borderColor,
                   height: 4,
@@ -2912,7 +2898,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                             const SizedBox(height: 10),
                             ClipRRect(
                               borderRadius: BorderRadius.circular(2),
-                              child: _AnimatedStepProgressBar(
+                              child: AnimatedStepProgressBar(
                                 value: (_currentStep + 1) / 11,
                                 backgroundColor: borderColor,
                                 height: 3,
@@ -2941,7 +2927,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                               children: [
                                 AnimatedSwitcher(
                                   duration: const Duration(milliseconds: 240),
-                                  transitionBuilder: _stepTransitionBuilder,
+                                  transitionBuilder: stepTransitionBuilder,
                                   child: Text(
                                     stepTitles[_currentStep],
                                     key: ValueKey(_currentStep),
@@ -2984,7 +2970,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                         const SizedBox(height: 10),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(2),
-                          child: _AnimatedStepProgressBar(
+                          child: AnimatedStepProgressBar(
                             value: (_currentStep + 1) / 11,
                             backgroundColor: borderColor,
                             height: 3,
@@ -3007,7 +2993,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                               duration: const Duration(milliseconds: 320),
                               switchInCurve: Curves.easeOutCubic,
                               switchOutCurve: Curves.easeInCubic,
-                              transitionBuilder: _stepTransitionBuilder,
+                              transitionBuilder: stepTransitionBuilder,
                               child: KeyedSubtree(
                                 key: ValueKey(_currentStep),
                                 child: steps[_currentStep],
@@ -3019,7 +3005,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                           duration: const Duration(milliseconds: 320),
                           switchInCurve: Curves.easeOutCubic,
                           switchOutCurve: Curves.easeInCubic,
-                          transitionBuilder: _stepTransitionBuilder,
+                          transitionBuilder: stepTransitionBuilder,
                           child: KeyedSubtree(
                             key: ValueKey(_currentStep),
                             child: steps[_currentStep],
@@ -3067,51 +3053,6 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                   ),
                 ],
               ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// Barra de progreso del wizard con transición suave entre valores (en vez del
-/// salto abrupto de LinearProgressIndicator) + un leve resplandor mientras avanza.
-class _AnimatedStepProgressBar extends StatelessWidget {
-  final double value;
-  final Color backgroundColor;
-  final double height;
-
-  const _AnimatedStepProgressBar({
-    required this.value,
-    required this.backgroundColor,
-    this.height = 4,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: value),
-      duration: const Duration(milliseconds: 420),
-      curve: Curves.easeOutCubic,
-      builder: (context, animatedValue, _) {
-        return Container(
-          height: height,
-          decoration: BoxDecoration(color: backgroundColor),
-          child: FractionallySizedBox(
-            alignment: Alignment.centerLeft,
-            widthFactor: animatedValue.clamp(0.0, 1.0),
-            child: Container(
-              decoration: BoxDecoration(
-                color: GardenColors.primary,
-                boxShadow: [
-                  BoxShadow(
-                    color: GardenColors.primary.withValues(alpha: 0.55),
-                    blurRadius: 6,
-                    spreadRadius: 0.5,
-                  ),
-                ],
-              ),
             ),
           ),
         );

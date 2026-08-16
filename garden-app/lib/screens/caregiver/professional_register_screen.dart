@@ -29,6 +29,7 @@ import '../../services/cities_service.dart';
 import '../../utils/input_formatters.dart';
 import 'caregiver_profile_data_screen.dart';
 import 'caregiver_contract_step.dart';
+import '../../widgets/animated_step_progress_bar.dart';
 
 class ProfessionalRegisterScreen extends StatefulWidget {
   const ProfessionalRegisterScreen({super.key});
@@ -1366,11 +1367,10 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
               automaticallyImplyLeading: _currentStep > 0,
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(4),
-                child: LinearProgressIndicator(
+                child: AnimatedStepProgressBar(
                   value: (_currentStep + 1) / totalSteps,
                   backgroundColor: borderColor,
-                  valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
-                  minHeight: 4,
+                  height: 4,
                 ),
               ),
             ),
@@ -1412,11 +1412,10 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
                             const SizedBox(height: 10),
                             ClipRRect(
                               borderRadius: BorderRadius.circular(2),
-                              child: LinearProgressIndicator(
+                              child: AnimatedStepProgressBar(
                                 value: (_currentStep + 1) / totalSteps,
                                 backgroundColor: borderColor,
-                                valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
-                                minHeight: 3,
+                                height: 3,
                               ),
                             ),
                           ]),
@@ -1456,12 +1455,18 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
                       ? Center(child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 620),
                           child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 200),
+                            duration: const Duration(milliseconds: 280),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            transitionBuilder: stepTransitionBuilder,
                             child: KeyedSubtree(key: ValueKey(_currentStep), child: stepContent),
                           ),
                         ))
                       : AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 250),
+                          duration: const Duration(milliseconds: 280),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          transitionBuilder: stepTransitionBuilder,
                           child: KeyedSubtree(key: ValueKey(_currentStep), child: stepContent),
                         ),
                 ),
