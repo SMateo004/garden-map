@@ -290,13 +290,13 @@ class TermsOfServiceScreen extends StatelessWidget {
         _LegalSection(
           '6. Comisiones, precios y estructura de pagos',
           'PRECIOS: Los Cuidadores establecen libremente sus tarifas en Bolivianos (Bs.). El precio que publica el Cuidador es el monto íntegro que recibirá por el servicio.\n\n'
-          'COMISIÓN DE PLATAFORMA: Garden cobra una comisión del 20% que se AÑADE sobre el precio establecido por el Cuidador. Esta comisión es pagada por el Cliente y cubre: el procesamiento seguro del pago, el Fondo de Garantía Garden, el soporte al usuario, la verificación de identidad de Cuidadores y el mantenimiento de la infraestructura tecnológica.\n\n'
-          'EJEMPLO: Si el Cuidador cobra Bs. 100 por un servicio, el Cliente paga Bs. 120 (precio del Cuidador + 20% de comisión Garden). El Cuidador recibe íntegramente sus Bs. 100.\n\n'
+          'COMISIÓN DE PLATAFORMA: Garden cobra una comisión del 10% que se AÑADE sobre el precio establecido por el Cuidador. Esta comisión es pagada por el Cliente y cubre: el procesamiento seguro del pago, el Fondo de Garantía Garden, el soporte al usuario, la verificación de identidad de Cuidadores y el mantenimiento de la infraestructura tecnológica.\n\n'
+          'EJEMPLO: Si el Cuidador cobra Bs. 100 por un servicio, el Cliente paga Bs. 110 (precio del Cuidador + 10% de comisión Garden). El Cuidador recibe íntegramente sus Bs. 100.\n\n'
           'DISTRIBUCIÓN DEL PAGO:\n'
           '  → El Cuidador fija su precio (ej.: Bs. 100).\n'
-          '  → El Cliente paga el precio del Cuidador + 20% de comisión Garden (ej.: Bs. 120).\n'
+          '  → El Cliente paga el precio del Cuidador + 10% de comisión Garden (ej.: Bs. 110).\n'
           '  → El Cuidador recibe el 100% de su precio establecido (ej.: Bs. 100).\n'
-          '  → Garden retiene el 20% de comisión (ej.: Bs. 20).\n'
+          '  → Garden retiene el 10% de comisión (ej.: Bs. 10).\n'
           '  → El pago al Cuidador se libera dentro de las 24 horas siguientes a la confirmación de finalización del servicio por ambas partes, o automáticamente a las 72 horas si el Cliente no confirma ni disputa.\n\n'
           'SMART CONTRACT: Cada Reserva genera un contrato inteligente en la red Polygon que registra: monto pagado, identidad de las partes (hash), fechas del servicio y condiciones acordadas. Este registro es permanente, público y no puede ser alterado por ninguna de las partes ni por Garden.\n\n'
           'VERIFICACIÓN DEL PAGO: Mientras Garden completa la integración directa con el sistema bancario (QR interbancario SIP), la confirmación de que un pago fue efectivamente transferido puede realizarse mediante revisión manual por parte del equipo de Garden, en lugar de una confirmación automática instantánea del banco. Esto no cambia el monto que pagas ni tus derechos de reembolso — solo el tiempo que puede tomar la confirmación mientras esta integración esté en curso.\n\n'
@@ -321,7 +321,7 @@ class TermsOfServiceScreen extends StatelessWidget {
           'CANCELACIÓN POR EL CUIDADOR: Si el Cuidador cancela con menos de 24 horas de anticipación, el Cliente recibe reembolso del 100% y el Cuidador recibe una penalización en su perfil. Tres cancelaciones tardías en 90 días resultan en suspensión temporal de 30 días.\n\n'
           'CASOS DE FUERZA MAYOR (bloqueos, paros, desastres naturales): Si un bloqueo de calles, paro cívico, estado de emergencia declarado o un desastre natural impide físicamente que el Cliente o el Cuidador cumplan con el horario acordado, ninguna de las partes sufre penalización — la reserva puede reprogramarse sin costo o cancelarse con reembolso del 100%, sin importar la ventana de tiempo indicada arriba. Quien solicita esta excepción debe notificar a Garden apenas sea razonablemente posible, idealmente con evidencia de la situación (noticias, fotos, comunicados oficiales).\n\n'
           'MOTIVO OBLIGATORIO Y MAL CLIMA: Toda cancelación (por el Cliente o por el Cuidador) antes de que inicie el servicio requiere indicar un motivo. Si el motivo es "Mal clima", se garantiza reembolso del 100% al Cliente sin importar cuánto faltaba para el servicio — pero únicamente para Paseo y Visita domiciliaria (los servicios donde el mal clima impide físicamente salir a la calle) y hasta un máximo de 2 veces por Cliente cada 90 días. A partir de la tercera cancelación por "Mal clima" en ese período, o si el servicio es Hospedaje o Guardería, se aplica la tabla de reembolso escalonado por tiempo indicada arriba. Para cualquier otro motivo, también se aplica dicha tabla.\n\n'
-          'REEMBOLSOS: Los reembolsos se acreditan en la Billetera Garden en un plazo de 1-3 días hábiles. El retiro a cuenta bancaria puede demorar hasta 5 días hábiles adicionales.',
+          'REEMBOLSOS: Los reembolsos se acreditan en la Billetera Garden en un plazo de 1-3 días hábiles. El retiro del saldo a cuenta bancaria se procesa en 1-3 días hábiles adicionales.',
         ),
 
         // ── 8. QUÉ PUEDE HACER UN DUEÑO DE MASCOTA ──────────────────────────
@@ -364,7 +364,7 @@ class TermsOfServiceScreen extends StatelessWidget {
           '✓ Establecer sus propios precios, horarios y disponibilidad libremente.\n'
           '✓ Aceptar o rechazar cualquier solicitud de Reserva sin necesidad de justificación.\n'
           '✓ Cancelar una Reserva activa si detecta que la mascota representa un riesgo para su seguridad o la de otros animales a su cuidado, notificando inmediatamente a Garden.\n'
-          '✓ Recibir el 100% del precio que él mismo ha establecido por cada Reserva. La comisión de Garden (20%) es añadida sobre el precio del Cuidador y pagada por el Cliente — el Cuidador NUNCA pierde parte de su tarifa.\n'
+          '✓ Recibir el 100% del precio que él mismo ha establecido por cada Reserva. La comisión de Garden (10%) es añadida sobre el precio del Cuidador y pagada por el Cliente — el Cuidador NUNCA pierde parte de su tarifa.\n'
           '✓ Construir un perfil público con fotos, descripción y reseñas de sus servicios.\n'
           '✓ Comunicarse con los Clientes a través del chat integrado para coordinación del servicio.\n'
           '✓ Solicitar información adicional sobre la mascota antes de confirmar la Reserva.\n'
@@ -407,7 +407,7 @@ class TermsOfServiceScreen extends StatelessWidget {
           'Garden mantiene un Fondo de Garantía de hasta Bs. 2.000 por incidente, sujeto a disponibilidad y verificación, destinado a cubrir gastos veterinarios de emergencia en situaciones donde el incidente NO sea producto de negligencia del Cuidador (accidente fortuito, causa desconocida, condición preexistente no informada). Este fondo es una garantía voluntaria de Garden y no constituye reconocimiento de responsabilidad.\n\n'
           'SI SE DETERMINA NEGLIGENCIA DEL CUIDADOR:\n'
           'Si la investigación de Garden determina que el incidente fue causado por negligencia comprobable del Cuidador (descuido, abandono, falta de agua o alimentación, violencia, sustancias tóxicas accesibles en su domicilio), el Cuidador deberá cubrir el 100% de los gastos veterinarios documentados. En estos casos el Fondo de Garantía Garden no aplica — la responsabilidad económica recae íntegramente sobre el Cuidador. Garden retendrá los montos correspondientes de los próximos pagos del Cuidador hasta saldar la deuda. Para montos superiores a Bs. 5.000, Garden actuará como mediador ante instancias civiles.\n\n'
-          'Esta estructura (comisión del 20%) existe precisamente para sostener el Fondo de Garantía y proteger a los Clientes en casos donde el incidente no sea negligencia del Cuidador.\n\n'
+          'Esta estructura (comisión del 10%) existe precisamente para sostener el Fondo de Garantía y proteger a los Clientes en casos donde el incidente no sea negligencia del Cuidador.\n\n'
           'Fundamento legal: Art. 984 del Código Civil Boliviano (D.L. N° 12760) — responsabilidad por daño causado por culpa o negligencia.\n\n'
           'SITUACIONES DONDE EL CUIDADOR NO ES RESPONSABLE:\n'
           '• Condición médica preexistente no declarada por el Dueño en la Reserva.\n'
@@ -467,8 +467,8 @@ class TermsOfServiceScreen extends StatelessWidget {
         // ── 17. CONTACTO DE EMERGENCIA OBLIGATORIO ───────────────────────────
         _LegalSection(
           '17. Contacto de emergencia obligatorio',
-          'Todo Cuidador debe registrar al menos un contacto de emergencia (nombre y teléfono de un familiar o persona de confianza) antes de poder ofrecer servicios de Hospedaje o Guardería.\n\n'
-          'Si el Cuidador no puede ser contactado (no responde al chat, llamadas o notificaciones de la app) durante más de 12 horas mientras tiene una mascota bajo su custodia, Garden contactará al contacto de emergencia registrado y, de ser necesario, a las autoridades locales, para verificar el bienestar del Cuidador y de la mascota.\n\n'
+          'Todo Cuidador debe registrar exactamente 3 contactos de emergencia (nombre y teléfono de familiares o personas de confianza) como último paso de su registro, antes de que su perfil pueda activarse — sin importar qué servicios ofrezca.\n\n'
+          'Si el Cuidador no puede ser contactado (no responde al chat, llamadas o notificaciones de la app) durante más de 12 horas mientras tiene una mascota bajo su custodia, Garden contactará a los contactos de emergencia registrados y, de ser necesario, a las autoridades locales, para verificar el bienestar del Cuidador y de la mascota.\n\n'
           'El Dueño también puede registrar un contacto de emergencia alternativo, por si Garden no logra comunicarse directamente con él durante una situación crítica relacionada con su mascota.',
         ),
 

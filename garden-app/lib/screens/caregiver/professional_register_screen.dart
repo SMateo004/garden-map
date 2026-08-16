@@ -28,6 +28,7 @@ import '../../services/auth_state.dart';
 import '../../services/cities_service.dart';
 import '../../utils/input_formatters.dart';
 import 'caregiver_profile_data_screen.dart';
+import 'caregiver_contract_step.dart';
 
 class ProfessionalRegisterScreen extends StatefulWidget {
   const ProfessionalRegisterScreen({super.key});
@@ -607,6 +608,31 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
     } catch (e) {
       if (mounted) {
         GardenErrorDialog.show(context, 'Error leyendo imagen: $e');
+      }
+    }
+  }
+
+  /// Llamado por CaregiverContractStep solo después del scroll-to-accept.
+  /// Si el PATCH falla, no navega — el botón vuelve a estar disponible para
+  /// reintentar (ver CaregiverContractStep._handleAccept).
+  Future<void> _acceptContractAndFinish() async {
+    try {
+      final response = await http.patch(
+        Uri.parse('$_baseUrl/caregiver/profile'),
+        headers: {'Authorization': 'Bearer $_authToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'contractAccepted': true}),
+      );
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (data['success'] != true) {
+        throw Exception(data['error']?['message'] ?? 'No se pudo registrar la aceptación del contrato');
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('caregiver_setup_complete', true);
+      if (!mounted) return;
+      context.go('/caregiver/home');
+    } catch (e) {
+      if (mounted) {
+        GardenErrorDialog.show(context, 'No se pudo completar el registro. Intenta de nuevo.');
       }
     }
   }
@@ -1264,14 +1290,15 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
             ),
             child: CaregiverProfileDataScreen(
               embeddedMode: true,
-              onSaveComplete: () async {
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setBool('caregiver_setup_complete', true);
-                if (!mounted) return;
-                context.go('/caregiver/home');
-              },
+              onSaveComplete: () => setState(() => _currentStep = 8),
             ),
           );
+        }
+
+        // Step 8 (final): Contrato de cuidador — scroll-to-accept, mismas
+        // responsabilidades que el registro individual (onboarding_wizard_screen.dart).
+        if (_currentStep == 8) {
+          return CaregiverContractStep(onAccept: _acceptContractAndFinish);
         }
 
         final stepTitles = [
@@ -1283,6 +1310,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           'Precio',
           'Tu retrato',
           'Perfil profesional',
+          'Contrato',
         ];
 
         Widget stepContent;
@@ -1297,7 +1325,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           default: stepContent = const SizedBox.shrink();
         }
 
-        final totalSteps = 8;
+        final totalSteps = 9;
         final isRegistrationStep = _currentStep == 0;
         final buttonLabel = _currentStep == 0 ? 'Verificar código' :
             _currentStep == 6 ? 'Continuar →' : 'Siguiente →';

@@ -4728,6 +4728,12 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                     row('Detalle mascotas', detail?['currentPetsDetails'] as String?),
                   ])),
 
+                  // KIT DE BIENVENIDA
+                  sectionHeader('KIT DE BIENVENIDA', Icons.card_giftcard_rounded),
+                  infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    row('Talla (polera/gorra)', detail?['shirtSize'] as String?),
+                  ])),
+
                   // CONDICIONES DE SERVICIO
                   sectionHeader('CONDICIONES DE SERVICIO', Icons.rule_rounded),
                   infoCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -4886,6 +4892,9 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                     checkRow('Condiciones de verificación aceptadas', detail?['verificationAccepted'] == true),
                     if (detail?['termsAcceptedAt'] != null)
                       row('Aceptados el', (detail!['termsAcceptedAt'] as String).substring(0, 10)),
+                    checkRow('Contrato de cuidador firmado', detail?['contractAcceptedAt'] != null),
+                    if (detail?['contractAcceptedAt'] != null)
+                      row('Contrato firmado el', (detail!['contractAcceptedAt'] as String).substring(0, 10)),
                   ])),
 
                   // IDENTIFICADORES TÉCNICOS

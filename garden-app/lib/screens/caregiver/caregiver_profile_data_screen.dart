@@ -181,6 +181,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   int _maxPetsGuarderia = 1;
   List<String> _acceptedPetTypes = [];
   List<String> _acceptedSizes = [];
+  /// Talla de la polera/gorra del kit de bienvenida (XS-XXL) — distinto de
+  /// _acceptedSizes, que son los tamaños de MASCOTA que el cuidador acepta.
+  String? _shirtSize;
+  static const List<String> _shirtSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
   bool _weekdays = true;
   bool _weekends = false;
   bool _holidays = false;
@@ -352,6 +356,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         ? dbAnimalTypes
         : List<String>.from(details['acceptedPetTypes'] ?? []);
     _acceptedSizes = List<String>.from(details['acceptedSizes'] ?? []);
+    _shirtSize = profile['shirtSize'] as String?;
     _weekdays = availability['weekdays'] ?? defaultSchedule['weekdays'] ?? true;
     _weekends = availability['weekends'] ?? defaultSchedule['weekends'] ?? false;
     _holidays = availability['holidays'] ?? defaultSchedule['holidays'] ?? false;
@@ -485,6 +490,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       _whatDiffersController.text.trim().length >= 3,
       _acceptedPetTypes.isNotEmpty,
       _acceptedSizes.isNotEmpty,
+      _shirtSize != null,
       true, // acceptAggressive (bool no-nullable en Dart, siempre "definido")
       true, // acceptPuppies
       true, // acceptSeniors
@@ -524,6 +530,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
       ('¿Qué te diferencia?', _whatDiffersController.text.trim().length >= 3),
       ('Tipos de mascota que aceptas', _acceptedPetTypes.isNotEmpty),
       ('Tamaños que aceptas', _acceptedSizes.isNotEmpty),
+      ('Talla de tu kit de bienvenida', _shirtSize != null),
     ];
   }
 
@@ -736,6 +743,7 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         'videoUrl': _videoUrlController.text.trim(),
         'sizesAccepted': _acceptedSizes,
         'animalTypes': _acceptedPetTypes,
+        if (_shirtSize != null) 'shirtSize': _shirtSize,
         // Top-level, no dentro de serviceDetails — así el backend los guarda
         // en las columnas reales que usa la validación de capacidad al
         // crear una reserva (ver booking.service.ts assertPaseoAvailability/
@@ -2177,6 +2185,46 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
               const SizedBox(height: 10),
               IgnorePointer(ignoring: !widget.embeddedMode && !_isEditing, child: _buildChipsSection(_emergencyOptions, _selectedEmergencyOptions, surface, borderColor)),
             ],
+
+            const Divider(height: 48),
+
+            // Kit de bienvenida — polera + gorra Garden. La talla es lo único
+            // que se pide acá; el envío se coordina después por separado.
+            _sectionTitle('🎁 Kit de bienvenida', textColor),
+            Text(
+              'Te vamos a enviar una polera y una gorra oficiales de Garden a tu domicilio, sin costo. '
+              'Llegan en 1-3 días hábiles y coordinamos el horario de entrega con vos por tus datos de contacto.',
+              style: TextStyle(color: subtextColor, fontSize: 13, height: 1.4),
+            ),
+            const SizedBox(height: 14),
+            Text('Talla de polera/gorra', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            IgnorePointer(
+              ignoring: !widget.embeddedMode && !_isEditing,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _shirtSizes.map((size) {
+                  final isSel = _shirtSize == size;
+                  return GestureDetector(
+                    onTap: () => setState(() => _shirtSize = size),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: 52,
+                      height: 44,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: isSel ? GardenColors.primary.withValues(alpha: 0.12) : surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: isSel ? GardenColors.primary : borderColor, width: isSel ? 1.5 : 1),
+                      ),
+                      child: Text(size,
+                          style: TextStyle(color: isSel ? GardenColors.primary : textColor, fontSize: 13.5, fontWeight: FontWeight.w700)),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
 
             const Divider(height: 48),
 

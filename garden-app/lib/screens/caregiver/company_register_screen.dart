@@ -31,6 +31,7 @@ import '../../widgets/address_section.dart';
 import '../../services/cities_service.dart';
 import '../../widgets/extra_services_editor.dart';
 import 'caregiver_profile_data_screen.dart';
+import 'caregiver_contract_step.dart';
 import 'phone_verification_screen.dart';
 import 'email_verification_screen.dart';
 
@@ -310,8 +311,10 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         return;
       }
 
-      // Todo lo anterior completo — perfil detallado de la empresa
-      setState(() => _currentStep = 10);
+      // Todo lo anterior completo — perfil detallado de la empresa, salvo
+      // que ya haya pasado por ahí Y aceptado el contrato (paso 11), en cuyo
+      // caso no tiene sentido hacerla volver a llenar el perfil detallado.
+      setState(() => _currentStep = profile['contractAcceptedAt'] != null ? 11 : 10);
     } catch (_) {
       // Falla silenciosa — se queda en el paso 0 (comportamiento actual)
     }
@@ -723,6 +726,29 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
     }
   }
 
+  /// Llamado por CaregiverContractStep solo después del scroll-to-accept.
+  /// Si el PATCH falla, no navega — el botón vuelve a estar disponible para
+  /// reintentar (ver CaregiverContractStep._handleAccept).
+  Future<void> _acceptContractAndFinish() async {
+    try {
+      final response = await http.patch(
+        Uri.parse('$_baseUrl/caregiver/profile'),
+        headers: {'Authorization': 'Bearer $_authToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'contractAccepted': true}),
+      );
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (data['success'] != true) {
+        throw Exception(data['error']?['message'] ?? 'No se pudo registrar la aceptación del contrato');
+      }
+      if (!mounted) return;
+      context.go('/caregiver/home');
+    } catch (e) {
+      if (mounted) {
+        GardenErrorDialog.show(context, 'No se pudo completar el registro. Intenta de nuevo.');
+      }
+    }
+  }
+
   Future<void> _pickLogo() async {
     final picked = await image_picker_pkg.ImagePicker().pickImage(
         source: image_picker_pkg.ImageSource.gallery, imageQuality: kIsWeb ? null : 85);
@@ -759,8 +785,13 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         embeddedMode: true,
         isCompany: true,
         servicesOffered: _services,
-        onSaveComplete: () => context.go('/caregiver/home'),
+        onSaveComplete: () => setState(() => _currentStep = 11),
       );
+    }
+    // Step 11 (final): Contrato de cuidador — scroll-to-accept, mismas
+    // responsabilidades que el registro individual (onboarding_wizard_screen.dart).
+    if (_currentStep == 11) {
+      return CaregiverContractStep(onAccept: _acceptContractAndFinish);
     }
 
     return Scaffold(
@@ -782,7 +813,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(4),
           child: LinearProgressIndicator(
-            value: (_currentStep + 1) / 11,
+            value: (_currentStep + 1) / 12,
             backgroundColor: borderColor,
             valueColor: const AlwaysStoppedAnimation<Color>(GardenColors.primary),
             minHeight: 3,

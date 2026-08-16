@@ -12,6 +12,7 @@ import '../../theme/garden_theme.dart' show fixImageUrl, GardenColors, GardenBut
 import '../../services/auth_service.dart';
 
 import 'caregiver_profile_data_screen.dart';
+import 'caregiver_contract_content.dart';
 import 'verification_screen.dart';
 import 'combined_verification_step.dart';
 import '../../services/auth_state.dart';
@@ -75,6 +76,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       List.generate(3, (_) => TextEditingController());
 
   bool _isValidBoPhone(String phone) => RegExp(r'^[67][0-9]{7}$').hasMatch(phone.trim());
+
+  // Paso 10 (nuevo, final real): Contrato de cuidador — el botón de aceptar
+  // solo se habilita después de scrollear el contrato hasta el final.
+  final ScrollController _contractScrollController = ScrollController();
+  bool _contractScrolledToEnd = false;
 
   // Paso 6: Perfil Profesional
   final List<String> _sizesAccepted = [];
@@ -154,9 +160,21 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     ]) {
       c.addListener(_onFormFieldChanged);
     }
+    _contractScrollController.addListener(_onContractScroll);
     _loadToken();
     _loadPriceStats();
     _loadPriceLimits();
+  }
+
+  /// Habilita "Acepto y finalizo el registro" solo cuando el usuario llegó
+  /// (con margen de 24px) al final del contrato — no antes de tocarlo, y no
+  /// con un scroll a medias.
+  void _onContractScroll() {
+    if (_contractScrolledToEnd || !_contractScrollController.hasClients) return;
+    final pos = _contractScrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 24) {
+      setState(() => _contractScrolledToEnd = true);
+    }
   }
 
   Future<void> _loadPriceLimits() async {
@@ -437,7 +455,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           bioOk &&
           sizesAccepted.isNotEmpty &&
           animalTypes.isNotEmpty &&
-          experienceOk;
+          experienceOk &&
+          profile['shirtSize'] != null;
 
       if (!step6Complete) {
         setState(() => _currentStep = 6);
@@ -470,6 +489,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         return;
       }
 
+      // Step 10: Contrato de cuidador (scroll-to-accept, final)
+      if (profile['contractAcceptedAt'] == null) {
+        setState(() => _currentStep = 10);
+        return;
+      }
+
       // All steps complete — attempt submit (handles already-approved case)
       await _completeWizard();
     } catch (_) {
@@ -490,6 +515,10 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           'termsAccepted': true,
           'privacyAccepted': true,
           'verificationAccepted': true,
+          // Solo llega true si el usuario de verdad scrolleó el contrato
+          // hasta el final en el paso 10 (ver _buildStep10) — el botón que
+          // dispara _completeWizard() está deshabilitado hasta entonces.
+          'contractAccepted': _contractScrolledToEnd,
         }),
       );
 
@@ -534,6 +563,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
 
   @override
   void dispose() {
+    _contractScrollController.dispose();
     _firstNameController.dispose();
     _lastNameController.dispose();
     _emailController.dispose();
@@ -721,6 +751,12 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           }
         }
         return true;
+      case 10: // Contrato de cuidador — debe scrollear hasta el final
+        if (!_contractScrolledToEnd) {
+          _showStepError('Desliza el contrato hasta el final para poder aceptarlo');
+          return false;
+        }
+        return true;
       default:
         return true; // Steps 6-8 handled by embedded screens
     }
@@ -775,6 +811,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           if (name.isEmpty || !_isValidBoPhone(phone)) return false;
         }
         return true;
+      case 10:
+        return _contractScrolledToEnd;
       default:
         return true; // Steps 6-8: embedded screens manage their own button
     }
@@ -963,9 +1001,15 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       return;
     }
 
-    // Step 9: Contactos de emergencia → guardar y finalizar registro
+    // Step 9: Contactos de emergencia → guardar y avanzar al contrato
     if (_currentStep == 9) {
       await _onEmergencyContactsNext();
+      return;
+    }
+
+    // Step 10 (final): Contrato de cuidador → finalizar registro
+    if (_currentStep == 10) {
+      await _completeWizard();
       return;
     }
 
@@ -1127,6 +1171,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         setState(() => _currentStep = 8);
       } else if (emergencyContacts.isEmpty) {
         setState(() => _currentStep = 9);
+      } else if (profile['contractAcceptedAt'] == null) {
+        setState(() => _currentStep = 10);
       } else {
         await _completeWizard();
       }
@@ -1160,6 +1206,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           setState(() => _currentStep = 8);
         } else if (emergencyContacts.isEmpty) {
           setState(() => _currentStep = 9);
+        } else if (profile['contractAcceptedAt'] == null) {
+          setState(() => _currentStep = 10);
         } else {
           await _completeWizard();
         }
@@ -1181,7 +1229,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     setState(() => _currentStep = 9);
   }
 
-  /// Step 9 (final): validates 3 emergency contacts, saves them, then submits.
+  /// Step 9: validates 3 emergency contacts, saves them, advances to the
+  /// contrato de cuidador (step 10, ahora el paso final real).
   Future<void> _onEmergencyContactsNext() async {
     if (!_validateCurrentStep()) return;
     setState(() => _isLoading = true);
@@ -1191,8 +1240,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     });
     await _patchProfile({'emergencyContacts': contacts});
     if (!mounted) return;
-    setState(() => _isLoading = false);
-    await _completeWizard();
+    setState(() { _isLoading = false; _currentStep = 10; });
   }
 
   void _prevStep() {
@@ -1453,10 +1501,11 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     );
   }
 
-  // ── PASO 9 (index 9, final): Contactos de emergencia ─────────────
-  // Requerido por Términos y Condiciones Sección 17 antes de ofrecer
-  // Hospedaje/Guardería. Se piden 3 contactos (nombre + teléfono), todos
-  // obligatorios, con la misma validación de teléfono boliviano del Paso 0.
+  // ── PASO 9 (index 9): Contactos de emergencia ─────────────
+  // Requerido por Términos y Condiciones Sección 17 antes de activar el
+  // perfil, sin importar qué servicios ofrezca. Se piden 3 contactos (nombre
+  // + teléfono), todos obligatorios, con la misma validación de teléfono
+  // boliviano del Paso 0.
   Widget _buildStep9() {
     final isDark = themeNotifier.isDark;
     final textColor    = isDark ? GardenColors.darkTextPrimary    : GardenColors.lightTextPrimary;
@@ -1553,6 +1602,98 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // ── PASO 10 (index 10, final real): Contrato de cuidador ─────────
+  // El botón "Acepto y finalizo el registro" (bottom nav genérico, ver
+  // _canProceed case 10) solo se habilita después de que _onContractScroll
+  // detecta que el usuario llegó al final de ESTE SingleChildScrollView —
+  // por eso, a diferencia de los demás pasos, pasamos un controller propio
+  // en vez de dejar que Flutter use uno implícito.
+  Widget _buildStep10() {
+    final isDark = themeNotifier.isDark;
+    final textColor    = isDark ? GardenColors.darkTextPrimary    : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary  : GardenColors.lightTextSecondary;
+    final borderColor  = isDark ? GardenColors.darkBorder         : GardenColors.lightBorder;
+    final surface      = isDark ? GardenColors.darkSurface        : GardenColors.lightSurface;
+
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            controller: _contractScrollController,
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Contrato de Cuidador',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
+                const SizedBox(height: 6),
+                Text(
+                  'Último paso — leé el contrato completo hasta el final para poder aceptarlo.',
+                  style: TextStyle(fontSize: 14, color: subtextColor, height: 1.5),
+                ),
+                const SizedBox(height: 8),
+                Text('Actualizado: $contractLastUpdated',
+                    style: TextStyle(fontSize: 11.5, color: subtextColor.withValues(alpha: 0.8))),
+                const SizedBox(height: 24),
+                for (final section in caregiverContractSections) ...[
+                  Text(section.title,
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textColor)),
+                  const SizedBox(height: 8),
+                  Text(section.body,
+                      style: TextStyle(fontSize: 13.5, color: textColor.withValues(alpha: 0.85), height: 1.55)),
+                  const SizedBox(height: 24),
+                ],
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: (_contractScrolledToEnd ? GardenColors.success : GardenColors.primary).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: (_contractScrolledToEnd ? GardenColors.success : GardenColors.primary).withValues(alpha: 0.3)),
+                  ),
+                  child: Row(children: [
+                    Icon(
+                      _contractScrolledToEnd ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+                      color: _contractScrolledToEnd ? GardenColors.success : GardenColors.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _contractScrolledToEnd
+                            ? 'Llegaste al final. Ya podés aceptar el contrato.'
+                            : 'Este es el final del contrato — desliza hacia arriba si te falta releer algo.',
+                        style: TextStyle(fontSize: 12.5, color: textColor, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ]),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Aviso persistente mientras no llegó al final — el botón "Acepto y
+        // finalizo el registro" del nav genérico está deshabilitado, y sin
+        // este texto no queda claro por qué.
+        if (!_contractScrolledToEnd)
+          Container(
+            width: double.infinity,
+            color: surface,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+            decoration: BoxDecoration(border: Border(top: BorderSide(color: borderColor))),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.keyboard_double_arrow_down_rounded, color: subtextColor, size: 16),
+                const SizedBox(width: 6),
+                Text('Desliza para leer todo el contrato',
+                    style: TextStyle(fontSize: 12, color: subtextColor, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+      ],
     );
   }
 
@@ -2616,7 +2757,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       postRegStep,     // 6: Perfil profesional
       postRegStep,     // 7: Verificación de identidad
       postRegStep,     // 8: Verificación combinada (teléfono + email)
-      _buildStep9(),   // 9: Contactos de emergencia (final)
+      _buildStep9(),   // 9: Contactos de emergencia
+      _buildStep10(),  // 10: Contrato de cuidador (final real)
     ];
 
     final stepTitles = [
@@ -2630,13 +2772,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       'Verificación ID',
       'Verificar cuenta',
       'Contactos de emergencia',
+      'Contrato',
     ];
 
     // Steps 6-8 are embedded screens that manage their own "Continue" buttons.
-    // Step 9 (contactos de emergencia) uses the standard bottom nav, like 0-5.
-    final bool showNavButtons = _currentStep <= 5 || _currentStep == 9;
+    // Steps 9 y 10 (contactos de emergencia, contrato) usan el nav genérico, como 0-5.
+    final bool showNavButtons = _currentStep <= 5 || _currentStep == 9 || _currentStep == 10;
     final bool isRegistrationStep = _currentStep == 0;
-    final bool isFinalStep = _currentStep == 9;
+    final bool isFinalStep = _currentStep == 10;
 
     return AnimatedBuilder(
       animation: themeNotifier,
@@ -2705,7 +2848,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(4),
                 child: _AnimatedStepProgressBar(
-                  value: (_currentStep + 1) / 10,
+                  value: (_currentStep + 1) / 11,
                   backgroundColor: borderColor,
                   height: 4,
                 ),
@@ -2744,7 +2887,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                                 ),
                                 const Spacer(),
                                 Text(
-                                  'Paso ${_currentStep + 1} de 10',
+                                  'Paso ${_currentStep + 1} de 11',
                                   style: TextStyle(color: subtextColor, fontSize: 12),
                                 ),
                                 const SizedBox(width: 10),
@@ -2770,7 +2913,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                             ClipRRect(
                               borderRadius: BorderRadius.circular(2),
                               child: _AnimatedStepProgressBar(
-                                value: (_currentStep + 1) / 10,
+                                value: (_currentStep + 1) / 11,
                                 backgroundColor: borderColor,
                                 height: 3,
                               ),
@@ -2807,7 +2950,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                                 ),
                                 const SizedBox(height: 1),
                                 Text(
-                                  'Paso ${_currentStep + 1} de 10',
+                                  'Paso ${_currentStep + 1} de 11',
                                   style: TextStyle(color: subtextColor, fontSize: 11),
                                 ),
                               ],
@@ -2815,7 +2958,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                             // Dots: 9 pasos, llenos los completados
                             Row(
                               mainAxisSize: MainAxisSize.min,
-                              children: List.generate(10, (i) {
+                              children: List.generate(11, (i) {
                                 final done   = i < _currentStep;
                                 final active = i == _currentStep;
                                 return AnimatedContainer(
@@ -2842,7 +2985,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                         ClipRRect(
                           borderRadius: BorderRadius.circular(2),
                           child: _AnimatedStepProgressBar(
-                            value: (_currentStep + 1) / 10,
+                            value: (_currentStep + 1) / 11,
                             backgroundColor: borderColor,
                             height: 3,
                           ),
@@ -2911,7 +3054,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                               child: GardenButton(
                                 label: isRegistrationStep
                                     ? 'Crear mi cuenta'
-                                    : (isFinalStep ? 'Finalizar registro' : 'Siguiente →'),
+                                    : (isFinalStep ? 'Acepto y finalizo el registro' : 'Siguiente →'),
                                 loading: _isLoading,
                                 height: 48,
                                 onPressed: (_isLoading || !_canProceed) ? null : _nextStep,
