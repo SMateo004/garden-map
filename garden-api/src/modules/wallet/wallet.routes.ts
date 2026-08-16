@@ -381,11 +381,23 @@ router.post('/withdraw/:id/cancel', authMiddleware, asyncHandler(async (req: Req
   const userId = (req as any).user.userId;
   const { id } = req.params;
 
-  const tx = await prisma.walletTransaction.findUnique({ where: { id } });
-  if (!tx || tx.type !== 'WITHDRAWAL' || tx.userId !== userId) {
-    return res.status(404).json({ success: false, error: { message: 'Solicitud no encontrada' } });
-  }
-  if (tx.status !== 'PENDING') {
+  // Update atómico condicionado a status: 'PENDING' — sin esto, esta acción
+  // (leer estado, luego escribir) puede pisarse con processWithdrawal del
+  // admin corriendo en el mismo instante: ambos leen PENDING antes de que
+  // cualquiera escriba, y el último write gana sin que el otro se entere.
+  // Con un admin ya convencido de que pasó a PROCESSING (y posiblemente a
+  // punto de transferir la plata a mano), esto lo dejaría cancelado bajo su
+  // nariz. Mismo patrón que balance: { gte } en completeWithdrawal.
+  const result = await prisma.walletTransaction.updateMany({
+    where: { id, userId, type: 'WITHDRAWAL', status: 'PENDING' },
+    data: { status: 'CANCELLED' },
+  });
+
+  if (result.count === 0) {
+    const tx = await prisma.walletTransaction.findUnique({ where: { id } });
+    if (!tx || tx.type !== 'WITHDRAWAL' || tx.userId !== userId) {
+      return res.status(404).json({ success: false, error: { message: 'Solicitud no encontrada' } });
+    }
     return res.status(409).json({
       success: false,
       error: {
@@ -398,12 +410,8 @@ router.post('/withdraw/:id/cancel', authMiddleware, asyncHandler(async (req: Req
   // Balance nunca se descuenta hasta que un admin completa el retiro (ver
   // completeWithdrawal en admin.controller.ts) — así que cancelar acá es solo
   // un cambio de estado, no requiere devolver saldo.
-  await prisma.walletTransaction.update({
-    where: { id },
-    data: { status: 'CANCELLED' },
-  });
 
-  track(userId, 'withdrawal_cancelled', { transactionId: id, amount: Number(tx.amount) });
+  track(userId, 'withdrawal_cancelled', { transactionId: id });
   emitWalletUpdated(userId);
 
   res.json({ success: true, data: { status: 'CANCELLED' } });

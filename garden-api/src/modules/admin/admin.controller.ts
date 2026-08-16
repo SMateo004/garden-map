@@ -477,15 +477,20 @@ export const getWithdrawals = asyncHandler(async (req: Request, res: Response) =
 export const processWithdrawal = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  const tx = await prisma.walletTransaction.findUnique({ where: { id } });
-  if (!tx || tx.type !== 'WITHDRAWAL' || tx.status !== 'PENDING') {
+  // Update atómico condicionado a status: 'PENDING' — desde que el usuario
+  // puede autocancelar (POST /wallet/withdraw/:id/cancel), este endpoint ya
+  // no es el único escritor de este status: sin esta guarda, una cancelación
+  // del usuario justo en el mismo instante podía pisarse con este write
+  // (o viceversa) bajo un simple check-then-act. Mismo patrón que el cancel.
+  const updateResult = await prisma.walletTransaction.updateMany({
+    where: { id, type: 'WITHDRAWAL', status: 'PENDING' },
+    data: { status: 'PROCESSING' },
+  });
+  if (updateResult.count === 0) {
     return res.status(400).json({ success: false, error: { message: 'Solicitud no encontrada o no está pendiente' } });
   }
 
-  await prisma.walletTransaction.update({
-    where: { id },
-    data: { status: 'PROCESSING' },
-  });
+  const tx = await prisma.walletTransaction.findUniqueOrThrow({ where: { id } });
 
   auditLog({ userId: req.user!.userId, action: 'WITHDRAWAL_PROCESSING', entity: 'WalletTransaction', entityId: id, details: { amount: Number(tx.amount), caregiverId: tx.userId }, ip: req.ip });
   emitWalletUpdated(tx.userId);

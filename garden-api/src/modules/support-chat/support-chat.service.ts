@@ -73,6 +73,12 @@ export async function sendClientMessage(userId: string, rawMessage: string) {
 
   const io = getIO();
 
+  // Arranca en el status recién escrito por el upsert; se actualiza abajo si
+  // el bot escala. Se devuelve al cliente para que el header del chat
+  // refleje la escalación al instante, sin esperar a que llegue un mensaje
+  // real del admin por socket (que puede tardar minutos u horas).
+  let finalStatus: string = thread.status;
+
   // El bot responde salvo que un admin ya esté activamente en el hilo.
   let botMessage: { id: string; message: string; createdAt: Date } | null = null;
   if (!thread.adminJoinedAt) {
@@ -99,6 +105,7 @@ export async function sendClientMessage(userId: string, rawMessage: string) {
         where: { id: thread.id },
         data: { status: 'ESCALATED', lastMessageAt: new Date(), lastMessagePreview: preview(resultado.respuesta) },
       });
+      finalStatus = 'ESCALATED';
       logger.info('[SupportChat] Hilo escalado a admin', { threadId: thread.id, userId, razon: resultado.razon });
     }
   }
@@ -130,6 +137,7 @@ export async function sendClientMessage(userId: string, rawMessage: string) {
     message: saved.message,
     createdAt: saved.createdAt,
     botMessage,
+    status: finalStatus,
   };
 }
 
@@ -200,22 +208,33 @@ export async function getThreadMessagesForAdmin(threadId: string) {
   if (!thread) throw new BadRequestError('Conversación no encontrada', 'THREAD_NOT_FOUND');
 
   if (thread.status === 'ESCALATED' && !thread.adminJoinedAt) {
-    const joinedMessage = 'Un asesor humano se unió a la conversación y va a revisar tu caso.';
-    const savedJoin = await prisma.supportMessage.create({
-      data: { threadId, senderRole: 'ADMIN', message: joinedMessage },
+    // Update atómico condicionado a adminJoinedAt: null — dos admins abriendo
+    // el mismo hilo casi al mismo tiempo (o un solo admin refrescando dos
+    // veces rápido) pueden leer el mismo estado "nadie entró todavía" antes
+    // de que cualquiera escriba. Sin esta guarda, ambos crean el mensaje de
+    // "un asesor se unió" y lo emiten, duplicándolo para el cliente.
+    const claimed = await prisma.supportThread.updateMany({
+      where: { id: threadId, adminJoinedAt: null },
+      data: { adminJoinedAt: new Date() },
     });
-    await prisma.supportThread.update({ where: { id: threadId }, data: { adminJoinedAt: new Date() } });
 
-    const io = getIO();
-    if (io) {
-      io.to(`user:${thread.userId}`).emit('support_admin_reply', {
-        threadId,
-        message: joinedMessage,
-        senderRole: 'ADMIN',
-        createdAt: savedJoin.createdAt.toISOString(),
+    if (claimed.count > 0) {
+      const joinedMessage = 'Un asesor humano se unió a la conversación y va a revisar tu caso.';
+      const savedJoin = await prisma.supportMessage.create({
+        data: { threadId, senderRole: 'ADMIN', message: joinedMessage },
       });
+
+      const io = getIO();
+      if (io) {
+        io.to(`user:${thread.userId}`).emit('support_admin_reply', {
+          threadId,
+          message: joinedMessage,
+          senderRole: 'ADMIN',
+          createdAt: savedJoin.createdAt.toISOString(),
+        });
+      }
+      logger.info('[SupportChat] Admin entró al hilo escalado — bot desactivado para este hilo', { threadId });
     }
-    logger.info('[SupportChat] Admin entró al hilo escalado — bot desactivado para este hilo', { threadId });
   }
 
   const messages = await prisma.supportMessage.findMany({
