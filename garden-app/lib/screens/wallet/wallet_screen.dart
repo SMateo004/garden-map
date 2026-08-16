@@ -29,6 +29,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   String _role = '';
   bool _uploadingQr = false;
   bool _switchingMethod = false;
+  String? _cancellingWithdrawalId;
   // Los datos de cobro (número de cuenta, titular, QR de pago) son
   // información sensible que antes se mostraba siempre expandida en la
   // billetera — el dueño de la plataforma pidió ocultarla por defecto y
@@ -236,6 +237,56 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
       }
     } finally {
       if (mounted) setState(() => _switchingMethod = false);
+    }
+  }
+
+  /// Cancela una solicitud de retiro propia mientras siga PENDING. El backend
+  /// rechaza el cambio de estado si un admin ya la pasó a PROCESSING.
+  Future<void> _cancelWithdrawal(String transactionId) async {
+    if (_cancellingWithdrawalId != null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('¿Cancelar solicitud de retiro?'),
+        content: const Text('El dinero seguirá disponible en tu billetera. Puedes volver a solicitar el retiro cuando quieras.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Volver')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: GardenColors.error, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(dCtx, true),
+            child: const Text('Sí, cancelar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _cancellingWithdrawalId = transactionId);
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/wallet/withdraw/$transactionId/cancel'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadWallet();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Solicitud de retiro cancelada.'),
+              backgroundColor: GardenColors.success,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+        }
+      } else if (mounted) {
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'No se pudo cancelar la solicitud');
+      }
+    } catch (e) {
+      if (mounted) GardenErrorDialog.show(context, 'Error de conexión. Intenta de nuevo.');
+    } finally {
+      if (mounted) setState(() => _cancellingWithdrawalId = null);
     }
   }
 
@@ -1652,6 +1703,8 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
 
     final date = DateTime.tryParse(t['createdAt'] as String? ?? '');
     final dateStr = date != null ? '${date.day}/${date.month}/${date.year}' : '';
+    final canCancel = type == 'WITHDRAWAL' && isPending && t['id'] != null;
+    final isCancelling = canCancel && _cancellingWithdrawalId == t['id'];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1709,6 +1762,23 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                 style: TextStyle(color: subtextColor, fontSize: 10)),
             ],
           ),
+          if (canCancel) ...[
+            const SizedBox(width: 4),
+            isCancelling
+                ? const SizedBox(
+                    width: 20, height: 20,
+                    child: Padding(
+                      padding: EdgeInsets.all(2),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    color: subtextColor,
+                    tooltip: 'Cancelar solicitud',
+                    onPressed: () => _cancelWithdrawal(t['id'] as String),
+                  ),
+          ],
         ],
       ),
     );

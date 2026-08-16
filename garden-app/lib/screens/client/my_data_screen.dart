@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter/services.dart' show HapticFeedback, FilteringTextInputFormatter;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
@@ -33,6 +33,8 @@ class _MyDataScreenState extends State<MyDataScreen> {
   late TextEditingController _phoneCtrl;
   late TextEditingController _addressCtrl;
   late TextEditingController _bioCtrl;
+  late TextEditingController _nitCtrl;
+  late TextEditingController _nitRazonSocialCtrl;
   DateTime? _dateOfBirth;
 
   // Dirección detallada
@@ -60,6 +62,8 @@ class _MyDataScreenState extends State<MyDataScreen> {
     _phoneCtrl = TextEditingController();
     _addressCtrl = TextEditingController();
     _bioCtrl = TextEditingController();
+    _nitCtrl = TextEditingController();
+    _nitRazonSocialCtrl = TextEditingController();
     _streetCtrl = TextEditingController();
     _numberCtrl = TextEditingController();
     _apartmentCtrl = TextEditingController();
@@ -76,6 +80,8 @@ class _MyDataScreenState extends State<MyDataScreen> {
     _phoneCtrl.dispose();
     _addressCtrl.dispose();
     _bioCtrl.dispose();
+    _nitCtrl.dispose();
+    _nitRazonSocialCtrl.dispose();
     _streetCtrl.dispose();
     _numberCtrl.dispose();
     _apartmentCtrl.dispose();
@@ -123,8 +129,42 @@ class _MyDataScreenState extends State<MyDataScreen> {
           }
         });
       }
+      // NIT/Carnet vive en ClientProfile, no en User — /auth/me no lo trae,
+      // se carga aparte del mismo endpoint que usa payment_screen.dart.
+      final profileRes = await http.get(
+        Uri.parse('$_baseUrl/client/my-profile'),
+        headers: {'Authorization': 'Bearer $_token'},
+      );
+      final profileData = jsonDecode(profileRes.body);
+      if (profileData['success'] == true && profileData['data'] != null) {
+        final profile = profileData['data'] as Map<String, dynamic>;
+        setState(() {
+          _nitCtrl.text = profile['nit'] as String? ?? '';
+          _nitRazonSocialCtrl.text = profile['nitRazonSocial'] as String? ?? '';
+        });
+      }
     } catch (_) {}
     if (mounted) setState(() => _isLoading = false);
+  }
+
+  /// Guarda NIT/Carnet y razón social por separado — viven en ClientProfile
+  /// y se actualizan vía PATCH /api/client/profile (mismo endpoint que
+  /// payment_screen.dart usa al pagar), no vía PATCH /auth/me.
+  Future<bool> _saveBillingInfo() async {
+    try {
+      final res = await http.patch(
+        Uri.parse('$_baseUrl/client/profile'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'nit': _nitCtrl.text.trim(),
+          'nitRazonSocial': _nitRazonSocialCtrl.text.trim(),
+        }),
+      );
+      final data = jsonDecode(res.body);
+      return data['success'] == true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _pickAndUploadPhoto() async {
@@ -280,8 +320,12 @@ class _MyDataScreenState extends State<MyDataScreen> {
       final data = jsonDecode(res.body);
       if (!mounted) return;
       if (data['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Datos actualizados'), backgroundColor: GardenColors.success));
+        final billingOk = await _saveBillingInfo();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(billingOk ? 'Datos actualizados' : 'Datos actualizados (no se pudo guardar el NIT/Carnet, intenta de nuevo)'),
+          backgroundColor: billingOk ? GardenColors.success : GardenColors.warning,
+        ));
         Navigator.pop(context, true); // true = reload profile
       } else {
         throw Exception(data['error']?['message'] ?? 'Error al actualizar');
@@ -532,6 +576,36 @@ class _MyDataScreenState extends State<MyDataScreen> {
               decoration: fieldDeco('Una breve descripción de ti', Icons.description_outlined).copyWith(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
+            ),
+            const SizedBox(height: 20),
+
+            // NIT / Carnet — dato de facturación, vive en el perfil (no en
+            // cada reserva) para no tener que volver a escribirlo cada vez
+            // que se paga un servicio. Acepta tanto NIT como número de
+            // Carnet (CI) — ambos son válidos para emitir la factura.
+            Row(children: [
+              Icon(Icons.receipt_long_outlined, color: textColor, size: 16),
+              const SizedBox(width: 6),
+              Text('NIT o Carnet (facturación)', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+            ]),
+            const SizedBox(height: 4),
+            Text(
+              'Opcional. Puedes usar tu NIT o tu número de Carnet de Identidad — cualquiera de los dos sirve para tu factura. Se guarda acá y se pre-carga cada vez que pagues un servicio, pero puedes cambiarlo cuando quieras.',
+              style: TextStyle(color: subtextColor, fontSize: 11.5),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _nitCtrl,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              style: TextStyle(color: textColor),
+              decoration: fieldDeco('NIT o Carnet', Icons.badge_outlined),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _nitRazonSocialCtrl,
+              style: TextStyle(color: textColor),
+              decoration: fieldDeco('Razón social (opcional)', Icons.article_outlined),
             ),
             const SizedBox(height: 16),
 

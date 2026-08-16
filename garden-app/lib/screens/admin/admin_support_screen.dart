@@ -178,6 +178,8 @@ class _AdminSupportScreenState extends State<AdminSupportScreen> {
                                                 overflow: TextOverflow.ellipsis,
                                                 maxLines: 1,
                                               ),
+                                              const SizedBox(height: 4),
+                                              _StatusChip(status: t['status'] as String? ?? 'BOT'),
                                             ],
                                           ),
                                         ),
@@ -214,6 +216,27 @@ class _AdminSupportScreenState extends State<AdminSupportScreen> {
   }
 }
 
+/// Chip de estado del hilo — mismo vocabulario en toda la pantalla: bot
+/// atendiendo solo, necesita a un asesor, o ya se cerró el caso.
+class _StatusChip extends StatelessWidget {
+  final String status;
+  const _StatusChip({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = switch (status) {
+      'ESCALATED' => ('🧑‍💼 Necesita atención', const Color(0xFFE58A00)),
+      'RESOLVED' => ('✅ Resuelto', GardenColors.success),
+      _ => ('🌿 Bot atendiendo', GardenColors.primary),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+      child: Text(label, style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w700)),
+    );
+  }
+}
+
 class _ThreadDetail extends StatefulWidget {
   final String threadId;
   final String clientName;
@@ -242,6 +265,8 @@ class _ThreadDetailState extends State<_ThreadDetail> {
   List<Map<String, dynamic>> _messages = [];
   bool _loading = true;
   bool _sending = false;
+  bool _resolving = false;
+  String _status = 'BOT';
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
 
@@ -279,7 +304,10 @@ class _ThreadDetailState extends State<_ThreadDetail> {
       );
       final data = jsonDecode(res.body);
       if (mounted && data['success'] == true) {
-        setState(() => _messages = (data['data']['messages'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList());
+        setState(() {
+          _messages = (data['data']['messages'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          _status = data['data']['status'] as String? ?? 'BOT';
+        });
         WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
       }
       // Marcar como leído — no bloquea la UI si falla.
@@ -334,6 +362,43 @@ class _ThreadDetailState extends State<_ThreadDetail> {
     }
   }
 
+  /// Cierra el caso — recién acá el cliente "empieza de cero" en su próximo
+  /// mensaje. Hasta entonces, aunque el admin no toque nada más, la
+  /// conversación sigue completa y visible de su lado (puede haber
+  /// diligencias pendientes).
+  Future<void> _resolve() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Marcar como resuelto?'),
+        content: const Text('El cliente va a ver esta conversación completa hasta que la resuelvas. Después de esto, su próximo mensaje empieza un caso nuevo.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Marcar como resuelto')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _resolving = true);
+    try {
+      final res = await http.post(
+        Uri.parse('${widget.baseUrl}/admin/support/threads/${widget.threadId}/resolve'),
+        headers: {'Authorization': 'Bearer ${widget.adminToken}'},
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] == true && mounted) {
+        setState(() => _status = 'RESOLVED');
+        widget.onSent();
+      } else if (mounted) {
+        GardenErrorDialog.show(context, 'No se pudo marcar como resuelto. Intenta de nuevo.');
+      }
+    } catch (e) {
+      if (mounted) GardenErrorDialog.show(context, 'Error de conexión. Intenta de nuevo.');
+    } finally {
+      if (mounted) setState(() => _resolving = false);
+    }
+  }
+
   @override
   void dispose() {
     widget.incomingMessage.removeListener(_onIncomingMessage);
@@ -362,7 +427,24 @@ class _ThreadDetailState extends State<_ThreadDetail> {
               children: [
                 GardenAvatar(imageUrl: widget.clientPhoto, size: 36),
                 const SizedBox(width: 12),
-                Text(widget.clientName, style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w700)),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.clientName, style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 3),
+                      _StatusChip(status: _status),
+                    ],
+                  ),
+                ),
+                if (_status != 'RESOLVED')
+                  TextButton.icon(
+                    onPressed: _resolving ? null : _resolve,
+                    icon: _resolving
+                        ? const SizedBox(width: 14, height: 14, child: GardenLoadingIndicator(size: 14))
+                        : const Icon(Icons.check_circle_outline_rounded, size: 16),
+                    label: const Text('Marcar resuelto', style: TextStyle(fontSize: 12.5)),
+                  ),
               ],
             ),
           ),
@@ -375,37 +457,51 @@ class _ThreadDetailState extends State<_ThreadDetail> {
                     itemCount: _messages.length,
                     itemBuilder: (_, i) {
                       final m = _messages[i];
-                      final isAdmin = m['senderRole'] == 'ADMIN';
+                      final role = m['senderRole'] as String? ?? 'CLIENT';
+                      final isAdmin = role == 'ADMIN';
+                      final isBot = role == 'BOT';
+                      final aligned = isAdmin || isBot; // "nuestro lado" de la conversación
                       final createdAt = DateTime.tryParse(m['createdAt'] as String? ?? '')?.toLocal();
                       final hh = createdAt == null ? '' : '${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}';
+                      final label = isBot ? '🌿 Asistente' : isAdmin ? '🧑‍💼 Vos' : null;
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
-                        child: Row(
-                          mainAxisAlignment: isAdmin ? MainAxisAlignment.end : MainAxisAlignment.start,
+                        child: Column(
+                          crossAxisAlignment: aligned ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                           children: [
-                            Flexible(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: isAdmin ? GardenColors.primary : surface,
-                                  borderRadius: BorderRadius.only(
-                                    topLeft: const Radius.circular(18),
-                                    topRight: const Radius.circular(18),
-                                    bottomLeft: Radius.circular(isAdmin ? 18 : 4),
-                                    bottomRight: Radius.circular(isAdmin ? 4 : 18),
-                                  ),
-                                  border: isAdmin ? null : Border.all(color: border),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(m['message'] as String? ?? '', style: TextStyle(color: isAdmin ? Colors.white : text, fontSize: 14, height: 1.35)),
-                                    const SizedBox(height: 3),
-                                    Text(hh, style: TextStyle(color: isAdmin ? Colors.white70 : text.withValues(alpha: 0.45), fontSize: 10)),
-                                  ],
-                                ),
+                            if (label != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 3),
+                                child: Text(label, style: TextStyle(color: subtext, fontSize: 10.5, fontWeight: FontWeight.w700)),
                               ),
+                            Row(
+                              mainAxisAlignment: aligned ? MainAxisAlignment.end : MainAxisAlignment.start,
+                              children: [
+                                Flexible(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: isAdmin ? GardenColors.primary : (isBot ? GardenColors.primary.withValues(alpha: 0.55) : surface),
+                                      borderRadius: BorderRadius.only(
+                                        topLeft: const Radius.circular(18),
+                                        topRight: const Radius.circular(18),
+                                        bottomLeft: Radius.circular(aligned ? 18 : 4),
+                                        bottomRight: Radius.circular(aligned ? 4 : 18),
+                                      ),
+                                      border: aligned ? null : Border.all(color: border),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(m['message'] as String? ?? '', style: TextStyle(color: aligned ? Colors.white : text, fontSize: 14, height: 1.35)),
+                                        const SizedBox(height: 3),
+                                        Text(hh, style: TextStyle(color: aligned ? Colors.white70 : text.withValues(alpha: 0.45), fontSize: 10)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),

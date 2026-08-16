@@ -1135,7 +1135,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ],
           ),
           const SizedBox(height: 4),
-          Text('Se usará para tu factura de este servicio. Si lo dejas vacío, se emitirá con NIT 0.',
+          Text('Se usará para tu factura de este servicio (NIT o Carnet, cualquiera sirve). Si lo dejas vacío, se emitirá con NIT 0. Puedes cambiar tu dato guardado en Mi Perfil.',
               style: TextStyle(color: subtextColor, fontSize: 11)),
           const SizedBox(height: 12),
           TextField(
@@ -1144,7 +1144,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             style: TextStyle(color: textColor, fontSize: 13),
             decoration: InputDecoration(
-              labelText: 'NIT',
+              labelText: 'NIT o Carnet',
               hintText: '0 (opcional)',
               hintStyle: TextStyle(color: subtextColor, fontSize: 12),
               labelStyle: TextStyle(color: subtextColor, fontSize: 12.5),

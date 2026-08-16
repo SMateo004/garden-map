@@ -1,13 +1,11 @@
-/// Chat de soporte cliente↔admin — reemplaza el enlace directo a WhatsApp
-/// del Centro de Ayuda (ver help_center_screen.dart).
+/// Chat de soporte cliente↔admin. Primera línea la atiende un bot (Claude,
+/// grounded en el centro de ayuda); si el caso se sale de lo que el bot
+/// puede resolver, escala a un admin humano — recién ahí, nunca antes.
 ///
 /// El hilo real vive completo en el backend para siempre (un solo
-/// SupportThread por cliente, ver comentario en prisma/schema.prisma), pero
-/// del lado del cliente la conversación "empieza de cero" cada vez que abre
-/// la app: [SupportChatSession.startedAt] es un DateTime en memoria (NO
-/// persistido en disco) calculado una sola vez por arranque del proceso —
-/// cerrar la app de verdad (no solo pasarla a segundo plano) lo reinicia
-/// solo, sin necesidad de ningún estado especial de "cierre".
+/// SupportThread por cliente, ver prisma/schema.prisma). Ya no "empieza de
+/// cero" al abrir la app: la conversación persiste hasta que un admin la
+/// marca resuelta desde su panel — eso es lo único que la reinicia.
 library;
 
 import 'dart:async';
@@ -16,18 +14,9 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 
-class SupportChatSession {
-  SupportChatSession._();
-  static DateTime? _startedAt;
-
-  /// La primera vez que se pide (por proceso), queda fijado — llamadas
-  /// posteriores devuelven siempre el mismo valor mientras la app siga viva.
-  static DateTime get startedAt => _startedAt ??= DateTime.now().toUtc();
-}
-
 class SupportChatMessage {
   final String id;
-  final String senderRole; // 'CLIENT' | 'ADMIN'
+  final String senderRole; // 'CLIENT' | 'BOT' | 'ADMIN'
   final String message;
   final DateTime createdAt;
 
@@ -51,6 +40,9 @@ class SupportChatService extends ChangeNotifier {
   List<SupportChatMessage> get messages => _messages;
   bool loading = true;
   bool sending = false;
+  /// 'BOT' | 'ESCALATED' | 'RESOLVED' — la UI usa esto para mostrar el
+  /// banner de "esperando a un asesor" cuando corresponde.
+  String status = 'BOT';
 
   SupportChatService({required String baseUrl, required String token}) : _baseUrl = baseUrl, _token = token;
 
@@ -61,9 +53,8 @@ class SupportChatService extends ChangeNotifier {
 
   Future<void> loadSession() async {
     try {
-      final since = SupportChatSession.startedAt.toIso8601String();
       final res = await http.get(
-        Uri.parse('$_baseUrl/support/chat?since=$since'),
+        Uri.parse('$_baseUrl/support/chat'),
         headers: {'Authorization': 'Bearer $_token'},
       );
       final data = jsonDecode(res.body);
@@ -71,6 +62,7 @@ class SupportChatService extends ChangeNotifier {
         _messages = (data['data']['messages'] as List)
             .map((m) => SupportChatMessage.fromJson(m as Map<String, dynamic>))
             .toList();
+        status = data['data']['status'] as String? ?? 'BOT';
       }
     } catch (e) {
       debugPrint('SupportChat: error cargando sesión: $e');
@@ -95,13 +87,17 @@ class SupportChatService extends ChangeNotifier {
         try {
           final raw = (data is List && data.isNotEmpty) ? data.first : data;
           final map = Map<String, dynamic>.from(raw as Map);
+          final senderRole = map['senderRole'] as String? ?? 'ADMIN';
           final msg = SupportChatMessage(
             id: 'live_${DateTime.now().microsecondsSinceEpoch}',
-            senderRole: 'ADMIN',
+            senderRole: senderRole,
             message: map['message'] as String,
             createdAt: DateTime.parse(map['createdAt'] as String).toLocal(),
           );
           _messages.add(msg);
+          // Un mensaje real de ADMIN en vivo significa que un asesor ya
+          // entró a la conversación.
+          if (senderRole == 'ADMIN') status = 'ESCALATED';
           notifyListeners();
         } catch (e) {
           debugPrint('SupportChat: error parseando respuesta del admin: $e');
@@ -127,7 +123,7 @@ class SupportChatService extends ChangeNotifier {
             headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
             body: jsonEncode({'message': trimmed}),
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 20));
       final data = jsonDecode(res.body);
       if (data['success'] == true) {
         _messages.add(SupportChatMessage(
@@ -136,6 +132,18 @@ class SupportChatService extends ChangeNotifier {
           message: trimmed,
           createdAt: DateTime.parse(data['data']['createdAt'] as String).toLocal(),
         ));
+        // La respuesta del bot (si respondió) viaja en el mismo POST — no
+        // hace falta esperar al socket para verla en la propia pantalla que
+        // acaba de mandar el mensaje.
+        final botMessageJson = data['data']['botMessage'] as Map<String, dynamic>?;
+        if (botMessageJson != null) {
+          _messages.add(SupportChatMessage(
+            id: botMessageJson['id'] as String,
+            senderRole: 'BOT',
+            message: botMessageJson['message'] as String,
+            createdAt: DateTime.parse(botMessageJson['createdAt'] as String).toLocal(),
+          ));
+        }
         return true;
       }
       return false;
