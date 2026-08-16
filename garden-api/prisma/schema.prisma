@@ -1327,16 +1327,39 @@ model ChatMessage {
 /// GET /support/chat?since=... en support-chat.routes.ts) — al cerrar la
 /// app y volver a entrar arranca "de cero" visualmente, pero en la base
 /// nunca se pierde nada: el admin sigue viendo todo.
+/// BOT: el agente de IA (Claude) responde solo, grounded en el centro de
+/// ayuda. ESCALATED: el bot decidió (o una regla dura lo forzó) que hace
+/// falta una persona — sigue respondiendo mientras nadie del equipo entró
+/// al hilo, pero ya quedó marcado para atención humana. RESOLVED: un admin
+/// lo cerró explícitamente — recién ahí el próximo mensaje del cliente
+/// arranca una conversación visualmente nueva (ver resolvedAt).
+enum SupportThreadStatus {
+  BOT
+  ESCALATED
+  RESOLVED
+}
+
 model SupportThread {
-  id                 String           @id @default(uuid())
-  userId             String           @unique
-  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                 String              @id @default(uuid())
+  userId             String              @unique
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages           SupportMessage[]
-  lastMessageAt      DateTime         @default(now())
-  lastMessagePreview String?          @db.VarChar(200)
+  lastMessageAt      DateTime            @default(now())
+  lastMessagePreview String?             @db.VarChar(200)
   /// Hay mensaje(s) del cliente que ningún admin marcó como leído todavía.
-  unreadByAdmin      Boolean          @default(false)
-  createdAt          DateTime         @default(now())
+  unreadByAdmin      Boolean             @default(false)
+  status             SupportThreadStatus @default(BOT)
+  /// Cuándo un admin entró de verdad al hilo tras la última escalación — el
+  /// bot deja de responder automáticamente en cuanto esto se setea (no se
+  /// pisa con la persona real). Se limpia cada vez que el hilo se reabre
+  /// después de RESOLVED.
+  adminJoinedAt      DateTime?
+  /// Cuándo un admin marcó el hilo como resuelto por última vez — el
+  /// cliente solo ve mensajes posteriores a esto (o todo, si nunca se
+  /// resolvió). Reemplaza el viejo "empieza de cero en cada apertura de la
+  /// app": ahora la conversación persiste hasta que un humano la cierra.
+  resolvedAt         DateTime?
+  createdAt          DateTime            @default(now())
 
   @@index([lastMessageAt])
   @@map("support_threads")
@@ -1346,8 +1369,8 @@ model SupportMessage {
   id           String        @id @default(uuid())
   threadId     String
   thread       SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  senderRole   String // 'CLIENT' | 'ADMIN'
-  /// Qué admin respondió — null en los mensajes del cliente.
+  senderRole   String // 'CLIENT' | 'BOT' | 'ADMIN'
+  /// Qué admin respondió — null en los mensajes del cliente y del bot.
   senderUserId String?
   message      String        @db.Text
   createdAt    DateTime      @default(now())

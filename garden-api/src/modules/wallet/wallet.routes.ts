@@ -7,6 +7,7 @@ import { track } from '../../shared/analytics.js';
 import { uploadImage } from '../../services/storage.service.js';
 import { assertImageBuffer } from '../../shared/mime-validation.js';
 import { validateBankInfo, persistBankInfo, isPhoneBasedBankType } from './bank-info.util.js';
+import { emitWalletUpdated } from '../../services/socket.service.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -351,7 +352,7 @@ router.post(
         title: '✅ Solicitud de retiro recibida',
         message:
           `Hemos recibido tu solicitud de retiro de Bs ${parsedAmount} a ${destinationSummary!}.\n\n` +
-          `El depósito se realizará en un plazo máximo de 5 días hábiles de forma completamente gratuita.\n\n` +
+          `El depósito se realizará en un plazo de 1-3 días hábiles de forma completamente gratuita.\n\n` +
           `Cuando el depósito sea confirmado, te lo notificaremos aquí. ¡Gracias por confiar en Garden!`,
         type: 'SYSTEM',
       },
@@ -369,6 +370,44 @@ router.post(
     });
   })
 );
+
+// ──────────────────────────────────────────────────────────────────────────────
+// POST /api/wallet/withdraw/:id/cancel — el propio usuario cancela su retiro
+// mientras siga PENDING. Una vez que un admin lo pasa a PROCESSING ya no se
+// puede autocancelar (evita pisar un pago que el admin ya empezó a hacer a
+// mano) — a partir de ahí solo un admin puede rechazarlo.
+// ──────────────────────────────────────────────────────────────────────────────
+router.post('/withdraw/:id/cancel', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
+  const userId = (req as any).user.userId;
+  const { id } = req.params;
+
+  const tx = await prisma.walletTransaction.findUnique({ where: { id } });
+  if (!tx || tx.type !== 'WITHDRAWAL' || tx.userId !== userId) {
+    return res.status(404).json({ success: false, error: { message: 'Solicitud no encontrada' } });
+  }
+  if (tx.status !== 'PENDING') {
+    return res.status(409).json({
+      success: false,
+      error: {
+        message: 'Esta solicitud ya está en proceso y no se puede cancelar. Contacta a soporte si necesitas ayuda.',
+        code: 'INVALID_STATUS_TRANSITION',
+      },
+    });
+  }
+
+  // Balance nunca se descuenta hasta que un admin completa el retiro (ver
+  // completeWithdrawal en admin.controller.ts) — así que cancelar acá es solo
+  // un cambio de estado, no requiere devolver saldo.
+  await prisma.walletTransaction.update({
+    where: { id },
+    data: { status: 'CANCELLED' },
+  });
+
+  track(userId, 'withdrawal_cancelled', { transactionId: id, amount: Number(tx.amount) });
+  emitWalletUpdated(userId);
+
+  res.json({ success: true, data: { status: 'CANCELLED' } });
+}));
 
 // ──────────────────────────────────────────────────────────────────────────────
 // POST /api/wallet/redeem — canjear código de regalo (CLIENT o CAREGIVER)

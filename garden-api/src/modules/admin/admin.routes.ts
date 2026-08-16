@@ -25,6 +25,7 @@ router.get('/support/threads', supportChatController.listThreads);
 router.get('/support/threads/:threadId/messages', supportChatController.getThreadMessages);
 router.post('/support/threads/:threadId/reply', supportChatController.reply);
 router.post('/support/threads/:threadId/read', supportChatController.markRead);
+router.post('/support/threads/:threadId/resolve', supportChatController.resolve);
 
 /** Libro contable / finanzas — reporte gerencial mensual para socios. */
 router.get('/ledger/accounts', ledgerController.getAccounts);
