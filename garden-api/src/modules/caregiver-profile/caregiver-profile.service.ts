@@ -15,6 +15,7 @@ import type { PatchCaregiverProfileBody, PatchAvailabilityBody } from './caregiv
 import {
   getMissingRequiredFieldsForSubmit,
   validateEmergencyContacts,
+  SHIRT_SIZES,
   type RequiredSubmitField,
 } from './caregiver-profile.validation.js';
 import logger from '../../shared/logger.js';
@@ -277,6 +278,14 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.termsAccepted !== undefined) updateData.termsAccepted = body.termsAccepted;
   if (body.privacyAccepted !== undefined) updateData.privacyAccepted = body.privacyAccepted;
   if (body.verificationAccepted !== undefined) updateData.verificationAccepted = body.verificationAccepted;
+  // Camino genérico de aceptación del contrato — usado por los flujos de
+  // registro profesional/empresa (professional_register_screen.dart,
+  // company_register_screen.dart), que terminan con un PATCH en vez de
+  // pasar por POST /caregiver/submit (ese endpoint solo lo usa el wizard
+  // individual). Solo permite SETEAR la aceptación, nunca desmarcarla.
+  if ((body as any).contractAccepted === true) {
+    updateData.contractAcceptedAt = new Date();
+  }
   if (body.photos !== undefined) updateData.photos = ensureAbsoluteUrls(body.photos);
   if ((body as any).walkerPhotos !== undefined) (updateData as any).walkerPhotos = ensureAbsoluteUrls((body as any).walkerPhotos);
   if ((body as any).caregiverPhotos !== undefined) (updateData as any).caregiverPhotos = ensureAbsoluteUrls((body as any).caregiverPhotos);
@@ -306,6 +315,13 @@ export async function patchProfile(userId: string, body: PatchCaregiverProfileBo
   if (body.sizesAccepted !== undefined) {
     updateData.sizesAccepted = { set: body.sizesAccepted as string[] };
     logger.info('patchProfile: saving sizesAccepted', { userId, sizesAccepted: body.sizesAccepted });
+  }
+  if ((body as any).shirtSize !== undefined) {
+    const shirtSize = (body as any).shirtSize;
+    if (shirtSize !== null && !SHIRT_SIZES.includes(shirtSize)) {
+      throw new BadRequestError(`Talla inválida. Debe ser una de: ${SHIRT_SIZES.join(', ')}`, 'INVALID_SHIRT_SIZE');
+    }
+    updateData.shirtSize = shirtSize;
   }
   if (body.noAcceptBreeds !== undefined) updateData.noAcceptBreeds = body.noAcceptBreeds;
   if (body.breedsWhy !== undefined) updateData.breedsWhy = body.breedsWhy;
@@ -487,6 +503,7 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
       handleAnxious: 'manejo de mascotas ansiosas (paso 7)',
       emergencyResponse: 'respuesta a emergencias (paso 7)',
       sizesAccepted: 'tamaños de mascotas aceptados (paso 7)',
+      shirtSize: 'talla de tu kit de bienvenida (paso 7)',
     };
     const labels = missing.map(f => fieldLabels[f] ?? f);
     const message = `Faltan completar: ${labels.join(', ')}`;
@@ -507,6 +524,10 @@ export async function submitProfile(userId: string): Promise<{ success: true; me
         termsAccepted: true,
         privacyAccepted: true,
         verificationAccepted: true,
+        // El controller ya exigió contractAccepted===true en el body antes de
+        // llegar acá (ver caregiver-profile.controller.ts submit) — este
+        // timestamp es el registro persistente de esa aceptación.
+        contractAcceptedAt: new Date(),
       } as any,
     });
 

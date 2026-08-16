@@ -39,17 +39,31 @@ export const patchProfile = asyncHandler(async (req: Request, res: Response) => 
 });
 
 /** POST /api/caregiver/submit - Enviar solicitud (campos obligatorios, status → PENDING_REVIEW).
- *  Body: { termsAccepted: true, privacyAccepted: true, verificationAccepted: true }
+ *  Body: { termsAccepted: true, privacyAccepted: true, verificationAccepted: true, contractAccepted: true }
  */
 export const submit = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { termsAccepted, privacyAccepted, verificationAccepted } = req.body ?? {};
+  const { termsAccepted, privacyAccepted, verificationAccepted, contractAccepted } = req.body ?? {};
   if (termsAccepted !== true || privacyAccepted !== true || verificationAccepted !== true) {
     return res.status(400).json({
       success: false,
       error: {
         code: 'CONSENT_REQUIRED',
         message: 'Debes aceptar los términos de servicio, la política de privacidad y la verificación de identidad para enviar tu perfil.',
+      },
+    });
+  }
+  // Contrato del cuidador — paso obligatorio y separado de los checkboxes de
+  // arriba: el cliente solo manda contractAccepted=true después de que el
+  // usuario scrolleó el contrato completo en pantalla (ver _buildStep10 en
+  // onboarding_wizard_screen.dart). Sin este gate, un cuidador podía terminar
+  // el registro sin haber visto el contrato ni una sola vez.
+  if (contractAccepted !== true) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: 'CONTRACT_REQUIRED',
+        message: 'Debes leer y aceptar el contrato de cuidador para enviar tu perfil.',
       },
     });
   }

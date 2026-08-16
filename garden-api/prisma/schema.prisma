@@ -205,6 +205,14 @@ model CaregiverProfile {
   privacyAccepted                 Boolean?
   verificationAccepted            Boolean?
   termsAcceptedAt                 DateTime?
+  /// Contrato de cuidador (obligaciones, código de conducta, comisión, kit,
+  /// etc.) — se muestra como último paso del registro y exige scroll hasta
+  /// el final antes de habilitar "Acepto". Ver caregiver-contract.content.ts.
+  contractAcceptedAt              DateTime?
+  /// Talla de la polera y gorra del kit de bienvenida (XS-XXL) — se pide una
+  /// sola vez en el paso "Perfil profesional" del registro. Se le muestra al
+  /// admin para coordinar el envío (1-3 días hábiles a domicilio).
+  shirtSize                       String?                     @db.VarChar(4)
   experienceYears                 Int?
   ownPets                         Boolean?
   currentPetsDetails              Json?

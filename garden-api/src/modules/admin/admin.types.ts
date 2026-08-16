@@ -150,6 +150,8 @@ export interface AdminCaregiverDetailDto {
   privacyAccepted: boolean | null;
   verificationAccepted: boolean | null;
   termsAcceptedAt: string | null;
+  /// Contrato de cuidador — timestamp de aceptación (scroll-to-accept al final del registro).
+  contractAcceptedAt: string | null;
 
   // --- Experiencia ---
   experienceYears: number | null;
@@ -167,6 +169,8 @@ export interface AdminCaregiverDetailDto {
   acceptPuppies: boolean | null;
   acceptSeniors: boolean | null;
   sizesAccepted: string[];
+  /// Talla de la polera/gorra del kit de bienvenida (XS-XXL).
+  shirtSize: string | null;
   noAcceptBreeds: boolean | null;
   breedsWhy: string | null;
 

@@ -24,6 +24,9 @@ import {
 const MIN_TEXT_DRAFT = 5;
 const MIN_BIO = 50;
 
+/** Tallas válidas para la polera/gorra del kit de bienvenida. */
+export const SHIRT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'] as const;
+
 // --- PATCH: actualización parcial (todos los campos opcionales) ---
 
 export const patchCaregiverProfileSchema = z.record(z.any()).optional();
@@ -45,6 +48,8 @@ export interface PatchCaregiverProfileBody {
   termsAccepted?: boolean;
   privacyAccepted?: boolean;
   verificationAccepted?: boolean;
+  /** Solo permite setear a true — ver patchProfile en caregiver-profile.service.ts. */
+  contractAccepted?: boolean;
   photos?: string[];
   profilePhoto?: string | null;
   experienceYears?: any;
@@ -89,6 +94,8 @@ export interface PatchCaregiverProfileBody {
   onboardingStatus?: any;
   serviceDetails?: any;
   emergencyContacts?: Array<{ name?: string; phone?: string }>;
+  /** Talla de la polera/gorra del kit de bienvenida (XS/S/M/L/XL/XXL). */
+  shirtSize?: string;
 }
 
 // --- Contactos de emergencia: exactamente 3, cada uno con nombre y teléfono boliviano válido ---
@@ -140,6 +147,7 @@ const REQUIRED_FIELDS_FOR_SUBMIT = [
   'handleAnxious',
   'emergencyResponse',
   'sizesAccepted',
+  'shirtSize',
 ] as const;
 
 export type RequiredSubmitField = (typeof REQUIRED_FIELDS_FOR_SUBMIT)[number];
@@ -185,6 +193,7 @@ export function getMissingRequiredFieldsForSubmit(profile: any): RequiredSubmitF
   // Paso 6 (Perfil profesional)
   if (profile.experienceYears === null || profile.experienceYears === undefined) missing.push('experienceYears');
   if (!Array.isArray(profile.sizesAccepted) || profile.sizesAccepted.length === 0) missing.push('sizesAccepted');
+  if (!SHIRT_SIZES.includes(profile.shirtSize)) missing.push('shirtSize');
 
   // Campos de experiencia: solo requeridos si NO es amateur (experienceYears > 0)
   const isAmateur = profile.isAmateur === true || profile.experienceYears === 0;
