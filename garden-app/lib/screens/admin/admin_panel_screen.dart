@@ -3455,6 +3455,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       ('Procesando', 'PROCESSING'),
       ('Completados', 'COMPLETED'),
       ('Rechazados', 'REJECTED'),
+      // El usuario puede autocancelar su propio retiro (ver POST
+      // /wallet/withdraw/:id/cancel) — sin este tab, esos quedaban invisibles
+      // para el admin: no aparecían en ningún filtro existente.
+      ('Cancelados', 'CANCELLED'),
     ];
 
     return Column(
@@ -3634,15 +3638,21 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                 ),
                                 const SizedBox(width: 8),
                               ],
-                              Expanded(
-                                child: GardenButton(
-                                  label: 'Rechazar',
-                                  height: 38,
-                                  color: GardenColors.error,
-                                  outline: true,
-                                  onPressed: () => _rejectWithdrawal(w['id'] as String),
+                              // Rechazar solo tiene sentido en PENDING/PROCESSING — el backend
+                              // ya lo rechaza con 409 fuera de esos estados, pero mostrar el
+                              // botón en Completados/Rechazados/Cancelados (agregado junto con
+                              // el autocancelar del usuario) solo invita a un click que
+                              // siempre va a fallar.
+                              if (isPending || status == 'PROCESSING')
+                                Expanded(
+                                  child: GardenButton(
+                                    label: 'Rechazar',
+                                    height: 38,
+                                    color: GardenColors.error,
+                                    outline: true,
+                                    onPressed: () => _rejectWithdrawal(w['id'] as String),
+                                  ),
                                 ),
-                              ),
                             ],
                           ),
                         ],

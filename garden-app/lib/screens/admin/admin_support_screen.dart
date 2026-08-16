@@ -344,12 +344,19 @@ class _ThreadDetailState extends State<_ThreadDetail> {
       final data = jsonDecode(res.body);
       if (data['success'] == true) {
         _controller.clear();
-        setState(() => _messages.add({
-              'id': data['data']['id'],
-              'senderRole': 'ADMIN',
-              'message': text,
-              'createdAt': data['data']['createdAt'],
-            }));
+        setState(() {
+          _messages.add({
+            'id': data['data']['id'],
+            'senderRole': 'ADMIN',
+            'message': text,
+            'createdAt': data['data']['createdAt'],
+          });
+          // El backend escala a ESCALATED en cuanto un admin responde (salvo
+          // que ya esté RESOLVED) — sin esto, si el admin le escribe a un
+          // hilo que seguía en 'BOT' (todavía no había escalado), el chip
+          // se quedaba mostrando "Bot atendiendo" hasta el próximo refresh.
+          if (_status != 'RESOLVED') _status = 'ESCALATED';
+        });
         widget.onSent();
         WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
       } else if (mounted) {

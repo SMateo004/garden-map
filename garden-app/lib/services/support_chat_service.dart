@@ -132,6 +132,11 @@ class SupportChatService extends ChangeNotifier {
           message: trimmed,
           createdAt: DateTime.parse(data['data']['createdAt'] as String).toLocal(),
         ));
+        // Sin esto, el header seguía diciendo "el asistente te responde al
+        // instante" hasta que un admin de verdad escribía — aunque el bot ya
+        // hubiera decidido escalar en esta misma respuesta.
+        final newStatus = data['data']['status'] as String?;
+        if (newStatus != null) status = newStatus;
         // La respuesta del bot (si respondió) viaja en el mismo POST — no
         // hace falta esperar al socket para verla en la propia pantalla que
         // acaba de mandar el mensaje.
