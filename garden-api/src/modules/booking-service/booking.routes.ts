@@ -214,6 +214,14 @@ router.post(
   serviceExecutionController.start
 );
 
+/** POST /api/bookings/:id/en-route — cuidador marca que salió hacia el servicio (los 3 tipos, antes de iniciar). */
+router.post(
+  '/:id/en-route',
+  authMiddleware,
+  requireRole('CAREGIVER'),
+  serviceExecutionController.enRoute
+);
+
 /** POST /api/bookings/:id/arrive — cuidador marca que llegó al punto de encuentro (solo PASEO, antes de iniciar). */
 router.post(
   '/:id/arrive',

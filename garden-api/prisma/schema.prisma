@@ -472,6 +472,11 @@ model Booking {
   serviceEndedAt             DateTime?
   serviceStartPhoto          String?
   serviceEndPhoto            String?
+  /// Momento en que el cuidador marca que salió hacia el punto de encuentro
+  /// (Paseo) o hacia el domicilio del dueño (Hospedaje/Guardería) — paso
+  /// opcional y previo a arrivedAt/serviceStartedAt, solo informativo para
+  /// el dueño. Aplica a los 3 tipos de servicio; nunca alimenta calcOvertimeMinutes.
+  enRouteAt                  DateTime?
   /// Momento en que el cuidador de un Paseo llega al punto de encuentro —
   /// paso previo y separado de serviceStartedAt (que marca el inicio real
   /// del paseo/cobro). Solo se usa en PASEO; nunca alimenta calcOvertimeMinutes.

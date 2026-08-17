@@ -484,6 +484,31 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   bool get _conversationBlocked => _iBlockedThem || _theyBlockedMe || _sendBlockedByServer;
 
+  /// Plantillas de coordinación contextuales según quién está escribiendo y en
+  /// qué momento del booking — para no tener que tipear a mano lo mismo que
+  /// escribe casi todo el mundo antes/durante el servicio. Vacío fuera de
+  /// CONFIRMED/IN_PROGRESS (antes de aceptar o después de terminar no aplican).
+  List<String> get _quickReplies {
+    final status = widget.bookingStatus;
+    final isCaregiver = widget.role == 'CAREGIVER';
+    if (status == 'CONFIRMED') {
+      return isCaregiver
+          ? const ['Ya salí 🚗', 'Llego en 5 min', '¿Dónde te espero?']
+          : const ['¿Ya saliste?', 'Te espero en la puerta', 'Avisé al portero'];
+    }
+    if (status == 'IN_PROGRESS') {
+      return isCaregiver
+          ? const ['Todo bien 👍', 'Ya casi terminamos', 'Está tranquilo/a']
+          : const ['¡Gracias por la foto!', '¿Todo bien?'];
+    }
+    return const [];
+  }
+
+  void _sendQuickReply(String text) {
+    _messageController.text = text;
+    _sendMessage();
+  }
+
   Future<void> _confirmBlockUser() async {
     if (_otherPersonId == null) return;
     final confirmed = await showDialog<bool>(
@@ -895,7 +920,41 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       color: surface,
                       border: Border(top: BorderSide(color: borderColor)),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_quickReplies.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: SizedBox(
+                              height: 34,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: _quickReplies.length,
+                                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                                itemBuilder: (_, i) {
+                                  final reply = _quickReplies[i];
+                                  return GestureDetector(
+                                    onTap: () => _sendQuickReply(reply),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: GardenColors.primary.withValues(alpha: 0.08),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(color: GardenColors.primary.withValues(alpha: 0.25)),
+                                      ),
+                                      child: Text(
+                                        reply,
+                                        style: const TextStyle(color: GardenColors.primary, fontSize: 12.5, fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        Row(
                       children: [
                         Expanded(
                           child: TextField(
@@ -930,6 +989,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                             child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
                           ),
                         ),
+                      ],
+                    ),
                       ],
                     ),
                   ),

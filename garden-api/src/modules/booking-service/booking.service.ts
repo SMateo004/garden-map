@@ -3630,6 +3630,45 @@ export async function startService(bookingId: string, caregiverUserId: string, p
   });
 }
 
+/** Cuidador marca que salió hacia el punto de encuentro/domicilio del dueño —
+ * los 3 tipos de servicio, solo antes de iniciar (CONFIRMED). Paso opcional,
+ * previo a arrivedAt/startService: no toca ningún campo que alimente
+ * calcOvertimeMinutes. Idempotente — si ya estaba marcado, no reenvía la
+ * notificación al dueño. */
+export async function markEnRoute(bookingId: string, caregiverUserId: string): Promise<BookingCreateResult> {
+  return prisma.$transaction(async (tx) => {
+    const profile = await tx.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
+    if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
+
+    const booking = await tx.booking.findFirst({ where: { id: bookingId, caregiverId: profile.id } });
+    if (!booking) throw new BookingNotFoundError(bookingId);
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new BadRequestError('Solo puedes avisar que vas en camino antes de iniciar el servicio');
+    }
+
+    if (booking.enRouteAt) {
+      return bookingToResponse(booking);
+    }
+
+    const updated = await tx.booking.update({
+      where: { id: bookingId },
+      data: { enRouteAt: new Date() },
+    });
+
+    await tx.notification.create({
+      data: {
+        userId: booking.clientId,
+        title: '🚗 Tu cuidador va en camino',
+        message: `El cuidador está en camino para el servicio de ${booking.petName}.`,
+        type: 'SYSTEM',
+      },
+    });
+    sendPushToUser(booking.clientId, '🚗 Tu cuidador va en camino', `Está en camino para el servicio de ${booking.petName}.`, { type: 'SERVICE_EN_ROUTE', bookingId }).catch(() => {});
+
+    return bookingToResponse(updated);
+  });
+}
+
 /** Cuidador marca que llegó al punto de encuentro — solo PASEO, solo antes de
  * iniciar (CONFIRMED). Paso previo y separado de startService: no toca
  * serviceStartedAt ni ningún campo que alimente calcOvertimeMinutes, así que
@@ -3815,6 +3854,27 @@ export async function addServiceEvent(
     }
 
     logger.info('Incident reported — admin notified urgently, client notified calmly, service timer paused', { bookingId, clientId: booking.clientId });
+  }
+
+  // Check-in de tranquilidad para Hospedaje/Guardería: a diferencia de Paseo
+  // (que tiene GPS en vivo), acá la única señal de "mi cuidador está con mi
+  // mascota ahora" son las fotos que sube durante el servicio — se avisa al
+  // dueño cada vez que llega una, sin campos nuevos en el schema.
+  if (type === 'PHOTO' && booking.serviceType !== ServiceType.PASEO) {
+    await prisma.notification.create({
+      data: {
+        userId: booking.clientId,
+        title: `📸 Novedades de ${booking.petName ?? 'tu mascota'}`,
+        message: 'Tu cuidador subió una foto nueva durante el servicio — está con tu mascota ahora.',
+        type: 'SYSTEM',
+      },
+    });
+    sendPushToUser(
+      booking.clientId,
+      `📸 Novedades de ${booking.petName ?? 'tu mascota'}`,
+      'Tu cuidador subió una foto nueva — abre la app para verla.',
+      { type: 'SERVICE_CHECKIN_PHOTO', bookingId }
+    ).catch(() => {});
   }
 
   if (type === 'INCIDENT_RESOLVED') {

@@ -39,6 +39,8 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   bool _isLoading = true;
   bool _isProcessing = false;
   bool _isMarkingArrived = false;
+  bool _isMarkingEnRoute = false;
+  bool _skipEnRoute = false;
   // Humor elegido por el cuidador en la hoja de "¿Finalizar servicio?" —
   // se manda junto con /conclude para el reporte del servicio.
   String? _selectedMood;
@@ -1134,6 +1136,37 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         ),
         child: Builder(
           builder: (context) {
+            // Los 3 tipos: paso opcional antes de "Ya llegué"/"Iniciar" —
+            // avisa al dueño que el cuidador ya salió. No bloquea nada, solo
+            // se oculta una vez tocado (ver _markEnRoute).
+            if (!_hasEnRoute && !_skipEnRoute) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GardenButton(
+                    label: _isMarkingEnRoute ? 'Avisando...' : '🚗  Voy en camino',
+                    loading: _isMarkingEnRoute,
+                    outline: true,
+                    color: GardenColors.primary,
+                    onPressed: _isMarkingEnRoute ? null : _markEnRoute,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Avisale al dueño que ya saliste hacia el servicio (opcional).',
+                    style: TextStyle(color: subtextColor, fontSize: 11),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: () => setState(() => _skipEnRoute = true),
+                    child: Text('Omitir', style: TextStyle(color: subtextColor, fontSize: 12)),
+                  ),
+                ],
+              );
+            }
+
             // Paseo: antes de poder iniciar, el cuidador debe marcar que
             // llegó al punto de encuentro — paso propio, no afecta el cobro
             // (ver _markArrived). El resto de la lógica de bloqueo (ventana
@@ -2104,39 +2137,50 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
 
                   const SizedBox(height: 20),
 
-                  // Status card
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: (isPaseo && _hasArrived ? GardenColors.success : GardenColors.primary).withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: (isPaseo && _hasArrived ? GardenColors.success : GardenColors.primary).withValues(alpha: 0.18)),
-                    ),
-                    child: Row(
-                      children: [
-                        _PulsingDot(color: isPaseo && _hasArrived ? GardenColors.success : GardenColors.primary),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                isPaseo && _hasArrived ? '¡Tu cuidador llegó!' : 'Esperando inicio del servicio',
-                                style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                isPaseo && _hasArrived
-                                    ? 'Está en tu domicilio y va a iniciar el paseo en breve.'
-                                    : 'Tu cuidador iniciará el servicio cuando llegue. Recibirás una notificación.',
-                                style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4),
-                              ),
-                            ],
+                  // Status card — 3 estados posibles antes de iniciar: esperando,
+                  // en camino (enRouteAt, los 3 tipos) o llegó (arrivedAt, solo Paseo).
+                  () {
+                    final Color statusColor;
+                    final String statusTitle;
+                    final String statusSubtitle;
+                    if (isPaseo && _hasArrived) {
+                      statusColor = GardenColors.success;
+                      statusTitle = '¡Tu cuidador llegó!';
+                      statusSubtitle = 'Está en tu domicilio y va a iniciar el paseo en breve.';
+                    } else if (_hasEnRoute) {
+                      statusColor = GardenColors.secondary;
+                      statusTitle = 'Tu cuidador va en camino';
+                      statusSubtitle = 'Está en camino hacia tu domicilio. Recibirás una notificación cuando llegue.';
+                    } else {
+                      statusColor = GardenColors.primary;
+                      statusTitle = 'Esperando inicio del servicio';
+                      statusSubtitle = 'Tu cuidador iniciará el servicio cuando llegue. Recibirás una notificación.';
+                    }
+                    return Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: statusColor.withValues(alpha: 0.18)),
+                      ),
+                      child: Row(
+                        children: [
+                          _PulsingDot(color: statusColor),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(statusTitle, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
+                                const SizedBox(height: 3),
+                                Text(statusSubtitle, style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4)),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
+                        ],
+                      ),
+                    );
+                  }(),
 
                   const SizedBox(height: 20),
 
@@ -4268,6 +4312,33 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   }
 
   // --- LOGICA DE ACCIONES ---
+
+  /// Los 3 tipos de servicio: el cuidador avisa que salió hacia el servicio,
+  /// paso opcional y previo a "Ya llegué"/"Iniciar" — no toca serviceStartedAt
+  /// ni el cobro, solo avisa al dueño.
+  bool get _hasEnRoute => _booking?['enRouteAt'] != null;
+
+  Future<void> _markEnRoute() async {
+    if (_isMarkingEnRoute) return;
+    setState(() => _isMarkingEnRoute = true);
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/en-route'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadBooking();
+      } else {
+        throw Exception(data['error']?['message'] ?? 'No se pudo avisar que vas en camino');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _isMarkingEnRoute = false);
+    }
+  }
 
   /// Solo PASEO: el cuidador marca que llegó al punto de encuentro, un paso
   /// separado y previo a "Iniciar paseo" — no toca serviceStartedAt ni el

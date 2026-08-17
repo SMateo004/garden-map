@@ -32,6 +32,15 @@ export const start = asyncHandler(async (req: Request, res: Response) => {
     res.json({ success: true, data: booking });
 });
 
+/** POST /api/bookings/:id/en-route — cuidador marca que salió hacia el servicio (los 3 tipos, antes de iniciar). */
+export const enRoute = asyncHandler(async (req: Request, res: Response) => {
+    const bookingId = req.params.id!;
+    const caregiverUserId = req.user!.userId;
+
+    const booking = await bookingService.markEnRoute(bookingId, caregiverUserId);
+    res.json({ success: true, data: booking });
+});
+
 /** POST /api/bookings/:id/arrive — cuidador marca que llegó (solo PASEO, antes de iniciar). */
 export const arrive = asyncHandler(async (req: Request, res: Response) => {
     const bookingId = req.params.id!;
