@@ -1114,16 +1114,20 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                       ),
                     ),
                   ],
-                  // "Reservar de nuevo" — quick win: precarga el mismo
-                  // cuidador/servicio, sin repetir fecha/mascotas (esas se
-                  // eligen frescas, booking_screen.dart las auto-carga con
-                  // solo caregiverId+serviceType).
+                  // "Reservar de nuevo" — precarga el mismo cuidador,
+                  // servicio Y mascota (la misma que se usó en esta reserva,
+                  // no la primera del cliente por defecto) — fecha/hora se
+                  // eligen frescas, eso sí, booking_screen.dart las auto-carga
+                  // con caregiverId+serviceType+petId.
                   if (status == 'COMPLETED' && booking['caregiverId'] != null) ...[
                     const SizedBox(height: 8),
                     OutlinedButton.icon(
                       onPressed: () => context.push(
                         '/booking/${booking['caregiverId']}',
-                        extra: {'serviceType': booking['serviceType']},
+                        extra: {
+                          'serviceType': booking['serviceType'],
+                          if (booking['petId'] != null) 'petId': booking['petId'],
+                        },
                       ),
                       icon: const Icon(Icons.replay_rounded, size: 16),
                       label: const Text('Reservar de nuevo', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),

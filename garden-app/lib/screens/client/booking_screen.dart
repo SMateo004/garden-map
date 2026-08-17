@@ -15,6 +15,11 @@ class BookingScreen extends StatefulWidget {
   final List<dynamic>? preloadedPets;
   final String? preloadedToken;
   final String? preloadedService; // 'PASEO' | 'HOSPEDAJE' — pre-selected from profile screen
+  /// Mascota a preseleccionar — viene de "Reservar de nuevo" en Mis Reservas,
+  /// para repetir la misma mascota de esa reserva en vez de caer siempre en
+  /// la primera del cliente. Si no está entre las mascotas actuales del
+  /// cliente (o vino null), se usa el fallback de siempre (_pets.first).
+  final String? preloadedPetId;
 
   const BookingScreen({
     super.key,
@@ -23,6 +28,7 @@ class BookingScreen extends StatefulWidget {
     this.preloadedPets,
     this.preloadedToken,
     this.preloadedService,
+    this.preloadedPetId,
   });
 
   @override
@@ -35,6 +41,18 @@ class _BookingScreenState extends State<BookingScreen> {
   bool _isLoading = true;
   String _clientToken = '';
   String get _baseUrl => const String.fromEnvironment('API_URL', defaultValue: 'https://api.gardenbo.com/api');
+
+  /// Mascota con la que arranca preseleccionada la reserva: la de
+  /// widget.preloadedPetId ("Reservar de nuevo") si todavía existe entre las
+  /// mascotas del cliente, si no la primera de la lista (comportamiento de
+  /// siempre). _pets debe tener al menos un elemento al llamar esto.
+  String _pickInitialPetId() {
+    final preloaded = widget.preloadedPetId;
+    if (preloaded != null && _pets.any((p) => p['id'] == preloaded)) {
+      return preloaded;
+    }
+    return _pets.first['id'] as String;
+  }
 
   // Selecciones del usuario
   // Multi-pet: ordered list of selected pet IDs (index 0 = full price, 1 = -25%, 2 = -50%)
@@ -218,7 +236,7 @@ class _BookingScreenState extends State<BookingScreen> {
         } else if (services.isNotEmpty) {
           _selectedService = services.first;
         }
-        if (_pets.isNotEmpty) _selectedPetIds = [_pets.first['id'] as String];
+        if (_pets.isNotEmpty) _selectedPetIds = [_pickInitialPetId()];
         // Si el cuidador exige Meet & Greet, se activa solo y no se puede
         // desactivar — ver _buildMeetAndGreetSection.
         if (_caregiver!['requireMeetAndGreet'] == true) _includeMG = true;
@@ -287,7 +305,7 @@ class _BookingScreenState extends State<BookingScreen> {
           }
           setState(() => _pets = pets);
           if (_pets.isNotEmpty) {
-            _selectedPetIds = [_pets.first['id'] as String];
+            _selectedPetIds = [_pickInitialPetId()];
           } else {
              WidgetsBinding.instance.addPostFrameCallback((_) {
                if (mounted) GardenSnackBar.warning(context, 'Primero agrega una mascota en tu perfil');

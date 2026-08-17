@@ -429,6 +429,7 @@ final GoRouter _router = GoRouter(
           preloadedPets: extra?['pets'] as List<dynamic>?,
           preloadedToken: extra?['token'] as String?,
           preloadedService: extra?['serviceType'] as String?,
+          preloadedPetId: extra?['petId'] as String?,
         );
       },
     ),

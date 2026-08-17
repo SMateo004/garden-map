@@ -472,6 +472,15 @@ model Booking {
   serviceEndedAt             DateTime?
   serviceStartPhoto          String?
   serviceEndPhoto            String?
+  /// Momento en que el cuidador de un Paseo llega al punto de encuentro —
+  /// paso previo y separado de serviceStartedAt (que marca el inicio real
+  /// del paseo/cobro). Solo se usa en PASEO; nunca alimenta calcOvertimeMinutes.
+  arrivedAt                  DateTime?
+  /// Cómo se vio la mascota durante el servicio, elegido por el cuidador al
+  /// concluir (FELIZ | TRANQUILO | ANSIOSO | CANSADO) — opcional, alimenta el
+  /// reporte del servicio que ve el dueño. Ver SHIRT_SIZES-style constante
+  /// en booking.validation.ts (PET_MOODS) para los valores válidos.
+  petMood                    String?
   /// Momento en que el DUEÑO marca (desde su lado) que el servicio ya terminó.
   /// Si esto ocurre antes de que el cuidador concluya oficialmente (con fotos),
   /// el overtime se congela en este instante en vez de seguir corriendo hasta

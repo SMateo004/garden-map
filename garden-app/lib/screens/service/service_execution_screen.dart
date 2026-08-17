@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
 import 'package:http_parser/http_parser.dart';
@@ -36,6 +38,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   Map<String, dynamic>? _booking;
   bool _isLoading = true;
   bool _isProcessing = false;
+  bool _isMarkingArrived = false;
+  // Humor elegido por el cuidador en la hoja de "¿Finalizar servicio?" —
+  // se manda junto con /conclude para el reporte del servicio.
+  String? _selectedMood;
   String _token = '';
   late AnimationController _pulseController;
   Timer? _serviceTimer;
@@ -780,9 +786,14 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
     final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
     final isPaseo = _booking?['serviceType'] == 'PASEO';
+    final isGuarderia = _booking?['serviceType'] == 'GUARDERIA';
     final heroColors = isPaseo
         ? [GardenColors.forest, const Color(0xFF0B5C2E)]
         : [GardenColors.primaryDark, GardenColors.primary];
+    final serviceEmoji = isPaseo ? '🦮' : (isGuarderia ? '🏡' : '🏠');
+    final serviceConfirmedLabel = isPaseo
+        ? 'Paseo confirmado'
+        : (isGuarderia ? 'Guardería confirmada' : 'Hospedaje confirmado');
 
     return Scaffold(
       backgroundColor: bg,
@@ -870,10 +881,10 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(isPaseo ? '🦮' : '🏠', style: const TextStyle(fontSize: 13)),
+                                Text(serviceEmoji, style: const TextStyle(fontSize: 13)),
                                 const SizedBox(width: 6),
                                 Text(
-                                  isPaseo ? 'Paseo confirmado' : 'Hospedaje confirmado',
+                                  serviceConfirmedLabel,
                                   style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
                                 ),
                               ],
@@ -1123,6 +1134,32 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         ),
         child: Builder(
           builder: (context) {
+            // Paseo: antes de poder iniciar, el cuidador debe marcar que
+            // llegó al punto de encuentro — paso propio, no afecta el cobro
+            // (ver _markArrived). El resto de la lógica de bloqueo (ventana
+            // horaria, etc.) sigue aplicando recién después, para "Iniciar".
+            if (isPaseo && !_hasArrived) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GardenButton(
+                    label: _isMarkingArrived ? 'Marcando llegada...' : '📍  Ya llegué',
+                    loading: _isMarkingArrived,
+                    color: GardenColors.secondary,
+                    onPressed: _isMarkingArrived ? null : _markArrived,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Marca tu llegada al punto de encuentro para poder iniciar el paseo.',
+                    style: TextStyle(color: subtextColor, fontSize: 11),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              );
+            }
+
             final blockReason = _getStartServiceBlockReason();
             final isBlocked = blockReason != null;
             final isWebNonPro = kIsWeb && !_caregiverIsProfessional;
@@ -1164,7 +1201,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   ),
                 ],
                 GardenButton(
-                  label: _isProcessing ? 'Iniciando...' : (isPaseo ? '🦮  Iniciar paseo' : '🏠  Iniciar hospedaje'),
+                  label: _isProcessing ? 'Iniciando...' : (isPaseo ? '🦮  Iniciar paseo' : (isGuarderia ? '🏡  Iniciar guardería' : '🏠  Iniciar hospedaje')),
                   loading: _isProcessing,
                   color: isBlocked
                       ? (isDark ? GardenColors.darkBorder : GardenColors.lightBorder)
@@ -2071,25 +2108,27 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: GardenColors.primary.withValues(alpha: 0.06),
+                      color: (isPaseo && _hasArrived ? GardenColors.success : GardenColors.primary).withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: GardenColors.primary.withValues(alpha: 0.18)),
+                      border: Border.all(color: (isPaseo && _hasArrived ? GardenColors.success : GardenColors.primary).withValues(alpha: 0.18)),
                     ),
                     child: Row(
                       children: [
-                        const _PulsingDot(color: GardenColors.primary),
+                        _PulsingDot(color: isPaseo && _hasArrived ? GardenColors.success : GardenColors.primary),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Esperando inicio del servicio',
+                                isPaseo && _hasArrived ? '¡Tu cuidador llegó!' : 'Esperando inicio del servicio',
                                 style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700),
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                'Tu cuidador iniciará el servicio cuando llegue. Recibirás una notificación.',
+                                isPaseo && _hasArrived
+                                    ? 'Está en tu domicilio y va a iniciar el paseo en breve.'
+                                    : 'Tu cuidador iniciará el servicio cuando llegue. Recibirás una notificación.',
                                 style: TextStyle(color: subtextColor, fontSize: 12, height: 1.4),
                               ),
                             ],
@@ -3888,7 +3927,11 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                       style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
                     const SizedBox(height: 14),
                     _InfoRow('Mascota', _booking?['petName'] as String? ?? '—', textColor, subtextColor),
-                    _InfoRow('Servicio', _booking?['serviceType'] == 'PASEO' ? '🦮 Paseo' : '🏠 Hospedaje', textColor, subtextColor),
+                    _InfoRow('Servicio', switch (_booking?['serviceType']) {
+                      'PASEO' => '🦮 Paseo',
+                      'GUARDERIA' => '🏡 Guardería',
+                      _ => '🏠 Hospedaje',
+                    }, textColor, subtextColor),
                     _InfoRow('Total', 'Bs ${_booking?['totalAmount'] ?? '—'}', textColor, subtextColor),
                     if (_booking?['serviceType'] == 'PASEO') ...[
                       Builder(builder: (_) {
@@ -3923,6 +3966,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                 ),
               ),
               const SizedBox(height: 14),
+
+              // ── Reporte del servicio (fotos + humor + recorrido) ──────
+              _buildServiceReportSection(textColor, subtextColor, surface, borderColor, isDark),
 
               // ── Escrow badge ─────────────────────────────────────────
               Container(
@@ -3966,6 +4012,158 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
           ),
         ),
       ),
+    );
+  }
+
+  static const Map<String, (String, String)> _petMoodInfo = {
+    'FELIZ': ('😄', 'feliz'),
+    'TRANQUILO': ('😌', 'tranquilo'),
+    'ANSIOSO': ('😟', 'ansioso'),
+    'CANSADO': ('😴', 'cansado'),
+  };
+
+  /// Reporte del servicio, estilo "report card" — reutiliza datos que ya se
+  /// venían guardando (fotos de serviceEvents + inicio/fin, GPS track de
+  /// PASEO) más el humor opcional que el cuidador elige al concluir. No pega
+  /// a ningún endpoint nuevo — todo ya vino en el _loadBooking() de siempre.
+  Widget _buildServiceReportSection(Color textColor, Color subtextColor, Color surface, Color borderColor, bool isDark) {
+    final isPaseoCompleted = _booking?['serviceType'] == 'PASEO';
+    final mood = _booking?['petMood'] as String?;
+    final moodInfo = mood != null ? _petMoodInfo[mood] : null;
+
+    final startPhoto = _booking?['serviceStartPhoto'] as String?;
+    final endPhoto = _booking?['serviceEndPhoto'] as String?;
+    final galleryPhotos = _serviceEvents
+        .where((e) => e['type'] == 'PHOTO' && (e['photoUrl'] as String? ?? '').isNotEmpty)
+        .map((e) => e['photoUrl'] as String)
+        .toList();
+    final allPhotos = <String>[
+      if (startPhoto != null && startPhoto.isNotEmpty) startPhoto,
+      ...galleryPhotos,
+      if (endPhoto != null && endPhoto.isNotEmpty) endPhoto,
+    ];
+
+    final track = (_booking?['gpsTrack'] as List?)
+            ?.whereType<Map>()
+            .where((p) => p['lat'] != null && p['lng'] != null)
+            .map((p) => LatLng((p['lat'] as num).toDouble(), (p['lng'] as num).toDouble()))
+            .toList() ??
+        const <LatLng>[];
+    final showMap = isPaseoCompleted && track.length >= 2;
+
+    if (allPhotos.isEmpty && moodInfo == null && !showMap) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(GardenRadius.xl),
+            border: Border.all(color: borderColor),
+            boxShadow: GardenShadows.card,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Reporte del servicio',
+                  style: TextStyle(color: subtextColor, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+              const SizedBox(height: 14),
+              if (moodInfo != null) ...[
+                Row(children: [
+                  Text(moodInfo.$1, style: const TextStyle(fontSize: 22)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text('${_booking?['petName'] ?? 'La mascota'} estuvo ${moodInfo.$2} durante el servicio',
+                        style: TextStyle(color: textColor, fontSize: 13.5, fontWeight: FontWeight.w600)),
+                  ),
+                ]),
+                const SizedBox(height: 16),
+              ],
+              if (allPhotos.isNotEmpty) ...[
+                SizedBox(
+                  height: 92,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: allPhotos.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (_, i) => ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        fixImageUrl(allPhotos[i]),
+                        width: 92, height: 92, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 92, height: 92,
+                          color: (isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated),
+                          child: Icon(Icons.broken_image_outlined, color: subtextColor, size: 20),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text('${allPhotos.length} foto${allPhotos.length == 1 ? '' : 's'} del servicio',
+                    style: TextStyle(color: subtextColor, fontSize: 11)),
+                if (showMap) const SizedBox(height: 18),
+              ],
+              if (showMap) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: SizedBox(
+                    height: 170,
+                    child: IgnorePointer(
+                      child: FlutterMap(
+                        options: MapOptions(
+                          initialCenter: LatLng(
+                            (track.map((p) => p.latitude).reduce((a, b) => a + b)) / track.length,
+                            (track.map((p) => p.longitude).reduce((a, b) => a + b)) / track.length,
+                          ),
+                          initialZoom: 15,
+                          interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
+                        ),
+                        children: [
+                          TileLayer(
+                            urlTemplate: isDark
+                                ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                                : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                            subdomains: const ['a', 'b', 'c', 'd'],
+                            userAgentPackageName: 'com.garden.bolivia',
+                          ),
+                          PolylineLayer(polylines: [
+                            Polyline(points: track, strokeWidth: 4, color: GardenColors.secondary),
+                          ]),
+                          MarkerLayer(markers: [
+                            Marker(
+                              point: track.first, width: 20, height: 20,
+                              child: Container(
+                                decoration: const BoxDecoration(color: GardenColors.success, shape: BoxShape.circle),
+                                child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 12),
+                              ),
+                            ),
+                            Marker(
+                              point: track.last, width: 20, height: 20,
+                              child: Container(
+                                decoration: const BoxDecoration(color: GardenColors.error, shape: BoxShape.circle),
+                                child: const Icon(Icons.flag_rounded, color: Colors.white, size: 11),
+                              ),
+                            ),
+                          ]),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text('Recorrido del paseo', style: TextStyle(color: subtextColor, fontSize: 11)),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+      ],
     );
   }
 
@@ -4070,6 +4268,34 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   }
 
   // --- LOGICA DE ACCIONES ---
+
+  /// Solo PASEO: el cuidador marca que llegó al punto de encuentro, un paso
+  /// separado y previo a "Iniciar paseo" — no toca serviceStartedAt ni el
+  /// cobro, solo avisa al dueño y habilita el botón de iniciar.
+  bool get _hasArrived => _booking?['arrivedAt'] != null;
+
+  Future<void> _markArrived() async {
+    if (_isMarkingArrived) return;
+    setState(() => _isMarkingArrived = true);
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/bookings/${widget.bookingId}/arrive'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        await _loadBooking();
+      } else {
+        throw Exception(data['error']?['message'] ?? 'No se pudo marcar la llegada');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      GardenErrorDialog.show(context, e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _isMarkingArrived = false);
+    }
+  }
+
   Future<void> _startService() async {
     // iOS mata la ubicación en segundo plano si el cuidador cierra la app
     // por completo (restricción de la plataforma, no un bug nuestro) — avisar
@@ -4584,6 +4810,12 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
     final bg = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
     final textColor = isDark ? GardenColors.darkTextPrimary : GardenColors.lightTextPrimary;
     final subtextColor = isDark ? GardenColors.darkTextSecondary : GardenColors.lightTextSecondary;
+    final surfaceEl = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
+    final borderColor = isDark ? GardenColors.darkBorder : GardenColors.lightBorder;
+
+    // Arranca sin selección cada vez que se abre la hoja — es opcional, no
+    // arrastra el humor elegido en un intento anterior si se cancela.
+    _selectedMood = null;
 
     showModalBottomSheet(
       context: context,
@@ -4624,7 +4856,55 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               textAlign: TextAlign.center,
               style: TextStyle(color: subtextColor, fontSize: 14, height: 1.5),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 22),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('¿Cómo estuvo la mascota? (opcional)',
+                  style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(height: 10),
+            StatefulBuilder(
+              builder: (ctx, setSheetState) => Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: const [
+                  ('FELIZ', '😄', 'Feliz'),
+                  ('TRANQUILO', '😌', 'Tranquilo'),
+                  ('ANSIOSO', '😟', 'Ansioso'),
+                  ('CANSADO', '😴', 'Cansado'),
+                ].map((m) {
+                  final (value, emoji, label) = m;
+                  final selected = _selectedMood == value;
+                  return GestureDetector(
+                    onTap: () => setSheetState(() {
+                      _selectedMood = selected ? null : value;
+                    }),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: selected ? GardenColors.primary.withValues(alpha: 0.12) : surfaceEl,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: selected ? GardenColors.primary : borderColor,
+                          width: selected ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Text(emoji, style: const TextStyle(fontSize: 14)),
+                        const SizedBox(width: 6),
+                        Text(label, style: TextStyle(
+                          color: selected ? GardenColors.primary : textColor,
+                          fontSize: 12.5,
+                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                        )),
+                      ]),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 24),
             Row(
               children: [
                 Expanded(
@@ -4677,6 +4957,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
       } catch (_) {
         // Sin ubicación disponible — se concluye igual, sin punto final.
       }
+      if (_selectedMood != null) conclusionBody['petMood'] = _selectedMood;
       final response = await http.post(
         Uri.parse('$_baseUrl/bookings/${widget.bookingId}/conclude'),
         headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},

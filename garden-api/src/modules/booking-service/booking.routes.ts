@@ -214,6 +214,14 @@ router.post(
   serviceExecutionController.start
 );
 
+/** POST /api/bookings/:id/arrive — cuidador marca que llegó al punto de encuentro (solo PASEO, antes de iniciar). */
+router.post(
+  '/:id/arrive',
+  authMiddleware,
+  requireRole('CAREGIVER'),
+  serviceExecutionController.arrive
+);
+
 router.post(
   '/:id/event',
   authMiddleware,

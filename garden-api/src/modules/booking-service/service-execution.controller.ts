@@ -32,6 +32,15 @@ export const start = asyncHandler(async (req: Request, res: Response) => {
     res.json({ success: true, data: booking });
 });
 
+/** POST /api/bookings/:id/arrive — cuidador marca que llegó (solo PASEO, antes de iniciar). */
+export const arrive = asyncHandler(async (req: Request, res: Response) => {
+    const bookingId = req.params.id!;
+    const caregiverUserId = req.user!.userId;
+
+    const booking = await bookingService.markArrived(bookingId, caregiverUserId);
+    res.json({ success: true, data: booking });
+});
+
 export const addEvent = asyncHandler(async (req: Request, res: Response) => {
     const bookingId = req.params.id!;
     const caregiverUserId = req.user!.userId;
@@ -204,7 +213,8 @@ export const conclude = asyncHandler(async (req: Request, res: Response) => {
         caregiverUserId,
         parsed.data.photo,
         parsed.data.lat ?? null,
-        parsed.data.lng ?? null
+        parsed.data.lng ?? null,
+        parsed.data.petMood
     );
     res.json({ success: true, data: booking });
 });

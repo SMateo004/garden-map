@@ -318,6 +318,10 @@ export const trackLocationBodySchema = z.object({
 });
 export type TrackLocationBody = z.infer<typeof trackLocationBodySchema>;
 
+/** Cómo se vio la mascota durante el servicio — elegido por el cuidador al
+ * concluir, opcional. Alimenta el reporte del servicio que ve el dueño. */
+export const PET_MOODS = ['FELIZ', 'TRANQUILO', 'ANSIOSO', 'CANSADO'] as const;
+
 /** POST /api/bookings/:id/conclude — cuidador finaliza el servicio. */
 export const concludeServiceBodySchema = z.object({
   photo: z.string().optional().default(''),
@@ -331,6 +335,7 @@ export const concludeServiceBodySchema = z.object({
     .min(-180, 'lng debe estar entre -180 y 180')
     .max(180, 'lng debe estar entre -180 y 180')
     .optional(),
+  petMood: z.enum(PET_MOODS).optional(),
 });
 export type ConcludeServiceBody = z.infer<typeof concludeServiceBodySchema>;
 

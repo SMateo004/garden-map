@@ -3630,6 +3630,53 @@ export async function startService(bookingId: string, caregiverUserId: string, p
   });
 }
 
+/** Cuidador marca que llegó al punto de encuentro — solo PASEO, solo antes de
+ * iniciar (CONFIRMED). Paso previo y separado de startService: no toca
+ * serviceStartedAt ni ningún campo que alimente calcOvertimeMinutes, así que
+ * no afecta el cobro. Idempotente — si ya estaba marcado, no reenvía la
+ * notificación al dueño (evita spam si el cuidador toca el botón dos veces). */
+export async function markArrived(bookingId: string, caregiverUserId: string): Promise<BookingCreateResult> {
+  return prisma.$transaction(async (tx) => {
+    const profile = await tx.caregiverProfile.findFirst({ where: { userId: caregiverUserId } });
+    if (!profile) throw new ForbiddenError('Perfil de cuidador no encontrado');
+
+    const booking = await tx.booking.findFirst({ where: { id: bookingId, caregiverId: profile.id } });
+    if (!booking) throw new BookingNotFoundError(bookingId);
+    if (booking.serviceType !== ServiceType.PASEO) {
+      throw new BadRequestError('Marcar llegada solo aplica a paseos');
+    }
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new BadRequestError('Solo puedes marcar tu llegada antes de iniciar el servicio');
+    }
+
+    if (booking.arrivedAt) {
+      return bookingToResponse(booking);
+    }
+
+    const updated = await tx.booking.update({
+      where: { id: bookingId },
+      data: { arrivedAt: new Date() },
+    });
+
+    await tx.notification.create({
+      data: {
+        userId: booking.clientId,
+        title: '📍 Tu cuidador llegó',
+        message: `El cuidador llegó a tu domicilio para el paseo de ${booking.petName}. En breve va a iniciar el servicio.`,
+        type: 'SYSTEM',
+      },
+    });
+    sendPushToUser(
+      booking.clientId,
+      '📍 Tu cuidador llegó',
+      `Está en tu domicilio para el paseo de ${booking.petName}.`,
+      { type: 'SERVICE_ARRIVED', bookingId }
+    ).catch(() => {});
+
+    return bookingToResponse(updated);
+  });
+}
+
 /** Allowed event types from caregiver during a service. */
 const ALLOWED_EVENT_TYPES = ['INCIDENT', 'ACCIDENT', 'ILLNESS', 'COMPLICATION', 'NOTE', 'PHOTO', 'WALK_UPDATE', 'INCIDENT_RESOLVED'] as const;
 
@@ -4240,7 +4287,8 @@ export async function concludeService(
   caregiverUserId: string,
   photoUrl: string,
   lat: number | null,
-  lng: number | null
+  lng: number | null,
+  petMood?: string
 ): Promise<BookingCreateResult> {
   const concludedAt = new Date();
 
@@ -4377,6 +4425,7 @@ export async function concludeService(
         gpsDistance,
         overtimeMinutes:  overtimeMins,
         overtimeFeeAmount: overtimeFeeGross,
+        ...(petMood ? { petMood } : {}),
       },
     });
 

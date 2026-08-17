@@ -41,6 +41,14 @@ export interface BookingCreateResult {
   refundAmount?: string | null;
   refundStatus?: string | null;
   paidAt?: string | null;
+  /** Cuidador llegó al punto de encuentro (solo PASEO) — paso previo a
+   * serviceStartedAt, nunca alimenta el cálculo de overtime. */
+  arrivedAt?: string | null;
+  /** Cómo se vio la mascota durante el servicio, elegido por el cuidador al
+   * concluir — alimenta el reporte del servicio. */
+  petMood?: string | null;
+  serviceStartPhoto?: string | null;
+  serviceEndPhoto?: string | null;
   caregiverName?: string;
   caregiverPhone?: string | null;
   caregiverPhoto?: string | null;
@@ -162,6 +170,10 @@ export function bookingToResponse(b: any): BookingCreateResult {
     refundAmount: b.refundAmount != null ? String(b.refundAmount) : null,
     refundStatus: b.refundStatus ?? null,
     paidAt: b.paidAt?.toISOString() ?? null,
+    arrivedAt: b.arrivedAt?.toISOString() ?? null,
+    petMood: b.petMood ?? null,
+    serviceStartPhoto: b.serviceStartPhoto ?? null,
+    serviceEndPhoto: b.serviceEndPhoto ?? null,
     serviceStartedAt: b.serviceStartedAt?.toISOString() ?? null,
     serviceEndedAt: b.serviceEndedAt?.toISOString() ?? null,
     clientMarkedEndAt: b.clientMarkedEndAt?.toISOString() ?? null,
