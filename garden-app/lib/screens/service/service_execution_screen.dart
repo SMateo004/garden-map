@@ -40,7 +40,6 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
   bool _isProcessing = false;
   bool _isMarkingArrived = false;
   bool _isMarkingEnRoute = false;
-  bool _skipEnRoute = false;
   // Humor elegido por el cuidador en la hoja de "¿Finalizar servicio?" —
   // se manda junto con /conclude para el reporte del servicio.
   String? _selectedMood;
@@ -1136,36 +1135,43 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
         ),
         child: Builder(
           builder: (context) {
-            // Los 3 tipos: paso opcional antes de "Ya llegué"/"Iniciar" —
-            // avisa al dueño que el cuidador ya salió. No bloquea nada, solo
-            // se oculta una vez tocado (ver _markEnRoute).
-            if (!_hasEnRoute && !_skipEnRoute) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  GardenButton(
-                    label: _isMarkingEnRoute ? 'Avisando...' : '🚗  Voy en camino',
-                    loading: _isMarkingEnRoute,
-                    outline: true,
-                    color: GardenColors.primary,
-                    onPressed: _isMarkingEnRoute ? null : _markEnRoute,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Avisale al dueño que ya saliste hacia el servicio (opcional).',
-                    style: TextStyle(color: subtextColor, fontSize: 11),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 10),
-                  TextButton(
-                    onPressed: () => setState(() => _skipEnRoute = true),
-                    child: Text('Omitir', style: TextStyle(color: subtextColor, fontSize: 12)),
-                  ),
-                ],
-              );
-            }
+            // "Voy en camino" es informativo puro para el dueño — nunca debe
+            // tapar el botón principal (Llegué/Iniciar). Se muestra como chip
+            // chico arriba del CTA, no como pantalla propia a completar u
+            // omitir (eso sí sería fricción evasiva innecesaria).
+            final enRouteChip = !_hasEnRoute
+                ? Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: GestureDetector(
+                      onTap: _isMarkingEnRoute ? null : _markEnRoute,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: GardenColors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: GardenColors.primary.withValues(alpha: 0.25)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_isMarkingEnRoute)
+                              const SizedBox(
+                                width: 13, height: 13,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: GardenColors.primary),
+                              )
+                            else
+                              const Icon(Icons.directions_car_filled_rounded, size: 15, color: GardenColors.primary),
+                            const SizedBox(width: 6),
+                            Text(
+                              _isMarkingEnRoute ? 'Avisando...' : 'Avisar que voy en camino',
+                              style: const TextStyle(color: GardenColors.primary, fontSize: 12.5, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                : const SizedBox.shrink();
 
             // Paseo: antes de poder iniciar, el cuidador debe marcar que
             // llegó al punto de encuentro — paso propio, no afecta el cobro
@@ -1175,6 +1181,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  enRouteChip,
                   GardenButton(
                     label: _isMarkingArrived ? 'Marcando llegada...' : '📍  Ya llegué',
                     loading: _isMarkingArrived,
@@ -1199,6 +1206,7 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                enRouteChip,
                 if (isBlocked) ...[
                   Container(
                     width: double.infinity,
@@ -2150,7 +2158,9 @@ class _ServiceExecutionScreenState extends State<ServiceExecutionScreen> with Si
                     } else if (_hasEnRoute) {
                       statusColor = GardenColors.secondary;
                       statusTitle = 'Tu cuidador va en camino';
-                      statusSubtitle = 'Está en camino hacia tu domicilio. Recibirás una notificación cuando llegue.';
+                      statusSubtitle = isPaseo
+                          ? 'Está en camino hacia tu domicilio. Recibirás una notificación cuando llegue.'
+                          : 'Está en camino hacia tu domicilio. Recibirás una notificación cuando inicie el servicio.';
                     } else {
                       statusColor = GardenColors.primary;
                       statusTitle = 'Esperando inicio del servicio';
