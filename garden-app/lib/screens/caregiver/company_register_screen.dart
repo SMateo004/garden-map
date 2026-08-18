@@ -32,6 +32,7 @@ import '../../services/cities_service.dart';
 import '../../widgets/extra_services_editor.dart';
 import 'caregiver_profile_data_screen.dart';
 import 'caregiver_contract_step.dart';
+import 'caregiver_pin_step.dart';
 import '../../widgets/animated_step_progress_bar.dart' show stepTransitionBuilder;
 import '../../widgets/registration_phases.dart';
 import '../../widgets/estimated_earnings_banner.dart';
@@ -62,6 +63,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
     RegistrationPhase(name: 'Tu servicio', icon: Icons.pets_rounded, startStep: 4, endStep: 7),
     RegistrationPhase(name: 'Verificación', icon: Icons.verified_user_outlined, startStep: 8, endStep: 9),
     RegistrationPhase(name: 'Perfil y contrato', icon: Icons.description_outlined, startStep: 10, endStep: 11),
+    RegistrationPhase(name: 'Seguridad', icon: Icons.lock_outline_rounded, startStep: 12, endStep: 12),
   ];
   // Cubre TODO _next() (registro, patch, subida de fotos/logo) para que el
   // botón se deshabilite/muestre loading durante cualquier paso, no solo los
@@ -740,8 +742,9 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
   }
 
   /// Llamado por CaregiverContractStep solo después del scroll-to-accept.
-  /// Si el PATCH falla, no navega — el botón vuelve a estar disponible para
-  /// reintentar (ver CaregiverContractStep._handleAccept).
+  /// Si el PATCH falla, no avanza — el botón vuelve a estar disponible para
+  /// reintentar (ver CaregiverContractStep._handleAccept). El registro
+  /// todavía no termina acá — falta el paso de PIN de seguridad (12).
   Future<void> _acceptContractAndFinish() async {
     try {
       final response = await http.patch(
@@ -754,10 +757,33 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
         throw Exception(data['error']?['message'] ?? 'No se pudo registrar la aceptación del contrato');
       }
       if (!mounted) return;
-      context.go('/caregiver/home');
+      setState(() => _currentStep = 12);
     } catch (e) {
       if (mounted) {
         GardenErrorDialog.show(context, 'No se pudo completar el registro. Intenta de nuevo.');
+      }
+    }
+  }
+
+  /// Último paso real (12): crea el PIN de seguridad (mismo endpoint que
+  /// widgets/pin_gate.dart) y recién ahí navega a home — llamado por
+  /// CaregiverPinStep solo con un PIN ya validado localmente.
+  Future<void> _submitPin(String pin) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/auth/security-pin'),
+        headers: {'Authorization': 'Bearer $_authToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'newPin': pin}),
+      );
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (data['success'] != true) {
+        throw Exception(data['error']?['message'] ?? 'No se pudo crear el PIN');
+      }
+      if (!mounted) return;
+      context.go('/caregiver/home');
+    } catch (e) {
+      if (mounted) {
+        GardenErrorDialog.show(context, 'No se pudo crear el PIN. Intenta de nuevo.');
       }
     }
   }
@@ -776,7 +802,7 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
     if (_showIntro) {
       return RegistrationPhaseIntro(
         title: 'Vamos a registrar tu empresa',
-        subtitle: 'Son 5 fases cortas — podés guardar tu progreso y volver cuando quieras.',
+        subtitle: 'Son 6 fases cortas — podés guardar tu progreso y volver cuando quieras.',
         phases: _phases,
         onStart: () => setState(() => _showIntro = false),
       );
@@ -813,6 +839,10 @@ class _CompanyRegisterScreenState extends State<CompanyRegisterScreen> {
     // responsabilidades que el registro individual (onboarding_wizard_screen.dart).
     if (_currentStep == 11) {
       return CaregiverContractStep(onAccept: _acceptContractAndFinish);
+    }
+    // Step 12 (final real): PIN de seguridad.
+    if (_currentStep == 12) {
+      return CaregiverPinStep(onSubmit: _submitPin);
     }
 
     return Scaffold(

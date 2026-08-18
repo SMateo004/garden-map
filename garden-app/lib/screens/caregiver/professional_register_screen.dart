@@ -29,6 +29,7 @@ import '../../services/cities_service.dart';
 import '../../utils/input_formatters.dart';
 import 'caregiver_profile_data_screen.dart';
 import 'caregiver_contract_step.dart';
+import 'caregiver_pin_step.dart';
 import '../../widgets/animated_step_progress_bar.dart' show stepTransitionBuilder;
 import '../../widgets/registration_phases.dart';
 import '../../widgets/estimated_earnings_banner.dart';
@@ -51,6 +52,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
     RegistrationPhase(name: 'Tu perfil', icon: Icons.person_outline_rounded, startStep: 1, endStep: 1),
     RegistrationPhase(name: 'Tu servicio', icon: Icons.pets_rounded, startStep: 2, endStep: 6),
     RegistrationPhase(name: 'Perfil y contrato', icon: Icons.description_outlined, startStep: 7, endStep: 8),
+    RegistrationPhase(name: 'Seguridad', icon: Icons.lock_outline_rounded, startStep: 9, endStep: 9),
   ];
 
   // Paso 0: Código de admin
@@ -624,8 +626,9 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
   }
 
   /// Llamado por CaregiverContractStep solo después del scroll-to-accept.
-  /// Si el PATCH falla, no navega — el botón vuelve a estar disponible para
-  /// reintentar (ver CaregiverContractStep._handleAccept).
+  /// Si el PATCH falla, no avanza — el botón vuelve a estar disponible para
+  /// reintentar (ver CaregiverContractStep._handleAccept). El registro
+  /// todavía no termina acá — falta el paso de PIN de seguridad (9).
   Future<void> _acceptContractAndFinish() async {
     try {
       final response = await http.patch(
@@ -637,13 +640,36 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
       if (data['success'] != true) {
         throw Exception(data['error']?['message'] ?? 'No se pudo registrar la aceptación del contrato');
       }
+      if (!mounted) return;
+      setState(() => _currentStep = 9);
+    } catch (e) {
+      if (mounted) {
+        GardenErrorDialog.show(context, 'No se pudo completar el registro. Intenta de nuevo.');
+      }
+    }
+  }
+
+  /// Último paso real (9): crea el PIN de seguridad (mismo endpoint que
+  /// widgets/pin_gate.dart) y recién ahí marca el registro como completo —
+  /// llamado por CaregiverPinStep solo con un PIN ya validado localmente.
+  Future<void> _submitPin(String pin) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/auth/security-pin'),
+        headers: {'Authorization': 'Bearer $_authToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'newPin': pin}),
+      );
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (data['success'] != true) {
+        throw Exception(data['error']?['message'] ?? 'No se pudo crear el PIN');
+      }
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('caregiver_setup_complete', true);
       if (!mounted) return;
       context.go('/caregiver/home');
     } catch (e) {
       if (mounted) {
-        GardenErrorDialog.show(context, 'No se pudo completar el registro. Intenta de nuevo.');
+        GardenErrorDialog.show(context, 'No se pudo crear el PIN. Intenta de nuevo.');
       }
     }
   }
@@ -1327,6 +1353,11 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           return CaregiverContractStep(onAccept: _acceptContractAndFinish);
         }
 
+        // Step 9 (final real): PIN de seguridad.
+        if (_currentStep == 9) {
+          return CaregiverPinStep(onSubmit: _submitPin);
+        }
+
         final stepTitles = [
           'Código de acceso',
           'Datos básicos',
@@ -1337,6 +1368,7 @@ class _ProfessionalRegisterScreenState extends State<ProfessionalRegisterScreen>
           'Tu retrato',
           'Perfil profesional',
           'Contrato',
+          'PIN de seguridad',
         ];
 
         Widget stepContent;

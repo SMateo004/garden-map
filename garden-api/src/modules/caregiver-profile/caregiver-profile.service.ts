@@ -175,7 +175,7 @@ export async function getMyProfile(userId: string) {
   }
 
   // Re-fetch to get updated flags
-  return prisma.caregiverProfile.findUnique({
+  const refreshed = await prisma.caregiverProfile.findUnique({
     where: { userId },
     include: {
       user: {
@@ -189,10 +189,17 @@ export async function getMyProfile(userId: string) {
           country: true,
           city: true,
           emailVerified: true,
+          securityPinHash: true,
         },
       },
     }
   });
+  if (!refreshed) return null;
+
+  // El wizard usa esto solo para decidir si mostrar el paso de configurar
+  // PIN (resume) — nunca debe llegar el hash real al cliente.
+  const { securityPinHash, ...userWithoutHash } = refreshed.user;
+  return { ...refreshed, user: { ...userWithoutHash, hasSecurityPin: !!securityPinHash } };
 }
 
 /** PATCH profile: actualización parcial. 403 si status APPROVED. Si DRAFT o NEEDS_REVISION → mantiene o fija DRAFT. */

@@ -12,6 +12,7 @@ import '../client/my_ratings_screen.dart';
 import '../client/nearby_vets_screen.dart';
 import 'blocked_users_screen.dart';
 import 'notification_settings_screen.dart';
+import 'change_pin_dialog.dart';
 import '../../services/auth_state.dart';
 import '../../services/secure_storage_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -1024,6 +1025,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                     const SizedBox(height: 16),
                     Text('Privacidad y seguridad', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
                     const SizedBox(height: 8),
+                    _profileTile(icon: Icons.lock_outline_rounded, title: 'Cambiar PIN',
+                        onTap: () => showChangePinDialog(context)),
                     _profileTile(icon: Icons.block_rounded, title: 'Usuarios bloqueados',
                         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BlockedUsersScreen()))),
                     const SizedBox(height: 16),
@@ -1370,6 +1373,15 @@ class _ProfileScreenState extends State<ProfileScreen>
           title: 'Política de Privacidad',
           onTap: () => context.push('/privacy'),
         ),
+
+        const SizedBox(height: 24),
+        _sectionLabel('Privacidad y seguridad', textColor),
+        const SizedBox(height: 10),
+        _profileTile(icon: Icons.lock_outline_rounded, title: 'Cambiar PIN',
+            onTap: () => showChangePinDialog(context)),
+        const SizedBox(height: 8),
+        _profileTile(icon: Icons.block_rounded, title: 'Usuarios bloqueados',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BlockedUsersScreen()))),
 
         const SizedBox(height: 24),
         _sectionLabel('Cuenta', textColor),

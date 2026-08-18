@@ -61,6 +61,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
     RegistrationPhase(name: 'Tu servicio', icon: Icons.pets_rounded, startStep: 2, endStep: 6),
     RegistrationPhase(name: 'Verificación', icon: Icons.verified_user_outlined, startStep: 7, endStep: 9),
     RegistrationPhase(name: 'Contrato', icon: Icons.description_outlined, startStep: 10, endStep: 10),
+    RegistrationPhase(name: 'Seguridad', icon: Icons.lock_outline_rounded, startStep: 11, endStep: 11),
   ];
 
   // Paso 1: Datos personales
@@ -95,6 +96,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   // solo se habilita después de scrollear el contrato hasta el final.
   final ScrollController _contractScrollController = ScrollController();
   bool _contractScrolledToEnd = false;
+
+  // Paso 11 (final real): PIN de seguridad — protege billetera y ubicación
+  // exacta de clientes. Se configura acá para no tener que pedirlo después
+  // (ver widgets/pin_gate.dart, que sigue sirviendo de red de contención para
+  // cuentas viejas que se registraron antes de que este paso existiera).
+  final _pinController = TextEditingController();
+  final _pinConfirmController = TextEditingController();
+  String? _pinError;
 
   // Paso 6: Perfil Profesional
   final List<String> _sizesAccepted = [];
@@ -172,6 +181,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       _firstNameController, _lastNameController, _emailController,
       _passwordController, _phoneController, _addressStreetController,
       ..._emergencyNameControllers, ..._emergencyPhoneControllers,
+      _pinController, _pinConfirmController,
     ]) {
       c.addListener(_onFormFieldChanged);
     }
@@ -510,6 +520,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         return;
       }
 
+      // Step 11: PIN de seguridad (final real) — cuentas registradas antes
+      // de que este paso existiera no tienen PIN todavía.
+      final hasSecurityPin = userNode?['hasSecurityPin'] == true;
+      if (!hasSecurityPin) {
+        setState(() => _currentStep = 11);
+        return;
+      }
+
       // All steps complete — attempt submit (handles already-approved case)
       await _completeWizard();
     } catch (_) {
@@ -579,6 +597,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
   @override
   void dispose() {
     _contractScrollController.dispose();
+    _pinController.dispose();
+    _pinConfirmController.dispose();
     _firstNameController.dispose();
     _lastNameController.dispose();
     _emailController.dispose();
@@ -828,6 +848,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
         return true;
       case 10:
         return _contractScrolledToEnd;
+      case 11:
+        return _pinController.text.trim().length == 4 && _pinConfirmController.text.trim().length == 4;
       default:
         return true; // Steps 6-8: embedded screens manage their own button
     }
@@ -1022,13 +1044,56 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       return;
     }
 
-    // Step 10 (final): Contrato de cuidador → finalizar registro
+    // Step 10: Contrato de cuidador → avanza al PIN de seguridad
     if (_currentStep == 10) {
-      await _completeWizard();
+      setState(() => _currentStep = 11);
+      return;
+    }
+
+    // Step 11 (final real): PIN de seguridad → crear PIN y finalizar registro
+    if (_currentStep == 11) {
+      await _submitPinAndFinish();
       return;
     }
 
     // Steps 6-8 handled by embedded screens
+  }
+
+  /// Último paso real del wizard: crea el PIN de seguridad del usuario
+  /// (mismo endpoint que usa widgets/pin_gate.dart para el caso "todavía no
+  /// tiene PIN") y recién ahí llama a _completeWizard() — así el registro no
+  /// puede terminar sin que el PIN quede configurado.
+  Future<void> _submitPinAndFinish() async {
+    final pin = _pinController.text.trim();
+    final confirm = _pinConfirmController.text.trim();
+    if (pin.length != 4 || int.tryParse(pin) == null) {
+      setState(() => _pinError = 'El PIN debe tener 4 dígitos');
+      return;
+    }
+    if (pin != confirm) {
+      setState(() => _pinError = 'Los PIN no coinciden');
+      return;
+    }
+    setState(() { _isLoading = true; _pinError = null; });
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/auth/security-pin'),
+        headers: {'Authorization': 'Bearer $_authToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({'newPin': pin}),
+      );
+      final data = jsonDecode(response.body);
+      if (data['success'] != true) {
+        setState(() {
+          _isLoading = false;
+          _pinError = data['error']?['message'] ?? 'No se pudo crear el PIN';
+        });
+        return;
+      }
+    } catch (_) {
+      setState(() { _isLoading = false; _pinError = 'Error de conexión — intenta de nuevo'; });
+      return;
+    }
+    await _completeWizard();
   }
 
   /// Step 0 → 1: Register with minimal data, get token, advance.
@@ -1699,6 +1764,75 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
               ),
             ]),
           ),
+        ],
+      ),
+    );
+  }
+
+  // ── PASO 11 (index 11, final real): PIN de seguridad ─────────
+  Widget _buildStep11() {
+    final isDark = themeNotifier.isDark;
+    final textColor    = isDark ? GardenColors.darkTextPrimary    : GardenColors.lightTextPrimary;
+    final subtextColor = isDark ? GardenColors.darkTextSecondary  : GardenColors.lightTextSecondary;
+    final borderColor  = isDark ? GardenColors.darkBorder         : GardenColors.lightBorder;
+    final surfaceEl    = isDark ? GardenColors.darkSurfaceElevated: GardenColors.lightSurfaceElevated;
+
+    InputDecoration pinField(String hint) => InputDecoration(
+      counterText: '',
+      hintText: hint,
+      filled: true,
+      fillColor: surfaceEl,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
+    );
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 56, height: 56,
+            decoration: BoxDecoration(color: GardenColors.primary.withValues(alpha: 0.12), shape: BoxShape.circle),
+            child: const Icon(Icons.lock_outline_rounded, color: GardenColors.primary, size: 28),
+          ),
+          const SizedBox(height: 16),
+          Text('Creá tu PIN de seguridad',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5)),
+          const SizedBox(height: 6),
+          Text(
+            'Último paso. Este PIN de 4 dígitos protege tu billetera y la ubicación exacta de tus clientes cuando '
+            'gestionás un servicio — te lo vamos a pedir cada vez que entres a esas pantallas, así tus datos quedan '
+            'seguros aunque tu teléfono caiga en otras manos.',
+            style: TextStyle(fontSize: 14, color: subtextColor, height: 1.5),
+          ),
+          const SizedBox(height: 28),
+          Text('PIN (4 dígitos)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: textColor)),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _pinController,
+            obscureText: true,
+            keyboardType: TextInputType.number,
+            maxLength: 4,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 22, letterSpacing: 10, color: textColor),
+            decoration: pinField('••••'),
+          ),
+          const SizedBox(height: 16),
+          Text('Repetí el PIN', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: textColor)),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _pinConfirmController,
+            obscureText: true,
+            keyboardType: TextInputType.number,
+            maxLength: 4,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 22, letterSpacing: 10, color: textColor),
+            decoration: pinField('••••'),
+          ),
+          if (_pinError != null) ...[
+            const SizedBox(height: 12),
+            Text(_pinError!, style: const TextStyle(color: GardenColors.error, fontSize: 12.5)),
+          ],
         ],
       ),
     );
@@ -2774,7 +2908,8 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       postRegStep,     // 7: Verificación de identidad
       postRegStep,     // 8: Verificación combinada (teléfono + email)
       _buildStep9(),   // 9: Contactos de emergencia
-      _buildStep10(),  // 10: Contrato de cuidador (final real)
+      _buildStep10(),  // 10: Contrato de cuidador
+      _buildStep11(),  // 11: PIN de seguridad (final real)
     ];
 
     final stepTitles = [
@@ -2789,13 +2924,14 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
       'Verificar cuenta',
       'Contactos de emergencia',
       'Contrato',
+      'PIN de seguridad',
     ];
 
     // Steps 6-8 are embedded screens that manage their own "Continue" buttons.
-    // Steps 9 y 10 (contactos de emergencia, contrato) usan el nav genérico, como 0-5.
-    final bool showNavButtons = _currentStep <= 5 || _currentStep == 9 || _currentStep == 10;
+    // Steps 9-11 (contactos de emergencia, contrato, PIN) usan el nav genérico, como 0-5.
+    final bool showNavButtons = _currentStep <= 5 || _currentStep == 9 || _currentStep == 10 || _currentStep == 11;
     final bool isRegistrationStep = _currentStep == 0;
-    final bool isFinalStep = _currentStep == 10;
+    final bool isFinalStep = _currentStep == 11;
 
     return AnimatedBuilder(
       animation: themeNotifier,
@@ -3080,7 +3216,7 @@ class _OnboardingWizardScreenState extends State<OnboardingWizardScreen> {
                               child: GardenButton(
                                 label: isRegistrationStep
                                     ? 'Crear mi cuenta'
-                                    : (isFinalStep ? 'Acepto y finalizo el registro' : 'Siguiente →'),
+                                    : (isFinalStep ? 'Crear PIN y finalizar registro' : 'Siguiente →'),
                                 loading: _isLoading,
                                 height: 48,
                                 onPressed: (_isLoading || !_canProceed) ? null : _nextStep,
