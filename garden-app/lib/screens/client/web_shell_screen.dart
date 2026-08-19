@@ -57,6 +57,16 @@ class _WebShellScreenState extends State<WebShellScreen> {
     _selectedTab = widget.initialTab;
     debugPrint('[WebShell] init tab=${widget.initialTab}');
     _loadAuth();
+    // Un login que ocurre con esta pantalla ya montada debajo (invitado en
+    // /marketplace → push a /login → go de vuelta) no recrea este State, así
+    // que initState no vuelve a correr — ver doc de loginSuccessNotifier.
+    loginSuccessNotifier.addListener(_loadAuth);
+  }
+
+  @override
+  void dispose() {
+    loginSuccessNotifier.removeListener(_loadAuth);
+    super.dispose();
   }
 
   Future<void> _loadAuth() async {

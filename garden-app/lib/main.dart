@@ -162,6 +162,16 @@ const _roleRestrictedPrefixes = <String, String>{
   '/my-pets-tab': 'CLIENT',
   '/my-pets': 'CLIENT',
   '/service-selector': 'CLIENT',
+  // Faltaban acá — un CAREGIVER que llega a /booking o /payment sin haber
+  // cambiado a rol CLIENT (ej. deep link, "Reservar de nuevo" desde una
+  // notificación, o simplemente exploración) no se topaba con ningún guard
+  // en el cliente: la pantalla cargaba normal hasta que el POST /bookings
+  // (CLIENT-only en el backend) devolvía un 403 crudo "Sin permisos para
+  // esta acción" recién al intentar reservar/pagar — confuso porque no
+  // explica qué pasó ni qué hacer. Con el guard acá, se redirige antes,
+  // igual que ya pasa con /marketplace.
+  '/booking': 'CLIENT',
+  '/payment': 'CLIENT',
 };
 
 // Home correcta para cada rol efectivo — mismo destino que usa el cambio de

@@ -28,6 +28,21 @@ import 'presence_service.dart';
 /// Definido aquí (no en auth_service) para evitar dependencias circulares.
 final sessionExpiredNotifier = ValueNotifier<bool>(false);
 
+/// Se emite justo después de un login exitoso (email/contraseña o social),
+/// una sola vez por login — ver login_screen.dart _navigateAfterLogin.
+///
+/// Por qué existe: en web, "Iniciar sesión" se abre con context.push encima
+/// de la pantalla que ya estaba montada (ej. marketplace de invitado), así
+/// que context.go('/marketplace') después del login reutiliza esa MISMA
+/// instancia de State en vez de crear una nueva — su initState() (que leyó
+/// AuthState.token una sola vez, cuando todavía estaba vacío) nunca se
+/// vuelve a ejecutar. Sin esto, el marketplace se quedaba mostrando el modo
+/// invitado hasta que el usuario refrescaba el navegador a mano. Pantallas
+/// que cachean su propio "estoy logueado" en initState deben escuchar esto
+/// y releer AuthState.token cuando se dispara (ver web_shell_screen.dart y
+/// marketplace_screen.dart).
+final loginSuccessNotifier = ValueNotifier<int>(0);
+
 class AuthState {
   AuthState._(); // non-instantiable
 

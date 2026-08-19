@@ -240,6 +240,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
     _loadInitialData();
     _loadBanners();
+    // Un invitado que inicia sesión sin salir de /marketplace (push a
+    // /login → go de vuelta) reutiliza este mismo State — initState no
+    // vuelve a correr, así que sin esto se quedaba en modo invitado hasta
+    // refrescar el navegador a mano. Ver doc de loginSuccessNotifier.
+    loginSuccessNotifier.addListener(_loadInitialData);
     ZonesService.getBlockedZones().then((blocked) {
       if (!mounted) return;
       setState(() {
@@ -271,6 +276,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   @override
   void dispose() {
+    loginSuccessNotifier.removeListener(_loadInitialData);
     _searchController.dispose();
     _searchDebounce?.cancel();
     _activeBookingTimer?.cancel();

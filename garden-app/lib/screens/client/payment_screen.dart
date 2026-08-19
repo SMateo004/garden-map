@@ -256,6 +256,29 @@ class _PaymentScreenState extends State<PaymentScreen> {
     super.dispose();
   }
 
+  // ── Datos de facturación (NIT) — guardado explícito e inmediato ─────────
+  // A diferencia de _initPayment() (que además manda nit/razonSocial como
+  // snapshot de ESTA reserva al pagar), esto persiste el default del perfil
+  // apenas el usuario toca "Guardar" en el modal — mismo endpoint que usa
+  // my_data_screen.dart, así el cambio queda guardado de una sin depender
+  // de que el usuario efectivamente pague después.
+  Future<bool> _saveBillingInfo() async {
+    try {
+      final res = await http.patch(
+        Uri.parse('$_baseUrl/client/profile'),
+        headers: {'Authorization': 'Bearer $_clientToken', 'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'nit': _nitCtrl.text.trim(),
+          'nitRazonSocial': _razonSocialCtrl.text.trim(),
+        }),
+      );
+      final data = jsonDecode(res.body);
+      return data['success'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // ── Código promocional ─────────────────────────────────────────────────
   Future<void> _applyPromoCode() async {
     final code = _promoController.text.trim();
@@ -1110,78 +1133,147 @@ class _PaymentScreenState extends State<PaymentScreen> {
   // ── Datos de facturación (NIT) ──────────────────────────────────────────
   // Se pide siempre (QR o Tarjeta), pero nunca bloquea el pago: si se deja
   // vacío, el backend guarda "0" en el snapshot de la reserva y la factura
-  // se emite igual. Lo que sí se ingrese acá se guarda como default en el
-  // perfil del cliente y se pre-carga en su próximo servicio (editable cada
-  // vez, ver _loadBillingInfo).
-  Widget _buildBillingSection(Color textColor, Color subtextColor, Color surface, Color borderColor) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor),
+  // se emite igual. Tile resumen + modal editable — "Guardar" persiste de
+  // inmediato el default del perfil (ver _saveBillingInfo), no solo al
+  // pagar, para que una edición se sienta guardada en el momento en vez de
+  // depender de completar el pago.
+  Widget _buildBillingSummaryTile(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    final nit = _nitCtrl.text.trim();
+    final razonSocial = _razonSocialCtrl.text.trim();
+    final hasData = nit.isNotEmpty || razonSocial.isNotEmpty;
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => _showBillingModal(textColor, subtextColor, surface, borderColor),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.receipt_long_outlined, color: GardenColors.primary, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Datos de facturación',
+                      style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13.5)),
+                  const SizedBox(height: 2),
+                  Text(
+                    hasData
+                        ? [if (nit.isNotEmpty) 'NIT/Carnet $nit', if (razonSocial.isNotEmpty) razonSocial].join(' · ')
+                        : 'Sin datos — se emitirá con NIT 0',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: subtextColor, fontSize: 11.5),
+                  ),
+                ],
+              ),
+            ),
+            Text(hasData ? 'Editar' : 'Agregar',
+                style: const TextStyle(color: GardenColors.primary, fontSize: 12.5, fontWeight: FontWeight.w700)),
+            const SizedBox(width: 2),
+            Icon(Icons.chevron_right_rounded, color: subtextColor, size: 18),
+          ],
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.receipt_long_outlined, color: GardenColors.primary, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text('Datos de facturación',
-                    style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13.5)),
+    );
+  }
+
+  Future<void> _showBillingModal(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    bool saving = false;
+    String? error;
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          Future<void> save() async {
+            setModalState(() { saving = true; error = null; });
+            final ok = await _saveBillingInfo();
+            if (!ctx.mounted) return;
+            if (ok) {
+              if (mounted) setState(() {});
+              Navigator.pop(ctx);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('Datos de facturación guardados'),
+                  backgroundColor: GardenColors.success,
+                ));
+              }
+            } else {
+              setModalState(() { saving = false; error = 'No se pudo guardar. Intenta de nuevo.'; });
+            }
+          }
+          return Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text('Se usará para tu factura de este servicio (NIT o Carnet, cualquiera sirve). Si lo dejas vacío, se emitirá con NIT 0. Puedes cambiar tu dato guardado en Mi Perfil.',
-              style: TextStyle(color: subtextColor, fontSize: 11)),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _nitCtrl,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            style: TextStyle(color: textColor, fontSize: 13),
-            decoration: InputDecoration(
-              labelText: 'NIT o Carnet',
-              hintText: '0 (opcional)',
-              hintStyle: TextStyle(color: subtextColor, fontSize: 12),
-              labelStyle: TextStyle(color: subtextColor, fontSize: 12.5),
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: borderColor),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: GardenColors.primary, width: 1.5),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40, height: 4,
+                      margin: const EdgeInsets.only(bottom: 18),
+                      decoration: BoxDecoration(color: subtextColor.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2)),
+                    ),
+                  ),
+                  Text('Datos de facturación', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Se usará para tu factura de este servicio (NIT o Carnet, cualquiera sirve). Si lo dejas vacío, se emitirá con NIT 0. Se guarda acá y se pre-carga en tus próximos servicios.',
+                    style: TextStyle(color: subtextColor, fontSize: 12.5, height: 1.4),
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: _nitCtrl,
+                    autofocus: true,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    style: TextStyle(color: textColor, fontSize: 14),
+                    decoration: InputDecoration(
+                      labelText: 'NIT o Carnet',
+                      hintText: '0 (opcional)',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderColor)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _razonSocialCtrl,
+                    style: TextStyle(color: textColor, fontSize: 14),
+                    decoration: InputDecoration(
+                      labelText: 'Razón social (opcional)',
+                      hintText: 'Nombre para la factura',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderColor)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
+                    ),
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 10),
+                    Text(error!, style: const TextStyle(color: GardenColors.error, fontSize: 12.5)),
+                  ],
+                  const SizedBox(height: 20),
+                  GardenButton(
+                    label: 'Guardar',
+                    loading: saving,
+                    onPressed: saving ? null : save,
+                  ),
+                ],
               ),
             ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _razonSocialCtrl,
-            style: TextStyle(color: textColor, fontSize: 13),
-            decoration: InputDecoration(
-              labelText: 'Razón social (opcional)',
-              hintText: 'Nombre para la factura',
-              hintStyle: TextStyle(color: subtextColor, fontSize: 12),
-              labelStyle: TextStyle(color: subtextColor, fontSize: 12.5),
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: borderColor),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: GardenColors.primary, width: 1.5),
-              ),
-            ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -1235,55 +1327,102 @@ class _PaymentScreenState extends State<PaymentScreen> {
       );
 
   // ── Código promocional ───────────────────────────────────────────────────
-  Widget _buildPromoCodeSection(Color textColor, Color subtextColor, Color surface, Color borderColor) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            const Icon(Icons.local_offer_outlined, color: GardenColors.primary, size: 18),
-            const SizedBox(width: 8),
-            Text('Código promocional', style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13.5)),
-          ]),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _promoController,
-                  textCapitalization: TextCapitalization.characters,
-                  style: TextStyle(color: textColor, fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'Ej. BIENVENIDO',
-                    hintStyle: TextStyle(color: subtextColor, fontSize: 12),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderColor)),
-                    errorText: _promoError,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _applyingPromo ? null : _applyPromoCode,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: GardenColors.primary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-                ),
-                child: _applyingPromo
-                    ? const SizedBox(width: 14, height: 14, child: GardenLoadingIndicator(size: 14, color: Colors.white))
-                    : const Text('Aplicar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12.5)),
-              ),
-            ],
+  Widget _buildPromoCodeTile(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => _showPromoCodeModal(textColor, subtextColor, surface, borderColor),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(children: [
+          const Icon(Icons.local_offer_outlined, color: GardenColors.primary, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text('¿Tenés un código promocional?',
+                style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 13.5)),
           ),
-        ],
+          const Text('Agregar', style: TextStyle(color: GardenColors.primary, fontSize: 12.5, fontWeight: FontWeight.w700)),
+          const SizedBox(width: 2),
+          Icon(Icons.chevron_right_rounded, color: subtextColor, size: 18),
+        ]),
+      ),
+    );
+  }
+
+  Future<void> _showPromoCodeModal(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    // Arranca sin error/valor previo cada vez que se abre — un intento
+    // fallido anterior no debe quedar pegado la próxima vez.
+    _promoController.clear();
+    _promoError = null;
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          Future<void> apply() async {
+            await _applyPromoCode();
+            if (!ctx.mounted) return;
+            if (_promoError == null) {
+              Navigator.pop(ctx);
+            } else {
+              setModalState(() {});
+            }
+          }
+          return Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40, height: 4,
+                      margin: const EdgeInsets.only(bottom: 18),
+                      decoration: BoxDecoration(color: subtextColor.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2)),
+                    ),
+                  ),
+                  Text('Código promocional', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Si tenés un código de descuento, ingresalo acá antes de generar el pago.',
+                    style: TextStyle(color: subtextColor, fontSize: 12.5, height: 1.4),
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: _promoController,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.characters,
+                    style: TextStyle(color: textColor, fontSize: 14),
+                    decoration: InputDecoration(
+                      labelText: 'Código',
+                      hintText: 'Ej. BIENVENIDO',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderColor)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GardenColors.primary, width: 1.5)),
+                      errorText: _promoError,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  GardenButton(
+                    label: 'Aplicar código',
+                    loading: _applyingPromo,
+                    onPressed: _applyingPromo ? null : apply,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -1861,7 +2000,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
           // ── Datos de facturación (NIT) — se pide siempre, para QR o Tarjeta.
           // No bloquea el pago si se deja vacío (cae a NIT "0" en el backend).
-          _buildBillingSection(textColor, subtextColor, surface, borderColor),
+          _buildBillingSummaryTile(textColor, subtextColor, surface, borderColor),
           const SizedBox(height: 20),
 
           // ── Billetera Garden — sección separada, lógica intacta ──────────
@@ -2102,7 +2241,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
           // ── Código promocional ────────────────────────────────────────────
           if (_booking != null && _booking!['promoCode'] == null) ...[
-            _buildPromoCodeSection(textColor, subtextColor, surface, borderColor),
+            _buildPromoCodeTile(textColor, subtextColor, surface, borderColor),
             const SizedBox(height: 20),
           ],
           if (_booking?['promoCode'] != null) ...[

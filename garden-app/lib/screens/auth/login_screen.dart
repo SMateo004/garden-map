@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
+import '../../services/auth_state.dart' show loginSuccessNotifier;
 import '../../services/fcm_service.dart';
 import '../../services/social_auth_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -53,6 +54,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _navigateAfterLogin(String role, {String? activeRole, bool needsProfilePhoto = false}) {
     FcmService.registerAfterLogin();
+    // Avisa a pantallas que ya estaban montadas antes del login (típico en
+    // web: marketplace de invitado) que AuthState.token ya no está vacío —
+    // ver el doc comment de loginSuccessNotifier en auth_state.dart.
+    loginSuccessNotifier.value++;
     // Check if we came from a guest tap on a caregiver profile
     final extra = GoRouterState.of(context).extra;
     if (extra is Map<String, dynamic> && extra.containsKey('returnTo')) {
