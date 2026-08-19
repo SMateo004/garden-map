@@ -30,6 +30,14 @@
           }
         },
         {
+          "client_id": "1067635397531-i9b470km6mht7g442019p9vaqtaehuso.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.garden.bolivia",
+            "certificate_hash": "f1169b77341051bee5a7dbaa6f55cd2254311e85"
+          }
+        },
+        {
           "client_id": "1067635397531-l67988vkjv8a9t7hr8hvchk7k2fgpgjb.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
