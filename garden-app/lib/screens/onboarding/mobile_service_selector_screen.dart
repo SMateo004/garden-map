@@ -36,6 +36,12 @@ class _MobileServiceSelectorScreenState
   void initState() {
     super.initState();
     _loadName();
+    // Un login que ocurre con esta pantalla ya montada debajo (invitado en
+    // /service-selector → push a /login → go de vuelta) reutiliza este
+    // mismo State — initState no vuelve a correr, así que ni el nombre ni
+    // AuthState.hasSession (leído en vivo en build) se reflejaban hasta
+    // tocar algo que forzara un rebuild. Ver doc de loginSuccessNotifier.
+    loginSuccessNotifier.addListener(_onLoginSuccess);
 
     _entranceCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 900));
@@ -206,8 +212,14 @@ class _MobileServiceSelectorScreenState
 
   @override
   void dispose() {
+    loginSuccessNotifier.removeListener(_onLoginSuccess);
     _entranceCtrl.dispose();
     super.dispose();
+  }
+
+  void _onLoginSuccess() {
+    _loadName();
+    if (mounted) setState(() {}); // fuerza releer AuthState.hasSession en build()
   }
 
   @override

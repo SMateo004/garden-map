@@ -44,14 +44,26 @@ class _BookingScreenState extends State<BookingScreen> {
 
   /// Mascota con la que arranca preseleccionada la reserva: la de
   /// widget.preloadedPetId ("Reservar de nuevo") si todavía existe entre las
-  /// mascotas del cliente, si no la primera de la lista (comportamiento de
-  /// siempre). _pets debe tener al menos un elemento al llamar esto.
-  String _pickInitialPetId() {
+  /// mascotas del cliente Y es compatible con este cuidador, si no la
+  /// primera mascota compatible de la lista. Devuelve null si ninguna
+  /// mascota es compatible — mejor arrancar sin nada preseleccionado (el
+  /// cliente ve el motivo en la tarjeta de cada una) que preseleccionar una
+  /// que el cuidador no acepta: eso la mostraba con el estilo "elegida"
+  /// (resaltada) en vez del estilo "bloqueada", ocultando justo el aviso que
+  /// se supone que debía verse. _pets debe tener al menos un elemento al
+  /// llamar esto — quien llama decide qué hacer si devuelve null.
+  String? _pickInitialPetId() {
     final preloaded = widget.preloadedPetId;
-    if (preloaded != null && _pets.any((p) => p['id'] == preloaded)) {
-      return preloaded;
+    if (preloaded != null) {
+      final match = _pets.firstWhere((p) => p['id'] == preloaded, orElse: () => const {});
+      if (match.isNotEmpty && _petIncompatibilityReason(match) == null) {
+        return preloaded;
+      }
     }
-    return _pets.first['id'] as String;
+    for (final pet in _pets) {
+      if (_petIncompatibilityReason(pet) == null) return pet['id'] as String;
+    }
+    return null;
   }
 
   // Selecciones del usuario
@@ -236,7 +248,10 @@ class _BookingScreenState extends State<BookingScreen> {
         } else if (services.isNotEmpty) {
           _selectedService = services.first;
         }
-        if (_pets.isNotEmpty) _selectedPetIds = [_pickInitialPetId()];
+        if (_pets.isNotEmpty) {
+          final initial = _pickInitialPetId();
+          _selectedPetIds = initial != null ? [initial] : [];
+        }
         // Si el cuidador exige Meet & Greet, se activa solo y no se puede
         // desactivar — ver _buildMeetAndGreetSection.
         if (_caregiver!['requireMeetAndGreet'] == true) _includeMG = true;
@@ -305,7 +320,8 @@ class _BookingScreenState extends State<BookingScreen> {
           }
           setState(() => _pets = pets);
           if (_pets.isNotEmpty) {
-            _selectedPetIds = [_pickInitialPetId()];
+            final initial = _pickInitialPetId();
+            _selectedPetIds = initial != null ? [initial] : [];
           } else {
              WidgetsBinding.instance.addPostFrameCallback((_) {
                if (mounted) GardenSnackBar.warning(context, 'Primero agrega una mascota en tu perfil');
@@ -448,6 +464,19 @@ class _BookingScreenState extends State<BookingScreen> {
   /// onPressed condicional del botón.
   bool get _isFormValid {
     if (_selectedPetIds.isEmpty) return false;
+    // La mascota inicial se preselecciona sola al cargar (_pickInitialPetId
+    // — la de "reservar de nuevo" si sigue existiendo, si no la primera de
+    // la lista) sin chequear si es compatible con ESTE cuidador. La tarjeta
+    // de la mascota ya bloquea tocarla para seleccionarla si no es
+    // compatible, pero no revalida una que ya vino preseleccionada —
+    // sin esto, el botón quedaba habilitado con una mascota que el
+    // cuidador no acepta (tamaño, especie, agresividad, cachorro o mayor)
+    // y recién el backend la rechazaba al crear la reserva.
+    for (final petId in _selectedPetIds) {
+      final pet = _pets.firstWhere((p) => p['id'] == petId, orElse: () => const {});
+      if (pet.isEmpty) continue;
+      if (_petIncompatibilityReason(pet) != null) return false;
+    }
     if (_selectedService == null) return false;
     final isMultiDayPaseo = _selectedService == 'PASEO' && _isMultiDay;
     if (!isMultiDayPaseo && _selectedDate == null) return false;
