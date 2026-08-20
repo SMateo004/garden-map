@@ -2839,8 +2839,11 @@ export async function getFinancialStats() {
    * MODELO FINANCIERO GARDEN
    * ─────────────────────────────────────────────────────────────
    * El cuidador fija su precio P (pricePerUnit × días/duración).
-   * GARDEN añade 10% encima → el cliente paga totalAmount = P × 1.10
-   * commissionAmount = P × 0.10  ← ganancia real de GARDEN (ya guardada en DB)
+   * GARDEN añade su comisión configurable encima (Admin > Técnico >
+   * "Comisión GARDEN", platformCommissionPct — NUNCA fija, el admin la
+   * cambia seguido) → el cliente paga totalAmount = P × (1 + pct/100).
+   * commissionAmount = P × (pct/100) ← ganancia real de GARDEN por esa
+   * reserva puntual (ya guardada en DB con la tarifa vigente al momento).
    * Cuidador recibe  = totalAmount − commissionAmount = P
    *
    * Devoluciones (refundAmount procesadas) → dinero del dueño que
@@ -2850,6 +2853,12 @@ export async function getFinancialStats() {
    * del neto como inversión en adquisición de usuarios.
    * ─────────────────────────────────────────────────────────────
    */
+  // Tarifa VIGENTE ahora mismo — solo para describir el modelo en curso
+  // (ej. "GARDEN cobra X% ..."). Los montos reales (commissionAmount de cada
+  // reserva) ya están guardados con la tarifa que aplicaba en su momento;
+  // esto no los recalcula, solo evita mostrar un "10%" fijo y desactualizado
+  // en el texto explicativo cuando el admin cambió la comisión desde entonces.
+  const currentCommissionPct = await (await import('../../utils/settings-cache.js')).getNumericSetting('platformCommissionPct', 10);
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -3041,7 +3050,7 @@ export async function getFinancialStats() {
     incomeStatement: {
       revenues: {
         commissionsEarned: gardenCommissions,
-        description: 'GARDEN cobra 10% sobre el precio del cuidador por cada servicio completado',
+        description: `GARDEN cobra ${currentCommissionPct}% sobre el precio del cuidador por cada servicio completado (tarifa vigente — configurable en Admin > Técnico > Comisión GARDEN)`,
       },
       expenses: {
         refundedCommissions: refundCommLost,
@@ -3049,8 +3058,8 @@ export async function getFinancialStats() {
         total: totalGiftCodeMarketing,
       },
       netIncome: netGardenIncome,
-      companyFeeRate: 0.10,
-      note: 'Si cuidador cobra Bs 30 → cliente paga Bs 33 → GARDEN gana Bs 3',
+      companyFeeRate: currentCommissionPct / 100,
+      note: `Con la tarifa vigente (${currentCommissionPct}%): si cuidador cobra Bs 30 → cliente paga Bs ${(30 * (1 + currentCommissionPct / 100)).toFixed(2)} → GARDEN gana Bs ${(30 * currentCommissionPct / 100).toFixed(2)}`,
     },
     /**
      * Balance General

@@ -621,6 +621,12 @@ class _FinancialTabState extends State<_FinancialTab>
     final refundTotal   = (ref['totalReturnedToClients'] as num?)?.toDouble() ?? 0.0;
     final mktSpend      = (mkt['giftCodeSpend']       as num?)?.toDouble() ?? 0.0;
     final mktRedemptions = (mkt['giftCodeRedemptions'] as int?) ?? 0;
+    // % real efectivo de este período (no un valor fijo) — se calcula de los
+    // montos reales de arriba, nunca hardcodeado. "Comisión GARDEN" es
+    // configurable desde Admin > Técnico y cambia con el tiempo, así que un
+    // "10%" fijo en el texto quedaba desactualizado apenas el admin la
+    // cambiaba, mientras los montos de al lado ya reflejaban la real.
+    final effectiveCommissionPct = grossBilled > 0 ? (gardenEarns / grossBilled * 100) : 0.0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -642,7 +648,8 @@ class _FinancialTabState extends State<_FinancialTab>
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Modelo: cuidador fija Bs X → cliente paga Bs X×1.10 → GARDEN gana 10% (Bs X×0.10)',
+                    'Modelo: cuidador fija Bs X → cliente paga Bs X + comisión → GARDEN gana ${effectiveCommissionPct.toStringAsFixed(1)}% '
+                    '(configurable en Admin > Técnico > Comisión GARDEN)',
                     style: TextStyle(color: subtextColor, fontSize: 11),
                   ),
                 ),
@@ -657,7 +664,7 @@ class _FinancialTabState extends State<_FinancialTab>
                   'Bs ${_fmt(grossBilled)}', GardenColors.primary,
                   Icons.receipt_rounded, surface, borderColor, textColor, subtextColor)),
               const SizedBox(width: 10),
-              Expanded(child: _kpiCard('Ganancia GARDEN (10%)',
+              Expanded(child: _kpiCard('Ganancia GARDEN (${effectiveCommissionPct.toStringAsFixed(1)}%)',
                   'Bs ${_fmt(gardenEarns)}', GardenColors.success,
                   Icons.business_center_rounded, surface, borderColor, textColor, subtextColor)),
             ],
@@ -777,7 +784,7 @@ class _FinancialTabState extends State<_FinancialTab>
               border: Border.all(color: GardenColors.success.withValues(alpha: 0.2)),
             ),
             child: Text(
-              inc['note'] as String? ?? 'Cuidador: Bs 30 → Cliente paga: Bs 33 → GARDEN gana: Bs 3 (10%)',
+              inc['note'] as String? ?? 'Ver la tarifa vigente en Admin > Técnico > Comisión GARDEN',
               style: TextStyle(color: subtextColor, fontSize: 11, fontStyle: FontStyle.italic),
             ),
           ),
@@ -852,6 +859,9 @@ class _FinancialTabState extends State<_FinancialTab>
 
     final accComm     = (assets['accumulatedCommissions']  as num?)?.toDouble() ?? 0.0;
     final pendingFunds= (assets['pendingCaregiverFunds']   as num?)?.toDouble() ?? 0.0;
+    // % real efectivo (no fijo) — ver mismo comentario en _buildDashboardTab.
+    final bsGrossBilled = (s['grossBilled'] as num?)?.toDouble() ?? 0.0;
+    final bsCommissionPct = bsGrossBilled > 0 ? (accComm / bsGrossBilled * 100) : 0.0;
     final totalAssets = (assets['total']                   as num?)?.toDouble() ?? 0.0;
     final pendingWd   = (liabilities['pendingWithdrawals'] as num?)?.toDouble() ?? 0.0;
     final procWd      = (liabilities['processingWithdrawals'] as num?)?.toDouble() ?? 0.0;
@@ -870,7 +880,7 @@ class _FinancialTabState extends State<_FinancialTab>
           const SizedBox(height: 16),
 
           _finSection('ACTIVOS', textColor, borderColor, surface, [
-            _finRow('Comisiones acumuladas GARDEN (10%)', accComm, textColor, subtextColor),
+            _finRow('Comisiones acumuladas GARDEN (${bsCommissionPct.toStringAsFixed(1)}%)', accComm, textColor, subtextColor),
             _finRow('Fondos de cuidadores en plataforma', pendingFunds, textColor, subtextColor),
             _finRow('TOTAL ACTIVOS', totalAssets, textColor, subtextColor, isTotal: true, highlight: true),
           ]),
@@ -1147,6 +1157,8 @@ class _FinancialTabState extends State<_FinancialTab>
     final billed = (data['billedToClient'] as num?)?.toDouble() ?? 0.0;
     final gardenEarns = (data['gardenEarnings'] as num?)?.toDouble() ?? 0.0;
     final caregiverEarns = (data['caregiverEarnings'] as num?)?.toDouble() ?? 0.0;
+    // % real de este tipo de servicio (no fijo) — ver mismo comentario en _buildDashboardTab.
+    final servicePct = billed > 0 ? (gardenEarns / billed * 100) : 0.0;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1174,7 +1186,7 @@ class _FinancialTabState extends State<_FinancialTab>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('GARDEN (10%):', style: TextStyle(color: subtextColor, fontSize: 11)),
+              Text('GARDEN (${servicePct.toStringAsFixed(1)}%):', style: TextStyle(color: subtextColor, fontSize: 11)),
               Text('Bs ${_fmt(gardenEarns)}',
                   style: TextStyle(color: GardenColors.success, fontWeight: FontWeight.w700, fontSize: 13)),
             ],

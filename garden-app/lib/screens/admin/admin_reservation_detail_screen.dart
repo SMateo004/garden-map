@@ -580,6 +580,16 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
     final caregiversPayout = (d['caregiverPayoutAmount'] as num?)?.toDouble() ?? (total - commission);
     final walletPayment = (d['walletPaymentAmount'] as num?)?.toDouble() ?? 0.0;
     final txs = (d['walletTransactions'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    // % real de ESTA reserva (no un valor fijo) — Comisión GARDEN es
+    // configurable desde Admin > Técnico y cambia con el tiempo, así que
+    // "10%"/"90%" hardcodeado quedaba desactualizado o directamente
+    // incorrecto para reservas hechas con otra tarifa. Se calcula del propio
+    // commissionAmount/totalAmount de esta reserva, que sí refleja la tarifa
+    // real que aplicó al momento de pagarse.
+    final commissionPct = total > 0 ? (commission / total * 100) : 0.0;
+    final caregiverPct = total > 0 ? (caregiversPayout / total * 100) : 0.0;
+    final commissionFlex = (commissionPct.round()).clamp(0, 100);
+    final caregiverFlex = (100 - commissionFlex).clamp(0, 100);
 
     return ListView(padding: const EdgeInsets.all(16), children: [
 
@@ -612,30 +622,30 @@ class _AdminReservationDetailScreenState extends State<AdminReservationDetailScr
         Container(
           decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor)),
           child: Column(children: [
-            _payRow('Pago al cuidador (90%)', caregiversPayout, GardenColors.success, Icons.person_rounded),
+            _payRow('Pago al cuidador (${caregiverPct.toStringAsFixed(0)}%)', caregiversPayout, GardenColors.success, Icons.person_rounded),
             Divider(height: 1, color: borderColor),
-            _payRow('Comisión Garden (10%)', commission, GardenColors.primary, Icons.eco_rounded),
+            _payRow('Comisión Garden (${commissionPct.toStringAsFixed(0)}%)', commission, GardenColors.primary, Icons.eco_rounded),
           ]),
         ),
         const SizedBox(height: 12),
-        // Barra visual de distribución
+        // Barra visual de distribución — proporcional al % real de esta reserva
         ClipRRect(
           borderRadius: BorderRadius.circular(6),
           child: Row(children: [
             Flexible(
-              flex: 90,
+              flex: caregiverFlex,
               child: Container(height: 10, color: GardenColors.success),
             ),
             Flexible(
-              flex: 10,
+              flex: commissionFlex,
               child: Container(height: 10, color: GardenColors.primary),
             ),
           ]),
         ),
         const SizedBox(height: 6),
-        const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('Cuidador 90%', style: TextStyle(fontSize: 10, color: GardenColors.success, fontWeight: FontWeight.bold)),
-          Text('Garden 10%', style: TextStyle(fontSize: 10, color: GardenColors.primary, fontWeight: FontWeight.bold)),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text('Cuidador ${caregiverPct.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 10, color: GardenColors.success, fontWeight: FontWeight.bold)),
+          Text('Garden ${commissionPct.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 10, color: GardenColors.primary, fontWeight: FontWeight.bold)),
         ]),
       ])),
 
