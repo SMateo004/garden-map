@@ -32,10 +32,12 @@ const phoneClientSchema = z
 const MIN_TEXT_DRAFT = 5;
 
 /**
- * Password reutilizable para los flujos de REGISTRO (no login — ver loginSchema).
+ * Password reutilizable para los flujos de REGISTRO, cambio de contraseña
+ * autenticado y "olvidé mi contraseña" (no login — ver loginSchema, que solo
+ * verifica contra un hash existente y no debe exigir formato nuevo).
  * Exige longitud mínima + al menos 1 mayúscula, 1 número y 1 símbolo.
  */
-const strongPasswordSchema = z
+export const strongPasswordSchema = z
   .string()
   .min(8, 'Mínimo 8 caracteres')
   .max(128, 'Máximo 128 caracteres')

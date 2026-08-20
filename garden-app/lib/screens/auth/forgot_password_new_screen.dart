@@ -26,7 +26,14 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
     _passwordCtrl.addListener(() => setState(() {}));
   }
 
+  // Mismos requisitos que strongPasswordSchema en auth.validation.ts (backend)
+  // — se revalida ahí igual, esto es solo para que el usuario vea en vivo qué
+  // le falta antes de enviar, en vez de enterarse recién con un error del servidor.
   bool get _hasMinLength => _passwordCtrl.text.length >= 8;
+  bool get _hasUppercase => _passwordCtrl.text.contains(RegExp(r'[A-Z]'));
+  bool get _hasNumber => _passwordCtrl.text.contains(RegExp(r'[0-9]'));
+  bool get _hasSymbol => _passwordCtrl.text.contains(RegExp(r'[^A-Za-z0-9]'));
+  bool get _isStrongEnough => _hasMinLength && _hasUppercase && _hasNumber && _hasSymbol;
   bool get _passwordsMatch => _confirmCtrl.text.isNotEmpty && _confirmCtrl.text == _passwordCtrl.text;
 
   String get _baseUrl => const String.fromEnvironment(
@@ -44,8 +51,8 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
   Future<void> _submit() async {
     final pass = _passwordCtrl.text;
     final confirm = _confirmCtrl.text;
-    if (pass.length < 8) {
-      GardenSnackBar.warning(context, 'La contraseña debe tener al menos 8 caracteres');
+    if (!_isStrongEnough) {
+      GardenSnackBar.warning(context, 'La contraseña debe cumplir todos los requisitos de seguridad');
       return;
     }
     if (pass != confirm) {
@@ -141,7 +148,7 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Elige una contraseña segura con al menos 8 caracteres.',
+                    'Elige una contraseña segura: al menos 8 caracteres, una mayúscula, un número y un símbolo.',
                     style: TextStyle(fontSize: 15, color: subtextColor, height: 1.5),
                   ),
                   const SizedBox(height: 36),
@@ -161,20 +168,14 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Row(
+                  Wrap(
+                    spacing: 14,
+                    runSpacing: 6,
                     children: [
-                      Icon(
-                        _hasMinLength ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                        size: 14,
-                        color: _hasMinLength ? GardenColors.success : subtextColor,
-                      ),
-                      const SizedBox(width: 6),
-                      Text('Al menos 8 caracteres',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: _hasMinLength ? GardenColors.success : subtextColor,
-                          )),
+                      _requirementChip('Al menos 8 caracteres', _hasMinLength, subtextColor),
+                      _requirementChip('Una mayúscula', _hasUppercase, subtextColor),
+                      _requirementChip('Un número', _hasNumber, subtextColor),
+                      _requirementChip('Un símbolo', _hasSymbol, subtextColor),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -223,7 +224,7 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
                     child: GardenButton(
                       label: 'Guardar contraseña',
                       loading: _loading,
-                      onPressed: _submit,
+                      onPressed: (_isStrongEnough && _passwordsMatch) ? _submit : null,
                     ),
                   ),
                 ],
@@ -232,6 +233,26 @@ class _ForgotPasswordNewScreenState extends State<ForgotPasswordNewScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _requirementChip(String label, bool met, Color subtextColor) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          met ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+          size: 14,
+          color: met ? GardenColors.success : subtextColor,
+        ),
+        const SizedBox(width: 6),
+        Text(label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: met ? GardenColors.success : subtextColor,
+            )),
+      ],
     );
   }
 }

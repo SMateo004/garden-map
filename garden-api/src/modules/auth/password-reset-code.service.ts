@@ -17,11 +17,11 @@ import prisma from '../../config/database.js';
 import { BadRequestError } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
 import { sendTransactionalEmail } from './email.service.js';
+import { strongPasswordSchema } from './auth.validation.js';
 
 const CODE_EXPIRY_MINUTES = 10;
 const MAX_ATTEMPTS = 5;
 const COOLDOWN_SECONDS = 60;
-const MIN_PASSWORD_LENGTH = 8;
 
 function generateCode(): string {
     return randomInt(1000, 9999).toString();
@@ -125,10 +125,11 @@ export async function verifyResetCode(email: string, code: string): Promise<{ te
 
 /** Paso 3 — Cambiar la contraseña usando el tempToken. */
 export async function setNewPassword(tempToken: string, newPassword: string): Promise<void> {
-    if (!newPassword || newPassword.length < MIN_PASSWORD_LENGTH) {
+    const strongCheck = strongPasswordSchema.safeParse(newPassword);
+    if (!strongCheck.success) {
         throw new BadRequestError(
-            `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`,
-            'PASSWORD_TOO_SHORT'
+            strongCheck.error.errors[0]?.message ?? 'La contraseña no cumple los requisitos de seguridad.',
+            'PASSWORD_TOO_WEAK'
         );
     }
 

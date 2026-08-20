@@ -19,10 +19,10 @@ import { env } from '../../config/env.js';
 import { BadRequestError } from '../../shared/errors.js';
 import logger from '../../shared/logger.js';
 import { sendTransactionalEmail } from './email.service.js';
+import { strongPasswordSchema } from './auth.validation.js';
 import bcrypt from 'bcrypt';
 
 const TOKEN_EXPIRY_MINUTES = 60;
-const MIN_PASSWORD_LENGTH = 8;
 
 function generateToken(): string {
   return randomBytes(32).toString('hex'); // 64-char hex = 256 bits entropy
@@ -112,10 +112,11 @@ export async function validateResetToken(rawToken: string): Promise<{ userId: st
  */
 export async function resetPassword(rawToken: string, newPassword: string): Promise<void> {
   // Validate
-  if (!newPassword || newPassword.length < MIN_PASSWORD_LENGTH) {
+  const strongCheck = strongPasswordSchema.safeParse(newPassword);
+  if (!strongCheck.success) {
     throw new BadRequestError(
-      `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`,
-      'PASSWORD_TOO_SHORT'
+      strongCheck.error.errors[0]?.message ?? 'La contraseña no cumple los requisitos de seguridad.',
+      'PASSWORD_TOO_WEAK'
     );
   }
 

@@ -11,6 +11,7 @@ import {
   registerProfessionalMinimalSchema,
   registerCompanyMinimalSchema,
   patchCaregiverProfileSchema,
+  strongPasswordSchema,
   type RegisterCaregiverBody,
   type RegisterClientBody,
 } from './auth.validation.js';
@@ -774,11 +775,12 @@ export const changePassword = asyncHandler(async (req: Request, res: Response) =
   if (!newPassword || typeof newPassword !== 'string') {
     throw new BadRequestError('La nueva contraseña es requerida.', 'MISSING_NEW_PASSWORD');
   }
-  if (newPassword.length < 8) {
-    throw new BadRequestError('La nueva contraseña debe tener al menos 8 caracteres.', 'PASSWORD_TOO_SHORT');
-  }
-  if (newPassword.length > 128) {
-    throw new BadRequestError('La contraseña no puede superar 128 caracteres.', 'PASSWORD_TOO_LONG');
+  const strongCheck = strongPasswordSchema.safeParse(newPassword);
+  if (!strongCheck.success) {
+    throw new BadRequestError(
+      strongCheck.error.errors[0]?.message ?? 'La contraseña no cumple los requisitos de seguridad.',
+      'PASSWORD_TOO_WEAK'
+    );
   }
   if (confirmPassword !== undefined && newPassword !== confirmPassword) {
     throw new BadRequestError('Las contraseñas no coinciden.', 'PASSWORD_MISMATCH');
