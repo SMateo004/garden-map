@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart' show HapticFeedback, FilteringTextInputFormatter;
@@ -11,9 +12,12 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_state.dart';
+import '../../utils/browser_back_guard.dart';
 import '../../utils/qr_saver.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import '../../widgets/card_payment_widgets.dart';
+
+enum _BrowserBackGuardMode { none, confirmCancel, redirectHome }
 
 class PaymentScreen extends StatefulWidget {
   /// Existing booking (M&G follow-up, back navigation recovery, etc.)
@@ -72,6 +76,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Duration _countdownRemaining = Duration.zero;
   int _pollFailureCount = 0;
   bool _pollFailureWarningShown = false;
+
+  // Guard contra el botón "atrás" del NAVEGADOR en web — ver
+  // utils/browser_back_guard.dart para el porqué (PopScope no lo intercepta
+  // en Flutter Web). No-op en mobile/desktop.
+  _BrowserBackGuardMode _armedBackGuardMode = _BrowserBackGuardMode.none;
 
   // QR capture key for "Guardar QR"
   final GlobalKey _qrBoundaryKey = GlobalKey();
@@ -249,11 +258,33 @@ class _PaymentScreenState extends State<PaymentScreen> {
   @override
   void dispose() {
     _stopPolling();
+    disarmBrowserBackGuard();
     _donationController.dispose();
     _nitCtrl.dispose();
     _razonSocialCtrl.dispose();
     _promoController.dispose();
     super.dispose();
+  }
+
+  /// Arma/desarma el guard del botón "atrás" del navegador (web) según el
+  /// estado actual de la pantalla. Idempotente — sólo toca el listener del
+  /// navegador cuando el modo realmente cambia. No-op fuera de web.
+  void _syncBrowserBackGuard(_BrowserBackGuardMode desired) {
+    if (!kIsWeb || _armedBackGuardMode == desired) return;
+    switch (desired) {
+      case _BrowserBackGuardMode.none:
+        disarmBrowserBackGuard();
+        break;
+      case _BrowserBackGuardMode.confirmCancel:
+        armBrowserBackGuard(_handleBack);
+        break;
+      case _BrowserBackGuardMode.redirectHome:
+        armBrowserBackGuard(() {
+          if (mounted) context.go('/marketplace');
+        });
+        break;
+    }
+    _armedBackGuardMode = desired;
   }
 
   // ── Datos de facturación (NIT) — guardado explícito e inmediato ─────────
@@ -1003,17 +1034,29 @@ class _PaymentScreenState extends State<PaymentScreen> {
           );
         }
 
-        if (_paymentConfirmed) return _buildSuccessScreen();
-        if (_manualRequested) return _buildManualPendingScreen();
-        if (_paymentRejected) return _buildRejectionScreen();
-        if (_qrExpired) return _buildExpiredScreen();
-
         // Intercept back when QR is being shown OR when this screen already
         // created the booking itself (modo params) — same condition as
         // _handleBack, so the system back gesture behaves the same as the
         // AppBar's back button instead of silently discarding it.
         final interceptBack = _qrResponse != null ||
             (widget.bookingParams != null && _bookingId != null && !_paymentConfirmed);
+        final inTerminalSubScreen = _manualRequested || _paymentRejected || _qrExpired;
+        // El botón "atrás" del NAVEGADOR (web) no respeta PopScope — ver
+        // utils/browser_back_guard.dart. Se arma/desarma en cada build para
+        // que el guard siga siempre al estado real de la pantalla.
+        _syncBrowserBackGuard(
+          _paymentConfirmed
+              ? _BrowserBackGuardMode.redirectHome
+              : (interceptBack && !inTerminalSubScreen)
+                  ? _BrowserBackGuardMode.confirmCancel
+                  : _BrowserBackGuardMode.none,
+        );
+
+        if (_paymentConfirmed) return _buildSuccessScreen();
+        if (_manualRequested) return _buildManualPendingScreen();
+        if (_paymentRejected) return _buildRejectionScreen();
+        if (_qrExpired) return _buildExpiredScreen();
+
         return PopScope(
           canPop: !interceptBack,
           onPopInvokedWithResult: (didPop, _) {
