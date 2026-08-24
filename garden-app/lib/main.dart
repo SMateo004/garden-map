@@ -22,6 +22,9 @@ import 'screens/client/payment_screen.dart';
 import 'screens/client/slot_conflict_screen.dart';
 import 'screens/client/booking_confirmed_screen.dart';
 import 'screens/caregiver/caregiver_home_screen.dart';
+import 'screens/caregiver/staff_home_screen.dart';
+import 'screens/caregiver/staff_invite_accept_screen.dart';
+import 'screens/caregiver/staff_team_screen.dart';
 import 'screens/caregiver/caregiver_pets_screen.dart';
 import 'screens/caregiver/verification_screen.dart';
 import 'screens/caregiver/trainings_screen.dart';
@@ -138,6 +141,8 @@ const _publicPaths = {
   '/sign-in/profesional',
   '/caregiver/onboarding',
   '/caregiver/onboarding-profesional',
+  '/caregiver-staff/join', // empleado sin cuenta todavía, entra con un código de invitación
+
   '/client-welcome',
   '/service-selector', // accesible sin login (modo guest)
   '/track', // link público de "compartir viaje en vivo" — sin cuenta, sin login
@@ -172,16 +177,23 @@ const _roleRestrictedPrefixes = <String, String>{
   // igual que ya pasa con /marketplace.
   '/booking': 'CLIENT',
   '/payment': 'CLIENT',
+  // El staff de una empresa también tiene rol CAREGIVER (mismo enum), así
+  // que este prefijo por sí solo no distingue dueño de empleado — ver el
+  // chequeo explícito de AuthState.isCaregiverStaff más abajo en redirect.
+  '/caregiver-staff/home': 'CAREGIVER',
 };
 
 // Home correcta para cada rol efectivo — mismo destino que usa el cambio de
-// rol explícito en profile_screen.dart (_doSwitchRole).
+// rol explícito en profile_screen.dart (_doSwitchRole). Un empleado de
+// empresa (AuthState.isCaregiverStaff) tiene rol CAREGIVER pero NUNCA debe
+// aterrizar en /caregiver/home (el dashboard completo del dueño, con
+// billetera/precios/config) — va a su dashboard reducido en su lugar.
 String _homeForRole(String effectiveRole) {
   switch (effectiveRole) {
     case 'ADMIN':
       return '/admin';
     case 'CAREGIVER':
-      return '/caregiver/home';
+      return AuthState.isCaregiverStaff ? '/caregiver-staff/home' : '/caregiver/home';
     default:
       return '/service-selector';
   }
@@ -208,6 +220,13 @@ final GoRouter _router = GoRouter(
       }
       if (requiredRole != null && AuthState.effectiveRole != requiredRole) {
         return _homeForRole(AuthState.effectiveRole);
+      }
+
+      // Un empleado de empresa tiene rol CAREGIVER (mismo enum que el dueño),
+      // así que el guard de arriba no lo distingue — bloqueo explícito para
+      // que nunca llegue al dashboard completo del dueño.
+      if (AuthState.isCaregiverStaff && (path == '/caregiver/home' || path.startsWith('/caregiver/home/'))) {
+        return '/caregiver-staff/home';
       }
     }
 
@@ -407,6 +426,21 @@ final GoRouter _router = GoRouter(
       path: '/caregiver/home',
       name: 'caregiverHome',
       builder: (context, state) => const CaregiverHomeScreen(),
+    ),
+    GoRoute(
+      path: '/caregiver-staff/home',
+      name: 'caregiverStaffHome',
+      builder: (context, state) => const StaffHomeScreen(),
+    ),
+    GoRoute(
+      path: '/caregiver-staff/join',
+      name: 'caregiverStaffJoin',
+      builder: (context, state) => const StaffInviteAcceptScreen(),
+    ),
+    GoRoute(
+      path: '/caregiver/staff',
+      name: 'caregiverStaffTeam',
+      builder: (context, state) => const StaffTeamScreen(),
     ),
     GoRoute(
       path: '/caregiver/pets',

@@ -317,6 +317,15 @@ class SocialAuthService {
     }
     AuthState.updateRole(role: role, activeRole: effectiveActiveRole);
 
+    // Presente solo si role=CAREGIVER y esta cuenta es un empleado de una
+    // empresa (ver caregiver-staff module del backend) — mismo tratamiento
+    // que AuthService.saveUserData() para el login por email/contraseña.
+    final isCaregiverStaff = user['isCaregiverStaff'] == true;
+    final staffCompanyName = user['staffCompanyName'] as String? ?? '';
+    await prefs.setBool('is_caregiver_staff', isCaregiverStaff);
+    await prefs.setString('staff_company_name', staffCompanyName);
+    AuthState.updateStaffInfo(isCaregiverStaff: isCaregiverStaff, companyName: staffCompanyName);
+
     return SocialLoginResult(
       success: true,
       userExists: true,

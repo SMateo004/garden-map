@@ -75,6 +75,8 @@ class AuthService {
     await prefs.remove('user_id');
     await prefs.remove('user_name');
     await prefs.remove('user_photo');
+    await prefs.remove('is_caregiver_staff');
+    await prefs.remove('staff_company_name');
     // Countdown de próxima reserva (idea #3) + estadística mensual (idea #5)
     // — no dejar datos de la cuenta anterior visibles en el widget idle si
     // el dispositivo se comparte o se cambia de cuenta. El widget de
@@ -107,6 +109,14 @@ class AuthService {
       await prefs.remove('active_role');
     }
     AuthState.updateRole(role: permanentRole, activeRole: effectiveActiveRole);
+
+    // Presente solo si role=CAREGIVER y esta cuenta es un EMPLEADO de una
+    // empresa (no el dueño) — ver caregiver-staff module del backend.
+    final isCaregiverStaff = user['isCaregiverStaff'] == true;
+    final staffCompanyName = user['staffCompanyName'] as String? ?? '';
+    await prefs.setBool('is_caregiver_staff', isCaregiverStaff);
+    await prefs.setString('staff_company_name', staffCompanyName);
+    AuthState.updateStaffInfo(isCaregiverStaff: isCaregiverStaff, companyName: staffCompanyName);
   }
 
   // ── Session refresh ─────────────────────────────────────────────────────────

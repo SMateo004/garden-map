@@ -117,6 +117,15 @@ export async function socialLogin(req: Request, res: Response, next: NextFunctio
 
     logger.info(`[SocialAuth] login ${provider} → user ${user.id} (${user.role})`);
 
+    // Mismo cálculo que auth.service.ts login() — solo aplica si un empleado
+    // de una empresa alguna vez usa Google/Apple con el mismo email de su
+    // cuenta de staff. Import dinámico para evitar import circular.
+    let staffInfo: { isCaregiverStaff: boolean; staffCompanyName: string | null } | null = null;
+    if (user.role === 'CAREGIVER') {
+      const { getStaffLoginInfo } = await import('../caregiver-staff/caregiver-staff.service.js');
+      staffInfo = await getStaffLoginInfo(user.id);
+    }
+
     return res.json({
       success: true,
       data: {
@@ -131,6 +140,7 @@ export async function socialLogin(req: Request, res: Response, next: NextFunctio
           firstName: user.firstName,
           lastName: user.lastName,
           profilePicture: user.profilePicture,
+          ...(staffInfo ? { isCaregiverStaff: staffInfo.isCaregiverStaff, staffCompanyName: staffInfo.staffCompanyName } : {}),
         },
       },
     });

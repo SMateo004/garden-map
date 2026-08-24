@@ -977,7 +977,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                         _profileTile(icon: Icons.volunteer_activism_outlined, title: 'Conviérteme en cuidador',
                             onTap: () => context.push('/become-caregiver')),
                     ],
-                    if (_effectiveRole == 'CAREGIVER') ...[
+                    if (_effectiveRole == 'CAREGIVER' && AuthState.isCaregiverStaff) ...[
+                      // Empleado de una empresa — solo operativo, nada de
+                      // billetera/precios/config del negocio (eso es del dueño).
+                      _profileTile(icon: Icons.event_note_outlined, title: 'Mis reservas',
+                          onTap: () => context.push('/caregiver-staff/home')),
+                    ],
+                    if (_effectiveRole == 'CAREGIVER' && !AuthState.isCaregiverStaff) ...[
                       _profileTile(icon: Icons.assignment_outlined, title: 'Datos del cuidador',
                           highlight: _isCaregiverDataIncomplete,
                           onTap: () async {
@@ -990,6 +996,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                           onTap: () => context.push('/caregiver/home')),
                       _profileTile(icon: Icons.pets_outlined, title: 'Mascotas',
                           onTap: () => context.push('/caregiver/pets')),
+                      if (_caregiverProfile?['isCompany'] == true)
+                        _profileTile(icon: Icons.groups_outlined, title: 'Mi equipo',
+                            onTap: () => context.push('/caregiver/staff')),
                       if (_caregiverProfile?['verified'] != true &&
                           _caregiverProfile?['verificationStatus'] != 'VERIFIED' &&
                           _caregiverProfile?['identityVerificationStatus'] != 'VERIFIED')
@@ -1030,7 +1039,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     _profileTile(icon: Icons.block_rounded, title: 'Usuarios bloqueados',
                         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BlockedUsersScreen()))),
                     const SizedBox(height: 16),
-                    if (_role == 'CAREGIVER') ...[
+                    if (_role == 'CAREGIVER' && !AuthState.isCaregiverStaff) ...[
                       Text('Cuenta', style: GardenText.labelLarge.copyWith(color: textColor, fontSize: 12, letterSpacing: 0.4)),
                       const SizedBox(height: 8),
                       _switchRoleTile(textColor),
@@ -1235,7 +1244,11 @@ class _ProfileScreenState extends State<ProfileScreen>
             ),
         ],
 
-        if (_effectiveRole == 'CAREGIVER') ...[
+        if (_effectiveRole == 'CAREGIVER' && AuthState.isCaregiverStaff) ...[
+          _profileTile(icon: Icons.event_note_outlined, title: 'Mis reservas', onTap: () => context.push('/caregiver-staff/home')),
+        ],
+
+        if (_effectiveRole == 'CAREGIVER' && !AuthState.isCaregiverStaff) ...[
           _profileTile(
             icon: Icons.assignment_outlined,
             title: 'Datos del cuidador',
@@ -1248,6 +1261,8 @@ class _ProfileScreenState extends State<ProfileScreen>
           _profileTile(icon: Icons.edit_outlined, title: 'Editar perfil', onTap: () => context.push('/caregiver/edit-profile')),
           _profileTile(icon: Icons.home_outlined, title: 'Mi panel', onTap: () => context.push('/caregiver/home')),
           _profileTile(icon: Icons.pets_outlined, title: 'Mascotas', onTap: () => context.push('/caregiver/pets')),
+          if (_caregiverProfile?['isCompany'] == true)
+            _profileTile(icon: Icons.groups_outlined, title: 'Mi equipo', onTap: () => context.push('/caregiver/staff')),
           if (_caregiverProfile?['verified'] != true &&
               _caregiverProfile?['verificationStatus'] != 'VERIFIED' &&
               _caregiverProfile?['identityVerificationStatus'] != 'VERIFIED')
@@ -1386,7 +1401,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         const SizedBox(height: 24),
         _sectionLabel('Cuenta', textColor),
         const SizedBox(height: 10),
-        if (_role == 'CAREGIVER') ...[
+        if (_role == 'CAREGIVER' && !AuthState.isCaregiverStaff) ...[
           _switchRoleTile(textColor),
           const SizedBox(height: 8),
         ],

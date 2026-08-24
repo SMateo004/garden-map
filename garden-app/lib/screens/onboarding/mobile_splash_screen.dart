@@ -104,7 +104,12 @@ class _MobileSplashScreenState extends State<MobileSplashScreen>
       final activeRole = prefs.getString('active_role') ?? '';
       final effectiveRole = activeRole.isNotEmpty ? activeRole : role;
 
-      if (effectiveRole == 'CAREGIVER') return const _NavTarget('/caregiver/home');
+      if (effectiveRole == 'CAREGIVER') {
+        // Empleado de una empresa (mismo rol CAREGIVER que el dueño) — va a
+        // su dashboard reducido, nunca al del dueño. Ver caregiver-staff module.
+        final isCaregiverStaff = prefs.getBool('is_caregiver_staff') ?? false;
+        return _NavTarget(isCaregiverStaff ? '/caregiver-staff/home' : '/caregiver/home');
+      }
 
       // Pending-payment / in-progress takes priority over rating
       if (activeBookingResult is _NavTarget) return activeBookingResult;

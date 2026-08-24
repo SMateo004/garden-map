@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/auth_service.dart';
-import '../../services/auth_state.dart' show loginSuccessNotifier;
+import '../../services/auth_state.dart' show loginSuccessNotifier, AuthState;
 import '../../services/fcm_service.dart';
 import '../../services/social_auth_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -87,7 +87,9 @@ class _LoginScreenState extends State<LoginScreen> {
         context.go(nextRoute);
       }
     } else if (effectiveRole == 'CAREGIVER') {
-      context.go('/caregiver/home');
+      // saveUserData() ya corrió antes de llegar acá (ver _handleLogin), así
+      // que AuthState.isCaregiverStaff ya está poblado.
+      context.go(AuthState.isCaregiverStaff ? '/caregiver-staff/home' : '/caregiver/home');
     } else {
       context.go('/marketplace');
     }

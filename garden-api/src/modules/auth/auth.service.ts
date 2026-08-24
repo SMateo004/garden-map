@@ -58,7 +58,12 @@ export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
   expiresIn: string;
-  user: { id: string; email: string; role: string; activeRole?: string | null; firstName: string; lastName: string; profilePicture?: string | null };
+  user: {
+    id: string; email: string; role: string; activeRole?: string | null; firstName: string; lastName: string; profilePicture?: string | null;
+    /** Presente solo cuando role=CAREGIVER — true si esta cuenta es un empleado de una empresa (ver caregiver-staff module), no el dueño. */
+    isCaregiverStaff?: boolean;
+    staffCompanyName?: string | null;
+  };
 }
 
 export interface RegisterCaregiverResult {
@@ -647,6 +652,17 @@ export async function login(
   const { token: accessToken, expiresIn } = signAccessToken(payload);
   const refreshToken = await createRefreshToken(user.id);
 
+  // Solo se consulta para CAREGIVER — sin costo agregado para CLIENT/ADMIN.
+  // Nunca se cachea en el JWT: getStaffLoginInfo hace una lectura fresca acá,
+  // y cada request a /api/caregiver-staff/* la vuelve a resolver por su cuenta,
+  // así que revocar el acceso de un empleado corta en el siguiente request,
+  // no cuando expire este token.
+  let staffInfo: { isCaregiverStaff: boolean; staffCompanyName: string | null } | null = null;
+  if (user.role === UserRole.CAREGIVER) {
+    const { getStaffLoginInfo } = await import('../caregiver-staff/caregiver-staff.service.js');
+    staffInfo = await getStaffLoginInfo(user.id);
+  }
+
   return {
     accessToken,
     refreshToken,
@@ -659,6 +675,7 @@ export async function login(
       firstName: user.firstName,
       lastName: user.lastName,
       profilePicture: user.profilePicture,
+      ...(staffInfo ? { isCaregiverStaff: staffInfo.isCaregiverStaff, staffCompanyName: staffInfo.staffCompanyName } : {}),
     },
   };
 }

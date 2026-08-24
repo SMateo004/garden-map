@@ -49,6 +49,8 @@ class AuthState {
   static String _token = '';
   static String _role = '';
   static String _activeRole = '';
+  static bool _isCaregiverStaff = false;
+  static String _staffCompanyName = '';
 
   // ── Synchronous read ───────────────────────────────────────────────────────
 
@@ -69,6 +71,14 @@ class AuthState {
   /// mobile_splash_screen.dart.
   static String get effectiveRole => _activeRole.isNotEmpty ? _activeRole : _role;
 
+  /// true si esta cuenta CAREGIVER es un EMPLEADO de una empresa (no el
+  /// dueño) — ver caregiver-staff module del backend. Siempre false para
+  /// cuentas que no son CAREGIVER.
+  static bool get isCaregiverStaff => _isCaregiverStaff;
+
+  /// Nombre de la empresa a la que pertenece el empleado (vacío si no aplica).
+  static String get staffCompanyName => _staffCompanyName;
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   /// Call once at app start (after WidgetsFlutterBinding.ensureInitialized).
@@ -80,6 +90,8 @@ class AuthState {
     final prefs = await SharedPreferences.getInstance();
     _role = prefs.getString('user_role') ?? '';
     _activeRole = prefs.getString('active_role') ?? '';
+    _isCaregiverStaff = prefs.getBool('is_caregiver_staff') ?? false;
+    _staffCompanyName = prefs.getString('staff_company_name') ?? '';
     if (kDebugMode) {
       debugPrint('[AuthState] initialized — session: ${_token.isNotEmpty ? "present" : "none"}, '
           'role: $_role, activeRole: $_activeRole');
@@ -104,12 +116,21 @@ class AuthState {
     if (activeRole != null) _activeRole = activeRole;
   }
 
+  /// Mismo patrón que [updateRole] — llamar junto con cada escritura a
+  /// `is_caregiver_staff`/`staff_company_name` en SharedPreferences.
+  static void updateStaffInfo({bool? isCaregiverStaff, String? companyName}) {
+    if (isCaregiverStaff != null) _isCaregiverStaff = isCaregiverStaff;
+    if (companyName != null) _staffCompanyName = companyName;
+  }
+
   /// Clear the in-memory token AND all persisted session data.
   /// Call on explicit logout.
   static Future<void> clear() async {
     _token = '';
     _role = '';
     _activeRole = '';
+    _isCaregiverStaff = false;
+    _staffCompanyName = '';
     await SecureStorageService.clearAll();
     PresenceService.instance.disconnect();
   }
