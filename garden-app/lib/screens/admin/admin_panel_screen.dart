@@ -4637,6 +4637,8 @@ class _CaregiverDetailSheetState extends State<_CaregiverDetailSheet> {
                     ],
                     row('¿Por qué ser cuidador?', detail?['whyCaregiver'] as String?),
                     row('¿Qué lo diferencia?', detail?['whatDiffers'] as String?),
+                    row('Instagram', (detail?['socialLinks'] as Map?)?['instagram'] as String?),
+                    row('Facebook', (detail?['socialLinks'] as Map?)?['facebook'] as String?),
                   ])),
 
                   // SERVICIOS Y PRECIOS

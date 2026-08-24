@@ -109,6 +109,7 @@ export async function getCaregiverDetailForAdmin(profileId: string): Promise<Adm
     photos: profile.photos ?? [],
     caregiverPhotos: (profile as any).caregiverPhotos ?? [],
     placePhotos: (profile as any).placePhotos as Record<string, string[]> | null,
+    socialLinks: (profile as any).socialLinks as { instagram?: string; facebook?: string } | null,
     servicesOffered: profile.servicesOffered ?? [],
     serviceAvailability: profile.serviceAvailability as Record<string, unknown> | null,
     pricePerDay: profile.pricePerDay,

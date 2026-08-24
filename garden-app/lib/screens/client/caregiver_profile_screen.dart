@@ -11,6 +11,7 @@ import '../../widgets/garden_logo_loader.dart';
 import '../../services/auth_state.dart';
 import '../../widgets/garden_loading_indicator.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class CaregiverProfileScreen extends StatefulWidget {
   final String caregiverId;
@@ -141,6 +142,35 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
   bool _offersPaseoForCalendar() {
     final services = (_caregiver?['services'] as List?)?.cast<String>() ?? [];
     return services.contains('PASEO');
+  }
+
+  Map<String, String> get _socialLinks {
+    final raw = _caregiver?['socialLinks'] as Map<String, dynamic>? ?? {};
+    return raw.map((k, v) => MapEntry(k, v.toString())).cast<String, String>()
+      ..removeWhere((_, v) => v.isEmpty);
+  }
+
+  Future<void> _openSocialUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http') && await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Widget _socialIconButton(IconData icon, String url, Color subtextColor, Color borderColor) {
+    return InkWell(
+      onTap: () => _openSocialUrl(url),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: borderColor),
+        ),
+        child: Icon(icon, color: subtextColor, size: 20),
+      ),
+    );
   }
 
   static const _calDayLabels = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
@@ -1132,6 +1162,22 @@ class _CaregiverProfileScreenState extends State<CaregiverProfileScreen> {
                         Text('Video de presentación', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 12),
                         _CaregiverIntroVideo(url: _caregiver!['videoUrl'] as String),
+                        const SizedBox(height: 24),
+                      ],
+                      // Redes sociales (opcional) — Instagram/Facebook del cuidador.
+                      if (_socialLinks.isNotEmpty) ...[
+                        Divider(color: borderColor),
+                        const SizedBox(height: 20),
+                        Text('Redes sociales', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 12),
+                        Row(children: [
+                          if (_socialLinks['instagram'] != null)
+                            _socialIconButton(Icons.camera_alt_outlined, _socialLinks['instagram']!, subtextColor, borderColor),
+                          if (_socialLinks['facebook'] != null) ...[
+                            const SizedBox(width: 10),
+                            _socialIconButton(Icons.facebook_outlined, _socialLinks['facebook']!, subtextColor, borderColor),
+                          ],
+                        ]),
                         const SizedBox(height: 24),
                       ],
                       // Calendario de disponibilidad (próximos 14 días, PASEO) —

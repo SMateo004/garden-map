@@ -46,6 +46,8 @@ export interface CaregiverDetail extends CaregiverListItem {
   bioDetail?: string | null;
   /** Video de presentación (link de YouTube), opcional. */
   videoUrl?: string | null;
+  /** Redes sociales del cuidador, mostradas en su perfil público. Ambas opcionales. */
+  socialLinks?: { instagram?: string; facebook?: string } | null;
   /** Si es true, sus reservas pagadas se auto-aceptan sin esperar aprobación manual. */
   instantBookingEnabled?: boolean;
   photos: string[];

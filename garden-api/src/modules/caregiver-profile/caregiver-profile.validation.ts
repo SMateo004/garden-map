@@ -52,6 +52,8 @@ export interface PatchCaregiverProfileBody {
   contractAccepted?: boolean;
   photos?: string[];
   profilePhoto?: string | null;
+  /** { instagram?: string, facebook?: string } — se muestran en el perfil público y en el detalle del admin. */
+  socialLinks?: { instagram?: string; facebook?: string } | null;
   experienceYears?: any;
   isAmateur?: boolean;
   ownPets?: boolean;

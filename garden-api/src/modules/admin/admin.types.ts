@@ -133,6 +133,7 @@ export interface AdminCaregiverDetailDto {
   photos: string[]; // legacy — reemplazado por caregiverPhotos
   caregiverPhotos: string[];
   placePhotos: Record<string, string[]> | null;
+  socialLinks: { instagram?: string; facebook?: string } | null;
 
   // --- Servicios y disponibilidad ---
   servicesOffered: string[];

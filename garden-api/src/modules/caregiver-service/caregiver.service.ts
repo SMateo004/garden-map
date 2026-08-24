@@ -589,6 +589,7 @@ export async function getCaregiverById(id: string): Promise<CaregiverDetail | nu
     acceptSeniors: profile.acceptSeniors,
     requireMeetAndGreet: (profile as any).requireMeetAndGreet ?? false,
     videoUrl: (profile as any).videoUrl ?? null,
+    socialLinks: (profile as any).socialLinks ?? null,
     instantBookingEnabled: (profile as any).instantBookingEnabled ?? false,
     sizesAccepted: profile.sizesAccepted,
     animalTypes: profile.animalTypes,

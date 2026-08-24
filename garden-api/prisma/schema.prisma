@@ -74,6 +74,9 @@ model User {
   referralRewardGiven          Boolean                       @default(false)
   caregiverProfile             CaregiverProfile?
   clientProfile                ClientProfile?
+  /// Presente solo si este usuario es un EMPLEADO de una empresa cuidadora
+  /// (no tiene CaregiverProfile propio en ese caso — ver caregiver-staff.service.ts).
+  staffMembership               CaregiverStaffMember?           @relation("StaffMembership")
   identityVerificationSessions IdentityVerificationSession[]
   reviews                      Review[]
   verificationAudits           VerificationAudit[]
@@ -175,6 +178,9 @@ model CaregiverProfile {
   /// Video de presentación (link de YouTube, mismo patrón que Training.videoUrl
   /// — evita construir upload/hosting de video propio para esto). Opcional.
   videoUrl                        String?                     @db.VarChar(500)
+  /// Redes sociales del cuidador, mostradas en su perfil público y en el
+  /// detalle del admin — { instagram?: url, facebook?: url }. Todas opcionales.
+  socialLinks                     Json?
   placePhotos                     Json? // { sala:[url], descanso:[url], alimentacion:[url], jardin:[url], juego:[url] }
   profilePhoto                    String?
   address                         String?                     @db.VarChar(500)
@@ -351,6 +357,8 @@ model CaregiverProfile {
   infractions                     CaregiverInfraction[]
   trainingProgress                CaregiverTrainingProgress[]
   extraServices                   ExtraService[]
+  staffMembers                    CaregiverStaffMember[]
+  staffInvites                    CaregiverStaffInvite[]
 
   @@index([status])
   @@index([userId])
@@ -364,6 +372,65 @@ model CaregiverProfile {
   @@index([experienceYears])
   @@index([animalTypes])
   @@map("caregiver_profiles")
+}
+
+/// Empleado de una empresa cuidadora (isCompany=true). Tiene su PROPIA cuenta
+/// (User.role=CAREGIVER) pero NUNCA tiene un CaregiverProfile propio — su
+/// identidad de negocio se resuelve siempre a través de esta tabla. Solo
+/// operativo (ver/atender reservas); billetera, precios, config y chat con
+/// clientes quedan exclusivamente del lado del dueño — ver caregiver-staff
+/// module para el detalle de qué rutas expone.
+model CaregiverStaffMember {
+  id                 String               @id @default(uuid())
+  caregiverProfileId String
+  caregiverProfile   CaregiverProfile     @relation(fields: [caregiverProfileId], references: [id], onDelete: Cascade)
+  userId             String               @unique
+  user               User                 @relation("StaffMembership", fields: [userId], references: [id], onDelete: Cascade)
+  status             CaregiverStaffStatus @default(ACTIVE)
+  invitedByUserId    String
+  invitedAt          DateTime             @default(now())
+  joinedAt           DateTime?
+  removedAt          DateTime?
+  removedByUserId    String?
+  removalReason      String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@index([caregiverProfileId, status])
+  @@map("caregiver_staff_members")
+}
+
+enum CaregiverStaffStatus {
+  ACTIVE
+  SUSPENDED
+  REMOVED
+}
+
+/// Código de invitación de un solo uso generado por el dueño de una empresa
+/// para que un empleado se registre y quede vinculado a su CaregiverProfile.
+model CaregiverStaffInvite {
+  id                 String                     @id @default(uuid())
+  caregiverProfileId String
+  caregiverProfile   CaregiverProfile           @relation(fields: [caregiverProfileId], references: [id], onDelete: Cascade)
+  code               String                     @unique @db.VarChar(12)
+  createdByUserId    String
+  status             CaregiverStaffInviteStatus @default(PENDING)
+  expiresAt          DateTime
+  usedAt             DateTime?
+  usedByUserId       String?
+  /// Etiqueta libre para que el dueño reconozca el invite (ej. "Turno noche").
+  label              String?                    @db.VarChar(100)
+  createdAt          DateTime                   @default(now())
+
+  @@index([caregiverProfileId, status])
+  @@map("caregiver_staff_invites")
+}
+
+enum CaregiverStaffInviteStatus {
+  PENDING
+  USED
+  EXPIRED
+  REVOKED
 }
 
 /// Disponibilidad por cuidador y fecha. MVP: hospedaje por día; paseos por bloques (MANANA/TARDE/NOCHE).

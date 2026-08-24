@@ -147,6 +147,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   bool _requireMeetAndGreet = false;
   bool _instantBookingEnabled = false;
   final TextEditingController _videoUrlController = TextEditingController();
+  final TextEditingController _instagramController = TextEditingController();
+  final TextEditingController _facebookController = TextEditingController();
 
   // Selecciones
   List<String> _selectedHomeTypes = [];
@@ -392,6 +394,9 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     _requireMeetAndGreet = profile['requireMeetAndGreet'] as bool? ?? false;
     _instantBookingEnabled = profile['instantBookingEnabled'] as bool? ?? false;
     _videoUrlController.text = profile['videoUrl'] as String? ?? '';
+    final socialLinks = profile['socialLinks'] as Map<String, dynamic>? ?? {};
+    _instagramController.text = socialLinks['instagram'] as String? ?? '';
+    _facebookController.text = socialLinks['facebook'] as String? ?? '';
 
     // Mapear texto guardado a chips predefinidas
     final anxiousText = profile['handleAnxious'] as String? ?? '';
@@ -624,6 +629,14 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     if (videoText.isNotEmpty && YoutubePlayerController.convertUrlToId(videoText) == null) {
       return _showValidationError('El link del video de presentación no parece de YouTube');
     }
+    final instagramText = _instagramController.text.trim();
+    if (instagramText.isNotEmpty && !instagramText.contains('instagram.com')) {
+      return _showValidationError('El link de Instagram no parece válido (debe ser instagram.com/...)');
+    }
+    final facebookText = _facebookController.text.trim();
+    if (facebookText.isNotEmpty && !facebookText.contains('facebook.com')) {
+      return _showValidationError('El link de Facebook no parece válido (debe ser facebook.com/...)');
+    }
 
     // Servicios y precios — si un servicio está activo, su precio y demás
     // secciones que aparecen para él NO pueden guardarse vacías.
@@ -741,6 +754,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         'requireMeetAndGreet': _requireMeetAndGreet,
         'instantBookingEnabled': _instantBookingEnabled,
         'videoUrl': _videoUrlController.text.trim(),
+        'socialLinks': {
+          if (_instagramController.text.trim().isNotEmpty) 'instagram': _instagramController.text.trim(),
+          if (_facebookController.text.trim().isNotEmpty) 'facebook': _facebookController.text.trim(),
+        },
         'sizesAccepted': _acceptedSizes,
         'animalTypes': _acceptedPetTypes,
         if (_shirtSize != null) 'shirtSize': _shirtSize,
@@ -1643,6 +1660,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
                                   ),
                                   const SizedBox(height: 16),
                                   _videoUrlField(textColor, subtextColor, surface, borderColor),
+                                  const SizedBox(height: 16),
+                                  _socialLinksField(textColor, subtextColor, surface, borderColor),
                                   if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
                                     const SizedBox(height: 16),
                                     SizedBox(key: _keyHandleAnxious, height: 0),
@@ -2170,6 +2189,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             ),
             const SizedBox(height: 16),
             _videoUrlField(textColor, subtextColor, surface, borderColor),
+            const SizedBox(height: 16),
+            _socialLinksField(textColor, subtextColor, surface, borderColor),
 
             // Situaciones especiales — solo para no-amateurs
             if (!_isAmateur && _experienceYearsController.text.isNotEmpty) ...[
@@ -2337,6 +2358,49 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
             errorStyle: const TextStyle(color: GardenColors.error, fontSize: 11),
           ),
         ),
+      ],
+    );
+  }
+
+  // Redes sociales (opcional) — se muestran con ícono en el perfil público
+  // y también las ve el admin en el detalle del cuidador.
+  Widget _socialLinksField(Color textColor, Color subtextColor, Color surface, Color borderColor) {
+    Widget field(TextEditingController ctrl, IconData icon, String hint, String domain) {
+      final text = ctrl.text.trim();
+      final looksValid = text.isEmpty || text.contains(domain);
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: TextField(
+          controller: ctrl,
+          enabled: _isEditing || widget.embeddedMode,
+          onChanged: (_) => setState(() {}),
+          style: TextStyle(color: textColor, fontSize: 14),
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, color: subtextColor, size: 20),
+            hintText: hint,
+            hintStyle: TextStyle(color: subtextColor, fontSize: 12.5),
+            filled: true,
+            fillColor: surface,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderColor)),
+            errorText: looksValid ? null : 'Ese link no parece de $domain',
+            errorStyle: const TextStyle(color: GardenColors.error, fontSize: 11),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Redes sociales (opcional)', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 4),
+        Text('Se muestran en tu perfil público — genera más confianza en quien te busca.',
+            style: TextStyle(color: subtextColor, fontSize: 11.5)),
+        const SizedBox(height: 8),
+        field(_instagramController, Icons.camera_alt_outlined, 'https://instagram.com/tu_usuario', 'instagram.com'),
+        field(_facebookController, Icons.facebook_outlined, 'https://facebook.com/tu_pagina', 'facebook.com'),
       ],
     );
   }
