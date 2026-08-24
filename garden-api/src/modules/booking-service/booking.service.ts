@@ -29,6 +29,7 @@ import { getIO, emitWalletUpdated } from '../../services/socket.service.js';
 import { boliviaDateTimeToMs, boliviaDateAndTimeToMs } from '../../utils/bolivia-time.js';
 import * as sipService from '../../services/sip.service.js';
 import * as paymentQrService from '../../services/payment-qr.service.js';
+import * as paymentQrAmountService from '../../services/payment-qr-amount.service.js';
 import { env } from '../../config/env.js';
 import type {
   CreateBookingBody,
@@ -1296,9 +1297,11 @@ export interface GenerateQRResult {
 /**
  * Genera QR de pago.
  * - Con SIP_ENABLED=true: llama a la API bancaria SIP y devuelve imagen Base64 real.
- * - Con SIP_ENABLED=false: usa el QR provisional subido por un admin para ese
- *   tipo de servicio (imagen real de una cuenta bancaria, pero SIN conexión al
- *   riel SIP) — o cae a un placeholder si el admin aún no subió ninguno.
+ * - Con SIP_ENABLED=false: usa el QR provisional subido por un admin — primero
+ *   busca uno exacto para ese monto (payment-qr-amount.service.ts, más preciso,
+ *   el cliente no tipea nada), si no hay cae al genérico por tipo de servicio
+ *   (payment-qr.service.ts), y si tampoco hay, a un placeholder. Ninguno de
+ *   estos QR está conectado al riel bancario SIP.
  *
  * El alias enviado a SIP es el bookingId, que SIP nos devolverá en el callback
  * para que podamos identificar qué reserva se pagó.
@@ -1348,10 +1351,19 @@ export async function generateQR(
   }
 
   // Modo local / fallback — SOLO cuando SIP_ENABLED=false (dev/CI)
+  // Orden de precedencia: QR exacto por monto > QR genérico por tipo de
+  // servicio > placeholder. El QR por monto es más preciso (el cliente no
+  // tiene que tipear el monto), pero requiere que el admin lo haya subido
+  // para ese boliviano exacto — si no, cae al genérico de siempre.
   const qrId = crypto.randomUUID();
+  const amountQrUrl = monto != null ? await paymentQrAmountService.getPaymentQrImageUrlForAmount(monto) : null;
+  if (amountQrUrl) {
+    logger.info('QR generado (provisional subido por admin, por monto exacto)', { bookingId, qrId, monto });
+    return { qrId, qrImageUrl: amountQrUrl, qrImageType: 'url', qrExpiresAt };
+  }
   const uploadedQrUrl = serviceType ? await paymentQrService.getPaymentQrImageUrl(serviceType) : null;
   if (uploadedQrUrl) {
-    logger.info('QR generado (provisional subido por admin)', { bookingId, qrId, serviceType });
+    logger.info('QR generado (provisional subido por admin, por tipo de servicio)', { bookingId, qrId, serviceType });
     return { qrId, qrImageUrl: uploadedQrUrl, qrImageType: 'url', qrExpiresAt };
   }
   const qrImageUrl = `https://api.garden.bo/qr/placeholder/${qrId}`;

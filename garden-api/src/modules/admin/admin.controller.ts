@@ -11,6 +11,7 @@ import { asyncHandler } from '../../shared/async-handler.js';
 import prisma from '../../config/database.js';
 import * as adminService from './admin.service.js';
 import * as paymentQrService from '../../services/payment-qr.service.js';
+import * as paymentQrAmountService from '../../services/payment-qr-amount.service.js';
 import { uploadImage } from '../../services/storage.service.js';
 import { assertImageBuffer } from '../../shared/mime-validation.js';
 import { auditLog } from '../../services/audit.service.js';
@@ -1204,6 +1205,49 @@ export const uploadPaymentQrHandler = [
     res.json({ success: true, data: { serviceType, url } });
   }),
 ];
+
+/** GET /api/admin/payment-qr-by-amount — mapa disperso {monto: url} de los QR exactos ya subidos. */
+export const getPaymentQrImagesByAmount = asyncHandler(async (req: Request, res: Response) => {
+  const urls = await paymentQrAmountService.getAllPaymentQrByAmount();
+  res.json({
+    success: true,
+    data: { min: paymentQrAmountService.MIN_AMOUNT, max: paymentQrAmountService.MAX_AMOUNT, urls },
+  });
+});
+
+/** POST /api/admin/payment-qr-by-amount/:amount — multipart 'qr'. Sube/reemplaza el QR de ese monto exacto. */
+export const uploadPaymentQrByAmountHandler = [
+  paymentQrUpload.single('qr'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const amount = Number(req.params.amount);
+    if (!Number.isInteger(amount) || amount < paymentQrAmountService.MIN_AMOUNT || amount > paymentQrAmountService.MAX_AMOUNT) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_AMOUNT', message: `El monto debe ser un entero entre ${paymentQrAmountService.MIN_AMOUNT} y ${paymentQrAmountService.MAX_AMOUNT}` },
+      });
+    }
+    const file = req.file;
+    if (!file) return res.status(400).json({ success: false, error: { code: 'MISSING_FILE', message: 'Se requiere una imagen (campo "qr")' } });
+    await assertImageBuffer(file.buffer);
+
+    const url = await uploadImage(file.buffer, { folder: 'payment-qr-amount', name: `qr-bs${amount}-${Date.now()}` });
+    await paymentQrAmountService.setPaymentQrImageUrlForAmount(amount, url, req.user!.userId);
+    res.json({ success: true, data: { amount, url } });
+  }),
+];
+
+/** DELETE /api/admin/payment-qr-by-amount/:amount — quita el QR de ese monto. */
+export const deletePaymentQrByAmountHandler = asyncHandler(async (req: Request, res: Response) => {
+  const amount = Number(req.params.amount);
+  if (!Number.isInteger(amount) || amount < paymentQrAmountService.MIN_AMOUNT || amount > paymentQrAmountService.MAX_AMOUNT) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_AMOUNT', message: `El monto debe ser un entero entre ${paymentQrAmountService.MIN_AMOUNT} y ${paymentQrAmountService.MAX_AMOUNT}` },
+    });
+  }
+  await paymentQrAmountService.deletePaymentQrImageUrlForAmount(amount, req.user!.userId);
+  res.json({ success: true });
+});
 
 // ── Verificación telefónica manual (fallback WhatsApp/SMS) ──────────────────
 

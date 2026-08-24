@@ -856,4 +856,13 @@ router.get('/payment-qr', adminController.getPaymentQrImages);
 /** POST /api/admin/payment-qr/:serviceType — multipart 'qr'. Sube/reemplaza el QR provisional de ese servicio. */
 router.post('/payment-qr/:serviceType', ...adminController.uploadPaymentQrHandler);
 
+/** GET /api/admin/payment-qr-by-amount — mapa disperso {monto: url} de los QR exactos ya subidos (Bs 15-1000). */
+router.get('/payment-qr-by-amount', adminController.getPaymentQrImagesByAmount);
+
+/** POST /api/admin/payment-qr-by-amount/:amount — multipart 'qr'. Sube/reemplaza el QR exacto de ese monto. */
+router.post('/payment-qr-by-amount/:amount', ...adminController.uploadPaymentQrByAmountHandler);
+
+/** DELETE /api/admin/payment-qr-by-amount/:amount — quita el QR de ese monto (vuelve a caer al genérico por servicio). */
+router.delete('/payment-qr-by-amount/:amount', adminController.deletePaymentQrByAmountHandler);
+
 export default router;
