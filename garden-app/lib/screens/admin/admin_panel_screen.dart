@@ -18,6 +18,7 @@ import 'admin_chat_reports_screen.dart';
 import 'admin_phone_otp_screen.dart';
 import 'admin_caregiver_deletion_requests_screen.dart';
 import 'admin_antecedentes_flagged_screen.dart';
+import 'admin_nit_verifications_screen.dart';
 import 'admin_email_otp_screen.dart';
 import 'admin_donations_screen.dart';
 import 'admin_vets_screen.dart';
@@ -1033,6 +1034,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ('Finanzas', Icons.attach_money_rounded),
     ('Soporte', Icons.support_agent_rounded),
     ('Blockchain', Icons.link_rounded),
+    ('Verif. de NIT', Icons.receipt_long_rounded),
     // Solo para pruebas — visible en el sidebar de web (_webNavGroups) pero
     // excluido a propósito del tab bar de mobile (ver _buildTabBar, que
     // asume que el ÚLTIMO tab de esta lista es el de solo-pruebas).
@@ -1044,9 +1046,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   // "Finanzas" — no es ingreso de Garden, es dinero de terceros en tránsito
   // hacia refugios, y el admin no puede editar montos ahí.
   static const List<(String, IconData, List<int>)> _webNavGroups = [
-    ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5, 21, 28]),
+    ('Operaciones', Icons.dashboard_outlined, [0, 1, 2, 4, 5, 21, 29]),
     ('Finanzas', Icons.attach_money_rounded, [3, 6, 7, 15, 25]),
-    ('Personas', Icons.groups_outlined, [8, 9, 20, 22, 23, 24]),
+    ('Personas', Icons.groups_outlined, [8, 9, 20, 22, 23, 24, 28]),
     ('Comunicación', Icons.forum_outlined, [12, 13, 17, 18, 19, 26]),
     ('Sistema', Icons.settings_outlined, [10, 11, 14, 16, 27]),
   ];
@@ -1083,6 +1085,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         AdminFinanceScreen(adminToken: _adminToken),
         AdminSupportScreen(adminToken: _adminToken),
         AdminBlockchainScreen(adminToken: _adminToken),
+        AdminNitVerificationsScreen(adminToken: _adminToken),
         AdminTestBookingScreen(adminToken: _adminToken),
       ],
     );
@@ -1408,12 +1411,15 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     // confundirlas: antecedentes en revisión (ámbar, todavía activo) vs.
     // auto-suspendido por rating bajo (info/azul, ya fuera del aire).
     final antecedentesNeedsReview = caregiver['antecedentesNeedsReview'] == true;
+    final nitNeedsReview = caregiver['nitNeedsReview'] == true;
     final lowRatingAutoSuspended = caregiver['lowRatingAutoSuspended'] == true;
     final highlightColor = lowRatingAutoSuspended
         ? GardenColors.info
         : antecedentesNeedsReview
             ? GardenColors.warning
-            : null;
+            : nitNeedsReview
+                ? GardenColors.primary
+                : null;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -1459,6 +1465,25 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                               border: Border.all(color: GardenColors.warning.withValues(alpha: 0.5)),
                             ),
                             child: const Text('⚠️ Antecedentes por revisar', style: TextStyle(color: GardenColors.warning, fontSize: 10, fontWeight: FontWeight.w700)),
+                          ),
+                        ),
+                      ],
+                      if (nitNeedsReview) ...[
+                        const SizedBox(width: 6),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(6),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => AdminNitVerificationsScreen(adminToken: _adminToken)),
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: GardenColors.primary.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: GardenColors.primary.withValues(alpha: 0.5)),
+                            ),
+                            child: const Text('🧾 NIT por revisar', style: TextStyle(color: GardenColors.primary, fontSize: 10, fontWeight: FontWeight.w700)),
                           ),
                         ),
                       ],

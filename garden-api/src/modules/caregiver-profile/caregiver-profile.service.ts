@@ -911,3 +911,49 @@ export async function submitAntecedentesDocument(
 
   return { antecedentesStatus: finalStatus };
 }
+
+/**
+ * Verificación de NIT — solo para cuentas EMPRESA. A diferencia de
+ * submitAntecedentesDocument, acá NO hay vía de auto-aprobación: el status
+ * queda SIEMPRE en EN_REVISION y SIEMPRE se notifica al admin, sin importar
+ * el veredicto del agente de IA — el usuario pidió explícitamente que un
+ * admin decida a mano en todos los casos.
+ */
+export async function submitNitDocument(
+  userId: string,
+  nitNumber: string,
+  documentUrl: string,
+  documentBuffer: Buffer,
+  mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' | 'application/pdf'
+): Promise<{ nitStatus: string }> {
+  const profile = await prisma.caregiverProfile.findUnique({ where: { userId }, select: { id: true, isCompany: true } });
+  if (!profile) throw new BadRequestError('Perfil de cuidador no encontrado');
+  if (!profile.isCompany) {
+    throw new ForbiddenError('La verificación de NIT es solo para cuentas empresa');
+  }
+
+  await prisma.caregiverProfile.update({
+    where: { userId },
+    data: {
+      nitNumber: nitNumber.trim(),
+      nitDocumentUrl: documentUrl,
+      nitStatus: 'EN_REVISION',
+      nitSubmittedAt: new Date(),
+    } as any,
+  });
+
+  const { verificarNit } = await import('../../agents/nit-verification.agent.js');
+  await verificarNit({ documentBuffer, mediaType, userId });
+
+  // A diferencia de antecedentes (que solo notifica si el agente marca algo
+  // raro), acá TODO envío necesita revisión humana por diseño — se notifica
+  // siempre, incluso si el agente falló técnicamente (resultado null).
+  await prisma.adminNotification.create({
+    data: {
+      type: 'NIT_VERIFICATION_SUBMITTED',
+      caregiverId: profile.id,
+    },
+  });
+
+  return { nitStatus: 'EN_REVISION' };
+}

@@ -297,6 +297,17 @@ model CaregiverProfile {
   antecedentesSubmittedAt         DateTime?
   antecedentesReviewedAt          DateTime?
   antecedentesReviewedById        String?
+  /// Verificación del NIT (Bolivia) — solo para cuentas empresa (isCompany).
+  /// Un agente de IA (nit-verification.agent.ts) revisa si el documento se ve
+  /// auténtico, pero SIEMPRE queda en EN_REVISION para que un admin decida —
+  /// a diferencia de antecedentes, acá no hay vía de auto-aprobación.
+  /// Status: PENDING | EN_REVISION | VERIFICADO | RECHAZADO
+  nitNumber                       String?                     @db.VarChar(20)
+  nitDocumentUrl                  String?
+  nitStatus                       String                      @default("PENDING") @db.VarChar(20)
+  nitSubmittedAt                  DateTime?
+  nitReviewedAt                   DateTime?
+  nitReviewedById                 String?
   emailVerified                   Boolean                     @default(false)
   phoneVerified                   Boolean                     @default(false)
   /// Lifecycle del onboarding visto desde el cuidador: INCOMPLETE | SUBMITTED | UNDER_REVIEW | APPROVED.

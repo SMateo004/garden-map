@@ -388,6 +388,7 @@ export async function listCaregivers(
     // "Iluminado" en el panel admin — dos señales independientes para no
     // pasar por alto casos que necesitan atención humana:
     antecedentesNeedsReview: (c as any).antecedentesStatus === 'EN_REVISION',
+    nitNeedsReview: (c as any).nitStatus === 'EN_REVISION',
     lowRatingAutoSuspended:
       (c as any).suspended === true && (c as any).suspensionReason === LOW_RATING_SUSPENSION_REASON,
   }));
@@ -440,6 +441,7 @@ export async function listPendingCaregivers(
     rejectionReason: c.rejectionReason,
     isProfessional: (c as any).isProfessional ?? false,
     antecedentesNeedsReview: (c as any).antecedentesStatus === 'EN_REVISION',
+    nitNeedsReview: (c as any).nitStatus === 'EN_REVISION',
     lowRatingAutoSuspended:
       (c as any).suspended === true && (c as any).suspensionReason === LOW_RATING_SUSPENSION_REASON,
   }));
@@ -3789,6 +3791,94 @@ export async function rejectAntecedentesDocument(profileId: string, adminId: str
 
   await prisma.adminAction.create({
     data: { adminId, actionType: 'REJECT_ANTECEDENTES_DOCUMENT', targetId: profileId, notes: reason },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VERIFICACIÓN DE NIT — solo cuentas empresa. A diferencia de antecedentes,
+// no hay auto-aprobación ni acción de "suspender": el NIT es un sello de
+// confianza, no una alerta de seguridad, así que solo hacen falta aprobar
+// o rechazar (ver caregiver-profile.service.ts submitNitDocument).
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** GET /api/admin/nit-verifications — empresas con NIT en revisión. */
+export async function listNitVerifications() {
+  const profiles = await prisma.caregiverProfile.findMany({
+    where: { nitStatus: 'EN_REVISION' } as any,
+    include: { user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } } },
+    orderBy: { nitSubmittedAt: 'desc' } as any,
+  });
+
+  return Promise.all(
+    profiles.map(async (p) => {
+      const latestLog = await prisma.agentLog.findFirst({
+        where: { agentType: 'NIT_VERIFICATION', userId: p.userId },
+        orderBy: { createdAt: 'desc' },
+      });
+      return {
+        profileId: p.id,
+        userId: p.userId,
+        companyName: (p as any).companyName,
+        businessType: (p as any).businessType,
+        name: `${p.user.firstName} ${p.user.lastName}`.trim(),
+        email: p.user.email,
+        phone: p.user.phone,
+        nitNumber: (p as any).nitNumber,
+        nitDocumentUrl: (p as any).nitDocumentUrl,
+        submittedAt: (p as any).nitSubmittedAt?.toISOString() ?? null,
+        agentVerdict: latestLog?.output ?? null,
+      };
+    })
+  );
+}
+
+/** POST /api/admin/nit-verifications/:profileId/approve — admin confirma que el NIT es válido. */
+export async function approveNitVerification(profileId: string, adminId: string): Promise<void> {
+  await prisma.caregiverProfile.update({
+    where: { id: profileId },
+    data: {
+      nitStatus: 'VERIFICADO',
+      nitReviewedAt: new Date(),
+      nitReviewedById: adminId,
+    } as any,
+  });
+  await prisma.adminAction.create({
+    data: { adminId, actionType: 'APPROVE_NIT_VERIFICATION', targetId: profileId },
+  });
+}
+
+/**
+ * POST /api/admin/nit-verifications/:profileId/reject — el NIT no es válido
+ * (borroso, no corresponde, vencido). No es punitivo: solo le pide al dueño
+ * que vuelva a subir uno válido, sin afectar su capacidad de operar.
+ */
+export async function rejectNitVerification(profileId: string, adminId: string, reason: string): Promise<void> {
+  const profile = await prisma.caregiverProfile.findUnique({
+    where: { id: profileId },
+    select: { userId: true },
+  });
+  if (!profile) throw new CaregiverNotFoundError(profileId);
+
+  await prisma.caregiverProfile.update({
+    where: { id: profileId },
+    data: {
+      nitStatus: 'RECHAZADO',
+      nitReviewedAt: new Date(),
+      nitReviewedById: adminId,
+    } as any,
+  });
+
+  await prisma.notification.create({
+    data: {
+      userId: profile.userId,
+      title: 'Tu NIT fue rechazado',
+      message: `Un administrador revisó tu documento y no pudo aprobarlo: ${reason}. Podés subir uno nuevo desde tu perfil cuando quieras.`,
+      type: 'NIT_REJECTED',
+    },
+  });
+
+  await prisma.adminAction.create({
+    data: { adminId, actionType: 'REJECT_NIT_VERIFICATION', targetId: profileId, notes: reason },
   });
 }
 

@@ -26,6 +26,9 @@ export interface CaregiverListItem {
   /** true si el cuidador subió su FELCC/REJAP y el agente de IA (más admin,
    * si quedó marcado) lo dio por limpio — filtro opcional, no requisito. */
   antecedentesVerified: boolean;
+  /** true si el NIT de la empresa fue verificado por un admin — solo aplica
+   * a cuentas isCompany, siempre false para cuidadores individuales. */
+  nitVerified: boolean;
   spaceType: string[]; // Array de tipos de espacio seleccionados
   experienceYears: any;
   experienceDescription: string | null;

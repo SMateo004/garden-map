@@ -223,6 +223,15 @@ router.post('/antecedentes-flagged/:profileId/dismiss', adminController.dismissA
 /** POST /api/admin/antecedentes-flagged/:profileId/reject — rechaza el documento, no suspende. */
 router.post('/antecedentes-flagged/:profileId/reject', adminController.rejectAntecedentesDocument);
 
+/** GET /api/admin/nit-verifications — empresas con NIT en revisión. */
+router.get('/nit-verifications', adminController.getNitVerifications);
+
+/** POST /api/admin/nit-verifications/:profileId/approve — confirma el NIT como válido. */
+router.post('/nit-verifications/:profileId/approve', adminController.approveNitVerification);
+
+/** POST /api/admin/nit-verifications/:profileId/reject — rechaza el documento, no es punitivo. */
+router.post('/nit-verifications/:profileId/reject', adminController.rejectNitVerification);
+
 /** GET /api/admin/caregiver-deletion-requests — cuidadores con solicitud de eliminación pendiente. */
 router.get('/caregiver-deletion-requests', adminController.getPendingCaregiverDeletionRequests);
 

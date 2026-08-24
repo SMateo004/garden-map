@@ -1317,6 +1317,34 @@ export const dismissAntecedentesFlag = asyncHandler(async (req: Request, res: Re
   res.json({ success: true });
 });
 
+// ── Verificación de NIT (empresas) — admin siempre decide a mano ───────────
+
+/** GET /api/admin/nit-verifications — empresas con NIT en revisión. */
+export const getNitVerifications = asyncHandler(async (req: Request, res: Response) => {
+  const data = await adminService.listNitVerifications();
+  res.json({ success: true, data });
+});
+
+/** POST /api/admin/nit-verifications/:profileId/approve — confirma el NIT como válido. */
+export const approveNitVerification = asyncHandler(async (req: Request, res: Response) => {
+  const { profileId } = req.params;
+  await adminService.approveNitVerification(profileId!, req.user!.userId);
+  auditLog({ userId: req.user!.userId, action: 'APPROVE_NIT_VERIFICATION', entity: 'CaregiverProfile', entityId: profileId, ip: req.ip });
+  res.json({ success: true });
+});
+
+/** POST /api/admin/nit-verifications/:profileId/reject — rechaza el documento, no es punitivo. */
+export const rejectNitVerification = asyncHandler(async (req: Request, res: Response) => {
+  const { profileId } = req.params;
+  const { reason } = req.body as { reason?: string };
+  if (!reason || !reason.trim()) {
+    return res.status(400).json({ success: false, error: { message: 'reason es requerido' } });
+  }
+  await adminService.rejectNitVerification(profileId!, req.user!.userId, reason.trim());
+  auditLog({ userId: req.user!.userId, action: 'REJECT_NIT_VERIFICATION', entity: 'CaregiverProfile', entityId: profileId, ip: req.ip });
+  res.json({ success: true });
+});
+
 // ── Eliminación de cuenta de cuidador (solo admin puede confirmarla) ───────
 
 /** GET /api/admin/caregiver-deletion-requests — cuidadores con solicitud pendiente. */

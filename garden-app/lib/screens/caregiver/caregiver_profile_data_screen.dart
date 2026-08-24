@@ -209,6 +209,12 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   String _antecedentesStatus = 'PENDING'; // PENDING | EN_REVISION | LIMPIO | FLAGGED
   bool _uploadingAntecedentes = false;
 
+  // NIT — solo cuentas empresa (_ic). A diferencia de antecedentes, el admin
+  // siempre decide a mano (nunca hay auto-aprobación), ver backend.
+  String _nitStatus = 'PENDING'; // PENDING | EN_REVISION | VERIFICADO | RECHAZADO
+  bool _uploadingNit = false;
+  final TextEditingController _nitNumberCtrl = TextEditingController();
+
   // Services from API (used when widget.servicesOffered is empty)
   List<String> _apiServicesOffered = [];
 
@@ -373,6 +379,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     _apiServicesOffered = List<String>.from(profile['servicesOffered'] ?? []);
     _identityVerificationStatus = profile['identityVerificationStatus'] as String? ?? 'PENDING';
     _antecedentesStatus = profile['antecedentesStatus'] as String? ?? 'PENDING';
+    _nitStatus = profile['nitStatus'] as String? ?? 'PENDING';
+    _nitNumberCtrl.text = profile['nitNumber'] as String? ?? '';
     _caregiverPhotoUrls = List<String>.from(profile['caregiverPhotos'] ?? []);
     final rawPlace = profile['placePhotos'];
     if (rawPlace is Map) {
@@ -1028,6 +1036,148 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
     }
   }
 
+  // ── Documentos — NIT (solo cuentas empresa) ──────────────────────────────
+  // A diferencia de antecedentes, acá el admin SIEMPRE decide a mano — no
+  // hay vía de auto-aprobación, ver caregiver-profile.service.ts submitNitDocument.
+  Future<void> _pickAndUploadNit() async {
+    if (_nitNumberCtrl.text.trim().isEmpty) {
+      GardenSnackBar.warning(context, 'Ingresá el número de NIT antes de subir el documento');
+      return;
+    }
+    final source = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _buildAntecedentesPickerSheet(ctx),
+    );
+    if (source == null) return;
+
+    try {
+      Uint8List? bytes;
+      String filename;
+      String mimeType;
+
+      if (source == 'camera' || source == 'gallery') {
+        final picked = await ImagePicker().pickImage(
+          source: source == 'camera' ? ImageSource.camera : ImageSource.gallery,
+          imageQuality: kIsWeb ? null : 85,
+        );
+        if (picked == null) return;
+        bytes = Uint8List.fromList(await picked.readAsBytes());
+        filename = picked.name.isEmpty ? 'nit_${DateTime.now().millisecondsSinceEpoch}.jpg' : picked.name;
+        mimeType = 'image/jpeg';
+      } else {
+        final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf'], withData: true);
+        if (result == null || result.files.isEmpty || result.files.single.bytes == null) return;
+        bytes = result.files.single.bytes;
+        filename = result.files.single.name;
+        mimeType = 'application/pdf';
+      }
+
+      if (!mounted) return;
+      setState(() => _uploadingNit = true);
+      final mediaParts = mimeType.split('/');
+      final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/caregiver/profile/nit'));
+      request.headers['Authorization'] = 'Bearer $_caregiverToken';
+      request.fields['nitNumber'] = _nitNumberCtrl.text.trim();
+      request.files.add(http.MultipartFile.fromBytes(
+        'document', bytes!,
+        filename: filename,
+        contentType: MediaType(mediaParts[0], mediaParts[1]),
+      ));
+      final streamed = await request.send().timeout(const Duration(minutes: 2));
+      final data = jsonDecode(await streamed.stream.bytesToString());
+      if (!mounted) return;
+      if (data['success'] == true) {
+        setState(() => _nitStatus = data['data']?['nitStatus'] as String? ?? 'EN_REVISION');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('NIT enviado. Lo estamos revisando.'), backgroundColor: GardenColors.success),
+        );
+      } else {
+        GardenErrorDialog.show(context, data['error']?['message'] ?? 'Error al subir el documento');
+      }
+    } catch (e) {
+      if (mounted) {
+        GardenErrorDialog.show(context, 'Error: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingNit = false);
+    }
+  }
+
+  Widget _nitRow(Color textColor, Color subtextColor, Color borderColor, Color surface) {
+    final (statusIcon, statusColor, statusLabel) = switch (_nitStatus) {
+      'VERIFICADO' => (Icons.verified_rounded, GardenColors.success, 'Verificado'),
+      'EN_REVISION' => (Icons.hourglass_top_rounded, GardenColors.warning, 'En revisión'),
+      'RECHAZADO' => (Icons.error_outline_rounded, GardenColors.error, 'Rechazado — subí uno nuevo'),
+      _ => (Icons.upload_file_outlined, subtextColor, 'Pendiente'),
+    };
+    final canEdit = _nitStatus == 'PENDING' || _nitStatus == 'RECHAZADO';
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.receipt_long_outlined, color: subtextColor, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('NIT del negocio', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
+                    Text('Un admin revisa y aprueba el documento a mano', style: TextStyle(color: subtextColor, fontSize: 11.5)),
+                  ],
+                ),
+              ),
+              Icon(statusIcon, color: statusColor, size: 20),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (canEdit)
+            TextField(
+              controller: _nitNumberCtrl,
+              enabled: !_uploadingNit,
+              style: TextStyle(color: textColor, fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Número de NIT',
+                hintStyle: TextStyle(color: subtextColor, fontSize: 12.5),
+                isDense: true,
+                filled: true,
+                fillColor: surface,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderColor)),
+              ),
+            )
+          else
+            Text('NIT: ${_nitNumberCtrl.text}', style: TextStyle(color: subtextColor, fontSize: 12.5)),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Spacer(),
+              if (canEdit)
+                ElevatedButton(
+                  onPressed: _uploadingNit ? null : _pickAndUploadNit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: GardenColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: _uploadingNit
+                      ? const GardenLoadingIndicator(size: 16, color: Colors.white)
+                      : const Text('Subir documento', style: TextStyle(fontSize: 12.5)),
+                )
+              else
+                Text(statusLabel, style: TextStyle(color: statusColor, fontSize: 12.5, fontWeight: FontWeight.w700)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAntecedentesPickerSheet(BuildContext ctx) {
     final isDark = themeNotifier.isDark;
     final surface = isDark ? GardenColors.darkSurface : GardenColors.lightSurface;
@@ -1177,6 +1327,8 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
   }
 
   Widget _buildDocumentsSectionContent(Color textColor, Color subtextColor, Color borderColor) {
+    final isDark = themeNotifier.isDark;
+    final surface = isDark ? GardenColors.darkSurfaceElevated : GardenColors.lightSurfaceElevated;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1197,6 +1349,10 @@ class _CaregiverProfileDataScreenState extends State<CaregiverProfileDataScreen>
         ),
         const SizedBox(height: 10),
         _antecedentesRow(textColor, subtextColor, borderColor),
+        if (_ic) ...[
+          const SizedBox(height: 10),
+          _nitRow(textColor, subtextColor, borderColor, surface),
+        ],
       ],
     );
   }
