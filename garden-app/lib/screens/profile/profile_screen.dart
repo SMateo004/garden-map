@@ -996,9 +996,12 @@ class _ProfileScreenState extends State<ProfileScreen>
                           onTap: () => context.push('/caregiver/home')),
                       _profileTile(icon: Icons.pets_outlined, title: 'Mascotas',
                           onTap: () => context.push('/caregiver/pets')),
-                      if (_caregiverProfile?['isCompany'] == true)
+                      if (_caregiverProfile?['isCompany'] == true) ...[
                         _profileTile(icon: Icons.groups_outlined, title: 'Mi equipo',
                             onTap: () => context.push('/caregiver/staff')),
+                        _profileTile(icon: Icons.meeting_room_outlined, title: 'Recepción',
+                            onTap: () => context.push('/caregiver/reception')),
+                      ],
                       if (_caregiverProfile?['verified'] != true &&
                           _caregiverProfile?['verificationStatus'] != 'VERIFIED' &&
                           _caregiverProfile?['identityVerificationStatus'] != 'VERIFIED')
@@ -1261,8 +1264,10 @@ class _ProfileScreenState extends State<ProfileScreen>
           _profileTile(icon: Icons.edit_outlined, title: 'Editar perfil', onTap: () => context.push('/caregiver/edit-profile')),
           _profileTile(icon: Icons.home_outlined, title: 'Mi panel', onTap: () => context.push('/caregiver/home')),
           _profileTile(icon: Icons.pets_outlined, title: 'Mascotas', onTap: () => context.push('/caregiver/pets')),
-          if (_caregiverProfile?['isCompany'] == true)
+          if (_caregiverProfile?['isCompany'] == true) ...[
             _profileTile(icon: Icons.groups_outlined, title: 'Mi equipo', onTap: () => context.push('/caregiver/staff')),
+            _profileTile(icon: Icons.meeting_room_outlined, title: 'Recepción', onTap: () => context.push('/caregiver/reception')),
+          ],
           if (_caregiverProfile?['verified'] != true &&
               _caregiverProfile?['verificationStatus'] != 'VERIFIED' &&
               _caregiverProfile?['identityVerificationStatus'] != 'VERIFIED')

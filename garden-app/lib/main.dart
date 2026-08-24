@@ -25,6 +25,7 @@ import 'screens/caregiver/caregiver_home_screen.dart';
 import 'screens/caregiver/staff_home_screen.dart';
 import 'screens/caregiver/staff_invite_accept_screen.dart';
 import 'screens/caregiver/staff_team_screen.dart';
+import 'screens/caregiver/reception_screen.dart';
 import 'screens/caregiver/caregiver_pets_screen.dart';
 import 'screens/caregiver/verification_screen.dart';
 import 'screens/caregiver/trainings_screen.dart';
@@ -181,6 +182,8 @@ const _roleRestrictedPrefixes = <String, String>{
   // que este prefijo por sí solo no distingue dueño de empleado — ver el
   // chequeo explícito de AuthState.isCaregiverStaff más abajo en redirect.
   '/caregiver-staff/home': 'CAREGIVER',
+  '/caregiver/reception': 'CAREGIVER',
+  '/caregiver-staff/reception': 'CAREGIVER',
 };
 
 // Home correcta para cada rol efectivo — mismo destino que usa el cambio de
@@ -441,6 +444,16 @@ final GoRouter _router = GoRouter(
       path: '/caregiver/staff',
       name: 'caregiverStaffTeam',
       builder: (context, state) => const StaffTeamScreen(),
+    ),
+    GoRoute(
+      path: '/caregiver/reception',
+      name: 'caregiverReception',
+      builder: (context, state) => const ReceptionScreen(apiPrefix: 'caregiver'),
+    ),
+    GoRoute(
+      path: '/caregiver-staff/reception',
+      name: 'caregiverStaffReception',
+      builder: (context, state) => const ReceptionScreen(apiPrefix: 'caregiver-staff'),
     ),
     GoRoute(
       path: '/caregiver/pets',

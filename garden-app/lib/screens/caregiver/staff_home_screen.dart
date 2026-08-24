@@ -6,6 +6,7 @@ import '../../services/auth_state.dart';
 import '../../services/auth_service.dart';
 import '../../services/caregiver_staff_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import 'reception_screen.dart';
 
 /// Dashboard reducido del empleado de una empresa cuidadora: solo ve y
 /// atiende reservas (check-in/check-out). Sin billetera, chat, precios ni
@@ -107,6 +108,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
             index: _tab,
             children: [
               _buildBookingsTab(surface, textColor, subtextColor, borderColor),
+              const ReceptionScreen(apiPrefix: 'caregiver-staff', embedded: true),
               _buildAccountTab(textColor, subtextColor, borderColor),
             ],
           ),
@@ -116,6 +118,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
             backgroundColor: surface,
             destinations: const [
               NavigationDestination(icon: Icon(Icons.event_note_outlined), selectedIcon: Icon(Icons.event_note_rounded), label: 'Reservas'),
+              NavigationDestination(icon: Icon(Icons.meeting_room_outlined), selectedIcon: Icon(Icons.meeting_room_rounded), label: 'Recepción'),
               NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'Cuenta'),
             ],
           ),

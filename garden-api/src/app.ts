@@ -20,6 +20,8 @@ import paymentRoutes, { webhookRouter as stripeWebhookRouter } from './modules/p
 import authRoutes from './modules/auth/auth.routes.js';
 import caregiverProfileRoutes from './modules/caregiver-profile/caregiver-profile.routes.js';
 import caregiverStaffRoutes from './modules/caregiver-staff/caregiver-staff.routes.js';
+import caregiverCrmRoutes from './modules/caregiver-crm/caregiver-crm.routes.js';
+import caregiverCrmStaffRoutes from './modules/caregiver-crm/caregiver-crm-staff.routes.js';
 import extraServiceRoutes from './modules/extra-service/extra-service.routes.js';
 import trainingRoutes from './modules/training/training.routes.js';
 import verificationRoutes from './modules/verification/verification.routes.js';
@@ -273,7 +275,9 @@ app.use('/legal', legalRoutes);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/caregiver', caregiverProfileRoutes);
+app.use('/api/caregiver', caregiverCrmRoutes);
 app.use('/api/caregiver-staff', caregiverStaffRoutes);
+app.use('/api/caregiver-staff', caregiverCrmStaffRoutes);
 app.use('/api/caregiver/extra-services', extraServiceRoutes);
 app.use('/api/caregiver/trainings', trainingRoutes);
 app.use('/api/verification', verificationRoutes);

@@ -359,6 +359,8 @@ model CaregiverProfile {
   extraServices                   ExtraService[]
   staffMembers                    CaregiverStaffMember[]
   staffInvites                    CaregiverStaffInvite[]
+  walkInClients                   WalkInClient[]
+  walkInVisits                    WalkInVisit[]
 
   @@index([status])
   @@index([userId])
@@ -431,6 +433,81 @@ enum CaregiverStaffInviteStatus {
   USED
   EXPIRED
   REVOKED
+}
+
+/// Cliente walk-in de una empresa cuidadora (hotel/guardería) que NUNCA usa
+/// la app Garden — directorio interno puro, sin User ni dinero involucrado.
+/// Solo para cuentas isCompany=true (validado en caregiver-crm.service.ts).
+model WalkInClient {
+  id                 String           @id @default(uuid())
+  caregiverProfileId String
+  caregiverProfile   CaregiverProfile @relation(fields: [caregiverProfileId], references: [id], onDelete: Cascade)
+  name               String           @db.VarChar(200)
+  phone              String?          @db.VarChar(30)
+  email              String?          @db.VarChar(200)
+  notes              String?
+  createdByUserId    String
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  pets               WalkInPet[]
+
+  @@index([caregiverProfileId])
+  @@map("walk_in_clients")
+}
+
+/// Mascota walk-in — mismo set de campos que Pet (registro tan completo como
+/// uno real), pero apunta a WalkInClient en vez de ClientProfile.
+/// onDelete: Restrict — no se puede borrar mientras tenga visitas (historial).
+model WalkInPet {
+  id              String        @id @default(uuid())
+  walkInClientId  String
+  walkInClient    WalkInClient  @relation(fields: [walkInClientId], references: [id], onDelete: Restrict)
+  name            String        @db.VarChar(200)
+  breed           String?       @db.VarChar(100)
+  age             Int?
+  size            PetSize?
+  animalType      AnimalType?
+  isAggressive    Boolean       @default(false)
+  photoUrl        String?
+  specialNeeds    String?
+  notes           String?
+  gender          String?       @db.VarChar(10)
+  weight          Float?
+  color           String?       @db.VarChar(100)
+  sterilized      Boolean?
+  microchipNumber String?       @db.VarChar(50)
+  extraPhotos     String[]
+  vaccinePhotos   String[]
+  documents       String[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  visits          WalkInVisit[]
+
+  @@index([walkInClientId])
+  @@map("walk_in_pets")
+}
+
+/// Log de presencia física de una mascota walk-in — checkedOutAt: null
+/// significa "está en el local ahora mismo" (misma semántica que
+/// Booking.status=IN_PROGRESS, pero los walk-in no tienen esa máquina de
+/// estados). serviceType decide si cuenta para el cupo combinado
+/// Hospedaje+Guardería (ver caregiver-capacity.ts) — Paseo es fuera del
+/// local y no cuenta para "quién está en las instalaciones".
+model WalkInVisit {
+  id                  String           @id @default(uuid())
+  caregiverProfileId  String
+  caregiverProfile    CaregiverProfile @relation(fields: [caregiverProfileId], references: [id], onDelete: Cascade)
+  walkInPetId         String
+  walkInPet           WalkInPet        @relation(fields: [walkInPetId], references: [id], onDelete: Restrict)
+  serviceType         ServiceType
+  notes               String?
+  checkedInAt         DateTime         @default(now())
+  checkedInByUserId   String
+  checkedOutAt        DateTime?
+  checkedOutByUserId  String?
+
+  @@index([caregiverProfileId, checkedOutAt])
+  @@map("walk_in_visits")
 }
 
 /// Disponibilidad por cuidador y fecha. MVP: hospedaje por día; paseos por bloques (MANANA/TARDE/NOCHE).

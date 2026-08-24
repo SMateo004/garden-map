@@ -18,6 +18,7 @@ import '../../widgets/price_suggestion_banner.dart';
 import '../../services/auth_service.dart';
 import '../../services/auth_state.dart';
 import '../../services/secure_storage_service.dart';
+import 'reception_screen.dart';
 import 'trainings_screen.dart';
 import 'caregiver_profile_data_screen.dart';
 import '../../widgets/garden_loading_indicator.dart';
@@ -3380,6 +3381,14 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
             automaticallyImplyLeading: false,
             title: logoTitle,
             actions: [
+              if (_caregiver?['isCompany'] == true)
+                IconButton(
+                  icon: Icon(Icons.meeting_room_outlined, color: subtextColor),
+                  tooltip: 'Recepción',
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const ReceptionScreen(apiPrefix: 'caregiver'),
+                  )),
+                ),
               NotificationBell(token: _caregiverToken, baseUrl: _baseUrl),
               IconButton(
                 icon: Icon(Icons.logout_outlined, color: subtextColor),

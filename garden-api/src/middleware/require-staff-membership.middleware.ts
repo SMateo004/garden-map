@@ -7,6 +7,8 @@ declare global {
   namespace Express {
     interface Request {
       staffContext?: StaffContext;
+      /** userId real de quien hizo la acción, capturado antes de que actAsOwner lo sustituya — ver captureActingUser. */
+      actingUserId?: string;
     }
   }
 }
@@ -30,20 +32,32 @@ export async function requireStaffMembership(req: Request, _res: Response, next:
 /**
  * Registra en el audit log qué empleado hizo la acción (con su userId real)
  * ANTES de que actAsOwner sustituya la identidad para el handler reusado —
- * fire-and-forget, nunca bloquea el request.
+ * fire-and-forget, nunca bloquea el request. `entity`/`entityIdParam`
+ * opcionales para reusar en módulos más allá de reservas (ver caregiver-crm,
+ * que loguea contra WalkInVisit con :petId/:visitId en vez de :id).
  */
-export function auditStaffAction(action: string) {
+export function auditStaffAction(action: string, entity: string = 'Booking', entityIdParam: string = 'id') {
   return (req: Request, _res: Response, next: NextFunction): void => {
     const ctx = req.staffContext!;
     auditLog({
       userId: req.user!.userId,
       action,
-      entity: 'Booking',
-      entityId: req.params.id,
+      entity,
+      entityId: req.params[entityIdParam],
       details: { caregiverProfileId: ctx.caregiverProfileId, companyName: ctx.companyName },
     });
     next();
   };
+}
+
+/**
+ * Captura el userId real de quien hizo la acción ANTES de que actAsOwner lo
+ * sustituya — necesario cuando el controller mismo necesita saber "quién
+ * hizo esto" (ej. WalkInVisit.checkedInByUserId), no solo el audit log.
+ */
+export function captureActingUser(req: Request, _res: Response, next: NextFunction): void {
+  req.actingUserId = req.user!.userId;
+  next();
 }
 
 /**
