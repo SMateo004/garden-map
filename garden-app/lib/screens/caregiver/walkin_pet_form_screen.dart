@@ -7,6 +7,7 @@ import '../../theme/garden_theme.dart';
 import '../../services/caregiver_crm_service.dart';
 import '../../utils/web_file_picker.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import 'walkin_visit_detail_screen.dart';
 
 /// Ficha completa de una mascota walk-in — mismos campos/agrupamiento que
 /// el formulario de mascota real (my_pets_screen.dart _PetFormSheet), pero
@@ -480,30 +481,40 @@ class _WalkInPetFormScreenState extends State<WalkInPetFormScreen> {
                       Text('Todavía no registró ninguna visita.', style: TextStyle(color: subtextColor, fontSize: 12.5))
                     else
                       for (final v in _visits)
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: surfaceEl,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: borderColor),
-                          ),
-                          child: Row(children: [
-                            Text(_serviceEmoji(v['serviceType'] as String), style: const TextStyle(fontSize: 20)),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(_fmtDate(v['checkedInAt'] as String), style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                                  Text(
-                                    v['checkedOutAt'] == null ? 'En curso' : 'Duró ${_duration(v['checkedInAt'] as String, v['checkedOutAt'] as String?)}',
-                                    style: TextStyle(color: v['checkedOutAt'] == null ? GardenColors.warning : subtextColor, fontSize: 12),
-                                  ),
-                                ],
-                              ),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () async {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => WalkInVisitDetailScreen(service: widget.service, visitId: v['id'] as String)),
+                            );
+                            _loadHistory();
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: surfaceEl,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: borderColor),
                             ),
-                          ]),
+                            child: Row(children: [
+                              Text(_serviceEmoji(v['serviceType'] as String), style: const TextStyle(fontSize: 20)),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(_fmtDate(v['checkedInAt'] as String), style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                                    Text(
+                                      v['checkedOutAt'] == null ? 'En curso' : 'Duró ${_duration(v['checkedInAt'] as String, v['checkedOutAt'] as String?)}',
+                                      style: TextStyle(color: v['checkedOutAt'] == null ? GardenColors.warning : subtextColor, fontSize: 12),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(Icons.chevron_right_rounded, color: subtextColor, size: 18),
+                            ]),
+                          ),
                         ),
                   ],
                   const SizedBox(height: 24),

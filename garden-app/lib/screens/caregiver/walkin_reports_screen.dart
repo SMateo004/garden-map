@@ -48,10 +48,14 @@ class _WalkInReportsScreenState extends State<WalkInReportsScreen> {
     }
   }
 
+  // El backend tope-a el rango a 180 días (getWalkInOccupancyReport hace un
+  // loop día por día) — el picker no debe dejar elegir más que eso.
+  static const _maxRangeDays = 180;
+
   Future<void> _pickRange() async {
     final range = await showDateRangePicker(
       context: context,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      firstDate: DateTime.now().subtract(const Duration(days: _maxRangeDays)),
       lastDate: DateTime.now(),
       initialDateRange: DateTimeRange(start: _from, end: _to),
     );
@@ -126,7 +130,7 @@ class _WalkInReportsScreenState extends State<WalkInReportsScreen> {
                           statCard('Ocupación promedio/día', '${_occupancy?['avgOccupancy'] ?? '—'} de ${_occupancy?['capacity'] ?? '—'}', Icons.pets_rounded),
                           statCard(
                             'Día pico',
-                            peak != null ? '${peak['count']} el ${peak['date']}' : '—',
+                            (peak != null && (peak['count'] as int) > 0) ? '${peak['count']} el ${peak['date']}' : 'Sin ocupación en el período',
                             Icons.trending_up_rounded,
                             color: GardenColors.warning,
                           ),

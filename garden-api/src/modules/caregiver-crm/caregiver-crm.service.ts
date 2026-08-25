@@ -290,7 +290,7 @@ export async function checkOutWalkInVisit(ownerUserId: string, actingUserId: str
       <p><strong>${visit.walkInPet.name}</strong> ya salió de <strong>${profile.companyName ?? 'nuestro local'}</strong>.</p>
       <p>Servicio: ${visit.serviceType} · Duración: ${durationTxt}</p>
       ${eventsHtml}
-      ${amountCollected !== undefined ? `<p>Monto cobrado: Bs ${amountCollected.toFixed(2)}</p>` : ''}
+      ${updated.amountCollected !== null ? `<p>Monto cobrado: Bs ${updated.amountCollected.toFixed(2)}</p>` : ''}
       <p>¡Gracias por confiarnos a ${visit.walkInPet.name}!</p>
     `;
     await notifyWalkInClientEmail(client.email, `${visit.walkInPet.name} ya está de vuelta con vos 🐾`, html);
@@ -304,6 +304,12 @@ export async function updateWalkInVisit(ownerUserId: string, visitId: string, bo
   const visit = await prisma.walkInVisit.findUnique({ where: { id: visitId } });
   if (!visit || visit.caregiverProfileId !== profile.id) {
     throw new NotFoundError('Visita no encontrada');
+  }
+  // El espacio físico solo tiene sentido mientras la mascota sigue en el
+  // local; el monto cobrado, en cambio, se puede corregir después del
+  // check-out (ej. el staff se olvidó de cargarlo en el momento).
+  if (body.spaceLabel !== undefined && visit.checkedOutAt !== null) {
+    throw new BadRequestError('Esta visita ya finalizó — no se puede reasignar el espacio', 'VISIT_ALREADY_CHECKED_OUT');
   }
   return prisma.walkInVisit.update({
     where: { id: visitId },
@@ -443,6 +449,8 @@ export async function getOccupancyDashboard(ownerUserId: string): Promise<Occupa
 
 // ── Reportes (solo dueño) ─────────────────────────────────────────────────────
 
+const MAX_REPORT_RANGE_DAYS = 180;
+
 function parseDateRange(from?: string, to?: string): { from: Date; to: Date } {
   const to_ = to ? new Date(to) : new Date();
   const from_ = from ? new Date(from) : new Date(to_.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -450,6 +458,12 @@ function parseDateRange(from?: string, to?: string): { from: Date; to: Date } {
     throw new BadRequestError('Rango de fechas inválido');
   }
   if (from_ > to_) throw new BadRequestError('"from" no puede ser posterior a "to"');
+  // getWalkInOccupancyReport hace un loop día por día — sin tope, un rango de
+  // años dispararía cientos de queries secuenciales.
+  const rangeDays = (to_.getTime() - from_.getTime()) / (24 * 60 * 60 * 1000);
+  if (rangeDays > MAX_REPORT_RANGE_DAYS) {
+    throw new BadRequestError(`El rango no puede superar ${MAX_REPORT_RANGE_DAYS} días`);
+  }
   return { from: from_, to: to_ };
 }
 

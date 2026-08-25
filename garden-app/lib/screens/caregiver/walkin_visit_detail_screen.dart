@@ -60,6 +60,13 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
     return '${diff.inMinutes}m';
   }
 
+  String _elapsedBetween(DateTime start, DateTime end) {
+    final diff = end.difference(start);
+    if (diff.inHours >= 24) return '${diff.inDays}d ${diff.inHours % 24}h';
+    if (diff.inHours >= 1) return '${diff.inHours}h ${diff.inMinutes % 60}m';
+    return '${diff.inMinutes}m';
+  }
+
   Future<({Uint8List bytes, String name})?> _pickImageBytes() async {
     if (kIsWeb) return pickImageFromWebInput();
     final picker = ImagePicker();
@@ -279,6 +286,10 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
         final client = pet?['walkInClient'] as Map<String, dynamic>?;
         final events = (v?['events'] as List?)?.cast<Map<String, dynamic>>() ?? [];
         final reversedEvents = events.reversed.toList();
+        // Una visita ya cerrada es de solo lectura — el backend igual
+        // rechaza agregar eventos/reasignar espacio, pero acá lo reflejamos
+        // en la UI para no mostrar acciones que van a fallar.
+        final isClosed = v != null && v['checkedOutAt'] != null;
 
         return Scaffold(
           backgroundColor: bg,
@@ -288,7 +299,7 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
             iconTheme: IconThemeData(color: textColor),
             title: Text(pet?['name'] as String? ?? 'Visita', style: TextStyle(color: textColor, fontWeight: FontWeight.w800)),
           ),
-          floatingActionButton: v == null
+          floatingActionButton: (v == null || isClosed)
               ? null
               : FloatingActionButton.extended(
                   onPressed: _busy ? null : _checkOut,
@@ -303,6 +314,17 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
                   : ListView(
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
                       children: [
+                        if (isClosed)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(color: subtextColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                            child: Row(children: [
+                              Icon(Icons.history_rounded, size: 14, color: subtextColor),
+                              const SizedBox(width: 6),
+                              Text('Visita finalizada — solo lectura', style: TextStyle(color: subtextColor, fontSize: 11.5, fontWeight: FontWeight.w600)),
+                            ]),
+                          ),
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderColor)),
@@ -311,19 +333,30 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
                             children: [
                               Text('${client?['name'] ?? '—'}', style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w700)),
                               const SizedBox(height: 4),
-                              Text('${v['serviceType']} · hace ${_elapsed(DateTime.parse(v['checkedInAt'] as String))}', style: TextStyle(color: subtextColor, fontSize: 12.5)),
+                              Text(
+                                isClosed
+                                    ? '${v['serviceType']} · duró ${_elapsedBetween(DateTime.parse(v['checkedInAt'] as String), DateTime.parse(v['checkedOutAt'] as String))}'
+                                    : '${v['serviceType']} · hace ${_elapsed(DateTime.parse(v['checkedInAt'] as String))}',
+                                style: TextStyle(color: subtextColor, fontSize: 12.5),
+                              ),
+                              if (v['amountCollected'] != null) ...[
+                                const SizedBox(height: 2),
+                                Text('Cobrado: Bs ${(v['amountCollected'] as num).toStringAsFixed(2)}', style: TextStyle(color: GardenColors.success, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                              ],
                               const SizedBox(height: 10),
                               InkWell(
-                                onTap: _editSpace,
+                                onTap: isClosed ? null : _editSpace,
                                 child: Row(children: [
-                                  const Icon(Icons.meeting_room_outlined, size: 16, color: GardenColors.primary),
+                                  Icon(Icons.meeting_room_outlined, size: 16, color: isClosed ? subtextColor : GardenColors.primary),
                                   const SizedBox(width: 6),
                                   Text(
-                                    (v['spaceLabel'] as String?)?.isNotEmpty == true ? v['spaceLabel'] as String : 'Asignar espacio (ej. Jaula 4)',
-                                    style: const TextStyle(color: GardenColors.primary, fontSize: 12.5, fontWeight: FontWeight.w600),
+                                    (v['spaceLabel'] as String?)?.isNotEmpty == true ? v['spaceLabel'] as String : (isClosed ? 'Sin espacio asignado' : 'Asignar espacio (ej. Jaula 4)'),
+                                    style: TextStyle(color: isClosed ? subtextColor : GardenColors.primary, fontSize: 12.5, fontWeight: FontWeight.w600),
                                   ),
-                                  const SizedBox(width: 4),
-                                  const Icon(Icons.edit_outlined, size: 13, color: GardenColors.primary),
+                                  if (!isClosed) ...[
+                                    const SizedBox(width: 4),
+                                    const Icon(Icons.edit_outlined, size: 13, color: GardenColors.primary),
+                                  ],
                                 ]),
                               ),
                             ],
@@ -332,22 +365,24 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
                         const SizedBox(height: 16),
                         Text('Bitácora', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w800)),
                         const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            for (final t in ['FEEDING', 'WALK', 'MEDICATION', 'BATH', 'NOTE', 'PHOTO', 'INCIDENT'])
-                              OutlinedButton(
-                                onPressed: _busy ? null : () => _addEvent(t, requirePhoto: t == 'PHOTO', requireNote: t == 'INCIDENT'),
-                                style: OutlinedButton.styleFrom(
-                                  side: BorderSide(color: t == 'INCIDENT' ? GardenColors.warning : borderColor),
-                                  foregroundColor: t == 'INCIDENT' ? GardenColors.warning : textColor,
+                        if (!isClosed) ...[
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final t in ['FEEDING', 'WALK', 'MEDICATION', 'BATH', 'NOTE', 'PHOTO', 'INCIDENT'])
+                                OutlinedButton(
+                                  onPressed: _busy ? null : () => _addEvent(t, requirePhoto: t == 'PHOTO', requireNote: t == 'INCIDENT'),
+                                  style: OutlinedButton.styleFrom(
+                                    side: BorderSide(color: t == 'INCIDENT' ? GardenColors.warning : borderColor),
+                                    foregroundColor: t == 'INCIDENT' ? GardenColors.warning : textColor,
+                                  ),
+                                  child: Text('${_kEventEmoji[t]} ${_kEventLabel[t]}'),
                                 ),
-                                child: Text('${_kEventEmoji[t]} ${_kEventLabel[t]}'),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                         if (reversedEvents.isEmpty)
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 16),
