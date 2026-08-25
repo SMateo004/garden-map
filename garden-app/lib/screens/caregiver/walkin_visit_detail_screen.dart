@@ -286,6 +286,13 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
         final client = pet?['walkInClient'] as Map<String, dynamic>?;
         final events = (v?['events'] as List?)?.cast<Map<String, dynamic>>() ?? [];
         final reversedEvents = events.reversed.toList();
+        // Hay un incidente sin resolver si el último evento de tipo
+        // INCIDENT/INCIDENT_RESOLVED de la bitácora es un INCIDENT.
+        final lastIncidentEvent = events.reversed.cast<Map<String, dynamic>?>().firstWhere(
+              (e) => e?['type'] == 'INCIDENT' || e?['type'] == 'INCIDENT_RESOLVED',
+              orElse: () => null,
+            );
+        final hasOpenIncident = lastIncidentEvent?['type'] == 'INCIDENT';
         // Una visita ya cerrada es de solo lectura — el backend igual
         // rechaza agregar eventos/reasignar espacio, pero acá lo reflejamos
         // en la UI para no mostrar acciones que van a fallar.
@@ -363,6 +370,19 @@ class _WalkInVisitDetailScreenState extends State<WalkInVisitDetailScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
+                        if (!isClosed && hasOpenIncident)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: _busy ? null : () => _addEvent('INCIDENT_RESOLVED'),
+                                style: ElevatedButton.styleFrom(backgroundColor: GardenColors.success, foregroundColor: Colors.white),
+                                icon: const Icon(Icons.check_circle_outline_rounded),
+                                label: const Text('Marcar incidente como resuelto'),
+                              ),
+                            ),
+                          ),
                         Text('Bitácora', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w800)),
                         const SizedBox(height: 10),
                         if (!isClosed) ...[

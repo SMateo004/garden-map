@@ -59,11 +59,17 @@ export const patchWalkInVisitBodySchema = z.object({
 
 const visitEventType = z.enum(['FEEDING', 'WALK', 'MEDICATION', 'BATH', 'NOTE', 'PHOTO', 'INCIDENT', 'INCIDENT_RESOLVED']);
 
+// INCIDENT sin descripción no sirve de nada — es lo único que ve el dueño y
+// el admin. PHOTO sin foto tampoco tiene sentido (para eso está NOTE). El
+// resto de la bitácora (FEEDING/WALK/MEDICATION/BATH/NOTE) puede quedar sin
+// nota — a veces solo importa marcar que pasó.
 export const addVisitEventBodySchema = z.object({
   type: visitEventType,
   note: z.string().max(1000).optional(),
   photoUrl: z.string().url().optional(),
-}).strict();
+}).strict()
+  .refine((data) => data.type !== 'INCIDENT' || !!data.note?.trim(), { message: 'Describí qué pasó', path: ['note'] })
+  .refine((data) => data.type !== 'PHOTO' || !!data.photoUrl, { message: 'Se requiere una foto', path: ['photoUrl'] });
 
 export const occupancyReportQuerySchema = z.object({
   from: z.string().optional(),
