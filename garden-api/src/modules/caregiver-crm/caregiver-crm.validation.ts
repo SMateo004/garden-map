@@ -45,4 +45,27 @@ export const checkInBodySchema = z.object({
   // Hospedaje+Guardería (Paseo es fuera del local, no cuenta).
   serviceType: z.nativeEnum(ServiceType),
   notes: z.string().max(500).optional(),
+  spaceLabel: z.string().max(50).optional(),
+}).strict();
+
+export const checkOutBodySchema = z.object({
+  amountCollected: z.number().min(0).max(100000).optional(),
+}).strict();
+
+export const patchWalkInVisitBodySchema = z.object({
+  spaceLabel: z.string().max(50).optional(),
+  amountCollected: z.number().min(0).max(100000).optional(),
+}).strict();
+
+const visitEventType = z.enum(['FEEDING', 'WALK', 'MEDICATION', 'BATH', 'NOTE', 'PHOTO', 'INCIDENT', 'INCIDENT_RESOLVED']);
+
+export const addVisitEventBodySchema = z.object({
+  type: visitEventType,
+  note: z.string().max(1000).optional(),
+  photoUrl: z.string().url().optional(),
+}).strict();
+
+export const occupancyReportQuerySchema = z.object({
+  from: z.string().optional(),
+  to: z.string().optional(),
 }).strict();

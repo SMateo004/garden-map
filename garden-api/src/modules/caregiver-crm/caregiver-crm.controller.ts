@@ -8,6 +8,10 @@ import {
   createWalkInPetBodySchema,
   patchWalkInPetBodySchema,
   checkInBodySchema,
+  checkOutBodySchema,
+  patchWalkInVisitBodySchema,
+  addVisitEventBodySchema,
+  occupancyReportQuerySchema,
 } from './caregiver-crm.validation.js';
 
 function actingUserId(req: Request): string {
@@ -55,6 +59,11 @@ export const createPet = asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json({ success: true, data: pet });
 });
 
+export const getPet = asyncHandler(async (req: Request, res: Response) => {
+  const pet = await crmService.getWalkInPet(req.user!.userId, req.params.id!);
+  res.json({ success: true, data: pet });
+});
+
 export const updatePet = asyncHandler(async (req: Request, res: Response) => {
   const parsed = patchWalkInPetBodySchema.safeParse(req.body ?? {});
   if (!parsed.success) throw new BadRequestError(parsed.error.errors[0]?.message ?? 'Datos inválidos', 'VALIDATION_ERROR');
@@ -73,14 +82,35 @@ export const checkIn = asyncHandler(async (req: Request, res: Response) => {
   const parsed = checkInBodySchema.safeParse(req.body ?? {});
   if (!parsed.success) throw new BadRequestError(parsed.error.errors[0]?.message ?? 'Datos inválidos', 'VALIDATION_ERROR');
   const visit = await crmService.checkInWalkInPet(
-    req.user!.userId, actingUserId(req), req.params.petId!, parsed.data.serviceType, parsed.data.notes
+    req.user!.userId, actingUserId(req), req.params.petId!, parsed.data.serviceType, parsed.data.notes, parsed.data.spaceLabel
   );
   res.status(201).json({ success: true, data: visit });
 });
 
-export const checkOut = asyncHandler(async (req: Request, res: Response) => {
-  const visit = await crmService.checkOutWalkInVisit(req.user!.userId, actingUserId(req), req.params.visitId!);
+export const getVisit = asyncHandler(async (req: Request, res: Response) => {
+  const visit = await crmService.getWalkInVisit(req.user!.userId, req.params.id!);
   res.json({ success: true, data: visit });
+});
+
+export const checkOut = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = checkOutBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) throw new BadRequestError(parsed.error.errors[0]?.message ?? 'Datos inválidos', 'VALIDATION_ERROR');
+  const visit = await crmService.checkOutWalkInVisit(req.user!.userId, actingUserId(req), req.params.visitId!, parsed.data.amountCollected);
+  res.json({ success: true, data: visit });
+});
+
+export const updateVisit = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = patchWalkInVisitBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) throw new BadRequestError(parsed.error.errors[0]?.message ?? 'Datos inválidos', 'VALIDATION_ERROR');
+  const visit = await crmService.updateWalkInVisit(req.user!.userId, req.params.id!, parsed.data);
+  res.json({ success: true, data: visit });
+});
+
+export const addEvent = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = addVisitEventBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) throw new BadRequestError(parsed.error.errors[0]?.message ?? 'Datos inválidos', 'VALIDATION_ERROR');
+  const visit = await crmService.addVisitEvent(req.user!.userId, actingUserId(req), req.params.id!, parsed.data);
+  res.status(201).json({ success: true, data: visit });
 });
 
 // ── Dashboard de ocupación ────────────────────────────────────────────────────
@@ -88,4 +118,20 @@ export const checkOut = asyncHandler(async (req: Request, res: Response) => {
 export const getOccupancy = asyncHandler(async (req: Request, res: Response) => {
   const dashboard = await crmService.getOccupancyDashboard(req.user!.userId);
   res.json({ success: true, data: dashboard });
+});
+
+// ── Reportes (solo dueño) ─────────────────────────────────────────────────────
+
+export const getOccupancyReport = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = occupancyReportQuerySchema.safeParse(req.query ?? {});
+  if (!parsed.success) throw new BadRequestError(parsed.error.errors[0]?.message ?? 'Datos inválidos', 'VALIDATION_ERROR');
+  const report = await crmService.getWalkInOccupancyReport(req.user!.userId, parsed.data.from, parsed.data.to);
+  res.json({ success: true, data: report });
+});
+
+export const getCashReport = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = occupancyReportQuerySchema.safeParse(req.query ?? {});
+  if (!parsed.success) throw new BadRequestError(parsed.error.errors[0]?.message ?? 'Datos inválidos', 'VALIDATION_ERROR');
+  const report = await crmService.getWalkInCashReport(req.user!.userId, parsed.data.from, parsed.data.to);
+  res.json({ success: true, data: report });
 });

@@ -516,6 +516,18 @@ model WalkInVisit {
   checkedInByUserId   String
   checkedOutAt        DateTime?
   checkedOutByUserId  String?
+  /// Espacio físico asignado dentro del local (ej. "Jaula 4") — puramente
+  /// informativo para el staff, no afecta el cupo combinado.
+  spaceLabel          String?          @db.VarChar(50)
+  /// Efectivo cobrado por esta visita, cargado por el staff al hacer
+  /// check-out — informativo para el dueño, NUNCA pasa por Garden ni por
+  /// User.balance (ver doc del módulo: CRM walk-in es puro registro interno).
+  amountCollected     Float?
+  /// Bitácora de la visita — mismo patrón que Booking.serviceEvents (JSON
+  /// append-only, tipos validados por zod, no por enum de Prisma):
+  /// FEEDING | WALK | MEDICATION | BATH | NOTE | PHOTO | INCIDENT |
+  /// INCIDENT_RESOLVED. Cada entrada: { type, note?, photoUrl?, at, byUserId }.
+  events              Json?            @db.JsonB
 
   @@index([caregiverProfileId, checkedOutAt])
   @@map("walk_in_visits")

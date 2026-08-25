@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../../theme/garden_theme.dart';
 import '../../services/caregiver_crm_service.dart';
 import '../../widgets/garden_loading_indicator.dart';
+import 'walkin_clients_screen.dart';
+import 'walkin_visit_detail_screen.dart';
+import 'walkin_reports_screen.dart';
 
 /// Dashboard de ocupación + CRM de mascotas walk-in — compartido entre el
 /// dueño ('caregiver') y el staff ('caregiver-staff'), mismos endpoints,
@@ -65,6 +68,15 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
     if (didCheckIn == true) _load();
   }
 
+  Future<void> _openVisitDetail(String visitId) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => WalkInVisitDetailScreen(service: _service, visitId: visitId)),
+    );
+    _load();
+  }
+
+  bool get _isOwner => widget.apiPrefix == 'caregiver';
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -123,7 +135,61 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 12),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => WalkInClientsScreen(service: _service)),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: surface,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.people_outline_rounded, color: GardenColors.primary, size: 20),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text('Clientes y mascotas registradas',
+                                    style: TextStyle(color: textColor, fontSize: 13.5, fontWeight: FontWeight.w600)),
+                              ),
+                              Icon(Icons.chevron_right_rounded, color: subtextColor),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (_isOwner) ...[
+                        const SizedBox(height: 8),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => WalkInReportsScreen(service: _service)),
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: surface,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.bar_chart_rounded, color: GardenColors.primary, size: 20),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text('Reportes de ocupación y caja',
+                                      style: TextStyle(color: textColor, fontSize: 13.5, fontWeight: FontWeight.w600)),
+                                ),
+                                Icon(Icons.chevron_right_rounded, color: subtextColor),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
                       if (entries.isEmpty)
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 40),
@@ -131,7 +197,10 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
                         )
                       else
                         for (final e in entries) ...[
-                          Container(
+                          InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: e['kind'] == 'WALK_IN' ? () => _openVisitDetail(e['id'] as String) : null,
+                            child: Container(
                             margin: const EdgeInsets.only(bottom: 10),
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
@@ -174,6 +243,7 @@ class _ReceptionScreenState extends State<ReceptionScreen> {
                                     child: const Text('Check-out'),
                                   ),
                               ],
+                            ),
                             ),
                           ),
                         ],
