@@ -30,6 +30,33 @@ significa:
 - Antes de un cambio grande, considerá si de verdad hace falta probar contra producción o si
   alcanza con revisar el código.
 
+### Alternativa: Postgres local vía Docker (para probar lógica de datos sin tocar prod)
+
+`garden-api/docker-compose.yml` levanta un Postgres 16 local (puerto 5433) con datos sintéticos
+propios — nunca un volcado de producción. Pensado para lo que solo necesita una base de datos
+correcta, no las integraciones externas reales (Resend, AWS, SIP, etc. — esas siguen siendo las
+reales sin importar qué DATABASE_URL uses, así que una prueba final contra producción con las
+cuentas `reviewer.*` sigue haciendo falta para lo que dependa de ellas).
+
+```bash
+docker compose up -d          # levanta el contenedor (Docker Desktop debe estar corriendo)
+cp .env.local.example .env.local
+npm run db:push:local         # sincroniza el schema en la base local (vacía)
+npm run db:seed:local         # crea admin/cuidadores de prueba (prisma/seed.ts)
+npm run dev:local             # arranca la API apuntando a la base local, no a producción
+```
+
+**Estado conocido (2026-08-26):** el setup está armado y `docker compose up` + la conexión TCP
+cruda al contenedor funcionan bien (verificado con `psql` y un socket Node directo), pero
+`prisma db push`/`db seed` fallan con `P1000: Authentication failed` contra este Postgres local
+específicamente en esta máquina (Windows + Docker Desktop) — probé usuario/contraseña correctos,
+`127.0.0.1` en vez de `localhost`, `sslmode=disable`, auth `md5` explícito, y forzar el engine
+binario nativo (`PRISMA_SCHEMA_ENGINE_TYPE=binary`) en vez del WASM por defecto de Prisma 5.22;
+ninguno lo resolvió, y el contenedor nunca registra el intento de conexión — apunta a un problema
+del lado del engine de Prisma en este entorno, no de la config. Si te encontrás con esto: probá
+otra versión de Prisma, o simplemente cambiá `DATABASE_URL` en `.env` a mano de forma temporal
+para el `db push`/seed puntual (mismo mecanismo que ya usa todo lo demás en este proyecto).
+
 ## Cómo se despliega (verificado con el historial real de GitHub Actions, no asumido)
 
 - **Push a `garden-api/**` en `main`** → `.github/workflows/deploy-api.yml` dispara un deploy
