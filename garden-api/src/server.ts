@@ -112,11 +112,15 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT',  () => shutdown('SIGINT'));
 
 /**
- * Verifies that the database schema is in sync with the Prisma migrations table.
- * The startCommand on Render already runs `prisma migrate resolve + migrate deploy`
- * before node starts. This check surfaces any remaining issues as a log warning
- * but does NOT exit — exiting here would kill the server after it's already
- * listening, causing all in-flight health-check requests to get connection-reset.
+ * Verifies that the `_prisma_migrations` ledger has no dangling failed/in-progress
+ * rows. NOTE: this ledger is largely disconnected from what's actually live —
+ * the startCommand on Render runs `prisma db push --accept-data-loss` (see
+ * render.yaml), never `migrate deploy`, so most schema changes never touch this
+ * table at all. This check exists only to catch the rare case where someone runs
+ * `prisma migrate dev/deploy/resolve` by hand against the live DB and leaves a
+ * row unresolved (finished_at NULL). It surfaces that as a log warning but does
+ * NOT exit — exiting here after listen() is already called would cause
+ * in-flight health-check requests to get connection-reset.
  */
 async function assertMigrationsApplied(): Promise<void> {
   try {
@@ -129,10 +133,10 @@ async function assertMigrationsApplied(): Promise<void> {
     `;
     if (rows.length > 0) {
       const names = rows.map(r => r.migration_name).join(', ');
-      // Log as warning (not fatal) — the startCommand handles migration deploy.
+      // Log as warning (not fatal) — this table doesn't gate deploys (db push does).
       // Exiting here after listen() is already called causes health-check timeouts.
       logger.warn(`[Startup] ${rows.length} migration(s) have finished_at=NULL: [${names}]. ` +
-        'They may be in-progress or failed. Check Render logs for migrate deploy output.');
+        'They may be in-progress or failed. Resolve manually with `prisma migrate resolve`.');
     } else {
       logger.info('[Startup] All Prisma migrations applied ✓');
     }
