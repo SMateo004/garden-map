@@ -25,6 +25,9 @@ jest.mock('../../src/config/database', () => {
     deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
   };
   const appSettings = { findUnique: jest.fn().mockResolvedValue(null) };
+  // login() para role CAREGIVER llama a getStaffLoginInfo -> getStaffContext,
+  // que consulta esto — null = no es staff (login normal de dueño).
+  const caregiverStaffMember = { findUnique: jest.fn().mockResolvedValue(null) };
   // audit.service.ts hace `import { prisma } from 'config/database.js'`
   // (named export, no default) para el auditLog fire-and-forget que dispara
   // el registro de cuidador — sin exponer también `prisma` acá, ese import
@@ -38,6 +41,7 @@ jest.mock('../../src/config/database', () => {
     refreshToken,
     appSettings,
     auditLog,
+    caregiverStaffMember,
     $queryRaw: jest.fn().mockResolvedValue([]),
     $transaction: jest.fn((fn: (t: typeof tx) => Promise<unknown>) => fn(tx)),
   };

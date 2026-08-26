@@ -20,6 +20,11 @@ jest.mock('../../src/config/database', () => {
     findFirst: jest.fn(),
     updateMany: jest.fn(),
   };
+  // login() para role CAREGIVER llama a getStaffLoginInfo -> getStaffContext,
+  // que consulta esto — sin el mock, login() explota con "Cannot read
+  // properties of undefined (reading 'findUnique')". null = no es staff,
+  // que es lo correcto para un login normal de cuidador dueño.
+  const caregiverStaffMember = { findUnique: jest.fn().mockResolvedValue(null) };
   const transactionTx = {
     user: { findUnique: jest.fn(), create: jest.fn() },
     caregiverProfile: { create: jest.fn() },
@@ -29,6 +34,7 @@ jest.mock('../../src/config/database', () => {
     default: {
       user,
       caregiverProfile,
+      caregiverStaffMember,
       refreshToken,
       $transaction: jest.fn((fn: (tx: typeof transactionTx) => Promise<unknown>) => fn(transactionTx)),
     },

@@ -115,7 +115,9 @@ describe('PATCH /api/auth/change-password', () => {
       .send({ currentPassword: CURRENT_PASSWORD, newPassword: 'short' });
 
     expect(res.status).toBe(400);
-    expect(res.body.error?.code).toBe('PASSWORD_TOO_SHORT');
+    // PASSWORD_TOO_SHORT ya no existe — la validación de fuerza de contraseña
+    // (min 8 + mayúscula + número + símbolo) usa un solo código unificado.
+    expect(res.body.error?.code).toBe('PASSWORD_TOO_WEAK');
   });
 
   it('returns 400 when currentPassword is missing', async () => {

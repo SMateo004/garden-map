@@ -43,6 +43,9 @@ jest.mock('../../src/config/database', () => {
   const pet = {
     findUnique: jest.fn().mockResolvedValue(petData),
     findFirst: jest.fn().mockResolvedValue(petData),
+    // createBooking valida petIds (soporta multi-mascota) vía tx.pet.findMany
+    // — sin este mock, la creación de reserva explota con 500.
+    findMany: jest.fn().mockResolvedValue([petData]),
   };
   const clientProfile = {
     findUnique: jest.fn().mockResolvedValue({
@@ -55,11 +58,21 @@ jest.mock('../../src/config/database', () => {
     }),
   };
   const appSettings = { findUnique: jest.fn().mockResolvedValue(null) };
+  // createBooking crea una fila BookingPet por mascota (soporte multi-mascota)
+  // después de crear el booking — sin este mock, tx.bookingPet.createMany
+  // no es función.
+  const bookingPet = { createMany: jest.fn().mockResolvedValue({ count: 1 }) };
+  // dispatchOnChainWithRetry (blockchain-retry.helper.ts) crea un
+  // AdminNotification cuando agota los reintentos — se dispara fire-and-forget
+  // desde cancelBooking, así que sin este mock el proceso entero explota con
+  // una excepción no capturada DESPUÉS de que Jest ya reportó los tests como
+  // pasados (exit code 1 igual, rompe el job de CI).
+  const adminNotification = { create: jest.fn().mockResolvedValue({}) };
   // booking.service.ts llama auditLog() en create/cancel, que importa
   // `{ prisma }` con nombre (no default) de config/database.js — sin exponer
   // también `prisma` acá, ese import resuelve undefined y auditLog explota.
   const auditLog = { create: jest.fn().mockResolvedValue({}) };
-  const txModels = { booking, caregiverProfile, availability, user, notification, walletTransaction, pet, clientProfile, appSettings, auditLog };
+  const txModels = { booking, caregiverProfile, availability, user, notification, walletTransaction, pet, clientProfile, appSettings, auditLog, bookingPet, adminNotification };
   const db = {
     booking,
     caregiverProfile,
@@ -71,6 +84,8 @@ jest.mock('../../src/config/database', () => {
     clientProfile,
     appSettings,
     auditLog,
+    bookingPet,
+    adminNotification,
     $queryRaw: jest.fn().mockResolvedValue([]),
     $executeRaw: jest.fn().mockResolvedValue(0),
     $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) => fn(txModels)),
@@ -85,8 +100,11 @@ const settingsCacheMock = {
   getBoolSetting: jest.fn().mockImplementation((key: string, defaultValue: boolean) =>
     Promise.resolve(key === 'maintenanceMode' ? false : defaultValue !== false ? true : false)
   ),
-  getNumericSetting: jest.fn().mockResolvedValue(0),
-  getStringSetting: jest.fn().mockResolvedValue(''),
+  // Sin esto, cualquier chequeo de precio mín/máx (hospedajeMinPrice,
+  // hospedajeMaxPrice, etc.) recibía 0 en vez del default real del llamador,
+  // rechazando reservas válidas con "supera el máximo permitido (Bs 0)".
+  getNumericSetting: jest.fn().mockImplementation((_key: string, defaultValue: number) => Promise.resolve(defaultValue)),
+  getStringSetting: jest.fn().mockImplementation((_key: string, defaultValue: string) => Promise.resolve(defaultValue)),
   invalidateSetting: jest.fn(),
 };
 jest.mock('../../src/utils/settings-cache', () => settingsCacheMock);
@@ -142,13 +160,19 @@ describe('POST /api/bookings', () => {
       pricePerDay: 100,
     });
 
-    (mockPrisma.availability.findMany as jest.Mock).mockResolvedValue([
-      { date: startDate, isAvailable: true },
-      { date: new Date(startDate.getTime() + 24 * 60 * 60 * 1000), isAvailable: true },
-      { date: endDate, isAvailable: true },
-    ]);
+    // El mock no filtra por `where` (no es una DB real) — devuelve tal cual
+    // lo que se le configure, sin importar el isAvailable:false del query
+    // real. Como el código solo pide filas explícitamente bloqueadas
+    // (isAvailable:false), "sin conflicto" se simula con un array vacío, no
+    // con filas isAvailable:true (esas igual habrían contado como "bloqueada"
+    // acá porque el mock ignora el filtro).
+    (mockPrisma.availability.findMany as jest.Mock).mockResolvedValue([]);
 
     (mockPrisma.booking.count as jest.Mock).mockResolvedValue(0);
+    // assertHospedajeAvailability llama tx.booking.findMany dos veces
+    // (reservas solapadas propias + guardería del mismo pool combinado) —
+    // [] = sin conflictos, camino feliz.
+    (mockPrisma.booking.findMany as jest.Mock).mockResolvedValue([]);
     (mockPrisma.booking.create as jest.Mock).mockResolvedValue({
       id: 'booking-1',
       serviceType: ServiceType.HOSPEDAJE,

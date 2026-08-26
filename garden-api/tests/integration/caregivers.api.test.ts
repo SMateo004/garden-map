@@ -25,7 +25,9 @@ jest.mock('../../src/config/database', () => {
     user,
     city,
     cityZone,
-    booking: { findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+    // count: usado por getCaregiverTrustStats (GET /api/caregivers/:id) —
+    // sin esto, prisma.booking.count no es función y el detalle explota con 500.
+    booking: { findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn(), count: jest.fn().mockResolvedValue(0) },
     adminAction: { create: jest.fn() },
     $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) => {
       return fn({ caregiverProfile, user });
@@ -118,6 +120,9 @@ const mockCaregiverDetail = {
   pricePerWalk60: 50,
   spaceType: 'casa_patio',
   servicesOffered: ['HOSPEDAJE', 'PASEO'],
+  // memberSince (caregiver.service.ts) hace profile.createdAt.toISOString()
+  // — sin este campo, el detalle explota con 500.
+  createdAt: new Date('2024-01-01T00:00:00.000Z'),
   bio: 'Bio test',
   photos: ['https://example.com/1.jpg'],
   user: { firstName: 'María', lastName: 'López', profilePicture: null },
