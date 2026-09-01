@@ -937,6 +937,10 @@ model ClientProfile {
   zoneId               String?
   cityZone             CityZone? @relation(fields: [zoneId], references: [id])
   phone                String?   @db.VarChar(20)
+  /// Verificación opcional del teléfono real (User.phone, no este campo
+  /// legacy) — mismo flujo OTP que cuidador, pero sin gatear nada; es solo
+  /// un dato de confianza editable desde "Mis Datos". Ver verifyCaregiverPhone.
+  phoneVerified        Boolean   @default(false)
   bio                  String?
   /// NIT guardado del cliente para facturación — se pre-carga en cada pago y
   /// es editable antes de cada servicio (ver Booking.nit para el snapshot

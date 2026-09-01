@@ -25,7 +25,7 @@ import { onCaregiverWelcome } from '../../services/notification.service.js';
 
 const ADMIN_NOTIFICATION_TYPE_SUBMIT = 'CAREGIVER_SUBMIT';
 
-/** PATCH user-info: actualiza nombre, email, teléfono. Si cambia el email → emailVerified = false. */
+/** PATCH user-info: actualiza nombre, email, teléfono. Si cambia el email → emailVerified = false. Si cambia el teléfono → phoneVerified = false. */
 export async function patchUserInfo(
   userId: string,
   body: { firstName?: string; lastName?: string; phone?: string; email?: string }
@@ -58,8 +58,10 @@ export async function patchUserInfo(
     userUpdateData.lastName = body.lastName.trim();
   }
   // phone is @unique String (not nullable) — only update if non-empty and actually different
-  if (body.phone !== undefined && body.phone.trim() && body.phone.trim() !== currentUser?.phone) {
-    userUpdateData.phone = body.phone.trim();
+  const newPhone = body.phone?.trim();
+  const phoneChanged = Boolean(newPhone && newPhone !== currentUser?.phone);
+  if (phoneChanged) {
+    userUpdateData.phone = newPhone;
   }
 
   const newEmail = body.email?.trim().toLowerCase();
@@ -76,7 +78,7 @@ export async function patchUserInfo(
   }
 
   if (Object.keys(userUpdateData).length === 0) {
-    return { updated: false, emailChanged: false };
+    return { updated: false, emailChanged: false, phoneChanged: false };
   }
 
   try {
@@ -94,6 +96,17 @@ export async function patchUserInfo(
     throw err;
   }
 
+  if (phoneChanged) {
+    // Recién acá, después de que el UPDATE del teléfono confirmó éxito — el
+    // número nuevo nunca se confirmó por OTP, no puede heredar la
+    // verificación del anterior (antes se quedaba en true sin razón).
+    await prisma.caregiverProfile.update({
+      where: { id: profile.id },
+      data: { phoneVerified: false },
+    });
+    logger.info('Phone changed — phoneVerified reset on profile', { userId });
+  }
+
   // Re-check completion flags after update
   await checkAndAutoSubmitProfile(userId);
 
@@ -101,7 +114,7 @@ export async function patchUserInfo(
   await getCache().del(`caregivers:detail:${profile.id}`);
   await delByPrefix('caregivers:list:');
 
-  return { updated: true, emailChanged: !!emailChanged };
+  return { updated: true, emailChanged: !!emailChanged, phoneChanged };
 }
 
 /** Genera código 6 dígitos, guarda en EmailVerification, envía email real (Resend/SMTP). 10 min expiry. */

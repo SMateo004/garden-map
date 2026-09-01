@@ -216,11 +216,21 @@ router.post('/forgot-password/verify-code', passwordResetActionLimiter, authCont
 /** POST /api/auth/forgot-password/set-password — body: { tempToken, newPassword }. Sets new password. */
 router.post('/forgot-password/set-password', passwordResetActionLimiter, authController.setNewPassword);
 
-// ── Phone Verification (Twilio SMS OTP) ──────────────────────────────────────
+// ── Phone Verification (WhatsApp → Vonage SMS → AWS SNS, ver otp-delivery.service.ts) ──
+// Los handlers no dependen del rol (solo leen/escriben User.phone + OTP, y al
+// verificar marcan phoneVerified=true en cualquier perfil que el usuario
+// tenga — caregiver y/o client). Se montan bajo ambos prefijos para que la
+// URL sea clara desde cada lado de la app; es el mismo código.
 /** POST /api/auth/caregiver/send-phone-otp — Envía OTP de 6 dígitos al teléfono del usuario. */
 router.post('/caregiver/send-phone-otp', authMiddleware, phoneOtpSendLimiter, authController.sendCaregiverPhoneOtp);
 
 /** POST /api/auth/caregiver/verify-phone — body: { code }. Verifica OTP y marca phoneVerified=true. */
 router.post('/caregiver/verify-phone', authMiddleware, otpVerifyLimiter, authController.verifyCaregiverPhone);
+
+/** POST /api/auth/client/send-phone-otp — igual que el de arriba, para el cliente (verificación opcional en "Mis Datos"). */
+router.post('/client/send-phone-otp', authMiddleware, phoneOtpSendLimiter, authController.sendCaregiverPhoneOtp);
+
+/** POST /api/auth/client/verify-phone — body: { code }. */
+router.post('/client/verify-phone', authMiddleware, otpVerifyLimiter, authController.verifyCaregiverPhone);
 
 export default router;

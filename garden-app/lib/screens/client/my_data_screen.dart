@@ -26,6 +26,13 @@ class _MyDataScreenState extends State<MyDataScreen> {
   bool _uploadingPhoto = false;
   String _token = '';
   Uint8List? _pendingPhotoBytes;
+  // Verificación opcional de teléfono (ClientProfile.phoneVerified) — solo
+  // informativa, no bloquea nada. _savedPhone es el número que YA está
+  // guardado en el servidor (distinto de lo que el usuario esté tipeando
+  // sin guardar en _phoneCtrl), para no ofrecer "Verificar" sobre un número
+  // que todavía no se guardó.
+  bool _phoneVerified = false;
+  String _savedPhone = '';
 
   late TextEditingController _firstCtrl;
   late TextEditingController _lastCtrl;
@@ -110,7 +117,8 @@ class _MyDataScreenState extends State<MyDataScreen> {
           // columna NOT NULL/UNIQUE — nunca debe mostrarse tal cual, el campo
           // debe quedar vacío para que el usuario cargue su número real.
           final rawPhone = user['phone'] as String? ?? '';
-          _phoneCtrl.text = rawPhone.startsWith('social_pending_') ? '' : rawPhone;
+          _savedPhone = rawPhone.startsWith('social_pending_') ? '' : rawPhone;
+          _phoneCtrl.text = _savedPhone;
           _addressCtrl.text = user['address'] as String? ?? '';
           _bioCtrl.text = user['bio'] as String? ?? '';
           _streetCtrl.text = user['addressStreet'] as String? ?? '';
@@ -141,6 +149,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
         setState(() {
           _nitCtrl.text = profile['nit'] as String? ?? '';
           _nitRazonSocialCtrl.text = profile['nitRazonSocial'] as String? ?? '';
+          _phoneVerified = profile['phoneVerified'] == true;
         });
       }
     } catch (_) {}
@@ -164,6 +173,20 @@ class _MyDataScreenState extends State<MyDataScreen> {
       return data['success'] == true;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Verificación opcional de teléfono — solo un dato de confianza en el
+  /// perfil, no bloquea ninguna acción.
+  Future<void> _startPhoneVerification() async {
+    final verified = await showDialog<bool>(
+      context: context,
+      builder: (_) => _PhoneOtpDialog(baseUrl: _baseUrl, token: _token, phone: _savedPhone),
+    );
+    if (verified == true && mounted) {
+      setState(() => _phoneVerified = true);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Teléfono verificado'), backgroundColor: GardenColors.success));
     }
   }
 
@@ -475,8 +498,27 @@ class _MyDataScreenState extends State<MyDataScreen> {
             ]),
             const SizedBox(height: 16),
 
-            // Phone
-            Text('Teléfono', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+            // Phone — verificación opcional, no bloquea nada. Solo se ofrece
+            // cuando lo tipeado coincide con lo ya guardado en el servidor
+            // (si el usuario está editando a un número nuevo sin guardar
+            // todavía, no hay nada real que verificar).
+            Row(children: [
+              Text('Teléfono', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+              if (_savedPhone.isNotEmpty && _phoneCtrl.text.trim() == _savedPhone) ...[
+                const SizedBox(width: 8),
+                if (_phoneVerified)
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.verified_outlined, color: GardenColors.success, size: 14),
+                    const SizedBox(width: 3),
+                    Text('Verificado', style: TextStyle(color: GardenColors.success, fontSize: 11.5)),
+                  ])
+                else
+                  GestureDetector(
+                    onTap: _startPhoneVerification,
+                    child: const Text('Verificar', style: TextStyle(color: GardenColors.primary, fontSize: 11.5, fontWeight: FontWeight.w700)),
+                  ),
+              ],
+            ]),
             const SizedBox(height: 6),
             TextField(controller: _phoneCtrl, style: TextStyle(color: textColor),
                 keyboardType: TextInputType.phone,
@@ -697,6 +739,119 @@ class _MyDataScreenState extends State<MyDataScreen> {
       color: GardenColors.primary.withValues(alpha: 0.15),
       child: Center(child: Text(initials.isEmpty ? '?' : initials,
         style: const TextStyle(color: GardenColors.primary, fontSize: 32, fontWeight: FontWeight.bold))),
+    );
+  }
+}
+
+/// Diálogo de verificación de teléfono para el cliente — envía el código al
+/// abrirse (una sola vez, vía initState) y lo verifica al confirmar.
+/// Devuelve `true` (Navigator.pop) si la verificación fue exitosa.
+class _PhoneOtpDialog extends StatefulWidget {
+  final String baseUrl;
+  final String token;
+  final String phone;
+  const _PhoneOtpDialog({required this.baseUrl, required this.token, required this.phone});
+
+  @override
+  State<_PhoneOtpDialog> createState() => _PhoneOtpDialogState();
+}
+
+class _PhoneOtpDialogState extends State<_PhoneOtpDialog> {
+  bool _sending = true;
+  bool _verifying = false;
+  String? _error;
+  final _codeCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _sendCode();
+  }
+
+  @override
+  void dispose() {
+    _codeCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendCode() async {
+    setState(() { _sending = true; _error = null; });
+    try {
+      final res = await http.post(
+        Uri.parse('${widget.baseUrl}/auth/client/send-phone-otp'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] != true) {
+        _error = (data['error'] as Map<String, dynamic>?)?['message'] as String? ?? 'No se pudo enviar el código';
+      }
+    } catch (_) {
+      _error = 'No se pudo enviar el código. Revisa tu conexión.';
+    }
+    if (mounted) setState(() => _sending = false);
+  }
+
+  Future<void> _verify() async {
+    setState(() { _verifying = true; _error = null; });
+    try {
+      final res = await http.post(
+        Uri.parse('${widget.baseUrl}/auth/client/verify-phone'),
+        headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+        body: jsonEncode({'code': _codeCtrl.text.trim()}),
+      );
+      final data = jsonDecode(res.body);
+      if (data['success'] == true) {
+        if (mounted) Navigator.pop(context, true);
+        return;
+      }
+      if (mounted) {
+        setState(() {
+          _verifying = false;
+          _error = (data['error'] as Map<String, dynamic>?)?['message'] as String? ?? 'Código incorrecto';
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() { _verifying = false; _error = 'Error de conexión, intenta de nuevo.'; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Verificar teléfono'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Te enviamos un código de 6 dígitos a ${widget.phone}.', style: const TextStyle(fontSize: 13)),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _codeCtrl,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            autofocus: true,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 20, letterSpacing: 4),
+            decoration: const InputDecoration(counterText: '', hintText: '000000'),
+            onChanged: (_) => setState(() {}),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 8),
+            Text(_error!, style: const TextStyle(color: GardenColors.error, fontSize: 12)),
+          ],
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: _sending ? null : _sendCode,
+            child: Text(_sending ? 'Enviando...' : 'Reenviar código'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        TextButton(
+          onPressed: (_verifying || _codeCtrl.text.trim().length != 6) ? null : _verify,
+          child: Text(_verifying ? 'Verificando...' : 'Verificar'),
+        ),
+      ],
     );
   }
 }

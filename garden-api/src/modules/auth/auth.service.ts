@@ -858,6 +858,13 @@ export async function registerProfessional(body: RegisterProfessionalBody): Prom
         identityVerificationStatus: 'VERIFIED',
         identityVerificationToken: randomBytes(32).toString('hex'),
         emailVerified: true,
+        // El código profesional (validado arriba) es el gate de confianza
+        // para toda la cuenta — igual que emailVerified, phoneVerified debe
+        // quedar en true desde el registro. Sin esto quedaba en false por
+        // default y no había ninguna pantalla en el wizard de "profesional"
+        // para corregirlo — el cuidador quedaba con el teléfono sin
+        // verificar para siempre, sin forma de arreglarlo.
+        phoneVerified: true,
         isProfessional: true,
         // Campo legacy que la respuesta de este endpoint todavía expone
         // (verificationStatus) — sin esto quedaba en su default

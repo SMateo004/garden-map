@@ -383,6 +383,9 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
   const userData: Record<string, unknown> = {};
   if (firstName && firstName.trim()) userData.firstName = firstName.trim();
   if (lastName && lastName.trim()) userData.lastName = lastName.trim();
+  // true solo si el número es realmente distinto al actual — usado abajo
+  // para resetear phoneVerified (el número nuevo nunca pasó por OTP).
+  let phoneChanged = false;
   if (phone && phone.trim()) {
     const cleanPhone = phone.trim().replace(/\D/g, '').replace(/^591/, '');
     if (!/^[67][0-9]{7}$/.test(cleanPhone)) {
@@ -395,6 +398,7 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
     if (existingPhone && existingPhone.id !== userId) {
       return res.status(409).json({ success: false, error: { code: 'PHONE_IN_USE', message: 'Ese teléfono ya está registrado en otra cuenta.' } });
     }
+    phoneChanged = !existingPhone;
     userData.phone = cleanPhone;
   }
   if (city !== undefined) userData.city = city?.trim() || null;
@@ -464,6 +468,10 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
   let updated: { firstName: string; lastName: string; phone: string; city: string | null; country: string | null; dateOfBirth: Date | null } | null = null;
   if (Object.keys(userData).length > 0) {
     updated = await prisma.user.update({ where: { id: userId }, data: userData });
+  }
+  if (phoneChanged) {
+    // updateMany: no-op seguro si el usuario no tiene CaregiverProfile (CLIENT).
+    await prisma.caregiverProfile.updateMany({ where: { userId }, data: { phoneVerified: false } });
   }
   if (Object.keys(profileData).length > 0) {
     if (effectiveRole === 'CAREGIVER') {
@@ -1044,8 +1052,10 @@ export const sendCaregiverPhoneOtp = asyncHandler(async (req: Request, res: Resp
   });
 });
 
-/** POST /api/auth/caregiver/verify-phone — body: { code }
- *  Verifica el código contra el guardado en BD y marca phoneVerified=true. */
+/** POST /api/auth/caregiver/verify-phone (también montado en /api/auth/client/verify-phone) — body: { code }
+ *  Verifica el código contra el guardado en BD y marca phoneVerified=true en
+ *  cualquier perfil (caregiver y/o client) que tenga este usuario — es el
+ *  mismo User.phone en ambos, no hace falta saber con qué rol llamó. */
 export const verifyCaregiverPhone = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const { code } = req.body ?? {};
@@ -1080,10 +1090,12 @@ export const verifyCaregiverPhone = asyncHandler(async (req: Request, res: Respo
     data: { phoneOtp: null, phoneOtpExpiresAt: null },
   });
 
-  await prisma.caregiverProfile.updateMany({
-    where: { userId },
-    data: { phoneVerified: true },
-  });
+  // updateMany en ambas tablas: no-op seguro para la que el usuario no
+  // tenga (ej. un CLIENT no tiene CaregiverProfile, y viceversa).
+  await Promise.all([
+    prisma.caregiverProfile.updateMany({ where: { userId }, data: { phoneVerified: true } }),
+    prisma.clientProfile.updateMany({ where: { userId }, data: { phoneVerified: true } }),
+  ]);
 
   // Companies: if both phone + email are verified → set verified=true (appears in marketplace)
   try {
