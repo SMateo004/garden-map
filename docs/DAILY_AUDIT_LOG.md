@@ -102,3 +102,94 @@ además re-conciliar manualmente algún `WalletTransaction.balance` ya grabado m
 No se encontró ningún ítem de bajo riesgo (copy/texto, validación de UI, código muerto) durante
 esta pasada — el foco quedó en profundidad sobre flujos de dinero en vez de cubrir más área. No
 hubo commits de código; solo este log.
+
+---
+
+## 2026-09-25 — Política de cancelación/reembolsos (coherencia texto↔backend) y calificaciones
+
+**Commit de referencia al iniciar la auditoría:** `2ab2fe2` (chore: registrar auditoría diaria
+anterior).
+
+**Área auditada:** coherencia entre lo que el backend realmente calcula como reembolso al
+cancelar una reserva (`garden-api/src/modules/booking-service/booking.service.ts`,
+`calculateRefund()`) y lo que la app le dice al usuario en dos lugares distintos
+(`garden-app/lib/screens/legal/legal_screen.dart` y `garden-app/lib/data/help_center_content.dart`).
+Elegida porque el propio CLAUDE.md señala explícitamente "plazos, montos, políticas que no
+coinciden entre sí" como el tipo de bug a buscar, y esta área no se había tocado en los commits
+recientes. También se revisó el sistema de calificaciones (ratings) buscando condiciones de
+carrera.
+
+### Hallazgo 1 (ALTO RIESGO — no aplicado, solo reportado): tres documentos de reembolso que no
+concuerdan entre sí, y ninguno de los dos textos de la app describe bien lo que hace el código
+
+**Lo que realmente hace el backend** (`booking.service.ts`, función `calculateRefund()` L2017-2086,
+umbrales configurables vía `AppSettings`/`getBookingSettings()` L67-91, con estos defaults):
+- `HOSPEDAJE` (L2027-2052, usa `booking.startDate`): >48h → 100% (menos cargo fijo Bs 10) · 24-48h
+  → 50% (también con el cargo Bs 10 descontado) · <24h → 0%.
+- **Cualquier otro `serviceType`** (`GUARDERIA`, `PASEO`, `VISITA_DOMICILIARIA`, `BAÑO_ESTETICA` —
+  todos caen en la misma rama genérica, L2055-2086, usa `booking.walkDate` a mediodía, comentario
+  explícito en L2055 dice "PASEO / GUARDERIA"): >12h → 100% · 6-12h → 50% · <6h → 0%. **No existe
+  ninguna rama especial para Guardería ni para Baño y Estética** — ambas se tratan exactamente
+  igual que un Paseo de 30 minutos.
+
+**Lo que dice `legal_screen.dart`** (sección 7, "Política de cancelación y reembolsos", L308-324):
+Hospedaje y Guardería juntos con >72h/24-72h/<24h (sin mencionar el cargo Bs 10); Paseo y Visita
+domiciliaria con >12h/2-12h/<2h; y un tercer bloque "BAÑO Y ESTÉTICA" inventado con >24h 100% /
+<24h 50% que no corresponde a ninguna rama real del código.
+
+**Lo que dice `help_center_content.dart`** (L125-136): Hospedaje y Guardería juntos con
+>48h/24-48h/<24h + cargo Bs 10 (coincide con la rama HOSPEDAJE del código); Paseo con >12h/6-12h/<6h
+(coincide con la rama genérica). No menciona Visita domiciliaria ni Baño y Estética.
+
+**El problema real:** los tres documentos (código, legal, ayuda) coinciden solo parcialmente entre
+sí, y ninguno de los dos textos de la app refleja correctamente que **Guardería usa el umbral corto
+de 12h/6h, no el largo de 48h/24h** — ambos textos prometen al usuario el trato "hospedaje" para
+Guardería cuando el código en realidad la trata como un paseo. Ejemplo concreto: un cliente que
+cancela una Guardería 30 horas antes, leyendo cualquiera de los dos textos, espera 100% (está
+dentro de la ventana ">24h"/">48h" que ambos documentos prometen) pero el código ya la puso en la
+rama <12h→<6h... en este caso 30h > 12h así que sí le da 100% igual, pero el punto de quiebre real
+está en otro lado (12h/6h) que no coincide con el que el usuario cree que aplica (48h/24h) — un
+cliente que cancela a las 20h antes de una Guardería cree (por ambos textos) que tiene garantizado
+al menos 50% y en realidad, según el código, ya está en la rama <12h → sin reembolso. Es una
+promesa de reembolso incumplida por diseño, en el módulo de dinero más sensible del negocio, y
+además el bloque "Baño y Estética" en `legal_screen.dart` describe una política que simplemente no
+existe en el código.
+
+**No se aplicó ningún cambio** porque esto es, sin ambigüedad, un tema de dinero/reembolsos — cae
+en la categoría de alto riesgo de esta auditoría. Además no es un simple arreglo de texto: antes de
+tocar nada hay que decidir cuál de los dos comportamientos es el intencional para Guardería y Baño
+y Estética —
+1. Si Guardería/Baño y Estética *deberían* tratarse como Hospedaje (parece lo más razonable dado
+   que Guardería es una custodia de día completo, no un paseo de 30 min) → el bug está en
+   `calculateRefund()` (falta una rama `GUARDERIA`/`BAÑO_ESTETICA` que use el umbral 48h/24h con
+   `startDate`), y ahí sí hay que decidir con cuidado porque afecta montos ya cobrados/reembolsados
+   en reservas pasadas.
+2. Si el umbral corto (12h/6h) es el intencional para Guardería/Baño y Estética → el bug está en
+   los dos textos de la app, que deben separar "Guardería" de "Hospedaje" y usar 12h/6h, y
+   `legal_screen.dart` debe borrar el bloque "Baño y Estética" inventado (o alinearlo a 12h/6h
+   también).
+Cualquiera de las dos direcciones cambia lo que el usuario cobra o recibe, así que queda
+completamente para que el dueño del proyecto decida antes de tocar código o copy.
+
+### Hallazgo 2 (informativo, sin acción — no es un bug de carrera ni de validación)
+
+Se revisó el flujo de calificaciones buscando condiciones de carrera: tanto
+`confirmReceiptByClient()` (cliente califica a cuidador, `booking.service.ts` L4656-4831) como
+`rateOwner()` (cuidador califica a cliente, L5226-5275) usan el patrón atómico ya establecido
+(`updateMany` con condición de guarda + recálculo de promedio dentro de la misma `$transaction`,
+p. ej. L4694-4704 y L5261-5268) — sin bugs ahí. Validación de rango 1-5 presente y consistente en
+`booking.validation.ts` (L344-348, L367-371) y revalidada en el server.
+
+Se notó sí una asimetría de diseño (no un bug): la calificación del cliente al cuidador se agrega
+en `CaregiverProfile.rating`/`reviewCount` (schema L168-169) y alimenta tanto el matching/orden de
+búsqueda como la auto-suspensión por rating bajo (`maybeAutoSuspendForLowRating()`, L4843+),
+mientras que la calificación del cuidador al cliente (`Booking.caregiverRating`, schema L677/691)
+no tiene ningún campo agregado equivalente en `ClientProfile` ni ningún efecto downstream — solo se
+calcula ad-hoc en el panel de admin (`admin.service.ts` L2733-2746). Puede ser intencional (los
+clientes no compiten por "matching" como los cuidadores), así que se deja solo como observación
+para que el dueño del proyecto confirme si es el comportamiento esperado — no se propone ni se
+aplica ningún cambio.
+
+### Sin cambios aplicados hoy
+Ambos hallazgos caen en zona de dinero/diseño de producto — no se tocó código ni copy. Solo se
+actualiza este log.
