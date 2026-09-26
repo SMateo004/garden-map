@@ -193,3 +193,94 @@ aplica ningún cambio.
 ### Sin cambios aplicados hoy
 Ambos hallazgos caen en zona de dinero/diseño de producto — no se tocó código ni copy. Solo se
 actualiza este log.
+
+---
+
+## 2026-09-26 — Seguridad de la verificación de identidad de cuidadores (endpoint sin auth)
+
+**Commit de referencia al iniciar la auditoría:** `29f5ba2` (chore: registrar auditoría diaria
+anterior — reembolso Guardería/Baño).
+
+**Área auditada:** `garden-api/src/modules/verification/` (pipeline completo de verificación de
+identidad: liveness, comparación facial, OCR). Elegida porque las dos auditorías anteriores se
+concentraron en flujos de dinero (recuperación de deuda, reembolsos) y el CLAUDE.md prioriza
+también seguridad/verificación del cuidador, área que no se había tocado todavía en esta serie de
+auditorías. El propio archivo `verification.controller.ts` tiene varios comentarios que documentan
+hardening previo de exactamente este tipo de problema en los endpoints vecinos
+(`create-liveness-session`, `check-liveness`, `submit`), lo que hizo sospechar que podía haber
+quedado un endpoint sin el mismo tratamiento — y lo había.
+
+### Hallazgo (ALTO RIESGO — no aplicado, solo reportado): `POST /api/verification/check-blink` no
+valida el token de verificación ni tiene rate limit, y dispara llamadas reales y facturadas a AWS
+Rekognition sin ninguna autenticación
+
+**Dónde:**
+- `garden-api/src/modules/verification/verification.routes.ts:42-50` — la ruta se registra sin
+  ningún rate limiter (a diferencia de `/create-liveness-session` y `/check-liveness`, líneas 32 y
+  37, que sí usan `livenessSessionLimiter` — 10 req/hora — con un comentario explícito arriba,
+  L9-10, sobre por qué: "cada sesión... es una llamada real y facturada a AWS Rekognition").
+- `garden-api/src/modules/verification/verification.controller.ts:202-234` (`checkBlink`) — exige
+  que `token` no esté vacío (L216-218) pero **nunca valida que sea válido**: llama a
+  `validateToken(token)` (L221) y usa el resultado sin comprobar `session.valid`:
+  ```ts
+  const session = await validateToken(token);
+  const userId = (session as any)?.userId ?? 'unknown';
+  const result = await checkBlinkLiveness(frameOpen.buffer, frameClosed.buffer, userId);
+  ```
+  Si el token es inválido/expirado/inventado, `validateToken` devuelve `{ valid: false, message:
+  ... }` (sin `userId`) — el código no lo rechaza, simplemente sigue con `userId = 'unknown'` y
+  ejecuta `checkBlinkLiveness` igual.
+- `garden-api/src/modules/verification/liveness.service.ts:186-245` (`checkBlinkLiveness`) — hace
+  dos llamadas reales a `RekognitionClient.send(DetectFacesCommand)` (una por cada frame) por cada
+  request, sin ningún control adicional.
+
+**Qué pasa en la práctica:** cualquiera, sin sesión ni token válido, puede mandar
+`POST /api/verification/check-blink` con dos imágenes cualesquiera y un `token` cualquiera (basta
+con que el campo no esté vacío — ni siquiera tiene que ser un JWT bien formado, porque
+`validateToken` atrapa el error de `jwt.verify` en un try/catch y sigue de largo hasta el fallback
+de buscarlo como token estático, y si tampoco matchea ahí, simplemente devuelve `valid: false` sin
+que el controller lo use). Cada request así factura 2 llamadas a AWS Rekognition `DetectFaces`, sin
+límite de frecuencia ni de intentos — es exactamente el mismo problema que el comentario en
+`create-liveness-session` (L109-117 del controller) describe haber arreglado para esa ruta ("cualquiera,
+sin credenciales, podía llamarlo en bucle y cada llamada crea una sesión real y facturada de AWS"),
+pero el fix nunca se replicó en `/check-blink`. Es un vector de abuso de costo (factura de AWS
+inflada por un tercero) y, en menor medida, una superficie para tantear el umbral de detección de
+parpadeo del sistema anti-spoofing sin dejar rastro asociado a ningún usuario real (el `userId`
+que se audita/loggea es literalmente el string `'unknown'`).
+
+**Por qué no es explotable para aprobar una identidad falsa (mitiga la severidad, no la anula):**
+si el llamador logra pasar el chequeo de parpadeo, `checkBlinkLiveness` firma un JWT
+`blinkLivenessToken` con `userId: 'unknown'` (L234-238 de `liveness.service.ts`). Cuando ese token
+se manda a `/api/verification/submit`, `verification.service.ts:230` compara
+`payload.userId !== user.id` y lo rechaza (`'unknown' !== <id real>`). Así que el bypass de
+liveness en sí no se puede encadenar hasta una verificación aprobada — el daño real hoy es
+puramente de costo/abuso (facturación de AWS) y de reconocimiento (permite iterar sobre el
+detector de parpadeo sin restricción), no de fraude de identidad consumado.
+
+**Propuesta de fix (no aplicada):**
+1. Agregar el mismo `livenessSessionLimiter` (u otro con límite similar) a la ruta
+   `check-blink` en `verification.routes.ts`, igual que en `create-liveness-session` y
+   `check-liveness`.
+2. En `checkBlink` (`verification.controller.ts`), rechazar con 401 cuando
+   `!session.valid` en vez de seguir con `userId = 'unknown'` — mismo patrón dual ya usado en
+   `createLivenessSession`/`checkLiveness` (líneas 118-153 y 161-196 del mismo archivo):
+   ```ts
+   const session = await validateToken(token);
+   if (!session.valid || !session.userId) {
+     return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Token de verificación inválido.' } });
+   }
+   const userId = session.userId;
+   ```
+
+**Por qué no se aplicó:** cae directo en dos categorías de alto riesgo de esta auditoría a la
+vez — seguridad/autorización (endpoint sin autenticación real) y verificación de identidad de
+cuidadores (parte del pipeline de liveness/anti-spoofing). Aunque el fix propuesto es acotado y de
+bajo riesgo técnico (agregar un rate limiter + una validación que ya existe como patrón en el
+mismo archivo, sin tocar dinero ni datos de producción), la política explícita de esta rutina es
+que seguridad/auth y verificación de identidad siempre van a revisión humana sin excepción por
+simplicidad del fix. Queda para que el dueño del proyecto lo apruebe y aplique (o lo pida en la
+próxima corrida con aprobación explícita).
+
+### Sin cambios aplicados hoy
+El único hallazgo de la pasada cae en la categoría de seguridad/verificación de identidad — no se
+tocó código. Solo se actualiza este log.
