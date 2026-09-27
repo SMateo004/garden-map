@@ -91,11 +91,15 @@ Responde ÚNICAMENTE en JSON válido, sin texto adicional:
  * además del criterio del bot (defensa en profundidad, mismo espíritu que el
  * resto del proyecto no delega decisiones de plata 100% a la IA). */
 const FORCED_ESCALATION_PATTERNS: Array<{ pattern: RegExp; razon: string }> = [
-  { pattern: /\b(demanda|denuncia|abogad|legal|fiscal[ií]a|polic[ií]a)\b/i, razon: 'Menciona algo de índole legal/policial.' },
-  { pattern: /\b(fondo de garant[ií]a|seguro veterinari|reclamo.*(veterinari|accidente)|accidente.*(mascota|perro|gato))\b/i, razon: 'Reclamo sobre el fondo de garantía / accidente con la mascota.' },
-  { pattern: /\b(eliminar|borrar|cerrar|dar de baja).{0,15}\bcuenta\b/i, razon: 'Pide eliminar/dar de baja su cuenta.' },
-  { pattern: /\b(estafa|me robaron|fraude|no me devolvieron|no me pagaron)\b/i, razon: 'Reclamo de dinero fuera de la política estándar.' },
-  { pattern: /\bhablar con (una persona|un humano|alguien real|un asesor)\b/i, razon: 'Pidió explícitamente hablar con una persona.' },
+  // Nota: sin \b de cierre en las raíces (denunci, abogad, veterinari, etc.)
+  // a propósito — un \b final no matchea dentro de una palabra ("abogado",
+  // "denunciar", "perros"), así que las formas conjugadas/plurales más
+  // comunes se colaban sin escalar. \w* cubre esas variantes.
+  { pattern: /\b(demanda\w*|denunci\w*|abogad\w*|legal|fiscal[ií]as?|polic[ií]as?)/iu, razon: 'Menciona algo de índole legal/policial.' },
+  { pattern: /\b(fondo de garant[ií]as?|seguro veterinari\w*|reclamo.*(veterinari\w*|accidente)|accidente.*(mascotas?|perros?|gatos?))/iu, razon: 'Reclamo sobre el fondo de garantía / accidente con la mascota.' },
+  { pattern: /\b(eliminar|borrar|cerrar|dar de baja).{0,15}\bcuenta\w*/iu, razon: 'Pide eliminar/dar de baja su cuenta.' },
+  { pattern: /\b(estafa\w*|me robaron|fraude|no me devolvieron|no me pagaron)/iu, razon: 'Reclamo de dinero fuera de la política estándar.' },
+  { pattern: /\bhablar con (una persona|un humano|alguien real|un asesor)\b/iu, razon: 'Pidió explícitamente hablar con una persona.' },
 ];
 
 export function requiereEscalacionForzada(message: string): string | null {

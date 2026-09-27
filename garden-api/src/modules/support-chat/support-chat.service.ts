@@ -101,12 +101,17 @@ export async function sendClientMessage(userId: string, rawMessage: string) {
     botMessage = { id: savedBot.id, message: savedBot.message, createdAt: savedBot.createdAt };
 
     if (resultado.necesitaHumano) {
-      await prisma.supportThread.update({
-        where: { id: thread.id },
+      // updateMany condicionado: si un admin resolvió el hilo mientras el bot
+      // esperaba la respuesta de Claude (llamada de varios segundos), esta
+      // escalación no debe reabrirlo pisando el RESOLVED recién puesto.
+      const escalated = await prisma.supportThread.updateMany({
+        where: { id: thread.id, status: { not: 'RESOLVED' } },
         data: { status: 'ESCALATED', lastMessageAt: new Date(), lastMessagePreview: preview(resultado.respuesta) },
       });
-      finalStatus = 'ESCALATED';
-      logger.info('[SupportChat] Hilo escalado a admin', { threadId: thread.id, userId, razon: resultado.razon });
+      if (escalated.count > 0) {
+        finalStatus = 'ESCALATED';
+        logger.info('[SupportChat] Hilo escalado a admin', { threadId: thread.id, userId, razon: resultado.razon });
+      }
     }
   }
 
