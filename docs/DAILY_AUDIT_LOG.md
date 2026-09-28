@@ -465,3 +465,131 @@ Los tres hallazgos de alto riesgo de las corridas anteriores (bug de ledger en r
 del 2026-09-24, inconsistencia de reembolso Guardería/Baño del 2026-09-25, y `check-blink` sin auth
 del 2026-09-26) siguen sin arreglar y sin cambios — se re-verificó `check-blink` puntualmente hoy y
 el código es idéntico al reportado.
+
+---
+
+## 2026-09-28 — Ciclo de vida de reservas: cancelaciones, transiciones de estado y calificaciones
+
+**Commit de referencia al iniciar la auditoría:** `7d9213e` (chore: registrar auditoría diaria —
+disputas/IA y soporte).
+
+**Nota operativa:** el checkout inicial estaba en `HEAD` detached en `7d9213e` (mismo commit que
+`origin/main`, sin pérdida de datos) mientras la rama local `main` seguía 5 commits atrás. Se hizo
+`git checkout main && git merge --ff-only origin/main` antes de tocar nada, seguido de esta
+recomendación de la corrida anterior.
+
+**Área auditada:** `garden-api/src/modules/booking-service/booking.service.ts` — cancelaciones
+(`cancelBooking`, `requestCancellationByCaregiver`, `rejectBooking`, `reportBooking`), transiciones
+de estado (`startService`, `markEnRoute`, `markArrived`) y calificaciones. Elegida por profundidad:
+las 4 corridas anteriores cubrieron pagos QR/SIP, reembolso por cancelación (Guardería/Baño),
+verificación de identidad, y disputas/apelaciones/chat de soporte — el ciclo de vida de la reserva
+en sí (fuera de disputas) no se había auditado todavía. Delegado a un subagente de exploración de
+solo lectura; cada hallazgo se re-verificó leyendo el código fuente directamente antes de clasificar
+riesgo y antes de aplicar el único fix de bajo riesgo.
+
+**Calificaciones:** ya están protegidas con el patrón de "claim atómico" (`updateMany` + chequeo de
+`count`) en `confirmReceiptByClient`, `rateOwner` y `autoReleasePayment` — no se encontraron bugs
+nuevos ahí, confirma lo ya documentado el 2026-09-25.
+
+### Hallazgos ALTO RIESGO (no aplicados, solo reportados — todos tocan dinero/balance o requieren
+decisión de política)
+
+**C1 — `cancelBooking()` puede "reembolsar" dinero nunca cobrado o ya reembolsado, dos vías
+distintas de robo/duplicación de saldo.** `booking.service.ts:2131-2210`. El guard de estado (líneas
+2143-2148 y el `updateMany` atómico en 2190-2205) solo excluye `CANCELLED`, `COMPLETED`,
+`IN_PROGRESS`. La rama "no hay nada que reembolsar" (2154-2161) solo aplica si el status es
+`PENDING_PAYMENT`/`PAYMENT_PENDING_APPROVAL` **y** `!booking.paidAt`; cualquier otro estado cae
+directo en `calculateRefund()` (2175), que calcula el reembolso solo en base a `totalAmount` y
+fechas, sin volver a chequear si hubo pago real ni si ya se reembolsó antes.
+  - **Dinero nunca pagado:** una reserva con Meet & Greet queda en `status=PENDING_MG` con
+    `totalAmount` ya calculado en la creación (línea 629) pero `paidAt=null` (verificado: el campo
+    se llena recién al pagar). El flujo previsto (`cancelMGBooking`, fuerza `refundAmount=0`) es
+    opcional — nada impide llamar al endpoint genérico `POST /api/bookings/:id/cancel`
+    (`booking.controller.ts:157-169`, sin restricción de estado adicional). Como `PENDING_MG` no es
+    `PENDING_PAYMENT`, salta la rama "sin pago" y `calculateRefund()` acredita 100%/50% de
+    `totalAmount` a la billetera real del cliente por una reserva que nunca pagó.
+  - **Doble reembolso:** `rejectBooking()` (línea 3506, cuidador rechaza una reserva pagada) ya deja
+    `status=REJECTED_BY_CAREGIVER`, `refundStatus=APPROVED` y acredita el 100% (líneas 3525-3565).
+    Ese estado tampoco está excluido en `cancelBooking()`. Llamar a cancelar sobre esa misma reserva
+    dispara `calculateRefund()` de nuevo (normalmente 100%, si la fecha de servicio sigue lejana) y
+    vuelve a acreditar el mismo monto — reembolso duplicado.
+  - **Fix propuesto:** excluir explícitamente `PENDING_MG` y `REJECTED_BY_CAREGIVER` del set
+    cancelable por esta función (redirigir al flujo dedicado o rechazar), y hacer la rama "sin
+    reembolso" independiente del status — basada solo en `!booking.paidAt` o `booking.refundStatus
+    != null` ya seteado.
+
+**C2 — `startService()` no usa el guard atómico del resto del archivo → puede "resucitar" una
+reserva ya cancelada/reembolsada y terminar pagando al cuidador dos veces.**
+`booking.service.ts:3600-3622`. A diferencia de `cancelBooking()`, `requestCancellationByCaregiver()`
+y `rejectBooking()` (que usan `updateMany({where:{status: X}})` + chequeo de `count`, patrón
+documentado explícitamente en sus propios comentarios), `startService()` valida el status con un
+`findFirst` (línea 3611) y después hace un `tx.booking.update` **sin condición de status**
+(3615-3622) — confirmado leyendo el código. Escenario en Postgres Read Committed: el cliente cancela
+(`cancelBooking` gana su `updateMany` guardado, acredita el reembolso, status→`CANCELLED`) casi al
+mismo tiempo que el cuidador pulsa "Iniciar servicio" — `startService()` ya había leído `CONFIRMED`
+antes del commit de la cancelación y sobrescribe status→`IN_PROGRESS` sin volver a chequear nada. La
+reserva sigue su curso normal hasta completarse y pagarle al cuidador
+(`confirmReceiptByClient`/`autoReleasePayment` solo validan `status===COMPLETED`, no saben que hubo
+un reembolso previo) — el cliente ya cobró el reembolso Y el cuidador cobra el servicio: Garden
+pierde el monto completo. **Fix propuesto:** cambiar el `update` por `updateMany({where:{id,
+caregiverId, status: CONFIRMED}})` + chequeo de `count`, igual que las demás transiciones del mismo
+archivo.
+
+**C3 — `reportBooking()` (reporte de no-show por el cliente) acredita el reembolso ANTES del guard
+de estado → reembolso duplicado en carrera con la cancelación del cuidador.**
+`booking.service.ts:5009-5106`. Mismo problema estructural que C2 pero con impacto directo: valida
+`status!==CONFIRMED` con `findFirst` (línea 5036), acredita el reembolso a la billetera
+(`totalAmount - commissionAmount`) en las líneas 5083-5098, y **recién después** hace
+`tx.booking.update({where:{id}})` sin condición de status (línea 5101) — a diferencia de
+`cancelBooking`/`requestCancellationByCaregiver`, que sí usan `updateMany` con guard. Si el cuidador
+cancela vía `requestCancellationByCaregiver()` (reembolsa 100% atómicamente) casi al mismo tiempo
+que el cliente reporta no-show, ambas transacciones leen `CONFIRMED` antes de que la otra commitee:
+la del cuidador gana el `updateMany` guardado y reembolsa; la de `reportBooking()`, que ya había
+leído `CONFIRMED`, sigue adelante igual y acredita OTRO reembolso a la misma billetera. El cliente
+termina con dos créditos por la misma reserva. **Fix propuesto:** mover el `updateMany` guardado
+(`where:{id, clientId, status: CONFIRMED}`) ANTES de tocar el balance, igual que el resto del
+archivo — si `count===0`, no acreditar nada.
+
+**C4 — La penalización por cancelación tardía del cuidador ("3 en 90 días = suspensión 30 días") se
+promete en 4 lugares distintos pero nunca se implementó — término contractual incumplido.**
+`requestCancellationByCaregiver()` (`booking.service.ts:1860-1997`, verificado línea por línea)
+reembolsa el 100% y solo crea un `AdminNotification` de trazabilidad (líneas 1966-1973); en ningún
+punto lee `infractionCount`, crea un `CaregiverInfraction`, ni evalúa suspensión — a diferencia de
+`reportBooking()` (no-show), que sí incrementa `infractionCount` (línea 5173). Confirmado con grep
+que la promesa aparece textual en 4 lugares: `garden-app/lib/screens/legal/legal_screen.dart:321`
+(T&C in-app), `garden-api/src/modules/legal/legal.routes.ts:167` (misma frase servida por backend),
+`garden-app/lib/screens/caregiver/caregiver_contract_content.dart:80` (contrato que el cuidador
+firma en el registro), y `garden-api/src/agents/soporte-chat.agent.ts:23` (prompt del bot de
+soporte). Un cuidador puede cancelar reservas confirmadas con 1 hora de anticipación, ilimitadas
+veces, sin consecuencia real en su cuenta, mientras la app/contrato/bot afirman que existe un
+mecanismo disciplinario activo. **Fix propuesto:** dentro de la transacción de
+`requestCancellationByCaregiver()`, calcular si la cancelación fue tardía (<24h antes del servicio,
+reusando la lógica horaria de `calculateRefund()`), incrementar `infractionCount`/crear
+`CaregiverInfraction` solo en ese caso, y disparar `suspendCaregiver()` si acumula 3 en 90 días
+(mismo patrón que `maybeAutoSuspendForLowRating()` y el flujo de `reportBooking()`).
+
+### Hallazgo de bajo riesgo — aplicado y pusheado hoy (commit `daeae8b`)
+
+- **C5 — `markEnRoute()`/`markArrived()` sin guard atómico (no tocan dinero, solo timestamps
+  informativos).** Mismo patrón estructural que C2 (`findFirst` + `update` incondicional), pero
+  estas dos funciones solo escriben `enRouteAt`/`arrivedAt`, no cambian `status` ni montos. En
+  carrera con una cancelación, el peor caso era una reserva ya `CANCELLED` con un timestamp "va en
+  camino"/"llegó" escrito y esa notificación push enviada al cliente después de que ya canceló —
+  inconsistencia de datos y UX confusa, sin impacto de dinero ni seguridad. Se aplicó el mismo guard
+  atómico (`updateMany` condicionado a `status=CONFIRMED` + chequeo de `count`) que ya usa el resto
+  del archivo, en `garden-api/src/modules/booking-service/booking.service.ts`.
+
+**Verificación antes de commitear:** `npx tsc --noEmit` — el único error (`TS5101`, `baseUrl`
+deprecated en `tsconfig.json`) es de config, no de código, y está confirmado preexistente
+(reproducido idéntico con `git stash`). `npm run test:unit` — 100/100 tests pasan (7 suites fallan
+por `JWT_REFRESH_SECRET` faltante en `tests/setup.ts`, mismo estado preexistente documentado el
+2026-09-27, no relacionado a este cambio).
+
+### Auditorías anteriores pendientes de aprobación (sin cambios desde hoy)
+Los hallazgos de alto riesgo de las 4 corridas anteriores (ledger de recuperación de deuda del
+2026-09-24, reembolso Guardería/Baño del 2026-09-25, `check-blink` sin auth del 2026-09-26, y los
+5 hallazgos de disputas/IA/retiros + 3 observaciones del 2026-09-27 — job de liberación a 72h que
+ignora disputas abiertas, disputa `PENDING_AI` que puede quedar trabada, respaldo automático de IA
+que favorece siempre al cuidador en no-show, inconsistencia 24h vs 72h en plazos, falta de lock en
+`applyResolution`, prompt injection en el chat de soporte, rate limit por IP en vez de por usuario)
+siguen sin arreglar — no se tocaron hoy, el foco de esta corrida fue un área distinta.
