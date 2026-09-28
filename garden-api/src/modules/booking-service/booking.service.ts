@@ -3662,10 +3662,18 @@ export async function markEnRoute(bookingId: string, caregiverUserId: string): P
       return bookingToResponse(booking);
     }
 
-    const updated = await tx.booking.update({
-      where: { id: bookingId },
+    // Guard atómico — evita que una carrera con cancelBooking()/
+    // requestCancellationByCaregiver() escriba enRouteAt (y dispare la
+    // notificación "va en camino") sobre una reserva que ya dejó de estar
+    // CONFIRMED en el momento del UPDATE.
+    const updateResult = await tx.booking.updateMany({
+      where: { id: bookingId, caregiverId: profile.id, status: BookingStatus.CONFIRMED },
       data: { enRouteAt: new Date() },
     });
+    if (updateResult.count === 0) {
+      throw new BadRequestError('Solo puedes avisar que vas en camino antes de iniciar el servicio');
+    }
+    const updated = await tx.booking.findFirstOrThrow({ where: { id: bookingId } });
 
     await tx.notification.create({
       data: {
@@ -3704,10 +3712,16 @@ export async function markArrived(bookingId: string, caregiverUserId: string): P
       return bookingToResponse(booking);
     }
 
-    const updated = await tx.booking.update({
-      where: { id: bookingId },
+    // Guard atómico — mismo motivo que markEnRoute(): evita pisar una reserva
+    // que dejó de estar CONFIRMED entre el findFirst y este UPDATE.
+    const updateResult = await tx.booking.updateMany({
+      where: { id: bookingId, caregiverId: profile.id, status: BookingStatus.CONFIRMED },
       data: { arrivedAt: new Date() },
     });
+    if (updateResult.count === 0) {
+      throw new BadRequestError('Solo puedes marcar tu llegada antes de iniciar el servicio');
+    }
+    const updated = await tx.booking.findFirstOrThrow({ where: { id: bookingId } });
 
     await tx.notification.create({
       data: {
