@@ -329,17 +329,41 @@ export async function verifyPaymentByQr(qrId: string, clientId: string): Promise
       // encadenados fuera de una transacción: si el proceso caía entre el
       // incremento de balance y la creación del registro de wallet, el saldo
       // quedaba recuperado sin ningún WalletTransaction que lo explique.
+      //
+      // FIX (auditoría 2026-09-24): antes se grababa `balance: 0` hardcodeado en el
+      // WalletTransaction, asumiendo que el saldo seguía siendo exactamente
+      // -debtRecovery en este instante. Si el cliente tuvo cualquier otro movimiento
+      // de saldo entre que se generó el QR y que se confirmó (pago con billetera,
+      // bono de referido, deuda de otro servicio), el historial le mostraba un saldo
+      // incorrecto. Además, dos QR pendientes con la misma deuda congelada podían
+      // "recuperarla" dos veces. Ahora se bloquea la fila (mismo patrón que
+      // booking.service.ts:1548), se relee el saldo real y se capea el monto a
+      // recuperar al saldo negativo vigente en este instante.
       await prisma.$transaction(async (tx) => {
-        await tx.user.update({
+        await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${booking.clientId} FOR UPDATE`;
+        const clientUser = await tx.user.findUnique({
           where: { id: booking.clientId },
-          data: { balance: { increment: debtRecovery } },
+          select: { balance: true },
+        });
+        const currentBalance = Number(clientUser?.balance ?? 0);
+        const actualDebtRecovery = Math.min(debtRecovery, Math.max(0, -currentBalance));
+        if (actualDebtRecovery <= 0) {
+          logger.info('Debt recovery (QR): deuda ya recuperada por confirmación concurrente, nada que hacer', {
+            bookingId: booking.id,
+          });
+          return;
+        }
+        const updated = await tx.user.update({
+          where: { id: booking.clientId },
+          data: { balance: { increment: actualDebtRecovery } },
+          select: { balance: true },
         });
         await tx.walletTransaction.create({
           data: {
             userId: booking.clientId,
             type: 'DEBT_RECOVERY',
-            amount: debtRecovery,
-            balance: 0, // balance se zerificó
+            amount: actualDebtRecovery,
+            balance: Number(updated.balance),
             description: `Deuda por tiempo extra recuperada vía QR — reserva ${booking.id.slice(0, 8)}`,
             bookingId: booking.id,
             status: 'COMPLETED',
@@ -541,20 +565,38 @@ export async function verifyPaymentBySipCallback(
   // Recuperar deuda previa incluida en el QR (igual que en verifyPaymentByQr) —
   // ambos escritos en una sola transacción para no dejar un incremento de
   // balance sin su WalletTransaction correspondiente si el proceso falla a mitad.
+  //
+  // FIX (auditoría 2026-09-24): ver comentario equivalente en verifyPaymentByQr —
+  // ya no se hardcodea `balance: 0`; se bloquea la fila, se relee el saldo real y
+  // se capea el monto a recuperar al saldo negativo vigente en este instante.
   const sipDebtRecovery = Number(booking.debtRecoveryAmount ?? 0);
   if (sipDebtRecovery > 0) {
     try {
       await prisma.$transaction(async (tx) => {
-        await tx.user.update({
+        await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${booking.clientId} FOR UPDATE`;
+        const clientUser = await tx.user.findUnique({
           where: { id: booking.clientId },
-          data: { balance: { increment: sipDebtRecovery } },
+          select: { balance: true },
+        });
+        const currentBalance = Number(clientUser?.balance ?? 0);
+        const actualDebtRecovery = Math.min(sipDebtRecovery, Math.max(0, -currentBalance));
+        if (actualDebtRecovery <= 0) {
+          logger.info('[SIP callback] Debt recovery: deuda ya recuperada por confirmación concurrente, nada que hacer', {
+            bookingId: booking.id,
+          });
+          return;
+        }
+        const updated = await tx.user.update({
+          where: { id: booking.clientId },
+          data: { balance: { increment: actualDebtRecovery } },
+          select: { balance: true },
         });
         await tx.walletTransaction.create({
           data: {
             userId: booking.clientId,
             type: 'DEBT_RECOVERY',
-            amount: sipDebtRecovery,
-            balance: 0,
+            amount: actualDebtRecovery,
+            balance: Number(updated.balance),
             description: `Deuda por tiempo extra recuperada vía SIP — reserva ${booking.id.slice(0, 8)}`,
             bookingId: booking.id,
             status: 'COMPLETED',

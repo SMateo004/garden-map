@@ -93,10 +93,34 @@ sobre la fila del usuario, mismo patrón que `booking.service.ts:1547`) en vez d
 valor congelado en `booking.debtRecoveryAmount`, o cap­ear el incremento a
 `Math.min(debtRecovery, Math.max(0, -saldoActualEnEseMomento))`.
 
-**Por qué no se aplicó:** toca `User.balance` y el ledger de `WalletTransaction` directamente —
-cae en la categoría de alto riesgo (dinero/balance/billetera) según la política de esta auditoría.
-Queda para que el dueño del proyecto lo revise y decida el fix exacto (incluyendo si conviene
-además re-conciliar manualmente algún `WalletTransaction.balance` ya grabado mal en producción).
+**Por qué no se aplicó (al momento de este hallazgo):** toca `User.balance` y el ledger de
+`WalletTransaction` directamente — cae en la categoría de alto riesgo (dinero/balance/billetera)
+según la política de esta auditoría. Quedó para que el dueño del proyecto lo revise y decida el
+fix exacto.
+
+### Actualización 2026-09-24 — Fix aplicado (revisión humana explícita)
+
+El dueño del proyecto pidió explícitamente revisar y arreglar los bugs pendientes del flujo de
+auditoría. Se aplicó el fix propuesto arriba en ambos lugares
+(`payment.service.ts` — confirmación por QR y callback SIP): se bloquea la fila del usuario
+(`SELECT ... FOR UPDATE`) dentro de la transacción, se relee el balance real, se capea el monto a
+recuperar al saldo negativo vigente en ese instante (evita la doble-recuperación con dos QR
+pendientes), y se graba el balance real post-incremento en el `WalletTransaction` en vez del `0`
+hardcodeado.
+
+De paso, revisando el resto del código por el mismo patrón (`balance: 0` hardcodeado sin releer
+tras un `update`), se encontró un tercer caso de la misma clase de bug en
+`auth.service.ts:finalizeAccountDeletion` (transferencia de saldo a GARDEN al eliminar cuenta) —
+mismo problema: leía el balance antes de la transacción y grababa `balance: 0` asumido en vez del
+real, sin bloqueo de fila. Se aplicó el mismo fix ahí también.
+
+**No se re-concilió** ningún `WalletTransaction.balance` ya grabado mal en producción antes de
+este fix — si hace falta, es una tarea aparte (habría que identificar las filas afectadas con una
+query y corregirlas a mano).
+
+**Pendiente de decisión del dueño del proyecto:** estos cambios están en el working tree, sin
+commitear ni pushear (push a `main` en `garden-api/**` dispara redeploy automático a producción
+vía Render — ver CLAUDE.md). No se commitea sin pedido explícito.
 
 ### Sin cambios aplicados hoy
 No se encontró ningún ítem de bajo riesgo (copy/texto, validación de UI, código muerto) durante

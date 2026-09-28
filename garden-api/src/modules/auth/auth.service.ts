@@ -1343,29 +1343,42 @@ export async function finalizeAccountDeletion(userId: string): Promise<void> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new BadRequestError('Usuario no encontrado');
 
-  const userWithBalance = await prisma.user.findUnique({ where: { id: userId }, select: { balance: true } });
-  const unifiedBalance = Number(userWithBalance?.balance ?? 0);
+  // FIX (misma clase de bug que auditoría 2026-09-24 en payment.service.ts):
+  // el balance real post-decrement se recalculaba fuera de la transacción
+  // (leído antes, nunca releído), y el WalletTransaction grababa `balance: 0`
+  // hardcodeado asumiendo que el decrement dejaba el saldo exactamente en 0.
+  // Si un crédito concurrente entra en esta ventana (ver comentario original
+  // sobre autoReleasePayment), el decrement en sí sigue siendo correcto (solo
+  // resta lo leído), pero el saldo resultante ya no es 0 y el ledger quedaba
+  // mostrando un dato incorrecto. Ahora se bloquea la fila (mismo patrón que
+  // booking.service.ts:1548) y se usa el balance real devuelto por el update.
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${userId} FOR UPDATE`;
+    const userWithBalance = await tx.user.findUnique({ where: { id: userId }, select: { balance: true } });
+    const unifiedBalance = Number(userWithBalance?.balance ?? 0);
+    if (unifiedBalance <= 0) return;
 
-  if (unifiedBalance > 0) {
-    // decrement (no "set balance: 0") + $transaction: si un payout se
-    // acredita justo en esta ventana (ej. autoReleasePayment corriendo en
-    // paralelo a esta eliminación de cuenta), un "set a 0" ciego lo hubiera
-    // borrado sin dejar rastro — decrement solo resta lo que realmente
-    // leímos acá, así que ese crédito concurrente sobrevive intacto.
-    await prisma.$transaction([
-      prisma.walletTransaction.create({
-        data: {
-          userId,
-          type: 'WITHDRAWAL',
-          amount: unifiedBalance,
-          balance: 0,
-          description: 'Saldo transferido a GARDEN al eliminar cuenta',
-          status: 'COMPLETED',
-        },
-      }),
-      prisma.user.update({ where: { id: userId }, data: { balance: { decrement: unifiedBalance } } }),
-    ]);
-  }
+    // decrement (no "set balance: 0"): si un payout se acredita justo en esta
+    // ventana (ej. autoReleasePayment corriendo en paralelo a esta eliminación
+    // de cuenta), un "set a 0" ciego lo hubiera borrado sin dejar rastro —
+    // decrement solo resta lo que realmente leímos acá, así que ese crédito
+    // concurrente sobrevive intacto (y ahora queda bien reflejado en el ledger).
+    const updated = await tx.user.update({
+      where: { id: userId },
+      data: { balance: { decrement: unifiedBalance } },
+      select: { balance: true },
+    });
+    await tx.walletTransaction.create({
+      data: {
+        userId,
+        type: 'WITHDRAWAL',
+        amount: unifiedBalance,
+        balance: Number(updated.balance),
+        description: 'Saldo transferido a GARDEN al eliminar cuenta',
+        status: 'COMPLETED',
+      },
+    });
+  });
 
   const deletedTag = `deleted_${Date.now()}`;
   await prisma.user.update({
