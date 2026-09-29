@@ -819,3 +819,115 @@ opciones sin tocar nada más. De paso se limpió la entrada muerta equivalente
 `'ADIESTRAMIENTO'` (misma clase de entrada muerta, pero fuera de lo que se decidió hoy).
 
 **Verificación:** `flutter analyze` sobre los 2 archivos tocados, sin errores nuevos.
+
+---
+
+## 2026-09-29 (más tarde) — Staff multiusuario y CRM walk-in para cuentas EMPRESA
+
+**Commit de referencia al iniciar la auditoría:** `d97e127` (fix: quitar "Visita a domicilio" de
+la landing page).
+
+**Nota operativa:** el checkout local seguía en `main` a `0c7c521`, 11 commits detrás de
+`origin/main` (HEAD estaba en un detached checkout ya sincronizado con `origin/main`, sin pérdida
+de datos). Se hizo `git checkout main && git merge --ff-only origin/main` antes de tocar nada.
+
+**Área auditada:** `garden-api/src/modules/caregiver-staff/` (invitaciones y miembros de staff
+para cuentas empresa), `garden-api/src/modules/caregiver-crm/` (CRM walk-in: clientes, mascotas,
+check-in/check-out, bitácora de eventos, dashboard de ocupación), y el flujo de verificación de
+NIT (`caregiver-profile.service.ts`, `admin.service.ts`). Elegida por profundidad: son features
+recientes (`abb959b`, `542e505`, `4b3a9a1`, `285aa71`) que ya tuvieron un fix funcional
+(`8972beb`, `0340257`) pero nunca pasaron por esta serie de auditorías diarias — encajan en el eje
+(a) seguridad/autorización del CLAUDE.md (multiusuario con distintos niveles de acceso a una misma
+cuenta). Delegado a un subagente de exploración de solo lectura; cada hallazgo se re-verificó
+leyendo el código fuente directamente antes de clasificar riesgo y antes de aplicar el fix de bajo
+riesgo.
+
+**Aspectos revisados sin hallazgos:** el scoping por empresa (IDOR) está bien — toda consulta del
+CRM y de staff re-deriva `caregiverProfileId` desde `resolveCompanyProfile(ownerUserId)` /
+`assertIsCompanyOwner(ownerUserId)` calculado en el servidor a partir del JWT del que llama, nunca
+de un `companyId` que mande el cliente; un miembro de staff no puede operar sobre otra empresa.
+Tampoco hay escalación de rol posible hoy (no existen niveles de rol — los endpoints solo-dueño
+exigen tener un `CaregiverProfile` propio, que el staff nunca tiene). La revocación de un miembro
+de staff se re-lee de la base en cada request (`getStaffContext`, sin cache) — un despido corta el
+acceso en el siguiente request aunque el JWT siga vigente. La verificación de NIT no se puede
+auto-aprobar (solo un admin la mueve a `VERIFICADO`) y solo gatea un badge cosmético, no dinero.
+
+### Hallazgos ALTO RIESGO (no aplicados, solo reportados — ambos tocan seguridad/autorización)
+
+**D1 — El código de invitación de staff se puede canjear más de una vez en paralelo (sin claim
+atómico).** `garden-api/src/modules/caregiver-staff/caregiver-staff.service.ts:160-234`
+(`registerStaffMember`). El chequeo `status === 'PENDING'` (líneas 162-171) se hace **fuera** de
+cualquier transacción, con una lectura que puede quedar obsoleta; dentro del `$transaction`
+(184-234) el invite se marca `USED` con un `update` plano, sin condición de estado — a diferencia
+del patrón de claim atómico (`updateMany` + chequeo de `count`) que ya usa el resto del proyecto
+(`booking.service.ts:1450, 3563, 3939, 4729, 4821`). Bajo Read Committed de Postgres, dos llamadas
+casi simultáneas a `POST /api/caregiver-staff/register` con el **mismo** código pasan ambas el
+chequeo de estado, y ambas crean un `User` + `CaregiverStaffMember` nuevo, sobreescribiendo el
+mismo invite a `USED` sin error. El código de invitación está explícitamente pensado para
+compartirse informalmente ("corto para compartir de palabra/WhatsApp" — comentario en el propio
+archivo, línea 29-31): si ese mensaje se reenvía o dos personas lo usan a la vez, ambas quedan
+como staff ACTIVO de la empresa, con acceso operativo completo a reservas, PII de clientes y CRM
+walk-in — rompe la invariante de "un solo uso" documentada en el propio schema
+(`schema.prisma:422-424`). **Fix propuesto:** mover el claim dentro de la transacción con
+`updateMany({ where: { id: invite.id, status: 'PENDING' }, data: {...} })` y chequear
+`count === 0` para rechazar con un error claro (esto además revierte la creación del `User`/
+`CaregiverStaffMember` del perdedor de la carrera, porque lanzar dentro de `$transaction` hace
+rollback de todo).
+
+**D2 — Una cuenta empresa suspendida por un admin puede seguir operando staff y el CRM walk-in.**
+`garden-api/src/modules/caregiver-staff/caregiver-staff.service.ts:34-41`
+(`assertIsCompanyOwner`) y `garden-api/src/modules/caregiver-crm/caregiver-crm.service.ts:54-61`
+(`resolveCompanyProfile`) solo validan `profile.isCompany`, nunca `profile.suspended` — a
+diferencia de las reservas reales, que sí excluyen perfiles suspendidos
+(`booking.service.ts:1139`, `where: { ..., suspended: false }`). El login tampoco valida
+`suspended` (confirmado: no hay ninguna referencia en `auth.service.ts`). Una suspensión de admin
+(por ejemplo tras un incidente de seguridad) hoy cancela y reembolsa las reservas activas del
+marketplace (`admin.service.ts:2399-2439`), pero el dueño de la empresa puede seguir logueado,
+generar nuevas invitaciones de staff, sumar empleados nuevos, y seguir operando el hospedaje/
+guardería walk-in de principio a fin (check-in/check-out, cobro en efectivo, bitácora de
+incidentes) completamente fuera de la vista del admin — el mismo tipo de actividad física con
+mascotas que motivó la suspensión sigue sin freno por este canal paralelo. **Fix propuesto:**
+agregar `if (profile.suspended) throw new ForbiddenError(...)` en ambas funciones, igual que el
+guard ya usado para reservas reales. Si la intención de producto es que la suspensión no afecte la
+operación walk-in interna (solo el marketplace), es una decisión legítima, pero no está declarada
+en ningún lado — el resto del módulo sí documenta explícitamente cada exclusión (ej. "CRM walk-in
+… sin dinero … nunca pasa por Garden"), así que se deja para que el dueño del proyecto decida
+explícitamente en vez de asumir.
+
+### Hallazgo de bajo riesgo — aplicado y pusheado hoy
+
+- **D3 — Check-in/check-out del CRM walk-in con carrera de lectura-luego-escritura, sin tocar
+  dinero ni autenticación.** `garden-api/src/modules/caregiver-crm/caregiver-crm.service.ts`
+  (`checkInWalkInPet` y `checkOutWalkInVisit`). Dos check-in casi simultáneos de la misma mascota
+  (doble tap, o dos miembros de staff escaneando la misma ficha) pasaban ambos el chequeo de "no
+  hay visita abierta" y creaban dos `WalkInVisit` abiertas para el mismo pet (sin índice único que
+  lo evite en el schema); un doble check-out mandaba el email de salida al cliente dos veces y
+  podía pisar el `amountCollected` del que ganó la carrera. Se aplicó el mismo patrón ya
+  establecido en el proyecto: lock de fila (`SELECT ... FOR UPDATE` sobre `walk_in_pets`, mismo
+  mecanismo que `payment.service.ts`/`booking.service.ts`) para el check-in, y claim atómico
+  (`updateMany` condicionado a `checkedOutAt: null` + chequeo de `count`) para el check-out. **No
+  se tocó** el hallazgo relacionado de que `combinedHospedajeGuarderiaMax()` nunca se aplica al
+  check-in walk-in (el cupo combinado de hospedaje+guardería declarado por la empresa es hoy
+  puramente informativo en el dashboard, `getOccupancyDashboard`, y no bloquea check-ins que lo
+  superen) — es una decisión de producto (¿debe el CRM walk-in respetar un tope duro como las
+  reservas reales, o queda a discreción del dueño del local?), no un simple bug de concurrencia, y
+  comparte el mismo comentario del propio módulo de que el CRM walk-in es "puro registro interno".
+  Se deja como observación para que el dueño del proyecto decida.
+
+**Verificación antes de commitear:** `npx tsc --noEmit` — sin errores nuevos (solo el preexistente
+`TS5101` de `tsconfig.json`, confirmado ya documentado en corridas anteriores). `npm run
+test:unit` — con `JWT_REFRESH_SECRET` seteado en el entorno de esta sesión (el repo sigue sin
+tenerlo en `tests/setup.ts`, mismo hueco preexistente ya documentado el 2026-09-27), 158/158 tests
+pasan, 14/14 suites; sin él, fallan las mismas 7 suites por la misma causa preexistente, no
+relacionada a este cambio. No existe un archivo de test dedicado a `caregiver-crm.service.ts` hoy
+(oportunidad para una corrida futura, no se agregó en esta pasada por no ser el foco).
+
+**Pendiente de decisión del dueño del proyecto:** D1 (invitación de staff sin claim atómico) y D2
+(suspensión no bloquea CRM/staff) — ambos tocan seguridad/autorización, cambios acotados y
+alineados a patrones ya usados en el proyecto, pero quedan sin aplicar por política explícita de
+esta auditoría.
+
+### Auditorías anteriores pendientes de aprobación
+No quedan hallazgos de alto riesgo sin resolver de corridas anteriores a esta — las 5 corridas del
+2026-09-24 al 2026-09-28 se resolvieron el 2026-09-28 (más tarde) y 2026-09-29 (ver entradas
+arriba). Los únicos pendientes activos ahora son D1 y D2 de esta corrida.

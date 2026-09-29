@@ -206,21 +206,28 @@ export async function checkInWalkInPet(
   const profile = await resolveCompanyProfile(ownerUserId);
   await findOwnedPet(profile.id, petId);
 
-  const openVisit = await prisma.walkInVisit.findFirst({ where: { walkInPetId: petId, checkedOutAt: null } });
-  if (openVisit) {
-    throw new ConflictError('Esta mascota ya está registrada como presente', 'ALREADY_CHECKED_IN');
-  }
+  // Lock de fila sobre la mascota (mismo patrón que payment.service.ts/
+  // booking.service.ts) para que dos check-in casi simultáneos de la misma
+  // mascota no pasen ambos el chequeo de "no hay visita abierta" bajo Read
+  // Committed y terminen creando dos WalkInVisit abiertas para el mismo pet.
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "walk_in_pets" WHERE id = ${petId} FOR UPDATE`;
+    const openVisit = await tx.walkInVisit.findFirst({ where: { walkInPetId: petId, checkedOutAt: null } });
+    if (openVisit) {
+      throw new ConflictError('Esta mascota ya está registrada como presente', 'ALREADY_CHECKED_IN');
+    }
 
-  return prisma.walkInVisit.create({
-    data: {
-      caregiverProfileId: profile.id,
-      walkInPetId: petId,
-      serviceType,
-      notes: notes ?? null,
-      spaceLabel: spaceLabel ?? null,
-      checkedInByUserId: actingUserId,
-    },
-    include: { walkInPet: { select: { name: true } } },
+    return tx.walkInVisit.create({
+      data: {
+        caregiverProfileId: profile.id,
+        walkInPetId: petId,
+        serviceType,
+        notes: notes ?? null,
+        spaceLabel: spaceLabel ?? null,
+        checkedInByUserId: actingUserId,
+      },
+      include: { walkInPet: { select: { name: true } } },
+    });
   });
 }
 
@@ -267,13 +274,22 @@ export async function checkOutWalkInVisit(ownerUserId: string, actingUserId: str
     throw new BadRequestError('Esta visita ya tiene check-out registrado', 'ALREADY_CHECKED_OUT');
   }
   const checkedOutAt = new Date();
-  const updated = await prisma.walkInVisit.update({
-    where: { id: visitId },
+  // Claim atómico (mismo patrón updateMany+count que el resto del proyecto)
+  // para que dos check-out casi simultáneos de la misma visita no manden
+  // ambos el email al cliente ni pisen el amountCollected del que ganó.
+  const claimed = await prisma.walkInVisit.updateMany({
+    where: { id: visitId, checkedOutAt: null },
     data: {
       checkedOutAt,
       checkedOutByUserId: actingUserId,
       ...(amountCollected !== undefined ? { amountCollected } : {}),
     },
+  });
+  if (claimed.count === 0) {
+    throw new BadRequestError('Esta visita ya tiene check-out registrado', 'ALREADY_CHECKED_OUT');
+  }
+  const updated = await prisma.walkInVisit.findUniqueOrThrow({
+    where: { id: visitId },
     include: { walkInPet: { select: { name: true } } },
   });
 
