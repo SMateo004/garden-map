@@ -22,7 +22,6 @@ class _MyRatingsScreenState extends State<MyRatingsScreen> {
     'HOSPEDAJE': 'Hospedaje',
     'GUARDERIA': 'Guardería',
     'PASEO': 'Paseo',
-    'VISITA_DOMICILIARIA': 'Visita a domicilio',
     'ADIESTRAMIENTO': 'Adiestramiento',
   };
 

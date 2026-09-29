@@ -625,7 +625,7 @@ class _SearchBar extends StatefulWidget {
 }
 class _SearchBarState extends State<_SearchBar> {
   bool _svcOpen = false;
-  static const _services = {'PASEO': 'Paseo', 'HOSPEDAJE': 'Hospedaje', 'GUARDERIA': 'Guardería', 'VISITA': 'Visita'};
+  static const _services = {'PASEO': 'Paseo', 'HOSPEDAJE': 'Hospedaje', 'GUARDERIA': 'Guardería'};
 
   @override
   Widget build(BuildContext context) {
@@ -757,7 +757,6 @@ class _SvcDropdown extends StatelessWidget {
     'PASEO': ('Paseo', Icons.directions_walk_rounded),
     'HOSPEDAJE': ('Hospedaje', Icons.home_rounded),
     'GUARDERIA': ('Guardería de día', Icons.wb_sunny_rounded),
-    'VISITA': ('Visita a domicilio', Icons.house_rounded),
   };
   const _SvcDropdown({required this.selected, required this.onSelect});
   @override
@@ -822,8 +821,6 @@ class _ServicesSection extends StatelessWidget {
      'En casa del cuidador. Cuidadores verificados y reseñados por otras familias.'),
     ('GUARDERIA',  Icons.wb_sunny_rounded,        'Guardería de día',
      'Mientras trabajás. Cuidadores verificados y reseñados por otras familias.'),
-    ('VISITA',     Icons.house_rounded,           'Visita a domicilio',
-     'En tu propia casa. Cuidadores verificados y reseñados por otras familias.'),
   ];
 
   @override

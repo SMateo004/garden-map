@@ -803,3 +803,19 @@ el 2026-09-28. Resultado de cada uno:
 analyze` sin errores nuevos en los archivos tocados. La única escritura directa a producción (el
 backfill del punto 1) se hizo fuera de este commit — es un dato, no código — y quedó documentada
 acá con el id de la fila creada para trazabilidad.
+
+---
+
+## 2026-09-29 — Decisión de producto: se retira "Visita a domicilio" de la landing page
+
+El dueño del proyecto decidió sacar la opción en vez de implementarla de verdad (el hallazgo
+quedó anotado en la corrida anterior: la landing page ofrecía "Visita a domicilio" como búsqueda
+real cuando no filtra nada — `_selectedService` en `marketplace_screen.dart` nunca maneja ese
+valor). Se removió de los 3 lugares donde aparecía en `landing_screen.dart`
+(`_SearchBarState._services`, `_SvcDropdown._opts`, `_ServicesSection._cards`) — ninguno usaba
+indexación fija, así que el resto de la UI (grilla de servicios, dropdown) se reacomoda solo a 3
+opciones sin tocar nada más. De paso se limpió la entrada muerta equivalente
+(`'VISITA_DOMICILIARIA'`) del mapa de labels en `my_ratings_screen.dart` — no se tocó
+`'ADIESTRAMIENTO'` (misma clase de entrada muerta, pero fuera de lo que se decidió hoy).
+
+**Verificación:** `flutter analyze` sobre los 2 archivos tocados, sin errores nuevos.
