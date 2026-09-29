@@ -391,6 +391,8 @@ export async function listCaregivers(
     nitNeedsReview: (c as any).nitStatus === 'EN_REVISION',
     lowRatingAutoSuspended:
       (c as any).suspended === true && (c as any).suspensionReason === LOW_RATING_SUSPENSION_REASON,
+    lateCancellationAutoSuspended:
+      (c as any).suspended === true && (c as any).suspensionReason === LATE_CANCELLATION_SUSPENSION_REASON,
   }));
   return { caregivers: items, total, page, limit };
 }
@@ -444,6 +446,8 @@ export async function listPendingCaregivers(
     nitNeedsReview: (c as any).nitStatus === 'EN_REVISION',
     lowRatingAutoSuspended:
       (c as any).suspended === true && (c as any).suspensionReason === LOW_RATING_SUSPENSION_REASON,
+    lateCancellationAutoSuspended:
+      (c as any).suspended === true && (c as any).suspensionReason === LATE_CANCELLATION_SUSPENSION_REASON,
   }));
 
   return { caregivers: items, total, page, limit };
@@ -2269,6 +2273,14 @@ export async function rejectIdentityVerification(sessionId: string, adminId: str
  * una suspensión fue automática por reviews malas, sin necesitar una columna
  * nueva en la base. */
 export const LOW_RATING_SUSPENSION_REASON = 'Suspensión automática: 5+ calificaciones de 1-2 estrellas';
+
+/** Motivo fijo usado por la auto-suspensión por cancelaciones tardías (ver
+ * requestCancellationByCaregiver en booking.service.ts) — mismo patrón que
+ * LOW_RATING_SUSPENSION_REASON de arriba. Promesa del contrato del cuidador y
+ * de los Términos y Condiciones (Sección 7 / 9): "tres cancelaciones tardías
+ * (menos de 24h antes) en 90 días = suspensión de 30 días" — no se aplicaba en
+ * el código hasta esta auditoría (2026-09-28, hallazgo C4). */
+export const LATE_CANCELLATION_SUSPENSION_REASON = 'Suspensión automática: 3+ cancelaciones tardías (menos de 24h) en 90 días';
 
 /** Suspender cuidador (fuera del aire temporalmente) */
 /**

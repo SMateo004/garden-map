@@ -1863,6 +1863,9 @@ export async function requestCancellationByCaregiver(
   reason: string,
   reasonCode: string
 ): Promise<BookingCreateResult> {
+  let shouldSuspendForLateCancellations = false;
+  let profileIdForSuspension: string | null = null;
+
   const result = await prisma.$transaction(async (tx) => {
     const profile = await tx.caregiverProfile.findFirst({
       where: { userId: caregiverUserId },
@@ -1943,6 +1946,49 @@ export async function requestCancellationByCaregiver(
       logger.info('requestCancellationByCaregiver: refund auto-credited to wallet', { bookingId, refundAmount });
     }
 
+    // FIX (auditoría 2026-09-28, C4): la penalización por cancelación tardía
+    // ("3 en 90 días = suspensión 30 días") está prometida en 4 lugares
+    // (T&C, contrato del cuidador, bot de soporte, ayuda) pero nunca se
+    // implementó acá — esta función reembolsaba el 100% y solo dejaba
+    // trazabilidad (adminNotification), sin tocar infractionCount ni evaluar
+    // suspensión, a diferencia de reportBooking() (no-show) que sí crea un
+    // CaregiverInfraction. Se reusa la misma lógica horaria que
+    // calculateRefund() (HOSPEDAJE/GUARDERIA usan startDate/walkDate a
+    // medianoche; PASEO usa walkDate) para decidir si esta cancelación fue
+    // "tardía" (<24h antes del servicio), y se cuenta sobre una ventana móvil
+    // de 90 días (mismo criterio ya usado por climaOverrideAvailable), no
+    // sobre el contador acumulado de por vida.
+    const referenceDate = booking.serviceType === ServiceType.HOSPEDAJE ? booking.startDate : booking.walkDate;
+    const hoursUntilService = referenceDate
+      ? (referenceDate.getTime() - now.getTime()) / (60 * 60 * 1000)
+      : Infinity; // sin fecha de referencia no se puede evaluar — no penalizar
+    const isLateCancellation = hoursUntilService < 24;
+
+    if (isLateCancellation) {
+      await tx.caregiverInfraction.create({
+        data: {
+          caregiverId: profile.id,
+          bookingId,
+          type: 'LATE_CANCELLATION',
+          bookingAmount: booking.totalAmount,
+          reasons: [reason],
+        },
+      });
+      await tx.caregiverProfile.update({
+        where: { id: profile.id },
+        data: { infractionCount: { increment: 1 } },
+      });
+
+      const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      const lateCancellationCount = await tx.caregiverInfraction.count({
+        where: { caregiverId: profile.id, type: 'LATE_CANCELLATION', createdAt: { gte: ninetyDaysAgo } },
+      });
+      if (lateCancellationCount >= 3) {
+        shouldSuspendForLateCancellations = true;
+        profileIdForSuspension = profile.id;
+      }
+    }
+
     // 1. Notificación para el dueño (cliente)
     await tx.notification.create({
       data: {
@@ -1979,6 +2025,19 @@ export async function requestCancellationByCaregiver(
     });
     return bookingToResponse(updated);
   });
+
+  // Fuera de la transacción a propósito — mismo motivo que
+  // maybeAutoSuspendForLowRating(): suspendCaregiver() abre su propia
+  // transacción para cancelar/reembolsar otras reservas activas del
+  // cuidador, y anidar $transaction dentro de $transaction usa una conexión
+  // separada.
+  if (shouldSuspendForLateCancellations && profileIdForSuspension) {
+    const { suspendCaregiver, LATE_CANCELLATION_SUSPENSION_REASON } = await import('../admin/admin.service.js');
+    await suspendCaregiver(profileIdForSuspension, 'SYSTEM_AUTO_SUSPEND', LATE_CANCELLATION_SUSPENSION_REASON).catch((err) => {
+      logger.error('Auto-suspensión por cancelaciones tardías falló', { profileId: profileIdForSuspension, err });
+    });
+    logger.warn('Cuidador auto-suspendido por 3+ cancelaciones tardías en 90 días', { profileId: profileIdForSuspension, bookingId });
+  }
 
   notificationService
     .onCaregiverCancelled(bookingId, reason)
@@ -2024,9 +2083,23 @@ export async function calculateRefund(
   const cfg = await getBookingSettings();
   const total = Number(booking.totalAmount);
 
-  if (booking.serviceType === ServiceType.HOSPEDAJE) {
-    const start = booking.startDate
-      ? new Date(booking.startDate.getFullYear(), booking.startDate.getMonth(), booking.startDate.getDate(), 0, 0, 0)
+  // FIX (auditoría 2026-09-25, decisión de política 2026-09-28): Guardería es
+  // una custodia de día completo, no un paseo de 30 minutos — antes caía en la
+  // rama genérica de abajo (umbral corto 12h/6h) junto con Paseo, mientras que
+  // los 2 textos de la app (legal_screen.dart, help_center_content.dart) le
+  // prometían al cliente el trato de Hospedaje (48h/24h). El dueño del
+  // proyecto decidió que Guardería SÍ debe tratarse como Hospedaje — se agrega
+  // acá para que el código coincida con lo que ya se promete.
+  if (booking.serviceType === ServiceType.HOSPEDAJE || booking.serviceType === ServiceType.GUARDERIA) {
+    // Guardería no tiene startDate/endDate (esos son exclusivos de Hospedaje,
+    // que puede durar varios días) — usa walkDate, igual que Paseo, porque es
+    // una reserva de un solo día. Se toma la medianoche de ese día como
+    // referencia (mismo criterio que Hospedaje) en vez del mediodía que usa
+    // Paseo más abajo — a este umbral de 48h/24h la diferencia de horas
+    // dentro del mismo día no cambia la banda de reembolso en la práctica.
+    const referenceDate = booking.serviceType === ServiceType.HOSPEDAJE ? booking.startDate : booking.walkDate;
+    const start = referenceDate
+      ? new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate(), 0, 0, 0)
       : null;
     if (!start) {
       return { refundAmount: 0, refundStatus: RefundStatus.REJECTED, refundPercent: 0 };
@@ -2146,16 +2219,29 @@ export async function cancelBooking(
     if (booking.status === BookingStatus.COMPLETED || booking.status === BookingStatus.IN_PROGRESS) {
       throw new BookingValidationError('No se puede cancelar una reserva ya iniciada o completada');
     }
+    // FIX (auditoría 2026-09-28, C1): PENDING_MG (Meet & Greet) tiene su propio
+    // flujo dedicado (cancelMGBooking, refundAmount=0 forzado) — nada impedía
+    // llamar a este endpoint genérico en su lugar. Y REJECTED_BY_CAREGIVER ya
+    // fue procesada (100% reembolsado) por rejectBooking(); cancelar de nuevo
+    // sobre esa misma reserva disparaba un segundo reembolso del mismo monto.
+    if (booking.status === BookingStatus.PENDING_MG) {
+      throw new BookingValidationError('Esta reserva está en fase de Meet & Greet — usa el flujo de cancelación de Meet & Greet.');
+    }
+    if (booking.status === BookingStatus.REJECTED_BY_CAREGIVER) {
+      throw new BookingValidationError('Esta reserva ya fue rechazada por el cuidador y reembolsada — no se puede cancelar de nuevo.');
+    }
 
     const now = new Date();
     let refundAmount: number;
     let refundStatus: RefundStatus;
 
-    if (
-      (booking.status === BookingStatus.PENDING_PAYMENT ||
-        booking.status === BookingStatus.PAYMENT_PENDING_APPROVAL) &&
-      !booking.paidAt
-    ) {
+    // FIX (auditoría 2026-09-28, C1): antes esta rama "sin reembolso" solo
+    // aplicaba si el status era PENDING_PAYMENT/PAYMENT_PENDING_APPROVAL — una
+    // reserva PENDING_MG (Meet & Greet, totalAmount ya calculado pero paidAt
+    // sigue null) caía directo en calculateRefund() de abajo y acreditaba
+    // 100%/50% de un monto que el cliente nunca pagó. Ahora se basa solo en
+    // si de verdad hubo pago, sin importar en qué status esté la reserva.
+    if (!booking.paidAt) {
       // No payment was made yet — nothing to refund
       refundAmount = 0;
       refundStatus = RefundStatus.REJECTED;
@@ -2191,7 +2277,20 @@ export async function cancelBooking(
       where: {
         id: bookingId,
         clientId,
-        status: { notIn: [BookingStatus.CANCELLED, BookingStatus.COMPLETED, BookingStatus.IN_PROGRESS] },
+        // FIX (auditoría 2026-09-28, C1): PENDING_MG y REJECTED_BY_CAREGIVER
+        // también excluidos acá (no solo en el chequeo de arriba) para cerrar
+        // la carrera real: si el cuidador rechaza la reserva (y ya reembolsa
+        // 100%) entre el findFirst de arriba y este updateMany, este guard
+        // atómico es lo único que evita un segundo reembolso duplicado.
+        status: {
+          notIn: [
+            BookingStatus.CANCELLED,
+            BookingStatus.COMPLETED,
+            BookingStatus.IN_PROGRESS,
+            BookingStatus.PENDING_MG,
+            BookingStatus.REJECTED_BY_CAREGIVER,
+          ],
+        },
       },
       data: {
         status: BookingStatus.CANCELLED,
@@ -3612,14 +3711,28 @@ export async function startService(bookingId: string, caregiverUserId: string, p
       throw new BadRequestError('El servicio solo puede iniciarse si está confirmado');
     }
 
-    const updated = await tx.booking.update({
-      where: { id: bookingId },
+    // FIX (auditoría 2026-09-28, C2): a diferencia de cancelBooking()/
+    // requestCancellationByCaregiver()/rejectBooking() (que usan updateMany
+    // condicionado + chequeo de count), este `update` no tenía guard de status
+    // — el cliente podía cancelar (reembolso acreditado, status→CANCELLED) casi
+    // al mismo tiempo que el cuidador iniciaba el servicio: como el status ya
+    // se había validado arriba con un `findFirst` (no atómico), este update sin
+    // condición sobrescribía igual status→IN_PROGRESS, "resucitando" una
+    // reserva ya cancelada/reembolsada, que después terminaba pagándole al
+    // cuidador también (confirmReceiptByClient/autoReleasePayment solo miran
+    // status===COMPLETED, no saben que hubo un reembolso previo).
+    const updateResult = await tx.booking.updateMany({
+      where: { id: bookingId, caregiverId: profile.id, status: BookingStatus.CONFIRMED },
       data: {
         status: BookingStatus.IN_PROGRESS,
         serviceStartedAt: new Date(),
         serviceStartPhoto: photoUrl,
       },
     });
+    if (updateResult.count === 0) {
+      throw new BadRequestError('El servicio solo puede iniciarse si está confirmado');
+    }
+    const updated = await tx.booking.findFirstOrThrow({ where: { id: bookingId } });
 
     // Notificación in-app al cliente
     await tx.notification.create({
@@ -5093,7 +5206,37 @@ export async function reportBooking(
     const commissionAmount = Number(booking.commissionAmount);
     const refundAmount     = totalAmount - commissionAmount; // Garden keeps its commission
 
-    // ── 4. Refund to client wallet ──────────────────────────────────────────
+    // ── 4. Reclamar la reserva ANTES de tocar el balance ────────────────────
+    // FIX (auditoría 2026-09-28, C3): antes el reembolso (paso 4 original) se
+    // acreditaba primero, y RECIÉN DESPUÉS se cancelaba la reserva con un
+    // `update` sin condición de status — a diferencia de cancelBooking()/
+    // requestCancellationByCaregiver(), que sí usan `updateMany` guardado
+    // ANTES de tocar dinero. Si el cuidador cancelaba vía
+    // requestCancellationByCaregiver() (reembolsa 100% atómicamente) casi al
+    // mismo tiempo que el dueño reportaba no-show acá, ambas transacciones
+    // leían CONFIRMED antes de que la otra comiteara: la del cuidador ganaba
+    // su updateMany guardado y reembolsaba; esta, que ya había leído CONFIRMED
+    // en el paso 1, seguía adelante igual y acreditaba OTRO reembolso — el
+    // cliente terminaba con dos créditos por la misma reserva. Ahora se
+    // reclama la reserva primero (atómico); si ya no está CONFIRMED, se aborta
+    // sin acreditar nada.
+    const claimResult = await tx.booking.updateMany({
+      where: { id: bookingId, clientId, status: BookingStatus.CONFIRMED },
+      data: {
+        status: BookingStatus.CANCELLED,
+        cancelledAt: new Date(),
+        cancellationReason: `Reporte del dueño: ${reasons.join(', ')}`,
+        refundAmount: refundAmount,
+        refundStatus: 'PROCESSED' as any,
+      },
+    });
+    if (claimResult.count === 0) {
+      throw new BookingValidationError(
+        'Esta reserva ya no está confirmada (fue cancelada o modificada por otra acción) — no se puede reportar.'
+      );
+    }
+
+    // ── 5. Refund to client wallet ──────────────────────────────────────────
     const updatedClient = await tx.user.update({
       where: { id: clientId },
       data: { balance: { increment: refundAmount } },
@@ -5108,18 +5251,6 @@ export async function reportBooking(
         description: `Reembolso por incumplimiento del cuidador — reserva ${bookingId.slice(0, 8)}`,
         bookingId,
         status: 'COMPLETED',
-      },
-    });
-
-    // ── 5. Cancel booking ────────────────────────────────────────────────────
-    await tx.booking.update({
-      where: { id: bookingId },
-      data: {
-        status: BookingStatus.CANCELLED,
-        cancelledAt: new Date(),
-        cancellationReason: `Reporte del dueño: ${reasons.join(', ')}`,
-        refundAmount: refundAmount,
-        refundStatus: 'PROCESSED' as any,
       },
     });
 

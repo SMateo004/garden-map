@@ -218,10 +218,10 @@ const List<HelpCategory> helpCenterCategories = [
           ),
           HelpSection(
             heading: '¿Cuándo recibe el cuidador su pago?',
-            body: 'El pago se libera al cuidador dentro de las 24 horas '
-                'siguientes a que ambas partes confirmen que el servicio '
-                'terminó correctamente, o automáticamente a las 72 horas si el '
-                'cliente no confirma ni abre una disputa.',
+            body: 'El pago se libera al cuidador de inmediato si el cliente '
+                'confirma que el servicio terminó correctamente, o '
+                'automáticamente a las 24 horas de finalizado el servicio si '
+                'el cliente no confirma ni abre una disputa.',
           ),
         ],
       ),

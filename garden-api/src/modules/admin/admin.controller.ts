@@ -530,9 +530,26 @@ export const completeWithdrawal = asyncHandler(async (req: Request, res: Respons
 
   try {
     await prisma.$transaction(async (prismaTx) => {
-      // Re-read under transaction lock to catch concurrent completions
+      // FIX (auditoría 2026-09-27, B1): el `findUnique` de acá abajo (comentario
+      // viejo: "re-read under transaction lock") NO es un lock — es una lectura
+      // plana. Bajo Read Committed de Postgres, dos admins completando el mismo
+      // retiro casi a la vez podían leer status='PENDING' ambos (ninguno había
+      // comiteado todavía) y pasar el guard los dos; el `balance: gte` de abajo
+      // sí sincroniza el balance en sí (vía lock de fila), pero no evita que
+      // AMBAS transacciones decrementen el balance por el mismo retiro — el
+      // resultado era balance descontado dos veces por una sola solicitud.
+      // Ahora se reclama la fila de `WalletTransaction` primero, de forma
+      // atómica (mismo patrón que el resto del proyecto): solo una gana; la
+      // otra ve count=0 y aborta antes de tocar el balance.
+      const claimed = await prismaTx.walletTransaction.updateMany({
+        where: { id, type: 'WITHDRAWAL', status: { in: ['PENDING', 'PROCESSING'] } },
+        data: { status: 'COMPLETED' },
+      });
+      if (claimed.count === 0) {
+        throw Object.assign(new Error('ALREADY_PROCESSED'), { code: 'ALREADY_PROCESSED' });
+      }
       const tx = await prismaTx.walletTransaction.findUnique({ where: { id } });
-      if (!tx || tx.type !== 'WITHDRAWAL' || !['PENDING', 'PROCESSING'].includes(tx.status)) {
+      if (!tx) {
         throw Object.assign(new Error('ALREADY_PROCESSED'), { code: 'ALREADY_PROCESSED' });
       }
 
@@ -544,12 +561,10 @@ export const completeWithdrawal = asyncHandler(async (req: Request, res: Respons
         throw Object.assign(new Error('NO_PROFILE'), { code: 'NO_PROFILE' });
       }
 
-      // Atomic conditional decrement — the earlier read-then-compare against
-      // userRecord.balance was check-then-act: two withdrawal requests for
-      // the same user, each individually within balance, could both pass this
-      // check before either's decrement committed (two admins approving
-      // concurrently, or one admin double-clicking). The `balance: gte` guard
-      // makes the check and the decrement a single atomic operation.
+      // Atomic conditional decrement — mismo guard que ya usaba antes. Si el
+      // balance no alcanza, se tira INSUFFICIENT_BALANCE y toda la transacción
+      // (incluyendo el claim de arriba) se revierte — el retiro vuelve a quedar
+      // en su estado original, no atascado en COMPLETED sin haberse cobrado.
       const decremented = await prismaTx.user.updateMany({
         where: { id: tx.userId, balance: { gte: tx.amount } },
         data: { balance: { decrement: tx.amount } },
@@ -565,7 +580,7 @@ export const completeWithdrawal = asyncHandler(async (req: Request, res: Respons
 
       await prismaTx.walletTransaction.update({
         where: { id },
-        data: { status: 'COMPLETED', balance: newBalance },
+        data: { balance: newBalance },
       });
 
       await prismaTx.notification.create({
@@ -616,7 +631,8 @@ export const rejectWithdrawal = asyncHandler(async (req: Request, res: Response)
     return res.status(404).json({ success: false, error: { message: 'Solicitud no encontrada' } });
   }
 
-  // Guard: only allow rejecting PENDING or PROCESSING withdrawals
+  // Guard: only allow rejecting PENDING or PROCESSING withdrawals (fast pre-check;
+  // el guard real y atómico está dentro de la transacción de abajo).
   if (!['PENDING', 'PROCESSING'].includes(tx.status)) {
     return res.status(409).json({
       success: false,
@@ -627,11 +643,23 @@ export const rejectWithdrawal = asyncHandler(async (req: Request, res: Response)
     });
   }
 
-  await prisma.$transaction(async (prismaTx) => {
-    await prismaTx.walletTransaction.update({
-      where: { id },
+  try {
+    await prisma.$transaction(async (prismaTx) => {
+    // FIX (auditoría 2026-09-27, B1): el `update` sin condición de abajo podía
+    // rechazar un retiro que un `completeWithdrawal` concurrente ya había
+    // completado (balance ya descontado) — el registro quedaba en REJECTED
+    // pero el dinero ya se había transferido, mostrándole al usuario un estado
+    // que contradice lo que realmente pasó con su plata. Mismo patrón atómico
+    // que completeWithdrawal: reclama la fila condicionada al estado antes de
+    // rechazarla; si ya no está en PENDING/PROCESSING (ej. un complete ganó la
+    // carrera), aborta sin tocar nada.
+    const claimed = await prismaTx.walletTransaction.updateMany({
+      where: { id, type: 'WITHDRAWAL', status: { in: ['PENDING', 'PROCESSING'] } },
       data: { status: 'REJECTED' },
     });
+    if (claimed.count === 0) {
+      throw Object.assign(new Error('ALREADY_PROCESSED'), { code: 'ALREADY_PROCESSED' });
+    }
 
     await prismaTx.notification.create({
       data: {
@@ -641,7 +669,13 @@ export const rejectWithdrawal = asyncHandler(async (req: Request, res: Response)
         type: 'SYSTEM',
       },
     });
-  });
+    });
+  } catch (err: any) {
+    if (err.code === 'ALREADY_PROCESSED') {
+      return res.status(409).json({ success: false, error: { message: 'Esta solicitud ya fue procesada' } });
+    }
+    throw err;
+  }
 
   auditLog({ userId: req.user!.userId, action: 'WITHDRAWAL_REJECTED', entity: 'WalletTransaction', entityId: id, details: { amount: Number(tx.amount), caregiverId: tx.userId, reason: reason ?? null }, ip: req.ip });
   // Sin esto, el "Pendiente" de la billetera del usuario solo se corregía

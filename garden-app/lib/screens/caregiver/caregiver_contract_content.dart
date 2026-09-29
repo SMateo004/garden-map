@@ -44,7 +44,7 @@ const List<ContractSection> caregiverContractSections = [
   ContractSection(
     '4. Cómo se paga tu trabajo',
     'Vos fijás libremente tu propio precio. Garden cobra una comisión del 10% que se AÑADE sobre tu precio y la paga el Cliente — vos nunca perdés parte de tu tarifa. Ejemplo: si cobrás Bs. 100, el Cliente paga Bs. 110, y vos recibís tus Bs. 100 completos.\n\n'
-    'El pago se libera a tu billetera Garden 24 horas después de que ambas partes confirmen que el servicio terminó bien, o automáticamente a las 72 horas si el Cliente no confirma ni abre una disputa. Las propinas que te dejen los Clientes son 100% tuyas, sin comisión.\n\n'
+    'El pago se libera a tu billetera Garden de inmediato si el Cliente confirma que el servicio terminó bien, o automáticamente a las 24 horas de finalizado el servicio si el Cliente no confirma ni abre una disputa. Las propinas que te dejen los Clientes son 100% tuyas, sin comisión.\n\n'
     'Podés retirar tu saldo a tu cuenta bancaria o billetera digital cuando quieras (monto mínimo aplica) — se procesa en 1-3 días hábiles, sin costo.',
   ),
   ContractSection(

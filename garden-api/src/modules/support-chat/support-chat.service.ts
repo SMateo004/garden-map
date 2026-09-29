@@ -79,9 +79,15 @@ export async function sendClientMessage(userId: string, rawMessage: string) {
   // real del admin por socket (que puede tardar minutos u horas).
   let finalStatus: string = thread.status;
 
-  // El bot responde salvo que un admin ya esté activamente en el hilo.
+  // El bot responde salvo que un admin ya esté activamente en el hilo, o el
+  // hilo ya esté ESCALATED esperando que un admin lo revise.
+  // FIX (auditoría 2026-09-27, B5): antes solo se chequeaba `adminJoinedAt` —
+  // un hilo podía estar ESCALATED (ya se le avisó al admin) durante horas
+  // sin que ningún admin lo hubiera abierto todavía, y en ese tiempo el bot
+  // seguía respondiendo (y facturando llamadas a Claude) a cada mensaje
+  // nuevo del cliente, contradiciendo la propia idea de "ya se escaló".
   let botMessage: { id: string; message: string; createdAt: Date } | null = null;
-  if (!thread.adminJoinedAt) {
+  if (!thread.adminJoinedAt && thread.status !== 'ESCALATED') {
     const historyRows = await prisma.supportMessage.findMany({
       where: { threadId: thread.id },
       orderBy: { createdAt: 'desc' },

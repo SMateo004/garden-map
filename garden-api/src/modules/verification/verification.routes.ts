@@ -39,9 +39,12 @@ router.post('/check-liveness', livenessSessionLimiter, controller.checkLiveness)
 /** GET /api/verification/validate?token= — public, returns { valid, userId?, message? } */
 router.get('/validate', controller.validate);
 
-/** POST /api/verification/check-blink — public (verification token). Blink liveness for web QR flow. */
+/** POST /api/verification/check-blink — public (verification token). Blink liveness for web QR flow.
+ *  Mismo límite que /create-liveness-session y /check-liveness — cada llamada dispara 2
+ *  invocaciones reales y facturadas a AWS Rekognition DetectFaces. */
 router.post(
   '/check-blink',
+  livenessSessionLimiter,
   upload.fields([
     { name: 'frameOpen', maxCount: 1 },
     { name: 'frameClosed', maxCount: 1 },

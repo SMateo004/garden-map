@@ -617,3 +617,125 @@ ignora disputas abiertas, disputa `PENDING_AI` que puede quedar trabada, respald
 que favorece siempre al cuidador en no-show, inconsistencia 24h vs 72h en plazos, falta de lock en
 `applyResolution`, prompt injection en el chat de soporte, rate limit por IP en vez de por usuario)
 siguen sin arreglar — no se tocaron hoy, el foco de esta corrida fue un área distinta.
+
+---
+
+## 2026-09-28 (más tarde) — Revisión humana explícita: se resuelven casi todos los hallazgos
+## pendientes de las 5 corridas anteriores
+
+El dueño del proyecto pidió explícitamente revisar y arreglar todos los bugs pendientes del flujo
+de auditoría "a la brevedad posible". Dado el volumen (17 hallazgos de alto riesgo acumulados en 5
+corridas), se agruparon en 3 lotes y se confirmó cada uno con el dueño antes de tocar código:
+
+**Grupo A (bugs técnicos, mismo patrón de lock ya usado en el proyecto, sin decisión de negocio) —
+aprobado sin cambios:**
+- **check-blink sin auth (2026-09-26):** se agregó `livenessSessionLimiter` a la ruta y se rechaza
+  con 401 si `!session.valid` en `checkBlink` — mismo patrón que `create-liveness-session`/
+  `check-liveness`. (`verification.routes.ts`, `verification.controller.ts`)
+- **A2 — disputa trabada en PENDING_AI:** se valida `responses` en `caregiver-response` (ya lo hacía
+  `client-response`); se sanea `recommendations` a array; cualquier falla en
+  `resolveAndApplyDispute` ahora notifica a admins (push + AdminNotification) en vez de dejar la
+  disputa colgada sin que nadie se entere — `resolve-manual` ya funciona sobre cualquier estado
+  no-RESOLVED, así que no hizo falta un estado nuevo. (`dispute.routes.ts`)
+- **A3 — respaldo automático de IA sin humano en no-show:** se removió el fallback determinístico
+  tras 3 fallos de la IA — ahora se propaga un error y el caller notifica a admins para resolución
+  manual, alineado con lo que el T&C ya prometía ("un miembro del equipo aplica un criterio de
+  respaldo"). (`dispute.routes.ts`)
+- **A5 — `applyResolution` sin lock:** las 3 ramas (CAREGIVER_WINS/CLIENT_WINS/PARTIAL) ahora
+  bloquean la fila (`SELECT ... FOR UPDATE`) y usan el balance real devuelto por el `update`, en vez
+  de `before + monto` sin lock. (`dispute.routes.ts`)
+- **A8 — prompt injection en el juez de IA:** razones/respuestas de las partes se sanean (cap de 10
+  items, 500 caracteres, escapa el delimitador propio) antes de interpolarse; se agregó una regla
+  explícita al prompt tratando ese texto como testimonio, nunca como instrucción. (`dispute.routes.ts`)
+- **B1 — retiros sin guard atómico:** `completeWithdrawal` y `rejectWithdrawal` ahora reclaman la
+  fila (`updateMany` condicionado a status) ANTES de tocar el balance — cierra tanto el doble-cobro
+  como el "rechazado después de ya pagado". (`admin.controller.ts`)
+- **C1 — `cancelBooking` podía reembolsar dinero nunca cobrado o dos veces:** se excluyen
+  `PENDING_MG` y `REJECTED_BY_CAREGIVER` del set cancelable (chequeo previo + guard atómico), y la
+  rama "sin reembolso" ahora se basa en `!booking.paidAt` en vez de en el status.
+  (`booking.service.ts`)
+- **C2 — `startService` sin guard atómico:** ahora usa `updateMany` condicionado a `CONFIRMED`, no
+  puede "resucitar" una reserva ya cancelada. (`booking.service.ts`)
+- **C3 — `reportBooking` acreditaba el reembolso antes del guard de estado:** se movió el
+  `updateMany` guardado ANTES de tocar el balance — cierra la carrera con
+  `requestCancellationByCaregiver()`. (`booking.service.ts`)
+
+**Grupo B (decisiones de política, ya confirmadas por el dueño):**
+- **Guardería y Baño/Estética → tratarlos como Hospedaje (48h/24h):** se agregó
+  `ServiceType.GUARDERIA` a la rama de `calculateRefund()` que ya usaba Hospedaje (usando
+  `walkDate` a medianoche como referencia, no `startDate` — Guardería no tiene ese campo). El bloque
+  "Baño y Estética" con una política inventada de 24h/24h se removió de `legal_screen.dart` y
+  `legal.routes.ts` (no existe como `ServiceType` real — confirmado que solo aparecía en esos 2
+  archivos de texto, en ningún flujo de reserva real). Se corrigió también el umbral de Paseo, que
+  decía "2h" en vez de "6h" (no coincidía ni con el código ni con `help_center_content.dart`).
+  (`booking.service.ts`, `legal_screen.dart`, `legal.routes.ts`)
+- **Plazo de disputa → 24h (el que ya usa el código), no 72h:** se corrigieron las 4 menciones a
+  72h en `legal_screen.dart`, `legal.routes.ts`, `caregiver_contract_content.dart` y
+  `soporte-chat.agent.ts`. De paso se removieron 2 afirmaciones falsas en la Sección 18 de T&C que
+  no correspondían a nada real en el código: un "PASO 2 — 48h para presentar evidencia" (no existe
+  tal ventana; la evidencia es la que ya existe en la reserva) y "un admin puede anular una
+  resolución antes de que se apele" (`resolveDisputeManually` solo bloquea si `status==='RESOLVED'`,
+  así que eso nunca fue posible sin pasar primero por una apelación).
+  (`legal_screen.dart`, `legal.routes.ts`, `caregiver_contract_content.dart`, `soporte-chat.agent.ts`)
+
+**Grupo C (bugs más grandes, aprobados explícitamente):**
+- **A1 — job de liberación a 72h (`onHoldSlaHoras`) ignoraba disputas abiertas:** se excluyen del
+  query las reservas con una disputa activa (`PENDING_CAREGIVER`/`PENDING_CLIENT`/`PENDING_AI`/
+  `APPEALED`). De paso se arreglaron 2 bugs más del mismo job encontrados al tocarlo: pagaba el
+  monto completo si `commissionAmount` era `null` (`Number(null)` → 0, sin descontar comisión), y no
+  creaba ningún `WalletTransaction` (pago invisible en el historial del cuidador) — ambos ya
+  arreglados con el mismo patrón de lock+balance real del resto del proyecto. (`server.ts`)
+- **C4 — suspensión por 3 cancelaciones tardías en 90 días, prometida en 4 lugares, nunca
+  implementada:** `requestCancellationByCaregiver()` ahora calcula si la cancelación fue tardía
+  (<24h antes del servicio, misma lógica horaria que `calculateRefund()`), crea un
+  `CaregiverInfraction` tipo `LATE_CANCELLATION`, y suspende al cuidador (mismo mecanismo que
+  `maybeAutoSuspendForLowRating`) si acumula 3+ en una ventana móvil de 90 días — no sobre el
+  contador acumulado de por vida. Se agregó también el flag `lateCancellationAutoSuspended` a los
+  listados de admin (mismo patrón que `lowRatingAutoSuspended`), aunque no se agregó un badge nuevo
+  en el panel Flutter para él (queda como mejora cosmética pendiente).
+  **Nota:** la suspensión es indefinida hasta que un admin la levante manualmente (mismo
+  comportamiento que la auto-suspensión por rating bajo ya existente) — el código no tiene hoy un
+  mecanismo de expiración automática a los 30 días; "30 días" se cumple operativamente, no de forma
+  automática. Si se quiere una expiración real, hace falta un campo `suspendedUntil` + un job nuevo
+  (fuera del alcance de este fix). (`booking.service.ts`, `admin.service.ts`)
+- **B3 — prompt injection en el chat de soporte:** el historial ahora se arma con turnos envueltos
+  en `<turno rol="...">`, con el contenido del usuario escapado (no puede cerrar su propia etiqueta
+  ni abrir una falsa), más una regla explícita en el system prompt tratando el contenido de un turno
+  de usuario como texto citado, nunca como instrucción o afirmación real de Garden/un asesor.
+  (`soporte-chat.agent.ts`)
+- **B5 — rate limit del bot de soporte por IP en vez de por usuario, y seguía respondiendo en hilos
+  ya escalados:** el limiter ahora usa `userId` como clave (la ruta ya vive detrás de
+  `authMiddleware`); y el bot deja de auto-responder en cuanto el hilo pasa a `ESCALATED`, no solo
+  cuando un admin ya lo abrió (`adminJoinedAt`). (`support-chat.routes.ts`, `support-chat.service.ts`)
+- **B2 (parcial) — base de conocimiento del bot de soporte:** se corrigieron los 2 valores que ya
+  tenían decisión de política (72h→24h, mención del respaldo humano tras falla de IA). El resto de
+  B2 (valores de `AppSettings` hardcodeados que no reflejan cambios en runtime) sigue como
+  limitación estructural conocida, no arreglada — requeriría inyectar los valores vigentes en el
+  prompt en cada llamada en vez de un string estático. (`soporte-chat.agent.ts`)
+
+**Hallazgo adicional encontrado al aplicar los fixes (mismo patrón, no estaba en ninguna corrida
+anterior):** `finalizeAccountDeletion` (`auth.service.ts`) tenía el mismo bug de ledger que el
+hallazgo original del 2026-09-24 (balance hardcodeado sin releer tras el `update`, sin lock de
+fila) — se aplicó el mismo fix ahí (ver entrada del 2026-09-24 arriba).
+
+**No se tocó (fuera de alcance, señalado al dueño):**
+- A4 ya decidido (24h) no requirió cambio de código, solo de textos — hecho.
+- A6, A7 (observaciones de la corrida del 2026-09-27) — no eran hallazgos de alto riesgo ni se
+  pidió explícitamente arreglarlos.
+- La lista de servicios de la Sección 5 de los T&C sigue mencionando "Baño y Estética" y "Visita
+  domiciliaria" como servicios ofrecidos — ninguno de los dos es un `ServiceType` real distinto en
+  el backend (Visita domiciliaria se resuelve como PASEO; Baño y Estética no existe en ningún flujo
+  de reserva). Se corrigió la tabla de reembolsos (que sí prometía algo distinto al código), pero no
+  se tocó esa lista de servicios — es una decisión de producto/copy, no un bug de lógica.
+- Reconciliación manual de `WalletTransaction.balance` ya grabados mal en producción antes de estos
+  fixes (ledger del 2026-09-24) — sigue pendiente, requiere una query aparte para identificar las
+  filas afectadas.
+
+**Verificación antes de commitear:** `npx tsc --noEmit` en `garden-api` — sin errores nuevos (solo
+el preexistente y conocido `phoneVerified` en `auth.controller.ts`). `npm run test:unit` — 158/158
+tests pasan, 14/14 suites. `flutter analyze` en `garden-app` — 0 errores (594 avisos `info`
+preexistentes, ninguno en los 3 archivos Dart tocados hoy).
+
+**Pendiente de decisión del dueño del proyecto:** todos estos cambios (14 archivos) están en el
+working tree, sin commitear ni pushear todavía — push a `garden-api/**` en `main` dispara redeploy
+automático a producción vía Render.

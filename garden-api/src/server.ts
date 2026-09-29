@@ -308,13 +308,26 @@ async function start() {
       const { getNumericSetting } = await import('./utils/settings-cache.js');
       const slaHoras = await getNumericSetting('onHoldSlaHoras', 72);
       const cutoff = new Date(Date.now() - slaHoras * 60 * 60 * 1000);
+      // FIX (auditoría 2026-09-27, A1): antes este `where` no miraba la disputa
+      // en absoluto — si el cuidador simplemente no respondía a una disputa
+      // abierta por el cliente, este job igual lo pagaba a las 72h (y si el
+      // cuidador respondía después, resolveAndApplyDispute fallaba con
+      // "ya no está ON_HOLD"/DISPUTE_ALREADY_RESOLVED). Ahora se excluyen las
+      // reservas con una disputa activa (esperando respuesta o evaluación) —
+      // esas dejan que el propio flujo de disputas (con su límite de
+      // apelación de 5 días hábiles) decida, en vez de que este timer genérico
+      // las pise a favor del cuidador por defecto.
       const stuckBookings = await prisma.booking.findMany({
         where: {
           status: 'COMPLETED',
           payoutStatus: 'ON_HOLD',
           ownerRated: true,
           updatedAt: { lte: cutoff },
-        },
+          OR: [
+            { dispute: null },
+            { dispute: { status: { notIn: ['PENDING_CAREGIVER', 'PENDING_CLIENT', 'PENDING_AI', 'APPEALED'] } } },
+          ],
+        } as any,
         select: { id: true, caregiverId: true, totalAmount: true, commissionAmount: true },
       });
 
@@ -333,10 +346,32 @@ async function start() {
             });
             if (!caregiverProfile) return;
 
-            const amount = Number(booking.totalAmount) - Number(booking.commissionAmount);
-            await tx.user.update({
+            // FIX (auditoría 2026-09-27, A1): dos huecos más en el mismo job.
+            // (1) `Number(booking.commissionAmount)` da 0 si commissionAmount
+            // es null (reservas viejas sin ese campo poblado), pagando el
+            // monto completo sin descontar la comisión de Garden — mismo
+            // fallback ya usado en applyResolution (dispute.routes.ts).
+            // (2) no creaba ningún WalletTransaction — el pago quedaba
+            // invisible en el historial del cuidador. Se agrega, con el mismo
+            // patrón de lock + balance real que el resto del proyecto.
+            const commission = Number(booking.commissionAmount ?? Number(booking.totalAmount) * 0.10);
+            const amount = Number(booking.totalAmount) - commission;
+            await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${caregiverProfile.userId} FOR UPDATE`;
+            const updated = await tx.user.update({
               where: { id: caregiverProfile.userId },
               data: { balance: { increment: amount } },
+              select: { balance: true },
+            });
+            await tx.walletTransaction.create({
+              data: {
+                userId: caregiverProfile.userId,
+                type: 'EARNING',
+                amount,
+                balance: Number(updated.balance),
+                description: `Pago liberado automáticamente tras ${slaHoras}h sin resolución — reserva ${booking.id.slice(0, 8).toUpperCase()}`,
+                bookingId: booking.id,
+                status: 'COMPLETED',
+              },
             });
           });
           logger.info(`[SLA-OnHold] Booking auto-released after ${slaHoras}h SLA`, { bookingId: booking.id });

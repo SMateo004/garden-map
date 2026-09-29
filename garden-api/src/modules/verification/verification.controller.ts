@@ -219,7 +219,13 @@ export const checkBlink = asyncHandler(async (req: Request, res: Response) => {
 
   const { validateToken } = await import('./verification.service.js');
   const session = await validateToken(token);
-  const userId = (session as any)?.userId ?? 'unknown';
+  if (!session.valid || !(session as any).userId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Token de verificación inválido.' },
+    });
+  }
+  const userId = (session as any).userId as string;
 
   const result = await checkBlinkLiveness(frameOpen.buffer, frameClosed.buffer, userId);
 
