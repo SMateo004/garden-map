@@ -1413,13 +1413,16 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     final antecedentesNeedsReview = caregiver['antecedentesNeedsReview'] == true;
     final nitNeedsReview = caregiver['nitNeedsReview'] == true;
     final lowRatingAutoSuspended = caregiver['lowRatingAutoSuspended'] == true;
+    final lateCancellationAutoSuspended = caregiver['lateCancellationAutoSuspended'] == true;
     final highlightColor = lowRatingAutoSuspended
         ? GardenColors.info
-        : antecedentesNeedsReview
-            ? GardenColors.warning
-            : nitNeedsReview
-                ? GardenColors.primary
-                : null;
+        : lateCancellationAutoSuspended
+            ? GardenColors.error
+            : antecedentesNeedsReview
+                ? GardenColors.warning
+                : nitNeedsReview
+                    ? GardenColors.primary
+                    : null;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -1497,6 +1500,18 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                             border: Border.all(color: GardenColors.info.withValues(alpha: 0.5)),
                           ),
                           child: const Text('🔻 Auto-suspendido por rating', style: TextStyle(color: GardenColors.info, fontSize: 10, fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                      if (lateCancellationAutoSuspended) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: GardenColors.error.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: GardenColors.error.withValues(alpha: 0.5)),
+                          ),
+                          child: const Text('🚫 Auto-suspendido: cancelaciones tardías', style: TextStyle(color: GardenColors.error, fontSize: 10, fontWeight: FontWeight.w700)),
                         ),
                       ],
                       if (isProfessional) ...[

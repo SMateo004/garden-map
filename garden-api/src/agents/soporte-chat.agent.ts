@@ -13,34 +13,65 @@
 import { callClaude } from '../services/claude.service.js';
 import { logAgentCall } from '../shared/agent-logger.js';
 import logger from '../shared/logger.js';
+import { getNumericSetting } from '../utils/settings-cache.js';
 
-const KNOWLEDGE_BASE = `
+// FIX (auditoría 2026-09-27, B2 — parcial): los montos/plazos de abajo eran un
+// string estático con números hardcodeados. Si un admin cambiaba una de estas
+// reglas desde AppSettings (comisión, mínimo de retiro, validez del QR,
+// umbrales de reembolso, plazo de auto-liberación), el bot seguía citando el
+// valor viejo indefinidamente. Ahora se arma en cada request con
+// getNumericSetting() (mismo cache de 30s que usa el resto del proyecto), así
+// que sigue los cambios reales de configuración sin necesitar un redeploy.
+async function buildKnowledgeBase(): Promise<string> {
+  const [
+    hospedaje100h,
+    hospedaje50h,
+    hospedajeFee,
+    paseo100h,
+    paseo50h,
+    autoReleaseHoras,
+    commissionPct,
+    qrValidityMinutes,
+    montoMinimoRetiro,
+  ] = await Promise.all([
+    getNumericSetting('hospedajeRefund100Horas', 48),
+    getNumericSetting('hospedajeRefund50Horas', 24),
+    getNumericSetting('hospedajeRefundAdminFeeBS', 10),
+    getNumericSetting('paseoRefund100Horas', 12),
+    getNumericSetting('paseoRefund50Horas', 6),
+    getNumericSetting('autoReleasePaymentHoras', 24),
+    getNumericSetting('platformCommissionPct', 10),
+    getNumericSetting('qrValidityMinutes', 15),
+    getNumericSetting('montoMinimoRetiro', 50),
+  ]);
+
+  return `
 # RESERVAS Y CANCELACIONES
 - Reservar: elegir servicio (Paseo/Hospedaje/Guardería) → filtrar cuidador → fecha y datos de la mascota → Meet & Greet obligatorio si es la primera reserva de Hospedaje/Guardería con ese cuidador → pagar (Billetera + QR) → esperar confirmación del cuidador.
-- Cancelación Hospedaje/Guardería: >48h antes = 100% reembolso (menos Bs 10 de cargo administrativo); 24-48h = 50%; <24h o no-show = sin reembolso.
-- Cancelación Paseo: >12h antes = 100%; 6-12h = 50%; <6h o no-show = sin reembolso.
+- Cancelación Hospedaje/Guardería: >${hospedaje100h}h antes = 100% reembolso (menos Bs ${hospedajeFee} de cargo administrativo); ${hospedaje50h}-${hospedaje100h}h = 50%; <${hospedaje50h}h o no-show = sin reembolso.
+- Cancelación Paseo: >${paseo100h}h antes = 100%; ${paseo50h}-${paseo100h}h = 50%; <${paseo50h}h o no-show = sin reembolso.
 - Reembolso a Billetera: inmediato. Reembolso a cuenta bancaria (QR): 1-3 días hábiles, lo procesa el equipo de Garden manualmente.
-- Si cancela el cuidador con <24h: cliente recibe 100% siempre, y el cuidador recibe una penalización (3 cancelaciones tardías en 90 días = suspensión de 30 días).
+- Si cancela el cuidador con menos de 24h de anticipación: cliente recibe 100% siempre, y el cuidador recibe una penalización (3 cancelaciones tardías en 90 días = suspensión).
 - Meet & Greet: reunión gratuita de 20-30 min (presencial o videollamada), se coordina desde el chat de la reserva con botón "Proponer Meet & Greet". Cancelar después de un Meet & Greet ya realizado no da reembolso.
 
 # PAGOS
-- Comisión de plataforma: 10% sobre el precio del cuidador, la paga el cliente aparte. Si el cuidador cobra Bs 100, el cliente paga Bs 110; el cuidador recibe sus Bs 100 completos.
-- El pago se libera al cuidador de inmediato si el cliente confirma que el servicio terminó bien, o automático a las 24h de finalizado el servicio si el cliente no confirma ni abre disputa.
-- QR bancario: válido 15 minutos, se cancela solo si expira sin pago detectado. Verificación automática cada 5s tras tocar "Ya realicé el pago". Si el sistema de QR falla, existe "Solicitud de verificación manual" (subir comprobante).
+- Comisión de plataforma: ${commissionPct}% sobre el precio del cuidador, la paga el cliente aparte. Si el cuidador cobra Bs 100, el cliente paga Bs ${100 + commissionPct}; el cuidador recibe sus Bs 100 completos.
+- El pago se libera al cuidador de inmediato si el cliente confirma que el servicio terminó bien, o automático a las ${autoReleaseHoras}h de finalizado el servicio si el cliente no confirma ni abre disputa.
+- QR bancario: válido ${qrValidityMinutes} minutos, se cancela solo si expira sin pago detectado. Verificación automática cada 5s tras tocar "Ya realicé el pago". Si el sistema de QR falla, existe "Solicitud de verificación manual" (subir comprobante).
 - Billetera Garden: saldo interno, se acumula sobre todo por reembolsos. Se puede combinar con QR si no cubre el total.
 - Donaciones a hogares de mascotas: voluntarias (Bs 5/10/20/personalizado hasta Bs 500), 0% comisión, 100% va al refugio.
 
 # RETIROS (CUIDADORES)
 - Configurar datos de cobro primero (Billetera → Datos de cobro): banco (ahorro/corriente + número de cuenta) o billetera digital (Tigo Money, Pago Fácil, etc. + número de celular). El nombre debe coincidir con el registrado en Garden.
-- Retiro mínimo: Bs 50. No puede superar el saldo disponible (saldo total menos retiros ya pendientes). Tarda 1-3 días hábiles. Garden no cobra comisión por retirar.
+- Retiro mínimo: Bs ${montoMinimoRetiro}. No puede superar el saldo disponible (saldo total menos retiros ya pendientes). Tarda 1-3 días hábiles. Garden no cobra comisión por retirar.
 
 # SER CUIDADOR
 - Registro gratuito, wizard de varios pasos que guarda el progreso si cierras la app a la mitad. Requiere: mayor de 18 años, datos + dirección, foto de perfil, servicios y zona, precios (Bs 15-400 típico, rango por zona), disponibilidad, fotos (mín. 2, más fotos del espacio si ofrece Hospedaje/Guardería), bio + cuestionario, verificación de identidad (CI + prueba de vida con reconocimiento facial AWS Rekognition), verificación de teléfono y correo.
 - Verificación de identidad: normalmente instantánea; si no se confirma automático, pasa a revisión manual (24-48h). Si falla, reintentar con buena luz, CI nítida y completa, rostro centrado sin lentes oscuros/gorra.
-- Precio: lo fija el cuidador dentro del rango de su zona; es el monto íntegro que recibe (el 10% de comisión lo paga el cliente aparte). Cambiar el precio solo afecta reservas nuevas.
+- Precio: lo fija el cuidador dentro del rango de su zona; es el monto íntegro que recibe (el ${commissionPct}% de comisión lo paga el cliente aparte). Cambiar el precio solo afecta reservas nuevas.
 
 # DISPUTAS Y PROBLEMAS
-- Se activa calificando con menos de 3 estrellas al finalizar un servicio — retiene el pago automáticamente y habilita "abrir disputa". Plazo para abrir la disputa: 24h desde que terminó el servicio; pasado ese plazo el pago se libera al cuidador y ya no se puede reclamar.
+- Se activa calificando con menos de 3 estrellas al finalizar un servicio — retiene el pago automáticamente y habilita "abrir disputa". Plazo para abrir la disputa: ${autoReleaseHoras}h desde que terminó el servicio; pasado ese plazo el pago se libera al cuidador y ya no se puede reclamar.
 - El cuidador puede dar su versión; una vez que responde, un sistema de IA (Claude) analiza todo el historial y evidencia y da un veredicto: a favor del cuidador (libera el pago), a favor del cliente (reembolso completo), o parcial. El veredicto se graba en blockchain (Polygon) de forma inmutable. Si la IA no logra resolver el caso, pasa a revisión manual de una persona del equipo de Garden (nunca se aplica un resultado automático sin evidencia real detrás).
 - Apelación: 5 días hábiles desde el veredicto. La apelación la revisa una PERSONA real del equipo de Garden (no la IA), y esa decisión es la definitiva.
 - Emergencia durante un servicio activo: el cuidador la reporta desde la pantalla del servicio; el tiempo se pausa automático, el equipo de Garden recibe alerta urgente, y se resuelve cuando el cuidador o un admin la marcan resuelta.
@@ -59,13 +90,16 @@ const KNOWLEDGE_BASE = `
 # FONDO DE GARANTÍA
 - Garden ofrece un fondo de garantía voluntario y discrecional para gastos veterinarios de emergencia derivados de un servicio (hasta Bs 2.000 aproximadamente), sujeto a revisión caso por caso — no es una póliza de seguro formal con una aseguradora. Cualquier reclamo sobre esto SIEMPRE necesita revisión humana, nunca lo resuelve el bot.
 `.trim();
+}
 
-const SYSTEM_PROMPT = `
+async function buildSystemPrompt(): Promise<string> {
+  const knowledgeBase = await buildKnowledgeBase();
+  return `
 Eres el asistente de soporte de GARDEN, un marketplace de cuidado de mascotas en Santa Cruz de la Sierra, Bolivia (paseo, hospedaje y guardería). Le respondés en el chat a un cliente o cuidador que ya está usando la app.
 
 Tu única fuente de verdad es esta base de conocimiento — nunca inventes montos, plazos o reglas que no estén acá:
 
-${KNOWLEDGE_BASE}
+${knowledgeBase}
 
 Reglas:
 1. Respondé en español boliviano, tono cercano y directo, sin tecnicismos innecesarios. Máximo 3-4 oraciones por respuesta.
@@ -85,6 +119,7 @@ Responde ÚNICAMENTE en JSON válido, sin texto adicional:
   "razon": "solo si necesitaHumano es true: motivo breve para que el admin entienda de qué se trata sin releer todo el chat"
 }
 `.trim();
+}
 
 /** Temas donde SIEMPRE hace falta una persona, sin importar lo que el bot
  * crea poder resolver — dinero en disputa, baja de cuenta, reclamos del
@@ -155,7 +190,8 @@ export async function responderSoporte(params: {
 
   try {
     const userMessage = buildUserMessage(historial, nuevoMensaje);
-    const resultado = await callClaude(SYSTEM_PROMPT, userMessage, 512) as RespuestaSoporte;
+    const systemPrompt = await buildSystemPrompt();
+    const resultado = await callClaude(systemPrompt, userMessage, 512) as RespuestaSoporte;
 
     if (typeof resultado?.respuesta !== 'string' || typeof resultado?.necesitaHumano !== 'boolean') {
       throw new Error('Respuesta sin campos respuesta/necesitaHumano válidos');

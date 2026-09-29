@@ -383,6 +383,111 @@ async function start() {
       logger.error('[SLA-OnHold] Cron job failed', { error: err.message });
     }
   }, 6 * 60 * 60 * 1000); // Every 6 hours
+
+  // FIX (auditoría 2026-09-27, A6): una disputa de no-show (PENDING_CAREGIVER/
+  // PENDING_CLIENT) no tenía ningún plazo si la otra parte nunca respondía —
+  // quedaba retenida indefinidamente (dinero retenido, no perdido, pero sin
+  // resolución posible: nadie puede forzar un veredicto sin la respuesta del
+  // otro lado). Mismo criterio ya aplicado en A2/A3 de esta misma revisión:
+  // ante algo que el pipeline automático no puede resolver con confianza
+  // (acá, sin la versión de una de las partes), se escala a un admin para
+  // revisión manual en vez de decidir un ganador por default — decidir "gana
+  // quien sí respondió" sería premiar el orden de llegada, justo lo que el
+  // propio prompt del juez de IA (dispute.routes.ts) advierte que NO es
+  // evidencia de quién tiene razón.
+  setInterval(async () => {
+    try {
+      const { getNumericSetting } = await import('./utils/settings-cache.js');
+      const slaHoras = await getNumericSetting('disputeResponseSlaHoras', 72);
+      const cutoff = new Date(Date.now() - slaHoras * 60 * 60 * 1000);
+      const staleDisputes = await prisma.dispute.findMany({
+        where: {
+          status: { in: ['PENDING_CAREGIVER', 'PENDING_CLIENT'] },
+          updatedAt: { lte: cutoff },
+        } as any,
+        select: { id: true, bookingId: true, status: true },
+      });
+
+      for (const dispute of staleDisputes as any[]) {
+        try {
+          // Idempotencia por consulta (sin campo nuevo en el schema): si ya se
+          // notificó esta disputa, no se repite en la próxima corrida.
+          const alreadyNotified = await prisma.adminNotification.findFirst({
+            where: { type: 'DISPUTE_NO_RESPONSE', bookingId: dispute.bookingId },
+          });
+          if (alreadyNotified) continue;
+
+          const booking = await prisma.booking.findUnique({
+            where: { id: dispute.bookingId },
+            select: { caregiverId: true },
+          });
+
+          await prisma.adminNotification.create({
+            data: { type: 'DISPUTE_NO_RESPONSE', caregiverId: booking?.caregiverId ?? '', bookingId: dispute.bookingId },
+          });
+
+          const { sendPushToAdmins } = await import('./services/firebase.service.js');
+          await sendPushToAdmins(
+            '⏳ Disputa sin respuesta',
+            `Reserva ${String(dispute.bookingId).slice(0, 8).toUpperCase()} — la otra parte no respondió en ${slaHoras}h. Requiere revisión manual (resolve-manual).`,
+            { type: 'DISPUTE_NO_RESPONSE', bookingId: dispute.bookingId }
+          ).catch(() => {});
+
+          logger.warn('[SLA-DisputeNoResponse] Disputa sin respuesta — admin notificado', {
+            disputeId: dispute.id,
+            bookingId: dispute.bookingId,
+            status: dispute.status,
+          });
+        } catch (err: any) {
+          logger.error('[SLA-DisputeNoResponse] Failed to notify stale dispute', { disputeId: dispute.id, error: err.message });
+        }
+      }
+    } catch (err: any) {
+      logger.error('[SLA-DisputeNoResponse] Cron job failed', { error: err.message });
+    }
+  }, 6 * 60 * 60 * 1000); // Every 6 hours
+
+  // Reactivación automática tras 30 días — suspensión por 3+ cancelaciones
+  // tardías en 90 días (ver requestCancellationByCaregiver, booking.service.ts).
+  // No se agregó una columna nueva al schema (suspendedUntil) porque no hay
+  // forma de correr `prisma db push`/migrate contra producción desde esta
+  // máquina ahora mismo (sin red hacia el Postgres de Render, y el Postgres
+  // local de Docker tiene el bug de auth ya documentado en CLAUDE.md) — en vez
+  // de eso, se calcula el vencimiento sobre campos que ya existen:
+  // `suspendedAt` (seteado por suspendCaregiver en toda suspensión) +
+  // `suspensionReason` exactamente igual a LATE_CANCELLATION_SUSPENSION_REASON
+  // (identifica que ESTA suspensión puntual es de las que sí vencen solas —
+  // una suspensión manual o por rating bajo con otro texto nunca matchea acá,
+  // así que sigue siendo indefinida hasta que un admin la levante, como antes).
+  setInterval(async () => {
+    try {
+      const { activateCaregiver, LATE_CANCELLATION_SUSPENSION_REASON } = await import('./modules/admin/admin.service.js');
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const expiredSuspensions = await prisma.caregiverProfile.findMany({
+        where: {
+          suspended: true,
+          suspensionReason: LATE_CANCELLATION_SUSPENSION_REASON,
+          suspendedAt: { lte: thirtyDaysAgo },
+        },
+        select: { id: true },
+      });
+
+      for (const profile of expiredSuspensions) {
+        try {
+          await activateCaregiver(
+            profile.id,
+            'SYSTEM_AUTO_REACTIVATE',
+            'Suspensión temporal de 30 días por cancelaciones tardías vencida — reactivación automática.'
+          );
+          logger.info('[SLA-LateCancellationSuspension] Cuidador reactivado automáticamente tras 30 días', { profileId: profile.id });
+        } catch (err: any) {
+          logger.error('[SLA-LateCancellationSuspension] Failed to reactivate', { profileId: profile.id, error: err.message });
+        }
+      }
+    } catch (err: any) {
+      logger.error('[SLA-LateCancellationSuspension] Cron job failed', { error: err.message });
+    }
+  }, 6 * 60 * 60 * 1000); // Every 6 hours
 }
 
 start().catch(err => {

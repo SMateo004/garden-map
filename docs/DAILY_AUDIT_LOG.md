@@ -739,3 +739,67 @@ preexistentes, ninguno en los 3 archivos Dart tocados hoy).
 **Pendiente de decisión del dueño del proyecto:** todos estos cambios (14 archivos) están en el
 working tree, sin commitear ni pushear todavía — push a `garden-api/**` en `main` dispara redeploy
 automático a producción vía Render.
+
+---
+
+## 2026-09-29 — Se resuelven los 6 puntos que quedaban pendientes de la corrida anterior
+
+El dueño del proyecto pidió avanzar con todo lo que había quedado señalado como "fuera de alcance"
+el 2026-09-28. Resultado de cada uno:
+
+1. **Reconciliación de `WalletTransaction.balance` mal grabados (bug del 2026-09-24).** Se consultó
+   producción directamente (25 filas totales en toda la tabla — proyecto en etapa temprana, permitió
+   revisión manual fila por fila en vez de un script masivo). Hallazgo: **cero filas `DEBT_RECOVERY`
+   y cero filas `WITHDRAWAL` de eliminación de cuenta existen en producción** — el bug estaba en el
+   código pero nunca llegó a dispararse en datos reales (nadie recuperó deuda por QR/SIP ni eliminó
+   una cuenta con saldo positivo durante la ventana en que existió el bug). Nada que reconciliar ahí.
+   Se revisó también el hueco relacionado del hallazgo A1 (pagos del job de 72h sin
+   `WalletTransaction`, ya corregido en código el 2026-09-28): de 7 reservas candidatas, se encontró
+   **una** con el registro faltante (reserva `91970a1c…`, cuenta `reviewer.cuidador` de prueba, Bs 90
+   de un paseo). Se confirmó que el balance real del usuario (360) ya coincidía exactamente con
+   `saldo anterior conocido (270) + el pago faltante (90)` — el dinero nunca estuvo mal, solo faltaba
+   el registro en el historial — y se hizo el backfill de esa única fila con su fecha histórica
+   real. Verificado después: 0 reservas con el hueco.
+
+2. **Expiración automática de la suspensión por cancelaciones tardías (30 días).** Se descartó
+   agregar una columna nueva al schema (`suspendedUntil`): no hay forma de correr
+   `prisma db push`/migrate contra producción desde esta sesión sin verificar antes conectividad, y
+   el Postgres local de Docker tiene el bug de auth ya documentado. En cambio, se implementó
+   reutilizando campos que ya existen — `suspendedAt` (que `suspendCaregiver` ya setea en toda
+   suspensión) + `suspensionReason` exactamente igual a `LATE_CANCELLATION_SUSPENSION_REASON` — y un
+   job nuevo en `server.ts` que reactiva automáticamente (`activateCaregiver`) cuando pasan 30 días.
+   Cero cambios de schema, cero riesgo de migración.
+3. **Base de conocimiento del bot de soporte con valores hardcodeados.** `KNOWLEDGE_BASE` pasó de ser
+   un string estático a una función (`buildKnowledgeBase()`) que arma el texto en cada request con
+   `getNumericSetting()` (mismo cache de 30s que el resto del proyecto) — comisión, umbrales de
+   reembolso, cargo de Hospedaje, validez del QR, plazo de auto-liberación y mínimo de retiro ahora
+   siguen los valores reales de `AppSettings` en vez de quedar congelados en el código.
+   (`soporte-chat.agent.ts`)
+4. **Sección 5 de los T&C con servicios inventados.** Investigando más a fondo se confirmó que
+   "Visita domiciliaria" TAMPOCO es un servicio real funcional — ni siquiera el filtro de búsqueda
+   del marketplace la reconoce (`marketplace_screen.dart`: `_selectedService` solo maneja
+   hospedaje/paseo/guardería; seleccionarla en la landing page manda un `service=visita` que no
+   filtra nada). Se removieron las 4 menciones de "Visita domiciliaria" y "Baño y Estética" de
+   `legal_screen.dart` y `legal.routes.ts` (definición de SERVICIO, lista de servicios de la Sección
+   5, encabezado de la tabla de reembolsos, y la excepción de Mal Clima) — ninguno de los dos existe
+   como flujo de reserva real. **Hallazgo nuevo, no arreglado hoy:** la landing page de marketing
+   (`landing_screen.dart`) sigue ofreciendo "Visita a domicilio" como opción de búsqueda real —
+   queda fuera de alcance por ser una decisión de producto (¿se retira la opción, o se implementa de
+   verdad?), no un simple fix de copy.
+5. **Badge visual en el panel admin para la suspensión por cancelaciones.** Se agregó
+   `lateCancellationAutoSuspended` (mismo patrón que `lowRatingAutoSuspended`) con un badge rojo
+   "🚫 Auto-suspendido: cancelaciones tardías" en `admin_panel_screen.dart`.
+6. **A6 y A7 (observaciones de la corrida del 2026-09-27).**
+   - **A7** — la apelación forzaba `status=COMPLETED` incluso para disputas de no-show; ahora usa el
+     mismo criterio `isNoShowDispute` que ya usa `applyResolution` para la resolución inicial.
+     (`admin.service.ts`, `resolveDisputeAppeal`)
+   - **A6** — una disputa de no-show sin respuesta de la otra parte no tenía ningún plazo. Se agregó
+     un job nuevo (mismo patrón que el resto de `server.ts`) que, tras un SLA configurable
+     (`disputeResponseSlaHoras`, default 72h), notifica a admins para revisión manual — **no** decide
+     un ganador por default, mismo criterio ya aplicado en A2/A3: el propio prompt del juez de IA
+     advierte que el orden de quién respondió primero no es evidencia de quién tiene razón.
+
+**Verificación:** `npx tsc --noEmit` sin errores nuevos, `npm run test:unit` 158/158, `flutter
+analyze` sin errores nuevos en los archivos tocados. La única escritura directa a producción (el
+backfill del punto 1) se hizo fuera de este commit — es un dato, no código — y quedó documentada
+acá con el id de la fila creada para trazabilidad.

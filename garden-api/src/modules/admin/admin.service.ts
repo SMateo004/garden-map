@@ -1474,9 +1474,16 @@ export async function resolveDisputeAppeal(
     }
 
     // ── Estado final de la reserva según el veredicto de la apelación ───────
+    // FIX (auditoría 2026-09-27, A7): forzaba COMPLETED para
+    // CAREGIVER_WINS/PARTIAL incluso cuando la disputa original era por
+    // no-show (la reserva nunca llegó a iniciarse) — semánticamente
+    // incoherente para un servicio que nunca se prestó. Mismo criterio
+    // (isNoShowDispute) ya usado en applyResolution (dispute.routes.ts) para
+    // la resolución inicial por IA/manual; se replica acá para la apelación.
+    const isNoShowDispute = booking.cancellationSource === 'NO_SHOW' && booking.status === BookingStatus.CANCELLED;
     const bookingData = verdict === 'CLIENT_WINS'
       ? { status: BookingStatus.CANCELLED, payoutStatus: 'REFUNDED' }
-      : { status: BookingStatus.COMPLETED, payoutStatus: 'PAID' };
+      : { status: isNoShowDispute ? BookingStatus.CANCELLED : BookingStatus.COMPLETED, payoutStatus: 'PAID' };
     await tx.booking.update({ where: { id: bookingId }, data: bookingData as any });
 
     const resolutionSummary = verdict === 'CAREGIVER_WINS'

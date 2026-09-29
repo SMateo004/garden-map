@@ -238,7 +238,7 @@ class TermsOfServiceScreen extends StatelessWidget {
           '• CLIENTE / DUEÑO: persona natural mayor de 18 años que usa Garden para contratar servicios de cuidado para su mascota.\n\n'
           '• CUIDADOR: persona natural mayor de 18 años, verificada por Garden, que ofrece servicios de cuidado de mascotas a través de la Plataforma. Los Cuidadores son prestadores de servicios independientes, NO empleados ni dependientes de Garden.\n\n'
           '• RESERVA: acuerdo de servicio entre un Cliente y un Cuidador, confirmado y pagado a través de la Plataforma.\n\n'
-          '• SERVICIO: cualquier modalidad de cuidado de mascotas ofrecida en la Plataforma (hospedaje, guardería, paseo, visita domiciliaria, baño y estética).\n\n'
+          '• SERVICIO: cualquier modalidad de cuidado de mascotas ofrecida en la Plataforma (hospedaje, guardería, paseo).\n\n'
           '• SMART CONTRACT: contrato inteligente desplegado en la red Polygon que registra los términos de cada Reserva (precio, fechas, condiciones) de forma inmutable. Una vez confirmada la Reserva, sus términos no pueden modificarse unilateralmente.\n\n'
           '• BILLETERA GARDEN: saldo virtual en Bolivianos acumulado en la cuenta del usuario, producto de reembolsos u otros créditos otorgados por Garden.\n\n'
           '• COMISIÓN DE PLATAFORMA: tarifa que Garden cobra sobre el valor de cada Reserva por el uso de la infraestructura tecnológica, procesamiento de pagos y garantías del servicio.\n\n'
@@ -281,8 +281,6 @@ class TermsOfServiceScreen extends StatelessWidget {
           'HOSPEDAJE: La mascota pernocta en el domicilio del Cuidador. El Cuidador asume responsabilidad de custodia plena durante todo el período contratado, incluyendo alimentación, acceso a agua, ejercicio básico y atención en caso de emergencia.\n\n'
           'GUARDERÍA DIURNA: La mascota permanece en el domicilio del Cuidador durante el día (máx. 12 horas). Mismo nivel de responsabilidad que el hospedaje.\n\n'
           'PASEO: El Cuidador retira a la mascota en el domicilio del Cliente, la pasea por una ruta predefinida (visible en tiempo real mediante GPS en la app) y la devuelve. El paseo estándar es de 30 minutos; el paseo extendido es de 60 minutos.\n\n'
-          'VISITA DOMICILIARIA: El Cuidador visita el domicilio del Cliente para alimentar, jugar y verificar el bienestar de la mascota. Duración estándar: 30 minutos por visita.\n\n'
-          'BAÑO Y ESTÉTICA: El Cuidador realiza aseo básico (baño, secado, cepillado) en el domicilio del Cuidador o del Cliente según se acuerde.\n\n'
           'MEET & GREET: Reunión presencial gratuita de 20-30 minutos entre el Cliente, el Cuidador y la mascota antes de confirmar la Reserva. Obligatoria para servicios de hospedaje y guardería en primera reserva.',
         ),
 
@@ -311,13 +309,13 @@ class TermsOfServiceScreen extends StatelessWidget {
           '• Cancelación con más de 48 horas de anticipación: reembolso del 100% (menos un cargo administrativo fijo de Bs. 10).\n'
           '• Cancelación entre 24 y 48 horas de anticipación: reembolso del 50% (también con el cargo de Bs. 10 descontado).\n'
           '• Cancelación con menos de 24 horas o sin presentación (no-show): sin reembolso.\n\n'
-          'PASEO Y VISITA DOMICILIARIA:\n'
+          'PASEO:\n'
           '• Cancelación con más de 12 horas de anticipación: reembolso del 100%.\n'
           '• Cancelación entre 6 y 12 horas de anticipación: reembolso del 50%.\n'
           '• Cancelación con menos de 6 horas o sin presentación: sin reembolso.\n\n'
           'CANCELACIÓN POR EL CUIDADOR: Si el Cuidador cancela con menos de 24 horas de anticipación, el Cliente recibe reembolso del 100% y el Cuidador recibe una penalización en su perfil. Tres cancelaciones tardías en 90 días resultan en suspensión temporal de 30 días.\n\n'
           'CASOS DE FUERZA MAYOR (bloqueos, paros, desastres naturales): Si un bloqueo de calles, paro cívico, estado de emergencia declarado o un desastre natural impide físicamente que el Cliente o el Cuidador cumplan con el horario acordado, ninguna de las partes sufre penalización — la reserva puede reprogramarse sin costo o cancelarse con reembolso del 100%, sin importar la ventana de tiempo indicada arriba. Quien solicita esta excepción debe notificar a Garden apenas sea razonablemente posible, idealmente con evidencia de la situación (noticias, fotos, comunicados oficiales).\n\n'
-          'MOTIVO OBLIGATORIO Y MAL CLIMA: Toda cancelación (por el Cliente o por el Cuidador) antes de que inicie el servicio requiere indicar un motivo. Si el motivo es "Mal clima", se garantiza reembolso del 100% al Cliente sin importar cuánto faltaba para el servicio — pero únicamente para Paseo y Visita domiciliaria (los servicios donde el mal clima impide físicamente salir a la calle) y hasta un máximo de 2 veces por Cliente cada 90 días. A partir de la tercera cancelación por "Mal clima" en ese período, o si el servicio es Hospedaje o Guardería, se aplica la tabla de reembolso escalonado por tiempo indicada arriba. Para cualquier otro motivo, también se aplica dicha tabla.\n\n'
+          'MOTIVO OBLIGATORIO Y MAL CLIMA: Toda cancelación (por el Cliente o por el Cuidador) antes de que inicie el servicio requiere indicar un motivo. Si el motivo es "Mal clima", se garantiza reembolso del 100% al Cliente sin importar cuánto faltaba para el servicio — pero únicamente para Paseo (el único servicio donde el mal clima impide físicamente salir a la calle) y hasta un máximo de 2 veces por Cliente cada 90 días. A partir de la tercera cancelación por "Mal clima" en ese período, o si el servicio es Hospedaje o Guardería, se aplica la tabla de reembolso escalonado por tiempo indicada arriba. Para cualquier otro motivo, también se aplica dicha tabla.\n\n'
           'REEMBOLSOS: Los reembolsos se acreditan en la Billetera Garden en un plazo de 1-3 días hábiles. El retiro del saldo a cuenta bancaria se procesa en 1-3 días hábiles adicionales.',
         ),
 
